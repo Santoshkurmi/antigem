@@ -24,3 +24,6 @@ val TextSecondaryDark = Color(0xFFA8A29E)
 val QuotaGreen = Color(0xFF16A34A)
 val QuotaAmber = Color(0xFFD97706)
 val QuotaRed = Color(0xFFDC2626)
+
+val GeminiBlue = Color(0xFF3B82F6)
+val GeminiPurple = Color(0xFF8B5CF6)

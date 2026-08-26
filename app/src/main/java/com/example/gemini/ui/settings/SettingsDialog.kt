@@ -3,10 +3,13 @@ package com.example.gemini.ui.settings
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -22,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ModelQuota
 import com.example.gemini.theme.*
@@ -32,151 +36,234 @@ fun SettingsDialog(
     projectId: String,
     tier: String,
     availableModels: List<AiModel> = AiModel.DEFAULT_MODELS,
+    enabledModelIds: Set<String>?,
     quotas: List<ModelQuota>,
     onLoginWithGoogle: () -> Unit,
     onManualTokenEntered: (String) -> Unit,
+    onToggleModelEnabled: (String, Boolean) -> Unit,
+    onEnableAllModels: () -> Unit,
     onRefreshQuotas: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var manualToken by remember { mutableStateOf("") }
     var showManualInput by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+                .fillMaxWidth(0.92f)
+                .fillMaxHeight(0.88f)
+                .padding(vertical = 16.dp)
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .padding(20.dp)
             ) {
                 Text(
-                    text = "Settings & Quotas",
-                    fontSize = 18.sp,
+                    text = "Settings & Preferences",
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Account info
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (userEmail != null) Icons.Outlined.CheckCircle else Icons.AutoMirrored.Outlined.Login,
-                                contentDescription = null,
-                                tint = if (userEmail != null) QuotaGreen else ClaudeTerracotta,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
+                    // Account info
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (userEmail != null) Icons.Outlined.CheckCircle else Icons.AutoMirrored.Outlined.Login,
+                                    contentDescription = null,
+                                    tint = if (userEmail != null) QuotaGreen else ClaudeTerracotta,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = userEmail ?: "Not logged in",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = userEmail ?: "Not logged in",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                text = "Project: $projectId • Tier: ${tier.uppercase()}",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
+                    }
 
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Project: $projectId • Tier: ${tier.uppercase()}",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Login Buttons
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = onLoginWithGoogle,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                        ) {
+                            Text("Google OAuth", fontSize = 13.sp, color = Color.White)
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        OutlinedButton(
+                            onClick = { showManualInput = !showManualInput },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(if (showManualInput) "Close Input" else "Paste Token", fontSize = 13.sp)
+                        }
+                    }
+
+                    if (showManualInput) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = manualToken,
+                            onValueChange = { manualToken = it },
+                            placeholder = { Text("Paste Callback URL or Code (4/0...)", fontSize = 12.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            singleLine = true
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Button(
+                            onClick = {
+                                if (manualToken.isNotBlank()) {
+                                    onManualTokenEntered(manualToken.trim())
+                                    manualToken = ""
+                                    showManualInput = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Apply URL / Code / Token", fontSize = 13.sp)
+                        }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                // Login Buttons
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Button(
-                        onClick = onLoginWithGoogle,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                    ) {
-                        Text("Google OAuth", fontSize = 13.sp, color = Color.White)
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    OutlinedButton(
-                        onClick = { showManualInput = !showManualInput },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Paste Token", fontSize = 13.sp)
-                    }
-                }
-
-                if (showManualInput) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = manualToken,
-                        onValueChange = { manualToken = it },
-                        placeholder = { Text("Paste Callback URL or Code (4/0...)", fontSize = 12.sp) },
+                    // Enabled Models Selection
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        singleLine = true
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Button(
-                        onClick = {
-                            if (manualToken.isNotBlank()) {
-                                onManualTokenEntered(manualToken.trim())
-                                manualToken = ""
-                                showManualInput = false
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Models in Chat",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Select models you want to use in the chat selector",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                            )
+                        }
+                        TextButton(
+                            onClick = onEnableAllModels,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("Select All", fontSize = 12.sp, color = ClaudeTerracotta)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            availableModels.forEach { model ->
+                                val isEnabled = enabledModelIds == null || model.id in enabledModelIds
+                                val quota = quotas.find { it.modelId == model.id }
+                                val pct = quota?.percentage
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { onToggleModelEnabled(model.id, !isEnabled) }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = isEnabled,
+                                        onCheckedChange = { checked -> onToggleModelEnabled(model.id, checked) },
+                                        colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = model.displayName,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = if (isEnabled) FontWeight.SemiBold else FontWeight.Normal,
+                                            color = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                        )
+                                        if (pct != null) {
+                                            val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
+                                            Text(
+                                                text = "Remaining Quota: $pct%",
+                                                fontSize = 11.sp,
+                                                color = badgeColor
+                                            )
+                                        }
+                                    }
+                                }
                             }
-                        },
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Quotas List Header
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp)
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Apply URL / Code / Token", fontSize = 13.sp)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Quotas List Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Live Model Quotas",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    IconButton(onClick = onRefreshQuotas, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            imageVector = Icons.Outlined.Refresh,
-                            contentDescription = "Refresh",
-                            tint = ClaudeTerracotta,
-                            modifier = Modifier.size(18.dp)
+                        Text(
+                            text = "Live Model Quotas",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        Spacer(modifier = Modifier.weight(1f))
+                        IconButton(onClick = onRefreshQuotas, modifier = Modifier.size(28.dp)) {
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = "Refresh",
+                                tint = ClaudeTerracotta,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 200.dp)
-                ) {
-                    items(availableModels, key = { it.id }) { model ->
+                    availableModels.forEach { model ->
                         val quota = quotas.find { it.modelId == model.id }
                         val pct = quota?.percentage ?: 0
                         val barColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
@@ -215,16 +302,19 @@ fun SettingsDialog(
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                 ) {
-                    Text("Done")
+                    Text("Done", color = Color.White, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

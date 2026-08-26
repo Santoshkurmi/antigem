@@ -90,24 +90,199 @@ class GoogleOAuthManager(private val client: OkHttpClient = OkHttpClient()) {
             val codeMatch = Regex("[?&]code=([^&\\s]+)").find(firstLine)
             val code = codeMatch?.groupValues?.get(1)?.let { URLDecoder.decode(it, "UTF-8") }
 
+            val encodedUrl = URLEncoder.encode(firstLine, "UTF-8")
+            val rawFullUrl = "http://localhost:51121$firstLine".replace(" HTTP/1.1", "").replace("GET ", "")
+            val safeCode = code ?: ""
+
             val responseBody = """
                 <!DOCTYPE html>
-                <html>
+                <html lang="en">
                 <head>
+                    <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Login Success</title>
+                    <title>Antigravity Authentication Successful</title>
                     <style>
-                        body { font-family: -apple-system, sans-serif; text-align: center; padding: 40px 20px; background: #181816; color: #f5f5f4; }
-                        .card { background: #232320; border-radius: 16px; padding: 24px; max-width: 360px; margin: 0 auto; }
-                        h2 { color: #d97706; margin-bottom: 8px; }
-                        p { color: #a8a29e; font-size: 14px; }
+                        * { box-sizing: border-box; margin: 0; padding: 0; }
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                            text-align: center;
+                            padding: 32px 16px;
+                            background: #141413;
+                            color: #edece9;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            min-height: 100vh;
+                        }
+                        .card {
+                            background: #1e1e1c;
+                            border: 1px solid rgba(255, 255, 255, 0.08);
+                            border-radius: 20px;
+                            padding: 28px 20px;
+                            max-width: 440px;
+                            width: 100%;
+                            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+                        }
+                        .icon-circle {
+                            width: 56px;
+                            height: 56px;
+                            border-radius: 50%;
+                            background: rgba(217, 119, 6, 0.15);
+                            color: #f59e0b;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            margin: 0 auto 16px;
+                            font-size: 28px;
+                        }
+                        h2 {
+                            color: #f5f5f4;
+                            font-size: 22px;
+                            font-weight: 700;
+                            margin-bottom: 8px;
+                            letter-spacing: -0.3px;
+                        }
+                        p.subtitle {
+                            color: #a8a29e;
+                            font-size: 14px;
+                            line-height: 1.5;
+                            margin-bottom: 22px;
+                        }
+                        .button-group {
+                            display: flex;
+                            flex-direction: column;
+                            gap: 10px;
+                            margin-bottom: 20px;
+                        }
+                        .btn {
+                            width: 100%;
+                            padding: 13px 18px;
+                            border-radius: 12px;
+                            border: none;
+                            font-size: 14.5px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            transition: all 0.15s ease-in-out;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 8px;
+                        }
+                        .btn-primary {
+                            background: #d97706;
+                            color: #ffffff;
+                        }
+                        .btn-primary:active {
+                            background: #b45309;
+                            transform: scale(0.98);
+                        }
+                        .btn-secondary {
+                            background: #2a2a27;
+                            color: #d6d3d1;
+                            border: 1px solid rgba(255, 255, 255, 0.1);
+                        }
+                        .btn-secondary:active {
+                            background: #363632;
+                            transform: scale(0.98);
+                        }
+                        .code-box {
+                            background: #111110;
+                            border: 1px solid rgba(255, 255, 255, 0.06);
+                            border-radius: 10px;
+                            padding: 10px 12px;
+                            font-family: monospace;
+                            font-size: 11px;
+                            color: #a8a29e;
+                            word-break: break-all;
+                            text-align: left;
+                            max-height: 65px;
+                            overflow-y: auto;
+                            margin-top: 14px;
+                            user-select: all;
+                        }
+                        .toast {
+                            color: #10b981;
+                            font-size: 13px;
+                            font-weight: 600;
+                            margin-top: 8px;
+                            min-height: 20px;
+                        }
                     </style>
                 </head>
                 <body>
                     <div class="card">
-                        <h2>✓ Login Successful!</h2>
-                        <p>You can return to the Gemini App now.</p>
+                        <div class="icon-circle">✓</div>
+                        <h2>Authentication Successful</h2>
+                        <p class="subtitle">Your Antigravity token has been authorized. You can return to the app or copy the URL below.</p>
+                        
+                        <div class="button-group">
+                            <button id="copyUrlBtn" class="btn btn-primary" onclick="copyFullUrl()">
+                                📋 Copy Callback URL
+                            </button>
+                            <button id="copyCodeBtn" class="btn btn-secondary" onclick="copyAuthCode()">
+                                🔑 Copy Auth Code Only
+                            </button>
+                        </div>
+                        <div id="statusToast" class="toast"></div>
+
+                        <div class="code-box" id="urlBox">$rawFullUrl</div>
                     </div>
+
+                    <script>
+                        const fullUrl = window.location.href || "$rawFullUrl";
+                        const authCode = "$safeCode";
+
+                        function showToast(msg) {
+                            const toast = document.getElementById('statusToast');
+                            toast.innerText = msg;
+                            setTimeout(() => { toast.innerText = ''; }, 3500);
+                        }
+
+                        function copyFullUrl() {
+                            navigator.clipboard.writeText(fullUrl).then(() => {
+                                document.getElementById('copyUrlBtn').innerText = '✓ URL Copied!';
+                                showToast('✓ Callback URL copied to clipboard!');
+                                setTimeout(() => {
+                                    document.getElementById('copyUrlBtn').innerText = '📋 Copy Callback URL';
+                                }, 3000);
+                            }).catch(() => {
+                                selectFallback(fullUrl);
+                            });
+                        }
+
+                        function copyAuthCode() {
+                            if (!authCode) {
+                                copyFullUrl();
+                                return;
+                            }
+                            navigator.clipboard.writeText(authCode).then(() => {
+                                document.getElementById('copyCodeBtn').innerText = '✓ Code Copied!';
+                                showToast('✓ Auth Code copied to clipboard!');
+                                setTimeout(() => {
+                                    document.getElementById('copyCodeBtn').innerText = '🔑 Copy Auth Code Only';
+                                }, 3000);
+                            }).catch(() => {
+                                selectFallback(authCode);
+                            });
+                        }
+
+                        function selectFallback(text) {
+                            const temp = document.createElement("textarea");
+                            temp.value = text;
+                            document.body.appendChild(temp);
+                            temp.select();
+                            document.execCommand("copy");
+                            document.body.removeChild(temp);
+                            showToast('✓ Copied to clipboard!');
+                        }
+
+                        // Attempt auto-copy on load
+                        try {
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                navigator.clipboard.writeText(fullUrl);
+                            }
+                        } catch(e) {}
+                    </script>
                 </body>
                 </html>
             """.trimIndent()

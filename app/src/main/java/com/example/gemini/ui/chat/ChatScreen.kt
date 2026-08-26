@@ -3,25 +3,25 @@ package com.example.gemini.ui.chat
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -31,8 +31,19 @@ import com.example.gemini.ui.components.ChatInputBar
 import com.example.gemini.ui.components.MessageBubble
 import com.example.gemini.ui.drawer.ChatHistoryDrawer
 import com.example.gemini.ui.models.ModelSelectorBottomSheet
+import com.example.gemini.ui.models.ThinkingSelectorBottomSheet
 import com.example.gemini.ui.settings.SettingsDialog
 import kotlinx.coroutines.launch
+
+import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import kotlinx.coroutines.delay
+
+enum class ScrollDirection { UP, DOWN }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +60,8 @@ fun ChatScreen(
     val isStreaming by viewModel.isStreaming.collectAsState()
     val selectedModelId by viewModel.selectedModelId.collectAsState()
     val availableModels by viewModel.availableModels.collectAsState()
+    val enabledModels by viewModel.enabledModels.collectAsState()
+    val enabledModelIds by viewModel.enabledModelIds.collectAsState()
     val isRefreshingModels by viewModel.isRefreshingModels.collectAsState()
     val quotas by viewModel.quotas.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
@@ -60,16 +73,99 @@ fun ChatScreen(
     var showSettingsDialog by remember { mutableStateOf(false) }
     val thinkingPref by viewModel.thinkingPreference.collectAsState()
 
-    val listState = rememberLazyListState()
-    val density = LocalDensity.current
-    val imeBottom = WindowInsets.ime.getBottom(density)
+    // Independent LazyListState per conversation
+    val convKey = currentConv?.id ?: "empty"
+    val listState = rememberSaveable(convKey, saver = LazyListState.Saver) { LazyListState() }
+    var lastScrolledConvId by remember { mutableStateOf<String?>(null) }
 
-    // Auto-scroll to bottom on new messages or when keyboard opens
-    LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length, imeBottom) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    // Determine whether user is scrolled near the bottom (within the last item)
+    val isAtBottom by remember(listState) {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val totalItems = layoutInfo.totalItemsCount
+            if (totalItems <= 1) true
+            else {
+                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
+                lastVisibleItem != null && lastVisibleItem.index >= totalItems - 2
+            }
         }
     }
+
+    val isAtTop by remember(listState) {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+        }
+    }
+
+    var scrollDirection by remember { mutableStateOf(ScrollDirection.DOWN) }
+    var showScrollButton by remember { mutableStateOf(false) }
+    var prevIndex by remember { mutableIntStateOf(0) }
+    var prevOffset by remember { mutableIntStateOf(0) }
+
+    // Track scroll direction strictly while scroll is in progress
+    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+        if (listState.isScrollInProgress) {
+            val currentIndex = listState.firstVisibleItemIndex
+            val currentOffset = listState.firstVisibleItemScrollOffset
+            if (currentIndex < prevIndex || (currentIndex == prevIndex && currentOffset < prevOffset)) {
+                scrollDirection = ScrollDirection.UP
+            } else if (currentIndex > prevIndex || (currentIndex == prevIndex && currentOffset > prevOffset)) {
+                scrollDirection = ScrollDirection.DOWN
+            }
+            prevIndex = currentIndex
+            prevOffset = currentOffset
+        }
+    }
+
+    // Show button during scroll and timeout after 5 seconds of inactivity
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            showScrollButton = true
+        } else if (showScrollButton) {
+            delay(5000)
+            showScrollButton = false
+        }
+    }
+
+    // Hide immediately when reaching the very top or very bottom
+    LaunchedEffect(isAtTop, isAtBottom) {
+        if (isAtTop && scrollDirection == ScrollDirection.UP) {
+            showScrollButton = false
+        }
+        if (isAtBottom && scrollDirection == ScrollDirection.DOWN) {
+            showScrollButton = false
+        }
+    }
+
+    var userSentMessageTrigger by remember { mutableStateOf(0) }
+
+    // Scroll to very bottom when a conversation is first opened / loaded
+    LaunchedEffect(currentConv?.id, messages.isNotEmpty()) {
+        if (currentConv?.id != null && messages.isNotEmpty() && lastScrolledConvId != currentConv?.id) {
+            lastScrolledConvId = currentConv?.id
+            listState.scrollToItem(messages.size)
+        }
+    }
+
+    // Scroll to bottom when user explicitly sends a message (instant)
+    LaunchedEffect(userSentMessageTrigger) {
+        if (userSentMessageTrigger > 0 && messages.isNotEmpty()) {
+            listState.scrollToItem(messages.size)
+        }
+    }
+
+    // Smart auto-scroll during streaming: only auto-scroll if user is already at the bottom
+    val lastMessageContentLength = messages.lastOrNull()?.content?.length ?: 0
+    val lastMessageThoughtLength = messages.lastOrNull()?.thoughtText?.length ?: 0
+
+    LaunchedEffect(messages.size, lastMessageContentLength, lastMessageThoughtLength) {
+        if (messages.isNotEmpty() && isAtBottom) {
+            listState.scrollToItem(messages.size)
+        }
+    }
+
+    val currentModel = AiModel.findInList(enabledModels, selectedModelId)
+    val currentQuota = quotas.find { it.modelId == selectedModelId }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -99,82 +195,14 @@ fun ChatScreen(
             topBar = {
                 TopAppBar(
                     title = {
-                        val currentModel = AiModel.findInList(availableModels, selectedModelId)
-                        val quota = quotas.find { it.modelId == selectedModelId }
-                        val pct = quota?.percentage
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Model Selector Pill
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                    .clickable { showModelSelector = true }
-                                    .padding(horizontal = 8.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = currentModel.displayName,
-                                    fontSize = 13.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1
-                                )
-
-                                if (pct != null) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(badgeColor.copy(alpha = 0.15f))
-                                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                                    ) {
-                                        Text(
-                                            text = "$pct%",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = badgeColor
-                                        )
-                                    }
-                                }
-
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "Switch Model",
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(6.dp))
-
-                            // Thinking Level Pill
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (thinkingPref.isEnabled) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                    .clickable { showThinkingSelector = true }
-                                    .padding(horizontal = 8.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Psychology,
-                                    contentDescription = "Thinking Level",
-                                    tint = if (thinkingPref.isEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = thinkingPref.level.label + (if (thinkingPref.isEnabled && thinkingPref.level != com.example.gemini.domain.model.ThinkingLevel.OFF) " (${thinkingPref.activeTokens / 1024}K)" else ""),
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (thinkingPref.isEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
-                            }
-                        }
+                        Text(
+                            text = currentConv?.title?.takeIf { it.isNotBlank() } ?: "Antigravity Chat",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
@@ -186,6 +214,13 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { showSettingsDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Settings,
+                                contentDescription = "Settings",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        }
                         IconButton(onClick = { viewModel.startNewChat() }) {
                             Icon(
                                 imageVector = Icons.Default.Add,
@@ -199,63 +234,134 @@ fun ChatScreen(
                     )
                 )
             },
-            bottomBar = {
-                ChatInputBar(
-                    isStreaming = isStreaming,
-                    onSendMessage = { text -> viewModel.sendMessage(text) },
-                    onStopStreaming = { viewModel.stopStreaming() }
-                )
-            },
-            containerColor = MaterialTheme.colorScheme.background
+            containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets.statusBars
         ) { paddingValues ->
-            Box(
+            // Synchronized container that moves seamlessly with the IME keyboard
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    .navigationBarsPadding()
+                    .imePadding()
             ) {
-                if (messages.isEmpty()) {
-                    // Empty state
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "How can I help you today?",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Powered by Google Antigravity CloudCode",
-                            fontSize = 13.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    if (messages.isEmpty()) {
+                        // Empty state
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "How can I help you today?",
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Powered by Google Antigravity CloudCode",
+                                fontSize = 13.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp)
+                        ) {
+                            items(messages, key = { it.id }) { msg ->
+                                MessageBubble(message = msg, modelId = selectedModelId)
+                            }
+                            // Bottom spacer to ensure scrolling reaches below the very bottom of the last message
+                            item(key = "bottom_anchor") {
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
                     }
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = 12.dp)
+
+                    // Floating Scroll Up / Scroll Down Button (Instant Movement)
+                    val showUpArrow = showScrollButton && scrollDirection == ScrollDirection.UP && !isAtTop
+                    val showDownArrow = showScrollButton && scrollDirection == ScrollDirection.DOWN && !isAtBottom
+                    val isVisible = (showUpArrow || showDownArrow) && messages.size > 2
+
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = isVisible,
+                        enter = fadeIn() + scaleIn(initialScale = 0.8f),
+                        exit = fadeOut() + scaleOut(targetScale = 0.8f),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 16.dp, bottom = 12.dp)
                     ) {
-                        items(messages, key = { it.id }) { msg ->
-                            MessageBubble(message = msg, modelId = selectedModelId)
+                        Surface(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .clickable {
+                                    showScrollButton = false
+                                    scope.launch {
+                                        if (showUpArrow) {
+                                            listState.scrollToItem(0)
+                                        } else {
+                                            listState.scrollToItem(messages.size)
+                                        }
+                                    }
+                                },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 6.dp,
+                            shadowElevation = 6.dp,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Icon(
+                                    imageVector = if (showUpArrow) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = if (showUpArrow) "Jump to Top" else "Jump to Bottom",
+                                    tint = ClaudeTerracotta,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }
+
+                // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)
+                ChatInputBar(
+                    selectedModel = currentModel,
+                    quota = currentQuota,
+                    thinkingPreference = thinkingPref,
+                    onOpenModelSelector = { showModelSelector = true },
+                    onOpenThinkingSelector = { showThinkingSelector = true },
+                    isStreaming = isStreaming,
+                    onSendMessage = { text ->
+                        viewModel.sendMessage(text)
+                        userSentMessageTrigger++
+                    },
+                    onStopStreaming = { viewModel.stopStreaming() }
+                )
             }
         }
     }
 
-    // Model Selector Bottom Sheet
+    // Model Selector Bottom Sheet (Grouped Categories & Thinking Config)
     if (showModelSelector) {
         ModelSelectorBottomSheet(
             selectedModelId = selectedModelId,
-            availableModels = availableModels,
+            availableModels = enabledModels,
             quotas = quotas,
+            thinkingPreference = thinkingPref,
+            onOpenThinkingConfig = { showThinkingSelector = true },
             isRefreshing = isRefreshingModels,
             onRefresh = { viewModel.refreshQuotas() },
             onSelectModel = { modelId -> viewModel.selectModel(modelId) },
@@ -265,7 +371,7 @@ fun ChatScreen(
 
     // Thinking Selector Bottom Sheet
     if (showThinkingSelector) {
-        com.example.gemini.ui.models.ThinkingSelectorBottomSheet(
+        ThinkingSelectorBottomSheet(
             currentPreference = thinkingPref,
             onPreferenceSelected = { pref -> viewModel.setThinkingPreference(pref) },
             onDismiss = { showThinkingSelector = false }
@@ -279,6 +385,7 @@ fun ChatScreen(
             projectId = projectId,
             tier = tier,
             availableModels = availableModels,
+            enabledModelIds = enabledModelIds,
             quotas = quotas,
             onLoginWithGoogle = {
                 val url = viewModel.getGoogleOAuthUrl()
@@ -287,6 +394,12 @@ fun ChatScreen(
             },
             onManualTokenEntered = { token ->
                 viewModel.applyManualInput(token)
+            },
+            onToggleModelEnabled = { modelId, isEnabled ->
+                viewModel.setModelEnabled(modelId, isEnabled)
+            },
+            onEnableAllModels = {
+                viewModel.enableAllModels()
             },
             onRefreshQuotas = {
                 viewModel.refreshQuotas()

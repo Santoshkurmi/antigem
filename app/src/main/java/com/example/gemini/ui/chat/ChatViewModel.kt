@@ -43,6 +43,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _availableModels = MutableStateFlow<List<AiModel>>(AiModel.DEFAULT_MODELS)
     val availableModels: StateFlow<List<AiModel>> = _availableModels.asStateFlow()
 
+    private val _enabledModelIds = MutableStateFlow<Set<String>?>(null)
+    val enabledModelIds: StateFlow<Set<String>?> = _enabledModelIds.asStateFlow()
+
+    private val _enabledModels = MutableStateFlow<List<AiModel>>(AiModel.DEFAULT_MODELS)
+    val enabledModels: StateFlow<List<AiModel>> = _enabledModels.asStateFlow()
+
     private val _isRefreshingModels = MutableStateFlow(false)
     val isRefreshingModels: StateFlow<Boolean> = _isRefreshingModels.asStateFlow()
 
@@ -68,6 +74,46 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _thinkingPreference.value = pref
     }
 
+    fun setModelEnabled(modelId: String, isEnabled: Boolean) {
+        val currentIds = _enabledModelIds.value?.toMutableSet() ?: _availableModels.value.map { it.id }.toMutableSet()
+        if (isEnabled) {
+            currentIds.add(modelId)
+        } else {
+            if (currentIds.size > 1) { // Don't allow disabling all models
+                currentIds.remove(modelId)
+            }
+        }
+        viewModelScope.launch {
+            authPrefs.saveEnabledModelIds(currentIds)
+        }
+    }
+
+    fun enableAllModels() {
+        val allIds = _availableModels.value.map { it.id }.toSet()
+        viewModelScope.launch {
+            authPrefs.saveEnabledModelIds(allIds)
+        }
+    }
+
+    private fun recomputeEnabledModels() {
+        val all = _availableModels.value
+        val enabledSet = _enabledModelIds.value
+        val filtered = if (enabledSet.isNullOrEmpty()) {
+            all
+        } else {
+            all.filter { it.id in enabledSet }
+        }
+        _enabledModels.value = if (filtered.isNotEmpty()) filtered else all
+
+        // If current selected model is not in enabled list, switch to first enabled model
+        val currentSelected = _selectedModelId.value
+        if (_enabledModels.value.none { it.id == currentSelected }) {
+            _enabledModels.value.firstOrNull()?.let {
+                selectModel(it.id)
+            }
+        }
+    }
+
     private var streamingJob: Job? = null
     var pendingPkceVerifier: String? = null
 
@@ -82,6 +128,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             authPrefs.userEmail.collect { _userEmail.value = it }
+        }
+
+        viewModelScope.launch {
+            authPrefs.enabledModelIds.collect { ids ->
+                _enabledModelIds.value = ids
+                recomputeEnabledModels()
+            }
         }
 
         viewModelScope.launch {
@@ -327,6 +380,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     val result = res.getOrThrow()
                     if (result.models.isNotEmpty()) {
                         _availableModels.value = result.models
+                        recomputeEnabledModels()
                     }
                     _quotas.value = result.quotas
                 }

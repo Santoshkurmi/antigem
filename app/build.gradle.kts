@@ -15,9 +15,19 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("release.jks")
+            storePassword = "geminiapp123"
+            keyAlias = "release"
+            keyPassword = "geminiapp123"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -73,6 +83,9 @@ dependencies {
   implementation(libs.okhttp.sse)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.androidx.datastore.preferences)
+
+  // Image Loading (Coil for Markdown Images)
+  implementation("io.coil-kt:coil-compose:2.7.0")
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)

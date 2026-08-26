@@ -19,6 +19,7 @@ class AuthPreferences(private val context: Context) {
         val USER_EMAIL = stringPreferencesKey("user_email")
         val TERMUX_SSH_HOST = stringPreferencesKey("termux_ssh_host")
         val TERMUX_SSH_PORT = stringPreferencesKey("termux_ssh_port")
+        val ENABLED_MODELS = androidx.datastore.preferences.core.stringSetPreferencesKey("enabled_models")
     }
 
     val accessToken: Flow<String?> = context.dataStore.data.map { it[ACCESS_TOKEN] }
@@ -26,6 +27,7 @@ class AuthPreferences(private val context: Context) {
     val projectId: Flow<String?> = context.dataStore.data.map { it[PROJECT_ID] ?: "rising-fact-p41fc" }
     val subscriptionTier: Flow<String?> = context.dataStore.data.map { it[SUBSCRIPTION_TIER] ?: "pro" }
     val userEmail: Flow<String?> = context.dataStore.data.map { it[USER_EMAIL] }
+    val enabledModelIds: Flow<Set<String>?> = context.dataStore.data.map { it[ENABLED_MODELS] }
 
     suspend fun saveTokens(accessToken: String, refreshToken: String?, email: String? = null) {
         context.dataStore.edit { prefs ->
@@ -43,6 +45,12 @@ class AuthPreferences(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[PROJECT_ID] = projectId
             prefs[SUBSCRIPTION_TIER] = tier
+        }
+    }
+
+    suspend fun saveEnabledModelIds(ids: Set<String>) {
+        context.dataStore.edit { prefs ->
+            prefs[ENABLED_MODELS] = ids
         }
     }
 
