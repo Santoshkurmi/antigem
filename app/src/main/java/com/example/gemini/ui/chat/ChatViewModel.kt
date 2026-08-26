@@ -750,11 +750,25 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        val toolInstruction = if (toolInstructionsList.isNotEmpty()) {
+        val baseToolInstruction = if (toolInstructionsList.isNotEmpty()) {
             "You have access to the following real-time tools:\n" +
             toolInstructionsList.joinToString("\n\n") +
             "\nWhen using a tool, explain what you are doing first, then output the <tool_call name=\"...\">payload</tool_call> block. You can use tools sequentially. Once a tool executes, you will receive the real results."
         } else null
+
+        val currentProject = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value
+        val currentTabPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeTabPath.value
+
+        val activeProjectContext = if (currentProject != null) {
+            "\n\nActive IDE Project Context:\n" +
+            "- Selected Project Name: ${currentProject.name}\n" +
+            "- Selected Project Path: ${currentProject.path}\n" +
+            "- Termux Project Folder: /data/data/com.termux/files/home/projects/${currentProject.name}\n" +
+            if (!currentTabPath.isNullOrBlank()) "- Currently Open Active File in IDE Editor: $currentTabPath\n" else ""
+        } else ""
+
+        val combinedInstruction = (baseToolInstruction ?: "") + activeProjectContext
+        val finalToolInstruction = if (combinedInstruction.isNotBlank()) combinedInstruction else null
 
         streamingJob = viewModelScope.launch {
             apiService.streamGenerateContent(
@@ -766,7 +780,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 summary = summary,
                 thinkingBudget = _thinkingPreference.value.activeTokens,
                 isThinkingEnabled = _thinkingPreference.value.isEnabled,
-                toolInstruction = toolInstruction,
+                toolInstruction = finalToolInstruction,
                 customSystemPrompt = conv.customSystemPrompt
             ).collect { event ->
                 when (event) {

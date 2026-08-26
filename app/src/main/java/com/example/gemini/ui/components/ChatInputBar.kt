@@ -31,13 +31,15 @@ import com.example.gemini.domain.model.ModelQuota
 import com.example.gemini.domain.model.ThinkingPreference
 import com.example.gemini.theme.*
 
+import androidx.compose.ui.text.input.TextFieldValue
+
 @Composable
 fun ChatInputBar(
     selectedModel: AiModel,
     quota: ModelQuota?,
     thinkingPreference: ThinkingPreference,
-    inputText: String,
-    onInputTextChange: (String) -> Unit,
+    textFieldValue: TextFieldValue,
+    onTextFieldValueChange: (TextFieldValue) -> Unit,
     onOpenModelSelector: () -> Unit,
     onOpenThinkingSelector: () -> Unit,
     isStreaming: Boolean,
@@ -192,8 +194,8 @@ fun ChatInputBar(
                     }
 
                     TextField(
-                        value = inputText,
-                        onValueChange = onInputTextChange,
+                        value = textFieldValue,
+                        onValueChange = onTextFieldValueChange,
                         placeholder = {
                             Text(
                                 text = "Message ${selectedModel.displayName.split(" ").firstOrNull() ?: "Gemini"}...",
@@ -237,24 +239,24 @@ fun ChatInputBar(
                 } else {
                     IconButton(
                         onClick = {
-                            val trimmed = inputText.trim()
+                            val trimmed = textFieldValue.text.trim()
                             if (trimmed.isNotEmpty()) {
                                 onSendMessage(trimmed)
-                                onInputTextChange("")
+                                onTextFieldValueChange(TextFieldValue(""))
                             }
                         },
-                        enabled = inputText.trim().isNotEmpty(),
+                        enabled = textFieldValue.text.trim().isNotEmpty(),
                         modifier = Modifier
                             .size(42.dp)
                             .clip(CircleShape)
                             .background(
-                                if (inputText.trim().isNotEmpty()) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant
+                                if (textFieldValue.text.trim().isNotEmpty()) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant
                             )
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowUpward,
                             contentDescription = "Send",
-                            tint = if (inputText.trim().isNotEmpty()) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            tint = if (textFieldValue.text.trim().isNotEmpty()) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                             modifier = Modifier.size(20.dp)
                         )
                     }
