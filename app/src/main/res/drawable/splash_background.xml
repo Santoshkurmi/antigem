@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Pure white splash background -->
+    <item android:drawable="@android:color/white" />
+
+    <!-- Centered AntiGem Logo -->
+    <item
+        android:drawable="@drawable/splash_logo"
+        android:gravity="center"
+        android:width="160dp"
+        android:height="160dp" />
+
+    <!-- Bottom AntiGem Brand Typography -->
+    <item
+        android:drawable="@drawable/splash_brand_name"
+        android:gravity="bottom|center_horizontal"
+        android:bottom="64dp"
+        android:width="160dp"
+        android:height="44dp" />
+</layer-list>
