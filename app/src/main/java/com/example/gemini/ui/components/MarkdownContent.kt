@@ -53,6 +53,8 @@ import ru.noties.jlatexmath.JLatexMathDrawable
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -125,17 +127,20 @@ fun MarkdownContent(
                         5 -> Triple(13.sp, 6.dp, 2.dp)
                         else -> Triple(12.5.sp, 5.dp, 2.dp)
                     }
-                    Text(
+                    FormattedInlineText(
                         text = block.text,
-                        fontSize = fontSize,
-                        fontWeight = FontWeight.Bold,
-                        color = if (block.level <= 3) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        style = TextStyle(
+                            fontSize = fontSize,
+                            fontWeight = FontWeight.Bold,
+                            color = if (block.level <= 3) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                        ),
                         modifier = Modifier.padding(top = topPad, bottom = bottomPad)
                     )
                 }
                 is MarkdownBlock.Bullet -> {
                     Row(
                         modifier = Modifier
+                            .fillMaxWidth()
                             .padding(vertical = 2.dp)
                             .padding(start = (block.indent * 14).dp),
                         verticalAlignment = Alignment.Top
@@ -145,14 +150,26 @@ fun MarkdownContent(
                             fontWeight = FontWeight.Bold,
                             color = ClaudeTerracotta,
                             fontSize = 14.sp,
-                            modifier = Modifier.padding(top = 1.dp)
+                            lineHeight = 21.sp,
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.None
+                                )
+                            )
                         )
-                        FormattedInlineText(text = block.text)
+                        FormattedInlineText(
+                            text = block.text,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
                 is MarkdownBlock.Numbered -> {
                     Row(
-                        modifier = Modifier.padding(vertical = 2.dp, horizontal = 2.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp, horizontal = 2.dp),
                         verticalAlignment = Alignment.Top
                     ) {
                         Text(
@@ -160,26 +177,40 @@ fun MarkdownContent(
                             fontWeight = FontWeight.Bold,
                             color = ClaudeTerracotta,
                             fontSize = 13.5.sp,
-                            modifier = Modifier.padding(top = 1.dp)
+                            lineHeight = 21.sp,
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.None
+                                )
+                            )
                         )
-                        FormattedInlineText(text = block.text)
+                        FormattedInlineText(
+                            text = block.text,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
                 is MarkdownBlock.Task -> {
                     Row(
-                        modifier = Modifier.padding(vertical = 2.dp, horizontal = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp, horizontal = 2.dp),
+                        verticalAlignment = Alignment.Top
                     ) {
                         Icon(
                             imageVector = if (block.isChecked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
                             contentDescription = if (block.isChecked) "Completed" else "Incomplete",
                             tint = if (block.isChecked) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier
+                                .padding(top = 1.5.dp, end = 6.dp)
+                                .size(17.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
                         FormattedInlineText(
                             text = block.text,
-                            isStrikethrough = block.isChecked
+                            isStrikethrough = block.isChecked,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
@@ -862,12 +893,14 @@ fun MarkdownTableView(
                             .widthIn(min = 90.dp, max = 220.dp)
                             .padding(horizontal = 10.dp, vertical = 7.dp)
                     ) {
-                        Text(
+                        FormattedInlineText(
                             text = header,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = textAlign
+                            style = TextStyle(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = textAlign
+                            )
                         )
                     }
                 }
@@ -917,6 +950,16 @@ data class FormattedInlineResult(
 fun FormattedInlineText(
     text: String,
     modifier: Modifier = Modifier,
+    style: TextStyle = TextStyle(
+        fontSize = 14.sp,
+        lineHeight = 21.sp,
+        platformStyle = PlatformTextStyle(includeFontPadding = false),
+        lineHeightStyle = LineHeightStyle(
+            alignment = LineHeightStyle.Alignment.Center,
+            trim = LineHeightStyle.Trim.None
+        ),
+        color = MaterialTheme.colorScheme.onSurface
+    ),
     isStrikethrough: Boolean = false
 ) {
     val isDark = isSystemInDarkTheme()
@@ -929,11 +972,7 @@ fun FormattedInlineText(
     Text(
         text = result.annotatedString,
         inlineContent = result.inlineContent,
-        style = TextStyle(
-            fontSize = 14.sp,
-            lineHeight = 21.sp,
-            color = MaterialTheme.colorScheme.onSurface
-        ),
+        style = style,
         modifier = modifier
     )
 }
@@ -958,25 +997,26 @@ private fun buildRichAnnotatedString(
     val pattern = Pattern.compile(
         "(\\[(.*?)\\]\\((https?://[^\\s)]+)\\))|" +                              // 1: Markdown Link [text](url)
         "(<a\\s+href=[\"'](https?://[^\"']+)[\"']\\s*>(.*?)</a>)|" +             // 4: HTML Link <a href="url">text</a>
-        "(`([^`]+)`)|" +                                                           // 7: Inline code `code`
+        "(`([^`\\n]+)`)|" +                                                        // 7: Inline code `code`
         "(<code>(.*?)</code>)|" +                                                  // 9: HTML code <code>code</code>
         "([$]{1,2}([^$\\n]+)[$]{1,2})|" +                                          // 11: Inline Math $formula$ or $$formula$$
         "(\\\\\\((.*?)\\\\\\))|" +                                                 // 13: Inline Math \(formula\)
-        "(\\*{3}([^*]+)\\*{3})|" +                                                 // 15: Bold-Italic ***text***
-        "(\\*{2}([^*]+)\\*{2})|" +                                                 // 17: Bold **text**
-        "(__{2}([^_]+)__{2})|" +                                                   // 19: Bold __text__
-        "(<b>(.*?)</b>)|" +                                                        // 21: HTML bold <b>text</b>
-        "(<strong>(.*?)</strong>)|" +                                              // 23: HTML strong <strong>text</strong>
-        "(<u>(.*?)</u>)|" +                                                        // 25: HTML underline <u>text</u>
-        "(\\*{1}([^*]+)\\*{1})|" +                                                 // 27: Italic *text*
-        "(_([^_]+)_)|" +                                                           // 29: Italic _text_
-        "(<i>(.*?)</i>)|" +                                                        // 31: HTML italic <i>text</i>
-        "(<em>(.*?)</em>)|" +                                                      // 33: HTML em <em>text</em>
-        "(~~([^~]+)~~)|" +                                                         // 35: Strikethrough ~~text~~
-        "(<s>(.*?)</s>)|" +                                                        // 37: HTML strike <s>text</s>
-        "(<del>(.*?)</del>)|" +                                                    // 39: HTML del <del>text</del>
-        "(<strike>(.*?)</strike>)",                                                // 41: HTML strike <strike>text</strike>
-        Pattern.CASE_INSENSITIVE
+        "(\\*{3}(.+?)\\*{3})|" +                                                   // 15: Bold-Italic ***text***
+        "(___([^_\\n]+)___)|" +                                                    // 17: Bold-Italic ___text___
+        "(\\*{2}(.+?)\\*{2})|" +                                                   // 19: Bold **text**
+        "(__([^_\\n]+)__)|" +                                                      // 21: Bold __text__
+        "(<b>(.*?)</b>)|" +                                                        // 23: HTML bold <b>text</b>
+        "(<strong>(.*?)</strong>)|" +                                              // 25: HTML strong <strong>text</strong>
+        "(~~(.+?)~~)|" +                                                           // 27: Strikethrough ~~text~~
+        "(<s>(.*?)</s>)|" +                                                        // 29: HTML strike <s>text</s>
+        "(<del>(.*?)</del>)|" +                                                    // 31: HTML del <del>text</del>
+        "(<strike>(.*?)</strike>)|" +                                              // 33: HTML strike <strike>text</strike>
+        "(<u>(.*?)</u>)|" +                                                        // 35: HTML underline <u>text</u>
+        "(\\*(?!\\s)(.+?)(?<!\\s)\\*)|" +                                          // 37: Italic *text*
+        "(_(?!\\s)([^_\\n]+?)(?<!\\s)_)|" +                                        // 39: Italic _text_
+        "(<i>(.*?)</i>)|" +                                                        // 41: HTML italic <i>text</i>
+        "(<em>(.*?)</em>)",                                                        // 43: HTML em <em>text</em>
+        Pattern.DOTALL or Pattern.CASE_INSENSITIVE
     )
     val matcher = pattern.matcher(cleanText)
     var lastEnd = 0
@@ -993,8 +1033,8 @@ private fun buildRichAnnotatedString(
 
         if (fullMatch.startsWith("[") && fullMatch.contains("](")) {
             // Markdown Link [title](url)
-            val linkTitle = matcher.group(2) ?: ""
-            val linkUrl = matcher.group(3) ?: ""
+            val linkTitle = fullMatch.substringAfter("[").substringBefore("](")
+            val linkUrl = fullMatch.substringAfter("](").substringBeforeLast(")")
             builder.pushLink(LinkAnnotation.Url(url = linkUrl))
             builder.pushStyle(
                 SpanStyle(
@@ -1023,7 +1063,7 @@ private fun buildRichAnnotatedString(
             builder.pop()
         } else if ((fullMatch.startsWith("`") && fullMatch.endsWith("`")) || fullMatch.startsWith("<code", ignoreCase = true)) {
             // Inline code `...` or <code>...</code>
-            val codeContent = if (fullMatch.startsWith("`")) fullMatch.removeSurrounding("`") else matcher.group(10) ?: ""
+            val codeContent = if (fullMatch.startsWith("`")) fullMatch.removeSurrounding("`") else fullMatch.replace(Regex("<[^>]+>"), "")
             builder.pushStyle(
                 SpanStyle(
                     fontFamily = FontFamily.Monospace,
@@ -1097,19 +1137,25 @@ private fun buildRichAnnotatedString(
                 builder.append(formatted)
                 builder.pop()
             }
-        } else if (fullMatch.startsWith("***") && fullMatch.endsWith("***")) {
+        } else if (fullMatch.startsWith("***") && fullMatch.endsWith("***") && fullMatch.length >= 6) {
             // Bold Italic ***...***
             val content = fullMatch.removeSurrounding("***")
             builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic))
             builder.append(content)
             builder.pop()
-        } else if (fullMatch.startsWith("**") && fullMatch.endsWith("**")) {
+        } else if (fullMatch.startsWith("___") && fullMatch.endsWith("___") && fullMatch.length >= 6) {
+            // Bold Italic ___...___
+            val content = fullMatch.removeSurrounding("___")
+            builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic))
+            builder.append(content)
+            builder.pop()
+        } else if (fullMatch.startsWith("**") && fullMatch.endsWith("**") && fullMatch.length >= 4) {
             // Bold **...**
             val content = fullMatch.removeSurrounding("**")
             builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
             builder.append(content)
             builder.pop()
-        } else if (fullMatch.startsWith("__") && fullMatch.endsWith("__")) {
+        } else if (fullMatch.startsWith("__") && fullMatch.endsWith("__") && fullMatch.length >= 4) {
             // Bold __...__
             val content = fullMatch.removeSurrounding("__")
             builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
@@ -1117,23 +1163,29 @@ private fun buildRichAnnotatedString(
             builder.pop()
         } else if (fullMatch.startsWith("<b", ignoreCase = true) || fullMatch.startsWith("<strong", ignoreCase = true)) {
             // HTML Bold <b>...</b> or <strong>...</strong>
-            val content = if (fullMatch.startsWith("<b", ignoreCase = true)) matcher.group(22) ?: "" else matcher.group(24) ?: ""
+            val content = fullMatch.replace(Regex("<[^>]+>"), "")
             builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+            builder.append(content)
+            builder.pop()
+        } else if (fullMatch.startsWith("~~") && fullMatch.endsWith("~~") && fullMatch.length >= 4) {
+            // Strikethrough ~~...~~
+            val content = fullMatch.removeSurrounding("~~")
+            builder.pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = Color.Gray))
             builder.append(content)
             builder.pop()
         } else if (fullMatch.startsWith("<u", ignoreCase = true)) {
             // HTML Underline <u>...</u>
-            val content = matcher.group(26) ?: ""
+            val content = fullMatch.replace(Regex("<[^>]+>"), "")
             builder.pushStyle(SpanStyle(textDecoration = TextDecoration.Underline))
             builder.append(content)
             builder.pop()
-        } else if (fullMatch.startsWith("*") && fullMatch.endsWith("*")) {
+        } else if (fullMatch.startsWith("*") && fullMatch.endsWith("*") && fullMatch.length >= 2) {
             // Italic *...*
             val content = fullMatch.removeSurrounding("*")
             builder.pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
             builder.append(content)
             builder.pop()
-        } else if (fullMatch.startsWith("_") && fullMatch.endsWith("_")) {
+        } else if (fullMatch.startsWith("_") && fullMatch.endsWith("_") && fullMatch.length >= 2) {
             // Italic _..._
             val content = fullMatch.removeSurrounding("_")
             builder.pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
@@ -1141,21 +1193,13 @@ private fun buildRichAnnotatedString(
             builder.pop()
         } else if (fullMatch.startsWith("<i", ignoreCase = true) || fullMatch.startsWith("<em", ignoreCase = true)) {
             // HTML Italic <i>...</i> or <em>...</em>
-            val content = if (fullMatch.startsWith("<i", ignoreCase = true)) matcher.group(32) ?: "" else matcher.group(34) ?: ""
+            val content = fullMatch.replace(Regex("<[^>]+>"), "")
             builder.pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-            builder.append(content)
-            builder.pop()
-        } else if (fullMatch.startsWith("~~") && fullMatch.endsWith("~~")) {
-            // Strikethrough ~~...~~
-            val content = fullMatch.removeSurrounding("~~")
-            builder.pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = Color.Gray))
             builder.append(content)
             builder.pop()
         } else if (fullMatch.startsWith("<s", ignoreCase = true) || fullMatch.startsWith("<del", ignoreCase = true) || fullMatch.startsWith("<strike", ignoreCase = true)) {
             // HTML Strikethrough <s>, <del>, <strike>
-            val content = if (fullMatch.startsWith("<s", ignoreCase = true)) matcher.group(38) ?: ""
-            else if (fullMatch.startsWith("<del", ignoreCase = true)) matcher.group(40) ?: ""
-            else matcher.group(42) ?: ""
+            val content = fullMatch.replace(Regex("<[^>]+>"), "")
             builder.pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = Color.Gray))
             builder.append(content)
             builder.pop()
