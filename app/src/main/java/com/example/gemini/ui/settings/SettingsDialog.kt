@@ -43,6 +43,7 @@ fun SettingsDialog(
     isServerLoading: Boolean = false,
     contextWindowLimit: Int = 10,
     summaryModelId: String = "always_ask",
+    isDevModeEnabled: Boolean = false,
     onLoginWithGoogle: () -> Unit,
     onToggleServer: (Boolean) -> Unit = {},
     onLogout: () -> Unit = {},
@@ -52,6 +53,7 @@ fun SettingsDialog(
     onRefreshQuotas: () -> Unit,
     onSetContextWindowLimit: (Int) -> Unit = {},
     onSetSummaryModelId: (String) -> Unit = {},
+    onToggleDevMode: (Boolean) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     var manualToken by remember { mutableStateOf("") }
@@ -489,6 +491,53 @@ fun SettingsDialog(
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Developer Mode & Telemetry Card
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.DataObject,
+                                    contentDescription = null,
+                                    tint = ClaudeTerracotta,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Developer Mode",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Live token telemetry, cache hit ratios, raw JSON payload inspector & prompt overrides",
+                                        fontSize = 11.5.sp,
+                                        lineHeight = 15.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Switch(
+                                    checked = isDevModeEnabled,
+                                    onCheckedChange = onToggleDevMode,
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = ClaudeTerracotta
+                                    )
+                                )
                             }
                         }
                     }

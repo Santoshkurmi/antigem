@@ -23,6 +23,17 @@ data class ToolCall(
 )
 
 @Serializable
+data class TokenUsage(
+    val promptTokens: Int = 0,
+    val outputTokens: Int = 0,
+    val cachedTokens: Int = 0,
+    val cacheCreationTokens: Int = 0,
+    val totalTokens: Int = 0,
+    val durationMs: Long = 0L,
+    val isEstimated: Boolean = false
+)
+
+@Serializable
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val conversationId: String,
@@ -32,6 +43,8 @@ data class ChatMessage(
     val thoughtDurationMs: Long? = null,
     val toolCalls: List<ToolCall> = emptyList(),
     val isStreaming: Boolean = false,
+    val tokenUsage: TokenUsage? = null,
+    val rawPayload: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -42,6 +55,7 @@ data class Conversation(
     val modelId: String = "claude-sonnet-4-5-thinking",
     val sessionId: String = UUID.randomUUID().toString(),
     val summary: String? = null,
+    val customSystemPrompt: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

@@ -10,6 +10,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
@@ -25,19 +27,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.theme.ClaudeTerracotta
+import java.text.NumberFormat
+import java.util.Locale
 
 @Composable
 fun MessageBubble(
     message: ChatMessage,
     modelId: String = "gemini",
+    isDevModeEnabled: Boolean = false,
     onEdit: (ChatMessage) -> Unit = {},
     onRetry: (ChatMessage) -> Unit = {},
     onApproveTool: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
@@ -47,6 +54,7 @@ fun MessageBubble(
     onSkipChoices: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
     onUpdateSummary: ((String) -> Unit)? = null,
     onDeleteSummary: (() -> Unit)? = null,
+    onViewRawPayload: ((String) -> Unit)? = null,
     summarizingModelName: String = "AI",
     pendingQueuedUserMessage: String? = null,
     modifier: Modifier = Modifier
@@ -182,6 +190,24 @@ fun MessageBubble(
                                 modifier = Modifier.size(16.dp)
                             )
                         }
+
+                        if (isDevModeEnabled && !message.rawPayload.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            IconButton(
+                                onClick = {
+                                    onViewRawPayload?.invoke(message.rawPayload)
+                                    showUserActions = false
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.DataObject,
+                                    contentDescription = "View Raw Request Payload",
+                                    tint = Color(0xFF8BE9FD),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -210,43 +236,73 @@ fun MessageBubble(
                     ModelTypingIndicator(modelId = modelId)
                 }
 
-                // Copy and Retry action buttons for assistant responses
+                // Copy, Retry, Raw Payload and Token Telemetry for assistant responses
                 if (!message.isStreaming && message.content.isNotEmpty()) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.Start,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(top = 4.dp)
                     ) {
-                        IconButton(
-                            onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("Copied Response", message.content)
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "Copied response", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.size(28.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.ContentCopy,
-                                contentDescription = "Copy message",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                modifier = Modifier.size(15.dp)
-                            )
+                            IconButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("Copied Response", message.content)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(context, "Copied response", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ContentCopy,
+                                    contentDescription = "Copy message",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(4.dp))
+
+                            IconButton(
+                                onClick = { onRetry(message) },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Refresh,
+                                    contentDescription = "Regenerate response",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+
+                            if (isDevModeEnabled && !message.rawPayload.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = { onViewRawPayload?.invoke(message.rawPayload) },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.DataObject,
+                                        contentDescription = "View Raw Request Payload",
+                                        tint = Color(0xFF8BE9FD),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
                         }
 
-                        Spacer(modifier = Modifier.width(4.dp))
-
-                        IconButton(
-                            onClick = { onRetry(message) },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Refresh,
-                                contentDescription = "Regenerate response",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                modifier = Modifier.size(16.dp)
+                        // Dev Mode Token & Cache Telemetry Badge
+                        if (isDevModeEnabled && message.tokenUsage != null) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            TokenUsageTelemetryPill(
+                                usage = message.tokenUsage,
+                                onViewPayload = if (!message.rawPayload.isNullOrBlank()) {
+                                    { onViewRawPayload?.invoke(message.rawPayload) }
+                                } else null
                             )
                         }
                     }
@@ -334,3 +390,71 @@ fun ModelTypingIndicator(
         )
     }
 }
+
+@Composable
+fun TokenUsageTelemetryPill(
+    usage: com.example.gemini.domain.model.TokenUsage,
+    onViewPayload: (() -> Unit)? = null
+) {
+    val nf = NumberFormat.getNumberInstance(Locale.US)
+    val cachePct = if (usage.promptTokens > 0 && usage.cachedTokens > 0) {
+        ((usage.cachedTokens.toDouble() / (usage.promptTokens + usage.cachedTokens)) * 100).toInt().coerceIn(0, 100)
+    } else 0
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .then(if (onViewPayload != null) Modifier.clickable { onViewPayload() } else Modifier)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "📥 ${nf.format(usage.promptTokens)}",
+                fontSize = 10.5.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF64B5F6)
+            )
+            Text(
+                text = "📤 ${nf.format(usage.outputTokens)}",
+                fontSize = 10.5.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF81C784)
+            )
+            if (usage.cachedTokens > 0) {
+                Text(
+                    text = "⚡ ${nf.format(usage.cachedTokens)} ($cachePct%)",
+                    fontSize = 10.5.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFFFD54F)
+                )
+            }
+            if (usage.durationMs > 0) {
+                val secStr = String.format(Locale.US, "%.1fs", usage.durationMs / 1000f)
+                Text(
+                    text = "⏱️ $secStr",
+                    fontSize = 10.5.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (usage.isEstimated) {
+                Text(
+                    text = "(est.)",
+                    fontSize = 9.5.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+

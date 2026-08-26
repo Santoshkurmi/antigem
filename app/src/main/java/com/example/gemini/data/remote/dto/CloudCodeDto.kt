@@ -112,6 +112,8 @@ data class UsageMetadataDto(
     val promptTokenCount: Int? = null,
     val candidatesTokenCount: Int? = null,
     val totalTokenCount: Int? = null,
-    val cachedContentTokenCount: Int? = null
+    val cachedContentTokenCount: Int? = null,
+    val cacheCreationInputTokens: Int? = null,
+    val cacheReadInputTokens: Int? = null
 )
 

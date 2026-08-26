@@ -103,6 +103,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _showSummaryModelPicker = MutableStateFlow(false)
     val showSummaryModelPicker: StateFlow<Boolean> = _showSummaryModelPicker.asStateFlow()
 
+    private val _isDevModeEnabled = MutableStateFlow(false)
+    val isDevModeEnabled: StateFlow<Boolean> = _isDevModeEnabled.asStateFlow()
+
     private val _terminatedToolDialog = MutableStateFlow<Pair<com.example.gemini.domain.model.ToolCall, String>?>(null)
     val terminatedToolDialog: StateFlow<Pair<com.example.gemini.domain.model.ToolCall, String>?> = _terminatedToolDialog.asStateFlow()
 
@@ -118,6 +121,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun dismissSummaryModelPicker() {
         _showSummaryModelPicker.value = false
         _summaryError.value = null
+    }
+
+    fun setDevModeEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.setDevModeEnabled(enabled)
+        }
+    }
+
+    fun updateCustomSystemPrompt(prompt: String?) {
+        val conv = _currentConversation.value ?: return
+        val updated = conv.copy(customSystemPrompt = if (prompt.isNullOrBlank()) null else prompt.trim())
+        _currentConversation.value = updated
+        viewModelScope.launch {
+            storage.saveConversation(updated)
+        }
     }
 
     fun setContextWindowLimit(limit: Int) {
@@ -365,6 +383,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             authPrefs.summaryModelId.collect { _summaryModelIdPref.value = it }
+        }
+
+        viewModelScope.launch {
+            authPrefs.isDevModeEnabled.collect { _isDevModeEnabled.value = it }
         }
 
         viewModelScope.launch {
@@ -730,7 +752,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 summary = summary,
                 thinkingBudget = _thinkingPreference.value.activeTokens,
                 isThinkingEnabled = _thinkingPreference.value.isEnabled,
-                toolInstruction = toolInstruction
+                toolInstruction = toolInstruction,
+                customSystemPrompt = conv.customSystemPrompt
             ).collect { event ->
                 when (event) {
                     is StreamEvent.ThoughtChunk -> {
@@ -1270,7 +1293,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             thought = thoughtBuilder.toString(),
                             thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
                             toolCalls = existingToolCalls,
-                            isStreaming = false
+                            isStreaming = false,
+                            tokenUsage = event.tokenUsage,
+                            rawPayload = event.rawPayload
                         )
                         storage.saveMessages(conv.id, _messages.value)
                         refreshQuotas()
@@ -1408,7 +1433,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         thought: String,
         thoughtDuration: Long?,
         toolCalls: List<com.example.gemini.domain.model.ToolCall> = emptyList(),
-        isStreaming: Boolean
+        isStreaming: Boolean,
+        tokenUsage: com.example.gemini.domain.model.TokenUsage? = null,
+        rawPayload: String? = null
     ) {
         val list = _messages.value.toMutableList()
         val index = list.indexOfFirst { it.id == msgId }
@@ -1420,7 +1447,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 thoughtText = thought.ifEmpty { null },
                 thoughtDurationMs = thoughtDuration,
                 toolCalls = finalToolCalls,
-                isStreaming = isStreaming
+                isStreaming = isStreaming,
+                tokenUsage = tokenUsage ?: existing.tokenUsage,
+                rawPayload = rawPayload ?: existing.rawPayload
             )
             _messages.value = list
         }

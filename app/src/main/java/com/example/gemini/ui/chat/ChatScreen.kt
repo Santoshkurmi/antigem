@@ -15,7 +15,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.Compress
+import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Terminal
@@ -41,9 +43,12 @@ import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.theme.*
 import com.example.gemini.ui.components.ActiveContextSummaryCard
 import com.example.gemini.ui.components.ChatInputBar
+import com.example.gemini.ui.components.ChatTelemetryDialog
 import com.example.gemini.ui.components.ContextSummarizeAlertBanner
+import com.example.gemini.ui.components.CustomSystemPromptDialog
 import com.example.gemini.ui.components.LiveSummarizingCard
 import com.example.gemini.ui.components.MessageBubble
+import com.example.gemini.ui.components.RawPayloadDialog
 import com.example.gemini.ui.components.SummaryModelPickerDialog
 import com.example.gemini.ui.components.TerminalInspectorDialog
 import com.example.gemini.ui.drawer.ChatHistoryDrawer
@@ -80,19 +85,6 @@ fun ChatScreen(
     val userEmail by viewModel.userEmail.collectAsState()
     val projectId by viewModel.projectId.collectAsState()
     val tier by viewModel.tier.collectAsState()
-
-    var showModelSelector by remember { mutableStateOf(false) }
-    var showThinkingSelector by remember { mutableStateOf(false) }
-    var showToolsSheet by remember { mutableStateOf(false) }
-    var showTerminalInspector by remember { mutableStateOf(false) }
-    var showSettingsDialog by remember { mutableStateOf(false) }
-    var inputText by remember { mutableStateOf("") }
-    var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
-    val thinkingPref by viewModel.thinkingPreference.collectAsState()
-    val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
-    val isOAuthServerListening by viewModel.isOAuthServerListening.collectAsState()
-    val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
-
     val isSummarizing by viewModel.isSummarizing.collectAsState()
     val summarizingModelName by viewModel.summarizingModelName.collectAsState()
     val summaryError by viewModel.summaryError.collectAsState()
@@ -101,6 +93,22 @@ fun ChatScreen(
     val postponedThreshold by viewModel.postponedThreshold.collectAsState()
     val showSummaryModelPicker by viewModel.showSummaryModelPicker.collectAsState()
     val summaryModelIdPref by viewModel.summaryModelIdPref.collectAsState()
+    val isDevModeEnabled by viewModel.isDevModeEnabled.collectAsState()
+
+    var showModelSelector by remember { mutableStateOf(false) }
+    var showThinkingSelector by remember { mutableStateOf(false) }
+    var showToolsSheet by remember { mutableStateOf(false) }
+    var showTerminalInspector by remember { mutableStateOf(false) }
+    var showRawPayloadDialog by remember { mutableStateOf<String?>(null) }
+    var showCustomSystemPromptDialog by remember { mutableStateOf(false) }
+    var showChatTelemetryDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var inputText by remember { mutableStateOf("") }
+    var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
+    val thinkingPref by viewModel.thinkingPreference.collectAsState()
+    val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
+    val isOAuthServerListening by viewModel.isOAuthServerListening.collectAsState()
+    val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
 
     // Independent LazyListState per conversation
     val convKey = currentConv?.id ?: "empty"
@@ -264,6 +272,15 @@ fun ChatScreen(
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                         }
+                        if (isDevModeEnabled) {
+                            IconButton(onClick = { showChatTelemetryDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Analytics,
+                                    contentDescription = "Chat Telemetry & Tokens",
+                                    tint = ClaudeTerracotta
+                                )
+                            }
+                        }
                         IconButton(onClick = { viewModel.startNewChat() }) {
                             Icon(
                                 imageVector = Icons.Default.Add,
@@ -325,6 +342,7 @@ fun ChatScreen(
                                 MessageBubble(
                                     message = msg, 
                                     modelId = selectedModelId,
+                                    isDevModeEnabled = isDevModeEnabled,
                                     onEdit = { targetMsg ->
                                         val msgIndex = messages.indexOfFirst { it.id == targetMsg.id }
                                         val isLastUserMsg = messages.indexOfLast { it.role == MessageRole.USER } == msgIndex
@@ -369,6 +387,9 @@ fun ChatScreen(
                                     },
                                     onDeleteSummary = {
                                         viewModel.deleteSummaryMessage(msg.id)
+                                    },
+                                    onViewRawPayload = { payloadJson ->
+                                        showRawPayloadDialog = payloadJson
                                     },
                                     summarizingModelName = summarizingModelName,
                                     pendingQueuedUserMessage = pendingQueuedUserMessage
@@ -504,6 +525,7 @@ fun ChatScreen(
             isServerLoading = isOAuthServerLoading,
             contextWindowLimit = contextWindowLimit,
             summaryModelId = summaryModelIdPref,
+            isDevModeEnabled = isDevModeEnabled,
             onLoginWithGoogle = {
                 val url = viewModel.getGoogleOAuthUrl()
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -529,6 +551,7 @@ fun ChatScreen(
             },
             onSetContextWindowLimit = { viewModel.setContextWindowLimit(it) },
             onSetSummaryModelId = { viewModel.setSummaryModelId(it) },
+            onToggleDevMode = { viewModel.setDevModeEnabled(it) },
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -703,6 +726,33 @@ fun ChatScreen(
         TerminalInspectorDialog(
             authPreferences = viewModel.authPreferences,
             onDismiss = { showTerminalInspector = false }
+        )
+    }
+
+    // Raw Request Payload Inspector Dialog (Developer Mode)
+    if (showRawPayloadDialog != null) {
+        RawPayloadDialog(
+            payloadJson = showRawPayloadDialog!!,
+            onDismiss = { showRawPayloadDialog = null }
+        )
+    }
+
+    // Custom System Prompt Override Dialog (Developer Mode)
+    if (showCustomSystemPromptDialog) {
+        CustomSystemPromptDialog(
+            initialPrompt = currentConv?.customSystemPrompt,
+            onSavePrompt = { viewModel.updateCustomSystemPrompt(it) },
+            onDismiss = { showCustomSystemPromptDialog = false }
+        )
+    }
+
+    // Chat Telemetry & Tokens Dialog (Developer Mode)
+    if (showChatTelemetryDialog) {
+        ChatTelemetryDialog(
+            conversation = currentConv,
+            messages = messages,
+            onOpenSystemPrompt = { showCustomSystemPromptDialog = true },
+            onDismiss = { showChatTelemetryDialog = false }
         )
     }
 }

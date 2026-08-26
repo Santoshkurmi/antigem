@@ -32,6 +32,7 @@ class AuthPreferences(private val context: Context) {
         val CONTEXT_WINDOW_LIMIT = androidx.datastore.preferences.core.intPreferencesKey("context_window_limit")
         val SUMMARY_MODEL_ID = stringPreferencesKey("summary_model_id")
         val ENABLED_MODELS = androidx.datastore.preferences.core.stringSetPreferencesKey("enabled_models")
+        val IS_DEV_MODE_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_dev_mode_enabled")
     }
 
     val accessToken: Flow<String?> = context.dataStore.data.map { it[ACCESS_TOKEN] }
@@ -41,6 +42,7 @@ class AuthPreferences(private val context: Context) {
     val subscriptionTier: Flow<String?> = context.dataStore.data.map { it[SUBSCRIPTION_TIER] ?: "pro" }
     val userEmail: Flow<String?> = context.dataStore.data.map { it[USER_EMAIL] }
     val enabledModelIds: Flow<Set<String>?> = context.dataStore.data.map { it[ENABLED_MODELS] }
+    val isDevModeEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_DEV_MODE_ENABLED] ?: false }
 
     val termuxSshHost: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_HOST] ?: "127.0.0.1" }
     val termuxSshPort: Flow<Int> = context.dataStore.data.map { it[TERMUX_SSH_PORT]?.toIntOrNull() ?: 8022 }
@@ -96,6 +98,12 @@ class AuthPreferences(private val context: Context) {
     suspend fun setSummaryModelId(modelId: String) {
         context.dataStore.edit { prefs ->
             prefs[SUMMARY_MODEL_ID] = modelId
+        }
+    }
+
+    suspend fun setDevModeEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[IS_DEV_MODE_ENABLED] = enabled
         }
     }
 

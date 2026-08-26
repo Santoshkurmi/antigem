@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
 sealed class StreamEvent {
     data class TextChunk(val text: String) : StreamEvent()
     data class ThoughtChunk(val thought: String) : StreamEvent()
-    data class Completed(val totalTokens: Int?) : StreamEvent()
+    data class Completed(val tokenUsage: com.example.gemini.domain.model.TokenUsage?, val rawPayload: String? = null) : StreamEvent()
     data class Error(val message: String) : StreamEvent()
 }
 
@@ -169,7 +169,8 @@ class AntigravityApiService(
         summary: String? = null,
         thinkingBudget: Int = 4096,
         isThinkingEnabled: Boolean = true,
-        toolInstruction: String? = null
+        toolInstruction: String? = null,
+        customSystemPrompt: String? = null
     ): Flow<StreamEvent> = flow {
         val contents = mutableListOf<ContentPartDto>()
 
@@ -246,7 +247,12 @@ class AntigravityApiService(
                     )
                 }
             } else {
-                val cleanText = msg.content.replace(Regex("<!--\\s*tool_call:[a-zA-Z0-9_-]+\\s*-->"), "").trim()
+                val cleanText = if (role == "model") {
+                    msg.content.replace(Regex("<!--\\s*tool_call:[a-zA-Z0-9_-]+\\s*-->"), "").trim()
+                } else {
+                    msg.content
+                }
+
                 if (cleanText.isNotBlank()) {
                     contents.add(
                         ContentPartDto(
@@ -280,10 +286,11 @@ class AntigravityApiService(
             }
         }
 
+        val customPart = if (!customSystemPrompt.isNullOrBlank()) "\n\n$customSystemPrompt" else ""
         val baseSysText = if (!toolInstruction.isNullOrBlank()) {
-            "$SYSTEM_INSTRUCTION\n\n$toolInstruction"
+            "$SYSTEM_INSTRUCTION$customPart\n\n$toolInstruction"
         } else {
-            SYSTEM_INSTRUCTION
+            "$SYSTEM_INSTRUCTION$customPart"
         }
 
         val requestPayload = CloudCodeRequest(
@@ -309,6 +316,11 @@ class AntigravityApiService(
         val jsonBody = json.encodeToString(requestPayload)
         Log.d(TAG, "[Outgoing Request Body] $jsonBody")
         val body = jsonBody.toRequestBody("application/json".toMediaType())
+
+        val inputCharsCount = jsonBody.length
+        var outputCharsCount = 0
+        var lastUsageMetadata: com.example.gemini.data.remote.dto.UsageMetadataDto? = null
+        val streamStartTime = System.currentTimeMillis()
 
         val endpoints = listOf(ENDPOINT_DAILY, ENDPOINT_PROD)
         var streamSucceeded = false
@@ -359,17 +371,20 @@ class AntigravityApiService(
                                         if (isThoughtPart && !part.text.isNullOrEmpty()) {
                                             Log.d(TAG, "[SSE Thought Chunk] ${part.text}")
                                             emit(StreamEvent.ThoughtChunk(part.text))
+                                            outputCharsCount += part.text.length
                                             chunkCount++
                                         } else if (!part.text.isNullOrEmpty()) {
                                             Log.d(TAG, "[SSE Text Chunk] ${part.text}")
                                             emit(StreamEvent.TextChunk(part.text))
+                                            outputCharsCount += part.text.length
                                             chunkCount++
                                         }
                                     }
                                 }
                                 val usage = chunk.activeUsage
                                 if (usage != null) {
-                                    Log.d(TAG, "[SSE Usage] Total tokens: ${usage.totalTokenCount}")
+                                    lastUsageMetadata = usage
+                                    Log.d(TAG, "[SSE Usage] Prompt: ${usage.promptTokenCount}, Output: ${usage.candidatesTokenCount}, Cached: ${usage.cachedContentTokenCount ?: usage.cacheReadInputTokens}, Total: ${usage.totalTokenCount}")
                                 }
                             } catch (e: Exception) {
                                 Log.w(TAG, "[SSE Parse Warning] $dataJson - Error: ${e.message}")
@@ -378,8 +393,40 @@ class AntigravityApiService(
                     }
                 }
 
-                Log.d(TAG, "[API] Stream finished successfully with $chunkCount chunks from $endpoint")
-                emit(StreamEvent.Completed(null))
+                val durationMs = System.currentTimeMillis() - streamStartTime
+                Log.d(TAG, "[API] Stream finished successfully with $chunkCount chunks in ${durationMs}ms from $endpoint")
+
+                val finalTokenUsage = if (lastUsageMetadata != null) {
+                    val prompt = lastUsageMetadata.promptTokenCount ?: (inputCharsCount / 4)
+                    val output = lastUsageMetadata.candidatesTokenCount ?: (outputCharsCount / 4).coerceAtLeast(chunkCount)
+                    val cached = lastUsageMetadata.cachedContentTokenCount ?: lastUsageMetadata.cacheReadInputTokens ?: 0
+                    val cacheCreation = lastUsageMetadata.cacheCreationInputTokens ?: 0
+                    val total = lastUsageMetadata.totalTokenCount ?: (prompt + output)
+                    com.example.gemini.domain.model.TokenUsage(
+                        promptTokens = prompt,
+                        outputTokens = output,
+                        cachedTokens = cached,
+                        cacheCreationTokens = cacheCreation,
+                        totalTokens = total,
+                        durationMs = durationMs,
+                        isEstimated = false
+                    )
+                } else {
+                    // Fallback heuristic tokenizer (~3.8 characters per token)
+                    val estimatedPrompt = (inputCharsCount / 3.8).toInt().coerceAtLeast(1)
+                    val estimatedOutput = (outputCharsCount / 3.8).toInt().coerceAtLeast(chunkCount)
+                    com.example.gemini.domain.model.TokenUsage(
+                        promptTokens = estimatedPrompt,
+                        outputTokens = estimatedOutput,
+                        cachedTokens = 0,
+                        cacheCreationTokens = 0,
+                        totalTokens = estimatedPrompt + estimatedOutput,
+                        durationMs = durationMs,
+                        isEstimated = true
+                    )
+                }
+
+                emit(StreamEvent.Completed(tokenUsage = finalTokenUsage, rawPayload = jsonBody))
                 streamSucceeded = true
                 break
             } catch (e: Exception) {
