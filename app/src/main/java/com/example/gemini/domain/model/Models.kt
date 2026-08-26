@@ -48,50 +48,13 @@ data class AiModel(
     val isDefault: Boolean = false
 ) {
     companion object {
-        val DEFAULT_MODELS = listOf(
-            AiModel(
-                id = "claude-sonnet-4-5-thinking",
-                displayName = "Claude 3.7 Sonnet (Thinking)",
-                family = ModelFamily.CLAUDE,
-                supportsThinking = true,
-                description = "Most intelligent model with reasoning and coding capabilities",
-                isDefault = true
-            ),
-            AiModel(
-                id = "claude-sonnet-4-5",
-                displayName = "Claude 3.7 Sonnet",
-                family = ModelFamily.CLAUDE,
-                supportsThinking = false,
-                description = "Fast, standard responses for general coding and conversation"
-            ),
-            AiModel(
-                id = "claude-opus-4-5-thinking",
-                displayName = "Claude 3.7 Opus (Thinking)",
-                family = ModelFamily.CLAUDE,
-                supportsThinking = true,
-                description = "Maximum reasoning power for deep architecture analysis"
-            ),
-            AiModel(
-                id = "gemini-3-flash",
-                displayName = "Gemini 2.5 Flash",
-                family = ModelFamily.GEMINI,
-                supportsThinking = true,
-                description = "Ultra-fast response with thinking and 1M context support"
-            ),
-            AiModel(
-                id = "gemini-3-pro-high",
-                displayName = "Gemini 2.5 Pro",
-                family = ModelFamily.GEMINI,
-                supportsThinking = true,
-                description = "High-tier Gemini reasoning and expansive context"
-            )
-        )
+        val DEFAULT_MODELS = emptyList<AiModel>()
 
         fun fromApi(id: String, displayName: String?, description: String? = null): AiModel {
             val name = displayName?.takeIf { it.isNotBlank() } ?: formatModelName(id)
             val family = if (id.contains("claude", ignoreCase = true)) ModelFamily.CLAUDE else ModelFamily.GEMINI
             val thinking = id.contains("thinking", ignoreCase = true) || id.contains("flash", ignoreCase = true) || id.contains("pro", ignoreCase = true)
-            val desc = description ?: if (family == ModelFamily.CLAUDE) "Anthropic Claude via CloudCode" else "Google Gemini Model"
+            val desc = description ?: if (family == ModelFamily.CLAUDE) "Anthropic Claude via Antigravity" else "Google Gemini via Antigravity"
             return AiModel(
                 id = id,
                 displayName = name,
@@ -108,7 +71,7 @@ data class AiModel(
         }
 
         fun findInList(models: List<AiModel>, id: String): AiModel {
-            return models.find { it.id == id } ?: fromApi(id, null)
+            return models.find { it.id == id } ?: if (id.isNotBlank()) fromApi(id, null) else AiModel("gemini", "Select Model")
         }
     }
 }

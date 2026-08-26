@@ -14,6 +14,7 @@ class AuthPreferences(private val context: Context) {
     companion object {
         val ACCESS_TOKEN = stringPreferencesKey("access_token")
         val REFRESH_TOKEN = stringPreferencesKey("refresh_token")
+        val EXPIRES_AT = androidx.datastore.preferences.core.longPreferencesKey("expires_at")
         val PROJECT_ID = stringPreferencesKey("project_id")
         val SUBSCRIPTION_TIER = stringPreferencesKey("subscription_tier")
         val USER_EMAIL = stringPreferencesKey("user_email")
@@ -24,12 +25,13 @@ class AuthPreferences(private val context: Context) {
 
     val accessToken: Flow<String?> = context.dataStore.data.map { it[ACCESS_TOKEN] }
     val refreshToken: Flow<String?> = context.dataStore.data.map { it[REFRESH_TOKEN] }
+    val expiresAt: Flow<Long?> = context.dataStore.data.map { it[EXPIRES_AT] }
     val projectId: Flow<String?> = context.dataStore.data.map { it[PROJECT_ID] ?: "rising-fact-p41fc" }
     val subscriptionTier: Flow<String?> = context.dataStore.data.map { it[SUBSCRIPTION_TIER] ?: "pro" }
     val userEmail: Flow<String?> = context.dataStore.data.map { it[USER_EMAIL] }
     val enabledModelIds: Flow<Set<String>?> = context.dataStore.data.map { it[ENABLED_MODELS] }
 
-    suspend fun saveTokens(accessToken: String, refreshToken: String?, email: String? = null) {
+    suspend fun saveTokens(accessToken: String, refreshToken: String?, email: String? = null, expiresInSeconds: Long? = 3600) {
         context.dataStore.edit { prefs ->
             prefs[ACCESS_TOKEN] = accessToken
             if (refreshToken != null) {
@@ -37,6 +39,9 @@ class AuthPreferences(private val context: Context) {
             }
             if (email != null) {
                 prefs[USER_EMAIL] = email
+            }
+            if (expiresInSeconds != null) {
+                prefs[EXPIRES_AT] = System.currentTimeMillis() + (expiresInSeconds * 1000)
             }
         }
     }
@@ -58,6 +63,7 @@ class AuthPreferences(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs.remove(ACCESS_TOKEN)
             prefs.remove(REFRESH_TOKEN)
+            prefs.remove(EXPIRES_AT)
             prefs.remove(USER_EMAIL)
         }
     }

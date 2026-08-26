@@ -19,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -43,6 +45,9 @@ fun ChatInputBar(
     onStopStreaming: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.background,
@@ -66,7 +71,11 @@ fun ChatInputBar(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
-                        .clickable { onOpenModelSelector() }
+                        .clickable {
+                            focusManager.clearFocus(force = true)
+                            keyboardController?.hide()
+                            onOpenModelSelector()
+                        }
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -124,7 +133,11 @@ fun ChatInputBar(
                                 if (thinkingPreference.isEnabled) ClaudeTerracotta.copy(alpha = 0.12f)
                                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
                             )
-                            .clickable { onOpenThinkingSelector() }
+                            .clickable {
+                                focusManager.clearFocus(force = true)
+                                keyboardController?.hide()
+                                onOpenThinkingSelector()
+                            }
                             .padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {

@@ -52,7 +52,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _isRefreshingModels = MutableStateFlow(false)
     val isRefreshingModels: StateFlow<Boolean> = _isRefreshingModels.asStateFlow()
 
-    private val _selectedModelId = MutableStateFlow(AiModel.DEFAULT_MODELS.first().id)
+    private val _selectedModelId = MutableStateFlow("")
     val selectedModelId: StateFlow<String> = _selectedModelId.asStateFlow()
 
     private val _thinkingPreference = MutableStateFlow(com.example.gemini.domain.model.ThinkingPreference())
@@ -107,7 +107,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         // If current selected model is not in enabled list, switch to first enabled model
         val currentSelected = _selectedModelId.value
-        if (_enabledModels.value.none { it.id == currentSelected }) {
+        if (_enabledModels.value.isNotEmpty() && (currentSelected.isBlank() || _enabledModels.value.none { it.id == currentSelected })) {
             _enabledModels.value.firstOrNull()?.let {
                 selectModel(it.id)
             }
@@ -151,10 +151,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startNewChat() {
+        val modelToUse = if (_selectedModelId.value.isNotBlank()) _selectedModelId.value else (_enabledModels.value.firstOrNull()?.id ?: "")
         val newConv = Conversation(
             id = UUID.randomUUID().toString(),
             title = "New Chat",
-            modelId = _selectedModelId.value,
+            modelId = modelToUse,
             sessionId = UUID.randomUUID().toString()
         )
         _currentConversation.value = newConv
@@ -283,8 +284,43 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         return targetMsg.content
     }
 
-    private suspend fun executeStream(conv: Conversation, currentHistory: List<ChatMessage>) {
-        val token = authPrefs.accessToken.firstOrNull()
+    suspend fun getValidAccessToken(forceRefresh: Boolean = false): String? {
+        val currentAccess = authPrefs.accessToken.firstOrNull()
+        val currentRefresh = authPrefs.refreshToken.firstOrNull()
+        val expiresAt = authPrefs.expiresAt.firstOrNull() ?: 0L
+
+        val isExpired = forceRefresh || (expiresAt > 0 && System.currentTimeMillis() >= expiresAt - 60_000)
+
+        if (!isExpired && !currentAccess.isNullOrBlank()) {
+            return currentAccess
+        }
+
+        if (!currentRefresh.isNullOrBlank()) {
+            android.util.Log.d("GeminiApp", "[Auth] Refreshing Google OAuth access token using refresh_token...")
+            val result = oauthManager.refreshToken(currentRefresh)
+            if (result.isSuccess) {
+                val tokenData = result.getOrThrow()
+                android.util.Log.d("GeminiApp", "[Auth] Token refreshed successfully! New access token acquired.")
+                authPrefs.saveTokens(
+                    accessToken = tokenData.access_token,
+                    refreshToken = tokenData.refresh_token ?: currentRefresh,
+                    expiresInSeconds = tokenData.expires_in ?: 3600
+                )
+                return tokenData.access_token
+            } else {
+                android.util.Log.e("GeminiApp", "[Auth] Failed to refresh token: ${result.exceptionOrNull()?.message}")
+            }
+        }
+
+        return currentAccess
+    }
+
+    private suspend fun executeStream(
+        conv: Conversation, 
+        currentHistory: List<ChatMessage>,
+        isRetryAfterRefresh: Boolean = false
+    ) {
+        val token = getValidAccessToken(forceRefresh = isRetryAfterRefresh)
         android.util.Log.d("GeminiApp", "[ViewModel] executeStream called. Model: ${_selectedModelId.value}, History size: ${currentHistory.size}, Token present: ${!token.isNullOrBlank()}")
         if (token.isNullOrBlank()) {
             val errorMsg = ChatMessage(
@@ -374,6 +410,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     is StreamEvent.Error -> {
                         android.util.Log.e("GeminiApp", "[ViewModel] Stream error: ${event.message}")
+                        
+                        // Check if 401 Unauthorized / Token Expired and can be refreshed automatically
+                        val isAuthError = event.message.contains("401") || 
+                                          event.message.contains("UNAUTHENTICATED", ignoreCase = true) || 
+                                          event.message.contains("Unauthorized", ignoreCase = true) ||
+                                          event.message.contains("token", ignoreCase = true)
+                        
+                        if (isAuthError && !isRetryAfterRefresh && !authPrefs.refreshToken.firstOrNull().isNullOrBlank()) {
+                            android.util.Log.d("GeminiApp", "[ViewModel] 401 encountered, automatically refreshing token and retrying...")
+                            _isStreaming.value = false
+                            // Remove empty placeholder and re-run with fresh token
+                            val currentList = _messages.value.filter { it.id != assistantMsgId }
+                            _messages.value = currentList
+                            executeStream(conv, currentHistory, isRetryAfterRefresh = true)
+                            return@collect
+                        }
+
                         _isStreaming.value = false
                         val errorContent = if (textBuilder.isEmpty()) "⚠️ Error: ${event.message}" else textBuilder.toString() + "\n\n⚠️ Error: ${event.message}"
                         updateAssistantMessage(
@@ -425,10 +478,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshQuotas() {
         viewModelScope.launch {
-            val token = authPrefs.accessToken.firstOrNull() ?: return@launch
+            var token = getValidAccessToken() ?: return@launch
             _isRefreshingModels.value = true
             try {
-                val res = apiService.fetchAvailableModels(token, _projectId.value)
+                var res = apiService.fetchAvailableModels(token, _projectId.value)
+                if (res.isFailure || res.getOrNull()?.models.isNullOrEmpty()) {
+                    val refreshedToken = getValidAccessToken(forceRefresh = true)
+                    if (!refreshedToken.isNullOrBlank() && refreshedToken != token) {
+                        token = refreshedToken
+                        res = apiService.fetchAvailableModels(token, _projectId.value)
+                    }
+                }
+
                 if (res.isSuccess) {
                     val result = res.getOrThrow()
                     if (result.models.isNotEmpty()) {
@@ -503,7 +564,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val userRes = oauthManager.fetchUserInfo(tokenData.access_token)
                 val email = userRes.getOrNull()?.email ?: "Google Account"
 
-                authPrefs.saveTokens(tokenData.access_token, tokenData.refresh_token, email)
+                authPrefs.saveTokens(
+                    accessToken = tokenData.access_token,
+                    refreshToken = tokenData.refresh_token,
+                    email = email,
+                    expiresInSeconds = tokenData.expires_in ?: 3600
+                )
                 _userEmail.value = email
 
                 val assistRes = apiService.loadCodeAssist(tokenData.access_token)

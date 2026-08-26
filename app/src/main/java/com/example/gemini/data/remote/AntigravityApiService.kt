@@ -157,7 +157,7 @@ class AntigravityApiService(
                 Log.e(TAG, "[API] fetchAvailableModels error: ${e.message}")
             }
         }
-        Result.success(AvailableModelsResult(com.example.gemini.domain.model.AiModel.DEFAULT_MODELS, emptyList()))
+        Result.success(AvailableModelsResult(emptyList(), emptyList()))
     }
 
     fun streamGenerateContent(

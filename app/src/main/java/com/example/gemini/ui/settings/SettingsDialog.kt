@@ -197,39 +197,48 @@ fun SettingsDialog(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                     ) {
                         Column(modifier = Modifier.padding(8.dp)) {
-                            availableModels.forEach { model ->
-                                val isEnabled = enabledModelIds == null || model.id in enabledModelIds
-                                val quota = quotas.find { it.modelId == model.id }
-                                val pct = quota?.percentage
+                            if (availableModels.isEmpty()) {
+                                Text(
+                                    text = "No models available yet. Connect your Google account above to load your models.",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                            } else {
+                                availableModels.forEach { model ->
+                                    val isEnabled = enabledModelIds == null || model.id in enabledModelIds
+                                    val quota = quotas.find { it.modelId == model.id }
+                                    val pct = quota?.percentage
 
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable { onToggleModelEnabled(model.id, !isEnabled) }
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(
-                                        checked = isEnabled,
-                                        onCheckedChange = { checked -> onToggleModelEnabled(model.id, checked) },
-                                        colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = model.displayName,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = if (isEnabled) FontWeight.SemiBold else FontWeight.Normal,
-                                            color = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { onToggleModelEnabled(model.id, !isEnabled) }
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = isEnabled,
+                                            onCheckedChange = { checked -> onToggleModelEnabled(model.id, checked) },
+                                            colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta)
                                         )
-                                        if (pct != null) {
-                                            val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Remaining Quota: $pct%",
-                                                fontSize = 11.sp,
-                                                color = badgeColor
+                                                text = model.displayName,
+                                                fontSize = 13.5.sp,
+                                                fontWeight = if (isEnabled) FontWeight.SemiBold else FontWeight.Normal,
+                                                color = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                             )
+                                            if (pct != null) {
+                                                val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
+                                                Text(
+                                                    text = "Remaining Quota: $pct%",
+                                                    fontSize = 11.sp,
+                                                    color = badgeColor
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -263,43 +272,52 @@ fun SettingsDialog(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    availableModels.forEach { model ->
-                        val quota = quotas.find { it.modelId == model.id }
-                        val pct = quota?.percentage ?: 0
-                        val barColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
+                    if (availableModels.isEmpty()) {
+                        Text(
+                            text = "No quota information. Log in to view live model quotas.",
+                            fontSize = 12.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(vertical = 6.dp)
+                        )
+                    } else {
+                        availableModels.forEach { model ->
+                            val quota = quotas.find { it.modelId == model.id }
+                            val pct = quota?.percentage ?: 0
+                            val barColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
 
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = model.displayName,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = if (quota?.remainingFraction != null) "$pct%" else "N/A",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = barColor
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            LinearProgressIndicator(
-                                progress = { (pct / 100f).coerceIn(0f, 1f) },
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp)),
-                                color = barColor,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = model.displayName,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = if (quota?.remainingFraction != null) "$pct%" else "N/A",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = barColor
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                LinearProgressIndicator(
+                                    progress = { (pct / 100f).coerceIn(0f, 1f) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = barColor,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            }
                         }
                     }
 

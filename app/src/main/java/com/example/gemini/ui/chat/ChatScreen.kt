@@ -20,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,6 +55,8 @@ fun ChatScreen(
     viewModel: ChatViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
@@ -374,8 +378,16 @@ fun ChatScreen(
                     thinkingPreference = thinkingPref,
                     inputText = inputText,
                     onInputTextChange = { inputText = it },
-                    onOpenModelSelector = { showModelSelector = true },
-                    onOpenThinkingSelector = { showThinkingSelector = true },
+                    onOpenModelSelector = {
+                        focusManager.clearFocus(force = true)
+                        keyboardController?.hide()
+                        showModelSelector = true
+                    },
+                    onOpenThinkingSelector = {
+                        focusManager.clearFocus(force = true)
+                        keyboardController?.hide()
+                        showThinkingSelector = true
+                    },
                     isStreaming = isStreaming,
                     onSendMessage = { text ->
                         viewModel.sendMessage(text)
@@ -388,14 +400,12 @@ fun ChatScreen(
         }
     }
 
-    // Model Selector Bottom Sheet (Grouped Categories & Thinking Config)
+    // Model Selector Bottom Sheet (Active Model at Top & Expandable Categories)
     if (showModelSelector) {
         ModelSelectorBottomSheet(
             selectedModelId = selectedModelId,
             availableModels = enabledModels,
             quotas = quotas,
-            thinkingPreference = thinkingPref,
-            onOpenThinkingConfig = { showThinkingSelector = true },
             isRefreshing = isRefreshingModels,
             onRefresh = { viewModel.refreshQuotas() },
             onSelectModel = { modelId -> viewModel.selectModel(modelId) },
