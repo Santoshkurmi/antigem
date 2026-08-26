@@ -47,6 +47,7 @@ class GoogleOAuthManager(private val client: OkHttpClient = OkHttpClient()) {
 
     private val json = Json { ignoreUnknownKeys = true }
     private var serverSocket: ServerSocket? = null
+    val isServerListening = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     data class PkcePair(
         val codeVerifier: String,
@@ -81,229 +82,246 @@ class GoogleOAuthManager(private val client: OkHttpClient = OkHttpClient()) {
 
     suspend fun startLocalCallbackServer(onCodeReceived: (String) -> Unit) = withContext(Dispatchers.IO) {
         try {
-            serverSocket?.close()
-            serverSocket = ServerSocket(51121, 1, InetAddress.getByName("127.0.0.1"))
-            val socket = serverSocket?.accept() ?: return@withContext
-            val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-            val firstLine = reader.readLine() ?: ""
+            stopLocalCallbackServer()
+            serverSocket = ServerSocket(51121, 5, InetAddress.getByName("127.0.0.1"))
+            isServerListening.value = true
+            android.util.Log.d("GeminiApp", "[OAuthServer] Listening on http://localhost:51121/oauth-callback")
 
-            val codeMatch = Regex("[?&]code=([^&\\s]+)").find(firstLine)
-            val code = codeMatch?.groupValues?.get(1)?.let { URLDecoder.decode(it, "UTF-8") }
+            while (isServerListening.value && serverSocket != null && !serverSocket!!.isClosed) {
+                val socket = try {
+                    serverSocket?.accept() ?: break
+                } catch (e: Exception) {
+                    break
+                }
 
-            val encodedUrl = URLEncoder.encode(firstLine, "UTF-8")
-            val rawFullUrl = "http://localhost:51121$firstLine".replace(" HTTP/1.1", "").replace("GET ", "")
-            val safeCode = code ?: ""
+                try {
+                    val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+                    val firstLine = reader.readLine() ?: ""
+                    android.util.Log.d("GeminiApp", "[OAuthServer] HTTP Request: $firstLine")
 
-            val responseBody = """
-                <!DOCTYPE html>
-                <html lang="en">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Antigravity Authentication Successful</title>
-                    <style>
-                        * { box-sizing: border-box; margin: 0; padding: 0; }
-                        body {
-                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                            text-align: center;
-                            padding: 32px 16px;
-                            background: #141413;
-                            color: #edece9;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            min-height: 100vh;
-                        }
-                        .card {
-                            background: #1e1e1c;
-                            border: 1px solid rgba(255, 255, 255, 0.08);
-                            border-radius: 20px;
-                            padding: 28px 20px;
-                            max-width: 440px;
-                            width: 100%;
-                            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-                        }
-                        .icon-circle {
-                            width: 56px;
-                            height: 56px;
-                            border-radius: 50%;
-                            background: rgba(217, 119, 6, 0.15);
-                            color: #f59e0b;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            margin: 0 auto 16px;
-                            font-size: 28px;
-                        }
-                        h2 {
-                            color: #f5f5f4;
-                            font-size: 22px;
-                            font-weight: 700;
-                            margin-bottom: 8px;
-                            letter-spacing: -0.3px;
-                        }
-                        p.subtitle {
-                            color: #a8a29e;
-                            font-size: 14px;
-                            line-height: 1.5;
-                            margin-bottom: 22px;
-                        }
-                        .button-group {
-                            display: flex;
-                            flex-direction: column;
-                            gap: 10px;
-                            margin-bottom: 20px;
-                        }
-                        .btn {
-                            width: 100%;
-                            padding: 13px 18px;
-                            border-radius: 12px;
-                            border: none;
-                            font-size: 14.5px;
-                            font-weight: 600;
-                            cursor: pointer;
-                            transition: all 0.15s ease-in-out;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            gap: 8px;
-                        }
-                        .btn-primary {
-                            background: #d97706;
-                            color: #ffffff;
-                        }
-                        .btn-primary:active {
-                            background: #b45309;
-                            transform: scale(0.98);
-                        }
-                        .btn-secondary {
-                            background: #2a2a27;
-                            color: #d6d3d1;
-                            border: 1px solid rgba(255, 255, 255, 0.1);
-                        }
-                        .btn-secondary:active {
-                            background: #363632;
-                            transform: scale(0.98);
-                        }
-                        .code-box {
-                            background: #111110;
-                            border: 1px solid rgba(255, 255, 255, 0.06);
-                            border-radius: 10px;
-                            padding: 10px 12px;
-                            font-family: monospace;
-                            font-size: 11px;
-                            color: #a8a29e;
-                            word-break: break-all;
-                            text-align: left;
-                            max-height: 65px;
-                            overflow-y: auto;
-                            margin-top: 14px;
-                            user-select: all;
-                        }
-                        .toast {
-                            color: #10b981;
-                            font-size: 13px;
-                            font-weight: 600;
-                            margin-top: 8px;
-                            min-height: 20px;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="card">
-                        <div class="icon-circle">✓</div>
-                        <h2>Authentication Successful</h2>
-                        <p class="subtitle">Your Antigravity token has been authorized. You can return to the app or copy the URL below.</p>
-                        
-                        <div class="button-group">
-                            <button id="copyUrlBtn" class="btn btn-primary" onclick="copyFullUrl()">
-                                📋 Copy Callback URL
-                            </button>
-                            <button id="copyCodeBtn" class="btn btn-secondary" onclick="copyAuthCode()">
-                                🔑 Copy Auth Code Only
-                            </button>
-                        </div>
-                        <div id="statusToast" class="toast"></div>
+                    if (firstLine.contains("/favicon.ico")) {
+                        val notFound = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        socket.getOutputStream().write(notFound.toByteArray(Charsets.UTF_8))
+                        socket.getOutputStream().flush()
+                        socket.close()
+                        continue
+                    }
 
-                        <div class="code-box" id="urlBox">$rawFullUrl</div>
-                    </div>
+                    val codeMatch = Regex("[?&]code=([^&\\s]+)").find(firstLine)
+                    val code = codeMatch?.groupValues?.get(1)?.let { URLDecoder.decode(it, "UTF-8") }
 
-                    <script>
-                        const fullUrl = window.location.href || "$rawFullUrl";
-                        const authCode = "$safeCode";
+                    val rawFullUrl = "http://localhost:51121$firstLine".replace(" HTTP/1.1", "").replace("GET ", "")
+                    val safeCode = code ?: ""
 
-                        function showToast(msg) {
-                            const toast = document.getElementById('statusToast');
-                            toast.innerText = msg;
-                            setTimeout(() => { toast.innerText = ''; }, 3500);
-                        }
+                    val responseBody = """
+                        <!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <title>Antigravity Authentication Successful</title>
+                            <style>
+                                * { box-sizing: border-box; margin: 0; padding: 0; }
+                                body {
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                                    text-align: center;
+                                    padding: 32px 16px;
+                                    background: #141413;
+                                    color: #edece9;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    min-height: 100vh;
+                                }
+                                .card {
+                                    background: #1e1e1c;
+                                    border: 1px solid rgba(255, 255, 255, 0.08);
+                                    border-radius: 20px;
+                                    padding: 28px 20px;
+                                    max-width: 440px;
+                                    width: 100%;
+                                    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+                                }
+                                .icon-circle {
+                                    width: 56px;
+                                    height: 56px;
+                                    border-radius: 50%;
+                                    background: rgba(217, 119, 6, 0.15);
+                                    color: #f59e0b;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    margin: 0 auto 16px;
+                                    font-size: 28px;
+                                }
+                                h2 {
+                                    color: #f5f5f4;
+                                    font-size: 22px;
+                                    font-weight: 700;
+                                    margin-bottom: 8px;
+                                    letter-spacing: -0.3px;
+                                }
+                                p.subtitle {
+                                    color: #a8a29e;
+                                    font-size: 14px;
+                                    line-height: 1.5;
+                                    margin-bottom: 22px;
+                                }
+                                .button-group {
+                                    display: flex;
+                                    gap: 10px;
+                                    margin-bottom: 12px;
+                                }
+                                .btn {
+                                    flex: 1;
+                                    padding: 12px 14px;
+                                    border-radius: 10px;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    border: none;
+                                    transition: background 0.2s;
+                                }
+                                .btn-primary {
+                                    background: #d97706;
+                                    color: #ffffff;
+                                }
+                                .btn-primary:hover {
+                                    background: #b45309;
+                                }
+                                .btn-secondary {
+                                    background: #2a2a28;
+                                    color: #e7e5e4;
+                                    border: 1px solid rgba(255, 255, 255, 0.12);
+                                }
+                                .btn-secondary:hover {
+                                    background: #383835;
+                                }
+                                .code-box {
+                                    background: #141413;
+                                    border: 1px solid rgba(255, 255, 255, 0.06);
+                                    border-radius: 10px;
+                                    padding: 10px 12px;
+                                    font-family: monospace;
+                                    font-size: 11px;
+                                    color: #a8a29e;
+                                    word-break: break-all;
+                                    text-align: left;
+                                    max-height: 65px;
+                                    overflow-y: auto;
+                                    margin-top: 14px;
+                                    user-select: all;
+                                }
+                                .toast {
+                                    color: #10b981;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    margin-top: 8px;
+                                    min-height: 20px;
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="card">
+                                <div class="icon-circle">✓</div>
+                                <h2>Authentication Successful</h2>
+                                <p class="subtitle">Your Antigravity token has been authorized. You can return to the app or copy the URL below.</p>
+                                
+                                <div class="button-group">
+                                    <button id="copyUrlBtn" class="btn btn-primary" onclick="copyFullUrl()">
+                                        📋 Copy Callback URL
+                                    </button>
+                                    <button id="copyCodeBtn" class="btn btn-secondary" onclick="copyAuthCode()">
+                                        🔑 Copy Auth Code Only
+                                    </button>
+                                </div>
+                                <div id="statusToast" class="toast"></div>
 
-                        function copyFullUrl() {
-                            navigator.clipboard.writeText(fullUrl).then(() => {
-                                document.getElementById('copyUrlBtn').innerText = '✓ URL Copied!';
-                                showToast('✓ Callback URL copied to clipboard!');
-                                setTimeout(() => {
-                                    document.getElementById('copyUrlBtn').innerText = '📋 Copy Callback URL';
-                                }, 3000);
-                            }).catch(() => {
-                                selectFallback(fullUrl);
-                            });
-                        }
+                                <div class="code-box" id="urlBox">$rawFullUrl</div>
+                            </div>
 
-                        function copyAuthCode() {
-                            if (!authCode) {
-                                copyFullUrl();
-                                return;
-                            }
-                            navigator.clipboard.writeText(authCode).then(() => {
-                                document.getElementById('copyCodeBtn').innerText = '✓ Code Copied!';
-                                showToast('✓ Auth Code copied to clipboard!');
-                                setTimeout(() => {
-                                    document.getElementById('copyCodeBtn').innerText = '🔑 Copy Auth Code Only';
-                                }, 3000);
-                            }).catch(() => {
-                                selectFallback(authCode);
-                            });
-                        }
+                            <script>
+                                const fullUrl = window.location.href || "$rawFullUrl";
+                                const authCode = "$safeCode";
 
-                        function selectFallback(text) {
-                            const temp = document.createElement("textarea");
-                            temp.value = text;
-                            document.body.appendChild(temp);
-                            temp.select();
-                            document.execCommand("copy");
-                            document.body.removeChild(temp);
-                            showToast('✓ Copied to clipboard!');
-                        }
+                                function showToast(msg) {
+                                    const toast = document.getElementById('statusToast');
+                                    toast.innerText = msg;
+                                    setTimeout(() => { toast.innerText = ''; }, 3500);
+                                }
 
-                        // Attempt auto-copy on load
-                        try {
-                            if (navigator.clipboard && navigator.clipboard.writeText) {
-                                navigator.clipboard.writeText(fullUrl);
-                            }
-                        } catch(e) {}
-                    </script>
-                </body>
-                </html>
-            """.trimIndent()
+                                function copyFullUrl() {
+                                    navigator.clipboard.writeText(fullUrl).then(() => {
+                                        document.getElementById('copyUrlBtn').innerText = '✓ URL Copied!';
+                                        showToast('✓ Callback URL copied to clipboard!');
+                                        setTimeout(() => {
+                                            document.getElementById('copyUrlBtn').innerText = '📋 Copy Callback URL';
+                                        }, 3000);
+                                    }).catch(() => {
+                                        selectFallback(fullUrl);
+                                    });
+                                }
 
-            val response = "HTTP/1.1 200 OK\r\n" +
-                    "Content-Type: text/html; charset=UTF-8\r\n" +
-                    "Content-Length: ${responseBody.toByteArray(Charsets.UTF_8).size}\r\n" +
-                    "Connection: close\r\n\r\n" +
-                    responseBody
+                                function copyAuthCode() {
+                                    if (!authCode) {
+                                        copyFullUrl();
+                                        return;
+                                    }
+                                    navigator.clipboard.writeText(authCode).then(() => {
+                                        document.getElementById('copyCodeBtn').innerText = '✓ Code Copied!';
+                                        showToast('✓ Auth Code copied to clipboard!');
+                                        setTimeout(() => {
+                                            document.getElementById('copyCodeBtn').innerText = '🔑 Copy Auth Code Only';
+                                        }, 3000);
+                                    }).catch(() => {
+                                        selectFallback(authCode);
+                                    });
+                                }
 
-            socket.getOutputStream().write(response.toByteArray(Charsets.UTF_8))
-            socket.getOutputStream().flush()
-            socket.close()
-            serverSocket?.close()
-            serverSocket = null
+                                function selectFallback(text) {
+                                    const temp = document.createElement("textarea");
+                                    temp.value = text;
+                                    document.body.appendChild(temp);
+                                    temp.select();
+                                    document.execCommand("copy");
+                                    document.body.removeChild(temp);
+                                    showToast('✓ Copied to clipboard!');
+                                }
 
-            if (code != null) {
-                onCodeReceived(code)
+                                try {
+                                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                                        navigator.clipboard.writeText(fullUrl);
+                                    }
+                                } catch(e) {}
+                            </script>
+                        </body>
+                        </html>
+                    """.trimIndent()
+
+                    val response = "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: text/html; charset=UTF-8\r\n" +
+                            "Content-Length: ${responseBody.toByteArray(Charsets.UTF_8).size}\r\n" +
+                            "Connection: close\r\n\r\n" +
+                            responseBody
+
+                    socket.getOutputStream().write(response.toByteArray(Charsets.UTF_8))
+                    socket.getOutputStream().flush()
+                    socket.close()
+
+                    if (code != null && code.isNotBlank()) {
+                        android.util.Log.d("GeminiApp", "[OAuthServer] Authorization code extracted successfully: ${code.take(15)}...")
+                        onCodeReceived(code)
+                        break
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("GeminiApp", "[OAuthServer] Socket handling error: ${e.message}")
+                    try { socket.close() } catch (_: Exception) {}
+                }
             }
         } catch (e: Exception) {
-            // Closed/cancelled
+            android.util.Log.e("GeminiApp", "[OAuthServer] Server loop terminated: ${e.message}")
+        } finally {
+            stopLocalCallbackServer()
         }
     }
 
@@ -311,8 +329,11 @@ class GoogleOAuthManager(private val client: OkHttpClient = OkHttpClient()) {
         try {
             serverSocket?.close()
             serverSocket = null
+            android.util.Log.d("GeminiApp", "[OAuthServer] Server stopped")
         } catch (e: Exception) {
             // Ignored
+        } finally {
+            isServerListening.value = false
         }
     }
 
@@ -348,13 +369,15 @@ class GoogleOAuthManager(private val client: OkHttpClient = OkHttpClient()) {
 
             val response = client.newCall(request).execute()
             val text = response.body?.string() ?: ""
+            android.util.Log.d("GeminiApp", "[OAuth] Token exchange HTTP ${response.code}: $text")
             if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("Token exchange failed ($response.code): $text"))
+                return@withContext Result.failure(Exception("Token exchange failed (${response.code}): $text"))
             }
 
             val tokenData = json.decodeFromString<TokenResponse>(text)
             Result.success(tokenData)
         } catch (e: Exception) {
+            android.util.Log.e("GeminiApp", "[OAuth] Token exchange exception: ${e.message}")
             Result.failure(e)
         }
     }
@@ -375,13 +398,15 @@ class GoogleOAuthManager(private val client: OkHttpClient = OkHttpClient()) {
 
             val response = client.newCall(request).execute()
             val text = response.body?.string() ?: ""
+            android.util.Log.d("GeminiApp", "[OAuth] Refresh token HTTP ${response.code}: $text")
             if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("Refresh token failed ($response.code): $text"))
+                return@withContext Result.failure(Exception("Refresh token failed (${response.code}): $text"))
             }
 
             val tokenData = json.decodeFromString<TokenResponse>(text)
             Result.success(tokenData)
         } catch (e: Exception) {
+            android.util.Log.e("GeminiApp", "[OAuth] Refresh token exception: ${e.message}")
             Result.failure(e)
         }
     }
@@ -396,12 +421,14 @@ class GoogleOAuthManager(private val client: OkHttpClient = OkHttpClient()) {
 
             val response = client.newCall(request).execute()
             val text = response.body?.string() ?: ""
+            android.util.Log.d("GeminiApp", "[OAuth] Fetch userinfo HTTP ${response.code}: $text")
             if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("Fetch userinfo failed ($response.code): $text"))
+                return@withContext Result.failure(Exception("Fetch userinfo failed (${response.code}): $text"))
             }
 
             Result.success(json.decodeFromString<UserInfoResponse>(text))
         } catch (e: Exception) {
+            android.util.Log.e("GeminiApp", "[OAuth] Fetch userinfo exception: ${e.message}")
             Result.failure(e)
         }
     }

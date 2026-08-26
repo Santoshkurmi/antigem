@@ -14,12 +14,15 @@ import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.Conversation
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.domain.model.ModelQuota
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
@@ -64,6 +67,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _userEmail = MutableStateFlow<String?>(null)
     val userEmail: StateFlow<String?> = _userEmail.asStateFlow()
+
+    val isOAuthServerListening: StateFlow<Boolean> = oauthManager.isServerListening.asStateFlow()
+    private val _isOAuthServerLoading = MutableStateFlow(false)
+    val isOAuthServerLoading: StateFlow<Boolean> = _isOAuthServerLoading.asStateFlow()
 
     private val _projectId = MutableStateFlow("rising-fact-p41fc")
     val projectId: StateFlow<String> = _projectId.asStateFlow()
@@ -123,6 +130,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private var streamingJob: Job? = null
+    private var serverJob: Job? = null
     var pendingPkceVerifier: String? = null
 
     init {
@@ -982,22 +990,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun applyManualInput(input: String) {
         val trimmed = input.trim()
+        android.util.Log.d("GeminiApp", "[OAuth] applyManualInput received: ${trimmed.take(30)}...")
         if (trimmed.contains("code=")) {
             val match = Regex("[?&]code=([^&\\s]+)").find(trimmed)
-            val code = match?.groupValues?.get(1)
+            val code = match?.groupValues?.get(1)?.let { java.net.URLDecoder.decode(it, "UTF-8") }
             if (code != null) {
+                android.util.Log.d("GeminiApp", "[OAuth] Extracted auth code from manual input: ${code.take(15)}...")
                 handleOAuthCode(code)
                 return
             }
         }
 
         if (trimmed.startsWith("4/0")) {
-            handleOAuthCode(trimmed)
+            val decoded = try { java.net.URLDecoder.decode(trimmed, "UTF-8") } catch (_: Exception) { trimmed }
+            handleOAuthCode(decoded)
             return
         }
 
-        // Direct access token
+        // Direct access token (e.g. ya29...)
         viewModelScope.launch {
+            android.util.Log.d("GeminiApp", "[OAuth] Applying direct token...")
             authPrefs.saveTokens(trimmed, null, "Manual Token")
             val assistRes = apiService.loadCodeAssist(trimmed)
             if (assistRes.isSuccess) {
@@ -1017,28 +1029,96 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun startOAuthServer() {
+        if (oauthManager.isServerListening.value && serverJob?.isActive == true) {
+            android.util.Log.d("GeminiApp", "[OAuth] Server is already active, ignoring start request")
+            return
+        }
+        serverJob?.cancel()
+        serverJob = viewModelScope.launch {
+            _isOAuthServerLoading.value = true
+            try {
+                if (pendingPkceVerifier == null) {
+                    val pkce = oauthManager.generatePkce()
+                    pendingPkceVerifier = pkce.codeVerifier
+                    android.util.Log.d("GeminiApp", "[OAuth] Generated PKCE verifier for server session")
+                }
+                _isOAuthServerLoading.value = false
+                oauthManager.startLocalCallbackServer { code ->
+                    handleOAuthCode(code)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("GeminiApp", "[OAuth] Server start failed: ${e.message}")
+                _isOAuthServerLoading.value = false
+            }
+        }
+    }
+
+    fun stopOAuthServer() {
+        serverJob?.cancel()
+        serverJob = null
+        _isOAuthServerLoading.value = false
+        oauthManager.stopLocalCallbackServer()
+    }
+
+    fun toggleOAuthServer(enable: Boolean) {
+        if (enable) {
+            startOAuthServer()
+        } else {
+            stopOAuthServer()
+        }
+    }
+
+    fun logout() {
+        stopOAuthServer()
+        pendingPkceVerifier = null
+        viewModelScope.launch {
+            authPrefs.clearAuth()
+            _userEmail.value = null
+            _projectId.value = "rising-fact-p41fc"
+            _tier.value = "pro"
+            _quotas.value = emptyList()
+            android.util.Log.d("GeminiApp", "[OAuth] Logged out successfully")
+        }
+    }
+
     fun getGoogleOAuthUrl(): String {
         val pkce = oauthManager.generatePkce()
         pendingPkceVerifier = pkce.codeVerifier
-
-        // Start background local callback server on 51121
-        viewModelScope.launch {
-            oauthManager.startLocalCallbackServer { code ->
-                handleOAuthCode(code)
-            }
-        }
-
+        android.util.Log.d("GeminiApp", "[OAuth] getGoogleOAuthUrl generated verifier (len=${pkce.codeVerifier.length})")
+        startOAuthServer()
         return pkce.authUrl
     }
 
     fun handleOAuthCode(code: String) {
-        val verifier = pendingPkceVerifier ?: return
-        viewModelScope.launch {
-            val tokenRes = oauthManager.exchangeCodeForToken(code, verifier)
-            if (tokenRes.isSuccess) {
+        val trimmedCode = code.trim()
+        android.util.Log.d("GeminiApp", "[OAuth] handleOAuthCode processing code: ${trimmedCode.take(20)}...")
+        val verifier = pendingPkceVerifier
+        if (verifier == null) {
+            android.util.Log.e("GeminiApp", "[OAuth] ERROR: pendingPkceVerifier is null! Cannot exchange auth code.")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            // Brief delay to let the server socket fully close and free the IO thread pool
+            // before making outbound network calls. This prevents DNS resolution failures
+            // that occur when the token exchange fires from within the server socket callback.
+            delay(400L)
+
+            var tokenRes: Result<GoogleOAuthManager.TokenResponse>? = null
+            for (attempt in 1..3) {
+                android.util.Log.d("GeminiApp", "[OAuth] exchangeCodeForToken attempt $attempt...")
+                tokenRes = oauthManager.exchangeCodeForToken(trimmedCode, verifier)
+                if (tokenRes.isSuccess) break
+                android.util.Log.w("GeminiApp", "[OAuth] Attempt $attempt failed: ${tokenRes.exceptionOrNull()?.message}")
+                if (attempt < 3) delay(1000L * attempt)
+            }
+
+            if (tokenRes?.isSuccess == true) {
                 val tokenData = tokenRes.getOrThrow()
+                android.util.Log.d("GeminiApp", "[OAuth] Token exchange SUCCESS! Fetching user profile...")
                 val userRes = oauthManager.fetchUserInfo(tokenData.access_token)
                 val email = userRes.getOrNull()?.email ?: "Google Account"
+                android.util.Log.d("GeminiApp", "[OAuth] User email resolved: $email")
 
                 authPrefs.saveTokens(
                     accessToken = tokenData.access_token,
@@ -1046,16 +1126,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     email = email,
                     expiresInSeconds = tokenData.expires_in ?: 3600
                 )
-                _userEmail.value = email
+                withContext(Dispatchers.Main) { _userEmail.value = email }
 
                 val assistRes = apiService.loadCodeAssist(tokenData.access_token)
                 if (assistRes.isSuccess) {
                     val (proj, tier) = assistRes.getOrThrow()
+                    android.util.Log.d("GeminiApp", "[OAuth] CodeAssist project: $proj, tier: $tier")
                     authPrefs.saveProjectInfo(proj, tier)
-                    _projectId.value = proj
-                    _tier.value = tier
+                    withContext(Dispatchers.Main) {
+                        _projectId.value = proj
+                        _tier.value = tier
+                    }
+                } else {
+                    android.util.Log.w("GeminiApp", "[OAuth] CodeAssist loading warning: ${assistRes.exceptionOrNull()?.message}")
                 }
                 refreshQuotas()
+            } else {
+                android.util.Log.e("GeminiApp", "[OAuth] Token exchange FAILED after retries: ${tokenRes?.exceptionOrNull()?.message}")
             }
         }
     }

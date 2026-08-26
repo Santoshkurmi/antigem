@@ -83,6 +83,8 @@ fun ChatScreen(
     var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
     val thinkingPref by viewModel.thinkingPreference.collectAsState()
     val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
+    val isOAuthServerListening by viewModel.isOAuthServerListening.collectAsState()
+    val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
 
     // Independent LazyListState per conversation
     val convKey = currentConv?.id ?: "empty"
@@ -464,10 +466,18 @@ fun ChatScreen(
             availableModels = availableModels,
             enabledModelIds = enabledModelIds,
             quotas = quotas,
+            isServerListening = isOAuthServerListening,
+            isServerLoading = isOAuthServerLoading,
             onLoginWithGoogle = {
                 val url = viewModel.getGoogleOAuthUrl()
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                 context.startActivity(intent)
+            },
+            onToggleServer = { enable ->
+                viewModel.toggleOAuthServer(enable)
+            },
+            onLogout = {
+                viewModel.logout()
             },
             onManualTokenEntered = { token ->
                 viewModel.applyManualInput(token)

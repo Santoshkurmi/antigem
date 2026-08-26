@@ -11,9 +11,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Login
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.automirrored.outlined.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,7 +37,11 @@ fun SettingsDialog(
     availableModels: List<AiModel> = AiModel.DEFAULT_MODELS,
     enabledModelIds: Set<String>?,
     quotas: List<ModelQuota>,
+    isServerListening: Boolean = false,
+    isServerLoading: Boolean = false,
     onLoginWithGoogle: () -> Unit,
+    onToggleServer: (Boolean) -> Unit = {},
+    onLogout: () -> Unit = {},
     onManualTokenEntered: (String) -> Unit,
     onToggleModelEnabled: (String, Boolean) -> Unit,
     onEnableAllModels: () -> Unit,
@@ -79,14 +82,17 @@ fun SettingsDialog(
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    // Account info
+                    // Account info card
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Icon(
                                     imageVector = if (userEmail != null) Icons.Outlined.CheckCircle else Icons.AutoMirrored.Outlined.Login,
                                     contentDescription = null,
@@ -94,70 +100,174 @@ fun SettingsDialog(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = userEmail ?: "Not logged in",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.5.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = userEmail ?: "Not logged in",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Project: $projectId • Tier: ${tier.uppercase()}",
+                                        fontSize = 11.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
 
-                            Spacer(modifier = Modifier.height(6.dp))
+                                if (userEmail != null) {
+                                    OutlinedButton(
+                                        onClick = onLogout,
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = MaterialTheme.colorScheme.error
+                                        ),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                                    ) {
+                                        Text("Log Out", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // If logged in
+                    if (userEmail != null) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            color = QuotaGreen.copy(alpha = 0.1f)
+                        ) {
                             Text(
-                                text = "Project: $projectId • Tier: ${tier.uppercase()}",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                text = "✓ Active session authorized. Log out to connect another account.",
+                                fontSize = 11.5.sp,
+                                color = QuotaGreen,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                         }
-                    }
+                    } else {
+                        // Login Buttons (Google OAuth & Paste Token)
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = onLoginWithGoogle,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                            ) {
+                                Text("Google OAuth", fontSize = 13.sp, color = Color.White)
+                            }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
 
-                    // Login Buttons
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = onLoginWithGoogle,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                        ) {
-                            Text("Google OAuth", fontSize = 13.sp, color = Color.White)
+                            OutlinedButton(
+                                onClick = { showManualInput = !showManualInput },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(if (showManualInput) "Close Input" else "Paste URL / Code", fontSize = 13.sp)
+                            }
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        OutlinedButton(
-                            onClick = { showManualInput = !showManualInput },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text(if (showManualInput) "Close Input" else "Paste Token", fontSize = 13.sp)
-                        }
-                    }
-
-                    if (showManualInput) {
                         Spacer(modifier = Modifier.height(10.dp))
-                        OutlinedTextField(
-                            value = manualToken,
-                            onValueChange = { manualToken = it },
-                            placeholder = { Text("Paste Callback URL or Code (4/0...)", fontSize = 12.sp) },
+
+                        // Localhost Server Checkbox Card
+                        Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Button(
-                            onClick = {
-                                if (manualToken.isNotBlank()) {
-                                    onManualTokenEntered(manualToken.trim())
-                                    manualToken = ""
-                                    showManualInput = false
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isServerListening) QuotaGreen.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                            )
                         ) {
-                            Text("Apply URL / Code / Token", fontSize = 13.sp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !isServerLoading) {
+                                        onToggleServer(!isServerListening)
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Localhost Server (:51121)",
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(
+                                                    if (isServerListening) QuotaGreen.copy(alpha = 0.15f)
+                                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                                                )
+                                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isServerListening) "Listening" else "Stopped",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isServerListening) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Listens for automatic browser callback on port 51121",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+
+                                if (isServerLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = ClaudeTerracotta
+                                    )
+                                } else {
+                                    Checkbox(
+                                        checked = isServerListening,
+                                        onCheckedChange = { onToggleServer(it) },
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = QuotaGreen,
+                                            checkmarkColor = Color.White
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        if (showManualInput) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = manualToken,
+                                onValueChange = { manualToken = it },
+                                placeholder = { Text("Paste Callback URL (http://...) or Code (4/0...)", fontSize = 12.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Button(
+                                onClick = {
+                                    if (manualToken.isNotBlank()) {
+                                        onManualTokenEntered(manualToken.trim())
+                                        manualToken = ""
+                                        showManualInput = false
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Apply URL / Code / Token", fontSize = 13.sp)
+                            }
                         }
                     }
 
