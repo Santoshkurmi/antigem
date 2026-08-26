@@ -39,6 +39,9 @@ fun ToolsBottomSheet(
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
+    val isWebSearchEnabled by authPreferences.isWebSearchToolEnabled.collectAsState(initial = true)
+    val isWebReaderEnabled by authPreferences.isWebReaderToolEnabled.collectAsState(initial = true)
+
     val isTerminalEnabled by authPreferences.isTerminalToolEnabled.collectAsState(initial = false)
     val isAutoExecute by authPreferences.isAutoExecuteTerminal.collectAsState(initial = true)
     val hostPref by authPreferences.termuxSshHost.collectAsState(initial = "127.0.0.1")
@@ -104,6 +107,162 @@ fun ToolsBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Tool Card 1: Free Web Search
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isWebSearchEnabled) ClaudeTerracotta.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isWebSearchEnabled) ClaudeTerracotta.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Search,
+                            contentDescription = null,
+                            tint = if (isWebSearchEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Web Search",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(QuotaGreen.copy(alpha = 0.15f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = "Free • 100%",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = QuotaGreen
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Real-time Google & DuckDuckGo search results",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Switch(
+                        checked = isWebSearchEnabled,
+                        onCheckedChange = { enabled ->
+                            coroutineScope.launch { authPreferences.setWebSearchToolEnabled(enabled) }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Tool Card 2: Webpage Content Reader
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isWebReaderEnabled) ClaudeTerracotta.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isWebReaderEnabled) ClaudeTerracotta.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Language,
+                            contentDescription = null,
+                            tint = if (isWebReaderEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Webpage Reader",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(QuotaGreen.copy(alpha = 0.15f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = "Free",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = QuotaGreen
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Extract clean article markdown from any URL",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Switch(
+                        checked = isWebReaderEnabled,
+                        onCheckedChange = { enabled ->
+                            coroutineScope.launch { authPreferences.setWebReaderToolEnabled(enabled) }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Tool Card: Termux Terminal Access
             Surface(

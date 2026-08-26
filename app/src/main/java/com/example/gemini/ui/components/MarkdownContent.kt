@@ -1211,6 +1211,24 @@ fun parseMarkdownBlocks(
             continue
         }
 
+        val webSearchMatch = Regex("<web_search>([\\s\\S]*?)</web_search>").find(line)
+        if (webSearchMatch != null) {
+            val query = webSearchMatch.groupValues[1].trim()
+            val matchedTool = toolCalls.find { it.command == query && it.name == "web_search" } ?: com.example.gemini.domain.model.ToolCall(name = "web_search", command = query, status = "RUNNING")
+            result.add(MarkdownBlock.AgentTool(matchedTool))
+            i++
+            continue
+        }
+
+        val readUrlMatch = Regex("<read_url>([\\s\\S]*?)</read_url>").find(line)
+        if (readUrlMatch != null) {
+            val url = readUrlMatch.groupValues[1].trim()
+            val matchedTool = toolCalls.find { it.command == url && it.name == "read_url" } ?: com.example.gemini.domain.model.ToolCall(name = "read_url", command = url, status = "RUNNING")
+            result.add(MarkdownBlock.AgentTool(matchedTool))
+            i++
+            continue
+        }
+
         // 1. Math block starting with $$
         if (line.trimStart().startsWith("$$")) {
             val firstLineContent = line.trimStart().removePrefix("$$")

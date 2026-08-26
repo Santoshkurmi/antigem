@@ -375,11 +375,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         val isTerminalEnabled = authPrefs.isTerminalToolEnabled.firstOrNull() ?: false
         val isAutoExecute = authPrefs.isAutoExecuteTerminal.firstOrNull() ?: true
+        val isWebSearchEnabled = authPrefs.isWebSearchToolEnabled.firstOrNull() ?: true
+        val isWebReaderEnabled = authPrefs.isWebReaderToolEnabled.firstOrNull() ?: true
 
-        val toolInstruction = if (isTerminalEnabled) {
-            "You have access to a local Termux Linux shell environment via SSH tool.\n" +
-            "To execute shell commands, wrap the exact command in <execute_command>command_here</execute_command>.\n" +
-            "Explain what you are doing first, then output the tag. You can run one or multiple commands in sequence. Once executed, you will receive the real terminal output."
+        val toolInstructionsList = mutableListOf<String>()
+        if (isWebSearchEnabled) {
+            toolInstructionsList.add("• Web Search Tool: To search Google / DuckDuckGo in real-time, output <web_search>search query</web_search>. You will receive top ranked results and snippets.")
+        }
+        if (isWebReaderEnabled) {
+            toolInstructionsList.add("• Webpage Content Reader: To read and extract clean markdown from any URL, output <read_url>https://example.com</read_url>. You will receive the extracted page content.")
+        }
+        if (isTerminalEnabled) {
+            toolInstructionsList.add("• Linux Shell Tool: You have access to a local Termux Linux shell via SSH. To execute commands, output <execute_command>command_here</execute_command>.")
+        }
+
+        val toolInstruction = if (toolInstructionsList.isNotEmpty()) {
+            "You have access to the following real-time tools:\n" +
+            toolInstructionsList.joinToString("\n") +
+            "\nWhen using a tool, explain what you are doing first, then output the tag. You can use tools sequentially. Once a tool executes, you will receive the real results."
         } else null
 
         streamingJob = viewModelScope.launch {
@@ -427,7 +440,183 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         val duration = (thoughtCompletedAt ?: System.currentTimeMillis()) - startTime
                         val streamGeneratedText = textBuilder.toString()
 
-                        // Check if AI requested a command execution
+                        // 1. Check for Web Search Tool
+                        val searchMatch = Regex("<web_search>([\\s\\S]*?)</web_search>").find(streamGeneratedText)
+                        if (searchMatch != null && isWebSearchEnabled) {
+                            val query = searchMatch.groupValues[1].trim()
+                            val cleanPreamble = streamGeneratedText.replace(Regex("<web_search>[\\s\\S]*?</web_search>"), "").trim()
+
+                            if (query.isNotEmpty()) {
+                                val runningToolCall = com.example.gemini.domain.model.ToolCall(
+                                    name = "web_search",
+                                    command = query,
+                                    status = "RUNNING"
+                                )
+                                val toolCallsWithRunning = existingToolCalls + runningToolCall
+                                val runningToolMarker = "<!-- tool_call:${runningToolCall.id} -->"
+                                val currentTextAccumulated = if (priorTextPrefix.isNotBlank()) {
+                                    if (cleanPreamble.isNotBlank()) "$priorTextPrefix\n\n$cleanPreamble\n\n$runningToolMarker" else "$priorTextPrefix\n\n$runningToolMarker"
+                                } else {
+                                    if (cleanPreamble.isNotBlank()) "$cleanPreamble\n\n$runningToolMarker" else runningToolMarker
+                                }
+
+                                updateAssistantMessage(
+                                    msgId = assistantMsgId,
+                                    content = currentTextAccumulated,
+                                    thought = thoughtBuilder.toString(),
+                                    thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                    toolCalls = toolCallsWithRunning,
+                                    isStreaming = true
+                                )
+
+                                viewModelScope.launch {
+                                    val searchStartTime = System.currentTimeMillis()
+                                    val searchResult = com.example.gemini.data.web.WebSearchManager.search(query)
+                                    val searchDuration = System.currentTimeMillis() - searchStartTime
+
+                                    val isSuccess = searchResult.isSuccess
+                                    val resultsList = searchResult.getOrNull() ?: emptyList()
+                                    val outputFormatted = if (isSuccess && resultsList.isNotEmpty()) {
+                                        buildString {
+                                            resultsList.forEachIndexed { idx, res ->
+                                                append("${idx + 1}. **${res.title}**\n")
+                                                append("   URL: ${res.url}\n")
+                                                append("   Snippet: ${res.snippet}\n\n")
+                                            }
+                                        }.trim()
+                                    } else {
+                                        searchResult.exceptionOrNull()?.localizedMessage ?: "(No search results found for '$query')"
+                                    }
+
+                                    val completedToolCall = runningToolCall.copy(
+                                        status = if (isSuccess) "SUCCESS" else "FAILED",
+                                        output = outputFormatted,
+                                        exitCode = if (isSuccess) 0 else 1,
+                                        durationMs = searchDuration
+                                    )
+                                    val updatedToolCalls = existingToolCalls + completedToolCall
+
+                                    updateAssistantMessage(
+                                        msgId = assistantMsgId,
+                                        content = currentTextAccumulated,
+                                        thought = thoughtBuilder.toString(),
+                                        thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                        toolCalls = updatedToolCalls,
+                                        isStreaming = false
+                                    )
+                                    storage.saveMessages(conv.id, _messages.value)
+
+                                    val syntheticHistory = currentHistory + listOf(
+                                        ChatMessage(
+                                            conversationId = conv.id,
+                                            role = MessageRole.ASSISTANT,
+                                            content = "$cleanPreamble\n<web_search>$query</web_search>"
+                                        ),
+                                        ChatMessage(
+                                            conversationId = conv.id,
+                                            role = MessageRole.USER,
+                                            content = "[Web Search Results for \"$query\"]:\n$outputFormatted"
+                                        )
+                                    )
+
+                                    executeStream(
+                                        conv = conv,
+                                        currentHistory = syntheticHistory,
+                                        existingAssistantMsgId = assistantMsgId,
+                                        existingToolCalls = updatedToolCalls,
+                                        priorTextPrefix = currentTextAccumulated
+                                    )
+                                }
+                                return@collect
+                            }
+                        }
+
+                        // 2. Check for Webpage Reader Tool
+                        val readerMatch = Regex("<read_url>([\\s\\S]*?)</read_url>").find(streamGeneratedText)
+                        if (readerMatch != null && isWebReaderEnabled) {
+                            val targetUrl = readerMatch.groupValues[1].trim()
+                            val cleanPreamble = streamGeneratedText.replace(Regex("<read_url>[\\s\\S]*?</read_url>"), "").trim()
+
+                            if (targetUrl.isNotEmpty()) {
+                                val runningToolCall = com.example.gemini.domain.model.ToolCall(
+                                    name = "read_url",
+                                    command = targetUrl,
+                                    status = "RUNNING"
+                                )
+                                val toolCallsWithRunning = existingToolCalls + runningToolCall
+                                val runningToolMarker = "<!-- tool_call:${runningToolCall.id} -->"
+                                val currentTextAccumulated = if (priorTextPrefix.isNotBlank()) {
+                                    if (cleanPreamble.isNotBlank()) "$priorTextPrefix\n\n$cleanPreamble\n\n$runningToolMarker" else "$priorTextPrefix\n\n$runningToolMarker"
+                                } else {
+                                    if (cleanPreamble.isNotBlank()) "$cleanPreamble\n\n$runningToolMarker" else runningToolMarker
+                                }
+
+                                updateAssistantMessage(
+                                    msgId = assistantMsgId,
+                                    content = currentTextAccumulated,
+                                    thought = thoughtBuilder.toString(),
+                                    thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                    toolCalls = toolCallsWithRunning,
+                                    isStreaming = true
+                                )
+
+                                viewModelScope.launch {
+                                    val readStartTime = System.currentTimeMillis()
+                                    val readResult = com.example.gemini.data.web.WebSearchManager.readUrl(targetUrl)
+                                    val readDuration = System.currentTimeMillis() - readStartTime
+
+                                    val isSuccess = readResult.isSuccess
+                                    val pageContent = readResult.getOrNull()
+                                    val outputFormatted = if (isSuccess && pageContent != null) {
+                                        "# ${pageContent.title}\n\n${pageContent.text}"
+                                    } else {
+                                        readResult.exceptionOrNull()?.localizedMessage ?: "(Could not fetch content from $targetUrl)"
+                                    }
+
+                                    val completedToolCall = runningToolCall.copy(
+                                        status = if (isSuccess) "SUCCESS" else "FAILED",
+                                        output = outputFormatted,
+                                        exitCode = if (isSuccess) 0 else 1,
+                                        durationMs = readDuration
+                                    )
+                                    val updatedToolCalls = existingToolCalls + completedToolCall
+
+                                    updateAssistantMessage(
+                                        msgId = assistantMsgId,
+                                        content = currentTextAccumulated,
+                                        thought = thoughtBuilder.toString(),
+                                        thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                        toolCalls = updatedToolCalls,
+                                        isStreaming = false
+                                    )
+                                    storage.saveMessages(conv.id, _messages.value)
+
+                                    val syntheticHistory = currentHistory + listOf(
+                                        ChatMessage(
+                                            conversationId = conv.id,
+                                            role = MessageRole.ASSISTANT,
+                                            content = "$cleanPreamble\n<read_url>$targetUrl</read_url>"
+                                        ),
+                                        ChatMessage(
+                                            conversationId = conv.id,
+                                            role = MessageRole.USER,
+                                            content = "[Webpage Content for \"$targetUrl\"]:\n$outputFormatted"
+                                        )
+                                    )
+
+                                    executeStream(
+                                        conv = conv,
+                                        currentHistory = syntheticHistory,
+                                        existingAssistantMsgId = assistantMsgId,
+                                        existingToolCalls = updatedToolCalls,
+                                        priorTextPrefix = currentTextAccumulated
+                                    )
+                                }
+                                return@collect
+                            }
+                        }
+
+                        // 3. Check for Termux SSH Command Execution Tool
                         val toolMatch = Regex("<execute_command>([\\s\\S]*?)</execute_command>").find(streamGeneratedText)
                         if (toolMatch != null && isTerminalEnabled && isAutoExecute) {
                             val cmdToRun = toolMatch.groupValues[1].trim()
@@ -435,6 +624,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                             if (cmdToRun.isNotEmpty()) {
                                 val runningToolCall = com.example.gemini.domain.model.ToolCall(
+                                    name = "bash",
                                     command = cmdToRun,
                                     status = "RUNNING"
                                 )

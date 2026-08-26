@@ -24,6 +24,8 @@ class AuthPreferences(private val context: Context) {
         val TERMUX_SSH_PASS = stringPreferencesKey("termux_ssh_pass")
         val IS_TERMINAL_TOOL_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_tool_enabled")
         val AUTO_EXECUTE_TERMINAL = androidx.datastore.preferences.core.booleanPreferencesKey("auto_execute_terminal")
+        val IS_WEB_SEARCH_TOOL_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_web_search_tool_enabled")
+        val IS_WEB_READER_TOOL_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_web_reader_tool_enabled")
         val ENABLED_MODELS = androidx.datastore.preferences.core.stringSetPreferencesKey("enabled_models")
     }
 
@@ -41,6 +43,21 @@ class AuthPreferences(private val context: Context) {
     val termuxSshPass: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_PASS] ?: "root" }
     val isTerminalToolEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_TERMINAL_TOOL_ENABLED] ?: false }
     val isAutoExecuteTerminal: Flow<Boolean> = context.dataStore.data.map { it[AUTO_EXECUTE_TERMINAL] ?: true }
+
+    val isWebSearchToolEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_WEB_SEARCH_TOOL_ENABLED] ?: true }
+    val isWebReaderToolEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_WEB_READER_TOOL_ENABLED] ?: true }
+
+    suspend fun setWebSearchToolEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[IS_WEB_SEARCH_TOOL_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setWebReaderToolEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[IS_WEB_READER_TOOL_ENABLED] = enabled
+        }
+    }
 
     suspend fun saveTermuxSshConfig(
         host: String,

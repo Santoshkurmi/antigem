@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,6 +46,9 @@ fun AgentToolCallCard(
 ) {
     val context = LocalContext.current
     var isExpanded by remember { mutableStateOf(false) }
+
+    val isSearch = toolCall.name == "web_search" || toolCall.name == "search"
+    val isReader = toolCall.name == "read_url" || toolCall.name == "web_reader"
 
     val isRunning = toolCall.status == "RUNNING"
     val isSuccess = toolCall.status == "SUCCESS" || (toolCall.status != "FAILED" && toolCall.exitCode == 0)
@@ -104,8 +109,13 @@ fun AgentToolCallCard(
                         modifier = Modifier.size(15.dp)
                     )
                 } else {
+                    val toolIcon = when (toolCall.name) {
+                        "web_search", "search" -> Icons.Outlined.Search
+                        "read_url", "web_reader" -> Icons.Outlined.Language
+                        else -> Icons.Default.Terminal
+                    }
                     Icon(
-                        imageVector = Icons.Default.Terminal,
+                        imageVector = toolIcon,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(15.dp)
@@ -116,10 +126,14 @@ fun AgentToolCallCard(
 
                 // Action Label & Command
                 val actionPrefix = when {
+                    isRunning && isSearch -> "Searching Web:"
+                    isRunning && isReader -> "Fetching Page:"
                     isRunning -> "Executing in Termux:"
+                    isSuccess && isSearch -> "Web Search:"
+                    isSuccess && isReader -> "Read Webpage:"
                     isSuccess -> "Executed:"
-                    isFailed -> "Failed to run:"
-                    else -> "Terminal:"
+                    isFailed -> "Failed:"
+                    else -> "Tool:"
                 }
 
                 Text(
@@ -133,7 +147,7 @@ fun AgentToolCallCard(
 
                 Text(
                     text = toolCall.command,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = if (isSearch) FontFamily.Default else FontFamily.Monospace,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -194,9 +208,14 @@ fun AgentToolCallCard(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val commandPrefix = when {
+                            isSearch -> "Search Query: \"${toolCall.command}\""
+                            isReader -> "URL: ${toolCall.command}"
+                            else -> "$ ${toolCall.command}"
+                        }
                         Text(
-                            text = "$ ${toolCall.command}",
-                            fontFamily = FontFamily.Monospace,
+                            text = commandPrefix,
+                            fontFamily = if (isSearch) FontFamily.Default else FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.5.sp,
                             color = ClaudeTerracotta,
