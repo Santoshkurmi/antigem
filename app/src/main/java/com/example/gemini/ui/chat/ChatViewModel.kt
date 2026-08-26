@@ -79,11 +79,208 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _tier = MutableStateFlow("pro")
     val tier: StateFlow<String> = _tier.asStateFlow()
 
+    private val _contextWindowLimit = MutableStateFlow(10)
+    val contextWindowLimit: StateFlow<Int> = _contextWindowLimit.asStateFlow()
+
+    private val _summaryModelIdPref = MutableStateFlow("always_ask")
+    val summaryModelIdPref: StateFlow<String> = _summaryModelIdPref.asStateFlow()
+
+    private val _isSummarizing = MutableStateFlow(false)
+    val isSummarizing: StateFlow<Boolean> = _isSummarizing.asStateFlow()
+
+    private val _summarizingModelName = MutableStateFlow("")
+    val summarizingModelName: StateFlow<String> = _summarizingModelName.asStateFlow()
+
+    private val _summaryError = MutableStateFlow<String?>(null)
+    val summaryError: StateFlow<String?> = _summaryError.asStateFlow()
+
+    private val _pendingQueuedUserMessage = MutableStateFlow<String?>(null)
+    val pendingQueuedUserMessage: StateFlow<String?> = _pendingQueuedUserMessage.asStateFlow()
+
+    private val _postponedThreshold = MutableStateFlow<Int?>(null)
+    val postponedThreshold: StateFlow<Int?> = _postponedThreshold.asStateFlow()
+
+    private val _showSummaryModelPicker = MutableStateFlow(false)
+    val showSummaryModelPicker: StateFlow<Boolean> = _showSummaryModelPicker.asStateFlow()
+
     private val _terminatedToolDialog = MutableStateFlow<Pair<com.example.gemini.domain.model.ToolCall, String>?>(null)
     val terminatedToolDialog: StateFlow<Pair<com.example.gemini.domain.model.ToolCall, String>?> = _terminatedToolDialog.asStateFlow()
 
     fun dismissTerminatedToolDialog() {
         _terminatedToolDialog.value = null
+    }
+
+    fun openManualSummaryPicker() {
+        _summaryError.value = null
+        _showSummaryModelPicker.value = true
+    }
+
+    fun dismissSummaryModelPicker() {
+        _showSummaryModelPicker.value = false
+        _summaryError.value = null
+    }
+
+    fun setContextWindowLimit(limit: Int) {
+        viewModelScope.launch {
+            authPrefs.setContextWindowLimit(limit)
+        }
+    }
+
+    fun setSummaryModelId(modelId: String) {
+        viewModelScope.launch {
+            authPrefs.setSummaryModelId(modelId)
+        }
+    }
+
+    fun postponeSummarization(extraCount: Int) {
+        val currentCount = _messages.value.size
+        _postponedThreshold.value = currentCount + extraCount
+    }
+
+    fun updateSummaryMessage(messageId: String, newSummary: String) {
+        val conv = _currentConversation.value ?: return
+        val updated = _messages.value.map {
+            if (it.id == messageId) it.copy(content = newSummary) else it
+        }
+        _messages.value = updated
+        val lastSummary = updated.filter { it.role == MessageRole.SUMMARY }.lastOrNull()?.content
+        val updatedConv = conv.copy(summary = lastSummary)
+        _currentConversation.value = updatedConv
+        viewModelScope.launch {
+            storage.saveMessages(conv.id, updated)
+            storage.saveConversation(updatedConv)
+        }
+    }
+
+    fun deleteSummaryMessage(messageId: String) {
+        val conv = _currentConversation.value ?: return
+        val updated = _messages.value.filterNot { it.id == messageId }
+        _messages.value = updated
+        val lastSummary = updated.filter { it.role == MessageRole.SUMMARY }.lastOrNull()?.content
+        val updatedConv = conv.copy(summary = lastSummary)
+        _currentConversation.value = updatedConv
+        _postponedThreshold.value = null
+        viewModelScope.launch {
+            storage.saveMessages(conv.id, updated)
+            storage.saveConversation(updatedConv)
+        }
+    }
+
+    fun updateSummary(newSummary: String) {
+        val latestSummaryMsg = _messages.value.filter { it.role == MessageRole.SUMMARY }.lastOrNull()
+        if (latestSummaryMsg != null) {
+            updateSummaryMessage(latestSummaryMsg.id, newSummary)
+        } else {
+            val conv = _currentConversation.value ?: return
+            val updated = conv.copy(summary = if (newSummary.isBlank()) null else newSummary)
+            _currentConversation.value = updated
+            viewModelScope.launch {
+                storage.saveConversation(updated)
+            }
+        }
+    }
+
+    fun deleteSummary() {
+        val latestSummaryMsg = _messages.value.filter { it.role == MessageRole.SUMMARY }.lastOrNull()
+        if (latestSummaryMsg != null) {
+            deleteSummaryMessage(latestSummaryMsg.id)
+        } else {
+            val conv = _currentConversation.value ?: return
+            val updated = conv.copy(summary = null)
+            _currentConversation.value = updated
+            _postponedThreshold.value = null
+            viewModelScope.launch {
+                storage.saveConversation(updated)
+            }
+        }
+    }
+
+    fun requestSummarization(modelId: String, onFinished: (() -> Unit)? = null) {
+        val conv = _currentConversation.value ?: return
+        val currentMessages = _messages.value
+        if (currentMessages.isEmpty()) {
+            _summaryError.value = "No messages in chat to summarize yet."
+            _showSummaryModelPicker.value = true
+            return
+        }
+
+        // Dismiss picker immediately so user returns to chat and sees live progress banner
+        _showSummaryModelPicker.value = false
+        _isSummarizing.value = true
+        _summaryError.value = null
+
+        val modelObj = _availableModels.value.find { it.id == modelId }
+        _summarizingModelName.value = modelObj?.displayName ?: modelId
+
+        // Insert a live streaming summary message at the current end of the chat!
+        val liveSummaryMessage = ChatMessage(
+            conversationId = conv.id,
+            role = MessageRole.SUMMARY,
+            content = "",
+            isStreaming = true
+        )
+        _messages.value = _messages.value + liveSummaryMessage
+
+        viewModelScope.launch {
+            val token = getValidAccessToken()
+            if (token.isNullOrBlank()) {
+                _summaryError.value = "Not logged in. Please sign in via Settings."
+                _isSummarizing.value = false
+                _messages.value = _messages.value.filterNot { it.id == liveSummaryMessage.id }
+                _showSummaryModelPicker.value = true
+                return@launch
+            }
+
+            val turnsToFilter = currentMessages.filter { it.role != MessageRole.SUMMARY }
+            val windowLimit = _contextWindowLimit.value
+            val (olderMessages, _) = ContextCompactor.splitHistory(turnsToFilter, windowLimit)
+            val messagesToSummarize = if (olderMessages.isNotEmpty()) olderMessages else turnsToFilter
+
+            android.util.Log.d("GeminiApp", "[ViewModel] Calling ContextCompactor.executeSummarization for conv: ${conv.id}")
+            val result = ContextCompactor.executeSummarization(
+                apiService = apiService,
+                token = token,
+                projectId = _projectId.value,
+                modelId = modelId,
+                messagesToSummarize = messagesToSummarize,
+                existingSummary = conv.summary
+            )
+
+            _isSummarizing.value = false
+
+            if (result.isSuccess) {
+                val newSummary = result.getOrThrow()
+                android.util.Log.d("GeminiApp", "[ViewModel] Summarization succeeded! Updating summary message ${liveSummaryMessage.id}")
+                val updatedMessages = _messages.value.map {
+                    if (it.id == liveSummaryMessage.id) {
+                        it.copy(content = newSummary, isStreaming = false)
+                    } else it
+                }
+                _messages.value = updatedMessages
+
+                val updatedConv = conv.copy(summary = newSummary)
+                _currentConversation.value = updatedConv
+                _postponedThreshold.value = null
+                _summaryError.value = null
+                storage.saveMessages(conv.id, updatedMessages)
+                storage.saveConversation(updatedConv)
+
+                // If a user message was queued during summarization, dispatch it now!
+                val pending = _pendingQueuedUserMessage.value
+                _pendingQueuedUserMessage.value = null
+                if (!pending.isNullOrBlank()) {
+                    executeStream(updatedConv, updatedMessages)
+                }
+
+                onFinished?.invoke()
+            } else {
+                val err = result.exceptionOrNull()?.localizedMessage ?: "Unknown error"
+                android.util.Log.e("GeminiApp", "[ViewModel] Summarization failed: $err")
+                _messages.value = _messages.value.filterNot { it.id == liveSummaryMessage.id }
+                _summaryError.value = err
+                _showSummaryModelPicker.value = true
+            }
+        }
     }
 
     fun setThinkingPreference(pref: com.example.gemini.domain.model.ThinkingPreference) {
@@ -160,6 +357,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             authPrefs.subscriptionTier.collect { it?.let { t -> _tier.value = t } }
+        }
+
+        viewModelScope.launch {
+            authPrefs.contextWindowLimit.collect { _contextWindowLimit.value = it }
+        }
+
+        viewModelScope.launch {
+            authPrefs.summaryModelId.collect { _summaryModelIdPref.value = it }
         }
 
         viewModelScope.launch {
@@ -244,7 +449,30 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             storage.saveConversation(updatedConv)
             storage.saveMessages(conv.id, updatedList)
-            executeStream(updatedConv, updatedList)
+
+            // If summarization is currently in progress, mark message as pending and queue it
+            if (_isSummarizing.value) {
+                _pendingQueuedUserMessage.value = content
+                return@launch
+            }
+
+            // Check if context window limit is exceeded and no summary exists yet
+            val threshold = _postponedThreshold.value ?: _contextWindowLimit.value
+            val needsSummary = updatedList.size > threshold && updatedConv.summary.isNullOrBlank()
+
+            if (needsSummary) {
+                val prefModel = _summaryModelIdPref.value
+                val modelToUse = if (prefModel != "always_ask" && _availableModels.value.any { it.id == prefModel }) {
+                    prefModel
+                } else {
+                    _availableModels.value.firstOrNull { it.id.contains("flash", ignoreCase = true) }?.id ?: _selectedModelId.value
+                }
+
+                _pendingQueuedUserMessage.value = content
+                requestSummarization(modelToUse)
+            } else {
+                executeStream(updatedConv, updatedList)
+            }
         }
     }
 
@@ -382,11 +610,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val textBuilder = StringBuilder()
         var thoughtCompletedAt: Long? = null
 
-        // Apply context compaction if history is very long
-        val (summary, compactHistory) = if (ContextCompactor.needsCompaction(currentHistory)) {
-            ContextCompactor.compactHistory(currentHistory)
+        // Apply context compaction: keep recent messages verbatim, older ones represented by executive summary
+        val windowLimit = _contextWindowLimit.value
+        val latestSummaryMsg = currentHistory.filter { it.role == MessageRole.SUMMARY }.lastOrNull()
+        val summaryIndex = if (latestSummaryMsg != null) currentHistory.indexOf(latestSummaryMsg) else -1
+
+        val (summary, compactHistory) = if (latestSummaryMsg != null && summaryIndex >= 0) {
+            val messagesAfterSummary = currentHistory.drop(summaryIndex + 1).filter { it.role != MessageRole.SUMMARY }
+            Pair(latestSummaryMsg.content, messagesAfterSummary)
+        } else if (!conv.summary.isNullOrBlank()) {
+            val (_, recent) = ContextCompactor.splitHistory(currentHistory.filter { it.role != MessageRole.SUMMARY }, windowLimit)
+            Pair(conv.summary, recent)
         } else {
-            Pair(conv.summary, currentHistory)
+            Pair(null, currentHistory.filter { it.role != MessageRole.SUMMARY })
         }
 
         val isTerminalEnabled = authPrefs.isTerminalToolEnabled.firstOrNull() ?: false

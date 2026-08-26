@@ -191,6 +191,8 @@ class AntigravityApiService(
 
         // Add chat history
         for (msg in messages) {
+            if (msg.role == MessageRole.SUMMARY) continue
+
             val role = if (msg.role == MessageRole.USER) "user" else "model"
 
             if (role == "model" && msg.toolCalls.isNotEmpty()) {

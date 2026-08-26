@@ -2,6 +2,7 @@ package com.example.gemini.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.*
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,6 +41,8 @@ fun SettingsDialog(
     quotas: List<ModelQuota>,
     isServerListening: Boolean = false,
     isServerLoading: Boolean = false,
+    contextWindowLimit: Int = 10,
+    summaryModelId: String = "always_ask",
     onLoginWithGoogle: () -> Unit,
     onToggleServer: (Boolean) -> Unit = {},
     onLogout: () -> Unit = {},
@@ -46,6 +50,8 @@ fun SettingsDialog(
     onToggleModelEnabled: (String, Boolean) -> Unit,
     onEnableAllModels: () -> Unit,
     onRefreshQuotas: () -> Unit,
+    onSetContextWindowLimit: (Int) -> Unit = {},
+    onSetSummaryModelId: (String) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     var manualToken by remember { mutableStateOf("") }
@@ -267,6 +273,137 @@ fun SettingsDialog(
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 Text("Apply URL / Code / Token", fontSize = 13.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Context & Memory Management Card
+                    Text(
+                        text = "Context & Memory Window",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Configure how many recent messages are kept verbatim and which model summarizes older context",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = "Recent Messages Kept Verbatim ($contextWindowLimit msgs)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            val limits = listOf(6, 10, 15, 20, 30)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                limits.forEach { limitVal ->
+                                    val isSelected = contextWindowLimit == limitVal
+                                    Surface(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { onSetContextWindowLimit(limitVal) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.padding(vertical = 6.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "$limitVal",
+                                                fontSize = 12.5.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Text(
+                                text = "Default Model for Summaries",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            val summaryOptions = listOf("always_ask" to "Always Ask when Summarizing") + availableModels.map { it.id to it.displayName }
+                            var showSummaryDropdown by remember { mutableStateOf(false) }
+                            val currentSelectedName = summaryOptions.find { it.first == summaryModelId }?.second ?: "Always Ask when Summarizing"
+
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { showSummaryDropdown = true },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = currentSelectedName,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowDown,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                DropdownMenu(
+                                    expanded = showSummaryDropdown,
+                                    onDismissRequest = { showSummaryDropdown = false }
+                                ) {
+                                    summaryOptions.forEach { (id, name) ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = name,
+                                                    fontWeight = if (id == summaryModelId) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (id == summaryModelId) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
+                                                )
+                                            },
+                                            onClick = {
+                                                onSetSummaryModelId(id)
+                                                showSummaryDropdown = false
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

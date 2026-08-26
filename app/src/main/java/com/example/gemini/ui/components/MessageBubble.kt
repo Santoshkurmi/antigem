@@ -45,9 +45,36 @@ fun MessageBubble(
     onTerminateTool: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
     onSubmitChoices: ((com.example.gemini.domain.model.ToolCall, String, String) -> Unit)? = null,
     onSkipChoices: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
+    onUpdateSummary: ((String) -> Unit)? = null,
+    onDeleteSummary: (() -> Unit)? = null,
+    summarizingModelName: String = "AI",
+    pendingQueuedUserMessage: String? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
+    if (message.role == MessageRole.SUMMARY) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            if (message.isStreaming) {
+                LiveSummarizingCard(
+                    modelName = summarizingModelName,
+                    pendingQueuedMessage = pendingQueuedUserMessage
+                )
+            } else {
+                ActiveContextSummaryCard(
+                    summaryText = message.content,
+                    onEditSummary = { onUpdateSummary?.invoke(it) },
+                    onDeleteSummary = { onDeleteSummary?.invoke() }
+                )
+            }
+        }
+        return
+    }
+
     val isUser = message.role == MessageRole.USER
     var showUserActions by remember { mutableStateOf(false) }
 

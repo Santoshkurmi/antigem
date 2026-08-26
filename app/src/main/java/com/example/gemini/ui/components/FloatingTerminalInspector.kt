@@ -146,21 +146,38 @@ fun FloatingTerminalInspector(
 
     // Fullscreen / Modal Terminal Inspector with Multi-Session Tabs
     if (isInspectorOpen) {
-        Dialog(
-            onDismissRequest = { isInspectorOpen = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            TerminalInspectorDialogContent(
-                tabs = tabs,
-                activeTabId = activeTabId,
-                authPreferences = authPreferences,
-                onSelectTab = { TermuxSshManager.selectTab(it) },
-                onCreateTab = { TermuxSshManager.createTab() },
-                onCloseTab = { TermuxSshManager.closeTab(it) },
-                onClearTab = { TermuxSshManager.clearTabCommands(it) },
-                onDismiss = { isInspectorOpen = false }
-            )
-        }
+        TerminalInspectorDialog(
+            authPreferences = authPreferences,
+            onDismiss = { isInspectorOpen = false }
+        )
+    }
+}
+
+/**
+ * Public Dialog for Terminal Inspector accessible directly from top app bar.
+ */
+@Composable
+fun TerminalInspectorDialog(
+    authPreferences: AuthPreferences,
+    onDismiss: () -> Unit
+) {
+    val tabs by TermuxSshManager.tabs.collectAsState()
+    val activeTabId by TermuxSshManager.activeTabId.collectAsState()
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        TerminalInspectorDialogContent(
+            tabs = tabs,
+            activeTabId = activeTabId,
+            authPreferences = authPreferences,
+            onSelectTab = { TermuxSshManager.selectTab(it) },
+            onCreateTab = { TermuxSshManager.createTab() },
+            onCloseTab = { TermuxSshManager.closeTab(it) },
+            onClearTab = { TermuxSshManager.clearTabCommands(it) },
+            onDismiss = onDismiss
+        )
     }
 }
 

@@ -7,7 +7,8 @@ enum class MessageRole {
     USER,
     ASSISTANT,
     TOOL,
-    SYSTEM
+    SYSTEM,
+    SUMMARY
 }
 
 @Serializable

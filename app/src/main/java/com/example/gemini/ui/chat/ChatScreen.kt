@@ -15,8 +15,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Compress
 import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,9 +39,13 @@ import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.theme.*
+import com.example.gemini.ui.components.ActiveContextSummaryCard
 import com.example.gemini.ui.components.ChatInputBar
-import com.example.gemini.ui.components.FloatingTerminalInspector
+import com.example.gemini.ui.components.ContextSummarizeAlertBanner
+import com.example.gemini.ui.components.LiveSummarizingCard
 import com.example.gemini.ui.components.MessageBubble
+import com.example.gemini.ui.components.SummaryModelPickerDialog
+import com.example.gemini.ui.components.TerminalInspectorDialog
 import com.example.gemini.ui.drawer.ChatHistoryDrawer
 import com.example.gemini.ui.models.ModelSelectorBottomSheet
 import com.example.gemini.ui.models.ThinkingSelectorBottomSheet
@@ -78,6 +84,7 @@ fun ChatScreen(
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
     var showToolsSheet by remember { mutableStateOf(false) }
+    var showTerminalInspector by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
     var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
@@ -85,6 +92,15 @@ fun ChatScreen(
     val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
     val isOAuthServerListening by viewModel.isOAuthServerListening.collectAsState()
     val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
+
+    val isSummarizing by viewModel.isSummarizing.collectAsState()
+    val summarizingModelName by viewModel.summarizingModelName.collectAsState()
+    val summaryError by viewModel.summaryError.collectAsState()
+    val pendingQueuedUserMessage by viewModel.pendingQueuedUserMessage.collectAsState()
+    val contextWindowLimit by viewModel.contextWindowLimit.collectAsState()
+    val postponedThreshold by viewModel.postponedThreshold.collectAsState()
+    val showSummaryModelPicker by viewModel.showSummaryModelPicker.collectAsState()
+    val summaryModelIdPref by viewModel.summaryModelIdPref.collectAsState()
 
     // Independent LazyListState per conversation
     val convKey = currentConv?.id ?: "empty"
@@ -167,7 +183,7 @@ fun ChatScreen(
         }
     }
 
-    // Smart auto-scroll during streaming: only auto-scroll if user is already at the bottom
+    // Smart auto-scroll during streaming: ONLY auto-scroll if user is already at the very bottom
     val lastMessageContentLength = messages.lastOrNull()?.content?.length ?: 0
     val lastMessageThoughtLength = messages.lastOrNull()?.thoughtText?.length ?: 0
 
@@ -227,6 +243,13 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.openManualSummaryPicker() }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Compress,
+                                contentDescription = "Summarize Context",
+                                tint = if (!currentConv?.summary.isNullOrBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                            )
+                        }
                         IconButton(onClick = { showToolsSheet = true }) {
                             Icon(
                                 imageVector = Icons.Outlined.Handyman,
@@ -234,11 +257,11 @@ fun ChatScreen(
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                         }
-                        IconButton(onClick = { showSettingsDialog = true }) {
+                        IconButton(onClick = { showTerminalInspector = true }) {
                             Icon(
-                                imageVector = Icons.Outlined.Settings,
-                                contentDescription = "Settings",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                imageVector = Icons.Outlined.Terminal,
+                                contentDescription = "Termux Terminal",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                         }
                         IconButton(onClick = { viewModel.startNewChat() }) {
@@ -335,15 +358,24 @@ fun ChatScreen(
                                     onTerminateTool = { toolCall, msgId ->
                                         viewModel.terminateRunningTerminalTool(toolCall, msgId)
                                     },
-                                    onSubmitChoices = { toolCall, msgId, summary ->
-                                        viewModel.submitUserChoices(toolCall, msgId, summary)
+                                    onSubmitChoices = { toolCall, msgId, summaryPayload ->
+                                        viewModel.submitUserChoices(toolCall, msgId, summaryPayload)
                                     },
                                     onSkipChoices = { toolCall, msgId ->
                                         viewModel.skipUserChoices(toolCall, msgId)
-                                    }
+                                    },
+                                    onUpdateSummary = { newText ->
+                                        viewModel.updateSummaryMessage(msg.id, newText)
+                                    },
+                                    onDeleteSummary = {
+                                        viewModel.deleteSummaryMessage(msg.id)
+                                    },
+                                    summarizingModelName = summarizingModelName,
+                                    pendingQueuedUserMessage = pendingQueuedUserMessage
                                 )
                             }
-                            // Bottom spacer to ensure scrolling reaches below the very bottom of the last message
+
+                            // Bottom spacer to ensure scrolling reaches below the very bottom
                             item(key = "bottom_anchor") {
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -398,13 +430,15 @@ fun ChatScreen(
                     }
                 }
 
-                // Floating Termux SSH Terminal Inspector (Active command HUD & Session monitor)
-                FloatingTerminalInspector(
-                    authPreferences = viewModel.authPreferences,
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .padding(end = 16.dp, bottom = 4.dp)
-                )
+                // In-Chat Summarize Alert Banner when threshold is reached (Pinned above input)
+                if (!isSummarizing && messages.size > (postponedThreshold ?: contextWindowLimit) && currentConv?.summary.isNullOrBlank()) {
+                    ContextSummarizeAlertBanner(
+                        messageCount = messages.size,
+                        windowLimit = contextWindowLimit,
+                        onSummarizeNow = { viewModel.openManualSummaryPicker() },
+                        onPostpone = { viewModel.postponeSummarization(it) }
+                    )
+                }
 
                 // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)
                 ChatInputBar(
@@ -468,6 +502,8 @@ fun ChatScreen(
             quotas = quotas,
             isServerListening = isOAuthServerListening,
             isServerLoading = isOAuthServerLoading,
+            contextWindowLimit = contextWindowLimit,
+            summaryModelId = summaryModelIdPref,
             onLoginWithGoogle = {
                 val url = viewModel.getGoogleOAuthUrl()
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -491,6 +527,8 @@ fun ChatScreen(
             onRefreshQuotas = {
                 viewModel.refreshQuotas()
             },
+            onSetContextWindowLimit = { viewModel.setContextWindowLimit(it) },
+            onSetSummaryModelId = { viewModel.setSummaryModelId(it) },
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -641,6 +679,30 @@ fun ChatScreen(
                     Text(text = "Stop Turn Here", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), fontSize = 12.5.sp)
                 }
             }
+        )
+    }
+
+    // Context Summary Model Picker Dialog
+    if (showSummaryModelPicker) {
+        SummaryModelPickerDialog(
+            availableModels = enabledModels,
+            currentChatModelId = selectedModelId,
+            defaultModelId = summaryModelIdPref,
+            errorMessage = summaryError,
+            onSelectModel = { 
+                viewModel.requestSummarization(it) {
+                    android.widget.Toast.makeText(context, "Context summary updated!", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismiss = { viewModel.dismissSummaryModelPicker() }
+        )
+    }
+
+    // Termux Terminal Inspector Dialog
+    if (showTerminalInspector) {
+        TerminalInspectorDialog(
+            authPreferences = viewModel.authPreferences,
+            onDismiss = { showTerminalInspector = false }
         )
     }
 }
