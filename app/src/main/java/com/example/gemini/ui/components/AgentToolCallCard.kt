@@ -42,8 +42,21 @@ fun AgentToolCallCard(
     modifier: Modifier = Modifier,
     onApprove: ((ToolCall) -> Unit)? = null,
     onReject: ((ToolCall) -> Unit)? = null,
-    onTerminate: ((ToolCall) -> Unit)? = null
+    onTerminate: ((ToolCall) -> Unit)? = null,
+    onSubmitChoices: ((ToolCall, String) -> Unit)? = null,
+    onSkipChoices: ((ToolCall) -> Unit)? = null
 ) {
+    val isChoice = toolCall.name == "ask_choices" || toolCall.name == "user_choice"
+    if (isChoice) {
+        ChoiceQuestionnaireCard(
+            toolCall = toolCall,
+            onSubmit = { summary -> onSubmitChoices?.invoke(toolCall, summary) },
+            onSkip = { onSkipChoices?.invoke(toolCall) },
+            modifier = modifier
+        )
+        return
+    }
+
     val context = LocalContext.current
     var isExpanded by remember { mutableStateOf(false) }
 

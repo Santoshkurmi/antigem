@@ -332,6 +332,12 @@ fun ChatScreen(
                                     },
                                     onTerminateTool = { toolCall, msgId ->
                                         viewModel.terminateRunningTerminalTool(toolCall, msgId)
+                                    },
+                                    onSubmitChoices = { toolCall, msgId, summary ->
+                                        viewModel.submitUserChoices(toolCall, msgId, summary)
+                                    },
+                                    onSkipChoices = { toolCall, msgId ->
+                                        viewModel.skipUserChoices(toolCall, msgId)
                                     }
                                 )
                             }

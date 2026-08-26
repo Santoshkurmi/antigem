@@ -43,6 +43,8 @@ fun MessageBubble(
     onApproveTool: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
     onRejectTool: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
     onTerminateTool: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
+    onSubmitChoices: ((com.example.gemini.domain.model.ToolCall, String, String) -> Unit)? = null,
+    onSkipChoices: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -164,7 +166,9 @@ fun MessageBubble(
                             toolCalls = message.toolCalls,
                             onApproveTool = if (onApproveTool != null) { toolCall -> onApproveTool(toolCall, message.id) } else null,
                             onRejectTool = if (onRejectTool != null) { toolCall -> onRejectTool(toolCall, message.id) } else null,
-                            onTerminateTool = if (onTerminateTool != null) { toolCall -> onTerminateTool(toolCall, message.id) } else null
+                            onTerminateTool = if (onTerminateTool != null) { toolCall -> onTerminateTool(toolCall, message.id) } else null,
+                            onSubmitChoices = if (onSubmitChoices != null) { toolCall, summary -> onSubmitChoices(toolCall, message.id, summary) } else null,
+                            onSkipChoices = if (onSkipChoices != null) { toolCall -> onSkipChoices(toolCall, message.id) } else null
                         )
                     }
                 } else if (message.isStreaming && message.thoughtText.isNullOrEmpty()) {

@@ -93,7 +93,9 @@ fun MarkdownContent(
     modifier: Modifier = Modifier,
     onApproveTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
     onRejectTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
-    onTerminateTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null
+    onTerminateTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
+    onSubmitChoices: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
+    onSkipChoices: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null
 ) {
     val blocks = remember(content, toolCalls) { parseMarkdownBlocks(content, toolCalls) }
 
@@ -105,7 +107,9 @@ fun MarkdownContent(
                         toolCall = block.toolCall,
                         onApprove = onApproveTool,
                         onReject = onRejectTool,
-                        onTerminate = onTerminateTool
+                        onTerminate = onTerminateTool,
+                        onSubmitChoices = onSubmitChoices,
+                        onSkipChoices = onSkipChoices
                     )
                 }
                 is MarkdownBlock.Math -> {
@@ -1238,17 +1242,48 @@ fun parseMarkdownBlocks(
     toolCalls: List<com.example.gemini.domain.model.ToolCall> = emptyList()
 ): List<MarkdownBlock> {
     val result = mutableListOf<MarkdownBlock>()
-    val lines = rawText.lines()
+
+    // Filter out any in-flight unclosed tool tags from live markdown preview so no raw JSON / commands leak
+    val toolTagPattern = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|tool_|execute_|web_|read_|ask_|user_)", RegexOption.IGNORE_CASE)
+    val match = toolTagPattern.find(rawText)
+    val cleanedText = if (match != null) {
+        rawText.substring(0, match.range.first)
+    } else {
+        rawText
+    }
+
+    val lines = cleanedText.lines()
     var i = 0
 
     while (i < lines.size) {
         val line = lines[i]
 
-        // 0. Inline Agent Tool Call Marker <!-- tool_call:ID --> or <execute_command>
+        // 0. Inline Agent Tool Call Marker <!-- tool_call:ID --> or <tool_call>
         val toolMarkerMatch = Regex("<!--\\s*tool_call:([a-zA-Z0-9_-]+)\\s*-->").find(line)
         if (toolMarkerMatch != null) {
             val toolId = toolMarkerMatch.groupValues[1]
             val matchedTool = toolCalls.find { it.id == toolId } ?: com.example.gemini.domain.model.ToolCall(id = toolId, command = "bash", status = "SUCCESS")
+            result.add(MarkdownBlock.AgentTool(matchedTool))
+            i++
+            continue
+        }
+
+        val unifiedToolMatch = Regex("<tool_call\\s+name=[\"']?([a-zA-Z0-9_-]+)[\"']?\\s*>([\\s\\S]*?)</tool_call>", RegexOption.IGNORE_CASE).find(line)
+        if (unifiedToolMatch != null) {
+            val name = unifiedToolMatch.groupValues[1].trim().lowercase()
+            val payload = unifiedToolMatch.groupValues[2].trim()
+            val matchedTool = toolCalls.find { it.command == payload }
+                ?: com.example.gemini.domain.model.ToolCall(name = name, command = payload, status = if (name == "ask_choices") "AWAITING_CHOICE" else "RUNNING")
+            result.add(MarkdownBlock.AgentTool(matchedTool))
+            i++
+            continue
+        }
+
+        val choiceMatch = Regex("<(ask_choices|user_choice)>([\\s\\S]*?)</(ask_choices|user_choice)>").find(line)
+        if (choiceMatch != null) {
+            val json = choiceMatch.groupValues[2].trim()
+            val matchedTool = toolCalls.find { it.command == json && (it.name == "ask_choices" || it.name == "user_choice") }
+                ?: com.example.gemini.domain.model.ToolCall(name = "ask_choices", command = json, status = "AWAITING_CHOICE")
             result.add(MarkdownBlock.AgentTool(matchedTool))
             i++
             continue

@@ -10,9 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,6 +39,7 @@ fun ToolsBottomSheet(
 
     val isWebSearchEnabled by authPreferences.isWebSearchToolEnabled.collectAsState(initial = true)
     val isWebReaderEnabled by authPreferences.isWebReaderToolEnabled.collectAsState(initial = true)
+    val isChoicesEnabled by authPreferences.isChoicesToolEnabled.collectAsState(initial = true)
 
     val isTerminalEnabled by authPreferences.isTerminalToolEnabled.collectAsState(initial = false)
     val isAutoExecute by authPreferences.isAutoExecuteTerminal.collectAsState(initial = true)
@@ -253,6 +252,84 @@ fun ToolsBottomSheet(
                         checked = isWebReaderEnabled,
                         onCheckedChange = { enabled ->
                             coroutineScope.launch { authPreferences.setWebReaderToolEnabled(enabled) }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Tool Card: Interactive Clarification & Choices
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isChoicesEnabled) ClaudeTerracotta.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isChoicesEnabled) ClaudeTerracotta.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ListAlt,
+                            contentDescription = null,
+                            tint = if (isChoicesEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Clarification & Choices",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(QuotaGreen.copy(alpha = 0.15f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = "Nested Tree • 4 Levels",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = QuotaGreen
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Lets AI ask multi-choice questions with nested options on ambiguous tasks",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Switch(
+                        checked = isChoicesEnabled,
+                        onCheckedChange = { enabled ->
+                            coroutineScope.launch { authPreferences.setChoicesToolEnabled(enabled) }
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
