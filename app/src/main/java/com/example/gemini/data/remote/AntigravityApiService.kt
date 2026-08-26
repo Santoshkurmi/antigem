@@ -210,6 +210,7 @@ class AntigravityApiService(
                         "write_file" -> "<tool_call name=\"write_file\">${tool.command}</tool_call>"
                         "edit_file" -> "<tool_call name=\"edit_file\">${tool.command}</tool_call>"
                         "automation" -> "<tool_call name=\"automation\">${tool.command}</tool_call>"
+                        "math", "cas", "math_eval" -> "<tool_call name=\"math\">${tool.command}</tool_call>"
                         "ask_choices", "user_choice" -> "<ask_choices>${tool.command}</ask_choices>"
                         else -> "<tool_call name=\"${tool.name}\">${tool.command}</tool_call>"
                     }
@@ -227,6 +228,7 @@ class AntigravityApiService(
                         "read_url" -> "[Webpage Content for \"${tool.command}\"]:\n${tool.output}"
                         "read_file", "write_file", "edit_file" -> "[File Tool Result: ${tool.name}]:\n${tool.output}"
                         "automation" -> "[Android Automation Result]:\n${tool.output}"
+                        "math", "cas", "math_eval" -> "[Symja CAS Math Engine Result for `${tool.command}`]:\n${tool.output}"
                         else -> "[Tool Result: ${tool.name}]:\n${tool.output}"
                     }
 

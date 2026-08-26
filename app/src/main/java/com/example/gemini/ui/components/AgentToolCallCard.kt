@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Functions
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
@@ -62,6 +63,7 @@ fun AgentToolCallCard(
 
     val isSearch = toolCall.name == "web_search" || toolCall.name == "search"
     val isReader = toolCall.name == "read_url" || toolCall.name == "web_reader"
+    val isMath = toolCall.name == "math" || toolCall.name == "cas" || toolCall.name == "math_eval"
 
     val isPendingApproval = toolCall.status == "PENDING_APPROVAL"
     val isRunning = toolCall.status == "RUNNING"
@@ -155,6 +157,7 @@ fun AgentToolCallCard(
                     val toolIcon = when (toolCall.name) {
                         "web_search", "search" -> Icons.Outlined.Search
                         "read_url", "web_reader" -> Icons.Outlined.Language
+                        "math", "cas", "math_eval" -> Icons.Outlined.Functions
                         else -> Icons.Default.Terminal
                     }
                     Icon(
@@ -172,9 +175,11 @@ fun AgentToolCallCard(
                     isPendingApproval -> "Approval Needed:"
                     isRunning && isSearch -> "Searching Web:"
                     isRunning && isReader -> "Fetching Page:"
+                    isRunning && isMath -> "Evaluating CAS Math:"
                     isRunning -> "Executing in Termux:"
                     isSuccess && isSearch -> "Web Search:"
                     isSuccess && isReader -> "Read Webpage:"
+                    isSuccess && isMath -> "Symja CAS Math Engine:"
                     isSuccess -> "Executed:"
                     isTerminated -> "Terminated:"
                     isRejected -> "Rejected:"
@@ -359,6 +364,7 @@ fun AgentToolCallCard(
                         val commandPrefix = when {
                             isSearch -> "Search Query: \"${toolCall.command}\""
                             isReader -> "URL: ${toolCall.command}"
+                            isMath -> "CAS Expr: ${toolCall.command}"
                             else -> "$ ${toolCall.command}"
                         }
                         Text(

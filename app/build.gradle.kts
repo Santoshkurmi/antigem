@@ -45,6 +45,13 @@ android {
     packaging {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        excludes += "*.xsd"
+        excludes += "**/*.xsd"
+        excludes += "META-INF/INDEX.LIST"
+        excludes += "META-INF/io.netty.versions.properties"
+        excludes += "META-INF/DEPENDENCIES"
+        excludes += "META-INF/LICENSE*"
+        excludes += "META-INF/NOTICE*"
       }
     }
 }
@@ -96,6 +103,9 @@ dependencies {
 
   // HTML Parser & Web Content Scraper (Free Web Search & Webpage Reader)
   implementation("org.jsoup:jsoup:1.18.3")
+
+  // Symja Computer Algebra System (CAS) - Pure Symbolic & Numeric Math Engine
+  implementation("org.matheclipse:matheclipse-core:3.2.0")
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)

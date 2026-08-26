@@ -654,6 +654,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val isChoicesToolEnabled = authPrefs.isChoicesToolEnabled.firstOrNull() ?: true
         val isFileToolEnabled = authPrefs.isFileToolEnabled.firstOrNull() ?: false
         val isAutomationToolEnabled = authPrefs.isAutomationToolEnabled.firstOrNull() ?: false
+        val isMathToolEnabled = authPrefs.isMathToolEnabled.firstOrNull() ?: true
 
         val toolInstructionsList = mutableListOf<String>()
         if (isChoicesToolEnabled) {
@@ -733,6 +734,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 "  11. take_screenshot     → Capture high-res screen snapshot.\n" +
                 "     Example: {\"action\": \"take_screenshot\"}\n\n" +
                 "  Tip: When interacting with an app UI, always call 'analyze_screen' first to see visible buttons, then 'tap' or 'type_text'."
+            )
+        }
+        if (isMathToolEnabled) {
+            toolInstructionsList.add(
+                "• Symja Computer Algebra System (CAS) Math Engine: You have an embedded, ultra-powerful symbolic & numeric mathematical engine.\n" +
+                "  Output: <tool_call name=\"math\">expression</tool_call>\n" +
+                "  Capabilities:\n" +
+                "  - Symbolic Calculus: D(Sin(x)*Exp(x), x), Integrate(x^2*Cos(x), x), Limit(Sin(x)/x, x->0), Series(Exp(x), {x, 0, 5})\n" +
+                "  - Equation & System Solving: Solve(x^2 - 5*x + 6 == 0, x), Solve({x + y == 10, x - y == 2}, {x, y}), Roots(...)\n" +
+                "  - Algebra & Factorization: Factor(x^4 - 16), Simplify((x^3 - 1)/(x - 1)), Expand((x + y)^6), Apart(1/((x-1)*(x+2)))\n" +
+                "  - Linear Algebra: Det({{1, 2}, {3, 4}}), Inverse({{1, 2}, {3, 4}}), Eigenvalues({{1, 2}, {2, 1}})\n" +
+                "  - Arbitrary Precision & Numeric: N(Pi, 100), 1/3 + 1/7, FactorInteger(123456789), PrimeQ(999983)\n" +
+                "  You will receive the exact symbolic result, numeric approximation, and rendered LaTeX formula."
             )
         }
 
@@ -1284,6 +1298,91 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 }
                                 return@collect
                             }
+
+                            // 6. Symja Computer Algebra System (CAS) Math Tool
+                            if ((toolName == "math" || toolName == "cas" || toolName == "math_eval") && isMathToolEnabled) {
+                                val mathToolCall = com.example.gemini.domain.model.ToolCall(
+                                    name = "math",
+                                    command = payload,
+                                    status = "RUNNING"
+                                )
+                                val toolCallsWithRunning = existingToolCalls + mathToolCall
+                                val runningToolMarker = "<!-- tool_call:${mathToolCall.id} -->"
+                                val currentTextAccumulated = if (priorTextPrefix.isNotBlank()) {
+                                    if (cleanPreamble.isNotBlank()) "$priorTextPrefix\n\n$cleanPreamble\n\n$runningToolMarker" else "$priorTextPrefix\n\n$runningToolMarker"
+                                } else {
+                                    if (cleanPreamble.isNotBlank()) "$cleanPreamble\n\n$runningToolMarker" else runningToolMarker
+                                }
+
+                                updateAssistantMessage(
+                                    msgId = assistantMsgId,
+                                    content = currentTextAccumulated,
+                                    thought = thoughtBuilder.toString(),
+                                    thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                    toolCalls = toolCallsWithRunning,
+                                    isStreaming = false
+                                )
+
+                                viewModelScope.launch {
+                                    val mathResult = com.example.gemini.data.math.SymjaCasManager.evaluate(payload)
+                                    val isSuccess = mathResult.isSuccess
+                                    val casRes = mathResult.getOrNull()
+
+                                    val outputFormatted = if (isSuccess && casRes != null) {
+                                        buildString {
+                                            append("Result: ${casRes.resultText}\n")
+                                            if (!casRes.latex.isNullOrBlank()) {
+                                                append("LaTeX: $$${casRes.latex}$$\n")
+                                            }
+                                            if (!casRes.numericDecimal.isNullOrBlank()) {
+                                                append("Numeric Approximation: ${casRes.numericDecimal}\n")
+                                            }
+                                        }.trim()
+                                    } else {
+                                        mathResult.exceptionOrNull()?.localizedMessage ?: "Evaluation error in CAS engine"
+                                    }
+
+                                    val completedToolCall = mathToolCall.copy(
+                                        status = if (isSuccess) "SUCCESS" else "FAILED",
+                                        output = outputFormatted,
+                                        exitCode = if (isSuccess) 0 else 1,
+                                        durationMs = casRes?.durationMs ?: 0L
+                                    )
+                                    val updatedToolCalls = existingToolCalls + completedToolCall
+
+                                    updateAssistantMessage(
+                                        msgId = assistantMsgId,
+                                        content = currentTextAccumulated,
+                                        thought = thoughtBuilder.toString(),
+                                        thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                        toolCalls = updatedToolCalls,
+                                        isStreaming = true
+                                    )
+                                    storage.saveMessages(conv.id, _messages.value)
+
+                                    val syntheticHistory = currentHistory + listOf(
+                                        ChatMessage(
+                                            conversationId = conv.id,
+                                            role = MessageRole.ASSISTANT,
+                                            content = "$cleanPreamble\n<tool_call name=\"math\">$payload</tool_call>"
+                                        ),
+                                        ChatMessage(
+                                            conversationId = conv.id,
+                                            role = MessageRole.USER,
+                                            content = "[Symja CAS Math Engine Result]:\n$outputFormatted"
+                                        )
+                                    )
+
+                                    executeStream(
+                                        conv = conv,
+                                        currentHistory = syntheticHistory,
+                                        existingAssistantMsgId = assistantMsgId,
+                                        existingToolCalls = updatedToolCalls,
+                                        priorTextPrefix = currentTextAccumulated
+                                    )
+                                }
+                                return@collect
+                            }
                         }
 
                         val finalDisplayContent = priorTextPrefix + (if (priorTextPrefix.isNotBlank() && streamGeneratedText.isNotBlank()) "\n\n$streamGeneratedText" else streamGeneratedText)
@@ -1412,18 +1511,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return ExtractedTool("automation", payload, preamble)
         }
 
+        // 8. Math CAS tag
+        val mathMatch = Regex("<(math|cas|math_eval)>([\\s\\S]*?)</\\1>", RegexOption.IGNORE_CASE).find(text)
+        if (mathMatch != null) {
+            val payload = mathMatch.groupValues[2].trim()
+            val preamble = text.replace(Regex("<(math|cas|math_eval)>[\\s\\S]*?</\\1>", RegexOption.IGNORE_CASE), "").trim()
+            return ExtractedTool("math", payload, preamble)
+        }
+
         return null
     }
 
     private fun sanitizeStreamingText(rawText: String): String {
         // Find index where any tool call tag starts (complete, unclosed, or in-flight)
-        val toolTagPattern = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|read_file|write_file|edit_file|automation|tool_|execute_|web_|read_|ask_|user_|auto_)", RegexOption.IGNORE_CASE)
+        val toolTagPattern = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|read_file|write_file|edit_file|automation|math|cas|tool_|execute_|web_|read_|ask_|user_|auto_|math_)", RegexOption.IGNORE_CASE)
         val match = toolTagPattern.find(rawText)
         return if (match != null) {
             rawText.substring(0, match.range.first).trimEnd()
         } else {
             // Also clean up any orphan closed tags
-            rawText.replace(Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|read_file|write_file|edit_file|automation)[^>]*>[\\s\\S]*?<\\/\\s*\\1\\s*>", RegexOption.IGNORE_CASE), "").trimEnd()
+            rawText.replace(Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|read_file|write_file|edit_file|automation|math|cas|math_eval)[^>]*>[\\s\\S]*?<\\/\\s*\\1\\s*>", RegexOption.IGNORE_CASE), "").trimEnd()
         }
     }
 
