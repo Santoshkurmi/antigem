@@ -1,20 +1,33 @@
 package com.example.gemini.ui.components
 
+import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.view.ViewGroup
+import android.webkit.WebView
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.OpenInFull
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +43,9 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.theme.*
 import kotlinx.coroutines.delay
 import java.util.regex.Pattern
@@ -44,6 +60,91 @@ private val SynAnnotation = Color(0xFFE5C07B)   // Warm Gold
 private val SynFunction = Color(0xFF61AFEF)     // Sky Blue
 private val SynPunctuation = Color(0xFFABB2BF)  // Light Gray
 
+/**
+ * Checks whether a code block is runnable / previewable as an interactive Web/HTML/SVG Artifact.
+ */
+fun isPreviewableCode(code: String, language: String): Boolean {
+    val lang = language.lowercase().trim()
+    if (lang in listOf("html", "htm", "svg", "xhtml", "web", "webapp", "xml")) return true
+
+    val trimmed = code.trim()
+    return trimmed.startsWith("<!DOCTYPE html", ignoreCase = true) ||
+            trimmed.startsWith("<html", ignoreCase = true) ||
+            trimmed.startsWith("<svg", ignoreCase = true) ||
+            (trimmed.contains("<script", ignoreCase = true) && trimmed.contains("</script>", ignoreCase = true)) ||
+            (trimmed.contains("<style", ignoreCase = true) && trimmed.contains("</style>", ignoreCase = true))
+}
+
+/**
+ * Builds standard responsive HTML wrapper for previewing code artifacts.
+ */
+fun prepareHtmlForPreview(rawCode: String, isDark: Boolean): String {
+    val trimmed = rawCode.trim()
+    val isRawSvg = trimmed.startsWith("<svg", ignoreCase = true)
+
+    if (isRawSvg) {
+        val bg = if (isDark) "#1E1E2E" else "#F8FAFC"
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
+                <style>
+                    * { box-sizing: border-box; }
+                    html, body {
+                        margin: 0; padding: 12px;
+                        background-color: $bg;
+                        display: flex; justify-content: center; align-items: center;
+                        min-height: 100vh; overflow: auto;
+                    }
+                    svg { max-width: 100%; height: auto; display: block; }
+                </style>
+            </head>
+            <body>
+                $trimmed
+            </body>
+            </html>
+        """.trimIndent()
+    }
+
+    // If it's already a full HTML document, ensure responsive viewport
+    if (trimmed.contains("<head", ignoreCase = true)) {
+        if (!trimmed.contains("viewport", ignoreCase = true)) {
+            return trimmed.replace(
+                Regex("<head>", RegexOption.IGNORE_CASE),
+                "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes\">"
+            )
+        }
+        return trimmed
+    }
+
+    // Wrap snippet in standard responsive container
+    val bg = if (isDark) "#181825" else "#FFFFFF"
+    val fg = if (isDark) "#CDD6F4" else "#1E293B"
+    return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
+            <style>
+                * { box-sizing: border-box; }
+                body {
+                    margin: 0; padding: 12px;
+                    background-color: $bg;
+                    color: $fg;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    overflow-x: hidden;
+                }
+            </style>
+        </head>
+        <body>
+            $trimmed
+        </body>
+        </html>
+    """.trimIndent()
+}
+
+@SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun CodeBlock(
     code: String,
@@ -52,6 +153,13 @@ fun CodeBlock(
 ) {
     val context = LocalContext.current
     var isCopied by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(0) } // 0 = Code, 1 = Preview
+    var reloadKey by remember { mutableStateOf(0) }
+    var isFullscreen by remember { mutableStateOf(false) }
+
+    val isPreviewable = remember(code, language) {
+        isPreviewableCode(code, language)
+    }
 
     LaunchedEffect(isCopied) {
         if (isCopied) {
@@ -68,17 +176,19 @@ fun CodeBlock(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(CodeBlockBgDark)
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
     ) {
-        // Header
+        // Header Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(CodeBlockBgDark.copy(alpha = 0.9f))
-                .padding(horizontal = 14.dp, vertical = 7.dp),
+                .background(CodeBlockBgDark.copy(alpha = 0.95f))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Language Badge
             Text(
                 text = language.ifEmpty { "code" }.uppercase(),
                 fontSize = 11.5.sp,
@@ -89,6 +199,97 @@ fun CodeBlock(
 
             Spacer(modifier = Modifier.weight(1f))
 
+            // Interactive Switcher: [Code | Preview] when previewable
+            if (isPreviewable) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .padding(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Code Tab
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (selectedTab == 0) ClaudeTerracotta else Color.Transparent)
+                            .clickable { selectedTab = 0 }
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Outlined.Code,
+                                contentDescription = null,
+                                tint = if (selectedTab == 0) Color.White else TextPrimaryDark.copy(alpha = 0.6f),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "Code",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (selectedTab == 0) Color.White else TextPrimaryDark.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+
+                    // Preview Tab
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (selectedTab == 1) ClaudeTerracotta else Color.Transparent)
+                            .clickable { selectedTab = 1 }
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                                tint = if (selectedTab == 1) Color.White else TextPrimaryDark.copy(alpha = 0.6f),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "Preview",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (selectedTab == 1) Color.White else TextPrimaryDark.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // In Preview Mode: Reload & Fullscreen buttons
+                if (selectedTab == 1) {
+                    IconButton(
+                        onClick = { reloadKey++ },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Reload preview",
+                            tint = TextPrimaryDark.copy(alpha = 0.7f),
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { isFullscreen = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.OpenInFull,
+                            contentDescription = "Fullscreen",
+                            tint = TextPrimaryDark.copy(alpha = 0.7f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+
+            // Copy Button
             IconButton(
                 onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -111,25 +312,152 @@ fun CodeBlock(
                         imageVector = Icons.Outlined.ContentCopy,
                         contentDescription = "Copy code",
                         tint = TextPrimaryDark.copy(alpha = 0.7f),
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                 }
             }
         }
 
-        HorizontalDivider(thickness = 0.7.dp, color = TextPrimaryDark.copy(alpha = 0.08f))
+        HorizontalDivider(thickness = 0.7.dp, color = Color.White.copy(alpha = 0.08f))
 
-        // Code Content with syntax highlighting
-        Text(
-            text = highlightedText,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.5.sp,
-            lineHeight = 19.sp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 14.dp, vertical = 12.dp)
-        )
+        // Body Content
+        if (selectedTab == 1 && isPreviewable) {
+            // Live Interactive Preview Runner
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 220.dp, max = 450.dp)
+                    .background(Color.White)
+            ) {
+                key(reloadKey) {
+                    val previewHtml = remember(code) {
+                        prepareHtmlForPreview(code, isDark = false)
+                    }
+                    AndroidView(
+                        factory = { ctx ->
+                            WebView(ctx).apply {
+                                layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.loadWithOverviewMode = true
+                                settings.useWideViewPort = true
+                                settings.builtInZoomControls = true
+                                settings.displayZoomControls = false
+                                loadDataWithBaseURL("https://localhost", previewHtml, "text/html", "UTF-8", null)
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        } else {
+            // Syntax Highlighted Code
+            Text(
+                text = highlightedText,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.5.sp,
+                lineHeight = 19.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            )
+        }
+    }
+
+    // Fullscreen Interactive Artifact Modal
+    if (isFullscreen) {
+        Dialog(
+            onDismissRequest = { isFullscreen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Modal Header
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = ClaudeTerracotta,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Interactive Artifact (${language.uppercase()})",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        IconButton(
+                            onClick = { reloadKey++ },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Reload",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { isFullscreen = false },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(thickness = 0.5.dp)
+
+                    // Fullscreen WebView
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        key(reloadKey) {
+                            val previewHtml = remember(code) {
+                                prepareHtmlForPreview(code, isDark = false)
+                            }
+                            AndroidView(
+                                factory = { ctx ->
+                                    WebView(ctx).apply {
+                                        layoutParams = ViewGroup.LayoutParams(
+                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                            ViewGroup.LayoutParams.MATCH_PARENT
+                                        )
+                                        settings.javaScriptEnabled = true
+                                        settings.domStorageEnabled = true
+                                        settings.loadWithOverviewMode = true
+                                        settings.useWideViewPort = true
+                                        settings.builtInZoomControls = true
+                                        settings.displayZoomControls = false
+                                        loadDataWithBaseURL("https://localhost", previewHtml, "text/html", "UTF-8", null)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -235,7 +563,6 @@ private fun highlightSyntax(code: String, lang: String): AnnotatedString {
         }
     } catch (_: Exception) {}
 
-    // Sort spans by priority (Comments & Strings override others)
     // Apply default text color
     builder.addStyle(SpanStyle(color = TextPrimaryDark), 0, code.length)
 
@@ -250,4 +577,3 @@ private fun highlightSyntax(code: String, lang: String): AnnotatedString {
 
     return builder.toAnnotatedString()
 }
-
