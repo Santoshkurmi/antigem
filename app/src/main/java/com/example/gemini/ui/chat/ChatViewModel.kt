@@ -393,6 +393,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val isWebSearchEnabled = authPrefs.isWebSearchToolEnabled.firstOrNull() ?: true
         val isWebReaderEnabled = authPrefs.isWebReaderToolEnabled.firstOrNull() ?: true
         val isChoicesToolEnabled = authPrefs.isChoicesToolEnabled.firstOrNull() ?: true
+        val isFileToolEnabled = authPrefs.isFileToolEnabled.firstOrNull() ?: false
 
         val toolInstructionsList = mutableListOf<String>()
         if (isChoicesToolEnabled) {
@@ -432,6 +433,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (isTerminalEnabled) {
             toolInstructionsList.add("• Linux Shell Tool: You have access to a local Termux Linux shell via SSH. To execute commands, output <tool_call name=\"bash\">command_here</tool_call>.")
+        }
+        if (isFileToolEnabled) {
+            toolInstructionsList.add(
+                "• File System Tools: Read, write, and edit files on the user's device. Always read a file before writing to get its hash.\n" +
+                "  - READ:  <tool_call name=\"read_file\">{\"path\": \"/abs/path\", \"start_line\": 1, \"end_line\": 50}</tool_call>\n" +
+                "    Returns: file content with line numbers + hash. start_line/end_line are optional.\n" +
+                "  - WRITE: <tool_call name=\"write_file\">{\"path\": \"/abs/path\", \"content\": \"full file content\", \"expected_hash\": \"<hash from read>\"}</tool_call>\n" +
+                "    Use expected_hash=\"NEW\" for brand new files. ALWAYS provide the full file content.\n" +
+                "  - EDIT:  <tool_call name=\"edit_file\">{\"path\": \"/abs/path\", \"old_str\": \"exact text to find\", \"new_str\": \"replacement\", \"expected_hash\": \"<hash from read>\"}</tool_call>\n" +
+                "    EDIT is preferred for partial changes. old_str must be an EXACT match (including whitespace). If the file changed, you'll be told to re-read it first."
+            )
         }
 
         val toolInstruction = if (toolInstructionsList.isNotEmpty()) {
@@ -810,6 +822,106 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     return@collect
                                 }
                             }
+
+                            // 5. File System Tools — read_file / write_file / edit_file
+                            if ((toolName == "read_file" || toolName == "write_file" || toolName == "edit_file") && isFileToolEnabled) {
+                                val runningToolCall = com.example.gemini.domain.model.ToolCall(
+                                    name = toolName,
+                                    command = payload,
+                                    status = "RUNNING"
+                                )
+                                val toolCallsWithRunning = existingToolCalls + runningToolCall
+                                val runningToolMarker = "<!-- tool_call:${runningToolCall.id} -->"
+                                val currentTextAccumulated = if (priorTextPrefix.isNotBlank()) {
+                                    if (cleanPreamble.isNotBlank()) "$priorTextPrefix\n\n$cleanPreamble\n\n$runningToolMarker" else "$priorTextPrefix\n\n$runningToolMarker"
+                                } else {
+                                    if (cleanPreamble.isNotBlank()) "$cleanPreamble\n\n$runningToolMarker" else runningToolMarker
+                                }
+
+                                updateAssistantMessage(
+                                    msgId = assistantMsgId,
+                                    content = currentTextAccumulated,
+                                    thought = thoughtBuilder.toString(),
+                                    thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                    toolCalls = toolCallsWithRunning,
+                                    isStreaming = true
+                                )
+
+                                val fileHost = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
+                                val filePort = authPrefs.termuxSshPort.firstOrNull() ?: 8022
+                                val fileUser = authPrefs.termuxSshUser.firstOrNull() ?: "root"
+                                val filePass = authPrefs.termuxSshPass.firstOrNull() ?: "root"
+
+                                viewModelScope.launch {
+                                    val fileStartTime = System.currentTimeMillis()
+                                    val (outputFormatted, isSuccess) = try {
+                                        when (toolName) {
+                                            "read_file" -> {
+                                                val p = com.example.gemini.data.file.FileToolExecutor.parseReadPayload(payload)
+                                                val res = com.example.gemini.data.file.FileToolExecutor.readFile(p.path, fileHost, filePort, fileUser, filePass, p.startLine, p.endLine)
+                                                if (res.isSuccess) Pair(com.example.gemini.data.file.FileToolExecutor.formatReadOutput(res.getOrThrow()), true)
+                                                else Pair("Error: ${res.exceptionOrNull()?.message}", false)
+                                            }
+                                            "write_file" -> {
+                                                val p = com.example.gemini.data.file.FileToolExecutor.parseWritePayload(payload)
+                                                val res = com.example.gemini.data.file.FileToolExecutor.writeFile(p.path, p.content, p.expectedHash, fileHost, filePort, fileUser, filePass)
+                                                if (res.isSuccess) Pair(com.example.gemini.data.file.FileToolExecutor.formatWriteOutput(res.getOrThrow()), true)
+                                                else Pair("Error: ${res.exceptionOrNull()?.message}", false)
+                                            }
+                                            "edit_file" -> {
+                                                val p = com.example.gemini.data.file.FileToolExecutor.parseEditPayload(payload)
+                                                val res = com.example.gemini.data.file.FileToolExecutor.editFile(p.path, p.oldStr, p.newStr, p.expectedHash, fileHost, filePort, fileUser, filePass, p.replaceAll)
+                                                if (res.isSuccess) Pair(com.example.gemini.data.file.FileToolExecutor.formatEditOutput(res.getOrThrow()), res.getOrThrow().replaced)
+                                                else Pair("Error: ${res.exceptionOrNull()?.message}", false)
+                                            }
+                                            else -> Pair("Unknown file tool: $toolName", false)
+                                        }
+                                    } catch (e: Exception) {
+                                        Pair("Error: ${e.message}", false)
+                                    }
+                                    val fileDuration = System.currentTimeMillis() - fileStartTime
+
+                                    val completedToolCall = runningToolCall.copy(
+                                        status = if (isSuccess) "SUCCESS" else "FAILED",
+                                        output = outputFormatted,
+                                        exitCode = if (isSuccess) 0 else 1,
+                                        durationMs = fileDuration
+                                    )
+                                    val updatedToolCalls = existingToolCalls + completedToolCall
+
+                                    updateAssistantMessage(
+                                        msgId = assistantMsgId,
+                                        content = currentTextAccumulated,
+                                        thought = thoughtBuilder.toString(),
+                                        thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                        toolCalls = updatedToolCalls,
+                                        isStreaming = false
+                                    )
+                                    storage.saveMessages(conv.id, _messages.value)
+
+                                    val syntheticHistory = currentHistory + listOf(
+                                        ChatMessage(
+                                            conversationId = conv.id,
+                                            role = MessageRole.ASSISTANT,
+                                            content = "$cleanPreamble\n<tool_call name=\"$toolName\">$payload</tool_call>"
+                                        ),
+                                        ChatMessage(
+                                            conversationId = conv.id,
+                                            role = MessageRole.USER,
+                                            content = "[File Tool Result: $toolName]:\n$outputFormatted"
+                                        )
+                                    )
+
+                                    executeStream(
+                                        conv = conv,
+                                        currentHistory = syntheticHistory,
+                                        existingAssistantMsgId = assistantMsgId,
+                                        existingToolCalls = updatedToolCalls,
+                                        priorTextPrefix = currentTextAccumulated
+                                    )
+                                }
+                                return@collect
+                            }
                         }
 
                         val finalDisplayContent = priorTextPrefix + (if (priorTextPrefix.isNotBlank() && streamGeneratedText.isNotBlank()) "\n\n$streamGeneratedText" else streamGeneratedText)
@@ -908,18 +1020,38 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return ExtractedTool("bash", payload, preamble)
         }
 
+        // 6. File tool tags (unified tool_call handles these, but keep as fallback)
+        val fileReadMatch = Regex("<read_file>([\\s\\S]*?)</read_file>", RegexOption.IGNORE_CASE).find(text)
+        if (fileReadMatch != null) {
+            val payload = fileReadMatch.groupValues[1].trim()
+            val preamble = text.replace(Regex("<read_file>[\\s\\S]*?</read_file>", RegexOption.IGNORE_CASE), "").trim()
+            return ExtractedTool("read_file", payload, preamble)
+        }
+        val fileWriteMatch = Regex("<write_file>([\\s\\S]*?)</write_file>", RegexOption.IGNORE_CASE).find(text)
+        if (fileWriteMatch != null) {
+            val payload = fileWriteMatch.groupValues[1].trim()
+            val preamble = text.replace(Regex("<write_file>[\\s\\S]*?</write_file>", RegexOption.IGNORE_CASE), "").trim()
+            return ExtractedTool("write_file", payload, preamble)
+        }
+        val fileEditMatch = Regex("<edit_file>([\\s\\S]*?)</edit_file>", RegexOption.IGNORE_CASE).find(text)
+        if (fileEditMatch != null) {
+            val payload = fileEditMatch.groupValues[1].trim()
+            val preamble = text.replace(Regex("<edit_file>[\\s\\S]*?</edit_file>", RegexOption.IGNORE_CASE), "").trim()
+            return ExtractedTool("edit_file", payload, preamble)
+        }
+
         return null
     }
 
     private fun sanitizeStreamingText(rawText: String): String {
         // Find index where any tool call tag starts (complete, unclosed, or in-flight)
-        val toolTagPattern = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|tool_|execute_|web_|read_|ask_|user_)", RegexOption.IGNORE_CASE)
+        val toolTagPattern = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|read_file|write_file|edit_file|tool_|execute_|web_|read_|ask_|user_)", RegexOption.IGNORE_CASE)
         val match = toolTagPattern.find(rawText)
         return if (match != null) {
             rawText.substring(0, match.range.first).trimEnd()
         } else {
             // Also clean up any orphan closed tags
-            rawText.replace(Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice)[^>]*>[\\s\\S]*?</\\s*\\1\\s*>", RegexOption.IGNORE_CASE), "").trimEnd()
+            rawText.replace(Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|read_file|write_file|edit_file)[^>]*>[\\s\\S]*?<\\/\\s*\\1\\s*>", RegexOption.IGNORE_CASE), "").trimEnd()
         }
     }
 

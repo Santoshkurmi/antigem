@@ -40,6 +40,7 @@ fun ToolsBottomSheet(
     val isWebSearchEnabled by authPreferences.isWebSearchToolEnabled.collectAsState(initial = true)
     val isWebReaderEnabled by authPreferences.isWebReaderToolEnabled.collectAsState(initial = true)
     val isChoicesEnabled by authPreferences.isChoicesToolEnabled.collectAsState(initial = true)
+    val isFileToolEnabled by authPreferences.isFileToolEnabled.collectAsState(initial = false)
 
     val isTerminalEnabled by authPreferences.isTerminalToolEnabled.collectAsState(initial = false)
     val isAutoExecute by authPreferences.isAutoExecuteTerminal.collectAsState(initial = true)
@@ -336,6 +337,110 @@ fun ToolsBottomSheet(
                             checkedTrackColor = ClaudeTerracotta
                         )
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Tool Card: File System (read_file / write_file / edit_file)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isFileToolEnabled) ClaudeTerracotta.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isFileToolEnabled) ClaudeTerracotta.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.FolderOpen,
+                                contentDescription = null,
+                                tint = if (isFileToolEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "File System",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(ClaudeTerracotta.copy(alpha = 0.15f))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = "Hash-Locked",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = ClaudeTerracotta
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Read, write & edit files with stale-write protection",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Switch(
+                            checked = isFileToolEnabled,
+                            onCheckedChange = { enabled ->
+                                coroutineScope.launch { authPreferences.setFileToolEnabled(enabled) }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = ClaudeTerracotta
+                            )
+                        )
+                    }
+
+                    AnimatedVisibility(visible = isFileToolEnabled) {
+                        Column(modifier = Modifier.padding(top = 12.dp)) {
+                            HorizontalDivider(thickness = 0.6.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "3 tools available: read_file \u2022 write_file \u2022 edit_file\n\nUses MD5 hash-locking: AI must read a file to get its current hash before writing. If the file changes between read and write, the write is automatically rejected.",
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ) {
+                                Text(
+                                    text = "Requires Terminal Access (Termux SSH) to be enabled and configured.",
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(8.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
