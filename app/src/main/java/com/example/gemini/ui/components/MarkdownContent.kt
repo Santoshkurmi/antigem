@@ -1262,8 +1262,10 @@ fun parseMarkdownBlocks(
         val toolMarkerMatch = Regex("<!--\\s*tool_call:([a-zA-Z0-9_-]+)\\s*-->").find(line)
         if (toolMarkerMatch != null) {
             val toolId = toolMarkerMatch.groupValues[1]
-            val matchedTool = toolCalls.find { it.id == toolId } ?: com.example.gemini.domain.model.ToolCall(id = toolId, command = "bash", status = "SUCCESS")
-            result.add(MarkdownBlock.AgentTool(matchedTool))
+            val matchedTool = toolCalls.find { it.id == toolId }
+            if (matchedTool != null) {
+                result.add(MarkdownBlock.AgentTool(matchedTool))
+            }
             i++
             continue
         }

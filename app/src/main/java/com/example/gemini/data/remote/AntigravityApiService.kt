@@ -192,12 +192,68 @@ class AntigravityApiService(
         // Add chat history
         for (msg in messages) {
             val role = if (msg.role == MessageRole.USER) "user" else "model"
-            contents.add(
-                ContentPartDto(
-                    role = role,
-                    parts = listOf(TextPartDto(text = msg.content))
-                )
-            )
+
+            if (role == "model" && msg.toolCalls.isNotEmpty()) {
+                // If assistant executed tool calls, expand them with their real outputs
+                // so the model maintains 100% memory of executed commands across long chats
+                val cleanText = msg.content.replace(Regex("<!--\\s*tool_call:[a-zA-Z0-9_-]+\\s*-->"), "").trim()
+
+                for (tool in msg.toolCalls) {
+                    val toolTag = when (tool.name) {
+                        "bash" -> "<tool_call name=\"bash\">${tool.command}</tool_call>"
+                        "web_search" -> "<tool_call name=\"web_search\">${tool.command}</tool_call>"
+                        "read_url" -> "<tool_call name=\"read_url\">${tool.command}</tool_call>"
+                        "read_file" -> "<tool_call name=\"read_file\">${tool.command}</tool_call>"
+                        "write_file" -> "<tool_call name=\"write_file\">${tool.command}</tool_call>"
+                        "edit_file" -> "<tool_call name=\"edit_file\">${tool.command}</tool_call>"
+                        "automation" -> "<tool_call name=\"automation\">${tool.command}</tool_call>"
+                        "ask_choices", "user_choice" -> "<ask_choices>${tool.command}</ask_choices>"
+                        else -> "<tool_call name=\"${tool.name}\">${tool.command}</tool_call>"
+                    }
+
+                    contents.add(
+                        ContentPartDto(
+                            role = "model",
+                            parts = listOf(TextPartDto(text = toolTag))
+                        )
+                    )
+
+                    val outputText = when (tool.name) {
+                        "bash" -> "[Terminal Output for `${tool.command}` (exit: ${tool.exitCode ?: 0})]:\n```\n${tool.output.ifEmpty { "(No output)" }}\n```"
+                        "web_search" -> "[Web Search Results for \"${tool.command}\"]:\n${tool.output}"
+                        "read_url" -> "[Webpage Content for \"${tool.command}\"]:\n${tool.output}"
+                        "read_file", "write_file", "edit_file" -> "[File Tool Result: ${tool.name}]:\n${tool.output}"
+                        "automation" -> "[Android Automation Result]:\n${tool.output}"
+                        else -> "[Tool Result: ${tool.name}]:\n${tool.output}"
+                    }
+
+                    contents.add(
+                        ContentPartDto(
+                            role = "user",
+                            parts = listOf(TextPartDto(text = outputText))
+                        )
+                    )
+                }
+
+                if (cleanText.isNotBlank()) {
+                    contents.add(
+                        ContentPartDto(
+                            role = "model",
+                            parts = listOf(TextPartDto(text = cleanText))
+                        )
+                    )
+                }
+            } else {
+                val cleanText = msg.content.replace(Regex("<!--\\s*tool_call:[a-zA-Z0-9_-]+\\s*-->"), "").trim()
+                if (cleanText.isNotBlank()) {
+                    contents.add(
+                        ContentPartDto(
+                            role = role,
+                            parts = listOf(TextPartDto(text = cleanText))
+                        )
+                    )
+                }
+            }
         }
 
         val lower = modelId.lowercase()

@@ -57,12 +57,14 @@ fun MessageBubble(
             .padding(horizontal = 16.dp, vertical = 6.dp),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
+        val hasActiveRunningTool = message.toolCalls.any { it.status == "RUNNING" || it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE" }
+
         // Thinking block (for assistant responses)
         if (!isUser && !message.thoughtText.isNullOrEmpty()) {
             ThinkingAccordion(
                 thoughtText = message.thoughtText,
                 durationMs = message.thoughtDurationMs,
-                isStreaming = message.isStreaming && message.content.isEmpty()
+                isStreaming = message.isStreaming && !hasActiveRunningTool
             )
             Spacer(modifier = Modifier.height(4.dp))
         }
@@ -171,7 +173,13 @@ fun MessageBubble(
                             onSkipChoices = if (onSkipChoices != null) { toolCall -> onSkipChoices(toolCall, message.id) } else null
                         )
                     }
-                } else if (message.isStreaming && message.thoughtText.isNullOrEmpty()) {
+
+                    // Show follow-up thinking / typing indicator ONLY after command execution is finished and AI is streaming/thinking
+                    if (message.isStreaming && !hasActiveRunningTool) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ModelTypingIndicator(modelId = modelId)
+                    }
+                } else if (message.isStreaming && !hasActiveRunningTool) {
                     ModelTypingIndicator(modelId = modelId)
                 }
 

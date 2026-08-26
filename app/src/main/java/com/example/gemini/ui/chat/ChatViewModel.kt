@@ -590,7 +590,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     thought = thoughtBuilder.toString(),
                                     thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
                                     toolCalls = toolCallsWithRunning,
-                                    isStreaming = true
+                                    isStreaming = false
                                 )
 
                                 viewModelScope.launch {
@@ -626,7 +626,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                         thought = thoughtBuilder.toString(),
                                         thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
                                         toolCalls = updatedToolCalls,
-                                        isStreaming = false
+                                        isStreaming = true
                                     )
                                     storage.saveMessages(conv.id, _messages.value)
 
@@ -675,7 +675,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     thought = thoughtBuilder.toString(),
                                     thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
                                     toolCalls = toolCallsWithRunning,
-                                    isStreaming = true
+                                    isStreaming = false
                                 )
 
                                 viewModelScope.launch {
@@ -705,7 +705,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                         thought = thoughtBuilder.toString(),
                                         thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
                                         toolCalls = updatedToolCalls,
-                                        isStreaming = false
+                                        isStreaming = true
                                     )
                                     storage.saveMessages(conv.id, _messages.value)
 
@@ -758,7 +758,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                         thought = thoughtBuilder.toString(),
                                         thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
                                         toolCalls = toolCallsWithRunning,
-                                        isStreaming = true
+                                        isStreaming = false
                                     )
 
                                     val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
@@ -798,7 +798,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                             thought = thoughtBuilder.toString(),
                                             thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
                                             toolCalls = updatedToolCalls,
-                                            isStreaming = false
+                                            isStreaming = true
                                         )
                                         storage.saveMessages(conv.id, _messages.value)
 
@@ -876,7 +876,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     thought = thoughtBuilder.toString(),
                                     thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
                                     toolCalls = toolCallsWithRunning,
-                                    isStreaming = true
+                                    isStreaming = false
                                 )
 
                                 val fileHost = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
@@ -927,7 +927,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                         thought = thoughtBuilder.toString(),
                                         thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
                                         toolCalls = updatedToolCalls,
-                                        isStreaming = false
+                                        isStreaming = true
                                     )
                                     storage.saveMessages(conv.id, _messages.value)
 
@@ -976,7 +976,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     thought = thoughtBuilder.toString(),
                                     thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
                                     toolCalls = toolCallsWithRunning,
-                                    isStreaming = true
+                                    isStreaming = false
                                 )
 
                                 viewModelScope.launch {
@@ -998,7 +998,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                         thought = thoughtBuilder.toString(),
                                         thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
                                         toolCalls = updatedToolCalls,
-                                        isStreaming = false
+                                        isStreaming = true
                                     )
                                     storage.saveMessages(conv.id, _messages.value)
 
@@ -1115,11 +1115,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return ExtractedTool("read_url", payload, preamble)
         }
 
-        // 5. Terminal Bash tag
-        val execMatch = Regex("<execute_command>([\\s\\S]*?)</execute_command>", RegexOption.IGNORE_CASE).find(text)
+        // 5. Terminal Bash tags (<execute_command>, <bash>, <terminal>, <sh>)
+        val execMatch = Regex("<(execute_command|bash|terminal|sh)>([\\s\\S]*?)</\\1>", RegexOption.IGNORE_CASE).find(text)
         if (execMatch != null) {
-            val payload = execMatch.groupValues[1].trim()
-            val preamble = text.replace(Regex("<execute_command>[\\s\\S]*?</execute_command>", RegexOption.IGNORE_CASE), "").trim()
+            val payload = execMatch.groupValues[2].trim()
+            val preamble = text.replace(Regex("<(execute_command|bash|terminal|sh)>[\\s\\S]*?</\\1>", RegexOption.IGNORE_CASE), "").trim()
             return ExtractedTool("bash", payload, preamble)
         }
 
