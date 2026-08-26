@@ -20,6 +20,10 @@ class AuthPreferences(private val context: Context) {
         val USER_EMAIL = stringPreferencesKey("user_email")
         val TERMUX_SSH_HOST = stringPreferencesKey("termux_ssh_host")
         val TERMUX_SSH_PORT = stringPreferencesKey("termux_ssh_port")
+        val TERMUX_SSH_USER = stringPreferencesKey("termux_ssh_user")
+        val TERMUX_SSH_PASS = stringPreferencesKey("termux_ssh_pass")
+        val IS_TERMINAL_TOOL_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_tool_enabled")
+        val AUTO_EXECUTE_TERMINAL = androidx.datastore.preferences.core.booleanPreferencesKey("auto_execute_terminal")
         val ENABLED_MODELS = androidx.datastore.preferences.core.stringSetPreferencesKey("enabled_models")
     }
 
@@ -30,6 +34,37 @@ class AuthPreferences(private val context: Context) {
     val subscriptionTier: Flow<String?> = context.dataStore.data.map { it[SUBSCRIPTION_TIER] ?: "pro" }
     val userEmail: Flow<String?> = context.dataStore.data.map { it[USER_EMAIL] }
     val enabledModelIds: Flow<Set<String>?> = context.dataStore.data.map { it[ENABLED_MODELS] }
+
+    val termuxSshHost: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_HOST] ?: "127.0.0.1" }
+    val termuxSshPort: Flow<Int> = context.dataStore.data.map { it[TERMUX_SSH_PORT]?.toIntOrNull() ?: 8022 }
+    val termuxSshUser: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_USER] ?: "root" }
+    val termuxSshPass: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_PASS] ?: "root" }
+    val isTerminalToolEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_TERMINAL_TOOL_ENABLED] ?: false }
+    val isAutoExecuteTerminal: Flow<Boolean> = context.dataStore.data.map { it[AUTO_EXECUTE_TERMINAL] ?: true }
+
+    suspend fun saveTermuxSshConfig(
+        host: String,
+        port: Int,
+        user: String,
+        pass: String,
+        enabled: Boolean,
+        autoExecute: Boolean
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[TERMUX_SSH_HOST] = host
+            prefs[TERMUX_SSH_PORT] = port.toString()
+            prefs[TERMUX_SSH_USER] = user
+            prefs[TERMUX_SSH_PASS] = pass
+            prefs[IS_TERMINAL_TOOL_ENABLED] = enabled
+            prefs[AUTO_EXECUTE_TERMINAL] = autoExecute
+        }
+    }
+
+    suspend fun setTerminalToolEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[IS_TERMINAL_TOOL_ENABLED] = enabled
+        }
+    }
 
     suspend fun saveTokens(accessToken: String, refreshToken: String?, email: String? = null, expiresInSeconds: Long? = 3600) {
         context.dataStore.edit { prefs ->

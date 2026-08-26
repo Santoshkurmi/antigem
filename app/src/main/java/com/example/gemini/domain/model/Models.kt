@@ -11,6 +11,17 @@ enum class MessageRole {
 }
 
 @Serializable
+data class ToolCall(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String = "bash",
+    val command: String,
+    val status: String = "RUNNING", // RUNNING, SUCCESS, FAILED, TERMINATED
+    val output: String = "",
+    val exitCode: Int? = null,
+    val durationMs: Long? = null
+)
+
+@Serializable
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val conversationId: String,
@@ -18,6 +29,7 @@ data class ChatMessage(
     val content: String,
     val thoughtText: String? = null,
     val thoughtDurationMs: Long? = null,
+    val toolCalls: List<ToolCall> = emptyList(),
     val isStreaming: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )

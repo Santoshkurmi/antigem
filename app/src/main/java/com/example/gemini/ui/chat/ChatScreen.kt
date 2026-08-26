@@ -2,16 +2,23 @@ package com.example.gemini.ui.chat
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,20 +39,15 @@ import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.theme.*
 import com.example.gemini.ui.components.ChatInputBar
+import com.example.gemini.ui.components.FloatingTerminalInspector
 import com.example.gemini.ui.components.MessageBubble
 import com.example.gemini.ui.drawer.ChatHistoryDrawer
 import com.example.gemini.ui.models.ModelSelectorBottomSheet
 import com.example.gemini.ui.models.ThinkingSelectorBottomSheet
 import com.example.gemini.ui.settings.SettingsDialog
-import kotlinx.coroutines.launch
-
-import androidx.compose.animation.*
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import com.example.gemini.ui.tools.ToolsBottomSheet
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 enum class ScrollDirection { UP, DOWN }
 
@@ -76,6 +78,7 @@ fun ChatScreen(
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
+    var showToolsSheet by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
     var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
@@ -222,6 +225,13 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { showToolsSheet = true }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Handyman,
+                                contentDescription = "Tools",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                            )
+                        }
                         IconButton(onClick = { showSettingsDialog = true }) {
                             Icon(
                                 imageVector = Icons.Outlined.Settings,
@@ -371,6 +381,14 @@ fun ChatScreen(
                     }
                 }
 
+                // Floating Termux SSH Terminal Inspector (Active command HUD & Session monitor)
+                FloatingTerminalInspector(
+                    authPreferences = viewModel.authPreferences,
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(end = 16.dp, bottom = 4.dp)
+                )
+
                 // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)
                 ChatInputBar(
                     selectedModel = currentModel,
@@ -449,6 +467,14 @@ fun ChatScreen(
                 viewModel.refreshQuotas()
             },
             onDismiss = { showSettingsDialog = false }
+        )
+    }
+
+    // AI Tools & Capabilities Bottom Sheet (Termux SSH Terminal Access)
+    if (showToolsSheet) {
+        ToolsBottomSheet(
+            authPreferences = viewModel.authPreferences,
+            onDismiss = { showToolsSheet = false }
         )
     }
 

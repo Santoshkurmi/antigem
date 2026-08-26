@@ -91,6 +91,9 @@ dependencies {
   implementation("io.noties.markwon:ext-latex:4.6.2")
   implementation("ru.noties:jlatexmath-android:0.2.0")
 
+  // Pure Java/Kotlin SSH Client (Persistent Termux SSH connection pool)
+  implementation("com.github.mwiede:jsch:0.2.20")
+
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)

@@ -154,9 +154,12 @@ fun MessageBubble(
         } else {
             // Assistant response
             Column(modifier = Modifier.fillMaxWidth()) {
-                if (message.content.isNotEmpty()) {
+                if (message.content.isNotEmpty() || message.toolCalls.isNotEmpty()) {
                     SelectionContainer {
-                        MarkdownContent(content = message.content)
+                        MarkdownContent(
+                            content = message.content,
+                            toolCalls = message.toolCalls
+                        )
                     }
                 } else if (message.isStreaming && message.thoughtText.isNullOrEmpty()) {
                     ModelTypingIndicator(modelId = modelId)

@@ -69,6 +69,7 @@ enum class TableAlignment { LEFT, CENTER, RIGHT }
 
 sealed class MarkdownBlock {
     data class Paragraph(val text: String) : MarkdownBlock()
+    data class AgentTool(val toolCall: com.example.gemini.domain.model.ToolCall) : MarkdownBlock()
     data class Header(val level: Int, val text: String) : MarkdownBlock()
     data class Bullet(val indent: Int, val text: String) : MarkdownBlock()
     data class Numbered(val number: String, val text: String) : MarkdownBlock()
@@ -86,13 +87,17 @@ sealed class MarkdownBlock {
 @Composable
 fun MarkdownContent(
     content: String,
+    toolCalls: List<com.example.gemini.domain.model.ToolCall> = emptyList(),
     modifier: Modifier = Modifier
 ) {
-    val blocks = remember(content) { parseMarkdownBlocks(content) }
+    val blocks = remember(content, toolCalls) { parseMarkdownBlocks(content, toolCalls) }
 
     Column(modifier = modifier.fillMaxWidth()) {
         blocks.forEach { block ->
             when (block) {
+                is MarkdownBlock.AgentTool -> {
+                    AgentToolCallCard(toolCall = block.toolCall)
+                }
                 is MarkdownBlock.Math -> {
                     NativeMathView(latex = block.latex, isDisplay = block.isDisplay)
                 }
@@ -1176,13 +1181,35 @@ private fun buildRichAnnotatedString(
  * Full Markdown block parser supporting:
  * Math ($$, \[\], ```math), Fenced Code, <details><summary>, GFM Tables, Headers (1-6), Images, Task Checklists, Blockquotes, Lists, Dividers, Paragraphs.
  */
-fun parseMarkdownBlocks(rawText: String): List<MarkdownBlock> {
+fun parseMarkdownBlocks(
+    rawText: String,
+    toolCalls: List<com.example.gemini.domain.model.ToolCall> = emptyList()
+): List<MarkdownBlock> {
     val result = mutableListOf<MarkdownBlock>()
     val lines = rawText.lines()
     var i = 0
 
     while (i < lines.size) {
         val line = lines[i]
+
+        // 0. Inline Agent Tool Call Marker <!-- tool_call:ID --> or <execute_command>
+        val toolMarkerMatch = Regex("<!--\\s*tool_call:([a-zA-Z0-9_-]+)\\s*-->").find(line)
+        if (toolMarkerMatch != null) {
+            val toolId = toolMarkerMatch.groupValues[1]
+            val matchedTool = toolCalls.find { it.id == toolId } ?: com.example.gemini.domain.model.ToolCall(id = toolId, command = "bash", status = "SUCCESS")
+            result.add(MarkdownBlock.AgentTool(matchedTool))
+            i++
+            continue
+        }
+
+        val execCmdMatch = Regex("<execute_command>([\\s\\S]*?)</execute_command>").find(line)
+        if (execCmdMatch != null) {
+            val cmd = execCmdMatch.groupValues[1].trim()
+            val matchedTool = toolCalls.find { it.command == cmd } ?: com.example.gemini.domain.model.ToolCall(command = cmd, status = "RUNNING")
+            result.add(MarkdownBlock.AgentTool(matchedTool))
+            i++
+            continue
+        }
 
         // 1. Math block starting with $$
         if (line.trimStart().startsWith("$$")) {
@@ -1350,6 +1377,12 @@ fun parseMarkdownBlocks(rawText: String): List<MarkdownBlock> {
         }
 
         i++
+    }
+
+    // Append any tool calls that were not explicitly embedded in the text
+    val handledToolIds = result.filterIsInstance<MarkdownBlock.AgentTool>().map { it.toolCall.id }.toSet()
+    toolCalls.filter { it.id !in handledToolIds }.forEach { orphanTool ->
+        result.add(MarkdownBlock.AgentTool(orphanTool))
     }
 
     return result
