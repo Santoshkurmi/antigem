@@ -14,10 +14,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
@@ -26,9 +23,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -83,6 +82,7 @@ fun ChatScreen(
     var inputText by remember { mutableStateOf("") }
     var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
     val thinkingPref by viewModel.thinkingPreference.collectAsState()
+    val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
 
     // Independent LazyListState per conversation
     val convKey = currentConv?.id ?: "empty"
@@ -323,6 +323,15 @@ fun ChatScreen(
                                             viewModel.retryMessage(targetMsg.id)
                                             userSentMessageTrigger++
                                         }
+                                    },
+                                    onApproveTool = { toolCall, msgId ->
+                                        viewModel.approveAndExecuteTerminalTool(toolCall, msgId)
+                                    },
+                                    onRejectTool = { toolCall, msgId ->
+                                        viewModel.rejectTerminalTool(toolCall, msgId)
+                                    },
+                                    onTerminateTool = { toolCall, msgId ->
+                                        viewModel.terminateRunningTerminalTool(toolCall, msgId)
                                     }
                                 )
                             }
@@ -529,6 +538,91 @@ fun ChatScreen(
             dismissButton = {
                 TextButton(onClick = { pendingMessageAction = null }) {
                     Text(text = "Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+            }
+        )
+    }
+
+    // Command Terminated Action Dialog (When user clicks Stop during command execution)
+    terminatedToolDialogState?.let { (toolCall, msgId) ->
+        var userFeedback by remember(toolCall.id) { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissTerminatedToolDialog() },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Cancel,
+                        contentDescription = null,
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Command Terminated",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "You stopped the running command:",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF0D0E15),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "$ ${toolCall.command}",
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = ClaudeTerracotta,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Explain why or give new instructions to AI (optional):",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = userFeedback,
+                        onValueChange = { userFeedback = it },
+                        placeholder = { Text("e.g. It was taking too long, please use grep or find a faster way...", fontSize = 12.5.sp) },
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.proceedAfterTermination(toolCall, msgId, userFeedback)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(text = "Send to AI & Proceed", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.dismissTerminatedToolDialog() }
+                ) {
+                    Text(text = "Stop Turn Here", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), fontSize = 12.5.sp)
                 }
             }
         )

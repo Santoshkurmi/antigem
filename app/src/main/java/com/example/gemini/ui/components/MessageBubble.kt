@@ -40,6 +40,9 @@ fun MessageBubble(
     modelId: String = "gemini",
     onEdit: (ChatMessage) -> Unit = {},
     onRetry: (ChatMessage) -> Unit = {},
+    onApproveTool: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
+    onRejectTool: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
+    onTerminateTool: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -158,7 +161,10 @@ fun MessageBubble(
                     SelectionContainer {
                         MarkdownContent(
                             content = message.content,
-                            toolCalls = message.toolCalls
+                            toolCalls = message.toolCalls,
+                            onApproveTool = if (onApproveTool != null) { toolCall -> onApproveTool(toolCall, message.id) } else null,
+                            onRejectTool = if (onRejectTool != null) { toolCall -> onRejectTool(toolCall, message.id) } else null,
+                            onTerminateTool = if (onTerminateTool != null) { toolCall -> onTerminateTool(toolCall, message.id) } else null
                         )
                     }
                 } else if (message.isStreaming && message.thoughtText.isNullOrEmpty()) {

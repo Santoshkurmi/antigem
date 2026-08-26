@@ -236,6 +236,7 @@ object TermuxSshManager {
         user: String,
         pass: String,
         targetTabId: String? = null,
+        customCmdId: String? = null,
         onChunk: (String) -> Unit = {}
     ): TerminalCommand = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
@@ -246,7 +247,7 @@ object TermuxSshManager {
         val tab = currentTabs.find { it.id == effectiveTabId } ?: currentTabs.first()
         val workingDir = tab.workingDirectory
 
-        val cmdId = UUID.randomUUID().toString()
+        val cmdId = customCmdId ?: UUID.randomUUID().toString()
         var currentCmd = TerminalCommand(
             id = cmdId,
             command = command,

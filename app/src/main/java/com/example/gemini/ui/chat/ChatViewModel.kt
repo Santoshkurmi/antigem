@@ -71,6 +71,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _tier = MutableStateFlow("pro")
     val tier: StateFlow<String> = _tier.asStateFlow()
 
+    private val _terminatedToolDialog = MutableStateFlow<Pair<com.example.gemini.domain.model.ToolCall, String>?>(null)
+    val terminatedToolDialog: StateFlow<Pair<com.example.gemini.domain.model.ToolCall, String>?> = _terminatedToolDialog.asStateFlow()
+
+    fun dismissTerminatedToolDialog() {
+        _terminatedToolDialog.value = null
+    }
+
     fun setThinkingPreference(pref: com.example.gemini.domain.model.ThinkingPreference) {
         _thinkingPreference.value = pref
     }
@@ -618,90 +625,131 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                         // 3. Check for Termux SSH Command Execution Tool
                         val toolMatch = Regex("<execute_command>([\\s\\S]*?)</execute_command>").find(streamGeneratedText)
-                        if (toolMatch != null && isTerminalEnabled && isAutoExecute) {
+                        if (toolMatch != null && isTerminalEnabled) {
                             val cmdToRun = toolMatch.groupValues[1].trim()
                             val cleanPreamble = streamGeneratedText.replace(Regex("<execute_command>[\\s\\S]*?</execute_command>"), "").trim()
 
                             if (cmdToRun.isNotEmpty()) {
-                                val runningToolCall = com.example.gemini.domain.model.ToolCall(
-                                    name = "bash",
-                                    command = cmdToRun,
-                                    status = "RUNNING"
-                                )
-                                val toolCallsWithRunning = existingToolCalls + runningToolCall
-                                val runningToolMarker = "<!-- tool_call:${runningToolCall.id} -->"
-                                val currentTextAccumulated = if (priorTextPrefix.isNotBlank()) {
-                                    if (cleanPreamble.isNotBlank()) "$priorTextPrefix\n\n$cleanPreamble\n\n$runningToolMarker" else "$priorTextPrefix\n\n$runningToolMarker"
-                                } else {
-                                    if (cleanPreamble.isNotBlank()) "$cleanPreamble\n\n$runningToolMarker" else runningToolMarker
-                                }
+                                val toolCallId = UUID.randomUUID().toString()
 
-                                updateAssistantMessage(
-                                    msgId = assistantMsgId,
-                                    content = currentTextAccumulated,
-                                    thought = thoughtBuilder.toString(),
-                                    thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
-                                    toolCalls = toolCallsWithRunning,
-                                    isStreaming = true
-                                )
-
-                                val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
-                                val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
-                                val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"
-                                val pass = authPrefs.termuxSshPass.firstOrNull() ?: "root"
-
-                                viewModelScope.launch {
-                                    val resultSession = com.example.gemini.data.ssh.TermuxSshManager.executeCommand(
+                                if (isAutoExecute) {
+                                    val runningToolCall = com.example.gemini.domain.model.ToolCall(
+                                        id = toolCallId,
+                                        name = "bash",
                                         command = cmdToRun,
-                                        host = host,
-                                        port = port,
-                                        user = user,
-                                        pass = pass
+                                        status = "RUNNING"
                                     )
-
-                                    val finalStatus = if (resultSession.exitCode == 0) "SUCCESS" else "FAILED"
-                                    val completedToolCall = runningToolCall.copy(
-                                        status = finalStatus,
-                                        output = resultSession.output,
-                                        exitCode = resultSession.exitCode,
-                                        durationMs = resultSession.durationMs
-                                    )
-                                    val updatedToolCalls = existingToolCalls + completedToolCall
+                                    val toolCallsWithRunning = existingToolCalls + runningToolCall
+                                    val runningToolMarker = "<!-- tool_call:${runningToolCall.id} -->"
+                                    val currentTextAccumulated = if (priorTextPrefix.isNotBlank()) {
+                                        if (cleanPreamble.isNotBlank()) "$priorTextPrefix\n\n$cleanPreamble\n\n$runningToolMarker" else "$priorTextPrefix\n\n$runningToolMarker"
+                                    } else {
+                                        if (cleanPreamble.isNotBlank()) "$cleanPreamble\n\n$runningToolMarker" else runningToolMarker
+                                    }
 
                                     updateAssistantMessage(
                                         msgId = assistantMsgId,
                                         content = currentTextAccumulated,
                                         thought = thoughtBuilder.toString(),
                                         thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
-                                        toolCalls = updatedToolCalls,
+                                        toolCalls = toolCallsWithRunning,
+                                        isStreaming = true
+                                    )
+
+                                    val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
+                                    val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
+                                    val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"
+                                    val pass = authPrefs.termuxSshPass.firstOrNull() ?: "root"
+
+                                    viewModelScope.launch {
+                                        val resultSession = com.example.gemini.data.ssh.TermuxSshManager.executeCommand(
+                                            command = cmdToRun,
+                                            host = host,
+                                            port = port,
+                                            user = user,
+                                            pass = pass,
+                                            customCmdId = toolCallId
+                                        )
+
+                                        val finalStatus = if (resultSession.status == com.example.gemini.data.ssh.CommandStatus.TERMINATED) {
+                                            "TERMINATED"
+                                        } else if (resultSession.exitCode == 0) {
+                                            "SUCCESS"
+                                        } else {
+                                            "FAILED"
+                                        }
+
+                                        val completedToolCall = runningToolCall.copy(
+                                            status = finalStatus,
+                                            output = resultSession.output,
+                                            exitCode = resultSession.exitCode,
+                                            durationMs = resultSession.durationMs
+                                        )
+                                        val updatedToolCalls = existingToolCalls + completedToolCall
+
+                                        updateAssistantMessage(
+                                            msgId = assistantMsgId,
+                                            content = currentTextAccumulated,
+                                            thought = thoughtBuilder.toString(),
+                                            thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                            toolCalls = updatedToolCalls,
+                                            isStreaming = false
+                                        )
+                                        storage.saveMessages(conv.id, _messages.value)
+
+                                        if (finalStatus != "TERMINATED") {
+                                            // Synthesize conversation history to continue within the same turn
+                                            val syntheticHistory = currentHistory + listOf(
+                                                ChatMessage(
+                                                    conversationId = conv.id,
+                                                    role = MessageRole.ASSISTANT,
+                                                    content = "$cleanPreamble\n<execute_command>$cmdToRun</execute_command>"
+                                                ),
+                                                ChatMessage(
+                                                    conversationId = conv.id,
+                                                    role = MessageRole.USER,
+                                                    content = "[Terminal Output for `$cmdToRun` (exit: ${resultSession.exitCode ?: 0})]:\n```\n${resultSession.output.ifEmpty { "(No output)" }}\n```"
+                                                )
+                                            )
+
+                                            // Continue generation seamlessly inside the SAME assistant bubble
+                                            executeStream(
+                                                conv = conv,
+                                                currentHistory = syntheticHistory,
+                                                existingAssistantMsgId = assistantMsgId,
+                                                existingToolCalls = updatedToolCalls,
+                                                priorTextPrefix = currentTextAccumulated
+                                            )
+                                        }
+                                    }
+                                    return@collect
+                                } else {
+                                    // Manual Confirmation Required (Auto-Execute Disabled)
+                                    val pendingToolCall = com.example.gemini.domain.model.ToolCall(
+                                        id = toolCallId,
+                                        name = "bash",
+                                        command = cmdToRun,
+                                        status = "PENDING_APPROVAL"
+                                    )
+                                    val toolCallsWithPending = existingToolCalls + pendingToolCall
+                                    val pendingToolMarker = "<!-- tool_call:${pendingToolCall.id} -->"
+                                    val currentTextAccumulated = if (priorTextPrefix.isNotBlank()) {
+                                        if (cleanPreamble.isNotBlank()) "$priorTextPrefix\n\n$cleanPreamble\n\n$pendingToolMarker" else "$priorTextPrefix\n\n$pendingToolMarker"
+                                    } else {
+                                        if (cleanPreamble.isNotBlank()) "$cleanPreamble\n\n$pendingToolMarker" else pendingToolMarker
+                                    }
+
+                                    updateAssistantMessage(
+                                        msgId = assistantMsgId,
+                                        content = currentTextAccumulated,
+                                        thought = thoughtBuilder.toString(),
+                                        thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                        toolCalls = toolCallsWithPending,
                                         isStreaming = false
                                     )
                                     storage.saveMessages(conv.id, _messages.value)
-
-                                    // Synthesize conversation history to continue within the same turn
-                                    val syntheticHistory = currentHistory + listOf(
-                                        ChatMessage(
-                                            conversationId = conv.id,
-                                            role = MessageRole.ASSISTANT,
-                                            content = "$cleanPreamble\n<execute_command>$cmdToRun</execute_command>"
-                                        ),
-                                        ChatMessage(
-                                            conversationId = conv.id,
-                                            role = MessageRole.USER,
-                                            content = "[Terminal Output for `$cmdToRun` (exit: ${resultSession.exitCode ?: 0})]:\n```\n${resultSession.output.ifEmpty { "(No output)" }}\n```"
-                                        )
-                                    )
-
-                                    // Continue generation seamlessly inside the SAME assistant bubble
-                                    executeStream(
-                                        conv = conv,
-                                        currentHistory = syntheticHistory,
-                                        existingAssistantMsgId = assistantMsgId,
-                                        existingToolCalls = updatedToolCalls,
-                                        priorTextPrefix = currentTextAccumulated
-                                    )
+                                    return@collect
                                 }
-                                return@collect
                             }
                         }
 
@@ -895,6 +943,196 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 refreshQuotas()
             }
+        }
+    }
+
+    fun approveAndExecuteTerminalTool(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String) {
+        val conv = _currentConversation.value ?: return
+        val msg = _messages.value.find { it.id == messageId } ?: return
+
+        val runningToolCall = toolCall.copy(status = "RUNNING")
+        val updatedToolCalls = msg.toolCalls.map { if (it.id == toolCall.id) runningToolCall else it }
+
+        updateAssistantMessage(
+            msgId = messageId,
+            content = msg.content,
+            thought = msg.thoughtText ?: "",
+            thoughtDuration = msg.thoughtDurationMs,
+            toolCalls = updatedToolCalls,
+            isStreaming = true
+        )
+
+        viewModelScope.launch {
+            val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
+            val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
+            val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"
+            val pass = authPrefs.termuxSshPass.firstOrNull() ?: "root"
+
+            val resultSession = com.example.gemini.data.ssh.TermuxSshManager.executeCommand(
+                command = toolCall.command,
+                host = host,
+                port = port,
+                user = user,
+                pass = pass,
+                customCmdId = toolCall.id
+            )
+
+            val finalStatus = if (resultSession.status == com.example.gemini.data.ssh.CommandStatus.TERMINATED) {
+                "TERMINATED"
+            } else if (resultSession.exitCode == 0) {
+                "SUCCESS"
+            } else {
+                "FAILED"
+            }
+
+            val completedToolCall = runningToolCall.copy(
+                status = finalStatus,
+                output = resultSession.output,
+                exitCode = resultSession.exitCode,
+                durationMs = resultSession.durationMs
+            )
+            val finalToolCalls = msg.toolCalls.map { if (it.id == toolCall.id) completedToolCall else it }
+
+            updateAssistantMessage(
+                msgId = messageId,
+                content = msg.content,
+                thought = msg.thoughtText ?: "",
+                thoughtDuration = msg.thoughtDurationMs,
+                toolCalls = finalToolCalls,
+                isStreaming = false
+            )
+            storage.saveMessages(conv.id, _messages.value)
+
+            if (finalStatus != "TERMINATED") {
+                val currentHistory = _messages.value.filter { it.id != messageId }
+                val syntheticHistory = currentHistory + listOf(
+                    ChatMessage(
+                        conversationId = conv.id,
+                        role = MessageRole.ASSISTANT,
+                        content = "<execute_command>${toolCall.command}</execute_command>"
+                    ),
+                    ChatMessage(
+                        conversationId = conv.id,
+                        role = MessageRole.USER,
+                        content = "[Terminal Output for `${toolCall.command}` (exit: ${resultSession.exitCode ?: 0})]:\n```\n${resultSession.output.ifEmpty { "(No output)" }}\n```"
+                    )
+                )
+
+                executeStream(
+                    conv = conv,
+                    currentHistory = syntheticHistory,
+                    existingAssistantMsgId = messageId,
+                    existingToolCalls = finalToolCalls,
+                    priorTextPrefix = msg.content
+                )
+            }
+        }
+    }
+
+    fun rejectTerminalTool(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, reason: String? = null) {
+        val conv = _currentConversation.value ?: return
+        val msg = _messages.value.find { it.id == messageId } ?: return
+
+        val rejectedToolCall = toolCall.copy(
+            status = "REJECTED",
+            output = reason ?: "[Command execution was rejected by user]"
+        )
+        val finalToolCalls = msg.toolCalls.map { if (it.id == toolCall.id) rejectedToolCall else it }
+
+        updateAssistantMessage(
+            msgId = messageId,
+            content = msg.content,
+            thought = msg.thoughtText ?: "",
+            thoughtDuration = msg.thoughtDurationMs,
+            toolCalls = finalToolCalls,
+            isStreaming = false
+        )
+
+        viewModelScope.launch {
+            storage.saveMessages(conv.id, _messages.value)
+
+            val currentHistory = _messages.value.filter { it.id != messageId }
+            val syntheticHistory = currentHistory + listOf(
+                ChatMessage(
+                    conversationId = conv.id,
+                    role = MessageRole.ASSISTANT,
+                    content = "<execute_command>${toolCall.command}</execute_command>"
+                ),
+                ChatMessage(
+                    conversationId = conv.id,
+                    role = MessageRole.USER,
+                    content = "[Terminal Command `${toolCall.command}` was rejected by user${if (reason.isNullOrBlank()) "" else ": $reason"}]"
+                )
+            )
+
+            executeStream(
+                conv = conv,
+                currentHistory = syntheticHistory,
+                existingAssistantMsgId = messageId,
+                existingToolCalls = finalToolCalls,
+                priorTextPrefix = msg.content
+            )
+        }
+    }
+
+    fun terminateRunningTerminalTool(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String) {
+        com.example.gemini.data.ssh.TermuxSshManager.killCommand(toolCall.id)
+
+        val conv = _currentConversation.value ?: return
+        val msg = _messages.value.find { it.id == messageId } ?: return
+
+        val terminatedToolCall = toolCall.copy(
+            status = "TERMINATED",
+            exitCode = 130,
+            output = (toolCall.output + "\n\n[Process terminated by user]").trim()
+        )
+        val finalToolCalls = msg.toolCalls.map { if (it.id == toolCall.id) terminatedToolCall else it }
+
+        updateAssistantMessage(
+            msgId = messageId,
+            content = msg.content,
+            thought = msg.thoughtText ?: "",
+            thoughtDuration = msg.thoughtDurationMs,
+            toolCalls = finalToolCalls,
+            isStreaming = false
+        )
+
+        viewModelScope.launch {
+            storage.saveMessages(conv.id, _messages.value)
+        }
+
+        // Show interactive action dialog
+        _terminatedToolDialog.value = Pair(terminatedToolCall, messageId)
+    }
+
+    fun proceedAfterTermination(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, userInstructions: String?) {
+        _terminatedToolDialog.value = null
+        val conv = _currentConversation.value ?: return
+        val msg = _messages.value.find { it.id == messageId } ?: return
+
+        viewModelScope.launch {
+            val currentHistory = _messages.value.filter { it.id != messageId }
+            val promptFeedback = if (!userInstructions.isNullOrBlank()) "\nUser Feedback: $userInstructions" else ""
+            val syntheticHistory = currentHistory + listOf(
+                ChatMessage(
+                    conversationId = conv.id,
+                    role = MessageRole.ASSISTANT,
+                    content = "<execute_command>${toolCall.command}</execute_command>"
+                ),
+                ChatMessage(
+                    conversationId = conv.id,
+                    role = MessageRole.USER,
+                    content = "[Terminal Command `${toolCall.command}` was terminated by user]:\n```\n${toolCall.output.ifEmpty { "(No output before termination)" }}\n```$promptFeedback"
+                )
+            )
+
+            executeStream(
+                conv = conv,
+                currentHistory = syntheticHistory,
+                existingAssistantMsgId = messageId,
+                existingToolCalls = msg.toolCalls,
+                priorTextPrefix = msg.content
+            )
         }
     }
 }

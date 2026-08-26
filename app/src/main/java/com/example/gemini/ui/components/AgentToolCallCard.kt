@@ -11,13 +11,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Search
@@ -42,7 +39,10 @@ import com.example.gemini.theme.*
 @Composable
 fun AgentToolCallCard(
     toolCall: ToolCall,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onApprove: ((ToolCall) -> Unit)? = null,
+    onReject: ((ToolCall) -> Unit)? = null,
+    onTerminate: ((ToolCall) -> Unit)? = null
 ) {
     val context = LocalContext.current
     var isExpanded by remember { mutableStateOf(false) }
@@ -50,20 +50,29 @@ fun AgentToolCallCard(
     val isSearch = toolCall.name == "web_search" || toolCall.name == "search"
     val isReader = toolCall.name == "read_url" || toolCall.name == "web_reader"
 
+    val isPendingApproval = toolCall.status == "PENDING_APPROVAL"
     val isRunning = toolCall.status == "RUNNING"
-    val isSuccess = toolCall.status == "SUCCESS" || (toolCall.status != "FAILED" && toolCall.exitCode == 0)
-    val isFailed = toolCall.status == "FAILED" || (toolCall.exitCode != null && toolCall.exitCode != 0)
+    val isTerminated = toolCall.status == "TERMINATED"
+    val isRejected = toolCall.status == "REJECTED"
+    val isSuccess = toolCall.status == "SUCCESS" || (toolCall.status != "FAILED" && !isTerminated && !isRejected && !isPendingApproval && toolCall.exitCode == 0)
+    val isFailed = toolCall.status == "FAILED" || (toolCall.exitCode != null && toolCall.exitCode != 0 && !isTerminated && !isRejected)
 
     val borderColor = when {
+        isPendingApproval -> Color(0xFFF59E0B).copy(alpha = 0.6f)
         isRunning -> ClaudeTerracotta.copy(alpha = 0.5f)
         isSuccess -> QuotaGreen.copy(alpha = 0.35f)
+        isTerminated -> Color(0xFFEF4444).copy(alpha = 0.5f)
+        isRejected -> Color.Gray.copy(alpha = 0.35f)
         isFailed -> Color.Red.copy(alpha = 0.4f)
         else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     }
 
     val headerBg = when {
+        isPendingApproval -> Color(0xFFF59E0B).copy(alpha = 0.12f)
         isRunning -> ClaudeTerracotta.copy(alpha = 0.1f)
         isSuccess -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        isTerminated -> Color(0xFFEF4444).copy(alpha = 0.1f)
+        isRejected -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
         isFailed -> Color.Red.copy(alpha = 0.08f)
         else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
     }
@@ -84,11 +93,18 @@ fun AgentToolCallCard(
                     .clip(RoundedCornerShape(10.dp))
                     .clickable { isExpanded = !isExpanded }
                     .background(headerBg)
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Status Icon
-                if (isRunning) {
+                if (isPendingApproval) {
+                    Icon(
+                        imageVector = Icons.Default.HourglassEmpty,
+                        contentDescription = "Pending Approval",
+                        tint = Color(0xFFF59E0B),
+                        modifier = Modifier.size(15.dp)
+                    )
+                } else if (isRunning) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(14.dp),
                         strokeWidth = 2.dp,
@@ -99,6 +115,20 @@ fun AgentToolCallCard(
                         imageVector = Icons.Default.Check,
                         contentDescription = "Success",
                         tint = QuotaGreen,
+                        modifier = Modifier.size(15.dp)
+                    )
+                } else if (isTerminated) {
+                    Icon(
+                        imageVector = Icons.Default.Cancel,
+                        contentDescription = "Terminated",
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(15.dp)
+                    )
+                } else if (isRejected) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Rejected",
+                        tint = Color.Gray,
                         modifier = Modifier.size(15.dp)
                     )
                 } else if (isFailed) {
@@ -126,21 +156,33 @@ fun AgentToolCallCard(
 
                 // Action Label & Command
                 val actionPrefix = when {
+                    isPendingApproval -> "Approval Needed:"
                     isRunning && isSearch -> "Searching Web:"
                     isRunning && isReader -> "Fetching Page:"
                     isRunning -> "Executing in Termux:"
                     isSuccess && isSearch -> "Web Search:"
                     isSuccess && isReader -> "Read Webpage:"
                     isSuccess -> "Executed:"
+                    isTerminated -> "Terminated:"
+                    isRejected -> "Rejected:"
                     isFailed -> "Failed:"
                     else -> "Tool:"
+                }
+
+                val actionColor = when {
+                    isPendingApproval -> Color(0xFFF59E0B)
+                    isRunning -> ClaudeTerracotta
+                    isSuccess -> QuotaGreen
+                    isTerminated || isFailed -> Color(0xFFEF4444)
+                    isRejected -> Color.Gray
+                    else -> MaterialTheme.colorScheme.onSurface
                 }
 
                 Text(
                     text = actionPrefix,
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isRunning) ClaudeTerracotta else if (isSuccess) QuotaGreen else if (isFailed) Color.Red else MaterialTheme.colorScheme.onSurface
+                    color = actionColor
                 )
 
                 Spacer(modifier = Modifier.width(6.dp))
@@ -155,6 +197,25 @@ fun AgentToolCallCard(
                     modifier = Modifier.weight(1f)
                 )
 
+                // Terminate (Stop) Button while Running
+                if (isRunning && onTerminate != null && !isSearch && !isReader) {
+                    IconButton(
+                        onClick = { onTerminate(toolCall) },
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(Color.Red.copy(alpha = 0.18f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Stop command",
+                            tint = Color.Red,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+
                 // Duration & Exit Code Badges
                 if (toolCall.durationMs != null && toolCall.durationMs > 0) {
                     Text(
@@ -165,7 +226,21 @@ fun AgentToolCallCard(
                     )
                 }
 
-                if (toolCall.exitCode != null && !isRunning) {
+                if (isTerminated) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.Red.copy(alpha = 0.15f))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "stopped",
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Red
+                        )
+                    }
+                } else if (toolCall.exitCode != null && !isRunning && !isPendingApproval && !isRejected) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
@@ -189,6 +264,66 @@ fun AgentToolCallCard(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
+            }
+
+            // Pending Approval Action Bar
+            if (isPendingApproval) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF0D0E15).copy(alpha = 0.4f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = "AI wants to execute this shell command in Termux:",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF0D0E15),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "$ ${toolCall.command}",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = ClaudeTerracotta,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = { onReject?.invoke(toolCall) },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = "Reject", fontSize = 11.5.sp)
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { onApprove?.invoke(toolCall) },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = "Run Command", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
 
             // Expanded Terminal Output
@@ -244,7 +379,7 @@ fun AgentToolCallCard(
 
                     if (toolCall.output.isEmpty()) {
                         Text(
-                            text = if (isRunning) "Running in Termux..." else "(No output returned)",
+                            text = if (isRunning) "Running in Termux..." else if (isPendingApproval) "(Waiting for approval)" else "(No output returned)",
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             color = Color.Gray

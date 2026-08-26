@@ -90,7 +90,10 @@ sealed class MarkdownBlock {
 fun MarkdownContent(
     content: String,
     toolCalls: List<com.example.gemini.domain.model.ToolCall> = emptyList(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onApproveTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
+    onRejectTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
+    onTerminateTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null
 ) {
     val blocks = remember(content, toolCalls) { parseMarkdownBlocks(content, toolCalls) }
 
@@ -98,7 +101,12 @@ fun MarkdownContent(
         blocks.forEach { block ->
             when (block) {
                 is MarkdownBlock.AgentTool -> {
-                    AgentToolCallCard(toolCall = block.toolCall)
+                    AgentToolCallCard(
+                        toolCall = block.toolCall,
+                        onApprove = onApproveTool,
+                        onReject = onRejectTool,
+                        onTerminate = onTerminateTool
+                    )
                 }
                 is MarkdownBlock.Math -> {
                     NativeMathView(latex = block.latex, isDisplay = block.isDisplay)
