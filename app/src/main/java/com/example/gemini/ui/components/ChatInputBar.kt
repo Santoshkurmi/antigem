@@ -168,7 +168,7 @@ fun ChatInputBar(
             // Text Input & Send Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 // Text Input container
                 Row(
