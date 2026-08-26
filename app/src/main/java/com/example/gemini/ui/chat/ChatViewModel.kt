@@ -32,6 +32,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val authPrefs get() = authPreferences
     private val apiService = AntigravityApiService()
     private val oauthManager = GoogleOAuthManager()
+    private val automationExecutor = com.example.gemini.data.automation.AutomationToolExecutor(application)
 
     val conversations: StateFlow<List<Conversation>> = storage.conversations
 
@@ -394,6 +395,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val isWebReaderEnabled = authPrefs.isWebReaderToolEnabled.firstOrNull() ?: true
         val isChoicesToolEnabled = authPrefs.isChoicesToolEnabled.firstOrNull() ?: true
         val isFileToolEnabled = authPrefs.isFileToolEnabled.firstOrNull() ?: false
+        val isAutomationToolEnabled = authPrefs.isAutomationToolEnabled.firstOrNull() ?: false
 
         val toolInstructionsList = mutableListOf<String>()
         if (isChoicesToolEnabled) {
@@ -443,6 +445,36 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 "    Use expected_hash=\"NEW\" for brand new files. ALWAYS provide the full file content.\n" +
                 "  - EDIT:  <tool_call name=\"edit_file\">{\"path\": \"/abs/path\", \"old_str\": \"exact text to find\", \"new_str\": \"replacement\", \"expected_hash\": \"<hash from read>\"}</tool_call>\n" +
                 "    EDIT is preferred for partial changes. old_str must be an EXACT match (including whitespace). If the file changed, you'll be told to re-read it first."
+            )
+        }
+        if (isAutomationToolEnabled) {
+            toolInstructionsList.add(
+                "• Android Native Automation Tool: Inspect and control the user's Android device screen and applications natively without terminal or SSH.\n" +
+                "  Output: <tool_call name=\"automation\">{\"action\": \"...\", ...}</tool_call>\n\n" +
+                "  Actions available:\n" +
+                "  1. analyze_screen       → Returns active foreground app, interactive UI tree with text labels, descriptions, and coordinates.\n" +
+                "     Example: {\"action\": \"analyze_screen\"}\n" +
+                "  2. tap                  → Click any button/element by text, description, or exact screen coordinates (x, y).\n" +
+                "     Example: {\"action\": \"tap\", \"text\": \"Search\"} or {\"action\": \"tap\", \"x\": 540, \"y\": 960}\n" +
+                "  3. type_text            → Type text into active or target input field.\n" +
+                "     Example: {\"action\": \"type_text\", \"text\": \"Hello World\", \"target\": \"Search YouTube\"}\n" +
+                "  4. scroll               → Scroll screen in any direction (\"down\", \"up\", \"left\", \"right\").\n" +
+                "     Example: {\"action\": \"scroll\", \"direction\": \"down\"}\n" +
+                "  5. launch_app           → Launch any app by name or package (e.g. \"YouTube\", \"Settings\", \"Spotify\", \"WhatsApp\").\n" +
+                "     Example: {\"action\": \"launch_app\", \"name\": \"YouTube\"}\n" +
+                "  6. press_key            → Trigger system navigation actions (\"back\", \"home\", \"recents\", \"notifications\", \"quick_settings\").\n" +
+                "     Example: {\"action\": \"press_key\", \"key\": \"back\"}\n" +
+                "  7. media_control        → Control active music/video playback (\"play\", \"pause\", \"play_pause\", \"next\", \"previous\", \"vol_up\", \"vol_down\", \"mute\").\n" +
+                "     Example: {\"action\": \"media_control\", \"command\": \"play_pause\"}\n" +
+                "  8. get_media_info       → Check if music/video is currently playing and current media volume.\n" +
+                "     Example: {\"action\": \"get_media_info\"}\n" +
+                "  9. list_apps            → List installed launchable apps on the device.\n" +
+                "     Example: {\"action\": \"list_apps\", \"query\": \"music\"}\n" +
+                "  10. get_running_apps    → Check recently used foreground apps.\n" +
+                "     Example: {\"action\": \"get_running_apps\"}\n" +
+                "  11. take_screenshot     → Capture high-res screen snapshot.\n" +
+                "     Example: {\"action\": \"take_screenshot\"}\n\n" +
+                "  Tip: When interacting with an app UI, always call 'analyze_screen' first to see visible buttons, then 'tap' or 'type_text'."
             )
         }
 
@@ -922,6 +954,77 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 }
                                 return@collect
                             }
+
+                            // 6. Native Android Automation Tool
+                            if ((toolName == "automation" || toolName == "android_automation" || toolName == "ui_automation") && isAutomationToolEnabled) {
+                                val runningToolCall = com.example.gemini.domain.model.ToolCall(
+                                    name = "automation",
+                                    command = payload,
+                                    status = "RUNNING"
+                                )
+                                val toolCallsWithRunning = existingToolCalls + runningToolCall
+                                val runningToolMarker = "<!-- tool_call:${runningToolCall.id} -->"
+                                val currentTextAccumulated = if (priorTextPrefix.isNotBlank()) {
+                                    if (cleanPreamble.isNotBlank()) "$priorTextPrefix\n\n$cleanPreamble\n\n$runningToolMarker" else "$priorTextPrefix\n\n$runningToolMarker"
+                                } else {
+                                    if (cleanPreamble.isNotBlank()) "$cleanPreamble\n\n$runningToolMarker" else runningToolMarker
+                                }
+
+                                updateAssistantMessage(
+                                    msgId = assistantMsgId,
+                                    content = currentTextAccumulated,
+                                    thought = thoughtBuilder.toString(),
+                                    thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                    toolCalls = toolCallsWithRunning,
+                                    isStreaming = true
+                                )
+
+                                viewModelScope.launch {
+                                    val autoStartTime = System.currentTimeMillis()
+                                    val (outputFormatted, isSuccess) = automationExecutor.execute(payload)
+                                    val autoDuration = System.currentTimeMillis() - autoStartTime
+
+                                    val completedToolCall = runningToolCall.copy(
+                                        status = if (isSuccess) "SUCCESS" else "FAILED",
+                                        output = outputFormatted,
+                                        exitCode = if (isSuccess) 0 else 1,
+                                        durationMs = autoDuration
+                                    )
+                                    val updatedToolCalls = existingToolCalls + completedToolCall
+
+                                    updateAssistantMessage(
+                                        msgId = assistantMsgId,
+                                        content = currentTextAccumulated,
+                                        thought = thoughtBuilder.toString(),
+                                        thoughtDuration = if (thoughtBuilder.isNotEmpty()) duration else null,
+                                        toolCalls = updatedToolCalls,
+                                        isStreaming = false
+                                    )
+                                    storage.saveMessages(conv.id, _messages.value)
+
+                                    val syntheticHistory = currentHistory + listOf(
+                                        ChatMessage(
+                                            conversationId = conv.id,
+                                            role = MessageRole.ASSISTANT,
+                                            content = "$cleanPreamble\n<tool_call name=\"automation\">$payload</tool_call>"
+                                        ),
+                                        ChatMessage(
+                                            conversationId = conv.id,
+                                            role = MessageRole.USER,
+                                            content = "[Android Automation Result]:\n$outputFormatted"
+                                        )
+                                    )
+
+                                    executeStream(
+                                        conv = conv,
+                                        currentHistory = syntheticHistory,
+                                        existingAssistantMsgId = assistantMsgId,
+                                        existingToolCalls = updatedToolCalls,
+                                        priorTextPrefix = currentTextAccumulated
+                                    )
+                                }
+                                return@collect
+                            }
                         }
 
                         val finalDisplayContent = priorTextPrefix + (if (priorTextPrefix.isNotBlank() && streamGeneratedText.isNotBlank()) "\n\n$streamGeneratedText" else streamGeneratedText)
@@ -1040,18 +1143,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return ExtractedTool("edit_file", payload, preamble)
         }
 
+        // 7. Automation tag
+        val autoMatch = Regex("<automation>([\\s\\S]*?)</automation>", RegexOption.IGNORE_CASE).find(text)
+        if (autoMatch != null) {
+            val payload = autoMatch.groupValues[1].trim()
+            val preamble = text.replace(Regex("<automation>[\\s\\S]*?</automation>", RegexOption.IGNORE_CASE), "").trim()
+            return ExtractedTool("automation", payload, preamble)
+        }
+
         return null
     }
 
     private fun sanitizeStreamingText(rawText: String): String {
         // Find index where any tool call tag starts (complete, unclosed, or in-flight)
-        val toolTagPattern = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|read_file|write_file|edit_file|tool_|execute_|web_|read_|ask_|user_)", RegexOption.IGNORE_CASE)
+        val toolTagPattern = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|read_file|write_file|edit_file|automation|tool_|execute_|web_|read_|ask_|user_|auto_)", RegexOption.IGNORE_CASE)
         val match = toolTagPattern.find(rawText)
         return if (match != null) {
             rawText.substring(0, match.range.first).trimEnd()
         } else {
             // Also clean up any orphan closed tags
-            rawText.replace(Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|read_file|write_file|edit_file)[^>]*>[\\s\\S]*?<\\/\\s*\\1\\s*>", RegexOption.IGNORE_CASE), "").trimEnd()
+            rawText.replace(Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|read_file|write_file|edit_file|automation)[^>]*>[\\s\\S]*?<\\/\\s*\\1\\s*>", RegexOption.IGNORE_CASE), "").trimEnd()
         }
     }
 

@@ -22,6 +22,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.provider.Settings
+import androidx.compose.ui.platform.LocalContext
+import com.example.gemini.data.automation.AndroidAppManager
+import com.example.gemini.data.automation.AndroidAutomationService
 import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.ssh.SshConnectionStatus
 import com.example.gemini.data.ssh.TermuxSshManager
@@ -41,6 +46,18 @@ fun ToolsBottomSheet(
     val isWebReaderEnabled by authPreferences.isWebReaderToolEnabled.collectAsState(initial = true)
     val isChoicesEnabled by authPreferences.isChoicesToolEnabled.collectAsState(initial = true)
     val isFileToolEnabled by authPreferences.isFileToolEnabled.collectAsState(initial = false)
+    val isAutomationToolEnabled by authPreferences.isAutomationToolEnabled.collectAsState(initial = false)
+
+    val context = LocalContext.current
+    val appManager = remember { AndroidAppManager(context) }
+    val isServiceRunning by AndroidAutomationService.isServiceActive.collectAsState()
+    var isAccessibilitySettingsEnabled by remember { mutableStateOf(appManager.isAccessibilityServiceEnabled()) }
+    var isUsageAccessGranted by remember { mutableStateOf(appManager.isUsageAccessGranted()) }
+
+    LaunchedEffect(isAutomationToolEnabled) {
+        isAccessibilitySettingsEnabled = appManager.isAccessibilityServiceEnabled()
+        isUsageAccessGranted = appManager.isUsageAccessGranted()
+    }
 
     val isTerminalEnabled by authPreferences.isTerminalToolEnabled.collectAsState(initial = false)
     val isAutoExecute by authPreferences.isAutoExecuteTerminal.collectAsState(initial = true)
@@ -437,6 +454,241 @@ fun ToolsBottomSheet(
                                     fontFamily = FontFamily.Monospace,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Tool Card: Native Android Automation
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isAutomationToolEnabled) ClaudeTerracotta.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isAutomationToolEnabled) ClaudeTerracotta.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.SmartToy,
+                                contentDescription = null,
+                                tint = if (isAutomationToolEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Android Automation",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(QuotaGreen.copy(alpha = 0.15f))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = "Native • 100%",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = QuotaGreen
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Screen analysis, tap, type, app launch & media control",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Switch(
+                            checked = isAutomationToolEnabled,
+                            onCheckedChange = { enabled ->
+                                coroutineScope.launch { authPreferences.setAutomationToolEnabled(enabled) }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = ClaudeTerracotta
+                            )
+                        )
+                    }
+
+                    AnimatedVisibility(visible = isAutomationToolEnabled) {
+                        Column(modifier = Modifier.padding(top = 14.dp)) {
+                            HorizontalDivider(thickness = 0.6.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text(
+                                text = "Required Android Permissions:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // 1. Accessibility Service Status Item
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        val isAccOk = isServiceRunning
+                                        val dotColor = if (isAccOk) QuotaGreen else if (isAccessibilitySettingsEnabled) ClaudeTerracotta else Color.Red
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(dotColor)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Accessibility Service",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = if (isAccOk) "Active & Running" else if (isAccessibilitySettingsEnabled) "Enabled (Binding...)" else "Disabled in Settings",
+                                                fontSize = 11.sp,
+                                                color = dotColor
+                                            )
+                                        }
+
+                                        if (!isAccOk) {
+                                            Button(
+                                                onClick = {
+                                                    try {
+                                                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        }
+                                                        context.startActivity(intent)
+                                                    } catch (_: Exception) {}
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                shape = RoundedCornerShape(6.dp),
+                                                modifier = Modifier.height(32.dp)
+                                            ) {
+                                                Text("Enable", fontSize = 11.5.sp)
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        text = "Allows AI to read screen elements, tap buttons, scroll & input text.",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 4.dp, start = 16.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // 2. Usage Stats Access Status Item
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        val isUsageOk = isUsageAccessGranted
+                                        val dotColor = if (isUsageOk) QuotaGreen else Color.Gray
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(dotColor)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Usage Stats Access (Optional)",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = if (isUsageOk) "Granted" else "Not Granted",
+                                                fontSize = 11.sp,
+                                                color = dotColor
+                                            )
+                                        }
+
+                                        if (!isUsageOk) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    try {
+                                                        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        }
+                                                        context.startActivity(intent)
+                                                    } catch (_: Exception) {}
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                shape = RoundedCornerShape(6.dp),
+                                                modifier = Modifier.height(32.dp)
+                                            ) {
+                                                Text("Allow", fontSize = 11.5.sp)
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        text = "Allows AI to check currently running & recently opened apps.",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 4.dp, start = 16.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Action List Summary
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "⚡ Actions: analyze_screen • tap • type_text • scroll • launch_app • media_control • press_key • take_screenshot",
+                                    fontSize = 10.5.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(10.dp)
                                 )
                             }
                         }

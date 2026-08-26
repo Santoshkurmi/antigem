@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">AntiGem</string>
+    <string name="accessibility_service_name">AntiGem AI Automation</string>
+    <string name="accessibility_service_description">Enables AntiGem AI Assistant to inspect the screen, tap buttons, scroll, input text, and automate tasks natively on your device.</string>
 </resources>
