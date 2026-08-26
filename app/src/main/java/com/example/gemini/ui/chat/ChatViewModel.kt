@@ -230,6 +230,59 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun retryMessage(messageId: String) {
+        if (_isStreaming.value) return
+        val conv = _currentConversation.value ?: return
+        val current = _messages.value
+        val index = current.indexOfFirst { it.id == messageId }
+        if (index < 0) return
+
+        val targetMsg = current[index]
+        if (targetMsg.role == MessageRole.USER) {
+            val isLastUserMsg = index >= current.indexOfLast { it.role == MessageRole.USER }
+            if (isLastUserMsg) {
+                // Truncate following assistant responses and re-stream
+                val truncated = current.take(index + 1)
+                _messages.value = truncated
+                viewModelScope.launch {
+                    storage.saveMessages(conv.id, truncated)
+                    executeStream(conv, truncated)
+                }
+            } else {
+                // Resend previous prompt as a fresh new user message
+                sendMessage(targetMsg.content)
+            }
+        } else {
+            // Assistant response retry: truncate this response and re-execute
+            val truncated = current.take(index)
+            _messages.value = truncated
+            viewModelScope.launch {
+                storage.saveMessages(conv.id, truncated)
+                executeStream(conv, truncated)
+            }
+        }
+    }
+
+    fun prepareEditMessage(messageId: String): String? {
+        val conv = _currentConversation.value ?: return null
+        val current = _messages.value
+        val index = current.indexOfFirst { it.id == messageId }
+        if (index < 0) return null
+
+        val targetMsg = current[index]
+        val isLastUserMsg = index >= current.indexOfLast { it.role == MessageRole.USER }
+
+        if (isLastUserMsg) {
+            // Remove this message and any subsequent messages so user can edit and send fresh
+            val truncated = current.take(index)
+            _messages.value = truncated
+            viewModelScope.launch {
+                storage.saveMessages(conv.id, truncated)
+            }
+        }
+        return targetMsg.content
+    }
+
     private suspend fun executeStream(conv: Conversation, currentHistory: List<ChatMessage>) {
         val token = authPrefs.accessToken.firstOrNull()
         android.util.Log.d("GeminiApp", "[ViewModel] executeStream called. Model: ${_selectedModelId.value}, History size: ${currentHistory.size}, Token present: ${!token.isNullOrBlank()}")

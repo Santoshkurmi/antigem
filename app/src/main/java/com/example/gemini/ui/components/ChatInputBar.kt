@@ -34,6 +34,8 @@ fun ChatInputBar(
     selectedModel: AiModel,
     quota: ModelQuota?,
     thinkingPreference: ThinkingPreference,
+    inputText: String,
+    onInputTextChange: (String) -> Unit,
     onOpenModelSelector: () -> Unit,
     onOpenThinkingSelector: () -> Unit,
     isStreaming: Boolean,
@@ -41,8 +43,6 @@ fun ChatInputBar(
     onStopStreaming: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var text by remember { mutableStateOf("") }
-
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.background,
@@ -179,8 +179,8 @@ fun ChatInputBar(
                     }
 
                     TextField(
-                        value = text,
-                        onValueChange = { text = it },
+                        value = inputText,
+                        onValueChange = onInputTextChange,
                         placeholder = {
                             Text(
                                 text = "Message ${selectedModel.displayName.split(" ").firstOrNull() ?: "Gemini"}...",
@@ -224,24 +224,24 @@ fun ChatInputBar(
                 } else {
                     IconButton(
                         onClick = {
-                            val trimmed = text.trim()
+                            val trimmed = inputText.trim()
                             if (trimmed.isNotEmpty()) {
                                 onSendMessage(trimmed)
-                                text = ""
+                                onInputTextChange("")
                             }
                         },
-                        enabled = text.trim().isNotEmpty(),
+                        enabled = inputText.trim().isNotEmpty(),
                         modifier = Modifier
                             .size(42.dp)
                             .clip(CircleShape)
                             .background(
-                                if (text.trim().isNotEmpty()) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant
+                                if (inputText.trim().isNotEmpty()) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant
                             )
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowUpward,
                             contentDescription = "Send",
-                            tint = if (text.trim().isNotEmpty()) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            tint = if (inputText.trim().isNotEmpty()) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                             modifier = Modifier.size(20.dp)
                         )
                     }

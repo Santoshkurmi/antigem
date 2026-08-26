@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.gemini.domain.model.AiModel
+import com.example.gemini.domain.model.ChatMessage
+import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.theme.*
 import com.example.gemini.ui.components.ChatInputBar
 import com.example.gemini.ui.components.MessageBubble
@@ -71,6 +73,8 @@ fun ChatScreen(
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var inputText by remember { mutableStateOf("") }
+    var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
     val thinkingPref by viewModel.thinkingPreference.collectAsState()
 
     // Independent LazyListState per conversation
@@ -279,7 +283,34 @@ fun ChatScreen(
                             contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp)
                         ) {
                             items(messages, key = { it.id }) { msg ->
-                                MessageBubble(message = msg, modelId = selectedModelId)
+                                MessageBubble(
+                                    message = msg, 
+                                    modelId = selectedModelId,
+                                    onEdit = { targetMsg ->
+                                        val msgIndex = messages.indexOfFirst { it.id == targetMsg.id }
+                                        val isLastUserMsg = messages.indexOfLast { it.role == MessageRole.USER } == msgIndex
+                                        val willDeleteOutput = isLastUserMsg && msgIndex < messages.lastIndex
+                                        if (willDeleteOutput) {
+                                            pendingMessageAction = PendingMessageAction(MessageActionType.EDIT, targetMsg)
+                                        } else {
+                                            val text = viewModel.prepareEditMessage(targetMsg.id)
+                                            if (text != null) {
+                                                inputText = text
+                                            }
+                                        }
+                                    },
+                                    onRetry = { targetMsg ->
+                                        val msgIndex = messages.indexOfFirst { it.id == targetMsg.id }
+                                        val isLastUserMsg = targetMsg.role == MessageRole.USER && (messages.indexOfLast { it.role == MessageRole.USER } == msgIndex)
+                                        val willDeleteOutput = (targetMsg.role == MessageRole.ASSISTANT) || (isLastUserMsg && msgIndex < messages.lastIndex)
+                                        if (willDeleteOutput) {
+                                            pendingMessageAction = PendingMessageAction(MessageActionType.RETRY, targetMsg)
+                                        } else {
+                                            viewModel.retryMessage(targetMsg.id)
+                                            userSentMessageTrigger++
+                                        }
+                                    }
+                                )
                             }
                             // Bottom spacer to ensure scrolling reaches below the very bottom of the last message
                             item(key = "bottom_anchor") {
@@ -341,11 +372,14 @@ fun ChatScreen(
                     selectedModel = currentModel,
                     quota = currentQuota,
                     thinkingPreference = thinkingPref,
+                    inputText = inputText,
+                    onInputTextChange = { inputText = it },
                     onOpenModelSelector = { showModelSelector = true },
                     onOpenThinkingSelector = { showThinkingSelector = true },
                     isStreaming = isStreaming,
                     onSendMessage = { text ->
                         viewModel.sendMessage(text)
+                        inputText = ""
                         userSentMessageTrigger++
                     },
                     onStopStreaming = { viewModel.stopStreaming() }
@@ -407,4 +441,64 @@ fun ChatScreen(
             onDismiss = { showSettingsDialog = false }
         )
     }
+
+    // Confirmation Dialog for Edit / Retry when deleting subsequent output
+    pendingMessageAction?.let { action ->
+        AlertDialog(
+            onDismissRequest = { pendingMessageAction = null },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = {
+                Text(
+                    text = if (action.type == MessageActionType.EDIT) "Edit Message?" else "Regenerate Response?",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Text(
+                    text = if (action.type == MessageActionType.EDIT) {
+                        "Editing this message will delete the subsequent response so you can edit and send a fresh query. Do you want to continue?"
+                    } else {
+                        "Retrying will delete the current response and regenerate a fresh answer. Do you want to continue?"
+                    },
+                    fontSize = 14.5.sp,
+                    lineHeight = 21.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val target = action.message
+                        if (action.type == MessageActionType.EDIT) {
+                            val text = viewModel.prepareEditMessage(target.id)
+                            if (text != null) {
+                                inputText = text
+                            }
+                        } else {
+                            viewModel.retryMessage(target.id)
+                            userSentMessageTrigger++
+                        }
+                        pendingMessageAction = null
+                    }
+                ) {
+                    Text(
+                        text = if (action.type == MessageActionType.EDIT) "Edit & Delete" else "Regenerate",
+                        color = ClaudeTerracotta,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingMessageAction = null }) {
+                    Text(text = "Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+            }
+        )
+    }
 }
+
+enum class MessageActionType { EDIT, RETRY }
+data class PendingMessageAction(val type: MessageActionType, val message: ChatMessage)
+
