@@ -168,7 +168,21 @@ func main() {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		ext := strings.ToLower(filepath.Ext(path))
+		switch ext {
+		case ".svg":
+			w.Header().Set("Content-Type", "image/svg+xml")
+		case ".png":
+			w.Header().Set("Content-Type", "image/png")
+		case ".jpg", ".jpeg":
+			w.Header().Set("Content-Type", "image/jpeg")
+		case ".webp":
+			w.Header().Set("Content-Type", "image/webp")
+		case ".gif":
+			w.Header().Set("Content-Type", "image/gif")
+		default:
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		}
 		w.Write(content)
 	}))
 

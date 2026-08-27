@@ -52,30 +52,25 @@ fun IdeScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    // --- Persistent State from TermuxDaemonManager ---
-    var isSidebarOpen by remember { mutableStateOf(true) }
-    var showNewProjectDialog by remember { mutableStateOf(false) }
-    var isWordWrap by remember { mutableStateOf(false) }
-
     var projects by remember { mutableStateOf<List<ProjectItem>>(emptyList()) }
-    val activeProject by TermuxDaemonManager.activeProject.collectAsState()
-    var fileTree by remember { mutableStateOf<List<FileNode>>(emptyList()) }
-
+    var activeProject by remember { mutableStateOf<ProjectItem?>(null) }
     val openTabs by TermuxDaemonManager.openTabs.collectAsState()
     val activeTabPath by TermuxDaemonManager.activeTabPath.collectAsState()
 
-    val daemonStatus by TermuxDaemonManager.status.collectAsState()
+    var fileTree by remember { mutableStateOf<List<FileNode>>(emptyList()) }
+    var isWordWrap by remember { mutableStateOf(false) }
+    var showNewProjectDialog by remember { mutableStateOf(false) }
 
-    // Refresh projects & tree
     fun refreshProjectsAndTree() {
         coroutineScope.launch {
-            val list = IdeApiClient.getProjects()
-            projects = list
-            if (activeProject == null && list.isNotEmpty()) {
-                TermuxDaemonManager.setActiveProject(list.first())
-            }
-            if (activeProject != null) {
-                fileTree = IdeApiClient.getFileTree(activeProject?.path)
+            val projs = IdeApiClient.getProjects()
+            projects = projs
+            val current = activeProject
+            if (current != null) {
+                fileTree = IdeApiClient.getFileTree(current.path)
+            } else if (projs.isNotEmpty()) {
+                activeProject = projs.first()
+                fileTree = IdeApiClient.getFileTree(projs.first().path)
             }
         }
     }
@@ -89,6 +84,10 @@ fun IdeScreen(
     }
 
     val activeTab = openTabs.find { it.path == activeTabPath }
+    val activeExt = remember(activeTab?.name) { activeTab?.name?.substringAfterLast('.', "")?.lowercase() ?: "" }
+    val isImageFile = activeExt in listOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "ico")
+    val isSvgFile = activeExt == "svg"
+    var showSvgSource by remember(activeTabPath) { mutableStateOf(false) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
@@ -106,7 +105,7 @@ fun IdeScreen(
                     fileTree = fileTree,
                     activeFilePath = activeTabPath,
                     onSelectProject = { proj ->
-                        TermuxDaemonManager.setActiveProject(proj)
+                        activeProject = proj
                         coroutineScope.launch {
                             fileTree = IdeApiClient.getFileTree(proj.path)
                             drawerState.close()
@@ -165,8 +164,19 @@ fun IdeScreen(
                         }
                     },
                     actions = {
+                        // SVG Toggle Button (Graphic Preview <-> XML Source Code)
+                        if (isSvgFile) {
+                            IconButton(onClick = { showSvgSource = !showSvgSource }) {
+                                Icon(
+                                    imageVector = if (showSvgSource) Icons.Default.Image else Icons.Default.Code,
+                                    contentDescription = if (showSvgSource) "Preview SVG Graphic" else "Edit SVG XML Source",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+
                         // Save Button
-                        if (activeTab != null) {
+                        if (activeTab != null && (!isImageFile || (isSvgFile && showSvgSource))) {
                             IconButton(
                                 onClick = {
                                     coroutineScope.launch {
@@ -187,12 +197,14 @@ fun IdeScreen(
                         }
 
                         // Word Wrap Toggle Button
-                        IconButton(onClick = { isWordWrap = !isWordWrap }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.WrapText,
-                                contentDescription = "Toggle Word Wrap",
-                                tint = if (isWordWrap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
+                        if (!isImageFile && !(isSvgFile && !showSvgSource)) {
+                            IconButton(onClick = { isWordWrap = !isWordWrap }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.WrapText,
+                                    contentDescription = "Toggle Word Wrap",
+                                    tint = if (isWordWrap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
                         }
 
                         // Run Project Button
@@ -274,30 +286,41 @@ fun IdeScreen(
                     }
                 }
 
-                // Editor Content View
+                // Editor / Asset Viewer Content Area
                 if (activeTab != null) {
-                    key(activeTab.path) {
-                        AndroidView<CodeEditorView>(
-                            factory = { ctx ->
-                                CodeEditorView(ctx).apply {
-                                    isWordWrapEnabled = isWordWrap
-                                    setFile(activeTab.name, activeTab.content)
-                                    onContentChangeListener = { newText ->
-                                        TermuxDaemonManager.updateTabContent(activeTab.path, newText)
-                                    }
-                                }
-                            },
-                            update = { view ->
-                                view.isWordWrapEnabled = isWordWrap
-                                view.setFile(activeTab.name, activeTab.content)
-                                view.onContentChangeListener = { newText ->
-                                    TermuxDaemonManager.updateTabContent(activeTab.path, newText)
-                                }
-                            },
+                    if (isImageFile || (isSvgFile && !showSvgSource)) {
+                        ImageAssetViewer(
+                            filePath = activeTab.path,
+                            fileName = activeTab.name,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .weight(1f)
+                                .weight(1f),
+                            onToggleXmlSource = if (isSvgFile) { { showSvgSource = true } } else null
                         )
+                    } else {
+                        key(activeTab.path) {
+                            AndroidView<CodeEditorView>(
+                                factory = { ctx ->
+                                    CodeEditorView(ctx).apply {
+                                        isWordWrapEnabled = isWordWrap
+                                        setFile(activeTab.name, activeTab.content)
+                                        onContentChangeListener = { newText ->
+                                            TermuxDaemonManager.updateTabContent(activeTab.path, newText)
+                                        }
+                                    }
+                                },
+                                update = { view ->
+                                    view.isWordWrapEnabled = isWordWrap
+                                    view.setFile(activeTab.name, activeTab.content)
+                                    view.onContentChangeListener = { newText ->
+                                        TermuxDaemonManager.updateTabContent(activeTab.path, newText)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .weight(1f)
+                            )
+                        }
                     }
                 } else {
                     Box(
@@ -323,24 +346,57 @@ fun IdeScreen(
                     }
                 }
             }
+
+            // Create New Project Modal Dialog
+            if (showNewProjectDialog) {
+                var projectName by remember { mutableStateOf("") }
+                var projectPath by remember { mutableStateOf("/data/data/com.termux/files/home/") }
+
+                AlertDialog(
+                    onDismissRequest = { showNewProjectDialog = false },
+                    title = { Text("Create New Project") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = projectName,
+                                onValueChange = { projectName = it },
+                                label = { Text("Project Name") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = projectPath,
+                                onValueChange = { projectPath = it },
+                                label = { Text("Folder Path") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (projectName.isNotBlank()) {
+                                    val fullPath = if (projectPath.endsWith("/")) "$projectPath$projectName" else "$projectPath/$projectName"
+                                    coroutineScope.launch {
+                                        IdeApiClient.createFileOrDir(fullPath, isDir = true)
+                                        showNewProjectDialog = false
+                                        refreshProjectsAndTree()
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Create")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showNewProjectDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
         }
     }
 }
-
-    // New Project Dialog
-    if (showNewProjectDialog) {
-        NewProjectDialog(
-            onDismiss = { showNewProjectDialog = false },
-            onCreateProject = { name, template ->
-                showNewProjectDialog = false
-                coroutineScope.launch {
-                    val newProj = IdeApiClient.createProject(name, template)
-                    if (newProj != null) {
-                        TermuxDaemonManager.setActiveProject(newProj)
-                        refreshProjectsAndTree()
-                    }
-                }
-            }
-        )
-    }
 }

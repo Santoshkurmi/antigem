@@ -91,8 +91,9 @@ dependencies {
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.androidx.datastore.preferences)
 
-  // Image Loading (Coil for Markdown Images)
+  // Image Loading (Coil for Markdown Images and IDE Asset Viewer)
   implementation("io.coil-kt:coil-compose:2.7.0")
+  implementation("io.coil-kt:coil-svg:2.7.0")
 
   // Native Android JLaTeXMath / LaTeX Renderer (Pure Android Canvas, Zero WebViews)
   implementation("io.noties.markwon:ext-latex:4.6.2")

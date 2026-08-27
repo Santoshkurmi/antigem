@@ -38,6 +38,14 @@ class CodeEditorView @JvmOverloads constructor(
             setColor(EditorColorScheme.SELECTED_TEXT_BACKGROUND, Color.parseColor("#264F78"))
             setColor(EditorColorScheme.SELECTION_HANDLE, Color.parseColor("#007ACC"))
             setColor(EditorColorScheme.SELECTION_INSERT, Color.parseColor("#007ACC"))
+            // Explicitly define syntax token colors to avoid black-on-black text
+            setColor(EditorColorScheme.TEXT_NORMAL, Color.parseColor("#D4D4D4"))
+            setColor(EditorColorScheme.HTML_TAG, Color.parseColor("#569CD6"))
+            setColor(EditorColorScheme.KEYWORD, Color.parseColor("#C586C0"))
+            setColor(EditorColorScheme.LITERAL, Color.parseColor("#CE9178"))
+            setColor(EditorColorScheme.COMMENT, Color.parseColor("#6A9955"))
+            setColor(EditorColorScheme.FUNCTION_NAME, Color.parseColor("#DCDCAA"))
+            setColor(EditorColorScheme.OPERATOR, Color.parseColor("#D4D4D4"))
         }
         isLineNumberEnabled = true
         isWordwrap = false
