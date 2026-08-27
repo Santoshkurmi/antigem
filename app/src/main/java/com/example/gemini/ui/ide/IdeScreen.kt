@@ -23,7 +23,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.data.daemon.DaemonStatus
@@ -92,7 +94,7 @@ fun IdeScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = true,
+        gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             ModalDrawerSheet(
                 drawerContainerColor = Color(0xFF252526),
@@ -160,48 +162,6 @@ fun IdeScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            var showHeaderDaemonLogs by remember { mutableStateOf(false) }
-
-                            // Daemon Status Pill
-                            Surface(
-                                shape = CircleShape,
-                                color = when (daemonStatus) {
-                                    DaemonStatus.RUNNING -> Color(0xFF1B5E20)
-                                    DaemonStatus.STARTING -> Color(0xFFE65100)
-                                    else -> Color(0xFFB71C1C)
-                                },
-                                modifier = Modifier
-                                    .padding(horizontal = 4.dp)
-                                    .clickable { showHeaderDaemonLogs = true }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .background(Color.White, CircleShape)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = when (daemonStatus) {
-                                            DaemonStatus.RUNNING -> "Daemon 9090"
-                                            DaemonStatus.STARTING -> "Starting..."
-                                            else -> "Offline"
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White,
-                                        fontSize = 10.sp
-                                    )
-                                }
-                            }
-
-                            if (showHeaderDaemonLogs) {
-                                DaemonLogsDialog(onDismiss = { showHeaderDaemonLogs = false })
-                            }
                         }
                     },
                     actions = {
@@ -316,72 +276,28 @@ fun IdeScreen(
 
                 // Editor Content View
                 if (activeTab != null) {
-                    val lines = remember(activeTab.content) { activeTab.content.split("\n") }
-                    val verticalScrollState = rememberScrollState()
-                    val horizontalScrollState = rememberScrollState()
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .weight(1f)
-                            .verticalScroll(verticalScrollState)
-                    ) {
-                        // Line Numbers Column (Locked to same vertical scroll)
-                        Column(
-                            modifier = Modifier
-                                .width(46.dp)
-                                .background(Color(0xFF1E1E1E))
-                                .padding(vertical = 8.dp),
-                            horizontalAlignment = Alignment.End
-                        ) {
-                            lines.indices.forEach { idx ->
-                                Text(
-                                    text = "${idx + 1}",
-                                    style = TextStyle(
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 12.5.sp,
-                                        color = Color.Gray.copy(alpha = 0.6f)
-                                    ),
-                                    modifier = Modifier
-                                        .height(20.dp)
-                                        .padding(end = 8.dp)
-                                )
-                            }
-                        }
-
-                        // Subtle vertical gutter divider
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height((lines.size * 20 + 16).dp)
-                                .background(Color(0xFF333333))
-                        )
-
-                        // Code Editor Text Area
-                        Box(
+                    key(activeTab.path) {
+                        AndroidView<CodeEditorView>(
+                            factory = { ctx ->
+                                CodeEditorView(ctx).apply {
+                                    isWordWrapEnabled = isWordWrap
+                                    setFile(activeTab.name, activeTab.content)
+                                    onContentChangeListener = { newText ->
+                                        TermuxDaemonManager.updateTabContent(activeTab.path, newText)
+                                    }
+                                }
+                            },
+                            update = { view ->
+                                view.isWordWrapEnabled = isWordWrap
+                                view.setFile(activeTab.name, activeTab.content)
+                                view.onContentChangeListener = { newText ->
+                                    TermuxDaemonManager.updateTabContent(activeTab.path, newText)
+                                }
+                            },
                             modifier = Modifier
                                 .fillMaxSize()
                                 .weight(1f)
-                                .then(
-                                    if (!isWordWrap) Modifier.horizontalScroll(horizontalScrollState)
-                                    else Modifier
-                                )
-                                .padding(vertical = 8.dp, horizontal = 10.dp)
-                        ) {
-                            BasicTextField(
-                                value = activeTab.content,
-                                onValueChange = { newText -> TermuxDaemonManager.updateTabContent(activeTab.path, newText) },
-                                visualTransformation = CodeSyntaxVisualTransformation(activeTab.name),
-                                textStyle = TextStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 13.5.sp,
-                                    color = Color(0xFFD4D4D4),
-                                    lineHeight = 20.sp
-                                ),
-                                cursorBrush = SolidColor(Color(0xFF007ACC)),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
+                        )
                     }
                 } else {
                     Box(

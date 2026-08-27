@@ -27,9 +27,21 @@ object CodeSyntaxColors {
 
 class CodeSyntaxVisualTransformation(private val fileName: String) : VisualTransformation {
 
+    private var lastRawText: String? = null
+    private var lastTransformed: AnnotatedString? = null
+
     override fun filter(text: AnnotatedString): TransformedText {
-        val ext = fileName.substringAfterLast('.', "").lowercase()
-        val highlighted = highlightCode(text.text, ext)
+        val raw = text.text
+        val cached = lastTransformed
+        val highlighted = if (lastRawText == raw && cached != null) {
+            cached
+        } else {
+            val ext = fileName.substringAfterLast('.', "").lowercase()
+            val result = highlightCode(raw, ext)
+            lastRawText = raw
+            lastTransformed = result
+            result
+        }
         return TransformedText(highlighted, OffsetMapping.Identity)
     }
 
