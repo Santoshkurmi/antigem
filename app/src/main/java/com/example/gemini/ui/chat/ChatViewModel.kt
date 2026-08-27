@@ -501,19 +501,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             content = content
         )
 
-        // Set title on first message
-        val updatedConv = if (conv.title == "New Chat" && _messages.value.isEmpty()) {
-            val shortTitle = if (content.length > 30) content.take(30) + "..." else content
-            conv.copy(title = shortTitle)
-        } else conv
-
-        _currentConversation.value = updatedConv
+        _currentConversation.value = conv
 
         val updatedList = _messages.value + userMsg
         _messages.value = updatedList
 
         viewModelScope.launch {
-            storage.saveConversation(updatedConv)
+            storage.saveConversation(conv)
             storage.saveMessages(conv.id, updatedList)
 
             // If summarization is currently in progress, mark message as pending and queue it
@@ -524,7 +518,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             // Check if context window limit is exceeded and no summary exists yet
             val threshold = _postponedThreshold.value ?: _contextWindowLimit.value
-            val needsSummary = updatedList.size > threshold && updatedConv.summary.isNullOrBlank()
+            val needsSummary = updatedList.size > threshold && conv.summary.isNullOrBlank()
 
             if (needsSummary) {
                 val prefModel = _summaryModelIdPref.value
@@ -537,7 +531,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _pendingQueuedUserMessage.value = content
                 requestSummarization(modelToUse)
             } else {
-                executeStream(updatedConv, updatedList)
+                executeStream(conv, updatedList)
             }
         }
     }
@@ -812,7 +806,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         } else ""
 
         val isFirstTurn = _messages.value.filter { it.role == MessageRole.USER }.size <= 1
-        val titlePrompt = if (isFirstTurn && (conv.title == "New Chat" || conv.title.endsWith("..."))) {
+        val titlePrompt = if (isFirstTurn) {
             "\n\nConversation Title Requirement:\nAt the very beginning of your response, output a concise, descriptive 3-6 word title for this conversation enclosed in <chat_title>...</chat_title> (e.g. <chat_title>Quantum Mechanics Overview</chat_title>). Do not include quotes or punctuation in the tag."
         } else ""
 
@@ -1622,7 +1616,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             if (titleMatch != null) {
                 val extractedTitle = titleMatch.groupValues[1].trim().replace("\"", "").replace("'", "")
                 val conv = _currentConversation.value
-                if (conv != null && (conv.title == "New Chat" || conv.title.endsWith("...")) && extractedTitle.isNotBlank()) {
+                if (conv != null && extractedTitle.isNotBlank() && conv.title != extractedTitle) {
                     val updated = conv.copy(title = extractedTitle)
                     _currentConversation.value = updated
                     viewModelScope.launch {
