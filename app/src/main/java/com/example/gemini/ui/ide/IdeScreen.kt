@@ -108,7 +108,6 @@ fun IdeScreen(
                         activeProject = proj
                         coroutineScope.launch {
                             fileTree = IdeApiClient.getFileTree(proj.path)
-                            drawerState.close()
                         }
                     },
                     onCreateProjectRequested = {
