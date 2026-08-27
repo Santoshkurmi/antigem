@@ -263,14 +263,12 @@ object TermuxSshManager {
             val channel = session.openChannel("exec") as ChannelExec
             runningChannels[cmdId] = channel
 
-            // Script wrapper to maintain working directory across calls
             val pwdMarker = "__ANTIGRAVITY_PWD:"
             val wrappedCommand = buildString {
                 if (workingDir.isNotBlank() && workingDir != "~") {
                     append("cd \"$workingDir\" 2>/dev/null || cd ~; ")
                 }
                 append(command)
-                append("; __RET=$?; echo \"\n$pwdMarker\$(pwd)\"; exit \$__RET")
             }
 
             channel.setCommand(wrappedCommand)
@@ -288,30 +286,34 @@ object TermuxSshManager {
             val buffer = CharArray(1024)
             var read = 0
 
-            while (!channel.isClosed || inStream.available() > 0 || errStream.available() > 0) {
-                var hadData = false
-
-                while (inStream.available() > 0 && inReader.read(buffer).also { read = it } != -1) {
-                    val chunk = String(buffer, 0, read)
-                    outputBuilder.append(chunk)
-                    onChunk(chunk)
-                    hadData = true
+            withContext(Dispatchers.IO) {
+                val stdoutJob = launch {
+                    try {
+                        while (inReader.read(buffer).also { read = it } != -1) {
+                            val chunk = String(buffer, 0, read)
+                            outputBuilder.append(chunk)
+                            onChunk(chunk)
+                        }
+                    } catch (_: Exception) {}
+                }
+                val stderrJob = launch {
+                    try {
+                        var errRead = 0
+                        val errBuffer = CharArray(1024)
+                        while (errReader.read(errBuffer).also { errRead = it } != -1) {
+                            val chunk = String(errBuffer, 0, errRead)
+                            outputBuilder.append(chunk)
+                            onChunk(chunk)
+                        }
+                    } catch (_: Exception) {}
                 }
 
-                while (errStream.available() > 0 && errReader.read(buffer).also { read = it } != -1) {
-                    val chunk = String(buffer, 0, read)
-                    outputBuilder.append(chunk)
-                    onChunk(chunk)
-                    hadData = true
+                while (!channel.isClosed) {
+                    delay(50)
                 }
 
-                if (hadData) {
-                    currentCmd = currentCmd.copy(output = sanitizeOutput(outputBuilder.toString(), pwdMarker))
-                    updateTabCommand(tab.id, currentCmd, isTabBusy = true)
-                }
-
-                if (channel.isClosed) break
-                delay(40)
+                stdoutJob.join()
+                stderrJob.join()
             }
 
             val exitCode = channel.exitStatus

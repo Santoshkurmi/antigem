@@ -35,8 +35,15 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.collectAsState
+import com.example.gemini.data.daemon.FileNode
+import com.example.gemini.data.daemon.IdeApiClient
+import com.example.gemini.data.daemon.ProjectItem
+import com.example.gemini.data.daemon.TermuxDaemonManager
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
@@ -82,7 +89,8 @@ sealed class ChatFeedItem(val key: String, val contentType: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
-    viewModel: ChatViewModel = viewModel()
+    viewModel: ChatViewModel = viewModel(),
+    onNavigateToIde: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -121,7 +129,10 @@ fun ChatScreen(
     var showCustomSystemPromptDialog by remember { mutableStateOf(false) }
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
-    var inputText by remember { mutableStateOf("") }
+    var textFieldValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(""))
+    }
+    val inputText = textFieldValue.text
     var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
     val thinkingPref by viewModel.thinkingPreference.collectAsState()
     val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
@@ -315,6 +326,30 @@ fun ChatScreen(
     val currentModel = AiModel.findInList(enabledModels, selectedModelId)
     val currentQuota = quotas.find { it.modelId == selectedModelId }
 
+    val activeChatProject by TermuxDaemonManager.activeProject.collectAsState()
+    var chatProjectsList by remember { mutableStateOf<List<ProjectItem>>(emptyList()) }
+    var showProjectDropdown by remember { mutableStateOf(false) }
+    var chatProjectFiles by remember { mutableStateOf<List<com.example.gemini.data.daemon.FileNode>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        scope.launch {
+            val list = IdeApiClient.getProjects()
+            chatProjectsList = list
+            if (activeChatProject == null && list.isNotEmpty()) {
+                TermuxDaemonManager.setActiveProject(list.first())
+            }
+        }
+    }
+
+    LaunchedEffect(activeChatProject) {
+        if (activeChatProject != null) {
+            scope.launch {
+                val tree = IdeApiClient.getFileTree(activeChatProject?.path)
+                chatProjectFiles = flattenFileNodes(tree)
+            }
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -343,14 +378,80 @@ fun ChatScreen(
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(
-                            text = currentConv?.title?.takeIf { it.isNotBlank() } ?: "Antigravity Chat",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Column {
+                            Text(
+                                text = currentConv?.title?.takeIf { it.isNotBlank() } ?: "Antigravity Chat",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Box {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.clickable {
+                                        scope.launch {
+                                            chatProjectsList = IdeApiClient.getProjects()
+                                            showProjectDropdown = true
+                                        }
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Folder,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(11.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = activeChatProject?.name ?: "Select Project",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                DropdownMenu(
+                                    expanded = showProjectDropdown,
+                                    onDismissRequest = { showProjectDropdown = false }
+                                ) {
+                                    if (chatProjectsList.isEmpty()) {
+                                        DropdownMenuItem(
+                                            text = { Text("No projects found in Termux") },
+                                            onClick = { showProjectDropdown = false }
+                                        )
+                                    } else {
+                                        chatProjectsList.forEach { proj ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = proj.name,
+                                                        fontWeight = if (proj.path == activeChatProject?.path) FontWeight.Bold else FontWeight.Normal
+                                                    )
+                                                },
+                                                onClick = {
+                                                    TermuxDaemonManager.setActiveProject(proj)
+                                                    showProjectDropdown = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
@@ -381,6 +482,13 @@ fun ChatScreen(
                                 imageVector = Icons.Outlined.Terminal,
                                 contentDescription = "Termux Terminal",
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                            )
+                        }
+                        IconButton(onClick = onNavigateToIde) {
+                            Icon(
+                                imageVector = Icons.Default.Code,
+                                contentDescription = "Code Editor IDE",
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
                         if (isDevModeEnabled) {
@@ -488,7 +596,7 @@ fun ChatScreen(
                                                 } else {
                                                     val text = viewModel.prepareEditMessage(targetMsg.id)
                                                     if (text != null) {
-                                                        inputText = text
+                                                        textFieldValue = TextFieldValue(text, selection = TextRange(text.length))
                                                     }
                                                 }
                                             },
@@ -651,13 +759,88 @@ fun ChatScreen(
                     )
                 }
 
+                // File Autocomplete Suggestions when user types @
+                val atIndex = inputText.lastIndexOf('@')
+                val isAtMentioning = atIndex >= 0 && (atIndex == inputText.length - 1 || !inputText.substring(atIndex + 1).contains(" "))
+                val atQuery = if (atIndex >= 0 && atIndex < inputText.length) inputText.substring(atIndex + 1) else ""
+
+                val fileSuggestions = remember(atQuery, chatProjectFiles, isAtMentioning) {
+                    if (!isAtMentioning || chatProjectFiles.isEmpty()) emptyList()
+                    else {
+                        chatProjectFiles.filter { file ->
+                            !file.isDir && (atQuery.isBlank() || file.name.contains(atQuery, ignoreCase = true) || file.path.contains(atQuery, ignoreCase = true))
+                        }.take(5)
+                    }
+                }
+
+                if (fileSuggestions.isNotEmpty()) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        tonalElevation = 6.dp
+                    ) {
+                        Column(modifier = Modifier.padding(6.dp)) {
+                            Text(
+                                text = "📁 Mention File in ${activeChatProject?.name ?: "Project"}:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                            fileSuggestions.forEach { file ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable {
+                                            val relPath = file.path.removePrefix(activeChatProject?.path ?: "").removePrefix("/")
+                                            val replacement = "@$relPath "
+                                            val newText = inputText.substring(0, atIndex) + replacement
+                                            textFieldValue = TextFieldValue(
+                                                text = newText,
+                                                selection = TextRange(newText.length)
+                                            )
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.InsertDriveFile,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = file.name,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = file.path.removePrefix(activeChatProject?.path ?: ""),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.Gray,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)
                 ChatInputBar(
                     selectedModel = currentModel,
                     quota = currentQuota,
                     thinkingPreference = thinkingPref,
-                    inputText = inputText,
-                    onInputTextChange = { inputText = it },
+                    textFieldValue = textFieldValue,
+                    onTextFieldValueChange = { textFieldValue = it },
                     onOpenModelSelector = {
                         focusManager.clearFocus(force = true)
                         keyboardController?.hide()
@@ -671,7 +854,7 @@ fun ChatScreen(
                     isStreaming = isStreaming,
                     onSendMessage = { text ->
                         viewModel.sendMessage(text)
-                        inputText = ""
+                        textFieldValue = TextFieldValue("")
                         userSentMessageTrigger++
                     },
                     onStopStreaming = { viewModel.stopStreaming() }
@@ -786,7 +969,7 @@ fun ChatScreen(
                         if (action.type == MessageActionType.EDIT) {
                             val text = viewModel.prepareEditMessage(target.id)
                             if (text != null) {
-                                inputText = text
+                                textFieldValue = TextFieldValue(text, selection = TextRange(text.length))
                             }
                         } else {
                             viewModel.retryMessage(target.id)
@@ -949,4 +1132,17 @@ fun ChatScreen(
 
 enum class MessageActionType { EDIT, RETRY }
 data class PendingMessageAction(val type: MessageActionType, val message: ChatMessage)
+
+private fun flattenFileNodes(nodes: List<com.example.gemini.data.daemon.FileNode>): List<com.example.gemini.data.daemon.FileNode> {
+    val result = mutableListOf<com.example.gemini.data.daemon.FileNode>()
+    for (node in nodes) {
+        if (!node.isDir) {
+            result.add(node)
+        }
+        if (node.children.isNotEmpty()) {
+            result.addAll(flattenFileNodes(node.children))
+        }
+    }
+    return result
+}
 
