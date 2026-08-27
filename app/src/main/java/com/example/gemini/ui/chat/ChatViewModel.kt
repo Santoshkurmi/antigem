@@ -413,9 +413,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val conv = storage.conversations.value.find { it.id == id }
             if (conv != null) {
+                val msgs = storage.getMessages(id)
                 _currentConversation.value = conv
                 _selectedModelId.value = conv.modelId
-                val msgs = storage.getMessages(id)
                 _messages.value = msgs
             }
         }
@@ -432,6 +432,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     startNewChat()
                 }
             }
+        }
+    }
+
+    fun updateConversationTitle(id: String, newTitle: String) {
+        val conv = storage.conversations.value.find { it.id == id } ?: _currentConversation.value ?: return
+        val updated = conv.copy(title = newTitle.trim())
+        if (_currentConversation.value?.id == id) {
+            _currentConversation.value = updated
+        }
+        viewModelScope.launch {
+            storage.saveConversation(updated)
         }
     }
 
@@ -767,7 +778,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             if (!currentTabPath.isNullOrBlank()) "- Currently Open Active File in IDE Editor: $currentTabPath\n" else ""
         } else ""
 
-        val combinedInstruction = (baseToolInstruction ?: "") + activeProjectContext
+        val isFirstTurn = _messages.value.filter { it.role == MessageRole.USER }.size <= 1
+        val titlePrompt = if (isFirstTurn && (conv.title == "New Chat" || conv.title.endsWith("..."))) {
+            "\n\nConversation Title Requirement:\nAt the very beginning of your response, output a concise, descriptive 3-6 word title for this conversation enclosed in <chat_title>...</chat_title> (e.g. <chat_title>Quantum Mechanics Overview</chat_title>). Do not include quotes or punctuation in the tag."
+        } else ""
+
+        val combinedInstruction = (baseToolInstruction ?: "") + activeProjectContext + titlePrompt
         val finalToolInstruction = if (combinedInstruction.isNotBlank()) combinedInstruction else null
 
         streamingJob = viewModelScope.launch {
@@ -1567,6 +1583,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         lastStreamUpdateTime = now
+        // Auto-extract chat title if present
+        if (content.contains("<chat_title>", ignoreCase = true)) {
+            val titleMatch = Regex("<chat_title>([\\s\\S]*?)</chat_title>", RegexOption.IGNORE_CASE).find(content)
+            if (titleMatch != null) {
+                val extractedTitle = titleMatch.groupValues[1].trim().replace("\"", "").replace("'", "")
+                val conv = _currentConversation.value
+                if (conv != null && (conv.title == "New Chat" || conv.title.endsWith("...")) && extractedTitle.isNotBlank()) {
+                    val updated = conv.copy(title = extractedTitle)
+                    _currentConversation.value = updated
+                    viewModelScope.launch {
+                        storage.saveConversation(updated)
+                    }
+                }
+            }
+        }
+
         val list = _messages.value.toMutableList()
         val index = list.indexOfFirst { it.id == msgId }
         if (index >= 0) {

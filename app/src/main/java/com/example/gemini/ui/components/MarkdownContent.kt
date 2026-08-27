@@ -1334,6 +1334,8 @@ private val CHOICE_REGEX = Regex("<(ask_choices|user_choice)>([\\s\\S]*?)</(ask_
 private val EXEC_CMD_REGEX = Regex("<execute_command>([\\s\\S]*?)</execute_command>")
 private val WEB_SEARCH_REGEX = Regex("<web_search>([\\s\\S]*?)</web_search>")
 private val READ_URL_REGEX = Regex("<read_url>([\\s\\S]*?)</read_url>")
+private val CHAT_TITLE_REGEX = Regex("<chat_title>[\\s\\S]*?</chat_title>\\s*", RegexOption.IGNORE_CASE)
+private val INFLIGHT_CHAT_TITLE_REGEX = Regex("<\\s*chat_title[\\s\\S]*", RegexOption.IGNORE_CASE)
 
 fun parseMarkdownBlocks(
     rawText: String,
@@ -1341,12 +1343,16 @@ fun parseMarkdownBlocks(
 ): List<MarkdownBlock> {
     val result = mutableListOf<MarkdownBlock>()
 
-    // Filter out any in-flight unclosed tool tags from live markdown preview so no raw JSON / commands leak
-    val match = if (rawText.contains('<')) TOOL_TAG_PATTERN.find(rawText) else null
+    // Filter out <chat_title> and in-flight unclosed tool tags so they never appear in UI
+    val textWithoutTitle = if (rawText.contains('<')) {
+        rawText.replace(CHAT_TITLE_REGEX, "").replace(INFLIGHT_CHAT_TITLE_REGEX, "")
+    } else rawText
+
+    val match = if (textWithoutTitle.contains('<')) TOOL_TAG_PATTERN.find(textWithoutTitle) else null
     val cleanedText = if (match != null) {
-        rawText.substring(0, match.range.first)
+        textWithoutTitle.substring(0, match.range.first)
     } else {
-        rawText
+        textWithoutTitle
     }
 
     val lines = cleanedText.lines()

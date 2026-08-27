@@ -129,6 +129,8 @@ fun ChatScreen(
     var showCustomSystemPromptDialog by remember { mutableStateOf(false) }
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showEditTitleDialog by remember { mutableStateOf(false) }
+    var editTitleText by remember { mutableStateOf("") }
     var textFieldValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(""))
     }
@@ -139,10 +141,11 @@ fun ChatScreen(
     val isOAuthServerListening by viewModel.isOAuthServerListening.collectAsState()
     val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
 
-    // Independent LazyListState per conversation
+    // Fresh LazyListState per conversation initialized directly at the bottom
     val convKey = currentConv?.id ?: "empty"
-    val listState = rememberSaveable(convKey, saver = LazyListState.Saver) { LazyListState() }
+    val listState = remember(convKey) { LazyListState(firstVisibleItemIndex = Int.MAX_VALUE) }
     var lastScrolledConvId by remember { mutableStateOf<String?>(null) }
+    var lastScrolledMessageCount by remember { mutableStateOf(-1) }
 
     // Determine whether user is scrolled near the bottom (within the last item)
     val isAtBottom by remember(listState) {
@@ -295,11 +298,16 @@ fun ChatScreen(
         result
     }
 
-    // Scroll to very bottom when a conversation is first opened / loaded
-    LaunchedEffect(currentConv?.id, feedItems.isNotEmpty()) {
-        if (currentConv?.id != null && feedItems.isNotEmpty() && lastScrolledConvId != currentConv?.id) {
-            lastScrolledConvId = currentConv?.id
-            listState.scrollToItem(feedItems.size)
+    // Always scroll to very bottom when a conversation is opened or loaded
+    LaunchedEffect(currentConv?.id, messages.size, feedItems.size) {
+        val convId = currentConv?.id
+        if (convId != null && feedItems.isNotEmpty()) {
+            if (lastScrolledConvId != convId || lastScrolledMessageCount != messages.size) {
+                lastScrolledConvId = convId
+                lastScrolledMessageCount = messages.size
+                shouldAutoScroll = true
+                listState.scrollToItem(maxOf(0, feedItems.size - 1))
+            }
         }
     }
 
@@ -307,7 +315,7 @@ fun ChatScreen(
     LaunchedEffect(userSentMessageTrigger) {
         if (userSentMessageTrigger > 0 && feedItems.isNotEmpty()) {
             shouldAutoScroll = true
-            listState.scrollToItem(feedItems.size)
+            listState.scrollToItem(maxOf(0, feedItems.size - 1))
         }
     }
 
@@ -318,8 +326,8 @@ fun ChatScreen(
 
     LaunchedEffect(feedItems.size, lastContentLen, lastThoughtLen, isStreaming) {
         if (feedItems.isNotEmpty() && isStreaming && shouldAutoScroll && !listState.isScrollInProgress) {
-            listState.scrollToItem(feedItems.size)
-            Log.d("PERF_TRACE", "📜 [Auto-Scroll] target=${feedItems.size}, items=${feedItems.size}")
+            listState.scrollToItem(maxOf(0, feedItems.size - 1))
+            Log.d("PERF_TRACE", "📜 [Auto-Scroll] target=${feedItems.size - 1}, items=${feedItems.size}")
         }
     }
 
@@ -379,14 +387,31 @@ fun ChatScreen(
                 TopAppBar(
                     title = {
                         Column {
-                            Text(
-                                text = currentConv?.title?.takeIf { it.isNotBlank() } ?: "Antigravity Chat",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        editTitleText = currentConv?.title ?: ""
+                                        showEditTitleDialog = true
+                                    }
+                            ) {
+                                Text(
+                                    text = currentConv?.title?.takeIf { it.isNotBlank() } ?: "Antigravity Chat",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Rename Chat",
+                                    modifier = Modifier.size(13.dp),
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                                )
+                            }
                             Box {
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
@@ -1119,6 +1144,53 @@ fun ChatScreen(
             messages = messages,
             onOpenSystemPrompt = { showCustomSystemPromptDialog = true },
             onDismiss = { showChatTelemetryDialog = false }
+        )
+    }
+
+    // Rename Chat Title Dialog
+    if (showEditTitleDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditTitleDialog = false },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = {
+                Text(
+                    text = "Rename Chat",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = editTitleText,
+                    onValueChange = { editTitleText = it },
+                    label = { Text("Chat Title") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val trimmed = editTitleText.trim()
+                        if (trimmed.isNotBlank()) {
+                            currentConv?.id?.let { id ->
+                                viewModel.updateConversationTitle(id, trimmed)
+                            }
+                        }
+                        showEditTitleDialog = false
+                    }
+                ) {
+                    Text("Save", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditTitleDialog = false }) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+            }
         )
     }
 }
