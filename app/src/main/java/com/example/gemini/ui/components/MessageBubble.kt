@@ -313,6 +313,209 @@ fun MessageBubble(
 }
 
 @Composable
+fun UserMessageBubble(
+    message: ChatMessage,
+    isDevModeEnabled: Boolean = false,
+    onEdit: (ChatMessage) -> Unit = {},
+    onRetry: (ChatMessage) -> Unit = {},
+    onViewRawPayload: ((String) -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var showUserActions by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.End
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = 320.dp)
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable { showUserActions = !showUserActions }
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            SelectionContainer {
+                Text(
+                    text = message.content,
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        // Action icons shown on tap/press below sent user message
+        AnimatedVisibility(
+            visible = showUserActions,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Row(
+                modifier = Modifier.padding(top = 4.dp, end = 2.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Copy Prompt
+                IconButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("Copied Prompt", message.content)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, "Copied prompt", Toast.LENGTH_SHORT).show()
+                        showUserActions = false
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ContentCopy,
+                        contentDescription = "Copy",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // Edit Prompt
+                IconButton(
+                    onClick = {
+                        onEdit(message)
+                        showUserActions = false
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = "Edit prompt",
+                        tint = ClaudeTerracotta,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // Retry Prompt
+                IconButton(
+                    onClick = {
+                        onRetry(message)
+                        showUserActions = false
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = "Retry prompt",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                if (isDevModeEnabled && !message.rawPayload.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = {
+                            onViewRawPayload?.invoke(message.rawPayload)
+                            showUserActions = false
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.DataObject,
+                            contentDescription = "View Raw Request Payload",
+                            tint = Color(0xFF8BE9FD),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AssistantMessageFooter(
+    message: ChatMessage,
+    isDevModeEnabled: Boolean = false,
+    onRetry: (ChatMessage) -> Unit = {},
+    onViewRawPayload: ((String) -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = ClipData.newPlainText("Copied Response", message.content)
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(context, "Copied response", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ContentCopy,
+                    contentDescription = "Copy message",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            IconButton(
+                onClick = { onRetry(message) },
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Refresh,
+                    contentDescription = "Regenerate response",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            if (isDevModeEnabled && !message.rawPayload.isNullOrBlank()) {
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = { onViewRawPayload?.invoke(message.rawPayload) },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.DataObject,
+                        contentDescription = "View Raw Request Payload",
+                        tint = Color(0xFF8BE9FD),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+
+        // Dev Mode Token & Cache Telemetry Badge
+        if (isDevModeEnabled && message.tokenUsage != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            TokenUsageTelemetryPill(
+                usage = message.tokenUsage,
+                onViewPayload = if (!message.rawPayload.isNullOrBlank()) {
+                    { onViewRawPayload?.invoke(message.rawPayload) }
+                } else null
+            )
+        }
+    }
+}
+
+@Composable
 fun ModelTypingIndicator(
     modelId: String,
     modifier: Modifier = Modifier

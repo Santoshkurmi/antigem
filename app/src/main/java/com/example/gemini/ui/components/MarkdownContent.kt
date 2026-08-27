@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import android.util.Log
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -87,6 +88,181 @@ sealed class MarkdownBlock {
 }
 
 @Composable
+fun MarkdownBlockView(
+    block: MarkdownBlock,
+    modifier: Modifier = Modifier,
+    onApproveTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
+    onRejectTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
+    onTerminateTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
+    onSubmitChoices: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
+    onSkipChoices: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null
+) {
+    when (block) {
+        is MarkdownBlock.AgentTool -> {
+            AgentToolCallCard(
+                toolCall = block.toolCall,
+                onApprove = onApproveTool,
+                onReject = onRejectTool,
+                onTerminate = onTerminateTool,
+                onSubmitChoices = onSubmitChoices,
+                onSkipChoices = onSkipChoices,
+                modifier = modifier
+            )
+        }
+        is MarkdownBlock.Math -> {
+            NativeMathView(latex = block.latex, isDisplay = block.isDisplay, modifier = modifier)
+        }
+        is MarkdownBlock.Mermaid -> {
+            MermaidDiagramView(code = block.code, modifier = modifier)
+        }
+        is MarkdownBlock.Code -> {
+            CodeBlock(code = block.code, language = block.language, modifier = modifier)
+        }
+        is MarkdownBlock.Table -> {
+            MarkdownTableView(table = block, modifier = modifier)
+        }
+        is MarkdownBlock.Image -> {
+            MarkdownImageView(image = block, modifier = modifier)
+        }
+        is MarkdownBlock.Details -> {
+            MarkdownDetailsView(details = block, modifier = modifier)
+        }
+        is MarkdownBlock.Header -> {
+            val (fontSize, topPad, bottomPad) = when (block.level) {
+                1 -> Triple(20.sp, 10.dp, 5.dp)
+                2 -> Triple(17.5.sp, 9.dp, 4.dp)
+                3 -> Triple(15.5.sp, 8.dp, 4.dp)
+                4 -> Triple(14.sp, 7.dp, 3.dp)
+                5 -> Triple(13.sp, 6.dp, 2.dp)
+                else -> Triple(12.5.sp, 5.dp, 2.dp)
+            }
+            FormattedInlineText(
+                text = block.text,
+                style = TextStyle(
+                    fontSize = fontSize,
+                    fontWeight = FontWeight.Bold,
+                    color = if (block.level <= 3) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                ),
+                modifier = modifier.padding(top = topPad, bottom = bottomPad)
+            )
+        }
+        is MarkdownBlock.Bullet -> {
+            Row(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp)
+                    .padding(start = (block.indent * 14).dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = if (block.indent == 0) "• " else "◦ ",
+                    fontWeight = FontWeight.Bold,
+                    color = ClaudeTerracotta,
+                    fontSize = 14.sp,
+                    lineHeight = 21.sp,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Center,
+                            trim = LineHeightStyle.Trim.None
+                        )
+                    )
+                )
+                FormattedInlineText(
+                    text = block.text,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+        is MarkdownBlock.Numbered -> {
+            Row(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp, horizontal = 2.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = "${block.number} ",
+                    fontWeight = FontWeight.Bold,
+                    color = ClaudeTerracotta,
+                    fontSize = 13.5.sp,
+                    lineHeight = 21.sp,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Center,
+                            trim = LineHeightStyle.Trim.None
+                        )
+                    )
+                )
+                FormattedInlineText(
+                    text = block.text,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+        is MarkdownBlock.Task -> {
+            Row(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp, horizontal = 2.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    imageVector = if (block.isChecked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                    contentDescription = if (block.isChecked) "Completed" else "Incomplete",
+                    tint = if (block.isChecked) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .padding(top = 1.5.dp, end = 6.dp)
+                        .size(17.dp)
+                )
+                FormattedInlineText(
+                    text = block.text,
+                    isStrikethrough = block.isChecked,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+        is MarkdownBlock.Blockquote -> {
+            Surface(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 5.dp),
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+            ) {
+                Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(4.dp)
+                            .background(ClaudeTerracotta)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    FormattedInlineText(
+                        text = block.text,
+                        modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp)
+                    )
+                }
+            }
+        }
+        is MarkdownBlock.HorizontalRule -> {
+            HorizontalDivider(
+                modifier = modifier.padding(vertical = 8.dp),
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+            )
+        }
+        is MarkdownBlock.Paragraph -> {
+            FormattedInlineText(
+                text = block.text,
+                modifier = modifier.padding(vertical = 3.dp)
+            )
+        }
+    }
+}
+
+@Composable
 fun MarkdownContent(
     content: String,
     toolCalls: List<com.example.gemini.domain.model.ToolCall> = emptyList(),
@@ -97,172 +273,32 @@ fun MarkdownContent(
     onSubmitChoices: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
     onSkipChoices: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null
 ) {
-    val blocks = remember(content, toolCalls) { parseMarkdownBlocks(content, toolCalls) }
+    val t0 = System.nanoTime()
+    val blocks = remember(content, toolCalls) {
+        val bStart = System.nanoTime()
+        val parsed = parseMarkdownBlocks(content, toolCalls)
+        val bDt = (System.nanoTime() - bStart) / 1_000_000.0
+        Log.d("PERF_TRACE", "  🔨 [Markdown Parse] len=${content.length}, blocks=${parsed.size}, took=${"%.2f".format(bDt)}ms")
+        parsed
+    }
+
+    SideEffect {
+        val dt = (System.nanoTime() - t0) / 1_000_000.0
+        if (dt > 1.0) {
+            Log.w("PERF_TRACE", "  📦 [MarkdownContent Comp] len=${content.length}, blocks=${blocks.size}, took=${"%.2f".format(dt)}ms")
+        }
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         blocks.forEach { block ->
-            when (block) {
-                is MarkdownBlock.AgentTool -> {
-                    AgentToolCallCard(
-                        toolCall = block.toolCall,
-                        onApprove = onApproveTool,
-                        onReject = onRejectTool,
-                        onTerminate = onTerminateTool,
-                        onSubmitChoices = onSubmitChoices,
-                        onSkipChoices = onSkipChoices
-                    )
-                }
-                is MarkdownBlock.Math -> {
-                    NativeMathView(latex = block.latex, isDisplay = block.isDisplay)
-                }
-                is MarkdownBlock.Mermaid -> {
-                    MermaidDiagramView(code = block.code)
-                }
-                is MarkdownBlock.Code -> {
-                    CodeBlock(code = block.code, language = block.language)
-                }
-                is MarkdownBlock.Table -> {
-                    MarkdownTableView(table = block)
-                }
-                is MarkdownBlock.Image -> {
-                    MarkdownImageView(image = block)
-                }
-                is MarkdownBlock.Details -> {
-                    MarkdownDetailsView(details = block)
-                }
-                is MarkdownBlock.Header -> {
-                    val (fontSize, topPad, bottomPad) = when (block.level) {
-                        1 -> Triple(20.sp, 10.dp, 5.dp)
-                        2 -> Triple(17.5.sp, 9.dp, 4.dp)
-                        3 -> Triple(15.5.sp, 8.dp, 4.dp)
-                        4 -> Triple(14.sp, 7.dp, 3.dp)
-                        5 -> Triple(13.sp, 6.dp, 2.dp)
-                        else -> Triple(12.5.sp, 5.dp, 2.dp)
-                    }
-                    FormattedInlineText(
-                        text = block.text,
-                        style = TextStyle(
-                            fontSize = fontSize,
-                            fontWeight = FontWeight.Bold,
-                            color = if (block.level <= 3) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                        ),
-                        modifier = Modifier.padding(top = topPad, bottom = bottomPad)
-                    )
-                }
-                is MarkdownBlock.Bullet -> {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp)
-                            .padding(start = (block.indent * 14).dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Text(
-                            text = if (block.indent == 0) "• " else "◦ ",
-                            fontWeight = FontWeight.Bold,
-                            color = ClaudeTerracotta,
-                            fontSize = 14.sp,
-                            lineHeight = 21.sp,
-                            style = TextStyle(
-                                platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                lineHeightStyle = LineHeightStyle(
-                                    alignment = LineHeightStyle.Alignment.Center,
-                                    trim = LineHeightStyle.Trim.None
-                                )
-                            )
-                        )
-                        FormattedInlineText(
-                            text = block.text,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-                is MarkdownBlock.Numbered -> {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp, horizontal = 2.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Text(
-                            text = "${block.number} ",
-                            fontWeight = FontWeight.Bold,
-                            color = ClaudeTerracotta,
-                            fontSize = 13.5.sp,
-                            lineHeight = 21.sp,
-                            style = TextStyle(
-                                platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                lineHeightStyle = LineHeightStyle(
-                                    alignment = LineHeightStyle.Alignment.Center,
-                                    trim = LineHeightStyle.Trim.None
-                                )
-                            )
-                        )
-                        FormattedInlineText(
-                            text = block.text,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-                is MarkdownBlock.Task -> {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp, horizontal = 2.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Icon(
-                            imageVector = if (block.isChecked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                            contentDescription = if (block.isChecked) "Completed" else "Incomplete",
-                            tint = if (block.isChecked) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            modifier = Modifier
-                                .padding(top = 1.5.dp, end = 6.dp)
-                                .size(17.dp)
-                        )
-                        FormattedInlineText(
-                            text = block.text,
-                            isStrikethrough = block.isChecked,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-                is MarkdownBlock.Blockquote -> {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 5.dp),
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                    ) {
-                        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .width(4.dp)
-                                    .background(ClaudeTerracotta)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            FormattedInlineText(
-                                text = block.text,
-                                modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp)
-                            )
-                        }
-                    }
-                }
-                is MarkdownBlock.HorizontalRule -> {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        thickness = 1.dp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                    )
-                }
-                is MarkdownBlock.Paragraph -> {
-                    FormattedInlineText(
-                        text = block.text,
-                        modifier = Modifier.padding(vertical = 3.dp)
-                    )
-                }
-            }
+            MarkdownBlockView(
+                block = block,
+                onApproveTool = onApproveTool,
+                onRejectTool = onRejectTool,
+                onTerminateTool = onTerminateTool,
+                onSubmitChoices = onSubmitChoices,
+                onSkipChoices = onSkipChoices
+            )
         }
     }
 }
@@ -1237,6 +1273,14 @@ private fun buildRichAnnotatedString(
  * Full Markdown block parser supporting:
  * Math ($$, \[\], ```math), Fenced Code, <details><summary>, GFM Tables, Headers (1-6), Images, Task Checklists, Blockquotes, Lists, Dividers, Paragraphs.
  */
+private val TOOL_TAG_PATTERN = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|tool_|execute_|web_|read_|ask_|user_)", RegexOption.IGNORE_CASE)
+private val TOOL_MARKER_REGEX = Regex("<!--\\s*tool_call:([a-zA-Z0-9_-]+)\\s*-->")
+private val UNIFIED_TOOL_REGEX = Regex("<tool_call\\s+name=[\"']?([a-zA-Z0-9_-]+)[\"']?\\s*>([\\s\\S]*?)</tool_call>", RegexOption.IGNORE_CASE)
+private val CHOICE_REGEX = Regex("<(ask_choices|user_choice)>([\\s\\S]*?)</(ask_choices|user_choice)>")
+private val EXEC_CMD_REGEX = Regex("<execute_command>([\\s\\S]*?)</execute_command>")
+private val WEB_SEARCH_REGEX = Regex("<web_search>([\\s\\S]*?)</web_search>")
+private val READ_URL_REGEX = Regex("<read_url>([\\s\\S]*?)</read_url>")
+
 fun parseMarkdownBlocks(
     rawText: String,
     toolCalls: List<com.example.gemini.domain.model.ToolCall> = emptyList()
@@ -1244,8 +1288,7 @@ fun parseMarkdownBlocks(
     val result = mutableListOf<MarkdownBlock>()
 
     // Filter out any in-flight unclosed tool tags from live markdown preview so no raw JSON / commands leak
-    val toolTagPattern = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|tool_|execute_|web_|read_|ask_|user_)", RegexOption.IGNORE_CASE)
-    val match = toolTagPattern.find(rawText)
+    val match = if (rawText.contains('<')) TOOL_TAG_PATTERN.find(rawText) else null
     val cleanedText = if (match != null) {
         rawText.substring(0, match.range.first)
     } else {
@@ -1258,64 +1301,67 @@ fun parseMarkdownBlocks(
     while (i < lines.size) {
         val line = lines[i]
 
-        // 0. Inline Agent Tool Call Marker <!-- tool_call:ID --> or <tool_call>
-        val toolMarkerMatch = Regex("<!--\\s*tool_call:([a-zA-Z0-9_-]+)\\s*-->").find(line)
-        if (toolMarkerMatch != null) {
-            val toolId = toolMarkerMatch.groupValues[1]
-            val matchedTool = toolCalls.find { it.id == toolId }
-            if (matchedTool != null) {
-                result.add(MarkdownBlock.AgentTool(matchedTool))
+        // Fast-path for tool tags
+        if (line.contains('<')) {
+            // 0. Inline Agent Tool Call Marker <!-- tool_call:ID --> or <tool_call>
+            val toolMarkerMatch = TOOL_MARKER_REGEX.find(line)
+            if (toolMarkerMatch != null) {
+                val toolId = toolMarkerMatch.groupValues[1]
+                val matchedTool = toolCalls.find { it.id == toolId }
+                if (matchedTool != null) {
+                    result.add(MarkdownBlock.AgentTool(matchedTool))
+                }
+                i++
+                continue
             }
-            i++
-            continue
-        }
 
-        val unifiedToolMatch = Regex("<tool_call\\s+name=[\"']?([a-zA-Z0-9_-]+)[\"']?\\s*>([\\s\\S]*?)</tool_call>", RegexOption.IGNORE_CASE).find(line)
-        if (unifiedToolMatch != null) {
-            val name = unifiedToolMatch.groupValues[1].trim().lowercase()
-            val payload = unifiedToolMatch.groupValues[2].trim()
-            val matchedTool = toolCalls.find { it.command == payload }
-                ?: com.example.gemini.domain.model.ToolCall(name = name, command = payload, status = if (name == "ask_choices") "AWAITING_CHOICE" else "RUNNING")
-            result.add(MarkdownBlock.AgentTool(matchedTool))
-            i++
-            continue
-        }
+            val unifiedToolMatch = UNIFIED_TOOL_REGEX.find(line)
+            if (unifiedToolMatch != null) {
+                val name = unifiedToolMatch.groupValues[1].trim().lowercase()
+                val payload = unifiedToolMatch.groupValues[2].trim()
+                val matchedTool = toolCalls.find { it.command == payload }
+                    ?: com.example.gemini.domain.model.ToolCall(name = name, command = payload, status = if (name == "ask_choices") "AWAITING_CHOICE" else "RUNNING")
+                result.add(MarkdownBlock.AgentTool(matchedTool))
+                i++
+                continue
+            }
 
-        val choiceMatch = Regex("<(ask_choices|user_choice)>([\\s\\S]*?)</(ask_choices|user_choice)>").find(line)
-        if (choiceMatch != null) {
-            val json = choiceMatch.groupValues[2].trim()
-            val matchedTool = toolCalls.find { it.command == json && (it.name == "ask_choices" || it.name == "user_choice") }
-                ?: com.example.gemini.domain.model.ToolCall(name = "ask_choices", command = json, status = "AWAITING_CHOICE")
-            result.add(MarkdownBlock.AgentTool(matchedTool))
-            i++
-            continue
-        }
+            val choiceMatch = CHOICE_REGEX.find(line)
+            if (choiceMatch != null) {
+                val json = choiceMatch.groupValues[2].trim()
+                val matchedTool = toolCalls.find { it.command == json && (it.name == "ask_choices" || it.name == "user_choice") }
+                    ?: com.example.gemini.domain.model.ToolCall(name = "ask_choices", command = json, status = "AWAITING_CHOICE")
+                result.add(MarkdownBlock.AgentTool(matchedTool))
+                i++
+                continue
+            }
 
-        val execCmdMatch = Regex("<execute_command>([\\s\\S]*?)</execute_command>").find(line)
-        if (execCmdMatch != null) {
-            val cmd = execCmdMatch.groupValues[1].trim()
-            val matchedTool = toolCalls.find { it.command == cmd } ?: com.example.gemini.domain.model.ToolCall(command = cmd, status = "RUNNING")
-            result.add(MarkdownBlock.AgentTool(matchedTool))
-            i++
-            continue
-        }
+            val execCmdMatch = EXEC_CMD_REGEX.find(line)
+            if (execCmdMatch != null) {
+                val cmd = execCmdMatch.groupValues[1].trim()
+                val matchedTool = toolCalls.find { it.command == cmd } ?: com.example.gemini.domain.model.ToolCall(command = cmd, status = "RUNNING")
+                result.add(MarkdownBlock.AgentTool(matchedTool))
+                i++
+                continue
+            }
 
-        val webSearchMatch = Regex("<web_search>([\\s\\S]*?)</web_search>").find(line)
-        if (webSearchMatch != null) {
-            val query = webSearchMatch.groupValues[1].trim()
-            val matchedTool = toolCalls.find { it.command == query && it.name == "web_search" } ?: com.example.gemini.domain.model.ToolCall(name = "web_search", command = query, status = "RUNNING")
-            result.add(MarkdownBlock.AgentTool(matchedTool))
-            i++
-            continue
-        }
+            val webSearchMatch = WEB_SEARCH_REGEX.find(line)
+            if (webSearchMatch != null) {
+                val query = webSearchMatch.groupValues[1].trim()
+                val matchedTool = toolCalls.find { it.command == query && it.name == "web_search" } ?: com.example.gemini.domain.model.ToolCall(name = "web_search", command = query, status = "RUNNING")
+                result.add(MarkdownBlock.AgentTool(matchedTool))
+                i++
+                continue
+            }
 
-        val readUrlMatch = Regex("<read_url>([\\s\\S]*?)</read_url>").find(line)
-        if (readUrlMatch != null) {
-            val url = readUrlMatch.groupValues[1].trim()
-            val matchedTool = toolCalls.find { it.command == url && it.name == "read_url" } ?: com.example.gemini.domain.model.ToolCall(name = "read_url", command = url, status = "RUNNING")
-            result.add(MarkdownBlock.AgentTool(matchedTool))
-            i++
-            continue
+            val readUrlMatch = READ_URL_REGEX.find(line)
+            if (readUrlMatch != null) {
+                val url = readUrlMatch.groupValues[1].trim()
+                val matchedTool = toolCalls.find { it.command == url && it.name == "read_url" } ?: com.example.gemini.domain.model.ToolCall(name = "read_url", command = url, status = "RUNNING")
+                result.add(MarkdownBlock.AgentTool(matchedTool))
+                i++
+                continue
+            }
         }
 
         // 1. Math block starting with $$

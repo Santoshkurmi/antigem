@@ -1523,6 +1523,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun sanitizeStreamingText(rawText: String): String {
+        if (!rawText.contains('<')) return rawText
         // Find index where any tool call tag starts (complete, unclosed, or in-flight)
         val toolTagPattern = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|read_file|write_file|edit_file|automation|math|cas|tool_|execute_|web_|read_|ask_|user_|auto_|math_)", RegexOption.IGNORE_CASE)
         val match = toolTagPattern.find(rawText)
@@ -1534,6 +1535,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var lastStreamUpdateTime = 0L
+
     private fun updateAssistantMessage(
         msgId: String,
         content: String,
@@ -1542,8 +1545,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         toolCalls: List<com.example.gemini.domain.model.ToolCall> = emptyList(),
         isStreaming: Boolean,
         tokenUsage: com.example.gemini.domain.model.TokenUsage? = null,
-        rawPayload: String? = null
+        rawPayload: String? = null,
+        forceImmediate: Boolean = false
     ) {
+        val now = System.currentTimeMillis()
+        if (!forceImmediate && isStreaming && (now - lastStreamUpdateTime < 100)) {
+            return
+        }
+        lastStreamUpdateTime = now
         val list = _messages.value.toMutableList()
         val index = list.indexOfFirst { it.id == msgId }
         if (index >= 0) {
@@ -1559,6 +1568,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 rawPayload = rawPayload ?: existing.rawPayload
             )
             _messages.value = list
+            android.util.Log.d("PERF_TRACE", "🌊 [Streaming Emit] ID=${msgId.take(8)}, len=${content.length}, isStreaming=$isStreaming")
         }
     }
 

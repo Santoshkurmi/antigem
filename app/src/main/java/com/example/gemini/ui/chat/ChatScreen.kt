@@ -56,10 +56,28 @@ import com.example.gemini.ui.models.ModelSelectorBottomSheet
 import com.example.gemini.ui.models.ThinkingSelectorBottomSheet
 import com.example.gemini.ui.settings.SettingsDialog
 import com.example.gemini.ui.tools.ToolsBottomSheet
+import android.util.Log
+import com.example.gemini.ui.components.MarkdownBlock
+import com.example.gemini.ui.components.MarkdownBlockView
+import com.example.gemini.ui.components.parseMarkdownBlocks
+import com.example.gemini.ui.components.UserMessageBubble
+import com.example.gemini.ui.components.AssistantMessageFooter
+import com.example.gemini.ui.components.ThinkingAccordion
+import com.example.gemini.ui.components.ModelTypingIndicator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class ScrollDirection { UP, DOWN }
+
+sealed class ChatFeedItem(val key: String, val contentType: String) {
+    data class Summary(val message: ChatMessage) : ChatFeedItem("summary_${message.id}", "SUMMARY")
+    data class User(val message: ChatMessage) : ChatFeedItem("user_${message.id}", "USER")
+    data class AssistantThinking(val messageId: String, val thoughtText: String, val durationMs: Long?, val isStreaming: Boolean) : ChatFeedItem("thought_$messageId", "THOUGHT")
+    data class AssistantBlock(val messageId: String, val blockIndex: Int, val block: MarkdownBlock) : ChatFeedItem("${messageId}_b$blockIndex", "ASSISTANT_BLOCK")
+    data class AssistantTyping(val messageId: String, val modelId: String) : ChatFeedItem("typing_$messageId", "TYPING")
+    data class AssistantFooter(val message: ChatMessage) : ChatFeedItem("footer_${message.id}", "FOOTER")
+    data class StreamingMessage(val message: ChatMessage) : ChatFeedItem("streaming_${message.id}", "STREAMING")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,68 +154,144 @@ fun ChatScreen(
 
     var scrollDirection by remember { mutableStateOf(ScrollDirection.DOWN) }
     var showScrollButton by remember { mutableStateOf(false) }
-    var prevIndex by remember { mutableIntStateOf(0) }
-    var prevOffset by remember { mutableIntStateOf(0) }
 
-    // Track scroll direction strictly while scroll is in progress
-    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
-        if (listState.isScrollInProgress) {
-            val currentIndex = listState.firstVisibleItemIndex
-            val currentOffset = listState.firstVisibleItemScrollOffset
-            if (currentIndex < prevIndex || (currentIndex == prevIndex && currentOffset < prevOffset)) {
-                scrollDirection = ScrollDirection.UP
-            } else if (currentIndex > prevIndex || (currentIndex == prevIndex && currentOffset > prevOffset)) {
-                scrollDirection = ScrollDirection.DOWN
+    // Decoupled asynchronous scroll observer - zero recomposition during pixel scroll
+    LaunchedEffect(listState) {
+        var prevIdx = 0
+        var prevOff = 0
+        snapshotFlow {
+            Triple(listState.isScrollInProgress, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+        }.collect { (isScrolling, currentIndex, currentOffset) ->
+            if (isScrolling) {
+                showScrollButton = true
+                val newDir = if (currentIndex < prevIdx || (currentIndex == prevIdx && currentOffset < prevOff)) {
+                    ScrollDirection.UP
+                } else if (currentIndex > prevIdx || (currentIndex == prevIdx && currentOffset > prevOff)) {
+                    ScrollDirection.DOWN
+                } else null
+                if (newDir != null && newDir != scrollDirection) {
+                    scrollDirection = newDir
+                }
+                prevIdx = currentIndex
+                prevOff = currentOffset
             }
-            prevIndex = currentIndex
-            prevOffset = currentOffset
         }
     }
 
-    // Show button during scroll and timeout after 5 seconds of inactivity
+    // Hide scroll button after scroll stops
     LaunchedEffect(listState.isScrollInProgress) {
-        if (listState.isScrollInProgress) {
-            showScrollButton = true
-        } else if (showScrollButton) {
-            delay(5000)
-            showScrollButton = false
-        }
-    }
-
-    // Hide immediately when reaching the very top or very bottom
-    LaunchedEffect(isAtTop, isAtBottom) {
-        if (isAtTop && scrollDirection == ScrollDirection.UP) {
-            showScrollButton = false
-        }
-        if (isAtBottom && scrollDirection == ScrollDirection.DOWN) {
+        if (!listState.isScrollInProgress && showScrollButton) {
+            delay(4000)
             showScrollButton = false
         }
     }
 
     var userSentMessageTrigger by remember { mutableStateOf(0) }
 
+    // Immutable Cache for completed historical messages (zero AST parsing during streaming)
+    val feedItemCache = remember { mutableMapOf<String, List<ChatFeedItem>>() }
+
+    // Granular block-level feed item expansion for smooth 120 FPS virtualization
+    val feedItems = remember(messages) {
+        val t0 = System.nanoTime()
+        val result = mutableListOf<ChatFeedItem>()
+        for (msg in messages) {
+            if (!msg.isStreaming) {
+                val cacheKey = "${msg.id}_${msg.content.hashCode()}_${msg.toolCalls.hashCode()}_${msg.thoughtText?.hashCode() ?: 0}"
+                val cached = feedItemCache[cacheKey]
+                if (cached != null) {
+                    result.addAll(cached)
+                    continue
+                }
+                val msgItems = mutableListOf<ChatFeedItem>()
+                when (msg.role) {
+                    MessageRole.SUMMARY -> {
+                        msgItems.add(ChatFeedItem.Summary(msg))
+                    }
+                    MessageRole.USER -> {
+                        msgItems.add(ChatFeedItem.User(msg))
+                    }
+                    MessageRole.ASSISTANT -> {
+                        if (!msg.thoughtText.isNullOrEmpty()) {
+                            msgItems.add(ChatFeedItem.AssistantThinking(
+                                messageId = msg.id,
+                                thoughtText = msg.thoughtText,
+                                durationMs = msg.thoughtDurationMs,
+                                isStreaming = false
+                            ))
+                        }
+                        if (msg.content.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
+                            val blocks = parseMarkdownBlocks(msg.content, msg.toolCalls)
+                            blocks.forEachIndexed { idx, block ->
+                                msgItems.add(ChatFeedItem.AssistantBlock(
+                                    messageId = msg.id,
+                                    blockIndex = idx,
+                                    block = block
+                                ))
+                            }
+                        }
+                        if (msg.content.isNotEmpty()) {
+                            msgItems.add(ChatFeedItem.AssistantFooter(msg))
+                        }
+                    }
+                    else -> {}
+                }
+                feedItemCache[cacheKey] = msgItems
+                result.addAll(msgItems)
+            } else {
+                // Active streaming message: virtualize blocks directly in LazyColumn so only visible blocks compose!
+                val hasActiveRunningTool = msg.toolCalls.any { 
+                    it.status == "RUNNING" || it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE" 
+                }
+                if (!msg.thoughtText.isNullOrEmpty()) {
+                    result.add(ChatFeedItem.AssistantThinking(
+                        messageId = msg.id,
+                        thoughtText = msg.thoughtText,
+                        durationMs = msg.thoughtDurationMs,
+                        isStreaming = !hasActiveRunningTool
+                    ))
+                }
+                if (msg.content.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
+                    val blocks = parseMarkdownBlocks(msg.content, msg.toolCalls)
+                    blocks.forEachIndexed { idx, block ->
+                        result.add(ChatFeedItem.AssistantBlock(
+                            messageId = msg.id,
+                            blockIndex = idx,
+                            block = block
+                        ))
+                    }
+                    if (!hasActiveRunningTool) {
+                        result.add(ChatFeedItem.AssistantTyping(msg.id, selectedModelId))
+                    }
+                } else if (!hasActiveRunningTool) {
+                    result.add(ChatFeedItem.AssistantTyping(msg.id, selectedModelId))
+                }
+            }
+        }
+        val dt = (System.nanoTime() - t0) / 1_000_000.0
+        Log.d("PERF_TRACE", "⚡ [FeedItems Calc] count=${result.size}, took=${"%.2f".format(dt)}ms")
+        result
+    }
+
     // Scroll to very bottom when a conversation is first opened / loaded
-    LaunchedEffect(currentConv?.id, messages.isNotEmpty()) {
-        if (currentConv?.id != null && messages.isNotEmpty() && lastScrolledConvId != currentConv?.id) {
+    LaunchedEffect(currentConv?.id, feedItems.isNotEmpty()) {
+        if (currentConv?.id != null && feedItems.isNotEmpty() && lastScrolledConvId != currentConv?.id) {
             lastScrolledConvId = currentConv?.id
-            listState.scrollToItem(messages.size)
+            listState.scrollToItem(feedItems.size)
         }
     }
 
     // Scroll to bottom when user explicitly sends a message (instant)
     LaunchedEffect(userSentMessageTrigger) {
-        if (userSentMessageTrigger > 0 && messages.isNotEmpty()) {
-            listState.scrollToItem(messages.size)
+        if (userSentMessageTrigger > 0 && feedItems.isNotEmpty()) {
+            listState.scrollToItem(feedItems.size)
         }
     }
 
     // Smart auto-scroll during streaming: ONLY auto-scroll if user is already at the very bottom
-    val lastMessageContentLength = messages.lastOrNull()?.content?.length ?: 0
-    val lastMessageThoughtLength = messages.lastOrNull()?.thoughtText?.length ?: 0
-
-    LaunchedEffect(messages.size, lastMessageContentLength, lastMessageThoughtLength) {
-        if (messages.isNotEmpty() && isAtBottom) {
-            listState.scrollToItem(messages.size)
+    LaunchedEffect(feedItems.size, isStreaming) {
+        if (feedItems.isNotEmpty() && isAtBottom && isStreaming) {
+            listState.scrollToItem(feedItems.size)
         }
     }
 
@@ -338,62 +432,141 @@ fun ChatScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp)
                         ) {
-                            items(messages, key = { it.id }) { msg ->
-                                MessageBubble(
-                                    message = msg, 
-                                    modelId = selectedModelId,
-                                    isDevModeEnabled = isDevModeEnabled,
-                                    onEdit = { targetMsg ->
-                                        val msgIndex = messages.indexOfFirst { it.id == targetMsg.id }
-                                        val isLastUserMsg = messages.indexOfLast { it.role == MessageRole.USER } == msgIndex
-                                        val willDeleteOutput = isLastUserMsg && msgIndex < messages.lastIndex
-                                        if (willDeleteOutput) {
-                                            pendingMessageAction = PendingMessageAction(MessageActionType.EDIT, targetMsg)
-                                        } else {
-                                            val text = viewModel.prepareEditMessage(targetMsg.id)
-                                            if (text != null) {
-                                                inputText = text
+                            items(
+                                items = feedItems,
+                                key = { it.key },
+                                contentType = { it.contentType }
+                            ) { feedItem ->
+                                when (feedItem) {
+                                    is ChatFeedItem.Summary -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            if (feedItem.message.isStreaming) {
+                                                LiveSummarizingCard(
+                                                    modelName = summarizingModelName,
+                                                    pendingQueuedMessage = pendingQueuedUserMessage
+                                                )
+                                            } else {
+                                                ActiveContextSummaryCard(
+                                                    summaryText = feedItem.message.content,
+                                                    onEditSummary = { viewModel.updateSummaryMessage(feedItem.message.id, it) },
+                                                    onDeleteSummary = { viewModel.deleteSummaryMessage(feedItem.message.id) }
+                                                )
                                             }
                                         }
-                                    },
-                                    onRetry = { targetMsg ->
-                                        val msgIndex = messages.indexOfFirst { it.id == targetMsg.id }
-                                        val isLastUserMsg = targetMsg.role == MessageRole.USER && (messages.indexOfLast { it.role == MessageRole.USER } == msgIndex)
-                                        val willDeleteOutput = (targetMsg.role == MessageRole.ASSISTANT) || (isLastUserMsg && msgIndex < messages.lastIndex)
-                                        if (willDeleteOutput) {
-                                            pendingMessageAction = PendingMessageAction(MessageActionType.RETRY, targetMsg)
-                                        } else {
-                                            viewModel.retryMessage(targetMsg.id)
-                                            userSentMessageTrigger++
+                                    }
+                                    is ChatFeedItem.User -> {
+                                        UserMessageBubble(
+                                            message = feedItem.message,
+                                            isDevModeEnabled = isDevModeEnabled,
+                                            onEdit = { targetMsg ->
+                                                val msgIndex = messages.indexOfFirst { it.id == targetMsg.id }
+                                                val isLastUserMsg = messages.indexOfLast { it.role == MessageRole.USER } == msgIndex
+                                                val willDeleteOutput = isLastUserMsg && msgIndex < messages.lastIndex
+                                                if (willDeleteOutput) {
+                                                    pendingMessageAction = PendingMessageAction(MessageActionType.EDIT, targetMsg)
+                                                } else {
+                                                    val text = viewModel.prepareEditMessage(targetMsg.id)
+                                                    if (text != null) {
+                                                        inputText = text
+                                                    }
+                                                }
+                                            },
+                                            onRetry = { targetMsg ->
+                                                val msgIndex = messages.indexOfFirst { it.id == targetMsg.id }
+                                                val isLastUserMsg = targetMsg.role == MessageRole.USER && (messages.indexOfLast { it.role == MessageRole.USER } == msgIndex)
+                                                val willDeleteOutput = (targetMsg.role == MessageRole.ASSISTANT) || (isLastUserMsg && msgIndex < messages.lastIndex)
+                                                if (willDeleteOutput) {
+                                                    pendingMessageAction = PendingMessageAction(MessageActionType.RETRY, targetMsg)
+                                                } else {
+                                                    viewModel.retryMessage(targetMsg.id)
+                                                    userSentMessageTrigger++
+                                                }
+                                            },
+                                            onViewRawPayload = { payloadJson ->
+                                                showRawPayloadDialog = payloadJson
+                                            }
+                                        )
+                                    }
+                                    is ChatFeedItem.AssistantThinking -> {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 2.dp)
+                                        ) {
+                                            ThinkingAccordion(
+                                                thoughtText = feedItem.thoughtText,
+                                                durationMs = feedItem.durationMs,
+                                                isStreaming = feedItem.isStreaming
+                                            )
                                         }
-                                    },
-                                    onApproveTool = { toolCall, msgId ->
-                                        viewModel.approveAndExecuteTerminalTool(toolCall, msgId)
-                                    },
-                                    onRejectTool = { toolCall, msgId ->
-                                        viewModel.rejectTerminalTool(toolCall, msgId)
-                                    },
-                                    onTerminateTool = { toolCall, msgId ->
-                                        viewModel.terminateRunningTerminalTool(toolCall, msgId)
-                                    },
-                                    onSubmitChoices = { toolCall, msgId, summaryPayload ->
-                                        viewModel.submitUserChoices(toolCall, msgId, summaryPayload)
-                                    },
-                                    onSkipChoices = { toolCall, msgId ->
-                                        viewModel.skipUserChoices(toolCall, msgId)
-                                    },
-                                    onUpdateSummary = { newText ->
-                                        viewModel.updateSummaryMessage(msg.id, newText)
-                                    },
-                                    onDeleteSummary = {
-                                        viewModel.deleteSummaryMessage(msg.id)
-                                    },
-                                    onViewRawPayload = { payloadJson ->
-                                        showRawPayloadDialog = payloadJson
-                                    },
-                                    summarizingModelName = summarizingModelName,
-                                    pendingQueuedUserMessage = pendingQueuedUserMessage
-                                )
+                                    }
+                                    is ChatFeedItem.AssistantBlock -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 1.dp)
+                                        ) {
+                                            MarkdownBlockView(
+                                                block = feedItem.block,
+                                                onApproveTool = { toolCall -> viewModel.approveAndExecuteTerminalTool(toolCall, feedItem.messageId) },
+                                                onRejectTool = { toolCall -> viewModel.rejectTerminalTool(toolCall, feedItem.messageId) },
+                                                onTerminateTool = { toolCall -> viewModel.terminateRunningTerminalTool(toolCall, feedItem.messageId) },
+                                                onSubmitChoices = { toolCall, summaryPayload -> viewModel.submitUserChoices(toolCall, feedItem.messageId, summaryPayload) },
+                                                onSkipChoices = { toolCall -> viewModel.skipUserChoices(toolCall, feedItem.messageId) }
+                                            )
+                                        }
+                                    }
+                                    is ChatFeedItem.AssistantTyping -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                        ) {
+                                            ModelTypingIndicator(modelId = feedItem.modelId)
+                                        }
+                                    }
+                                    is ChatFeedItem.AssistantFooter -> {
+                                        AssistantMessageFooter(
+                                            message = feedItem.message,
+                                            isDevModeEnabled = isDevModeEnabled,
+                                            onRetry = { targetMsg ->
+                                                viewModel.retryMessage(targetMsg.id)
+                                                userSentMessageTrigger++
+                                            },
+                                            onViewRawPayload = { payloadJson ->
+                                                showRawPayloadDialog = payloadJson
+                                            }
+                                        )
+                                    }
+                                    is ChatFeedItem.StreamingMessage -> {
+                                        MessageBubble(
+                                            message = feedItem.message,
+                                            modelId = selectedModelId,
+                                            isDevModeEnabled = isDevModeEnabled,
+                                            onApproveTool = { toolCall, msgId ->
+                                                viewModel.approveAndExecuteTerminalTool(toolCall, msgId)
+                                            },
+                                            onRejectTool = { toolCall, msgId ->
+                                                viewModel.rejectTerminalTool(toolCall, msgId)
+                                            },
+                                            onTerminateTool = { toolCall, msgId ->
+                                                viewModel.terminateRunningTerminalTool(toolCall, msgId)
+                                            },
+                                            onSubmitChoices = { toolCall, msgId, summaryPayload ->
+                                                viewModel.submitUserChoices(toolCall, msgId, summaryPayload)
+                                            },
+                                            onSkipChoices = { toolCall, msgId ->
+                                                viewModel.skipUserChoices(toolCall, msgId)
+                                            },
+                                            summarizingModelName = summarizingModelName,
+                                            pendingQueuedUserMessage = pendingQueuedUserMessage
+                                        )
+                                    }
+                                }
                             }
 
                             // Bottom spacer to ensure scrolling reaches below the very bottom
@@ -406,8 +579,8 @@ fun ChatScreen(
                     // Floating Scroll Up / Scroll Down Button (Instant Movement)
                     val showUpArrow = showScrollButton && scrollDirection == ScrollDirection.UP && !isAtTop
                     val showDownArrow = showScrollButton && scrollDirection == ScrollDirection.DOWN && !isAtBottom
-                    val isVisible = (showUpArrow || showDownArrow) && messages.size > 2
-
+                    val isVisible = (showUpArrow || showDownArrow) && feedItems.size > 2
+                                            
                     androidx.compose.animation.AnimatedVisibility(
                         visible = isVisible,
                         enter = fadeIn() + scaleIn(initialScale = 0.8f),
@@ -426,7 +599,7 @@ fun ChatScreen(
                                         if (showUpArrow) {
                                             listState.scrollToItem(0)
                                         } else {
-                                            listState.scrollToItem(messages.size)
+                                            listState.scrollToItem(feedItems.size)
                                         }
                                     }
                                 },
