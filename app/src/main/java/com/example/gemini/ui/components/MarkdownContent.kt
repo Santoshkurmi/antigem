@@ -594,17 +594,25 @@ fun MermaidDiagramView(
                                     android.view.ViewGroup.LayoutParams.MATCH_PARENT
                                 )
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                                isNestedScrollingEnabled = false
+                                isVerticalScrollBarEnabled = false
+                                isHorizontalScrollBarEnabled = false
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
                                 settings.loadWithOverviewMode = true
                                 settings.useWideViewPort = true
                                 settings.builtInZoomControls = true
                                 settings.displayZoomControls = false
+                                tag = htmlContent
                                 loadDataWithBaseURL("https://cdn.jsdelivr.net", htmlContent, "text/html", "UTF-8", null)
                             }
                         },
                         update = { webView ->
-                            webView.loadDataWithBaseURL("https://cdn.jsdelivr.net", htmlContent, "text/html", "UTF-8", null)
+                            if (webView.tag != htmlContent) {
+                                webView.tag = htmlContent
+                                webView.loadDataWithBaseURL("https://cdn.jsdelivr.net", htmlContent, "text/html", "UTF-8", null)
+                            }
                         },
                         modifier = Modifier.fillMaxSize()
                     )

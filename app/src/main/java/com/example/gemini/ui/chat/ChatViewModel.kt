@@ -1549,7 +1549,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         forceImmediate: Boolean = false
     ) {
         val now = System.currentTimeMillis()
-        if (!forceImmediate && isStreaming && (now - lastStreamUpdateTime < 100)) {
+        if (!forceImmediate && isStreaming && (now - lastStreamUpdateTime < 200)) {
             return
         }
         lastStreamUpdateTime = now

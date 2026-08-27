@@ -154,6 +154,7 @@ fun ChatScreen(
 
     var scrollDirection by remember { mutableStateOf(ScrollDirection.DOWN) }
     var showScrollButton by remember { mutableStateOf(false) }
+    var shouldAutoScroll by remember { mutableStateOf(true) }
 
     // Decoupled asynchronous scroll observer - zero recomposition during pixel scroll
     LaunchedEffect(listState) {
@@ -172,9 +173,19 @@ fun ChatScreen(
                 if (newDir != null && newDir != scrollDirection) {
                     scrollDirection = newDir
                 }
+                if (newDir == ScrollDirection.UP) {
+                    shouldAutoScroll = false
+                }
                 prevIdx = currentIndex
                 prevOff = currentOffset
             }
+        }
+    }
+
+    // Re-enable auto-scroll whenever the user scrolls back to the bottom
+    LaunchedEffect(isAtBottom) {
+        if (isAtBottom) {
+            shouldAutoScroll = true
         }
     }
 
@@ -284,14 +295,20 @@ fun ChatScreen(
     // Scroll to bottom when user explicitly sends a message (instant)
     LaunchedEffect(userSentMessageTrigger) {
         if (userSentMessageTrigger > 0 && feedItems.isNotEmpty()) {
+            shouldAutoScroll = true
             listState.scrollToItem(feedItems.size)
         }
     }
 
-    // Smart auto-scroll during streaming: ONLY auto-scroll if user is already at the very bottom
-    LaunchedEffect(feedItems.size, isStreaming) {
-        if (feedItems.isNotEmpty() && isAtBottom && isStreaming) {
+    // Smart auto-scroll during streaming: follows live stream until user drags up
+    val lastMsg = messages.lastOrNull()
+    val lastContentLen = lastMsg?.content?.length ?: 0
+    val lastThoughtLen = lastMsg?.thoughtText?.length ?: 0
+
+    LaunchedEffect(feedItems.size, lastContentLen, lastThoughtLen, isStreaming) {
+        if (feedItems.isNotEmpty() && isStreaming && shouldAutoScroll && !listState.isScrollInProgress) {
             listState.scrollToItem(feedItems.size)
+            Log.d("PERF_TRACE", "📜 [Auto-Scroll] target=${feedItems.size}, items=${feedItems.size}")
         }
     }
 
