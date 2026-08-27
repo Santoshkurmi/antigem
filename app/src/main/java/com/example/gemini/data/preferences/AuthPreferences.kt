@@ -30,6 +30,7 @@ class AuthPreferences(private val context: Context) {
         val IS_FILE_TOOL_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_file_tool_enabled")
         val IS_AUTOMATION_TOOL_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_automation_tool_enabled")
         val IS_MATH_TOOL_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_math_tool_enabled")
+        val IS_INTERACTIVE_UI_TOOL_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_interactive_ui_tool_enabled")
         val CONTEXT_WINDOW_LIMIT = androidx.datastore.preferences.core.intPreferencesKey("context_window_limit")
         val SUMMARY_MODEL_ID = stringPreferencesKey("summary_model_id")
         val ENABLED_MODELS = androidx.datastore.preferences.core.stringSetPreferencesKey("enabled_models")
@@ -64,6 +65,7 @@ class AuthPreferences(private val context: Context) {
     val isFileToolEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_FILE_TOOL_ENABLED] ?: false }
     val isAutomationToolEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_AUTOMATION_TOOL_ENABLED] ?: false }
     val isMathToolEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_MATH_TOOL_ENABLED] ?: true }
+    val isInteractiveUiToolEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_INTERACTIVE_UI_TOOL_ENABLED] ?: false }
     val contextWindowLimit: Flow<Int> = context.dataStore.data.map { it[CONTEXT_WINDOW_LIMIT] ?: 10 }
     val summaryModelId: Flow<String> = context.dataStore.data.map { it[SUMMARY_MODEL_ID] ?: "always_ask" }
 
@@ -100,6 +102,12 @@ class AuthPreferences(private val context: Context) {
     suspend fun setMathToolEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[IS_MATH_TOOL_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setInteractiveUiToolEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[IS_INTERACTIVE_UI_TOOL_ENABLED] = enabled
         }
     }
 

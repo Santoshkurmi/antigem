@@ -703,6 +703,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val isFileToolEnabled = authPrefs.isFileToolEnabled.firstOrNull() ?: false
         val isAutomationToolEnabled = authPrefs.isAutomationToolEnabled.firstOrNull() ?: false
         val isMathToolEnabled = authPrefs.isMathToolEnabled.firstOrNull() ?: true
+        val isInteractiveUiEnabled = authPrefs.isInteractiveUiToolEnabled.firstOrNull() ?: false
 
         val toolInstructionsList = mutableListOf<String>()
         if (isChoicesToolEnabled) {
@@ -795,6 +796,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 "  - Linear Algebra: Det({{1, 2}, {3, 4}}), Inverse({{1, 2}, {3, 4}}), Eigenvalues({{1, 2}, {2, 1}})\n" +
                 "  - Arbitrary Precision & Numeric: N(Pi, 100), 1/3 + 1/7, FactorInteger(123456789), PrimeQ(999983)\n" +
                 "  You will receive the exact symbolic result, numeric approximation, and rendered LaTeX formula."
+            )
+        }
+        if (isInteractiveUiEnabled) {
+            toolInstructionsList.add(
+                "• Interactive UI & Mini-Apps Engine:\n" +
+                "  You can create full-featured, highly interactive HTML5/CSS3/JavaScript components, custom calculators, games (like Tic-Tac-Toe, Pong, Snake, 2048, quizzes), interactive forms with sliders/buttons/dropdowns, charts, and visualizations directly in chat.\n" +
+                "  To create an interactive widget, output:\n" +
+                "  ```interactive_ui\n" +
+                "  <style>/* Clean modern styles, use CSS vars --primary, --bg, --text, --card-bg */</style>\n" +
+                "  <div>...interactive HTML...</div>\n" +
+                "  <script>\n" +
+                "    // Complete functional JavaScript\n" +
+                "  </script>\n" +
+                "  ```\n" +
+                "  The user can interact with buttons, sliders, canvases, play games, expand to fullscreen, and restart."
             )
         }
 

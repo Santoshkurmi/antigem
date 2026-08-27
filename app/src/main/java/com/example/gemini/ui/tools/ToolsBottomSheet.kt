@@ -49,6 +49,7 @@ fun ToolsBottomSheet(
     val isFileToolEnabled by authPreferences.isFileToolEnabled.collectAsState(initial = false)
     val isAutomationToolEnabled by authPreferences.isAutomationToolEnabled.collectAsState(initial = false)
     val isMathToolEnabled by authPreferences.isMathToolEnabled.collectAsState(initial = true)
+    val isInteractiveUiEnabled by authPreferences.isInteractiveUiToolEnabled.collectAsState(initial = false)
     
     var mathTestExpr by remember { mutableStateOf("Integrate(x^2 * Cos(x), x)") }
     var mathTestResult by remember { mutableStateOf<com.example.gemini.data.math.CasResult?>(null) }
@@ -586,6 +587,84 @@ fun ToolsBottomSheet(
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Tool Card: Interactive UI & Mini-Apps Engine (HTML5/JS/Canvas/Games)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isInteractiveUiEnabled) ClaudeTerracotta.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isInteractiveUiEnabled) ClaudeTerracotta.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SmartButton,
+                                contentDescription = null,
+                                tint = if (isInteractiveUiEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Interactive UI & Mini-Apps",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(if (isInteractiveUiEnabled) QuotaGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = if (isInteractiveUiEnabled) "ENABLED" else "DISABLED",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isInteractiveUiEnabled) QuotaGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "AI builds live interactive widgets, games (2048, Pong, Tic-Tac-Toe), calculators, and custom controls directly in chat",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Switch(
+                            checked = isInteractiveUiEnabled,
+                            onCheckedChange = { enabled ->
+                                coroutineScope.launch { authPreferences.setInteractiveUiToolEnabled(enabled) }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = ClaudeTerracotta
+                            )
+                        )
                     }
                 }
             }

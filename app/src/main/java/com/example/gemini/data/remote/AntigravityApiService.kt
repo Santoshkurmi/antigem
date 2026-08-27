@@ -213,6 +213,7 @@ class AntigravityApiService(
                         "edit_file" -> "<tool_call name=\"edit_file\">${tool.command}</tool_call>"
                         "automation" -> "<tool_call name=\"automation\">${tool.command}</tool_call>"
                         "math", "cas", "math_eval" -> "<tool_call name=\"math\">${tool.command}</tool_call>"
+                        "interactive_ui", "interactive_app", "render_ui" -> "<tool_call name=\"interactive_ui\">${tool.command}</tool_call>"
                         "ask_choices", "user_choice" -> "<ask_choices>${tool.command}</ask_choices>"
                         else -> "<tool_call name=\"${tool.name}\">${tool.command}</tool_call>"
                     }
@@ -231,6 +232,7 @@ class AntigravityApiService(
                         "read_file", "write_file", "edit_file" -> "[File Tool Result: ${tool.name}]:\n${tool.output}"
                         "automation" -> "[Android Automation Result]:\n${tool.output}"
                         "math", "cas", "math_eval" -> "[Symja CAS Math Engine Result for `${tool.command}`]:\n${tool.output}"
+                        "interactive_ui", "interactive_app", "render_ui" -> "[Interactive UI Widget rendered on user's device]:\nInteractive canvas is active."
                         else -> "[Tool Result: ${tool.name}]:\n${tool.output}"
                     }
 

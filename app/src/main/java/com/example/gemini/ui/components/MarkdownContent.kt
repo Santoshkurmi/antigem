@@ -84,6 +84,7 @@ sealed class MarkdownBlock {
     data class Code(val language: String, val code: String) : MarkdownBlock()
     data class Math(val latex: String, val isDisplay: Boolean = true) : MarkdownBlock()
     data class Mermaid(val code: String) : MarkdownBlock()
+    data class InteractiveUi(val htmlCode: String, val title: String = "Interactive App") : MarkdownBlock()
     data class Image(val alt: String, val url: String) : MarkdownBlock()
     data class Details(val summary: String, val body: String, val defaultOpen: Boolean = false) : MarkdownBlock()
     data class Table(val headers: List<String>, val rows: List<List<String>>, val alignments: List<TableAlignment>) : MarkdownBlock()
@@ -111,6 +112,9 @@ fun MarkdownBlockView(
                 onSkipChoices = onSkipChoices,
                 modifier = modifier
             )
+        }
+        is MarkdownBlock.InteractiveUi -> {
+            InteractiveUiView(htmlCode = block.htmlCode, title = block.title, modifier = modifier)
         }
         is MarkdownBlock.Math -> {
             NativeMathView(latex = block.latex, isDisplay = block.isDisplay, modifier = modifier)
@@ -1379,6 +1383,11 @@ fun parseMarkdownBlocks(
             if (unifiedToolMatch != null) {
                 val name = unifiedToolMatch.groupValues[1].trim().lowercase()
                 val payload = unifiedToolMatch.groupValues[2].trim()
+                if (name == "interactive_ui" || name == "render_ui" || name == "create_interactive_app" || name == "interactive_app") {
+                    result.add(MarkdownBlock.InteractiveUi(htmlCode = payload))
+                    i++
+                    continue
+                }
                 val matchedTool = toolCalls.find { it.command == payload }
                     ?: com.example.gemini.domain.model.ToolCall(name = name, command = payload, status = if (name == "ask_choices") "AWAITING_CHOICE" else "RUNNING")
                 result.add(MarkdownBlock.AgentTool(matchedTool))
@@ -1491,6 +1500,8 @@ fun parseMarkdownBlocks(
                 result.add(MarkdownBlock.Math(latex = codeLines.joinToString("\n"), isDisplay = true))
             } else if (lang.equals("mermaid", ignoreCase = true)) {
                 result.add(MarkdownBlock.Mermaid(code = codeLines.joinToString("\n").trim()))
+            } else if (lang.equals("interactive_ui", ignoreCase = true) || lang.equals("interactive_app", ignoreCase = true) || lang.equals("html_app", ignoreCase = true) || lang.equals("canvas_app", ignoreCase = true) || lang.equals("widget", ignoreCase = true) || lang.equals("ui", ignoreCase = true) || lang.equals("mini_app", ignoreCase = true)) {
+                result.add(MarkdownBlock.InteractiveUi(htmlCode = codeLines.joinToString("\n").trim()))
             } else {
                 result.add(MarkdownBlock.Code(language = lang, code = codeLines.joinToString("\n")))
             }
