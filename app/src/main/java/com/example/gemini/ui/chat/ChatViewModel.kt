@@ -106,6 +106,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _isDevModeEnabled = MutableStateFlow(false)
     val isDevModeEnabled: StateFlow<Boolean> = _isDevModeEnabled.asStateFlow()
 
+    private val _isLoadingConversation = MutableStateFlow(true)
+    val isLoadingConversation: StateFlow<Boolean> = _isLoadingConversation.asStateFlow()
+
     private val _terminatedToolDialog = MutableStateFlow<Pair<com.example.gemini.domain.model.ToolCall, String>?>(null)
     val terminatedToolDialog: StateFlow<Pair<com.example.gemini.domain.model.ToolCall, String>?> = _terminatedToolDialog.asStateFlow()
 
@@ -411,12 +414,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectConversation(id: String) {
         viewModelScope.launch {
-            val conv = storage.conversations.value.find { it.id == id }
-            if (conv != null) {
-                val msgs = storage.getMessages(id)
-                _currentConversation.value = conv
-                _selectedModelId.value = conv.modelId
-                _messages.value = msgs
+            _isLoadingConversation.value = true
+            _messages.value = emptyList()
+            try {
+                val conv = storage.conversations.value.find { it.id == id }
+                if (conv != null) {
+                    val msgs = storage.getMessages(id)
+                    _currentConversation.value = conv
+                    _selectedModelId.value = conv.modelId
+                    _messages.value = msgs
+                }
+            } finally {
+                _isLoadingConversation.value = false
             }
         }
     }

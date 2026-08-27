@@ -37,6 +37,8 @@ class AntigravityApiService(
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .connectionPool(okhttp3.ConnectionPool(5, 15, TimeUnit.SECONDS))
         .build()
 ) {
 
@@ -109,7 +111,7 @@ class AntigravityApiService(
     )
 
     suspend fun fetchAvailableModels(token: String, projectId: String? = null): Result<AvailableModelsResult> = withContext(Dispatchers.IO) {
-        val endpoints = listOf(ENDPOINT_DAILY, ENDPOINT_PROD)
+        val endpoints = listOf(ENDPOINT_PROD, ENDPOINT_DAILY)
         for (endpoint in endpoints) {
             try {
                 Log.d(TAG, "[API] Calling fetchAvailableModels on $endpoint (project: $projectId)")
@@ -324,7 +326,7 @@ class AntigravityApiService(
         var lastUsageMetadata: com.example.gemini.data.remote.dto.UsageMetadataDto? = null
         val streamStartTime = System.currentTimeMillis()
 
-        val endpoints = listOf(ENDPOINT_DAILY, ENDPOINT_PROD)
+        val endpoints = listOf(ENDPOINT_PROD, ENDPOINT_DAILY)
         var streamSucceeded = false
 
         for (endpoint in endpoints) {

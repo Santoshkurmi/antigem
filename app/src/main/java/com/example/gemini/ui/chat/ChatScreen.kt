@@ -140,6 +140,7 @@ fun ChatScreen(
     val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
     val isOAuthServerListening by viewModel.isOAuthServerListening.collectAsState()
     val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
+    val isLoadingConversation by viewModel.isLoadingConversation.collectAsState()
 
     // Fresh LazyListState per conversation initialized directly at the bottom
     val convKey = currentConv?.id ?: "empty"
@@ -547,7 +548,18 @@ fun ChatScreen(
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    if (messages.isEmpty()) {
+                    if (isLoadingConversation) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(36.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 2.5.dp
+                            )
+                        }
+                    } else if (messages.isEmpty()) {
                         // Empty state
                         Column(
                             modifier = Modifier
