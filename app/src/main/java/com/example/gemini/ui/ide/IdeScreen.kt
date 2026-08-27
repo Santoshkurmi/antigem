@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.WrapText
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -50,6 +53,7 @@ fun IdeScreen(
     // --- Persistent State from TermuxDaemonManager ---
     var isSidebarOpen by remember { mutableStateOf(true) }
     var showNewProjectDialog by remember { mutableStateOf(false) }
+    var isWordWrap by remember { mutableStateOf(false) }
 
     var projects by remember { mutableStateOf<List<ProjectItem>>(emptyList()) }
     val activeProject by TermuxDaemonManager.activeProject.collectAsState()
@@ -222,6 +226,15 @@ fun IdeScreen(
                             }
                         }
 
+                        // Word Wrap Toggle Button
+                        IconButton(onClick = { isWordWrap = !isWordWrap }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.WrapText,
+                                contentDescription = "Toggle Word Wrap",
+                                tint = if (isWordWrap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+
                         // Run Project Button
                         IconButton(
                             onClick = {
@@ -304,17 +317,19 @@ fun IdeScreen(
                 // Editor Content View
                 if (activeTab != null) {
                     val lines = remember(activeTab.content) { activeTab.content.split("\n") }
+                    val verticalScrollState = rememberScrollState()
+                    val horizontalScrollState = rememberScrollState()
 
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
                             .weight(1f)
+                            .verticalScroll(verticalScrollState)
                     ) {
-                        // Line Numbers Column
+                        // Line Numbers Column (Locked to same vertical scroll)
                         Column(
                             modifier = Modifier
-                                .width(42.dp)
-                                .fillMaxHeight()
+                                .width(46.dp)
                                 .background(Color(0xFF1E1E1E))
                                 .padding(vertical = 8.dp),
                             horizontalAlignment = Alignment.End
@@ -324,20 +339,34 @@ fun IdeScreen(
                                     text = "${idx + 1}",
                                     style = TextStyle(
                                         fontFamily = FontFamily.Monospace,
-                                        fontSize = 13.sp,
-                                        color = Color.DarkGray
+                                        fontSize = 12.5.sp,
+                                        color = Color.Gray.copy(alpha = 0.6f)
                                     ),
-                                    modifier = Modifier.height(20.dp).padding(end = 6.dp)
+                                    modifier = Modifier
+                                        .height(20.dp)
+                                        .padding(end = 8.dp)
                                 )
                             }
                         }
+
+                        // Subtle vertical gutter divider
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height((lines.size * 20 + 16).dp)
+                                .background(Color(0xFF333333))
+                        )
 
                         // Code Editor Text Area
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .weight(1f)
-                                .padding(8.dp)
+                                .then(
+                                    if (!isWordWrap) Modifier.horizontalScroll(horizontalScrollState)
+                                    else Modifier
+                                )
+                                .padding(vertical = 8.dp, horizontal = 10.dp)
                         ) {
                             BasicTextField(
                                 value = activeTab.content,
@@ -345,12 +374,12 @@ fun IdeScreen(
                                 visualTransformation = CodeSyntaxVisualTransformation(activeTab.name),
                                 textStyle = TextStyle(
                                     fontFamily = FontFamily.Monospace,
-                                    fontSize = 14.sp,
+                                    fontSize = 13.5.sp,
                                     color = Color(0xFFD4D4D4),
                                     lineHeight = 20.sp
                                 ),
                                 cursorBrush = SolidColor(Color(0xFF007ACC)),
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
