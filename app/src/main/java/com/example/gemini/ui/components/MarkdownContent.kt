@@ -39,6 +39,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.Color
 import android.util.Log
 import androidx.compose.ui.layout.ContentScale
@@ -914,6 +917,29 @@ fun MarkdownTableView(
     table: MarkdownBlock.Table,
     modifier: Modifier = Modifier
 ) {
+    val t0 = System.nanoTime()
+    val isDark = isSystemInDarkTheme()
+    val density = LocalDensity.current
+
+    // Memoize cell AnnotatedStrings so table layout & scrolling takes 0.00ms
+    val cachedHeaders = remember(table.headers, isDark, density) {
+        table.headers.map { header ->
+            buildRichAnnotatedString(header, false, isDark, density)
+        }
+    }
+    val cachedRows = remember(table.rows, isDark, density) {
+        table.rows.map { row ->
+            row.map { cell ->
+                buildRichAnnotatedString(cell, false, isDark, density)
+            }
+        }
+    }
+
+    SideEffect {
+        val dt = (System.nanoTime() - t0) / 1_000_000.0
+        Log.d("PERF_TRACE", "📊 [Table Comp] rows=${table.rows.size}, cols=${table.headers.size}, cells=${table.headers.size + table.rows.sumOf { it.size }}, took=${"%.2f".format(dt)}ms")
+    }
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -937,7 +963,7 @@ fun MarkdownTableView(
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
                     .padding(vertical = 2.dp)
             ) {
-                table.headers.forEachIndexed { colIdx, header ->
+                cachedHeaders.forEachIndexed { colIdx, headerResult ->
                     val alignment = table.alignments.getOrElse(colIdx) { TableAlignment.LEFT }
                     val textAlign = when (alignment) {
                         TableAlignment.CENTER -> TextAlign.Center
@@ -949,8 +975,9 @@ fun MarkdownTableView(
                             .widthIn(min = 90.dp, max = 220.dp)
                             .padding(horizontal = 10.dp, vertical = 7.dp)
                     ) {
-                        FormattedInlineText(
-                            text = header,
+                        Text(
+                            text = headerResult.annotatedString,
+                            inlineContent = headerResult.inlineContent,
                             style = TextStyle(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
@@ -965,7 +992,7 @@ fun MarkdownTableView(
             HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
 
             // Table Data Rows
-            table.rows.forEachIndexed { rowIdx, row ->
+            cachedRows.forEachIndexed { rowIdx, rowCells ->
                 Row(
                     modifier = Modifier
                         .background(
@@ -974,18 +1001,33 @@ fun MarkdownTableView(
                         )
                         .padding(vertical = 2.dp)
                 ) {
-                    row.forEachIndexed { colIdx, cellText ->
+                    rowCells.forEachIndexed { colIdx, cellResult ->
+                        val alignment = table.alignments.getOrElse(colIdx) { TableAlignment.LEFT }
+                        val textAlign = when (alignment) {
+                            TableAlignment.CENTER -> TextAlign.Center
+                            TableAlignment.RIGHT -> TextAlign.End
+                            TableAlignment.LEFT -> TextAlign.Start
+                        }
                         Box(
                             modifier = Modifier
                                 .widthIn(min = 90.dp, max = 220.dp)
                                 .padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
-                            FormattedInlineText(text = cellText)
+                            Text(
+                                text = cellResult.annotatedString,
+                                inlineContent = cellResult.inlineContent,
+                                style = TextStyle(
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    textAlign = textAlign
+                                )
+                            )
                         }
                     }
                 }
 
-                if (rowIdx < table.rows.size - 1) {
+                if (rowIdx < cachedRows.size - 1) {
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
                 }
             }
@@ -1039,6 +1081,7 @@ private fun buildRichAnnotatedString(
     isDark: Boolean = false,
     density: Density? = null
 ): FormattedInlineResult {
+    val t0 = System.nanoTime()
     val builder = AnnotatedString.Builder()
     val inlineContentMap = mutableMapOf<String, InlineTextContent>()
 
@@ -1171,14 +1214,12 @@ private fun buildRichAnnotatedString(
                         placeholderVerticalAlign = PlaceholderVerticalAlign.Center
                     )
                 ) {
-                    AndroidView(
-                        factory = { ctx ->
-                            ImageView(ctx).apply {
-                                adjustViewBounds = true
-                                setImageDrawable(drawable)
-                            }
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawIntoCanvas { canvas ->
+                            drawable.setBounds(0, 0, size.width.toInt(), size.height.toInt())
+                            drawable.draw(canvas.nativeCanvas)
                         }
-                    )
+                    }
                 }
             } else {
                 val formatted = formatLatexToNativeMath(mathContent)
@@ -1272,6 +1313,11 @@ private fun buildRichAnnotatedString(
 
     if (globalStrikethrough) {
         builder.pop()
+    }
+
+    val dt = (System.nanoTime() - t0) / 1_000_000.0
+    if (inlineContentMap.isNotEmpty() || dt > 1.0) {
+        Log.d("PERF_TRACE", "  📐 [Inline Math/Text Build] len=${text.length}, mathItems=${inlineContentMap.size}, took=${"%.2f".format(dt)}ms, text='${text.take(30)}'")
     }
 
     return FormattedInlineResult(builder.toAnnotatedString(), inlineContentMap)
