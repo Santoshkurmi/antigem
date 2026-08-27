@@ -274,8 +274,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _isSummarizing.value = false
 
             if (result.isSuccess) {
-                val newSummary = result.getOrThrow()
-                android.util.Log.d("GeminiApp", "[ViewModel] Summarization succeeded! Updating summary message ${liveSummaryMessage.id}")
+                val summarizationResult = result.getOrThrow()
+                val newSummary = summarizationResult.summary
+                val newTitle = summarizationResult.title?.takeIf { it.isNotBlank() } ?: conv.title
+                android.util.Log.d("GeminiApp", "[ViewModel] Summarization succeeded! New Title: '$newTitle', updating summary message ${liveSummaryMessage.id}")
                 val updatedMessages = _messages.value.map {
                     if (it.id == liveSummaryMessage.id) {
                         it.copy(content = newSummary, isStreaming = false)
@@ -283,7 +285,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 _messages.value = updatedMessages
 
-                val updatedConv = conv.copy(summary = newSummary)
+                val updatedConv = conv.copy(summary = newSummary, title = newTitle)
                 _currentConversation.value = updatedConv
                 _postponedThreshold.value = null
                 _summaryError.value = null

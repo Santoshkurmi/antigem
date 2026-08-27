@@ -9,28 +9,31 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
+data class SummarizationResult(
+    val summary: String,
+    val title: String? = null
+)
+
 object ContextCompactor {
 
     /**
-     * Splits full conversation history into:
-     * 1. olderMessages: to be summarized
-     * 2. recentMessages: kept verbatim in full fidelity (last windowLimit messages)
+     * Splits chat history into (olderMessages, recentMessages) based on contextWindowLimit.
      */
     fun splitHistory(
         messages: List<ChatMessage>,
         windowLimit: Int
     ): Pair<List<ChatMessage>, List<ChatMessage>> {
-        val limit = windowLimit.coerceAtLeast(4)
-        if (messages.size <= limit) {
+        if (messages.size <= windowLimit) {
             return Pair(emptyList(), messages)
         }
-        val older = messages.dropLast(limit)
-        val recent = messages.takeLast(limit)
+        val splitIndex = messages.size - windowLimit
+        val older = messages.take(splitIndex)
+        val recent = messages.drop(splitIndex)
         return Pair(older, recent)
     }
 
     /**
-     * Builds the prompt given to the AI summarizer model.
+     * Builds the prompt sent to the LLM to generate an executive context summary and updated title.
      */
     fun buildSummarizationPrompt(
         messagesToSummarize: List<ChatMessage>,
@@ -69,7 +72,8 @@ You are an expert AI Context Summarizer. Condense the following conversation his
 $conversationText
 
 INSTRUCTIONS:
-Produce a concise, structured markdown summary (around 150-300 words) with these exact sections:
+1. Output a refined, comprehensive 3-6 word title for this overall conversation enclosed in <chat_title>...</chat_title> at the very top (e.g. <chat_title>Spring Boot Auth Migration</chat_title>).
+2. Produce a concise, structured markdown summary (around 150-300 words) with these exact sections:
 • **Core Goal & Requirements**: What the user is building or asking for.
 • **Key Decisions & Architecture**: Important choices made, libraries/frameworks chosen, preferences specified.
 • **Work Accomplished & Tool Results**: Files created/modified, commands run, features implemented, and key outcomes.
@@ -89,7 +93,7 @@ Keep it factual, concise, and focused on code, files, decisions, and outcomes. D
         modelId: String,
         messagesToSummarize: List<ChatMessage>,
         existingSummary: String? = null
-    ): Result<String> = withContext(Dispatchers.IO) {
+    ): Result<SummarizationResult> = withContext(Dispatchers.IO) {
         try {
             val prompt = buildSummarizationPrompt(messagesToSummarize, existingSummary)
             val syntheticMessage = ChatMessage(
@@ -131,8 +135,15 @@ Keep it factual, concise, and focused on code, files, decisions, and outcomes. D
                 return@withContext Result.failure(Exception("Summarizer returned empty content"))
             }
 
-            android.util.Log.d("GeminiApp", "[ContextCompactor] Summarization completed! Length: ${finalSummary.length}")
-            Result.success(finalSummary)
+            var extractedTitle: String? = null
+            val titleMatch = Regex("<chat_title>([\\s\\S]*?)</chat_title>", RegexOption.IGNORE_CASE).find(finalSummary)
+            if (titleMatch != null) {
+                extractedTitle = titleMatch.groupValues[1].trim().replace("\"", "").replace("'", "")
+                finalSummary = finalSummary.replace(Regex("<chat_title>[\\s\\S]*?</chat_title>\\s*", RegexOption.IGNORE_CASE), "").trim()
+            }
+
+            android.util.Log.d("GeminiApp", "[ContextCompactor] Summarization completed! Title: '$extractedTitle', Length: ${finalSummary.length}")
+            Result.success(SummarizationResult(summary = finalSummary, title = extractedTitle))
         } catch (e: Exception) {
             android.util.Log.e("GeminiApp", "[ContextCompactor] Summarization failed: ${e.message}", e)
             Result.failure(e)
