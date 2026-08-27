@@ -120,6 +120,7 @@ fun ChatScreen(
     val showSummaryModelPicker by viewModel.showSummaryModelPicker.collectAsState()
     val summaryModelIdPref by viewModel.summaryModelIdPref.collectAsState()
     val isDevModeEnabled by viewModel.isDevModeEnabled.collectAsState()
+    val chatFontScale by viewModel.chatFontScale.collectAsState(initial = 1.0f)
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -582,16 +583,25 @@ fun ChatScreen(
                             )
                         }
                     } else {
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp)
-                        ) {
-                            items(
-                                items = feedItems,
-                                key = { it.key },
-                                contentType = { it.contentType }
-                            ) { feedItem ->
+                        val currentDensity = androidx.compose.ui.platform.LocalDensity.current
+                        val customDensity = remember(currentDensity, chatFontScale) {
+                            androidx.compose.ui.unit.Density(
+                                density = currentDensity.density,
+                                fontScale = currentDensity.fontScale * chatFontScale
+                            )
+                        }
+
+                        CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides customDensity) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp)
+                            ) {
+                                items(
+                                    items = feedItems,
+                                    key = { it.key },
+                                    contentType = { it.contentType }
+                                ) { feedItem ->
                                 when (feedItem) {
                                     is ChatFeedItem.Summary -> {
                                         Box(
@@ -730,6 +740,7 @@ fun ChatScreen(
                             }
                         }
                     }
+                }
 
                     // Floating Scroll Up / Scroll Down Button (Instant Movement)
                     val showUpArrow = showScrollButton && scrollDirection == ScrollDirection.UP && !isAtTop
@@ -929,6 +940,7 @@ fun ChatScreen(
             contextWindowLimit = contextWindowLimit,
             summaryModelId = summaryModelIdPref,
             isDevModeEnabled = isDevModeEnabled,
+            chatFontScale = chatFontScale,
             onLoginWithGoogle = {
                 val url = viewModel.getGoogleOAuthUrl()
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -954,6 +966,7 @@ fun ChatScreen(
             },
             onSetContextWindowLimit = { viewModel.setContextWindowLimit(it) },
             onSetSummaryModelId = { viewModel.setSummaryModelId(it) },
+            onSetChatFontScale = { viewModel.setChatFontScale(it) },
             onToggleDevMode = { viewModel.setDevModeEnabled(it) },
             onDismiss = { showSettingsDialog = false }
         )

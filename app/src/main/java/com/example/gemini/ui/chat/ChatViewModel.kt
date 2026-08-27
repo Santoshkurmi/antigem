@@ -145,6 +145,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    val chatFontScale = authPrefs.chatFontScale
+
+    fun setChatFontScale(scale: Float) {
+        viewModelScope.launch {
+            authPrefs.saveChatFontScale(scale)
+        }
+    }
+
     fun setContextWindowLimit(limit: Int) {
         viewModelScope.launch {
             authPrefs.setContextWindowLimit(limit)

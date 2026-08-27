@@ -44,6 +44,7 @@ fun SettingsDialog(
     contextWindowLimit: Int = 10,
     summaryModelId: String = "always_ask",
     isDevModeEnabled: Boolean = false,
+    chatFontScale: Float = 1.0f,
     onLoginWithGoogle: () -> Unit,
     onToggleServer: (Boolean) -> Unit = {},
     onLogout: () -> Unit = {},
@@ -53,6 +54,7 @@ fun SettingsDialog(
     onRefreshQuotas: () -> Unit,
     onSetContextWindowLimit: (Int) -> Unit = {},
     onSetSummaryModelId: (String) -> Unit = {},
+    onSetChatFontScale: (Float) -> Unit = {},
     onToggleDevMode: (Boolean) -> Unit = {},
     onDismiss: () -> Unit
 ) {
@@ -404,6 +406,102 @@ fun SettingsDialog(
                                                 showSummaryDropdown = false
                                             }
                                         )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Chat Font Size Section
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Chat Font Size (${(chatFontScale * 100).toInt()}%)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Scale all chat text, code blocks, and markdown proportionally",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                            )
+                        }
+                        if (chatFontScale != 1.0f) {
+                            TextButton(
+                                onClick = { onSetChatFontScale(1.0f) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text("Reset (1.0x)", fontSize = 12.sp, color = ClaudeTerracotta)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("A", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Slider(
+                                    value = chatFontScale,
+                                    onValueChange = { onSetChatFontScale(it) },
+                                    valueRange = 0.75f..1.60f,
+                                    steps = 16,
+                                    modifier = Modifier.weight(1f),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = ClaudeTerracotta,
+                                        activeTrackColor = ClaudeTerracotta
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text("A", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Preset Buttons
+                            val scalePresets = listOf(0.85f to "Small", 1.00f to "Normal", 1.15f to "Medium", 1.30f to "Large", 1.50f to "Huge")
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                scalePresets.forEach { (presetVal, label) ->
+                                    val isSelected = kotlin.math.abs(chatFontScale - presetVal) < 0.04f
+                                    Surface(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { onSetChatFontScale(presetVal) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.padding(vertical = 6.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                fontSize = 11.5.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
                                     }
                                 }
                             }
