@@ -355,12 +355,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             storage.init()
-            val list = storage.conversations.value
-            if (list.isNotEmpty()) {
-                selectConversation(list.first().id)
-            } else {
-                startNewChat()
-            }
+            startNewChat()
+            _isLoadingConversation.value = false
 
             authPrefs.userEmail.collect { _userEmail.value = it }
         }
@@ -407,9 +403,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         )
         _currentConversation.value = newConv
         _messages.value = emptyList()
-        viewModelScope.launch {
-            storage.saveConversation(newConv)
-        }
+        _isLoadingConversation.value = false
     }
 
     fun selectConversation(id: String) {
@@ -461,8 +455,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (conv != null) {
             val updated = conv.copy(modelId = modelId)
             _currentConversation.value = updated
-            viewModelScope.launch {
-                storage.saveConversation(updated)
+            val existsInStorage = storage.conversations.value.any { it.id == conv.id }
+            if (existsInStorage) {
+                viewModelScope.launch {
+                    storage.saveConversation(updated)
+                }
             }
         }
     }
