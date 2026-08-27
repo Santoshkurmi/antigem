@@ -23,6 +23,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 import java.util.UUID
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
@@ -33,6 +36,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val apiService = AntigravityApiService()
     private val oauthManager = GoogleOAuthManager()
     private val automationExecutor = com.example.gemini.data.automation.AutomationToolExecutor(application)
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     val conversations: StateFlow<List<Conversation>> = storage.conversations
 
@@ -353,6 +357,29 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     var pendingPkceVerifier: String? = null
 
     init {
+        viewModelScope.launch {
+            // Instantly restore cached models and quotas from local storage
+            authPrefs.cachedModelsJson.firstOrNull()?.let { modelsJson ->
+                if (!modelsJson.isNullOrBlank()) {
+                    try {
+                        val cachedModels = json.decodeFromString<List<AiModel>>(modelsJson)
+                        if (cachedModels.isNotEmpty()) {
+                            _availableModels.value = cachedModels
+                            recomputeEnabledModels()
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            authPrefs.cachedQuotasJson.firstOrNull()?.let { quotasJson ->
+                if (!quotasJson.isNullOrBlank()) {
+                    try {
+                        val cachedQuotas = json.decodeFromString<List<ModelQuota>>(quotasJson)
+                        _quotas.value = cachedQuotas
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+
         viewModelScope.launch {
             storage.init()
             startNewChat()
@@ -1658,6 +1685,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         recomputeEnabledModels()
                     }
                     _quotas.value = result.quotas
+
+                    // Persist cached models and quotas to local storage for instant launch next time
+                    try {
+                        val modelsStr = json.encodeToString(result.models)
+                        val quotasStr = json.encodeToString(result.quotas)
+                        authPrefs.saveCachedModelsAndQuotas(modelsStr, quotasStr)
+                    } catch (_: Exception) {}
                 }
             } finally {
                 _isRefreshingModels.value = false

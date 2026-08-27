@@ -34,6 +34,8 @@ class AuthPreferences(private val context: Context) {
         val SUMMARY_MODEL_ID = stringPreferencesKey("summary_model_id")
         val ENABLED_MODELS = androidx.datastore.preferences.core.stringSetPreferencesKey("enabled_models")
         val IS_DEV_MODE_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_dev_mode_enabled")
+        val CACHED_MODELS_JSON = stringPreferencesKey("cached_models_json")
+        val CACHED_QUOTAS_JSON = stringPreferencesKey("cached_quotas_json")
     }
 
     val accessToken: Flow<String?> = context.dataStore.data.map { it[ACCESS_TOKEN] }
@@ -44,6 +46,8 @@ class AuthPreferences(private val context: Context) {
     val userEmail: Flow<String?> = context.dataStore.data.map { it[USER_EMAIL] }
     val enabledModelIds: Flow<Set<String>?> = context.dataStore.data.map { it[ENABLED_MODELS] }
     val isDevModeEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_DEV_MODE_ENABLED] ?: false }
+    val cachedModelsJson: Flow<String?> = context.dataStore.data.map { it[CACHED_MODELS_JSON] }
+    val cachedQuotasJson: Flow<String?> = context.dataStore.data.map { it[CACHED_QUOTAS_JSON] }
 
     val termuxSshHost: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_HOST] ?: "127.0.0.1" }
     val termuxSshPort: Flow<Int> = context.dataStore.data.map { it[TERMUX_SSH_PORT]?.toIntOrNull() ?: 8022 }
@@ -164,6 +168,13 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveEnabledModelIds(ids: Set<String>) {
         context.dataStore.edit { prefs ->
             prefs[ENABLED_MODELS] = ids
+        }
+    }
+
+    suspend fun saveCachedModelsAndQuotas(modelsJson: String, quotasJson: String) {
+        context.dataStore.edit { prefs ->
+            prefs[CACHED_MODELS_JSON] = modelsJson
+            prefs[CACHED_QUOTAS_JSON] = quotasJson
         }
     }
 
