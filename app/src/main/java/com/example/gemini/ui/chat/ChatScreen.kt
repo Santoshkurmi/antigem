@@ -500,13 +500,6 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        IconButton(onClick = { viewModel.startNewChat() }) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "New Chat",
-                                tint = ClaudeTerracotta
-                            )
-                        }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background
