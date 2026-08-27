@@ -52,8 +52,30 @@ object TermuxDaemonManager {
     private val _openTabs = MutableStateFlow<List<OpenTab>>(emptyList())
     val openTabs: StateFlow<List<OpenTab>> = _openTabs.asStateFlow()
 
+    private var prefs: android.content.SharedPreferences? = null
+
+    fun init(context: Context) {
+        prefs = context.applicationContext.getSharedPreferences("termux_ide_prefs", Context.MODE_PRIVATE)
+        val savedName = prefs?.getString("active_proj_name", null)
+        val savedPath = prefs?.getString("active_proj_path", null)
+        if (!savedName.isNullOrBlank() && !savedPath.isNullOrBlank()) {
+            _activeProject.value = ProjectItem(savedName, savedPath)
+        }
+    }
+
     fun setActiveProject(project: ProjectItem?) {
         _activeProject.value = project
+        if (project != null) {
+            prefs?.edit()
+                ?.putString("active_proj_name", project.name)
+                ?.putString("active_proj_path", project.path)
+                ?.apply()
+        } else {
+            prefs?.edit()
+                ?.remove("active_proj_name")
+                ?.remove("active_proj_path")
+                ?.apply()
+        }
     }
 
     fun setActiveTabPath(path: String?) {

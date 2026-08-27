@@ -32,6 +32,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        com.example.gemini.data.daemon.TermuxDaemonManager.init(this)
+
         handleOAuthIntent(intent)
 
         setContent {

@@ -53,7 +53,7 @@ fun IdeScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var projects by remember { mutableStateOf<List<ProjectItem>>(emptyList()) }
-    var activeProject by remember { mutableStateOf<ProjectItem?>(null) }
+    val activeProject by TermuxDaemonManager.activeProject.collectAsState()
     val openTabs by TermuxDaemonManager.openTabs.collectAsState()
     val activeTabPath by TermuxDaemonManager.activeTabPath.collectAsState()
 
@@ -65,11 +65,11 @@ fun IdeScreen(
         coroutineScope.launch {
             val projs = IdeApiClient.getProjects()
             projects = projs
-            val current = activeProject
+            val current = TermuxDaemonManager.activeProject.value
             if (current != null) {
                 fileTree = IdeApiClient.getFileTree(current.path)
             } else if (projs.isNotEmpty()) {
-                activeProject = projs.first()
+                TermuxDaemonManager.setActiveProject(projs.first())
                 fileTree = IdeApiClient.getFileTree(projs.first().path)
             }
         }
@@ -80,6 +80,14 @@ fun IdeScreen(
         coroutineScope.launch {
             TermuxDaemonManager.ensureDaemonStarted()
             refreshProjectsAndTree()
+        }
+    }
+
+    LaunchedEffect(activeProject) {
+        if (activeProject != null) {
+            coroutineScope.launch {
+                fileTree = IdeApiClient.getFileTree(activeProject?.path)
+            }
         }
     }
 
@@ -105,10 +113,7 @@ fun IdeScreen(
                     fileTree = fileTree,
                     activeFilePath = activeTabPath,
                     onSelectProject = { proj ->
-                        activeProject = proj
-                        coroutineScope.launch {
-                            fileTree = IdeApiClient.getFileTree(proj.path)
-                        }
+                        TermuxDaemonManager.setActiveProject(proj)
                     },
                     onCreateProjectRequested = {
                         showNewProjectDialog = true
