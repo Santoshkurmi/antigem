@@ -38,7 +38,12 @@ class AuthPreferences(private val context: Context) {
         val CACHED_MODELS_JSON = stringPreferencesKey("cached_models_json")
         val CACHED_QUOTAS_JSON = stringPreferencesKey("cached_quotas_json")
         val CHAT_FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("chat_font_scale")
+        val AGY_BRIDGE_WS_URL = stringPreferencesKey("agy_bridge_ws_url")
+        val AGY_BRIDGE_HTTP_URL = stringPreferencesKey("agy_bridge_http_url")
     }
+
+    val agyBridgeWsUrl: Flow<String> = context.dataStore.data.map { it[AGY_BRIDGE_WS_URL] ?: "ws://127.0.0.1:8080" }
+    val agyBridgeHttpUrl: Flow<String> = context.dataStore.data.map { it[AGY_BRIDGE_HTTP_URL] ?: "http://127.0.0.1:8080" }
 
     val accessToken: Flow<String?> = context.dataStore.data.map { it[ACCESS_TOKEN] }
     val refreshToken: Flow<String?> = context.dataStore.data.map { it[REFRESH_TOKEN] }
