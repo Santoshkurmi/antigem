@@ -94,4 +94,47 @@ class LocalChatStorage(private val context: Context) {
             saveConversation(conv.copy(updatedAt = System.currentTimeMillis()))
         }
     }
+
+    suspend fun mergeAgyConversations(agyList: List<com.example.gemini.data.remote.AgyConversationSummary>) = withContext(Dispatchers.IO) {
+        val current = _conversations.value.toMutableList()
+        var modified = false
+
+        for (agy in agyList) {
+            val existingIndex = current.indexOfFirst { it.id == agy.id }
+            val agyTime = try {
+                java.time.Instant.parse(agy.createdAt).toEpochMilli()
+            } catch (_: Exception) {
+                System.currentTimeMillis()
+            }
+
+            if (existingIndex >= 0) {
+                val existing = current[existingIndex]
+                val newTitle = if (agy.title.isNotBlank() && agy.title != "New Chat") agy.title else existing.title
+                if (existing.title != newTitle || (agyTime > existing.updatedAt && agyTime > 0)) {
+                    current[existingIndex] = existing.copy(
+                        title = newTitle,
+                        updatedAt = maxOf(existing.updatedAt, agyTime)
+                    )
+                    modified = true
+                }
+            } else {
+                val newConv = Conversation(
+                    id = agy.id,
+                    title = if (agy.title.isNotBlank()) agy.title else "Antigravity Chat",
+                    modelId = "gemini-3.7-flash-high",
+                    sessionId = java.util.UUID.randomUUID().toString(),
+                    createdAt = agyTime,
+                    updatedAt = agyTime
+                )
+                current.add(newConv)
+                modified = true
+            }
+        }
+
+        if (modified) {
+            val sorted = current.sortedByDescending { it.updatedAt }
+            _conversations.value = sorted
+            conversationsFile.writeText(json.encodeToString(sorted))
+        }
+    }
 }

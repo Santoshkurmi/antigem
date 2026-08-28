@@ -75,6 +75,7 @@ enum class TableAlignment { LEFT, CENTER, RIGHT }
 
 sealed class MarkdownBlock {
     data class Paragraph(val text: String) : MarkdownBlock()
+    data class AgentThought(val thought: String, val durationMs: Long? = null, val isStreaming: Boolean = false) : MarkdownBlock()
     data class AgentTool(val toolCall: com.example.gemini.domain.model.ToolCall) : MarkdownBlock()
     data class Header(val level: Int, val text: String) : MarkdownBlock()
     data class Bullet(val indent: Int, val text: String) : MarkdownBlock()
@@ -102,6 +103,14 @@ fun MarkdownBlockView(
     onSkipChoices: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null
 ) {
     when (block) {
+        is MarkdownBlock.AgentThought -> {
+            ThinkingAccordion(
+                thoughtText = block.thought,
+                durationMs = block.durationMs,
+                isStreaming = block.isStreaming,
+                modifier = modifier.padding(vertical = 4.dp)
+            )
+        }
         is MarkdownBlock.AgentTool -> {
             AgentToolCallCard(
                 toolCall = block.toolCall,
@@ -1331,6 +1340,8 @@ private fun buildRichAnnotatedString(
  * Full Markdown block parser supporting:
  * Math ($$, \[\], ```math), Fenced Code, <details><summary>, GFM Tables, Headers (1-6), Images, Task Checklists, Blockquotes, Lists, Dividers, Paragraphs.
  */
+private val THOUGHT_START_REGEX = Regex("<(?:!--\\s*)?thought(?:\\s+duration=[\"']?([0-9]+)[\"']?)?(?:\\s*--)?>", RegexOption.IGNORE_CASE)
+private val THOUGHT_END_REGEX = Regex("<(?:!--\\s*)?/thought(?:\\s*--)?>", RegexOption.IGNORE_CASE)
 private val TOOL_TAG_PATTERN = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|tool_|execute_|web_|read_|ask_|user_)", RegexOption.IGNORE_CASE)
 private val TOOL_MARKER_REGEX = Regex("<!--\\s*tool_call:([a-zA-Z0-9_-]+)\\s*-->")
 private val UNIFIED_TOOL_REGEX = Regex("<tool_call\\s+name=[\"']?([a-zA-Z0-9_-]+)[\"']?\\s*>([\\s\\S]*?)</tool_call>", RegexOption.IGNORE_CASE)
@@ -1365,8 +1376,48 @@ fun parseMarkdownBlocks(
     while (i < lines.size) {
         val line = lines[i]
 
-        // Fast-path for tool tags
+        // Fast-path for tool tags & thoughts
         if (line.contains('<')) {
+            // -1. Sequential Agent Thought Block <!-- thought -->...<!-- /thought --> or <thought>
+            val thoughtStartMatch = THOUGHT_START_REGEX.find(line)
+            if (thoughtStartMatch != null) {
+                val durationMs = thoughtStartMatch.groupValues.getOrNull(1)?.toLongOrNull()
+                val thoughtLines = mutableListOf<String>()
+
+                if (line.contains("</thought>", ignoreCase = true) || line.contains("<!-- /thought -->", ignoreCase = true)) {
+                    val raw = line.replace(THOUGHT_START_REGEX, "").replace(THOUGHT_END_REGEX, "").trim()
+                    if (raw.isNotBlank()) {
+                        result.add(MarkdownBlock.AgentThought(raw, durationMs))
+                    }
+                    i++
+                    continue
+                }
+
+                val firstLine = line.replace(THOUGHT_START_REGEX, "").trim()
+                if (firstLine.isNotBlank()) thoughtLines.add(firstLine)
+
+                i++
+                var closed = false
+                while (i < lines.size) {
+                    val curr = lines[i]
+                    if (curr.contains("</thought>", ignoreCase = true) || curr.contains("<!-- /thought -->", ignoreCase = true)) {
+                        val endContent = curr.replace(THOUGHT_END_REGEX, "").trim()
+                        if (endContent.isNotBlank()) thoughtLines.add(endContent)
+                        closed = true
+                        i++
+                        break
+                    }
+                    thoughtLines.add(curr)
+                    i++
+                }
+
+                val finalThought = thoughtLines.joinToString("\n").trim()
+                if (finalThought.isNotBlank()) {
+                    result.add(MarkdownBlock.AgentThought(finalThought, durationMs, isStreaming = !closed))
+                }
+                continue
+            }
+
             // 0. Inline Agent Tool Call Marker <!-- tool_call:ID --> or <tool_call>
             val toolMarkerMatch = TOOL_MARKER_REGEX.find(line)
             if (toolMarkerMatch != null) {

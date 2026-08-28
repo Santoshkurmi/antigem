@@ -72,6 +72,7 @@ import com.example.gemini.ui.components.AssistantMessageFooter
 import com.example.gemini.ui.components.ThinkingAccordion
 import com.example.gemini.ui.components.ModelTypingIndicator
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
 enum class ScrollDirection { UP, DOWN }
@@ -121,6 +122,10 @@ fun ChatScreen(
     val summaryModelIdPref by viewModel.summaryModelIdPref.collectAsState()
     val isDevModeEnabled by viewModel.isDevModeEnabled.collectAsState()
     val chatFontScale by viewModel.chatFontScale.collectAsState(initial = 1.0f)
+    val bridgeStatusMessage by viewModel.bridgeStatusMessage.collectAsState()
+    val isServerOnline by viewModel.isServerOnline.collectAsState()
+    val conversationError by viewModel.conversationError.collectAsState()
+    val activeInstances by viewModel.activeInstances.collectAsState()
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -239,16 +244,13 @@ fun ChatScreen(
                         msgItems.add(ChatFeedItem.User(msg))
                     }
                     MessageRole.ASSISTANT -> {
-                        if (!msg.thoughtText.isNullOrEmpty()) {
-                            msgItems.add(ChatFeedItem.AssistantThinking(
-                                messageId = msg.id,
-                                thoughtText = msg.thoughtText,
-                                durationMs = msg.thoughtDurationMs,
-                                isStreaming = false
-                            ))
+                        val contentToParse = if (!msg.thoughtText.isNullOrEmpty() && !msg.content.contains("<!-- thought") && !msg.content.contains("<thought")) {
+                            "<!-- thought -->\n${msg.thoughtText}\n<!-- /thought -->\n${msg.content}"
+                        } else {
+                            msg.content
                         }
-                        if (msg.content.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
-                            val blocks = parseMarkdownBlocks(msg.content, msg.toolCalls)
+                        if (contentToParse.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
+                            val blocks = parseMarkdownBlocks(contentToParse, msg.toolCalls)
                             blocks.forEachIndexed { idx, block ->
                                 msgItems.add(ChatFeedItem.AssistantBlock(
                                     messageId = msg.id,
@@ -270,16 +272,13 @@ fun ChatScreen(
                 val hasActiveRunningTool = msg.toolCalls.any { 
                     it.status == "RUNNING" || it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE" 
                 }
-                if (!msg.thoughtText.isNullOrEmpty()) {
-                    result.add(ChatFeedItem.AssistantThinking(
-                        messageId = msg.id,
-                        thoughtText = msg.thoughtText,
-                        durationMs = msg.thoughtDurationMs,
-                        isStreaming = !hasActiveRunningTool
-                    ))
+                val contentToParse = if (!msg.thoughtText.isNullOrEmpty() && !msg.content.contains("<!-- thought") && !msg.content.contains("<thought")) {
+                    "<!-- thought -->\n${msg.thoughtText}\n<!-- /thought -->\n${msg.content}"
+                } else {
+                    msg.content
                 }
-                if (msg.content.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
-                    val blocks = parseMarkdownBlocks(msg.content, msg.toolCalls)
+                if (contentToParse.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
+                    val blocks = parseMarkdownBlocks(contentToParse, msg.toolCalls)
                     blocks.forEachIndexed { idx, block ->
                         result.add(ChatFeedItem.AssistantBlock(
                             messageId = msg.id,
@@ -343,7 +342,14 @@ fun ChatScreen(
 
     LaunchedEffect(Unit) {
         scope.launch {
-            val list = IdeApiClient.getProjects()
+            var list = IdeApiClient.getProjects()
+            if (list.isEmpty()) {
+                val httpUrl = viewModel.authPreferences.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+                val res = com.example.gemini.data.remote.AgyBridgeService().fetchProjects(httpUrl)
+                if (res.isSuccess) {
+                    list = res.getOrThrow().map { ProjectItem(it.name, it.path) }
+                }
+            }
             chatProjectsList = list
             if (activeChatProject == null && list.isNotEmpty()) {
                 TermuxDaemonManager.setActiveProject(list.first())
@@ -360,12 +366,19 @@ fun ChatScreen(
         }
     }
 
+    LaunchedEffect(drawerState.isOpen) {
+        if (drawerState.isOpen) {
+            viewModel.refreshActiveInstances()
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             ChatHistoryDrawer(
                 conversations = conversations,
                 currentConversationId = currentConv?.id,
+                activeInstances = activeInstances,
                 onSelectConversation = { id ->
                     viewModel.selectConversation(id)
                     scope.launch { drawerState.close() }
@@ -376,6 +389,9 @@ fun ChatScreen(
                 },
                 onDeleteConversation = { id ->
                     viewModel.deleteConversation(id)
+                },
+                onTerminateInstance = { id ->
+                    viewModel.terminateInstance(id)
                 },
                 onOpenSettings = {
                     showSettingsDialog = true
@@ -420,7 +436,15 @@ fun ChatScreen(
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                     modifier = Modifier.clickable {
                                         scope.launch {
-                                            chatProjectsList = IdeApiClient.getProjects()
+                                            var list = IdeApiClient.getProjects()
+                                            if (list.isEmpty()) {
+                                                val httpUrl = viewModel.authPreferences.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+                                                val res = com.example.gemini.data.remote.AgyBridgeService().fetchProjects(httpUrl)
+                                                if (res.isSuccess) {
+                                                    list = res.getOrThrow().map { ProjectItem(it.name, it.path) }
+                                                }
+                                            }
+                                            chatProjectsList = list
                                             showProjectDropdown = true
                                         }
                                     }
@@ -472,6 +496,7 @@ fun ChatScreen(
                                                 onClick = {
                                                     TermuxDaemonManager.setActiveProject(proj)
                                                     showProjectDropdown = false
+                                                    viewModel.onProjectChanged(proj.path)
                                                 }
                                             )
                                         }
@@ -559,6 +584,51 @@ fun ChatScreen(
                                 color = MaterialTheme.colorScheme.primary,
                                 strokeWidth = 2.5.dp
                             )
+                        }
+                    } else if (!conversationError.isNullOrBlank() && messages.isEmpty()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Unable to Load Chat",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = conversationError ?: "",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = {
+                                    currentConv?.id?.let { viewModel.selectConversation(it) }
+                                },
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Retry", fontSize = 13.5.sp)
+                            }
                         }
                     } else if (messages.isEmpty()) {
                         // Empty state
@@ -790,16 +860,6 @@ fun ChatScreen(
                     }
                 }
 
-                // In-Chat Summarize Alert Banner when threshold is reached (Pinned above input)
-                if (!isSummarizing && messages.size > (postponedThreshold ?: contextWindowLimit) && currentConv?.summary.isNullOrBlank()) {
-                    ContextSummarizeAlertBanner(
-                        messageCount = messages.size,
-                        windowLimit = contextWindowLimit,
-                        onSummarizeNow = { viewModel.openManualSummaryPicker() },
-                        onPostpone = { viewModel.postponeSummarization(it) }
-                    )
-                }
-
                 // File Autocomplete Suggestions when user types @
                 val atIndex = inputText.lastIndexOf('@')
                 val isAtMentioning = atIndex >= 0 && (atIndex == inputText.length - 1 || !inputText.substring(atIndex + 1).contains(" "))
@@ -818,53 +878,43 @@ fun ChatScreen(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(10.dp),
+                            .padding(horizontal = 14.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        tonalElevation = 6.dp
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     ) {
-                        Column(modifier = Modifier.padding(6.dp)) {
-                            Text(
-                                text = "📁 Mention File in ${activeChatProject?.name ?: "Project"}:",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             fileSuggestions.forEach { file ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(6.dp))
                                         .clickable {
-                                            val relPath = file.path.removePrefix(activeChatProject?.path ?: "").removePrefix("/")
-                                            val replacement = "@$relPath "
-                                            val newText = inputText.substring(0, atIndex) + replacement
+                                            val newText = inputText.substring(0, atIndex) + "@${file.path} "
                                             textFieldValue = TextFieldValue(
                                                 text = newText,
-                                                selection = TextRange(newText.length)
+                                                selection = androidx.compose.ui.text.TextRange(newText.length)
                                             )
                                         }
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.InsertDriveFile,
                                         contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.primary
+                                        tint = ClaudeTerracotta,
+                                        modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = file.name,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = file.path.removePrefix(activeChatProject?.path ?: ""),
-                                        style = MaterialTheme.typography.labelSmall,
+                                        text = file.path,
+                                        fontSize = 11.sp,
                                         color = Color.Gray,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -875,13 +925,53 @@ fun ChatScreen(
                     }
                 }
 
+                // Dynamic Bridge / Project / Model Initialization Banner
+                AnimatedVisibility(
+                    visible = !bridgeStatusMessage.isNullOrBlank(),
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 3.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                        border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.35f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(13.dp),
+                                strokeWidth = 2.dp,
+                                color = ClaudeTerracotta
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = bridgeStatusMessage ?: "",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
                 // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)
                 ChatInputBar(
                     selectedModel = currentModel,
                     quota = currentQuota,
                     thinkingPreference = thinkingPref,
                     textFieldValue = textFieldValue,
-                    onTextFieldValueChange = { textFieldValue = it },
+                    onTextFieldValueChange = {
+                        textFieldValue = it
+                        if (it.text.isNotEmpty()) {
+                            viewModel.onUserStartedTyping()
+                        }
+                    },
                     onOpenModelSelector = {
                         focusManager.clearFocus(force = true)
                         keyboardController?.hide()

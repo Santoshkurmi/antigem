@@ -123,48 +123,6 @@ fun ChatInputBar(
                         modifier = Modifier.size(15.dp)
                     )
                 }
-
-                if (selectedModel.supportsThinking) {
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // Thinking Level Pill
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                if (thinkingPreference.isEnabled) ClaudeTerracotta.copy(alpha = 0.12f)
-                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-                            )
-                            .clickable {
-                                focusManager.clearFocus(force = true)
-                                keyboardController?.hide()
-                                onOpenThinkingSelector()
-                            }
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Psychology,
-                            contentDescription = "Thinking",
-                            tint = if (thinkingPreference.isEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (thinkingPreference.isEnabled) "${thinkingPreference.level.label} (${thinkingPreference.activeTokens / 1024}K)" else "Thinking: Off",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (thinkingPreference.isEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Change Thinking",
-                            tint = if (thinkingPreference.isEnabled) ClaudeTerracotta.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
             }
 
             // Text Input & Send Row

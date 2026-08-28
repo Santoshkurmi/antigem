@@ -31,17 +31,75 @@ import java.util.*
 fun ChatHistoryDrawer(
     conversations: List<Conversation>,
     currentConversationId: String?,
+    activeInstances: List<com.example.gemini.data.remote.AgyActiveInstance> = emptyList(),
     onSelectConversation: (String) -> Unit,
     onNewChat: () -> Unit,
     onDeleteConversation: (String) -> Unit,
+    onTerminateInstance: (String) -> Unit = {},
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    var instanceToTerminate by remember { mutableStateOf<Pair<com.example.gemini.data.remote.AgyActiveInstance, String>?>(null) }
 
     val filtered = remember(conversations, searchQuery) {
         if (searchQuery.isBlank()) conversations
         else conversations.filter { it.title.contains(searchQuery, ignoreCase = true) }
+    }
+
+    if (instanceToTerminate != null) {
+        val (inst, title) = instanceToTerminate!!
+        AlertDialog(
+            onDismissRequest = { instanceToTerminate = null },
+            title = { Text("Active CLI Process", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            text = {
+                Column {
+                    Text(
+                        text = "A live Antigravity CLI process is running in the background for this chat:",
+                        fontSize = 13.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("Chat: $title", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Model: ${inst.model}", fontSize = 12.sp)
+                            Text("Uptime: ${inst.uptimeSeconds}s", fontSize = 12.sp)
+                            if (inst.pid > 0) {
+                                Text("PID: ${inst.pid}", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Terminate this instance to immediately free RAM?",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onTerminateInstance(inst.conversationId)
+                        instanceToTerminate = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Terminate & Free RAM", fontSize = 13.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { instanceToTerminate = null }) {
+                    Text("Keep Running", fontSize = 13.sp)
+                }
+            }
+        )
     }
 
     ModalDrawerSheet(
@@ -107,6 +165,8 @@ fun ChatHistoryDrawer(
             ) {
                 items(filtered, key = { it.id }) { conv ->
                     val isSelected = conv.id == currentConversationId
+                    val activeInst = activeInstances.find { it.conversationId == conv.id }
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -138,6 +198,38 @@ fun ChatHistoryDrawer(
                                 overflow = TextOverflow.Ellipsis,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+                        }
+
+                        if (activeInst != null) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFF4CAF50).copy(alpha = 0.15f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.5f)),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable {
+                                        instanceToTerminate = activeInst to conv.title
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .background(Color(0xFF4CAF50), androidx.compose.foundation.shape.CircleShape)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "RUNNING",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2E7D32)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
                         }
 
                         IconButton(

@@ -2,6 +2,8 @@ package com.example.gemini.data.remote
 
 import android.util.Log
 import com.example.gemini.domain.model.AiModel
+import com.example.gemini.domain.model.ChatMessage
+import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.domain.model.TokenUsage
 import com.example.gemini.domain.model.ToolCall
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +18,27 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+
+data class AgyConversationSummary(
+    val id: String,
+    val title: String,
+    val createdAt: String,
+    val stepsCount: Int = 0
+)
+
+data class AgyProjectSummary(
+    val name: String,
+    val path: String
+)
+
+data class AgyActiveInstance(
+    val conversationId: String,
+    val model: String,
+    val workspaceDir: String,
+    val pid: Long = 0,
+    val uptimeSeconds: Long = 0,
+    val isBusy: Boolean = false
+)
 
 sealed class AgyStreamEvent {
     data class TextChunk(val text: String) : AgyStreamEvent()
@@ -76,15 +99,175 @@ class AgyBridgeService(
         }
     }
 
+    suspend fun checkServerHealth(httpBaseUrl: String = DEFAULT_HTTP_URL): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/health")
+                .get()
+                .build()
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun fetchConversations(httpBaseUrl: String = DEFAULT_HTTP_URL): Result<List<AgyConversationSummary>> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val body = response.body?.string() ?: "{}"
+                val json = JSONObject(body)
+                val arr = json.optJSONArray("conversations") ?: JSONArray()
+                val list = mutableListOf<AgyConversationSummary>()
+
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    list.add(
+                        AgyConversationSummary(
+                            id = obj.getString("id"),
+                            title = obj.optString("title", "Antigravity Chat"),
+                            createdAt = obj.optString("created_at", ""),
+                            stepsCount = obj.optInt("steps_count", 0)
+                        )
+                    )
+                }
+
+                Result.success(list)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchConversations failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchConversationMessages(
+        conversationId: String,
+        httpBaseUrl: String = DEFAULT_HTTP_URL
+    ): Result<List<ChatMessage>> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations/$conversationId")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val body = response.body?.string() ?: "{}"
+                val json = JSONObject(body)
+                val arr = json.optJSONArray("messages") ?: JSONArray()
+                val chatMessages = mutableListOf<ChatMessage>()
+
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val roleStr = obj.optString("role", "user")
+                    val role = if (roleStr == "agent" || roleStr == "assistant") com.example.gemini.domain.model.MessageRole.ASSISTANT
+                               else com.example.gemini.domain.model.MessageRole.USER
+                    val content = obj.optString("content", "")
+                    val thinking = obj.optString("thinking").takeIf { it.isNotBlank() }
+
+                    val toolCallsList = mutableListOf<ToolCall>()
+                    val toolsArr = obj.optJSONArray("tool_calls")
+                    if (toolsArr != null) {
+                        for (t in 0 until toolsArr.length()) {
+                            val toolObj = toolsArr.optJSONObject(t) ?: continue
+                            val toolId = toolObj.optString("id").ifBlank { "tc_${conversationId}_${i}_$t" }
+                            val toolName = toolObj.optString("name").ifBlank { toolObj.optString("tool_name", "tool") }
+                            val toolCmd = toolObj.optString("command").ifBlank {
+                                toolObj.optJSONObject("args")?.toString() ?: toolObj.optJSONObject("parameters")?.toString() ?: ""
+                            }
+                            val toolOut = toolObj.optString("output", "")
+                            val toolStatus = toolObj.optString("status", "SUCCESS")
+                            toolCallsList.add(
+                                ToolCall(
+                                    id = toolId,
+                                    name = toolName,
+                                    command = toolCmd,
+                                    status = toolStatus,
+                                    output = toolOut
+                                )
+                            )
+                        }
+                    }
+
+                    chatMessages.add(
+                        ChatMessage(
+                            id = "msg_${conversationId}_$i",
+                            conversationId = conversationId,
+                            role = role,
+                            content = content,
+                            thoughtText = thinking,
+                            toolCalls = toolCallsList,
+                            isStreaming = false
+                        )
+                    )
+                }
+
+                Result.success(chatMessages)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchConversationMessages failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchProjects(httpBaseUrl: String = DEFAULT_HTTP_URL): Result<List<AgyProjectSummary>> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/projects")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val body = response.body?.string() ?: "{}"
+                val json = JSONObject(body)
+                val arr = json.optJSONArray("projects") ?: JSONArray()
+                val list = mutableListOf<AgyProjectSummary>()
+
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    list.add(
+                        AgyProjectSummary(
+                            name = obj.getString("name"),
+                            path = obj.getString("path")
+                        )
+                    )
+                }
+
+                Result.success(list)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchProjects failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     suspend fun prewarm(
         conversationId: String?,
         model: String,
+        workspaceDir: String? = null,
         httpBaseUrl: String = DEFAULT_HTTP_URL
     ) = withContext(Dispatchers.IO) {
         try {
             val targetId = conversationId ?: "new"
             val payload = JSONObject().apply {
                 put("model", model)
+                if (!workspaceDir.isNullOrBlank()) {
+                    put("workspaceDir", workspaceDir)
+                }
             }.toString()
 
             val request = Request.Builder()
@@ -98,10 +281,64 @@ class AgyBridgeService(
         }
     }
 
+    suspend fun fetchActiveInstances(httpBaseUrl: String = DEFAULT_HTTP_URL): Result<List<AgyActiveInstance>> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/instances")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val body = response.body?.string() ?: "{}"
+                val json = JSONObject(body)
+                val arr = json.optJSONArray("instances") ?: JSONArray()
+                val list = mutableListOf<AgyActiveInstance>()
+
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    list.add(
+                        AgyActiveInstance(
+                            conversationId = obj.getString("conversationId"),
+                            model = obj.optString("model", "gemini-3.7-flash-high"),
+                            workspaceDir = obj.optString("workspaceDir", ""),
+                            pid = obj.optLong("pid", 0),
+                            uptimeSeconds = obj.optLong("uptimeSeconds", 0),
+                            isBusy = obj.optBoolean("isBusy", false)
+                        )
+                    )
+                }
+                Result.success(list)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "fetchActiveInstances failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun terminateInstance(conversationId: String, httpBaseUrl: String = DEFAULT_HTTP_URL): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/instances/$conversationId/terminate")
+                .post("{}".toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "terminateInstance failed: ${e.message}")
+            false
+        }
+    }
+
     fun streamPrompt(
         prompt: String,
         model: String = "gemini-3.7-flash-high",
         conversationId: String? = null,
+        workspaceDir: String? = null,
         wsUrl: String = DEFAULT_WS_URL
     ): Flow<AgyStreamEvent> = callbackFlow {
         val request = Request.Builder().url(wsUrl).build()
@@ -121,6 +358,9 @@ class AgyBridgeService(
                     put("model", model)
                     if (!conversationId.isNullOrBlank()) {
                         put("conversationId", conversationId)
+                    }
+                    if (!workspaceDir.isNullOrBlank()) {
+                        put("workspaceDir", workspaceDir)
                     }
                 }
                 webSocket.send(payload.toString())
