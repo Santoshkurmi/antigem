@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -534,6 +535,13 @@ fun ChatScreen(
                             Icon(
                                 imageVector = Icons.Outlined.Terminal,
                                 contentDescription = "Termux Terminal",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                            )
+                        }
+                        IconButton(onClick = { showCustomSystemPromptDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Psychology,
+                                contentDescription = "Chat System Prompt",
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                         }
@@ -1245,10 +1253,12 @@ fun ChatScreen(
         )
     }
 
-    // Custom System Prompt Override Dialog (Developer Mode)
+    // Custom System Prompt Override Dialog
     if (showCustomSystemPromptDialog) {
         CustomSystemPromptDialog(
             initialPrompt = currentConv?.customSystemPrompt,
+            conversationId = currentConv?.id,
+            workspaceDir = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path,
             onSavePrompt = { viewModel.updateCustomSystemPrompt(it) },
             onDismiss = { showCustomSystemPromptDialog = false }
         )

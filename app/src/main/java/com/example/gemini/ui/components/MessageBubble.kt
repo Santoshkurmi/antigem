@@ -89,7 +89,12 @@ fun MessageBubble(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = if (isUser) 20.dp else 4.dp,
+                bottom = if (isUser) 6.dp else 10.dp
+            ),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
         val hasActiveRunningTool = message.toolCalls.any { it.status == "RUNNING" || it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE" }
@@ -285,10 +290,11 @@ fun MessageBubble(
                                 )
                             }
 
-                            if (isDevModeEnabled && !message.rawPayload.isNullOrBlank()) {
+                            val payloadToShow = message.rawContent ?: message.rawPayload
+                            if (!payloadToShow.isNullOrBlank()) {
                                 Spacer(modifier = Modifier.width(4.dp))
                                 IconButton(
-                                    onClick = { onViewRawPayload?.invoke(message.rawPayload) },
+                                    onClick = { onViewRawPayload?.invoke(payloadToShow) },
                                     modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
@@ -301,13 +307,14 @@ fun MessageBubble(
                             }
                         }
 
-                        // Dev Mode Token & Cache Telemetry Badge
-                        if (isDevModeEnabled && message.tokenUsage != null) {
+                        // Token & Cache Telemetry Badge (Always shown when metrics exist)
+                        if (message.tokenUsage != null) {
+                            val payloadToShow = message.rawContent ?: message.rawPayload
                             Spacer(modifier = Modifier.height(4.dp))
                             TokenUsageTelemetryPill(
                                 usage = message.tokenUsage,
-                                onViewPayload = if (!message.rawPayload.isNullOrBlank()) {
-                                    { onViewRawPayload?.invoke(message.rawPayload) }
+                                onViewPayload = if (!payloadToShow.isNullOrBlank()) {
+                                    { onViewRawPayload?.invoke(payloadToShow) }
                                 } else null
                             )
                         }
@@ -333,7 +340,7 @@ fun UserMessageBubble(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 6.dp),
         horizontalAlignment = Alignment.End
     ) {
         if (!message.contextSummary.isNullOrBlank() && message.contextSummary != "null") {
@@ -497,10 +504,11 @@ fun AssistantMessageFooter(
                 )
             }
 
-            if (isDevModeEnabled && !message.rawPayload.isNullOrBlank()) {
+            val payloadToShow = message.rawContent ?: message.rawPayload
+            if (!payloadToShow.isNullOrBlank()) {
                 Spacer(modifier = Modifier.width(4.dp))
                 IconButton(
-                    onClick = { onViewRawPayload?.invoke(message.rawPayload) },
+                    onClick = { onViewRawPayload?.invoke(payloadToShow) },
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
@@ -513,13 +521,14 @@ fun AssistantMessageFooter(
             }
         }
 
-        // Dev Mode Token & Cache Telemetry Badge
-        if (isDevModeEnabled && message.tokenUsage != null) {
+        // Token & Cache Telemetry Badge (Always shown when metrics exist)
+        if (message.tokenUsage != null) {
+            val payloadToShow = message.rawContent ?: message.rawPayload
             Spacer(modifier = Modifier.height(4.dp))
             TokenUsageTelemetryPill(
                 usage = message.tokenUsage,
-                onViewPayload = if (!message.rawPayload.isNullOrBlank()) {
-                    { onViewRawPayload?.invoke(message.rawPayload) }
+                onViewPayload = if (!payloadToShow.isNullOrBlank()) {
+                    { onViewRawPayload?.invoke(payloadToShow) }
                 } else null
             )
         }
