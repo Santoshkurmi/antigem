@@ -6,11 +6,13 @@ import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.domain.model.TokenUsage
 import com.example.gemini.domain.model.ToolCall
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -44,6 +46,8 @@ sealed class AgyStreamEvent {
     data class TextChunk(val text: String) : AgyStreamEvent()
     data class ThoughtChunk(val thought: String, val durationMs: Long? = null) : AgyStreamEvent()
     data class ToolChunk(val tool: ToolCall) : AgyStreamEvent()
+    data class InstanceStatus(val status: String, val message: String? = null, val conversationId: String? = null) : AgyStreamEvent()
+    data class SessionAttached(val conversationId: String, val isRunning: Boolean, val prompt: String? = null) : AgyStreamEvent()
     data class Completed(
         val tokenUsage: TokenUsage?,
         val conversationId: String? = null,
@@ -54,9 +58,11 @@ sealed class AgyStreamEvent {
 
 class AgyBridgeService(
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS) // infinite for WS
-        .writeTimeout(10, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .pingInterval(10, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 ) {
     companion object {
@@ -457,6 +463,21 @@ class AgyBridgeService(
                             }
                         }
 
+                        "session_attached" -> {
+                            val convId = root.optString("conversationId")
+                            val isRunning = root.optBoolean("isRunning", false)
+                            val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
+                            trySend(AgyStreamEvent.SessionAttached(conversationId = convId, isRunning = isRunning, prompt = prompt))
+                        }
+
+                        "instance_status" -> {
+                            val status = root.optString("status")
+                            val msg = root.optString("message").takeIf { it.isNotBlank() }
+                            val convId = root.optString("conversationId").takeIf { it.isNotBlank() }
+                            if (convId != null) assignedConversationId = convId
+                            trySend(AgyStreamEvent.InstanceStatus(status = status, message = msg, conversationId = convId))
+                        }
+
                         "raw_chunk" -> {
                             val textChunk = root.optString("text")
                             if (textChunk.isNotBlank()) {
@@ -499,11 +520,193 @@ class AgyBridgeService(
         }
     }.flowOn(Dispatchers.IO)
 
-    fun abort() {
+    fun attachToConversation(
+        conversationId: String,
+        wsUrl: String = DEFAULT_WS_URL
+    ): Flow<AgyStreamEvent> = callbackFlow {
+        val request = Request.Builder().url(wsUrl).build()
+        val activeToolsMap = mutableMapOf<Int, ToolCall>()
+
+        val wsListener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                activeWebSocket = webSocket
+                val payload = JSONObject().apply {
+                    put("type", "attach_session")
+                    put("conversationId", conversationId)
+                }
+                webSocket.send(payload.toString())
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                try {
+                    val root = JSONObject(text)
+                    val type = root.optString("type")
+
+                    when (type) {
+                        "session_attached" -> {
+                            val convId = root.optString("conversationId")
+                            val isRunning = root.optBoolean("isRunning", false)
+                            val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
+                            trySend(AgyStreamEvent.SessionAttached(conversationId = convId, isRunning = isRunning, prompt = prompt))
+                        }
+                        "agy_event" -> {
+                            val data = root.optJSONObject("data") ?: return
+                            val event = data.optString("event")
+
+                            if (event == "step_update") {
+                                val step = data.optJSONObject("step_update") ?: return
+                                val stepType = step.optString("step_type")
+
+                                if (step.has("thought") || step.has("thinking") || stepType == "thought") {
+                                    val thought = step.optString("thought").ifBlank { step.optString("thinking") }
+                                    if (thought.isNotBlank()) {
+                                        trySend(AgyStreamEvent.ThoughtChunk(thought))
+                                    }
+                                }
+
+                                if (stepType == "tool" || step.has("tool_info") || step.has("tool_name")) {
+                                    val info = step.optJSONObject("tool_info")
+                                    val name = info?.optString("name") ?: step.optString("tool_name", "tool")
+                                    val params = info?.optJSONObject("parameters")?.toString()
+                                        ?: step.optString("tool_args", "")
+                                    val output = info?.optString("output") ?: step.optString("tool_output", "")
+                                    val state = step.optString("state", "ACTIVE")
+                                    val stepIndex = step.optInt("step_index", activeToolsMap.size)
+                                    val durationSec = step.optDouble("duration_seconds", 0.0)
+
+                                    val toolCall = ToolCall(
+                                        id = "tool_$stepIndex",
+                                        name = name,
+                                        command = params,
+                                        status = if (state == "DONE") "SUCCESS" else "RUNNING",
+                                        output = output,
+                                        durationMs = if (durationSec > 0) (durationSec * 1000).toLong() else null
+                                    )
+                                    activeToolsMap[stepIndex] = toolCall
+                                    trySend(AgyStreamEvent.ToolChunk(toolCall))
+                                }
+
+                                if (stepType == "agent_response" && step.has("text_delta")) {
+                                    val delta = step.optString("text_delta")
+                                    if (delta.isNotEmpty()) {
+                                        trySend(AgyStreamEvent.TextChunk(delta))
+                                    }
+                                }
+                            }
+
+                            if (event == "result") {
+                                val res = data.optJSONObject("result") ?: JSONObject()
+                                val usage = res.optJSONObject("usage")
+                                val durationSec = res.optDouble("duration_seconds", 0.0)
+
+                                val tokenUsage = if (usage != null) {
+                                    TokenUsage(
+                                        promptTokens = usage.optInt("input_tokens", 0),
+                                        outputTokens = usage.optInt("output_tokens", 0),
+                                        cachedTokens = usage.optInt("cache_read_tokens", 0),
+                                        totalTokens = usage.optInt("total_tokens", 0),
+                                        durationMs = (durationSec * 1000).toLong()
+                                    )
+                                } else null
+
+                                val fullResponse = res.optString("response")
+                                val error = res.optString("error")
+
+                                if (error.isNotBlank()) {
+                                    trySend(AgyStreamEvent.Error(error))
+                                } else {
+                                    trySend(
+                                        AgyStreamEvent.Completed(
+                                            tokenUsage = tokenUsage,
+                                            conversationId = conversationId,
+                                            fullResponse = fullResponse
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                        "done" -> channel.close()
+                        "error" -> {
+                            trySend(AgyStreamEvent.Error(root.optString("message", "Unknown bridge error")))
+                            channel.close()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in attach WS: ${e.message}", e)
+                }
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                channel.close()
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                channel.close()
+            }
+        }
+
+        val ws = client.newWebSocket(request, wsListener)
+        awaitClose {
+            ws.cancel()
+            activeWebSocket = null
+        }
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun updateConversationTitle(conversationId: String, title: String, httpBaseUrl: String = DEFAULT_HTTP_URL): Boolean = withContext(Dispatchers.IO) {
         try {
-            val abortMsg = JSONObject().apply { put("type", "abort") }.toString()
-            activeWebSocket?.send(abortMsg)
+            val payload = JSONObject().apply { put("title", title) }.toString()
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations/$conversationId")
+                .patch(payload.toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "updateConversationTitle failed: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun deleteConversation(conversationId: String, httpBaseUrl: String = DEFAULT_HTTP_URL): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations/$conversationId")
+                .delete()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "deleteConversation failed: ${e.message}")
+            false
+        }
+    }
+
+    fun abort(conversationId: String? = null, httpBaseUrl: String = DEFAULT_HTTP_URL) {
+        try {
+            val abortPayload = JSONObject().apply {
+                put("type", "abort")
+                if (!conversationId.isNullOrBlank()) {
+                    put("conversationId", conversationId)
+                }
+            }.toString()
+            activeWebSocket?.send(abortPayload)
             activeWebSocket?.close(1000, "Aborted by user")
+            activeWebSocket = null
+
+            // Also post to HTTP abort endpoint to ensure immediate SIGINT termination
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val request = Request.Builder()
+                        .url("$httpBaseUrl/api/abort")
+                        .post(abortPayload.toRequestBody(jsonMediaType))
+                        .build()
+                    client.newCall(request).execute().use { }
+                } catch (_: Exception) {}
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Error sending abort: ${e.message}")
         }

@@ -85,13 +85,18 @@ class LocalChatStorage(private val context: Context) {
         emptyList()
     }
 
-    suspend fun saveMessages(conversationId: String, messages: List<ChatMessage>) = withContext(Dispatchers.IO) {
+    suspend fun saveMessages(
+        conversationId: String,
+        messages: List<ChatMessage>,
+        touchTimestamp: Boolean = false
+    ) = withContext(Dispatchers.IO) {
         val file = getMessagesFile(conversationId)
         file.writeText(json.encodeToString(messages))
-        // Update conversation updated_at
-        val conv = _conversations.value.find { it.id == conversationId }
-        if (conv != null) {
-            saveConversation(conv.copy(updatedAt = System.currentTimeMillis()))
+        if (touchTimestamp) {
+            val conv = _conversations.value.find { it.id == conversationId }
+            if (conv != null) {
+                saveConversation(conv.copy(updatedAt = System.currentTimeMillis()))
+            }
         }
     }
 
@@ -109,12 +114,10 @@ class LocalChatStorage(private val context: Context) {
 
             if (existingIndex >= 0) {
                 val existing = current[existingIndex]
-                val newTitle = if (agy.title.isNotBlank() && agy.title != "New Chat") agy.title else existing.title
-                if (existing.title != newTitle || (agyTime > existing.updatedAt && agyTime > 0)) {
-                    current[existingIndex] = existing.copy(
-                        title = newTitle,
-                        updatedAt = maxOf(existing.updatedAt, agyTime)
-                    )
+                val isGeneric = existing.title == "New Chat" || existing.title == "Antigravity Chat"
+                val newTitle = if (isGeneric && agy.title.isNotBlank() && agy.title != "New Chat") agy.title else existing.title
+                if (existing.title != newTitle) {
+                    current[existingIndex] = existing.copy(title = newTitle)
                     modified = true
                 }
             } else {
