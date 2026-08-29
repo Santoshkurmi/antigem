@@ -1358,17 +1358,10 @@ fun parseMarkdownBlocks(
 ): List<MarkdownBlock> {
     val result = mutableListOf<MarkdownBlock>()
 
-    // Filter out <chat_title> and in-flight unclosed tool tags so they never appear in UI
-    val textWithoutTitle = if (rawText.contains('<')) {
+    // Filter out <chat_title> so it never appears in UI
+    val cleanedText = if (rawText.contains('<')) {
         rawText.replace(CHAT_TITLE_REGEX, "").replace(INFLIGHT_CHAT_TITLE_REGEX, "")
     } else rawText
-
-    val match = if (textWithoutTitle.contains('<')) TOOL_TAG_PATTERN.find(textWithoutTitle) else null
-    val cleanedText = if (match != null) {
-        textWithoutTitle.substring(0, match.range.first)
-    } else {
-        textWithoutTitle
-    }
 
     val lines = cleanedText.lines()
     var i = 0

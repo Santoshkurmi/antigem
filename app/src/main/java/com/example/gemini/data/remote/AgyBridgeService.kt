@@ -288,6 +288,27 @@ class AgyBridgeService(
                         }
                     }
 
+                    val rawContent = obj.optString("rawContent").takeIf { it.isNotBlank() && it != "null" }
+                    val contextSummary = obj.optString("contextSummary").takeIf { it.isNotBlank() && it != "null" }
+                    val stepIndex = if (obj.has("stepIndex")) obj.optInt("stepIndex") else null
+
+                    var tokenUsage: com.example.gemini.domain.model.TokenUsage? = null
+                    val usageObj = obj.optJSONObject("tokenUsage")
+                    if (usageObj != null) {
+                        val inTok = usageObj.optInt("inputTokens", 0)
+                        val outTok = usageObj.optInt("outputTokens", 0)
+                        val cacheTok = usageObj.optInt("cacheReadTokens", 0)
+                        val totalTok = usageObj.optInt("totalTokens", inTok + outTok)
+                        val dur = (obj.optDouble("durationSeconds", 0.0) * 1000).toLong()
+                        tokenUsage = com.example.gemini.domain.model.TokenUsage(
+                            promptTokens = inTok,
+                            outputTokens = outTok,
+                            cachedTokens = cacheTok,
+                            totalTokens = totalTok,
+                            durationMs = dur
+                        )
+                    }
+
                     chatMessages.add(
                         ChatMessage(
                             id = "msg_${conversationId}_$i",
@@ -296,7 +317,11 @@ class AgyBridgeService(
                             content = content,
                             thoughtText = thinking,
                             toolCalls = toolCallsList,
-                            isStreaming = false
+                            isStreaming = false,
+                            rawContent = rawContent,
+                            contextSummary = contextSummary,
+                            stepIndex = stepIndex,
+                            tokenUsage = tokenUsage
                         )
                     )
                 }

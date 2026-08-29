@@ -45,6 +45,9 @@ data class ChatMessage(
     val isStreaming: Boolean = false,
     val tokenUsage: TokenUsage? = null,
     val rawPayload: String? = null,
+    val rawContent: String? = null,
+    val contextSummary: String? = null,
+    val stepIndex: Int? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 

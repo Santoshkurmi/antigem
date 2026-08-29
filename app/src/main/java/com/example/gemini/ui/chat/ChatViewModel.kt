@@ -729,7 +729,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             }
                             _isStreaming.value = false
                             _bridgeStatusMessage.value = null
-                            val finalContent = event.fullResponse?.takeIf { it.isNotBlank() } ?: contentBuilder.toString()
+                            val finalContent = if (!event.fullResponse.isNullOrBlank() && event.fullResponse.length >= contentBuilder.length) {
+                                event.fullResponse
+                            } else {
+                                contentBuilder.toString()
+                            }
                             updateAssistantMessage(
                                 msgId = assistantMsgId,
                                 content = finalContent,
@@ -1093,7 +1097,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 messagesMemoryCache.remove(conv.id)
                                 messagesMemoryCache[newId] = _messages.value
                             }
-                            val finalContent = event.fullResponse?.takeIf { it.isNotBlank() } ?: contentBuilder.toString()
+                            val finalContent = if (!event.fullResponse.isNullOrBlank() && event.fullResponse.length >= contentBuilder.length) {
+                                event.fullResponse
+                            } else {
+                                contentBuilder.toString()
+                            }
                             updateAssistantMessage(
                                 msgId = assistantMsgId,
                                 content = finalContent,

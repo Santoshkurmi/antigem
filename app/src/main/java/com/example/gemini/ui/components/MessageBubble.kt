@@ -104,6 +104,11 @@ fun MessageBubble(
             Spacer(modifier = Modifier.height(4.dp))
         }
 
+        // Context Compaction / Summary Banner (if this turn contains a summary)
+        if (!message.contextSummary.isNullOrBlank() && message.contextSummary != "null") {
+            ContextSummaryCheckpointBanner(summaryText = message.contextSummary)
+        }
+
         // Message Content Bubble
         if (isUser) {
             Column(horizontalAlignment = Alignment.End) {
@@ -191,11 +196,12 @@ fun MessageBubble(
                             )
                         }
 
-                        if (isDevModeEnabled && !message.rawPayload.isNullOrBlank()) {
+                        val payloadToShow = message.rawContent ?: message.rawPayload
+                        if (!payloadToShow.isNullOrBlank()) {
                             Spacer(modifier = Modifier.width(4.dp))
                             IconButton(
                                 onClick = {
-                                    onViewRawPayload?.invoke(message.rawPayload)
+                                    onViewRawPayload?.invoke(payloadToShow)
                                     showUserActions = false
                                 },
                                 modifier = Modifier.size(28.dp)
@@ -330,6 +336,10 @@ fun UserMessageBubble(
             .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.End
     ) {
+        if (!message.contextSummary.isNullOrBlank() && message.contextSummary != "null") {
+            ContextSummaryCheckpointBanner(summaryText = message.contextSummary)
+        }
+
         Box(
             modifier = Modifier
                 .widthIn(max = 320.dp)
@@ -414,11 +424,12 @@ fun UserMessageBubble(
                     )
                 }
 
-                if (isDevModeEnabled && !message.rawPayload.isNullOrBlank()) {
+                val payloadToShow = message.rawContent ?: message.rawPayload
+                if (!payloadToShow.isNullOrBlank()) {
                     Spacer(modifier = Modifier.width(4.dp))
                     IconButton(
                         onClick = {
-                            onViewRawPayload?.invoke(message.rawPayload)
+                            onViewRawPayload?.invoke(payloadToShow)
                             showUserActions = false
                         },
                         modifier = Modifier.size(28.dp)
@@ -656,6 +667,60 @@ fun TokenUsageTelemetryPill(
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun ContextSummaryCheckpointBanner(
+    summaryText: String,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { expanded = !expanded },
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.35f))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🧠 Context Compacted (History Summarized)",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = ClaudeTerracotta,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = if (expanded) "Hide ▲" else "Show Details ▼",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+
+            if (expanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                Spacer(modifier = Modifier.height(8.dp))
+                SelectionContainer {
+                    Text(
+                        text = summaryText,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                    )
+                }
             }
         }
     }
