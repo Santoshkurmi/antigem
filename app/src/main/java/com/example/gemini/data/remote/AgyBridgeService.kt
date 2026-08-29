@@ -237,6 +237,46 @@ class AgyBridgeService(
         }
     }
 
+    suspend fun uploadAttachment(
+        filename: String,
+        base64Data: String,
+        projectPath: String? = null,
+        httpBaseUrl: String = DEFAULT_HTTP_URL
+    ): Result<com.example.gemini.domain.model.ChatAttachment> = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("filename", filename)
+                put("base64Data", base64Data)
+                if (projectPath != null) put("projectPath", projectPath)
+            }
+            val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/upload")
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val resBody = response.body?.string() ?: "{}"
+                val resJson = JSONObject(resBody)
+                val attachment = com.example.gemini.domain.model.ChatAttachment(
+                    id = java.util.UUID.randomUUID().toString(),
+                    name = resJson.optString("name", filename),
+                    path = resJson.optString("path", ""),
+                    isImage = resJson.optBoolean("isImage", false),
+                    size = resJson.optLong("size", 0L),
+                    url = resJson.optString("url", null)
+                )
+                Result.success(attachment)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "uploadAttachment failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     suspend fun fetchConversationMessages(
         conversationId: String,
         httpBaseUrl: String = DEFAULT_HTTP_URL

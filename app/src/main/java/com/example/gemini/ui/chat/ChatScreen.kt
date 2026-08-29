@@ -49,7 +49,10 @@ import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.theme.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.example.gemini.ui.components.ActiveContextSummaryCard
+import com.example.gemini.ui.components.AttachmentSelectorBottomSheet
 import com.example.gemini.ui.components.ChatInputBar
 import com.example.gemini.ui.components.ChatTelemetryDialog
 import com.example.gemini.ui.components.ContextSummarizeAlertBanner
@@ -138,7 +141,23 @@ fun ChatScreen(
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showEditTitleDialog by remember { mutableStateOf(false) }
+    var showAttachmentSelector by remember { mutableStateOf(false) }
     var editTitleText by remember { mutableStateOf("") }
+
+    val attachments by viewModel.attachments.collectAsState()
+    val isUploadingAttachment by viewModel.isUploadingAttachment.collectAsState()
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.addAttachmentFromUri(it, context) }
+    }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.addAttachmentFromUri(it, context) }
+    }
     var textFieldValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(""))
     }
@@ -997,7 +1016,11 @@ fun ChatScreen(
                         textFieldValue = TextFieldValue("")
                         userSentMessageTrigger++
                     },
-                    onStopStreaming = { viewModel.stopStreaming() }
+                    onStopStreaming = { viewModel.stopStreaming() },
+                    attachments = attachments,
+                    isUploadingAttachment = isUploadingAttachment,
+                    onRemoveAttachment = { viewModel.removeAttachment(it) },
+                    onAttachClick = { showAttachmentSelector = true }
                 )
             }
         }
@@ -1261,6 +1284,18 @@ fun ChatScreen(
             workspaceDir = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path,
             onSavePrompt = { viewModel.updateCustomSystemPrompt(it) },
             onDismiss = { showCustomSystemPromptDialog = false }
+        )
+    }
+
+    // Attachment Selector Bottom Sheet
+    if (showAttachmentSelector) {
+        AttachmentSelectorBottomSheet(
+            onPickImage = { photoPickerLauncher.launch("image/*") },
+            onPickFile = { filePickerLauncher.launch("*/*") },
+            onPickProjectFile = {
+                onNavigateToIde()
+            },
+            onDismiss = { showAttachmentSelector = false }
         )
     }
 

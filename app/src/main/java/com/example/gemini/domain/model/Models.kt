@@ -52,6 +52,17 @@ data class ChatMessage(
 )
 
 @Serializable
+data class ChatAttachment(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val path: String,
+    val isImage: Boolean = false,
+    val localUri: String? = null,
+    val size: Long = 0L,
+    val url: String? = null
+)
+
+@Serializable
 data class Conversation(
     val id: String = UUID.randomUUID().toString(),
     val title: String = "New Chat",

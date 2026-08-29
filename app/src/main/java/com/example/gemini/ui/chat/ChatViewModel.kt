@@ -112,6 +112,86 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _showSummaryModelPicker = MutableStateFlow(false)
     val showSummaryModelPicker: StateFlow<Boolean> = _showSummaryModelPicker.asStateFlow()
 
+    private val _attachments = MutableStateFlow<List<com.example.gemini.domain.model.ChatAttachment>>(emptyList())
+    val attachments: StateFlow<List<com.example.gemini.domain.model.ChatAttachment>> = _attachments.asStateFlow()
+
+    private val _isUploadingAttachment = MutableStateFlow(false)
+    val isUploadingAttachment: StateFlow<Boolean> = _isUploadingAttachment.asStateFlow()
+
+    fun addAttachmentFromUri(uri: android.net.Uri, context: android.content.Context) {
+        viewModelScope.launch {
+            _isUploadingAttachment.value = true
+            try {
+                val contentResolver = context.contentResolver
+                var fileName = "attachment_${System.currentTimeMillis()}"
+                var fileSize = 0L
+
+                val cursor = contentResolver.query(uri, null, null, null, null)
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        val sizeIndex = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                        if (nameIndex >= 0) fileName = it.getString(nameIndex) ?: fileName
+                        if (sizeIndex >= 0) fileSize = it.getLong(sizeIndex)
+                    }
+                }
+
+                val bytes = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                }
+
+                if (bytes != null) {
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+                    val currentProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
+                    val res = agyBridgeService.uploadAttachment(
+                        filename = fileName,
+                        base64Data = base64,
+                        projectPath = currentProjPath,
+                        httpBaseUrl = httpUrl
+                    )
+                    if (res.isSuccess) {
+                        val att = res.getOrThrow().copy(localUri = uri.toString())
+                        _attachments.value = _attachments.value + att
+                    } else {
+                        val isImg = fileName.endsWith(".jpg", true) || fileName.endsWith(".png", true) || fileName.endsWith(".webp", true) || fileName.endsWith(".jpeg", true)
+                        val fallback = com.example.gemini.domain.model.ChatAttachment(
+                            name = fileName,
+                            path = uri.toString(),
+                            isImage = isImg,
+                            localUri = uri.toString(),
+                            size = fileSize
+                        )
+                        _attachments.value = _attachments.value + fallback
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "Failed to add attachment from uri: ${e.message}")
+            } finally {
+                _isUploadingAttachment.value = false
+            }
+        }
+    }
+
+    fun addProjectFileAttachment(filePath: String, fileName: String) {
+        val isImg = fileName.endsWith(".jpg", true) || fileName.endsWith(".png", true) || fileName.endsWith(".webp", true) || fileName.endsWith(".jpeg", true)
+        val att = com.example.gemini.domain.model.ChatAttachment(
+            name = fileName,
+            path = filePath,
+            isImage = isImg,
+            size = java.io.File(filePath).length()
+        )
+        _attachments.value = _attachments.value + att
+    }
+
+    fun removeAttachment(attachmentId: String) {
+        _attachments.value = _attachments.value.filter { it.id != attachmentId }
+    }
+
+    fun clearAttachments() {
+        _attachments.value = emptyList()
+    }
+
     private val _isDevModeEnabled = MutableStateFlow(false)
     val isDevModeEnabled: StateFlow<Boolean> = _isDevModeEnabled.asStateFlow()
 
@@ -841,20 +921,35 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendMessage(content: String) {
-        if (content.isBlank() || _isStreaming.value) return
+        if ((content.isBlank() && _attachments.value.isEmpty()) || _isStreaming.value) return
+
+        val currentAtts = _attachments.value
+        val attText = if (currentAtts.isNotEmpty()) {
+            val listStr = currentAtts.joinToString("\n") { att ->
+                if (att.isImage) {
+                    "[Attached Image: ${att.name}](file://${att.path})"
+                } else {
+                    "[Attached File: ${att.name}](file://${att.path})"
+                }
+            }
+            if (content.isNotBlank()) "\n\n$listStr" else listStr
+        } else ""
+
+        val finalPrompt = (content.trim() + attText).trim()
+        _attachments.value = emptyList()
 
         val conv = _currentConversation.value ?: return
         val userMsg = ChatMessage(
             conversationId = conv.id,
             role = MessageRole.USER,
-            content = content
+            content = finalPrompt
         )
 
         var updatedConv = conv
         val isFirstUserMsg = _messages.value.none { it.role == MessageRole.USER }
         val isGenericTitle = updatedConv.title == "New Chat" || updatedConv.title == "Antigravity Chat" || updatedConv.title.isBlank()
         if (isGenericTitle || isFirstUserMsg) {
-            val firstLine = content.trim().lines().firstOrNull { it.isNotBlank() } ?: "Chat"
+            val firstLine = finalPrompt.trim().lines().firstOrNull { it.isNotBlank() } ?: "Chat"
             val cleanTitle = firstLine.take(40) + if (firstLine.length > 40) "..." else ""
             updatedConv = updatedConv.copy(title = cleanTitle)
         }

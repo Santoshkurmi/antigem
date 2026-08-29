@@ -33,6 +33,15 @@ import com.example.gemini.theme.*
 
 import androidx.compose.ui.text.input.TextFieldValue
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.InsertDriveFile
+import coil.compose.AsyncImage
+import com.example.gemini.domain.model.ChatAttachment
+
 @Composable
 fun ChatInputBar(
     selectedModel: AiModel,
@@ -45,6 +54,10 @@ fun ChatInputBar(
     isStreaming: Boolean,
     onSendMessage: (String) -> Unit,
     onStopStreaming: () -> Unit,
+    attachments: List<ChatAttachment> = emptyList(),
+    isUploadingAttachment: Boolean = false,
+    onRemoveAttachment: (String) -> Unit = {},
+    onAttachClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val focusManager = LocalFocusManager.current
@@ -125,6 +138,93 @@ fun ChatInputBar(
                 }
             }
 
+            // Attachment Preview Chips Row
+            if (attachments.isNotEmpty() || isUploadingAttachment) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isUploadingAttachment) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = ClaudeTerracotta
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Uploading attachment...",
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    for (att in attachments) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(start = 6.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (att.isImage) {
+                                    val imgSource = att.url ?: att.localUri ?: "file://${att.path}"
+                                    AsyncImage(
+                                        model = imgSource,
+                                        contentDescription = att.name,
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Outlined.InsertDriveFile,
+                                        contentDescription = null,
+                                        tint = ClaudeTerracotta,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = att.name,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = { onRemoveAttachment(att.id) },
+                                    modifier = Modifier.size(20.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Close,
+                                        contentDescription = "Remove",
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Text Input & Send Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -140,7 +240,7 @@ fun ChatInputBar(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = { /* Attachment */ },
+                        onClick = onAttachClick,
                         modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
@@ -179,6 +279,7 @@ fun ChatInputBar(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 // Action Button (Send / Stop)
+                val canSend = textFieldValue.text.trim().isNotEmpty() || attachments.isNotEmpty()
                 if (isStreaming) {
                     IconButton(
                         onClick = onStopStreaming,
@@ -198,23 +299,23 @@ fun ChatInputBar(
                     IconButton(
                         onClick = {
                             val trimmed = textFieldValue.text.trim()
-                            if (trimmed.isNotEmpty()) {
+                            if (canSend) {
                                 onSendMessage(trimmed)
                                 onTextFieldValueChange(TextFieldValue(""))
                             }
                         },
-                        enabled = textFieldValue.text.trim().isNotEmpty(),
+                        enabled = canSend,
                         modifier = Modifier
                             .size(42.dp)
                             .clip(CircleShape)
                             .background(
-                                if (textFieldValue.text.trim().isNotEmpty()) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant
+                                if (canSend) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant
                             )
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowUpward,
                             contentDescription = "Send",
-                            tint = if (textFieldValue.text.trim().isNotEmpty()) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            tint = if (canSend) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                             modifier = Modifier.size(20.dp)
                         )
                     }
