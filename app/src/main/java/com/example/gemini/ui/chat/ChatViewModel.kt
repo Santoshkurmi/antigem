@@ -997,6 +997,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val userPrompt = currentHistory.lastOrNull { it.role == MessageRole.USER }?.content ?: ""
         val currentProject = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value
 
+        var currentEffectiveConvId = conv.id
+
         streamingJob = viewModelScope.launch {
             try {
                 agyBridgeService.streamPrompt(
@@ -1009,6 +1011,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     when (event) {
                         is com.example.gemini.data.remote.AgyStreamEvent.SessionAttached -> {}
                         is com.example.gemini.data.remote.AgyStreamEvent.InstanceStatus -> {
+                            if (!event.conversationId.isNullOrBlank() && event.conversationId != currentEffectiveConvId) {
+                                val newId = event.conversationId!!
+                                storage.updateConversationId(currentEffectiveConvId, newId)
+                                currentEffectiveConvId = newId
+                                _currentConversation.value = _currentConversation.value?.copy(id = newId)
+                                messagesMemoryCache.remove(conv.id)
+                                messagesMemoryCache[newId] = _messages.value
+                            }
                             if (event.status == "creating") {
                                 _bridgeStatusMessage.value = event.message ?: "Creating new instance for this chat..."
                             } else if (event.status == "ready") {
@@ -1075,6 +1085,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             }
                             _isStreaming.value = false
                             _bridgeStatusMessage.value = null
+                            if (!event.conversationId.isNullOrBlank() && event.conversationId != currentEffectiveConvId) {
+                                val newId = event.conversationId!!
+                                storage.updateConversationId(currentEffectiveConvId, newId)
+                                currentEffectiveConvId = newId
+                                _currentConversation.value = _currentConversation.value?.copy(id = newId)
+                                messagesMemoryCache.remove(conv.id)
+                                messagesMemoryCache[newId] = _messages.value
+                            }
                             val finalContent = event.fullResponse?.takeIf { it.isNotBlank() } ?: contentBuilder.toString()
                             updateAssistantMessage(
                                 msgId = assistantMsgId,
@@ -1085,7 +1103,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 isStreaming = false,
                                 tokenUsage = event.tokenUsage
                             )
-                            storage.saveMessages(conv.id, _messages.value, touchTimestamp = true)
+                            storage.saveMessages(currentEffectiveConvId, _messages.value, touchTimestamp = true)
                         }
                         is com.example.gemini.data.remote.AgyStreamEvent.QuotaUpdate -> {
                             applyQuotaSummary(event.quotaSummary)
@@ -1110,7 +1128,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 toolCalls = activeToolsMap.values.toList(),
                                 isStreaming = false
                             )
-                            storage.saveMessages(conv.id, _messages.value, touchTimestamp = false)
+                            storage.saveMessages(currentEffectiveConvId, _messages.value, touchTimestamp = false)
                         }
                     }
                 }
@@ -1129,9 +1147,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     toolCalls = activeToolsMap.values.toList(),
                     isStreaming = false
                 )
-                storage.saveMessages(conv.id, _messages.value, touchTimestamp = false)
+                storage.saveMessages(currentEffectiveConvId, _messages.value, touchTimestamp = false)
             } finally {
-                messagesMemoryCache[conv.id] = _messages.value
+                messagesMemoryCache[currentEffectiveConvId] = _messages.value
                 refreshActiveInstances()
             }
         }
@@ -1219,8 +1237,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val claudeGroup = summary.groups.find { it.groupId == "claude_gpt" }
 
         val updatedQuotas = _availableModels.value.map { model ->
-            val isGemini = model.family == com.example.gemini.domain.model.ModelFamily.GEMINI
-            val group = if (isGemini) geminiGroup else claudeGroup
+            val isClaude = model.family == com.example.gemini.domain.model.ModelFamily.CLAUDE
+            val group = if (isClaude) claudeGroup else geminiGroup
             com.example.gemini.domain.model.ModelQuota(
                 modelId = model.id,
                 remainingFraction = group?.fiveHour?.remainingFraction,

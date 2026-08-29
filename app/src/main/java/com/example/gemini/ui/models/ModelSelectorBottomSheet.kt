@@ -330,10 +330,22 @@ private fun MainCategoryListView(
             }
 
             if (otherModelsCount > 0) {
+                val fiveHour = geminiGroup?.fiveHour
+                val weekly = geminiGroup?.weekly
+                val line1 = if (fiveHour != null) {
+                    "5-Hour: ${fiveHour.remainingPct} left (${fiveHour.usedPct} used) • ${fiveHour.countdown}"
+                } else {
+                    val q = quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.OTHER } }
+                    if (q?.percentage != null) "5-Hour: ${q.percentage}% left • Resets in ${q.resetCountdown ?: "soon"}" else "5-Hour: 100% available"
+                }
+                val line2 = if (weekly != null) {
+                    "Weekly: ${weekly.remainingPct} left (${weekly.usedPct} used) • ${weekly.countdown}"
+                } else null
+
                 CategoryNavigationTile(
                     title = "Other Antigravity Models",
-                    line1 = "Experimental & Specialized AI Models",
-                    line2 = null,
+                    line1 = line1,
+                    line2 = line2,
                     count = otherModelsCount,
                     icon = Icons.Outlined.AutoAwesome,
                     brandColor = MaterialTheme.colorScheme.primary,

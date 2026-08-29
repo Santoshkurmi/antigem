@@ -100,6 +100,33 @@ class LocalChatStorage(private val context: Context) {
         }
     }
 
+    suspend fun updateConversationId(oldId: String, newId: String) = withContext(Dispatchers.IO) {
+        if (oldId == newId) return@withContext
+        val current = _conversations.value.toMutableList()
+        val index = current.indexOfFirst { it.id == oldId }
+        if (index >= 0) {
+            val conv = current[index]
+            current[index] = conv.copy(id = newId)
+            val sorted = current.sortedByDescending { it.updatedAt }
+            _conversations.value = sorted
+            conversationsFile.writeText(json.encodeToString(sorted))
+        }
+
+        val oldMsgFile = getMessagesFile(oldId)
+        val newMsgFile = getMessagesFile(newId)
+        if (oldMsgFile.exists()) {
+            try {
+                val msgsText = oldMsgFile.readText()
+                val msgs: List<ChatMessage> = json.decodeFromString(msgsText)
+                val updatedMsgs = msgs.map { it.copy(conversationId = newId) }
+                newMsgFile.writeText(json.encodeToString(updatedMsgs))
+                oldMsgFile.delete()
+            } catch (_: Exception) {
+                oldMsgFile.renameTo(newMsgFile)
+            }
+        }
+    }
+
     suspend fun mergeAgyConversations(agyList: List<com.example.gemini.data.remote.AgyConversationSummary>) = withContext(Dispatchers.IO) {
         val current = _conversations.value.toMutableList()
         var modified = false
@@ -121,21 +148,40 @@ class LocalChatStorage(private val context: Context) {
                     modified = true
                 }
             } else {
-                val newConv = Conversation(
-                    id = agy.id,
-                    title = if (agy.title.isNotBlank()) agy.title else "Antigravity Chat",
-                    modelId = "gemini-3.7-flash-high",
-                    sessionId = java.util.UUID.randomUUID().toString(),
-                    createdAt = agyTime,
-                    updatedAt = agyTime
-                )
-                current.add(newConv)
-                modified = true
+                // Check if there is an existing local conversation with the same non-generic title to prevent duplicate rows
+                val matchingTitleIndex = current.indexOfFirst {
+                    it.id != agy.id && it.title.equals(agy.title, ignoreCase = true) && agy.title != "New Chat" && agy.title != "Antigravity Chat"
+                }
+
+                if (matchingTitleIndex >= 0) {
+                    val oldConv = current[matchingTitleIndex]
+                    current[matchingTitleIndex] = oldConv.copy(id = agy.id)
+                    val oldMsgFile = getMessagesFile(oldConv.id)
+                    val newMsgFile = getMessagesFile(agy.id)
+                    if (oldMsgFile.exists() && !newMsgFile.exists()) {
+                        oldMsgFile.renameTo(newMsgFile)
+                    } else if (oldMsgFile.exists()) {
+                        oldMsgFile.delete()
+                    }
+                    modified = true
+                } else {
+                    val newConv = Conversation(
+                        id = agy.id,
+                        title = if (agy.title.isNotBlank()) agy.title else "Antigravity Chat",
+                        modelId = "gemini-3.7-flash-high",
+                        sessionId = java.util.UUID.randomUUID().toString(),
+                        createdAt = agyTime,
+                        updatedAt = agyTime
+                    )
+                    current.add(newConv)
+                    modified = true
+                }
             }
         }
 
         if (modified) {
-            val sorted = current.sortedByDescending { it.updatedAt }
+            val deduplicated = current.distinctBy { it.id }
+            val sorted = deduplicated.sortedByDescending { it.updatedAt }
             _conversations.value = sorted
             conversationsFile.writeText(json.encodeToString(sorted))
         }
