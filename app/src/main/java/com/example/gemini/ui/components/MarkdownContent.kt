@@ -1075,9 +1075,10 @@ fun FormattedInlineText(
 ) {
     val isDark = isSystemInDarkTheme()
     val density = LocalDensity.current
+    val fileLinkHandler = LocalFileLinkHandler.current
 
-    val result = remember(text, isStrikethrough, isDark, density) {
-        buildRichAnnotatedString(text, isStrikethrough, isDark, density)
+    val result = remember(text, isStrikethrough, isDark, density, fileLinkHandler) {
+        buildRichAnnotatedString(text, isStrikethrough, isDark, density, fileLinkHandler)
     }
 
     Text(
@@ -1092,7 +1093,8 @@ private fun buildRichAnnotatedString(
     text: String,
     globalStrikethrough: Boolean = false,
     isDark: Boolean = false,
-    density: Density? = null
+    density: Density? = null,
+    fileLinkHandler: FileLinkHandler? = null
 ): FormattedInlineResult {
     val t0 = System.nanoTime()
     val builder = AnnotatedString.Builder()
@@ -1105,29 +1107,30 @@ private fun buildRichAnnotatedString(
     // Pre-process <br> tags to newlines
     val cleanText = text.replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
 
-    // Comprehensive regex for Markdown and HTML inline formatting tokens + Inline Math ($...$)
+    // Comprehensive regex for Markdown and HTML inline formatting tokens + Inline Math ($...$) + file:// links
     val pattern = Pattern.compile(
-        "(\\[(.*?)\\]\\((https?://[^\\s)]+)\\))|" +                              // 1: Markdown Link [text](url)
-        "(<a\\s+href=[\"'](https?://[^\"']+)[\"']\\s*>(.*?)</a>)|" +             // 4: HTML Link <a href="url">text</a>
-        "(`([^`\\n]+)`)|" +                                                        // 7: Inline code `code`
-        "(<code>(.*?)</code>)|" +                                                  // 9: HTML code <code>code</code>
-        "([$]{1,2}([^$\\n]+)[$]{1,2})|" +                                          // 11: Inline Math $formula$ or $$formula$$
-        "(\\\\\\((.*?)\\\\\\))|" +                                                 // 13: Inline Math \(formula\)
-        "(\\*{3}(.+?)\\*{3})|" +                                                   // 15: Bold-Italic ***text***
-        "(___([^_\\n]+)___)|" +                                                    // 17: Bold-Italic ___text___
-        "(\\*{2}(.+?)\\*{2})|" +                                                   // 19: Bold **text**
-        "(__([^_\\n]+)__)|" +                                                      // 21: Bold __text__
-        "(<b>(.*?)</b>)|" +                                                        // 23: HTML bold <b>text</b>
-        "(<strong>(.*?)</strong>)|" +                                              // 25: HTML strong <strong>text</strong>
-        "(~~(.+?)~~)|" +                                                           // 27: Strikethrough ~~text~~
-        "(<s>(.*?)</s>)|" +                                                        // 29: HTML strike <s>text</s>
-        "(<del>(.*?)</del>)|" +                                                    // 31: HTML del <del>text</del>
-        "(<strike>(.*?)</strike>)|" +                                              // 33: HTML strike <strike>text</strike>
-        "(<u>(.*?)</u>)|" +                                                        // 35: HTML underline <u>text</u>
-        "(\\*(?!\\s)(.+?)(?<!\\s)\\*)|" +                                          // 37: Italic *text*
-        "(_(?!\\s)([^_\\n]+?)(?<!\\s)_)|" +                                        // 39: Italic _text_
-        "(<i>(.*?)</i>)|" +                                                        // 41: HTML italic <i>text</i>
-        "(<em>(.*?)</em>)",                                                        // 43: HTML em <em>text</em>
+        "(\\[(.*?)\\]\\(((?:https?|file)://[^\\s)]+)\\))|" +                              // 1: Markdown Link [text](url)
+        "(<a\\s+href=[\"']((?:https?|file)://[^\"']+)[\"']\\s*>(.*?)</a>)|" +             // 4: HTML Link <a href="url">text</a>
+        "(file:///[a-zA-Z0-9_./\\-#]+)|" +                                                 // 7: Bare file link file:///...
+        "(`([^`\\n]+)`)|" +                                                                // 8: Inline code `code`
+        "(<code>(.*?)</code>)|" +                                                          // 10: HTML code <code>code</code>
+        "([$]{1,2}([^$\\n]+)[$]{1,2})|" +                                                  // 12: Inline Math $formula$ or $$formula$$
+        "(\\\\\\((.*?)\\\\\\))|" +                                                         // 14: Inline Math \(formula\)
+        "(\\*{3}(.+?)\\*{3})|" +                                                           // 16: Bold-Italic ***text***
+        "(___([^_\\n]+)___)|" +                                                            // 18: Bold-Italic ___text___
+        "(\\*{2}(.+?)\\*{2})|" +                                                           // 20: Bold **text**
+        "(__([^_\\n]+)__)|" +                                                              // 22: Bold __text__
+        "(<b>(.*?)</b>)|" +                                                                // 24: HTML bold <b>text</b>
+        "(<strong>(.*?)</strong>)|" +                                                      // 26: HTML strong <strong>text</strong>
+        "(~~(.+?)~~)|" +                                                                   // 28: Strikethrough ~~text~~
+        "(<s>(.*?)</s>)|" +                                                                // 30: HTML strike <s>text</s>
+        "(<del>(.*?)</del>)|" +                                                            // 32: HTML del <del>text</del>
+        "(<strike>(.*?)</strike>)|" +                                                      // 34: HTML strike <strike>text</strike>
+        "(<u>(.*?)</u>)|" +                                                                // 36: HTML underline <u>text</u>
+        "(\\*(?!\\s)(.+?)(?<!\\s)\\*)|" +                                                  // 38: Italic *text*
+        "(_(?!\\s)([^_\\n]+?)(?<!\\s)_)|" +                                                // 40: Italic _text_
+        "(<i>(.*?)</i>)|" +                                                                // 42: HTML italic <i>text</i>
+        "(<em>(.*?)</em>)",                                                                // 44: HTML em <em>text</em>
         Pattern.DOTALL or Pattern.CASE_INSENSITIVE
     )
     val matcher = pattern.matcher(cleanText)
@@ -1147,30 +1150,120 @@ private fun buildRichAnnotatedString(
             // Markdown Link [title](url)
             val linkTitle = fullMatch.substringAfter("[").substringBefore("](")
             val linkUrl = fullMatch.substringAfter("](").substringBeforeLast(")")
-            builder.pushLink(LinkAnnotation.Url(url = linkUrl))
-            builder.pushStyle(
-                SpanStyle(
-                    color = GeminiBlue,
-                    fontWeight = FontWeight.SemiBold,
-                    textDecoration = TextDecoration.Underline
+            val isFile = linkUrl.startsWith("file://")
+
+            if (isFile) {
+                val cleanPath = linkUrl.removePrefix("file://").substringBefore("#")
+                val fileName = java.io.File(cleanPath).name.ifBlank { cleanPath }
+                val displayLabel = if (linkTitle.isBlank() || linkTitle.startsWith("file://") || linkTitle.startsWith("/")) {
+                    fileName
+                } else {
+                    linkTitle
+                }
+
+                if (fileLinkHandler != null) {
+                    builder.pushLink(
+                        LinkAnnotation.Clickable(
+                            tag = linkUrl,
+                            linkInteractionListener = {
+                                fileLinkHandler.onOpenFile(linkUrl)
+                            }
+                        )
+                    )
+                } else {
+                    builder.pushLink(LinkAnnotation.Url(url = linkUrl))
+                }
+                builder.pushStyle(
+                    SpanStyle(
+                        color = ClaudeTerracotta,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        background = ClaudeTerracotta.copy(alpha = 0.12f)
+                    )
                 )
-            )
-            builder.append(linkTitle)
-            builder.pop()
-            builder.pop()
+                builder.append(" $displayLabel ")
+                builder.pop()
+                builder.pop()
+            } else {
+                builder.pushLink(LinkAnnotation.Url(url = linkUrl))
+                builder.pushStyle(
+                    SpanStyle(
+                        color = GeminiBlue,
+                        fontWeight = FontWeight.SemiBold,
+                        textDecoration = TextDecoration.Underline
+                    )
+                )
+                builder.append(linkTitle)
+                builder.pop()
+                builder.pop()
+            }
         } else if (fullMatch.startsWith("<a", ignoreCase = true)) {
             // HTML Link <a href="url">title</a>
             val linkUrl = matcher.group(5) ?: ""
             val linkTitle = matcher.group(6) ?: ""
-            builder.pushLink(LinkAnnotation.Url(url = linkUrl))
+            val isFile = linkUrl.startsWith("file://")
+
+            if (isFile && fileLinkHandler != null) {
+                val cleanPath = linkUrl.removePrefix("file://").substringBefore("#")
+                val fileName = java.io.File(cleanPath).name.ifBlank { cleanPath }
+                val displayLabel = if (linkTitle.isBlank() || linkTitle.startsWith("file://")) fileName else linkTitle
+                builder.pushLink(
+                    LinkAnnotation.Clickable(
+                        tag = linkUrl,
+                        linkInteractionListener = {
+                            fileLinkHandler.onOpenFile(linkUrl)
+                        }
+                    )
+                )
+                builder.pushStyle(
+                    SpanStyle(
+                        color = ClaudeTerracotta,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        background = ClaudeTerracotta.copy(alpha = 0.12f)
+                    )
+                )
+                builder.append(" $displayLabel ")
+                builder.pop()
+                builder.pop()
+            } else {
+                builder.pushLink(LinkAnnotation.Url(url = linkUrl))
+                builder.pushStyle(
+                    SpanStyle(
+                        color = GeminiBlue,
+                        fontWeight = FontWeight.SemiBold,
+                        textDecoration = TextDecoration.Underline
+                    )
+                )
+                builder.append(linkTitle)
+                builder.pop()
+                builder.pop()
+            }
+        } else if (fullMatch.startsWith("file:///")) {
+            // Bare file link
+            val cleanPath = fullMatch.removePrefix("file://").substringBefore("#")
+            val fileName = java.io.File(cleanPath).name.ifBlank { cleanPath }
+            if (fileLinkHandler != null) {
+                builder.pushLink(
+                    LinkAnnotation.Clickable(
+                        tag = fullMatch,
+                        linkInteractionListener = {
+                            fileLinkHandler.onOpenFile(fullMatch)
+                        }
+                    )
+                )
+            } else {
+                builder.pushLink(LinkAnnotation.Url(url = fullMatch))
+            }
             builder.pushStyle(
                 SpanStyle(
-                    color = GeminiBlue,
+                    color = ClaudeTerracotta,
                     fontWeight = FontWeight.SemiBold,
-                    textDecoration = TextDecoration.Underline
+                    fontFamily = FontFamily.Monospace,
+                    background = ClaudeTerracotta.copy(alpha = 0.12f)
                 )
             )
-            builder.append(linkTitle)
+            builder.append(" $fileName ")
             builder.pop()
             builder.pop()
         } else if ((fullMatch.startsWith("`") && fullMatch.endsWith("`")) || fullMatch.startsWith("<code", ignoreCase = true)) {
@@ -1407,6 +1500,8 @@ fun parseMarkdownBlocks(
                 val finalThought = thoughtLines.joinToString("\n").trim()
                 if (finalThought.isNotBlank()) {
                     result.add(MarkdownBlock.AgentThought(finalThought, durationMs, isStreaming = !closed))
+                } else if (!closed) {
+                    result.add(MarkdownBlock.AgentThought("Thinking...", durationMs, isStreaming = true))
                 }
                 continue
             }

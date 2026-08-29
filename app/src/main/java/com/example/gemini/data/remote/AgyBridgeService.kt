@@ -10,6 +10,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -42,6 +45,15 @@ data class AgyActiveInstance(
     val isBusy: Boolean = false
 )
 
+enum class BridgeConnectionState {
+    CONNECTED_READY,
+    STREAMING,
+    SPAWNING_INSTANCE,
+    CONNECTING,
+    RECONNECTING,
+    OFFLINE_ERROR
+}
+
 sealed class AgyStreamEvent {
     data class TextChunk(val text: String) : AgyStreamEvent()
     data class ThoughtChunk(val thought: String, val durationMs: Long? = null) : AgyStreamEvent()
@@ -60,9 +72,9 @@ sealed class AgyStreamEvent {
 class AgyBridgeService(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(0, TimeUnit.MILLISECONDS) // infinite for WS
+        .readTimeout(0, TimeUnit.MILLISECONDS) // Infinite read timeout for persistent WebSocket
         .writeTimeout(30, TimeUnit.SECONDS)
-        .pingInterval(10, TimeUnit.SECONDS)
+        .pingInterval(10, TimeUnit.SECONDS) // Active heartbeat ping every 10 seconds
         .retryOnConnectionFailure(true)
         .build()
 ) {
@@ -70,6 +82,13 @@ class AgyBridgeService(
         const val TAG = "AgyBridgeService"
         const val DEFAULT_WS_URL = "ws://127.0.0.1:8080"
         const val DEFAULT_HTTP_URL = "http://127.0.0.1:8080"
+    }
+
+    private val _connectionState = MutableStateFlow(BridgeConnectionState.CONNECTING)
+    val connectionState: StateFlow<BridgeConnectionState> = _connectionState.asStateFlow()
+
+    fun updateConnectionState(newState: BridgeConnectionState) {
+        _connectionState.value = newState
     }
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
@@ -84,8 +103,10 @@ class AgyBridgeService(
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
+                    _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
                     return@withContext Result.failure(Exception("HTTP ${response.code}"))
                 }
+                _connectionState.value = BridgeConnectionState.CONNECTED_READY
                 val body = response.body?.string() ?: "{}"
                 val json = JSONObject(body)
                 val arr = json.optJSONArray("models") ?: JSONArray()
@@ -102,6 +123,7 @@ class AgyBridgeService(
             }
         } catch (e: Exception) {
             Log.e(TAG, "fetchModels failed: ${e.message}")
+            _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
             Result.failure(e)
         }
     }
@@ -183,7 +205,7 @@ class AgyBridgeService(
 
         return com.example.gemini.domain.model.QuotaSummaryResponse(
             groups = groupsList,
-            lastUpdated = json.optString("lastUpdated", null)
+            lastUpdated = json.optString("lastUpdated", "")
         )
     }
 
@@ -193,10 +215,14 @@ class AgyBridgeService(
                 .url("$httpBaseUrl/api/health")
                 .get()
                 .build()
+
             client.newCall(request).execute().use { response ->
-                response.isSuccessful
+                val online = response.isSuccessful
+                _connectionState.value = if (online) BridgeConnectionState.CONNECTED_READY else BridgeConnectionState.OFFLINE_ERROR
+                online
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
             false
         }
     }
@@ -222,13 +248,12 @@ class AgyBridgeService(
                     list.add(
                         AgyConversationSummary(
                             id = obj.getString("id"),
-                            title = obj.optString("title", "Antigravity Chat"),
+                            title = obj.optString("title", "Conversation"),
                             createdAt = obj.optString("created_at", ""),
                             stepsCount = obj.optInt("steps_count", 0)
                         )
                     )
                 }
-
                 Result.success(list)
             }
         } catch (e: Exception) {
@@ -244,32 +269,34 @@ class AgyBridgeService(
         httpBaseUrl: String = DEFAULT_HTTP_URL
     ): Result<com.example.gemini.domain.model.ChatAttachment> = withContext(Dispatchers.IO) {
         try {
-            val json = JSONObject().apply {
+            val payload = JSONObject().apply {
                 put("filename", filename)
                 put("base64Data", base64Data)
-                if (projectPath != null) put("projectPath", projectPath)
-            }
-            val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                if (!projectPath.isNullOrBlank()) {
+                    put("projectPath", projectPath)
+                }
+            }.toString()
+
             val request = Request.Builder()
                 .url("$httpBaseUrl/api/upload")
-                .post(body)
+                .post(payload.toRequestBody(jsonMediaType))
                 .build()
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                    return@withContext Result.failure(Exception("Upload HTTP ${response.code}"))
                 }
-                val resBody = response.body?.string() ?: "{}"
-                val resJson = JSONObject(resBody)
-                val attachment = com.example.gemini.domain.model.ChatAttachment(
-                    id = java.util.UUID.randomUUID().toString(),
-                    name = resJson.optString("name", filename),
-                    path = resJson.optString("path", ""),
-                    isImage = resJson.optBoolean("isImage", false),
-                    size = resJson.optLong("size", 0L),
-                    url = resJson.optString("url", null)
+                val body = response.body?.string() ?: "{}"
+                val obj = JSONObject(body)
+                val att = com.example.gemini.domain.model.ChatAttachment(
+                    id = obj.optString("id", "att_${System.currentTimeMillis()}"),
+                    name = obj.optString("name", filename),
+                    path = obj.optString("path", ""),
+                    isImage = obj.optBoolean("isImage", false),
+                    size = obj.optLong("size", 0L),
+                    url = obj.optString("url", "")
                 )
-                Result.success(attachment)
+                Result.success(att)
             }
         } catch (e: Exception) {
             Log.e(TAG, "uploadAttachment failed: ${e.message}")
@@ -309,7 +336,7 @@ class AgyBridgeService(
                     if (toolsArr != null) {
                         for (t in 0 until toolsArr.length()) {
                             val toolObj = toolsArr.optJSONObject(t) ?: continue
-                            val toolId = toolObj.optString("id").ifBlank { "tc_${conversationId}_${i}_$t" }
+                            val toolId = toolObj.optString("id").ifBlank { "tool_${conversationId}_$t" }
                             val toolName = toolObj.optString("name").ifBlank { toolObj.optString("tool_name", "tool") }
                             val toolCmd = toolObj.optString("command").ifBlank {
                                 toolObj.optJSONObject("args")?.toString() ?: toolObj.optJSONObject("parameters")?.toString() ?: ""
@@ -399,11 +426,10 @@ class AgyBridgeService(
                         )
                     )
                 }
-
                 Result.success(list)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "fetchProjects failed: ${e.message}")
+            Log.w(TAG, "fetchProjects failed: ${e.message}")
             Result.failure(e)
         }
     }
@@ -494,15 +520,17 @@ class AgyBridgeService(
         workspaceDir: String? = null,
         wsUrl: String = DEFAULT_WS_URL
     ): Flow<AgyStreamEvent> = callbackFlow {
+        _connectionState.value = BridgeConnectionState.CONNECTING
         val request = Request.Builder().url(wsUrl).build()
 
         var assignedConversationId = conversationId
-        val activeToolsMap = mutableMapOf<Int, ToolCall>()
+        val activeToolsMap = mutableMapOf<String, ToolCall>()
 
         val wsListener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "[WS] Connected to AGY daemon bridge")
                 activeWebSocket = webSocket
+                _connectionState.value = BridgeConnectionState.CONNECTED_READY
 
                 // Send prompt payload
                 val payload = JSONObject().apply {
@@ -532,9 +560,11 @@ class AgyBridgeService(
                             if (event == "init") {
                                 val convId = data.optString("conversation_id")
                                 if (convId.isNotBlank()) assignedConversationId = convId
+                                _connectionState.value = BridgeConnectionState.CONNECTED_READY
                             }
 
                             if (event == "step_update") {
+                                _connectionState.value = BridgeConnectionState.STREAMING
                                 val step = data.optJSONObject("step_update") ?: return
                                 val stepType = step.optString("step_type")
 
@@ -557,15 +587,16 @@ class AgyBridgeService(
                                     val stepIndex = step.optInt("step_index", activeToolsMap.size)
                                     val durationSec = step.optDouble("duration_seconds", 0.0)
 
+                                    val toolId = "tool_${assignedConversationId ?: "live"}_$stepIndex"
                                     val toolCall = ToolCall(
-                                        id = "tool_$stepIndex",
+                                        id = toolId,
                                         name = name,
                                         command = params,
                                         status = if (state == "DONE") "SUCCESS" else "RUNNING",
                                         output = output,
                                         durationMs = if (durationSec > 0) (durationSec * 1000).toLong() else null
                                     )
-                                    activeToolsMap[stepIndex] = toolCall
+                                    activeToolsMap[toolId] = toolCall
                                     trySend(AgyStreamEvent.ToolChunk(toolCall))
                                 }
 
@@ -579,6 +610,7 @@ class AgyBridgeService(
                             }
 
                             if (event == "result") {
+                                _connectionState.value = BridgeConnectionState.CONNECTED_READY
                                 val res = data.optJSONObject("result") ?: JSONObject()
                                 val usage = res.optJSONObject("usage")
                                 val durationSec = res.optDouble("duration_seconds", 0.0)
@@ -614,6 +646,7 @@ class AgyBridgeService(
                             val convId = root.optString("conversationId")
                             val isRunning = root.optBoolean("isRunning", false)
                             val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
+                            _connectionState.value = if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
                             trySend(AgyStreamEvent.SessionAttached(conversationId = convId, isRunning = isRunning, prompt = prompt))
                         }
 
@@ -622,6 +655,7 @@ class AgyBridgeService(
                             val msg = root.optString("message").takeIf { it.isNotBlank() }
                             val convId = root.optString("conversationId").takeIf { it.isNotBlank() }
                             if (convId != null) assignedConversationId = convId
+                            _connectionState.value = if (status == "creating") BridgeConnectionState.SPAWNING_INSTANCE else BridgeConnectionState.CONNECTED_READY
                             trySend(AgyStreamEvent.InstanceStatus(status = status, message = msg, conversationId = convId))
                         }
 
@@ -641,10 +675,12 @@ class AgyBridgeService(
                         }
 
                         "done" -> {
+                            _connectionState.value = BridgeConnectionState.CONNECTED_READY
                             channel.close()
                         }
 
                         "error" -> {
+                            _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
                             val errMsg = root.optString("message", "Unknown bridge error")
                             trySend(AgyStreamEvent.Error(errMsg))
                             channel.close()
@@ -657,12 +693,14 @@ class AgyBridgeService(
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "[WS] Failure: ${t.message}")
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
                 trySend(AgyStreamEvent.Error("Daemon connection failure: ${t.message}. Ensure Termux bridge is running."))
                 channel.close()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "[WS] Closed: $code $reason")
+                _connectionState.value = BridgeConnectionState.CONNECTED_READY
                 channel.close()
             }
         }
@@ -679,12 +717,14 @@ class AgyBridgeService(
         conversationId: String,
         wsUrl: String = DEFAULT_WS_URL
     ): Flow<AgyStreamEvent> = callbackFlow {
+        _connectionState.value = BridgeConnectionState.CONNECTING
         val request = Request.Builder().url(wsUrl).build()
-        val activeToolsMap = mutableMapOf<Int, ToolCall>()
+        val activeToolsMap = mutableMapOf<String, ToolCall>()
 
         val wsListener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 activeWebSocket = webSocket
+                _connectionState.value = BridgeConnectionState.CONNECTED_READY
                 val payload = JSONObject().apply {
                     put("type", "attach_session")
                     put("conversationId", conversationId)
@@ -702,6 +742,7 @@ class AgyBridgeService(
                             val convId = root.optString("conversationId")
                             val isRunning = root.optBoolean("isRunning", false)
                             val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
+                            _connectionState.value = if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
                             trySend(AgyStreamEvent.SessionAttached(conversationId = convId, isRunning = isRunning, prompt = prompt))
                         }
                         "agy_event" -> {
@@ -709,6 +750,7 @@ class AgyBridgeService(
                             val event = data.optString("event")
 
                             if (event == "step_update") {
+                                _connectionState.value = BridgeConnectionState.STREAMING
                                 val step = data.optJSONObject("step_update") ?: return
                                 val stepType = step.optString("step_type")
 
@@ -729,15 +771,16 @@ class AgyBridgeService(
                                     val stepIndex = step.optInt("step_index", activeToolsMap.size)
                                     val durationSec = step.optDouble("duration_seconds", 0.0)
 
+                                    val toolId = "tool_${conversationId}_$stepIndex"
                                     val toolCall = ToolCall(
-                                        id = "tool_$stepIndex",
+                                        id = toolId,
                                         name = name,
                                         command = params,
                                         status = if (state == "DONE") "SUCCESS" else "RUNNING",
                                         output = output,
                                         durationMs = if (durationSec > 0) (durationSec * 1000).toLong() else null
                                     )
-                                    activeToolsMap[stepIndex] = toolCall
+                                    activeToolsMap[toolId] = toolCall
                                     trySend(AgyStreamEvent.ToolChunk(toolCall))
                                 }
 
@@ -750,6 +793,7 @@ class AgyBridgeService(
                             }
 
                             if (event == "result") {
+                                _connectionState.value = BridgeConnectionState.CONNECTED_READY
                                 val res = data.optJSONObject("result") ?: JSONObject()
                                 val usage = res.optJSONObject("usage")
                                 val durationSec = res.optDouble("duration_seconds", 0.0)
@@ -780,34 +824,46 @@ class AgyBridgeService(
                                 }
                             }
                         }
-                        "quota_update" -> {
-                            val quotaObj = root.optJSONObject("data")
-                            if (quotaObj != null) {
-                                val summary = parseQuotaSummary(quotaObj)
-                                trySend(AgyStreamEvent.QuotaUpdate(summary))
-                            }
+
+                        "instance_status" -> {
+                            val status = root.optString("status")
+                            val msg = root.optString("message").takeIf { it.isNotBlank() }
+                            val convId = root.optString("conversationId").takeIf { it.isNotBlank() }
+                            _connectionState.value = if (status == "creating") BridgeConnectionState.SPAWNING_INSTANCE else BridgeConnectionState.CONNECTED_READY
+                            trySend(AgyStreamEvent.InstanceStatus(status = status, message = msg, conversationId = convId))
                         }
-                        "done" -> channel.close()
+
+                        "done" -> {
+                            _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                            channel.close()
+                        }
+
                         "error" -> {
-                            trySend(AgyStreamEvent.Error(root.optString("message", "Unknown bridge error")))
+                            _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                            val errMsg = root.optString("message", "Unknown bridge error")
+                            trySend(AgyStreamEvent.Error(errMsg))
                             channel.close()
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error in attach WS: ${e.message}", e)
+                    Log.e(TAG, "Error parsing WS message: ${e.message}", e)
                 }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                Log.w(TAG, "[WS] Attach Failure: ${t.message}")
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
                 channel.close()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                _connectionState.value = BridgeConnectionState.CONNECTED_READY
                 channel.close()
             }
         }
 
         val ws = client.newWebSocket(request, wsListener)
+
         awaitClose {
             ws.cancel()
             activeWebSocket = null
@@ -826,7 +882,7 @@ class AgyBridgeService(
                 response.isSuccessful
             }
         } catch (e: Exception) {
-            Log.w(TAG, "updateConversationTitle failed: ${e.message}")
+            Log.e(TAG, "updateConversationTitle failed: ${e.message}")
             false
         }
     }
@@ -842,35 +898,41 @@ class AgyBridgeService(
                 response.isSuccessful
             }
         } catch (e: Exception) {
-            Log.w(TAG, "deleteConversation failed: ${e.message}")
+            Log.e(TAG, "deleteConversation failed: ${e.message}")
             false
         }
     }
 
     fun abort(conversationId: String? = null, httpBaseUrl: String = DEFAULT_HTTP_URL) {
         try {
-            val abortPayload = JSONObject().apply {
-                put("type", "abort")
-                if (!conversationId.isNullOrBlank()) {
-                    put("conversationId", conversationId)
+            activeWebSocket?.let { ws ->
+                val payload = JSONObject().apply {
+                    put("type", "abort")
+                    if (!conversationId.isNullOrBlank()) {
+                        put("conversationId", conversationId)
+                    }
                 }
-            }.toString()
-            activeWebSocket?.send(abortPayload)
-            activeWebSocket?.close(1000, "Aborted by user")
-            activeWebSocket = null
+                ws.send(payload.toString())
+            }
 
-            // Also post to HTTP abort endpoint to ensure immediate SIGINT termination
             CoroutineScope(Dispatchers.IO).launch {
                 try {
+                    val payload = JSONObject().apply {
+                        if (!conversationId.isNullOrBlank()) {
+                            put("conversationId", conversationId)
+                        }
+                    }.toString()
                     val request = Request.Builder()
                         .url("$httpBaseUrl/api/abort")
-                        .post(abortPayload.toRequestBody(jsonMediaType))
+                        .post(payload.toRequestBody(jsonMediaType))
                         .build()
                     client.newCall(request).execute().use { }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.w(TAG, "HTTP abort fallback failed: ${e.message}")
+                }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error sending abort: ${e.message}")
+            Log.e(TAG, "abort failed: ${e.message}")
         }
     }
 }

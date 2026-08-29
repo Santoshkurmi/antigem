@@ -17,3 +17,11 @@ local.properties
 *.keystore
 release.jks
 
+# Go Daemon & Server Build Outputs
+server/bin/
+server/server
+server/daemon
+*.exe
+*.test
+
+

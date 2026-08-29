@@ -75,6 +75,12 @@ import com.example.gemini.ui.components.UserMessageBubble
 import com.example.gemini.ui.components.AssistantMessageFooter
 import com.example.gemini.ui.components.ThinkingAccordion
 import com.example.gemini.ui.components.ModelTypingIndicator
+import com.example.gemini.ui.components.ConnectionStatusBadge
+import com.example.gemini.ui.components.FileLinkHandler
+import com.example.gemini.ui.components.LocalFileLinkHandler
+import com.example.gemini.ui.components.FileDetailsDialog
+import com.example.gemini.ui.components.MarkdownDocViewerModal
+import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -128,6 +134,7 @@ fun ChatScreen(
     val chatFontScale by viewModel.chatFontScale.collectAsState(initial = 1.0f)
     val bridgeStatusMessage by viewModel.bridgeStatusMessage.collectAsState()
     val isServerOnline by viewModel.isServerOnline.collectAsState()
+    val connectionState by viewModel.connectionState.collectAsState()
     val conversationError by viewModel.conversationError.collectAsState()
     val activeInstances by viewModel.activeInstances.collectAsState()
     val quotaSummary by viewModel.quotaSummary.collectAsState()
@@ -158,8 +165,18 @@ fun ChatScreen(
     ) { uri: Uri? ->
         uri?.let { viewModel.addAttachmentFromUri(it, context) }
     }
-    var textFieldValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
-        mutableStateOf(TextFieldValue(""))
+    var activeConversationKey by remember { mutableStateOf(currentConv?.id ?: "new") }
+    var textFieldValue by remember {
+        mutableStateOf(viewModel.getDraft(currentConv?.id ?: "new"))
+    }
+
+    LaunchedEffect(currentConv?.id) {
+        val newKey = currentConv?.id ?: "new"
+        if (newKey != activeConversationKey) {
+            viewModel.setDraft(activeConversationKey, textFieldValue)
+            activeConversationKey = newKey
+            textFieldValue = viewModel.getDraft(newKey)
+        }
     }
     val inputText = textFieldValue.text
     var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
@@ -387,14 +404,48 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(drawerState.isOpen) {
-        if (drawerState.isOpen) {
-            viewModel.refreshActiveInstances()
-        }
+    var activeMarkdownDoc by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var activeFileDetailsPath by remember { mutableStateOf<String?>(null) }
+
+    val fileLinkHandler = remember(scope) {
+        FileLinkHandler(
+            onOpenFile = { rawUrl ->
+                val cleanPath = rawUrl.removePrefix("file://").substringBefore("#")
+                val isMd = cleanPath.endsWith(".md", ignoreCase = true) || cleanPath.endsWith(".markdown", ignoreCase = true)
+                if (isMd) {
+                    scope.launch {
+                        val content = try {
+                            val f = File(cleanPath)
+                            if (f.exists()) f.readText() else (IdeApiClient.readFile(cleanPath) ?: "")
+                        } catch (e: Exception) {
+                            IdeApiClient.readFile(cleanPath) ?: ""
+                        }
+                        activeMarkdownDoc = cleanPath to content
+                    }
+                } else {
+                    scope.launch {
+                        val content = try {
+                            val f = File(cleanPath)
+                            if (f.exists()) f.readText() else (IdeApiClient.readFile(cleanPath) ?: "")
+                        } catch (e: Exception) {
+                            IdeApiClient.readFile(cleanPath) ?: ""
+                        }
+                        val fileName = File(cleanPath).name
+                        TermuxDaemonManager.openOrSelectTab(cleanPath, fileName, content)
+                        onNavigateToIde()
+                    }
+                }
+            },
+            onShowDetails = { rawUrl ->
+                val cleanPath = rawUrl.removePrefix("file://").substringBefore("#")
+                activeFileDetailsPath = cleanPath
+            }
+        )
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
+    CompositionLocalProvider(LocalFileLinkHandler provides fileLinkHandler) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
         drawerContent = {
             ChatHistoryDrawer(
                 conversations = conversations,
@@ -451,78 +502,90 @@ fun ChatScreen(
                                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
                                 )
                             }
-                            Box {
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                    modifier = Modifier.clickable {
-                                        scope.launch {
-                                            var list = IdeApiClient.getProjects()
-                                            if (list.isEmpty()) {
-                                                val httpUrl = viewModel.authPreferences.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
-                                                val res = com.example.gemini.data.remote.AgyBridgeService().fetchProjects(httpUrl)
-                                                if (res.isSuccess) {
-                                                    list = res.getOrThrow().map { ProjectItem(it.name, it.path) }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                        modifier = Modifier.clickable {
+                                            scope.launch {
+                                                var list = IdeApiClient.getProjects()
+                                                if (list.isEmpty()) {
+                                                    val httpUrl = viewModel.authPreferences.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+                                                    val res = com.example.gemini.data.remote.AgyBridgeService().fetchProjects(httpUrl)
+                                                    if (res.isSuccess) {
+                                                        list = res.getOrThrow().map { ProjectItem(it.name, it.path) }
+                                                    }
                                                 }
+                                                chatProjectsList = list
+                                                showProjectDropdown = true
                                             }
-                                            chatProjectsList = list
-                                            showProjectDropdown = true
                                         }
-                                    }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Folder,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(11.dp),
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = activeChatProject?.name ?: "Select Project",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Icon(
-                                            imageVector = Icons.Default.ArrowDropDown,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-
-                                DropdownMenu(
-                                    expanded = showProjectDropdown,
-                                    onDismissRequest = { showProjectDropdown = false }
-                                ) {
-                                    if (chatProjectsList.isEmpty()) {
-                                        DropdownMenuItem(
-                                            text = { Text("No projects found in Termux") },
-                                            onClick = { showProjectDropdown = false }
-                                        )
-                                    } else {
-                                        chatProjectsList.forEach { proj ->
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(
-                                                        text = proj.name,
-                                                        fontWeight = if (proj.path == activeChatProject?.path) FontWeight.Bold else FontWeight.Normal
-                                                    )
-                                                },
-                                                onClick = {
-                                                    TermuxDaemonManager.setActiveProject(proj)
-                                                    showProjectDropdown = false
-                                                    viewModel.onProjectChanged(proj.path)
-                                                }
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Folder,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(11.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = activeChatProject?.name ?: "Select Project",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowDropDown,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                     }
+
+                                    DropdownMenu(
+                                        expanded = showProjectDropdown,
+                                        onDismissRequest = { showProjectDropdown = false }
+                                    ) {
+                                        if (chatProjectsList.isEmpty()) {
+                                            DropdownMenuItem(
+                                                text = { Text("No projects found in Termux") },
+                                                onClick = { showProjectDropdown = false }
+                                            )
+                                        } else {
+                                            chatProjectsList.forEach { proj ->
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Text(
+                                                            text = proj.name,
+                                                            color = if (proj.path == activeChatProject?.path) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        TermuxDaemonManager.setActiveProject(proj)
+                                                        showProjectDropdown = false
+                                                        viewModel.onProjectChanged(proj.path)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
+
+                                Spacer(modifier = Modifier.width(6.dp))
+
+                                ConnectionStatusBadge(
+                                    state = connectionState,
+                                    bridgeUrl = "http://127.0.0.1:8080",
+                                    activeInstances = activeInstances,
+                                    onReconnect = { viewModel.syncAgyConversations() }
+                                )
                             }
                         }
                     },
@@ -734,7 +797,9 @@ fun ChatScreen(
                                                 } else {
                                                     val text = viewModel.prepareEditMessage(targetMsg.id)
                                                     if (text != null) {
-                                                        textFieldValue = TextFieldValue(text, selection = TextRange(text.length))
+                                                        val tfv = TextFieldValue(text, selection = TextRange(text.length))
+                                                        textFieldValue = tfv
+                                                        viewModel.setDraft(activeConversationKey, tfv)
                                                     }
                                                 }
                                             },
@@ -918,16 +983,18 @@ fun ChatScreen(
                                         .fillMaxWidth()
                                         .clickable {
                                             val newText = inputText.substring(0, atIndex) + "@${file.path} "
-                                            textFieldValue = TextFieldValue(
+                                            val tfv = TextFieldValue(
                                                 text = newText,
                                                 selection = androidx.compose.ui.text.TextRange(newText.length)
                                             )
+                                            textFieldValue = tfv
+                                            viewModel.setDraft(activeConversationKey, tfv)
                                         }
                                         .padding(horizontal = 12.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.InsertDriveFile,
+                                        imageVector = Icons.Default.Description,
                                         contentDescription = null,
                                         tint = ClaudeTerracotta,
                                         modifier = Modifier.size(16.dp)
@@ -996,6 +1063,7 @@ fun ChatScreen(
                     textFieldValue = textFieldValue,
                     onTextFieldValueChange = {
                         textFieldValue = it
+                        viewModel.setDraft(activeConversationKey, it)
                         if (it.text.isNotEmpty()) {
                             viewModel.onUserStartedTyping()
                         }
@@ -1013,6 +1081,7 @@ fun ChatScreen(
                     isStreaming = isStreaming,
                     onSendMessage = { text ->
                         viewModel.sendMessage(text)
+                        viewModel.clearDraft(activeConversationKey)
                         textFieldValue = TextFieldValue("")
                         userSentMessageTrigger++
                     },
@@ -1135,7 +1204,9 @@ fun ChatScreen(
                         if (action.type == MessageActionType.EDIT) {
                             val text = viewModel.prepareEditMessage(target.id)
                             if (text != null) {
-                                textFieldValue = TextFieldValue(text, selection = TextRange(text.length))
+                                val tfv = TextFieldValue(text, selection = TextRange(text.length))
+                                textFieldValue = tfv
+                                viewModel.setDraft(activeConversationKey, tfv)
                             }
                         } else {
                             viewModel.retryMessage(target.id)
@@ -1355,6 +1426,47 @@ fun ChatScreen(
             }
         )
     }
+
+    // Markdown Document Fullscreen Viewer Modal (.md files)
+    activeMarkdownDoc?.let { (docPath, docContent) ->
+        MarkdownDocViewerModal(
+            filePath = docPath,
+            content = docContent,
+            onDismiss = { activeMarkdownDoc = null },
+            onOpenInIde = { path ->
+                activeMarkdownDoc = null
+                scope.launch {
+                    val content = try { File(path).readText() } catch (e: Exception) { docContent }
+                    TermuxDaemonManager.openOrSelectTab(path, File(path).name, content)
+                    onNavigateToIde()
+                }
+            }
+        )
+    }
+
+    // File Details & Quick Action Dialog (Long press / metadata)
+    activeFileDetailsPath?.let { path ->
+        FileDetailsDialog(
+            filePath = path,
+            onDismiss = { activeFileDetailsPath = null },
+            onOpenInIde = { filePath ->
+                activeFileDetailsPath = null
+                scope.launch {
+                    val content = try { File(filePath).readText() } catch (e: Exception) { IdeApiClient.readFile(filePath) ?: "" }
+                    TermuxDaemonManager.openOrSelectTab(filePath, File(filePath).name, content)
+                    onNavigateToIde()
+                }
+            },
+            onOpenMarkdownViewer = { filePath ->
+                activeFileDetailsPath = null
+                scope.launch {
+                    val content = try { File(filePath).readText() } catch (e: Exception) { IdeApiClient.readFile(filePath) ?: "" }
+                    activeMarkdownDoc = filePath to content
+                }
+            }
+        )
+    }
+    } // End of CompositionLocalProvider
 }
 
 enum class MessageActionType { EDIT, RETRY }

@@ -32,7 +32,7 @@ data class SearchMatch(
 
 object IdeApiClient {
     private const val TAG = "IdeApiClient"
-    private const val BASE_URL = "http://127.0.0.1:9090"
+    private const val BASE_URL = "http://127.0.0.1:8080"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)
@@ -66,16 +66,30 @@ object IdeApiClient {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext emptyList()
                 val bodyStr = response.body?.string() ?: return@withContext emptyList()
-                val jsonArr = JSONArray(bodyStr)
                 val list = mutableListOf<ProjectItem>()
-                for (i in 0 until jsonArr.length()) {
-                    val obj = jsonArr.getJSONObject(i)
-                    list.add(
-                        ProjectItem(
-                            name = obj.getString("name"),
-                            path = obj.getString("path")
+                if (bodyStr.trim().startsWith("[")) {
+                    val jsonArr = JSONArray(bodyStr)
+                    for (i in 0 until jsonArr.length()) {
+                        val obj = jsonArr.getJSONObject(i)
+                        list.add(
+                            ProjectItem(
+                                name = obj.getString("name"),
+                                path = obj.getString("path")
+                            )
                         )
-                    )
+                    }
+                } else {
+                    val jsonObj = JSONObject(bodyStr)
+                    val jsonArr = jsonObj.optJSONArray("projects") ?: JSONArray()
+                    for (i in 0 until jsonArr.length()) {
+                        val obj = jsonArr.getJSONObject(i)
+                        list.add(
+                            ProjectItem(
+                                name = obj.getString("name"),
+                                path = obj.getString("path")
+                            )
+                        )
+                    }
                 }
                 list
             }

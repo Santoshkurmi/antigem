@@ -139,19 +139,19 @@ object TermuxDaemonManager {
         user: String = "",
         pass: String = ""
     ): Boolean = withContext(Dispatchers.IO) {
-        _statusMessage.value = "Checking port 9090..."
-        log("Checking HTTP healthcheck at http://127.0.0.1:9090/api/health...")
+        _statusMessage.value = "Checking port 8080..."
+        log("Checking HTTP healthcheck at http://127.0.0.1:8080/api/health...")
 
         if (IdeApiClient.checkHealth()) {
             _status.value = DaemonStatus.RUNNING
-            _statusMessage.value = "Running on 127.0.0.1:9090"
-            log("✅ Go IDE Daemon is online on 127.0.0.1:9090!")
+            _statusMessage.value = "Running on 127.0.0.1:8080"
+            log("✅ Unified Bridge & IDE Daemon is online on 127.0.0.1:8080!")
             return@withContext true
         }
 
         _status.value = DaemonStatus.ERROR
-        _statusMessage.value = "Port 9090 Offline"
-        log("❌ Server is offline on http://127.0.0.1:9090/api/health")
+        _statusMessage.value = "Port 8080 Offline"
+        log("❌ Server is offline on http://127.0.0.1:8080/api/health")
         return@withContext false
     }
 }

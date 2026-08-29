@@ -525,11 +525,31 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _isServerOnline = MutableStateFlow<Boolean?>(null)
     val isServerOnline: StateFlow<Boolean?> = _isServerOnline.asStateFlow()
 
+    val connectionState: StateFlow<com.example.gemini.data.remote.BridgeConnectionState> = agyBridgeService.connectionState
+
     private val _conversationError = MutableStateFlow<String?>(null)
     val conversationError: StateFlow<String?> = _conversationError.asStateFlow()
 
     private val _activeInstances = MutableStateFlow<List<com.example.gemini.data.remote.AgyActiveInstance>>(emptyList())
     val activeInstances: StateFlow<List<com.example.gemini.data.remote.AgyActiveInstance>> = _activeInstances.asStateFlow()
+
+    private val _conversationDrafts = mutableMapOf<String, androidx.compose.ui.text.input.TextFieldValue>()
+
+    fun getDraft(conversationId: String): androidx.compose.ui.text.input.TextFieldValue {
+        return _conversationDrafts[conversationId] ?: androidx.compose.ui.text.input.TextFieldValue("")
+    }
+
+    fun setDraft(conversationId: String, value: androidx.compose.ui.text.input.TextFieldValue) {
+        if (value.text.isEmpty()) {
+            _conversationDrafts.remove(conversationId)
+        } else {
+            _conversationDrafts[conversationId] = value
+        }
+    }
+
+    fun clearDraft(conversationId: String) {
+        _conversationDrafts.remove(conversationId)
+    }
 
     fun refreshActiveInstances() {
         viewModelScope.launch {
@@ -733,11 +753,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         is com.example.gemini.data.remote.AgyStreamEvent.SessionAttached -> {
                             if (event.isRunning) {
                                 _isStreaming.value = true
+                                contentBuilder.clear()
+                                activeToolsMap.clear()
+                                inThought = false
                                 val currentMsgs = _messages.value.toMutableList()
                                 val lastMsg = currentMsgs.lastOrNull()
-                                if (lastMsg != null && lastMsg.role == MessageRole.ASSISTANT && lastMsg.isStreaming) {
+                                if (lastMsg != null && lastMsg.role == MessageRole.ASSISTANT) {
                                     assistantMsgId = lastMsg.id
-                                    contentBuilder.append(lastMsg.content)
+                                    updateAssistantMessage(
+                                        msgId = assistantMsgId,
+                                        content = "",
+                                        isStreaming = true
+                                    )
                                 } else {
                                     val newAssistantMsg = ChatMessage(
                                         id = assistantMsgId,
