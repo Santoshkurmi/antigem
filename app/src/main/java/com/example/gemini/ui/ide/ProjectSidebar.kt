@@ -22,6 +22,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.data.daemon.FileNode
 import com.example.gemini.data.daemon.ProjectItem
+import com.example.gemini.theme.ClaudeTerracotta
+
+enum class SidebarTab {
+    EXPLORER,
+    SOURCE_CONTROL
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,12 +39,14 @@ fun ProjectSidebar(
     onSelectProject: (ProjectItem) -> Unit,
     onCreateProjectRequested: () -> Unit,
     onOpenFile: (FileNode) -> Unit,
+    onOpenFileDiff: (filePath: String, isStaged: Boolean) -> Unit = { _, _ -> },
     onCreateFile: (parentPath: String, name: String, isDir: Boolean) -> Unit,
     onDeleteFile: (path: String) -> Unit,
     onRefreshTree: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var projectsDropdownExpanded by remember { mutableStateOf(false) }
+    var projectsDropdownExpanded by mutableStateOf(false)
+    var selectedTab by remember { mutableStateOf(SidebarTab.EXPLORER) }
     var showCreateFileDialog by remember { mutableStateOf<String?>(null) } // parentPath
     var isNewFolderMode by remember { mutableStateOf(false) }
     var newItemName by remember { mutableStateOf("") }
@@ -56,7 +64,7 @@ fun ProjectSidebar(
             color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp)
+                .padding(bottom = 6.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -98,24 +106,36 @@ fun ProjectSidebar(
                     onDismissRequest = { projectsDropdownExpanded = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Recent Projects", fontWeight = FontWeight.Bold) },
+                        text = { Text("Available Projects", fontWeight = FontWeight.Bold) },
                         onClick = {},
                         enabled = false
                     )
-                    Divider()
-                    projects.forEach { project ->
+                    HorizontalDivider()
+
+                    if (projects.isEmpty()) {
                         DropdownMenuItem(
-                            text = { Text(project.name) },
-                            leadingIcon = {
-                                Icon(Icons.Default.Folder, contentDescription = null)
-                            },
-                            onClick = {
-                                projectsDropdownExpanded = false
-                                onSelectProject(project)
-                            }
+                            text = { Text("No projects found in Termux") },
+                            onClick = { projectsDropdownExpanded = false }
                         )
+                    } else {
+                        projects.forEach { proj ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = proj.name,
+                                        fontWeight = if (proj.path == activeProject?.path) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (proj.path == activeProject?.path) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
+                                onClick = {
+                                    projectsDropdownExpanded = false
+                                    onSelectProject(proj)
+                                }
+                            )
+                        }
                     }
-                    Divider()
+
+                    HorizontalDivider()
                     DropdownMenuItem(
                         text = { Text("+ New Project", color = MaterialTheme.colorScheme.primary) },
                         leadingIcon = {
@@ -130,105 +150,180 @@ fun ProjectSidebar(
             }
         }
 
-        // --- 2. Action Bar (Refresh, New File, New Folder) ---
+        // --- 2. Sidebar Navigation Tabs (Explorer vs Source Control) ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(
-                text = "FILES",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 11.sp
-            )
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = if (selectedTab == SidebarTab.EXPLORER) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { selectedTab = SidebarTab.EXPLORER }
+            ) {
+                Row(
+                    modifier = Modifier.padding(vertical = 5.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp),
+                        tint = if (selectedTab == SidebarTab.EXPLORER) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Explorer",
+                        fontSize = 11.5.sp,
+                        fontWeight = if (selectedTab == SidebarTab.EXPLORER) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selectedTab == SidebarTab.EXPLORER) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
-            Row {
-                IconButton(
-                    onClick = {
-                        val rootPath = activeProject?.path ?: ""
-                        if (rootPath.isNotBlank()) {
-                            isNewFolderMode = false
-                            showCreateFileDialog = rootPath
-                        }
-                    },
-                    modifier = Modifier.size(28.dp)
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = if (selectedTab == SidebarTab.SOURCE_CONTROL) ClaudeTerracotta.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { selectedTab = SidebarTab.SOURCE_CONTROL }
+            ) {
+                Row(
+                    modifier = Modifier.padding(vertical = 5.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.NoteAdd,
-                        contentDescription = "New File",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        imageVector = Icons.Default.AltRoute,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp),
+                        tint = if (selectedTab == SidebarTab.SOURCE_CONTROL) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-                IconButton(
-                    onClick = {
-                        val rootPath = activeProject?.path ?: ""
-                        if (rootPath.isNotBlank()) {
-                            isNewFolderMode = true
-                            showCreateFileDialog = rootPath
-                        }
-                    },
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CreateNewFolder,
-                        contentDescription = "New Folder",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-                IconButton(
-                    onClick = onRefreshTree,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Git",
+                        fontSize = 11.5.sp,
+                        fontWeight = if (selectedTab == SidebarTab.SOURCE_CONTROL) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selectedTab == SidebarTab.SOURCE_CONTROL) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
         }
 
-        Divider(modifier = Modifier.padding(vertical = 4.dp))
-
-        // --- 3. Recursive File Tree ---
-        if (fileTree.isEmpty()) {
-            Box(
+        if (selectedTab == SidebarTab.SOURCE_CONTROL) {
+            GitSourceControlView(
+                activeProject = activeProject,
+                onOpenFileDiff = onOpenFileDiff,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .weight(1f)
+            )
+        } else {
+            // --- 3. Explorer Action Bar (Refresh, New File, New Folder) ---
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (activeProject == null) "Open or create a project to view files" else "Project is empty",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "FILES",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 11.sp
                 )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .weight(1f)
-            ) {
-                items(fileTree) { node ->
-                    FileTreeNodeItem(
-                        node = node,
-                        depth = 0,
-                        activeFilePath = activeFilePath,
-                        onOpenFile = onOpenFile,
-                        onCreateChildFile = { parentPath, isDir ->
-                            isNewFolderMode = isDir
-                            showCreateFileDialog = parentPath
+
+                Row {
+                    IconButton(
+                        onClick = {
+                            val rootPath = activeProject?.path ?: ""
+                            if (rootPath.isNotBlank()) {
+                                isNewFolderMode = false
+                                showCreateFileDialog = rootPath
+                            }
                         },
-                        onDeleteFile = onDeleteFile
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NoteAdd,
+                            contentDescription = "New File",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            val rootPath = activeProject?.path ?: ""
+                            if (rootPath.isNotBlank()) {
+                                isNewFolderMode = true
+                                showCreateFileDialog = rootPath
+                            }
+                        },
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CreateNewFolder,
+                            contentDescription = "New Folder",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = onRefreshTree,
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+
+            // --- 4. Recursive File Tree ---
+            if (fileTree.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f)
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (activeProject == null) "Open or create a project to view files" else "Project is empty",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f)
+                ) {
+                    items(fileTree) { node ->
+                        FileTreeNodeItem(
+                            node = node,
+                            depth = 0,
+                            activeFilePath = activeFilePath,
+                            onOpenFile = onOpenFile,
+                            onCreateChildFile = { parentPath, isDir ->
+                                isNewFolderMode = isDir
+                                showCreateFileDialog = parentPath
+                            },
+                            onDeleteFile = onDeleteFile
+                        )
+                    }
                 }
             }
         }

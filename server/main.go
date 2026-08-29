@@ -38,6 +38,7 @@ func main() {
 	pool := session.NewSessionPoolManager(cfg.WorkspaceDir, 5, onResultHook)
 	h := handlers.NewHandler(cfg, pool)
 	hub = ws.NewHub(cfg, pool)
+	h.SetHub(hub)
 
 	mux := http.NewServeMux()
 
@@ -63,6 +64,22 @@ func main() {
 	mux.HandleFunc("/api/file/rename", h.FileRenameHandler)
 	mux.HandleFunc("/api/search", h.FileSearchHandler)
 	mux.HandleFunc("/api/upload", h.UploadHandler)
+
+	// Git Source Control Endpoints
+	mux.HandleFunc("/api/git/status", h.GitStatusHandler)
+	mux.HandleFunc("/api/git/branches", h.GitBranchesHandler)
+	mux.HandleFunc("/api/git/checkout", h.GitCheckoutHandler)
+	mux.HandleFunc("/api/git/branch/create", h.GitCheckoutHandler)
+	mux.HandleFunc("/api/git/stage", h.GitStageHandler)
+	mux.HandleFunc("/api/git/unstage", h.GitUnstageHandler)
+	mux.HandleFunc("/api/git/discard", h.GitDiscardHandler)
+	mux.HandleFunc("/api/git/commit", h.GitCommitHandler)
+	mux.HandleFunc("/api/git/push", h.GitPushHandler)
+	mux.HandleFunc("/api/git/pull", h.GitPullHandler)
+	mux.HandleFunc("/api/git/stash", h.GitStashHandler)
+	mux.HandleFunc("/api/git/stash/pop", h.GitStashPopHandler)
+	mux.HandleFunc("/api/git/diff", h.GitDiffHandler)
+	mux.HandleFunc("/api/git/log", h.GitLogHandler)
 
 	// Sub-resource endpoints
 	mux.HandleFunc("/api/instances/", func(w http.ResponseWriter, r *http.Request) {

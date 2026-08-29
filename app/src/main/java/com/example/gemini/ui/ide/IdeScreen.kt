@@ -30,18 +30,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.data.daemon.DaemonStatus
 import com.example.gemini.data.daemon.FileNode
+import com.example.gemini.data.daemon.GitApiClient
 import com.example.gemini.data.daemon.IdeApiClient
+import com.example.gemini.data.daemon.OpenTab
 import com.example.gemini.data.daemon.ProjectItem
 import com.example.gemini.data.daemon.TermuxDaemonManager
+import com.example.gemini.theme.ClaudeTerracotta
 import kotlinx.coroutines.launch
-
-data class OpenTab(
-    val path: String,
-    val name: String,
-    var content: String,
-    var originalContent: String,
-    val isModified: Boolean = false
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,6 +118,15 @@ fun IdeScreen(
                         coroutineScope.launch {
                             val content = IdeApiClient.readFile(node.path) ?: ""
                             TermuxDaemonManager.openOrSelectTab(node.path, node.name, content)
+                            drawerState.close()
+                        }
+                    },
+                    onOpenFileDiff = { filePath, isStaged ->
+                        coroutineScope.launch {
+                            val projPath = activeProject?.path ?: return@launch
+                            val diffRes = GitApiClient.getDiff(projPath, filePath, isStaged)
+                            val diffContent = diffRes?.diff ?: ""
+                            TermuxDaemonManager.openDiffTab(filePath, diffContent, isStaged)
                             drawerState.close()
                         }
                     },
@@ -269,10 +273,19 @@ fun IdeScreen(
                                     .padding(horizontal = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                if (tab.isDiff) {
+                                    Icon(
+                                        imageVector = Icons.Default.Difference,
+                                        contentDescription = null,
+                                        tint = ClaudeTerracotta,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                }
                                 Text(
                                     text = if (tab.isModified) "${tab.name} *" else tab.name,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (isSelected) Color.White else Color.LightGray,
+                                    color = if (isSelected) (if (tab.isDiff) ClaudeTerracotta else Color.White) else Color.LightGray,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -290,9 +303,43 @@ fun IdeScreen(
                     }
                 }
 
-                // Editor / Asset Viewer Content Area
+                // Editor / Asset Viewer / Diff Content Area
                 if (activeTab != null) {
-                    if (isImageFile || (isSvgFile && !showSvgSource)) {
+                    if (activeTab.isDiff) {
+                        UnifiedDiffViewer(
+                            filePath = activeTab.diffFile ?: activeTab.path,
+                            rawDiff = activeTab.content,
+                            isStaged = activeTab.isStagedDiff,
+                            onStageToggle = {
+                                coroutineScope.launch {
+                                    val projPath = activeProject?.path ?: return@launch
+                                    val file = activeTab.diffFile ?: return@launch
+                                    if (activeTab.isStagedDiff) {
+                                        GitApiClient.unstage(projPath, listOf(file))
+                                    } else {
+                                        GitApiClient.stage(projPath, listOf(file))
+                                    }
+                                    // Refresh diff
+                                    val newDiff = GitApiClient.getDiff(projPath, file, !activeTab.isStagedDiff)
+                                    TermuxDaemonManager.openDiffTab(file, newDiff?.diff ?: "", !activeTab.isStagedDiff)
+                                }
+                            },
+                            onDiscard = {
+                                coroutineScope.launch {
+                                    val projPath = activeProject?.path ?: return@launch
+                                    val file = activeTab.diffFile ?: return@launch
+                                    GitApiClient.discard(projPath, listOf(file))
+                                    TermuxDaemonManager.closeTab(activeTab.path)
+                                }
+                            },
+                            onClose = {
+                                TermuxDaemonManager.closeTab(activeTab.path)
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f)
+                        )
+                    } else if (isImageFile || (isSvgFile && !showSvgSource)) {
                         ImageAssetViewer(
                             filePath = activeTab.path,
                             fileName = activeTab.name,

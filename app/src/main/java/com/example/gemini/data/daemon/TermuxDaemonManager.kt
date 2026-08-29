@@ -23,7 +23,10 @@ data class OpenTab(
     val name: String,
     val content: String,
     val originalContent: String,
-    val isModified: Boolean = false
+    val isModified: Boolean = false,
+    val isDiff: Boolean = false,
+    val diffFile: String? = null,
+    val isStagedDiff: Boolean = false
 )
 
 object TermuxDaemonManager {
@@ -116,6 +119,31 @@ object TermuxDaemonManager {
             _openTabs.value = _openTabs.value + OpenTab(path = path, name = name, content = content, originalContent = content)
         }
         _activeTabPath.value = path
+    }
+
+    fun openDiffTab(filePath: String, diffContent: String, isStaged: Boolean) {
+        val diffPath = "diff:${if (isStaged) "staged:" else ""}$filePath"
+        val tabName = "Diff: ${java.io.File(filePath).name}${if (isStaged) " (Staged)" else ""}"
+        val existing = _openTabs.value.find { it.path == diffPath }
+        if (existing != null) {
+            _openTabs.value = _openTabs.value.map {
+                if (it.path == diffPath) it.copy(content = diffContent, originalContent = diffContent) else it
+            }
+            _activeTabPath.value = diffPath
+        } else {
+            val newTab = OpenTab(
+                path = diffPath,
+                name = tabName,
+                content = diffContent,
+                originalContent = diffContent,
+                isModified = false,
+                isDiff = true,
+                diffFile = filePath,
+                isStagedDiff = isStaged
+            )
+            _openTabs.value = _openTabs.value + newTab
+            _activeTabPath.value = diffPath
+        }
     }
 
     fun setAutoStart(enabled: Boolean) {

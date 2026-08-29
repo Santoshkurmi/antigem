@@ -28,15 +28,33 @@ var (
 	sanitizeNameReg = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
 )
 
+type Broadcaster interface {
+	Broadcast(msg interface{})
+}
+
 type Handler struct {
 	Cfg  *config.Config
 	Pool *session.SessionPoolManager
+	Hub  Broadcaster
 }
 
 func NewHandler(cfg *config.Config, pool *session.SessionPoolManager) *Handler {
 	return &Handler{
 		Cfg:  cfg,
 		Pool: pool,
+	}
+}
+
+func (h *Handler) SetHub(hub Broadcaster) {
+	h.Hub = hub
+}
+
+func (h *Handler) NotifyGitChanged(project string) {
+	if h.Hub != nil {
+		h.Hub.Broadcast(map[string]interface{}{
+			"type":    "git_status_changed",
+			"project": project,
+		})
 	}
 }
 
@@ -486,6 +504,7 @@ func (h *Handler) FileSaveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.NotifyGitChanged(req.Path)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": req.Path})
 }
 
@@ -531,6 +550,7 @@ func (h *Handler) FilePatchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.NotifyGitChanged(req.Path)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": req.Path})
 }
 
@@ -553,6 +573,7 @@ func (h *Handler) FileCreateHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	h.NotifyGitChanged(req.Path)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": req.Path})
 }
 
@@ -567,6 +588,7 @@ func (h *Handler) FileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	h.NotifyGitChanged(req.Path)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": req.Path})
 }
 
@@ -581,6 +603,7 @@ func (h *Handler) FileRenameHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	h.NotifyGitChanged(req.NewPath)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": req.NewPath})
 }
 
