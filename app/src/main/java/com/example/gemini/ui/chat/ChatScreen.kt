@@ -126,6 +126,7 @@ fun ChatScreen(
     val isServerOnline by viewModel.isServerOnline.collectAsState()
     val conversationError by viewModel.conversationError.collectAsState()
     val activeInstances by viewModel.activeInstances.collectAsState()
+    val quotaSummary by viewModel.quotaSummary.collectAsState()
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -1000,8 +1001,9 @@ fun ChatScreen(
             selectedModelId = selectedModelId,
             availableModels = enabledModels,
             quotas = quotas,
+            quotaSummary = quotaSummary,
             isRefreshing = isRefreshingModels,
-            onRefresh = { viewModel.refreshQuotas() },
+            onRefresh = { viewModel.refreshQuotas(force = true) },
             onSelectModel = { modelId -> viewModel.selectModel(modelId) },
             onDismiss = { showModelSelector = false }
         )

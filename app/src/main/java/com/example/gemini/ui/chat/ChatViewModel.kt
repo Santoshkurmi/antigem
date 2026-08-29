@@ -16,6 +16,7 @@ import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.domain.model.ModelQuota
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,6 +71,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _quotas = MutableStateFlow<List<ModelQuota>>(emptyList())
     val quotas: StateFlow<List<ModelQuota>> = _quotas.asStateFlow()
+
+    private val _quotaSummary = MutableStateFlow<com.example.gemini.domain.model.QuotaSummaryResponse?>(null)
+    val quotaSummary: StateFlow<com.example.gemini.domain.model.QuotaSummaryResponse?> = _quotaSummary.asStateFlow()
 
     private val _userEmail = MutableStateFlow<String?>(null)
     val userEmail: StateFlow<String?> = _userEmail.asStateFlow()
@@ -751,6 +755,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             messagesMemoryCache[conv.id] = _messages.value
                             refreshActiveInstances()
                         }
+                        is com.example.gemini.data.remote.AgyStreamEvent.QuotaUpdate -> {
+                            applyQuotaSummary(event.quotaSummary)
+                        }
                         else -> {}
                     }
                 }
@@ -1080,6 +1087,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             )
                             storage.saveMessages(conv.id, _messages.value, touchTimestamp = true)
                         }
+                        is com.example.gemini.data.remote.AgyStreamEvent.QuotaUpdate -> {
+                            applyQuotaSummary(event.quotaSummary)
+                        }
                         is com.example.gemini.data.remote.AgyStreamEvent.Error -> {
                             if (inThought) {
                                 inThought = false
@@ -1203,14 +1213,50 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun refreshQuotas() {
+    fun applyQuotaSummary(summary: com.example.gemini.domain.model.QuotaSummaryResponse) {
+        _quotaSummary.value = summary
+        val geminiGroup = summary.groups.find { it.groupId == "gemini" }
+        val claudeGroup = summary.groups.find { it.groupId == "claude_gpt" }
+
+        val updatedQuotas = _availableModels.value.map { model ->
+            val isGemini = model.family == com.example.gemini.domain.model.ModelFamily.GEMINI
+            val group = if (isGemini) geminiGroup else claudeGroup
+            com.example.gemini.domain.model.ModelQuota(
+                modelId = model.id,
+                remainingFraction = group?.fiveHour?.remainingFraction,
+                resetTime = group?.fiveHour?.resetTime,
+                usedPercentage = group?.fiveHour?.usedPct,
+                resetCountdown = group?.fiveHour?.countdown,
+                weeklyRemainingFraction = group?.weekly?.remainingFraction,
+                weeklyUsedPercentage = group?.weekly?.usedPct,
+                weeklyResetCountdown = group?.weekly?.countdown
+            )
+        }
+        _quotas.value = updatedQuotas
+        viewModelScope.launch {
+            try {
+                val quotasStr = json.encodeToString(updatedQuotas)
+                authPrefs.saveCachedModelsAndQuotas(
+                    json.encodeToString(_availableModels.value),
+                    quotasStr
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun refreshQuotas(force: Boolean = true) {
         viewModelScope.launch {
             _isRefreshingModels.value = true
             try {
                 val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
-                val res = agyBridgeService.fetchModels(httpUrl)
-                if (res.isSuccess) {
-                    val models = res.getOrThrow()
+                val modelsDeferred = async { agyBridgeService.fetchModels(httpUrl) }
+                val quotasDeferred = async { agyBridgeService.fetchQuotas(httpUrl, force = force) }
+
+                val modelsRes = modelsDeferred.await()
+                val quotasRes = quotasDeferred.await()
+
+                if (modelsRes.isSuccess) {
+                    val models = modelsRes.getOrThrow()
                     if (models.isNotEmpty()) {
                         _availableModels.value = models
                         recomputeEnabledModels()
@@ -1219,13 +1265,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 ?: models.first().id
                         }
                     }
-                    try {
-                        val modelsStr = json.encodeToString(models)
-                        authPrefs.saveCachedModelsAndQuotas(modelsStr, "[]")
-                    } catch (_: Exception) {}
+                }
+
+                if (quotasRes.isSuccess) {
+                    applyQuotaSummary(quotasRes.getOrThrow())
                 }
             } catch (e: Exception) {
-                android.util.Log.e("GeminiApp", "Error refreshing models from bridge: ${e.message}")
+                android.util.Log.e("GeminiApp", "Error refreshing models & quotas: ${e.message}")
             } finally {
                 _isRefreshingModels.value = false
             }

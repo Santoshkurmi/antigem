@@ -48,6 +48,7 @@ sealed class AgyStreamEvent {
     data class ToolChunk(val tool: ToolCall) : AgyStreamEvent()
     data class InstanceStatus(val status: String, val message: String? = null, val conversationId: String? = null) : AgyStreamEvent()
     data class SessionAttached(val conversationId: String, val isRunning: Boolean, val prompt: String? = null) : AgyStreamEvent()
+    data class QuotaUpdate(val quotaSummary: com.example.gemini.domain.model.QuotaSummaryResponse) : AgyStreamEvent()
     data class Completed(
         val tokenUsage: TokenUsage?,
         val conversationId: String? = null,
@@ -103,6 +104,87 @@ class AgyBridgeService(
             Log.e(TAG, "fetchModels failed: ${e.message}")
             Result.failure(e)
         }
+    }
+
+    suspend fun fetchQuotas(
+        httpBaseUrl: String = DEFAULT_HTTP_URL,
+        force: Boolean = false
+    ): Result<com.example.gemini.domain.model.QuotaSummaryResponse> = withContext(Dispatchers.IO) {
+        try {
+            val url = if (force) "$httpBaseUrl/api/quotas?force=true" else "$httpBaseUrl/api/quotas"
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val body = response.body?.string() ?: "{}"
+                val json = JSONObject(body)
+                val summary = parseQuotaSummary(json)
+                Result.success(summary)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchQuotas failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    fun parseQuotaSummary(json: JSONObject): com.example.gemini.domain.model.QuotaSummaryResponse {
+        val groupsArr = json.optJSONArray("groups") ?: JSONArray()
+        val groupsList = mutableListOf<com.example.gemini.domain.model.ModelQuotaGroup>()
+
+        for (i in 0 until groupsArr.length()) {
+            val groupObj = groupsArr.getJSONObject(i)
+            val groupId = groupObj.optString("groupId", "")
+            val groupName = groupObj.optString("groupName", "")
+            val desc = groupObj.optString("description", "")
+
+            val fiveHourObj = groupObj.optJSONObject("fiveHour")
+            val fiveHour = fiveHourObj?.let {
+                com.example.gemini.domain.model.QuotaWindowInfo(
+                    window = it.optString("window", "5h"),
+                    displayName = it.optString("displayName", ""),
+                    remainingFraction = it.optDouble("remainingFraction", 1.0).toFloat(),
+                    remainingPct = it.optString("remainingPct", "100.0%"),
+                    usedPct = it.optString("usedPct", "0.0%"),
+                    resetTime = it.optString("resetTime", "").takeIf { t -> t.isNotBlank() },
+                    countdown = it.optString("countdown", ""),
+                    description = it.optString("description", "")
+                )
+            }
+
+            val weeklyObj = groupObj.optJSONObject("weekly")
+            val weekly = weeklyObj?.let {
+                com.example.gemini.domain.model.QuotaWindowInfo(
+                    window = it.optString("window", "weekly"),
+                    displayName = it.optString("displayName", ""),
+                    remainingFraction = it.optDouble("remainingFraction", 1.0).toFloat(),
+                    remainingPct = it.optString("remainingPct", "100.0%"),
+                    usedPct = it.optString("usedPct", "0.0%"),
+                    resetTime = it.optString("resetTime", "").takeIf { t -> t.isNotBlank() },
+                    countdown = it.optString("countdown", ""),
+                    description = it.optString("description", "")
+                )
+            }
+
+            groupsList.add(
+                com.example.gemini.domain.model.ModelQuotaGroup(
+                    groupId = groupId,
+                    groupName = groupName,
+                    description = desc,
+                    fiveHour = fiveHour,
+                    weekly = weekly
+                )
+            )
+        }
+
+        return com.example.gemini.domain.model.QuotaSummaryResponse(
+            groups = groupsList,
+            lastUpdated = json.optString("lastUpdated", null)
+        )
     }
 
     suspend fun checkServerHealth(httpBaseUrl: String = DEFAULT_HTTP_URL): Boolean = withContext(Dispatchers.IO) {
@@ -478,6 +560,14 @@ class AgyBridgeService(
                             trySend(AgyStreamEvent.InstanceStatus(status = status, message = msg, conversationId = convId))
                         }
 
+                        "quota_update" -> {
+                            val quotaObj = root.optJSONObject("data")
+                            if (quotaObj != null) {
+                                val summary = parseQuotaSummary(quotaObj)
+                                trySend(AgyStreamEvent.QuotaUpdate(summary))
+                            }
+                        }
+
                         "raw_chunk" -> {
                             val textChunk = root.optString("text")
                             if (textChunk.isNotBlank()) {
@@ -623,6 +713,13 @@ class AgyBridgeService(
                                         )
                                     )
                                 }
+                            }
+                        }
+                        "quota_update" -> {
+                            val quotaObj = root.optJSONObject("data")
+                            if (quotaObj != null) {
+                                val summary = parseQuotaSummary(quotaObj)
+                                trySend(AgyStreamEvent.QuotaUpdate(summary))
                             }
                         }
                         "done" -> channel.close()

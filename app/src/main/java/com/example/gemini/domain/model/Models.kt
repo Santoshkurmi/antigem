@@ -62,15 +62,20 @@ data class Conversation(
 
 enum class ModelFamily {
     CLAUDE,
-    GEMINI
+    GEMINI,
+    OTHER
 }
 
 @Serializable
 data class AiModel(
     val id: String,
     val displayName: String,
-    val family: ModelFamily = if (id.contains("claude", ignoreCase = true)) ModelFamily.CLAUDE else ModelFamily.GEMINI,
-    val supportsThinking: Boolean = id.contains("thinking", ignoreCase = true) || id.contains("flash", ignoreCase = true) || id.contains("pro", ignoreCase = true),
+    val family: ModelFamily = when {
+        id.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
+        id.contains("gemini", ignoreCase = true) -> ModelFamily.GEMINI
+        else -> ModelFamily.OTHER
+    },
+    val supportsThinking: Boolean = id.contains("thinking", ignoreCase = true) || id.contains("flash", ignoreCase = true) || id.contains("pro", ignoreCase = true) || id.contains("high", ignoreCase = true) || id.contains("medium", ignoreCase = true) || id.contains("low", ignoreCase = true),
     val description: String = "",
     val isDefault: Boolean = false
 ) {
@@ -79,9 +84,17 @@ data class AiModel(
 
         fun fromApi(id: String, displayName: String?, description: String? = null): AiModel {
             val name = displayName?.takeIf { it.isNotBlank() } ?: formatModelName(id)
-            val family = if (id.contains("claude", ignoreCase = true)) ModelFamily.CLAUDE else ModelFamily.GEMINI
-            val thinking = id.contains("thinking", ignoreCase = true) || id.contains("flash", ignoreCase = true) || id.contains("pro", ignoreCase = true)
-            val desc = description ?: if (family == ModelFamily.CLAUDE) "Anthropic Claude via Antigravity" else "Google Gemini via Antigravity"
+            val family = when {
+                id.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
+                id.contains("gemini", ignoreCase = true) -> ModelFamily.GEMINI
+                else -> ModelFamily.OTHER
+            }
+            val thinking = id.contains("thinking", ignoreCase = true) || id.contains("flash", ignoreCase = true) || id.contains("pro", ignoreCase = true) || id.contains("high", ignoreCase = true) || id.contains("medium", ignoreCase = true) || id.contains("low", ignoreCase = true)
+            val desc = description ?: when (family) {
+                ModelFamily.CLAUDE -> "Anthropic Claude via Antigravity"
+                ModelFamily.GEMINI -> "Google Gemini via Antigravity"
+                ModelFamily.OTHER -> "OpenAI / Other Model via Antigravity"
+            }
             return AiModel(
                 id = id,
                 displayName = name,
@@ -132,10 +145,42 @@ data class ThinkingPreference(
 }
 
 @Serializable
+data class QuotaWindowInfo(
+    val window: String = "5h",
+    val displayName: String = "",
+    val remainingFraction: Float = 1.0f,
+    val remainingPct: String = "100.0%",
+    val usedPct: String = "0.0%",
+    val resetTime: String? = null,
+    val countdown: String = "",
+    val description: String = ""
+)
+
+@Serializable
+data class ModelQuotaGroup(
+    val groupId: String = "",
+    val groupName: String = "",
+    val description: String = "",
+    val fiveHour: QuotaWindowInfo? = null,
+    val weekly: QuotaWindowInfo? = null
+)
+
+@Serializable
+data class QuotaSummaryResponse(
+    val groups: List<ModelQuotaGroup> = emptyList(),
+    val lastUpdated: String? = null
+)
+
+@Serializable
 data class ModelQuota(
     val modelId: String,
     val remainingFraction: Float? = null,
-    val resetTime: String? = null
+    val resetTime: String? = null,
+    val usedPercentage: String? = null,
+    val resetCountdown: String? = null,
+    val weeklyRemainingFraction: Float? = null,
+    val weeklyUsedPercentage: String? = null,
+    val weeklyResetCountdown: String? = null
 ) {
     val percentage: Int
         get() = remainingFraction?.let { (it * 100).toInt() } ?: 0
