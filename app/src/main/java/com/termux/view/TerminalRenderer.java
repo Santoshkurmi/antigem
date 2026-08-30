@@ -58,8 +58,10 @@ public final class TerminalRenderer {
                              int selectionY1, int selectionY2, int selectionX1, int selectionX2) {
         final boolean reverseVideo = mEmulator.isReverseVideo();
         final boolean hasSubRow = subRowOffset > 0.001f;
-        final int startRow = topRow - (hasSubRow ? 1 : 0);
-        final int endRow = topRow + mEmulator.mRows;
+        final int minTranscriptRow = -mEmulator.getScreen().getActiveTranscriptRows();
+        final boolean hasTopBufferRow = hasSubRow && (topRow - 1 >= minTranscriptRow);
+        final int startRow = hasTopBufferRow ? (topRow - 1) : topRow;
+        final int endRow = Math.min(mEmulator.mRows, topRow + mEmulator.mRows + (hasSubRow ? 1 : 0));
         final int columns = mEmulator.mColumns;
         final int cursorCol = mEmulator.getCursorCol();
         final int cursorRow = mEmulator.getCursorRow();
@@ -71,7 +73,7 @@ public final class TerminalRenderer {
         if (reverseVideo)
             canvas.drawColor(palette[TextStyle.COLOR_INDEX_FOREGROUND], PorterDuff.Mode.SRC);
 
-        float heightOffset = mFontLineSpacingAndAscent + (hasSubRow ? (subRowOffset - 1.0f) * mFontLineSpacing : 0f);
+        float heightOffset = mFontLineSpacingAndAscent + (hasTopBufferRow ? (subRowOffset - 1.0f) * mFontLineSpacing : subRowOffset * mFontLineSpacing);
         for (int row = startRow; row < endRow; row++) {
             heightOffset += mFontLineSpacing;
 

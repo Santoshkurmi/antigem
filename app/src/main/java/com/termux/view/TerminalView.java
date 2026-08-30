@@ -1038,6 +1038,9 @@ public final class TerminalView extends View {
         if (mEmulator == null) {
             canvas.drawColor(0XFF000000);
         } else {
+            canvas.save();
+            canvas.clipRect(0, 0, getWidth(), getHeight());
+
             // render the terminal view and highlight any selected text
             int[] sel = mDefaultSelectors;
             if (mTextSelectionCursorController != null) {
@@ -1048,6 +1051,8 @@ public final class TerminalView extends View {
 
             // render the text selection handles
             renderTextSelection();
+
+            canvas.restore();
         }
     }
 
