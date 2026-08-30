@@ -123,8 +123,8 @@ dependencies {
   implementation("org.apache.commons:commons-compress:1.26.1")
   implementation("org.tukaani:xz:1.9")
 
-  // Termux Terminal View & Emulator with Native PTY Support
-  implementation("com.github.termux.termux-app:terminal-view:v0.118.1")
+  // Termux Terminal Emulator with Native PTY Support (Terminal View is compiled from source)
+  implementation("com.github.termux.termux-app:terminal-emulator:v0.118.1")
   implementation("com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava")
 
   // Local tests: jUnit, coroutines, Android runner
