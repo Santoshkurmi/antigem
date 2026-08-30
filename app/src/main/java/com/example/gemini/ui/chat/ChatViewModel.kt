@@ -231,6 +231,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     val chatFontScale = authPrefs.chatFontScale
+    val isLocalToolsEnabled = authPrefs.isLocalToolsEnabled
+    val isLocalToolsInstalled = authPrefs.isLocalToolsInstalled
+
+    fun setLocalToolsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.setLocalToolsEnabled(enabled)
+            if (enabled) {
+                authPrefs.setTerminalToolEnabled(true)
+            }
+        }
+    }
 
     fun setChatFontScale(scale: Float) {
         viewModelScope.launch {
@@ -1602,33 +1613,46 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         )
 
         viewModelScope.launch {
-            val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
-            val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
-            val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"
-            val pass = authPrefs.termuxSshPass.firstOrNull() ?: "root"
+            val isLocalEnabled = authPrefs.isLocalToolsEnabled.firstOrNull() ?: false
+            val isLocalInstalled = authPrefs.isLocalToolsInstalled.firstOrNull() ?: false
 
-            val resultSession = com.example.gemini.data.ssh.TermuxSshManager.executeCommand(
-                command = toolCall.command,
-                host = host,
-                port = port,
-                user = user,
-                pass = pass,
-                customCmdId = toolCall.id
-            )
-
-            val finalStatus = if (resultSession.status == com.example.gemini.data.ssh.CommandStatus.TERMINATED) {
-                "TERMINATED"
-            } else if (resultSession.exitCode == 0) {
-                "SUCCESS"
+            val (outStr, exitCodeVal, durMs, finalStatus) = if (isLocalEnabled && isLocalInstalled) {
+                val localRes = com.example.gemini.data.local.LocalEnvironmentManager.executeCommand(
+                    command = toolCall.command,
+                    context = getApplication()
+                )
+                val st = if (localRes.exitCode == 0) "SUCCESS" else "FAILED"
+                ExecutedToolResult(localRes.output, localRes.exitCode, localRes.durationMs, st)
             } else {
-                "FAILED"
+                val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
+                val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
+                val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"
+                val pass = authPrefs.termuxSshPass.firstOrNull() ?: "root"
+
+                val resultSession = com.example.gemini.data.ssh.TermuxSshManager.executeCommand(
+                    command = toolCall.command,
+                    host = host,
+                    port = port,
+                    user = user,
+                    pass = pass,
+                    customCmdId = toolCall.id
+                )
+
+                val st = if (resultSession.status == com.example.gemini.data.ssh.CommandStatus.TERMINATED) {
+                    "TERMINATED"
+                } else if (resultSession.exitCode == 0) {
+                    "SUCCESS"
+                } else {
+                    "FAILED"
+                }
+                ExecutedToolResult(resultSession.output, resultSession.exitCode ?: 0, resultSession.durationMs, st)
             }
 
             val completedToolCall = runningToolCall.copy(
                 status = finalStatus,
-                output = resultSession.output,
-                exitCode = resultSession.exitCode,
-                durationMs = resultSession.durationMs
+                output = outStr,
+                exitCode = exitCodeVal,
+                durationMs = durMs
             )
             val finalToolCalls = msg.toolCalls.map { if (it.id == toolCall.id) completedToolCall else it }
 
@@ -1653,7 +1677,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     ChatMessage(
                         conversationId = conv.id,
                         role = MessageRole.USER,
-                        content = "[Terminal Output for `${toolCall.command}` (exit: ${resultSession.exitCode ?: 0})]:\n```\n${resultSession.output.ifEmpty { "(No output)" }}\n```"
+                        content = "[Terminal Output for `${toolCall.command}` (exit: $exitCodeVal)]:\n```\n${outStr.ifEmpty { "(No output)" }}\n```"
                     )
                 )
 
@@ -1868,3 +1892,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 }
+
+private data class ExecutedToolResult(
+    val output: String,
+    val exitCode: Int,
+    val durationMs: Long,
+    val status: String
+)
+

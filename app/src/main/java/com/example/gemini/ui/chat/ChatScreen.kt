@@ -62,6 +62,9 @@ import com.example.gemini.ui.components.MessageBubble
 import com.example.gemini.ui.components.RawPayloadDialog
 import com.example.gemini.ui.components.SummaryModelPickerDialog
 import com.example.gemini.ui.components.TerminalInspectorDialog
+import com.example.gemini.ui.components.LocalTerminalDialog
+import com.example.gemini.ui.settings.LocalToolsInstallDialog
+import com.example.gemini.data.local.LocalEnvironmentManager
 import com.example.gemini.ui.drawer.ChatHistoryDrawer
 import com.example.gemini.ui.models.ModelSelectorBottomSheet
 import com.example.gemini.ui.models.ThinkingSelectorBottomSheet
@@ -138,11 +141,15 @@ fun ChatScreen(
     val conversationError by viewModel.conversationError.collectAsState()
     val activeInstances by viewModel.activeInstances.collectAsState()
     val quotaSummary by viewModel.quotaSummary.collectAsState()
+    val isLocalToolsEnabled by viewModel.isLocalToolsEnabled.collectAsState(initial = false)
+    val isLocalToolsInstalled by viewModel.isLocalToolsInstalled.collectAsState(initial = false)
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
     var showToolsSheet by remember { mutableStateOf(false) }
     var showTerminalInspector by remember { mutableStateOf(false) }
+    var showLocalTerminalDialog by remember { mutableStateOf(false) }
+    var showLocalToolsInstallDialog by remember { mutableStateOf(false) }
     var showRawPayloadDialog by remember { mutableStateOf<String?>(null) }
     var showCustomSystemPromptDialog by remember { mutableStateOf(false) }
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
@@ -613,11 +620,20 @@ fun ChatScreen(
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                         }
-                        IconButton(onClick = { showTerminalInspector = true }) {
+                        IconButton(onClick = {
+                            if (isLocalToolsInstalled && isLocalToolsEnabled) {
+                                showLocalTerminalDialog = true
+                            } else if (isLocalToolsInstalled) {
+                                viewModel.setLocalToolsEnabled(true)
+                                showLocalTerminalDialog = true
+                            } else {
+                                showLocalToolsInstallDialog = true
+                            }
+                        }) {
                             Icon(
                                 imageVector = Icons.Outlined.Terminal,
-                                contentDescription = "Termux Terminal",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                contentDescription = "Terminal",
+                                tint = if (isLocalToolsInstalled && isLocalToolsEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                         }
                         IconButton(onClick = { showCustomSystemPromptDialog = true }) {
@@ -1133,6 +1149,8 @@ fun ChatScreen(
             summaryModelId = summaryModelIdPref,
             isDevModeEnabled = isDevModeEnabled,
             chatFontScale = chatFontScale,
+            isLocalToolsEnabled = isLocalToolsEnabled,
+            isLocalToolsInstalled = isLocalToolsInstalled,
             onLoginWithGoogle = {
                 val url = viewModel.getGoogleOAuthUrl()
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -1160,6 +1178,14 @@ fun ChatScreen(
             onSetSummaryModelId = { viewModel.setSummaryModelId(it) },
             onSetChatFontScale = { viewModel.setChatFontScale(it) },
             onToggleDevMode = { viewModel.setDevModeEnabled(it) },
+            onToggleLocalTools = { viewModel.setLocalToolsEnabled(it) },
+            onInstallLocalTools = { showLocalToolsInstallDialog = true },
+            onOpenLocalTerminal = { showLocalTerminalDialog = true },
+            onResetLocalTools = {
+                LocalEnvironmentManager.resetEnvironment(context)
+                viewModel.setLocalToolsEnabled(false)
+                scope.launch { viewModel.authPreferences.setLocalToolsInstalled(false) }
+            },
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1336,6 +1362,22 @@ fun ChatScreen(
         TerminalInspectorDialog(
             authPreferences = viewModel.authPreferences,
             onDismiss = { showTerminalInspector = false }
+        )
+    }
+
+    // Fully Working Local Terminal (Termux Shell with close button above)
+    if (showLocalTerminalDialog) {
+        LocalTerminalDialog(
+            onDismiss = { showLocalTerminalDialog = false }
+        )
+    }
+
+    // Local Tools Setup & Progress Dialog
+    if (showLocalToolsInstallDialog) {
+        LocalToolsInstallDialog(
+            authPreferences = viewModel.authPreferences,
+            onOpenTerminal = { showLocalTerminalDialog = true },
+            onDismiss = { showLocalToolsInstallDialog = false }
         )
     }
 

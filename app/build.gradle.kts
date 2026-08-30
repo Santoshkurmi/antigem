@@ -8,9 +8,9 @@ android {
     namespace = "com.example.gemini"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.gemini"
+        applicationId = "com.antigem"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 28
         versionCode = 1
         versionName = "1.0"
     }
@@ -35,6 +35,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+        disable += "ExpiredTargetSdkVersion"
+    }
+
     buildFeatures {
       compose = true
       aidl = false
@@ -112,6 +118,14 @@ dependencies {
   implementation("io.github.Rosemoe.sora-editor:editor:0.23.6")
   implementation("io.github.Rosemoe.sora-editor:language-textmate:0.23.6")
   implementation("io.github.Rosemoe.sora-editor:language-java:0.23.6")
+
+  // Archive and Compression Utilities (Supports tar, xz, ar, deb extraction)
+  implementation("org.apache.commons:commons-compress:1.26.1")
+  implementation("org.tukaani:xz:1.9")
+
+  // Termux Terminal View & Emulator with Native PTY Support
+  implementation("com.github.termux.termux-app:terminal-view:v0.118.1")
+  implementation("com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava")
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)

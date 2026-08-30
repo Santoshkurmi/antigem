@@ -45,6 +45,8 @@ fun SettingsDialog(
     summaryModelId: String = "always_ask",
     isDevModeEnabled: Boolean = false,
     chatFontScale: Float = 1.0f,
+    isLocalToolsEnabled: Boolean = false,
+    isLocalToolsInstalled: Boolean = false,
     onLoginWithGoogle: () -> Unit,
     onToggleServer: (Boolean) -> Unit = {},
     onLogout: () -> Unit = {},
@@ -56,6 +58,10 @@ fun SettingsDialog(
     onSetSummaryModelId: (String) -> Unit = {},
     onSetChatFontScale: (Float) -> Unit = {},
     onToggleDevMode: (Boolean) -> Unit = {},
+    onToggleLocalTools: (Boolean) -> Unit = {},
+    onInstallLocalTools: () -> Unit = {},
+    onOpenLocalTerminal: () -> Unit = {},
+    onResetLocalTools: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     var manualToken by remember { mutableStateOf("") }
@@ -505,6 +511,139 @@ fun SettingsDialog(
                                         checkedTrackColor = ClaudeTerracotta
                                     )
                                 )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Local Environment & Tools (Termux-like) Card
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Terminal,
+                                    contentDescription = null,
+                                    tint = if (isLocalToolsEnabled) QuotaGreen else ClaudeTerracotta,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Enable Tools Locally",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(
+                                                    if (isLocalToolsInstalled) QuotaGreen.copy(alpha = 0.15f)
+                                                    else ClaudeTerracotta.copy(alpha = 0.15f)
+                                                )
+                                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isLocalToolsInstalled) "Installed" else "Not Installed",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isLocalToolsInstalled) QuotaGreen else ClaudeTerracotta
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = "Termux-like native Linux shell, command execution, and file tools locally inside app sandbox",
+                                        fontSize = 11.5.sp,
+                                        lineHeight = 15.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Switch(
+                                    checked = isLocalToolsEnabled,
+                                    onCheckedChange = { checked ->
+                                        if (checked && !isLocalToolsInstalled) {
+                                            onInstallLocalTools()
+                                        } else {
+                                            onToggleLocalTools(checked)
+                                        }
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = if (isLocalToolsInstalled) QuotaGreen else ClaudeTerracotta
+                                    )
+                                )
+                            }
+
+                            if (isLocalToolsInstalled) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                HorizontalDivider(thickness = 0.6.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = onOpenLocalTerminal,
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Open Terminal", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = onInstallLocalTools,
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Reinstall", fontSize = 12.sp)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                OutlinedButton(
+                                    onClick = onResetLocalTools,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.4f)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Red)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Clear & Reset Environment", fontSize = 12.sp, color = Color.Red, fontWeight = FontWeight.Medium)
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = onInstallLocalTools,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(15.dp), tint = ClaudeTerracotta)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Download & Setup Tools Locally (>30 MB)", fontSize = 12.sp, color = ClaudeTerracotta, fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
                     }

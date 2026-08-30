@@ -1,0 +1,1295 @@
+package com.example.gemini.data.local
+
+import android.content.Context
+import android.os.Build
+import android.system.Os
+import android.util.Log
+import com.example.gemini.data.preferences.AuthPreferences
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONArray
+import org.json.JSONObject
+import org.apache.commons.compress.archivers.ar.ArArchiveEntry
+import org.apache.commons.compress.archivers.ar.ArArchiveInputStream
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
+import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
+import java.io.*
+import java.text.DecimalFormat
+import java.util.concurrent.TimeUnit
+import java.util.zip.ZipInputStream
+
+data class LocalCommandResult(
+    val exitCode: Int,
+    val output: String,
+    val durationMs: Long
+)
+
+sealed class BootstrapSource {
+    object Auto : BootstrapSource()
+    data class DirectUrl(val url: String) : BootstrapSource()
+    data class LocalZipUri(val uri: android.net.Uri) : BootstrapSource()
+}
+
+object LocalEnvironmentManager {
+
+    private const val TAG = "LocalEnvironmentManager"
+    private const val BOOTSTRAP_VERSION = "2026.08"
+    // Minimum 10 MB required for a real Termux bootstrap archive
+    private const val MIN_BOOTSTRAP_SIZE_BYTES = 10 * 1024 * 1024L
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .retryOnConnectionFailure(true)
+        .build()
+
+    private val _installerState = MutableStateFlow<LocalInstallerState>(LocalInstallerState.Idle)
+    val installerState: StateFlow<LocalInstallerState> = _installerState.asStateFlow()
+
+    private val _installerLogs = MutableStateFlow<List<String>>(emptyList())
+    val installerLogs: StateFlow<List<String>> = _installerLogs.asStateFlow()
+
+    fun log(message: String) {
+        Log.d(TAG, message)
+        val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        _installerLogs.value = (_installerLogs.value + "[$time] $message").takeLast(600)
+    }
+
+    fun clearLogs() {
+        _installerLogs.value = emptyList()
+    }
+
+    fun getPrefixDir(context: Context): File = File(context.filesDir, "usr")
+    fun getBinDir(context: Context): File = File(getPrefixDir(context), "bin")
+    fun getLibDir(context: Context): File = File(getPrefixDir(context), "lib")
+    fun getEtcDir(context: Context): File = File(getPrefixDir(context), "etc")
+    fun getTmpDir(context: Context): File = File(getPrefixDir(context), "tmp")
+    fun getHomeDir(context: Context): File = File(context.filesDir, "home")
+    fun getProjectsDir(context: Context): File = File(getHomeDir(context), "projects")
+
+    fun getBootstrapArch(): String {
+        val abis = Build.SUPPORTED_ABIS ?: emptyArray()
+        for (abi in abis) {
+            when {
+                abi.startsWith("arm64") || abi.equals("aarch64", ignoreCase = true) -> return "aarch64"
+                abi.startsWith("armeabi") || abi.equals("arm", ignoreCase = true) -> return "arm"
+                abi.contains("x86_64") -> return "x86_64"
+                abi.contains("x86") || abi.equals("i686", ignoreCase = true) -> return "i686"
+            }
+        }
+        return "aarch64"
+    }
+
+    fun isInstalled(context: Context): Boolean {
+        val binDir = getBinDir(context)
+        val homeDir = getHomeDir(context)
+        return (binDir.exists() && binDir.isDirectory && (File(binDir, "sh").exists() || File(binDir, "dash").exists() || File(binDir, "bash").exists() || File(binDir, "busybox").exists())) &&
+                homeDir.exists()
+    }
+
+    fun getInstallPath(context: Context): String {
+        return getPrefixDir(context).absolutePath
+    }
+
+    fun getFormattedDiskSpace(context: Context): String {
+        val prefix = getPrefixDir(context)
+        val home = getHomeDir(context)
+        var totalBytes = 0L
+        if (prefix.exists()) totalBytes += calculateDirectorySize(prefix)
+        if (home.exists()) totalBytes += calculateDirectorySize(home)
+        return formatFileSize(totalBytes)
+    }
+
+    fun calculateDirectorySize(dir: File): Long {
+        var size = 0L
+        val files = dir.listFiles() ?: return 0L
+        for (f in files) {
+            size += if (f.isDirectory) calculateDirectorySize(f) else f.length()
+        }
+        return size
+    }
+
+    fun formatFileSize(bytes: Long): String {
+        if (bytes <= 0) return "0 B"
+        val units = arrayOf("B", "KB", "MB", "GB")
+        val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt().coerceIn(0, units.size - 1)
+        val df = DecimalFormat("#,##0.#")
+        return "${df.format(bytes / Math.pow(1024.0, digitGroups.toDouble()))} ${units[digitGroups]}"
+    }
+
+    fun resetState() {
+        _installerState.value = LocalInstallerState.Idle
+    }
+
+    suspend fun discoverBootstrapPackage(context: Context): DiscoveredPackageInfo? = withContext(Dispatchers.IO) {
+        val arch = getBootstrapArch()
+        val packageName = context.packageName
+        _installerState.value = LocalInstallerState.Discovering("Finding latest verified Termux bootstrap release for $arch...")
+
+        // 1. Query GitHub API for latest release
+        try {
+            val apiRequest = Request.Builder()
+                .url("https://api.github.com/repos/termux/termux-packages/releases/latest")
+                .header("User-Agent", "GeminiApp-BootstrapInstaller/1.0")
+                .header("Accept", "application/vnd.github.v3+json")
+                .build()
+
+            httpClient.newCall(apiRequest).execute().use { response ->
+                if (response.isSuccessful) {
+                    val bodyString = response.body?.string()
+                    if (!bodyString.isNullOrBlank()) {
+                        val json = JSONObject(bodyString)
+                        val tagName = json.optString("tag_name", "latest")
+                        val assets = json.optJSONArray("assets")
+                        if (assets != null) {
+                            for (i in 0 until assets.length()) {
+                                val asset = assets.getJSONObject(i)
+                                val name = asset.optString("name", "")
+                                val downloadUrl = asset.optString("browser_download_url", "")
+                                val size = asset.optLong("size", 33 * 1024 * 1024L)
+                                if (name == "bootstrap-$arch.zip" && downloadUrl.isNotBlank()) {
+                                    val info = DiscoveredPackageInfo(
+                                        url = downloadUrl,
+                                        releaseTag = tagName,
+                                        assetName = name,
+                                        arch = arch,
+                                        sizeBytes = size,
+                                        sizeFormatted = formatFileSize(size),
+                                        packageName = packageName
+                                    )
+                                    _installerState.value = LocalInstallerState.AwaitingConfirmation(info)
+                                    return@withContext info
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed discovery from GitHub API: ${e.message}")
+        }
+
+        // Fallback default
+        val fallbackTag = "bootstrap-2026.08.30-r1+apt.android-7"
+        val fallbackUrl = "https://github.com/termux/termux-packages/releases/download/${fallbackTag.replace("+", "%2B")}/bootstrap-$arch.zip"
+        val fallbackInfo = DiscoveredPackageInfo(
+            url = fallbackUrl,
+            releaseTag = fallbackTag,
+            assetName = "bootstrap-$arch.zip",
+            arch = arch,
+            sizeBytes = 33 * 1024 * 1024L,
+            sizeFormatted = "~33 MB",
+            packageName = packageName
+        )
+        _installerState.value = LocalInstallerState.AwaitingConfirmation(fallbackInfo)
+        return@withContext fallbackInfo
+    }
+
+    private fun resolveBootstrapUrls(arch: String): List<String> {
+        val urls = mutableListOf<String>()
+
+        // 1. Query GitHub API for latest release assets dynamically
+        try {
+            val apiRequest = Request.Builder()
+                .url("https://api.github.com/repos/termux/termux-packages/releases/latest")
+                .header("User-Agent", "GeminiApp-BootstrapInstaller/1.0")
+                .header("Accept", "application/vnd.github.v3+json")
+                .build()
+
+            httpClient.newCall(apiRequest).execute().use { response ->
+                if (response.isSuccessful) {
+                    val bodyString = response.body?.string()
+                    if (!bodyString.isNullOrBlank()) {
+                        val json = JSONObject(bodyString)
+                        val assets = json.optJSONArray("assets")
+                        if (assets != null) {
+                            for (i in 0 until assets.length()) {
+                                val asset = assets.getJSONObject(i)
+                                val name = asset.optString("name", "")
+                                val downloadUrl = asset.optString("browser_download_url", "")
+                                if (name == "bootstrap-$arch.zip" && downloadUrl.isNotBlank()) {
+                                    urls.add(downloadUrl)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to query GitHub API latest release: ${e.message}")
+        }
+
+        // 2. Query GitHub API releases list if latest didn't yield assets
+        if (urls.isEmpty()) {
+            try {
+                val apiRequest = Request.Builder()
+                    .url("https://api.github.com/repos/termux/termux-packages/releases?per_page=5")
+                    .header("User-Agent", "GeminiApp-BootstrapInstaller/1.0")
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .build()
+
+                httpClient.newCall(apiRequest).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val bodyString = response.body?.string()
+                        if (!bodyString.isNullOrBlank()) {
+                            val releases = JSONArray(bodyString)
+                            for (r in 0 until releases.length()) {
+                                val releaseObj = releases.getJSONObject(r)
+                                val assets = releaseObj.optJSONArray("assets") ?: continue
+                                for (i in 0 until assets.length()) {
+                                    val asset = assets.getJSONObject(i)
+                                    val name = asset.optString("name", "")
+                                    val downloadUrl = asset.optString("browser_download_url", "")
+                                    if (name == "bootstrap-$arch.zip" && downloadUrl.isNotBlank() && !urls.contains(downloadUrl)) {
+                                        urls.add(downloadUrl)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to query GitHub API releases list: ${e.message}")
+            }
+        }
+
+        // 3. Fallback known weekly release tags
+        val fallbackTags = listOf(
+            "bootstrap-2026.08.30-r1+apt.android-7",
+            "bootstrap-2026.08.23-r1+apt.android-7",
+            "bootstrap-2026.08.16-r1+apt.android-7",
+            "bootstrap-2026.08.09-r1+apt.android-7",
+            "bootstrap-2026.08.02-r1+apt.android-7",
+            "bootstrap-2026.07.26-r1+apt.android-7"
+        )
+        for (tag in fallbackTags) {
+            val encodedTag = tag.replace("+", "%2B")
+            val fallbackUrl = "https://github.com/termux/termux-packages/releases/download/$encodedTag/bootstrap-$arch.zip"
+            if (!urls.contains(fallbackUrl)) {
+                urls.add(fallbackUrl)
+            }
+        }
+
+        return urls
+    }
+
+    suspend fun installLocalEnvironment(
+        context: Context,
+        authPreferences: AuthPreferences,
+        source: BootstrapSource = BootstrapSource.Auto
+    ): Boolean = withContext(Dispatchers.IO) {
+        val appContext = context.applicationContext
+        val prefixDir = getPrefixDir(appContext)
+        val binDir = getBinDir(appContext)
+        val libDir = getLibDir(appContext)
+        val etcDir = getEtcDir(appContext)
+        val tmpDir = getTmpDir(appContext)
+        val homeDir = getHomeDir(appContext)
+        val projectsDir = getProjectsDir(appContext)
+
+        val arch = getBootstrapArch()
+
+        clearLogs()
+        log("Starting installation: arch=$arch, source=${source.javaClass.simpleName}")
+
+        try {
+            Log.d(TAG, "Starting local bootstrap installation (arch: $arch, source: $source) at ${prefixDir.absolutePath}...")
+
+            // Ensure base directories exist
+            tmpDir.mkdirs()
+            homeDir.mkdirs()
+            projectsDir.mkdirs()
+
+            val tempZipFile = File(appContext.cacheDir, "bootstrap-$arch-download.zip")
+            if (tempZipFile.exists()) {
+                tempZipFile.delete()
+            }
+
+            var downloadSucceeded = false
+            var finalDownloadedSize = 0L
+
+            when (source) {
+                is BootstrapSource.Auto -> {
+                    _installerState.value = LocalInstallerState.Downloading(
+                        bytesDownloaded = 0L,
+                        totalBytes = 35 * 1024 * 1024L,
+                        progressFraction = 0.02f,
+                        speedText = "Finding package...",
+                        currentPackageName = "bootstrap-$arch.zip"
+                    )
+
+                    val downloadUrls = resolveBootstrapUrls(arch)
+                    Log.d(TAG, "Resolved ${downloadUrls.size} candidate bootstrap download URLs for $arch")
+
+                    for ((index, url) in downloadUrls.withIndex()) {
+                        try {
+                            Log.d(TAG, "Trying download mirror [${index + 1}/${downloadUrls.size}]: $url")
+                            _installerState.value = LocalInstallerState.Downloading(
+                                bytesDownloaded = 0L,
+                                totalBytes = 35 * 1024 * 1024L,
+                                progressFraction = 0.05f,
+                                speedText = "Connecting mirror ${index + 1}...",
+                                currentPackageName = "bootstrap-$arch.zip"
+                            )
+
+                            val request = Request.Builder()
+                                .url(url)
+                                .header("User-Agent", "GeminiApp-LocalTerminal/${Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64"}")
+                                .build()
+
+                            httpClient.newCall(request).execute().use { response ->
+                                if (!response.isSuccessful) {
+                                    Log.w(TAG, "Mirror returned HTTP ${response.code}: $url")
+                                    return@use
+                                }
+
+                                val body = response.body ?: return@use
+                                val contentLength = body.contentLength()
+                                if (contentLength in 1 until MIN_BOOTSTRAP_SIZE_BYTES) {
+                                    Log.w(TAG, "Rejected URL $url due to content length: $contentLength bytes (< 10 MB)")
+                                    return@use
+                                }
+
+                                val expectedTotal = if (contentLength > 0) contentLength else 35 * 1024 * 1024L
+                                var bytesReadTotal = 0L
+                                val startTime = System.currentTimeMillis()
+
+                                val buffer = ByteArray(64 * 1024)
+                                FileOutputStream(tempZipFile).use { outStream ->
+                                    body.byteStream().use { inStream ->
+                                        var read: Int
+                                        var lastUpdate = System.currentTimeMillis()
+                                        while (inStream.read(buffer).also { read = it } != -1) {
+                                            outStream.write(buffer, 0, read)
+                                            bytesReadTotal += read
+
+                                            val now = System.currentTimeMillis()
+                                            if (now - lastUpdate > 120) {
+                                                val elapsedSec = (now - startTime) / 1000.0
+                                                val speed = if (elapsedSec > 0) bytesReadTotal / elapsedSec else 0.0
+                                                val speedFormatted = "${formatFileSize(speed.toLong())}/s"
+                                                val fraction = (bytesReadTotal.toFloat() / expectedTotal.toFloat()).coerceIn(0.05f, 0.95f)
+
+                                                _installerState.value = LocalInstallerState.Downloading(
+                                                    bytesDownloaded = bytesReadTotal,
+                                                    totalBytes = expectedTotal,
+                                                    progressFraction = fraction,
+                                                    speedText = speedFormatted,
+                                                    currentPackageName = "bootstrap-$arch.zip"
+                                                )
+                                                lastUpdate = now
+                                            }
+                                        }
+                                    }
+                                }
+
+                                finalDownloadedSize = tempZipFile.length()
+                                if (finalDownloadedSize >= MIN_BOOTSTRAP_SIZE_BYTES && validateZipIntegrity(tempZipFile)) {
+                                    downloadSucceeded = true
+                                } else {
+                                    tempZipFile.delete()
+                                }
+                            }
+
+                            if (downloadSucceeded) break
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Download attempt failed from $url: ${e.message}")
+                            if (tempZipFile.exists()) tempZipFile.delete()
+                        }
+                    }
+                }
+
+                is BootstrapSource.DirectUrl -> {
+                    val customUrl = source.url.trim()
+                    if (customUrl.isBlank() || !customUrl.startsWith("http")) {
+                        val errorMsg = "Invalid download URL. Please provide a valid http/https direct link."
+                        _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                        return@withContext false
+                    }
+
+                    _installerState.value = LocalInstallerState.Downloading(
+                        bytesDownloaded = 0L,
+                        totalBytes = 35 * 1024 * 1024L,
+                        progressFraction = 0.05f,
+                        speedText = "Connecting direct URL...",
+                        currentPackageName = customUrl.substringAfterLast("/").take(30)
+                    )
+
+                    try {
+                        val request = Request.Builder()
+                            .url(customUrl)
+                            .header("User-Agent", "GeminiApp-LocalTerminal/${Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64"}")
+                            .build()
+
+                        httpClient.newCall(request).execute().use { response ->
+                            if (!response.isSuccessful) {
+                                val errorMsg = "Server returned HTTP ${response.code} for: $customUrl"
+                                _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                                return@withContext false
+                            }
+
+                            val body = response.body
+                            if (body == null) {
+                                _installerState.value = LocalInstallerState.Error(errorMessage = "Empty response body received from URL.", canRetry = true)
+                                return@withContext false
+                            }
+
+                            val contentLength = body.contentLength()
+                            val expectedTotal = if (contentLength > 0) contentLength else 35 * 1024 * 1024L
+                            var bytesReadTotal = 0L
+                            val startTime = System.currentTimeMillis()
+
+                            val buffer = ByteArray(64 * 1024)
+                            FileOutputStream(tempZipFile).use { outStream ->
+                                body.byteStream().use { inStream ->
+                                    var read: Int
+                                    var lastUpdate = System.currentTimeMillis()
+                                    while (inStream.read(buffer).also { read = it } != -1) {
+                                        outStream.write(buffer, 0, read)
+                                        bytesReadTotal += read
+
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastUpdate > 120) {
+                                            val elapsedSec = (now - startTime) / 1000.0
+                                            val speed = if (elapsedSec > 0) bytesReadTotal / elapsedSec else 0.0
+                                            val speedFormatted = "${formatFileSize(speed.toLong())}/s"
+                                            val fraction = (bytesReadTotal.toFloat() / expectedTotal.toFloat()).coerceIn(0.05f, 0.95f)
+
+                                            _installerState.value = LocalInstallerState.Downloading(
+                                                bytesDownloaded = bytesReadTotal,
+                                                totalBytes = expectedTotal,
+                                                progressFraction = fraction,
+                                                speedText = speedFormatted,
+                                                currentPackageName = customUrl.substringAfterLast("/").take(25)
+                                            )
+                                            lastUpdate = now
+                                        }
+                                    }
+                                }
+                            }
+                            finalDownloadedSize = tempZipFile.length()
+                            if (finalDownloadedSize < MIN_BOOTSTRAP_SIZE_BYTES) {
+                                val errorMsg = "Downloaded file from URL is only ${formatFileSize(finalDownloadedSize)} (< 10 MB required)."
+                                tempZipFile.delete()
+                                _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                                return@withContext false
+                            }
+                            if (!validateZipIntegrity(tempZipFile)) {
+                                val errorMsg = "Downloaded file is not a valid ZIP archive."
+                                tempZipFile.delete()
+                                _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                                return@withContext false
+                            }
+                            downloadSucceeded = true
+                        }
+                    } catch (e: Exception) {
+                        val errorMsg = "Direct download failed: ${e.localizedMessage ?: e.message}"
+                        _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                        return@withContext false
+                    }
+                }
+
+                is BootstrapSource.LocalZipUri -> {
+                    _installerState.value = LocalInstallerState.Downloading(
+                        bytesDownloaded = 0L,
+                        totalBytes = 35 * 1024 * 1024L,
+                        progressFraction = 0.1f,
+                        speedText = "Importing file...",
+                        currentPackageName = "Local ZIP Archive"
+                    )
+
+                    try {
+                        val inStream = appContext.contentResolver.openInputStream(source.uri)
+                            ?: throw IOException("Could not open input stream from chosen file")
+
+                        var bytesReadTotal = 0L
+                        val buffer = ByteArray(64 * 1024)
+                        FileOutputStream(tempZipFile).use { outStream ->
+                            inStream.use { input ->
+                                var read: Int
+                                while (input.read(buffer).also { read = it } != -1) {
+                                    outStream.write(buffer, 0, read)
+                                    bytesReadTotal += read
+                                }
+                            }
+                        }
+                        finalDownloadedSize = tempZipFile.length()
+                        if (finalDownloadedSize < MIN_BOOTSTRAP_SIZE_BYTES) {
+                            val errorMsg = "Selected ZIP file is only ${formatFileSize(finalDownloadedSize)} (< 10 MB minimum required)."
+                            tempZipFile.delete()
+                            _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                            return@withContext false
+                        }
+                        if (!validateZipIntegrity(tempZipFile)) {
+                            val errorMsg = "The selected file (${formatFileSize(finalDownloadedSize)}) is not a valid or readable ZIP archive."
+                            tempZipFile.delete()
+                            _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                            return@withContext false
+                        }
+                        downloadSucceeded = true
+                    } catch (e: Exception) {
+                        val errorMsg = "Failed to import selected ZIP file: ${e.localizedMessage ?: e.message}"
+                        _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                        return@withContext false
+                    }
+                }
+            }
+
+            if (!downloadSucceeded || !tempZipFile.exists() || tempZipFile.length() < MIN_BOOTSTRAP_SIZE_BYTES) {
+                val errorMsg = "Bootstrap archive is missing or invalid (< 10 MB). Please check source and retry."
+                Log.e(TAG, errorMsg)
+                _installerState.value = LocalInstallerState.Error(
+                    errorMessage = errorMsg,
+                    canRetry = true
+                )
+                return@withContext false
+            }
+
+            // Check if this ZIP is a GitHub Actions artifact wrapper containing an inner bootstrap-*.zip or debs.tar.gz
+            var innerZipFound: File? = null
+            var isDebsOnlyArchive = false
+
+            try {
+                java.util.zip.ZipFile(tempZipFile).use { outerZip ->
+                    val entries = outerZip.entries()
+                    var hasRootfsFiles = false
+                    while (entries.hasMoreElements()) {
+                        val entry = entries.nextElement()
+                        val name = entry.name
+                        if ((name.endsWith(".zip") && name.contains("bootstrap")) || (name.endsWith(".zip") && !name.contains("__MACOSX"))) {
+                            val innerFile = File(appContext.cacheDir, "inner_bootstrap.zip")
+                            outerZip.getInputStream(entry).use { inStream ->
+                                FileOutputStream(innerFile).use { outStream ->
+                                    inStream.copyTo(outStream)
+                                }
+                            }
+                            innerZipFound = innerFile
+                            break
+                        }
+                        if (name.contains("bin/") || name == "SYMLINKS.txt" || name.contains("usr/")) {
+                            hasRootfsFiles = true
+                        }
+                        if (name.endsWith("debs.tar.gz") || name.endsWith(".deb")) {
+                            isDebsOnlyArchive = true
+                        }
+                    }
+                    if (!hasRootfsFiles && isDebsOnlyArchive && innerZipFound == null) {
+                        isDebsOnlyArchive = true
+                    } else {
+                        isDebsOnlyArchive = false
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error inspecting outer ZIP structure: ${e.message}")
+            }
+
+            val inner = innerZipFound
+            val archiveToExtract = if (inner != null && inner.exists() && inner.length() > 0) {
+                tempZipFile.delete()
+                inner
+            } else {
+                tempZipFile
+            }
+
+            // STEP 2: Extract verified bootstrap archive
+            log("Archive ready: ${formatFileSize(archiveToExtract.length())}, isDebsArchive=$isDebsOnlyArchive")
+            Log.d(TAG, "Extracting verified bootstrap archive (${formatFileSize(archiveToExtract.length())}, isDebsArchive=$isDebsOnlyArchive)...")
+            _installerState.value = LocalInstallerState.Extracting(
+                extractedFilesCount = 0,
+                totalFilesEstimate = if (isDebsOnlyArchive) 155 else 800,
+                progressFraction = 0.05f,
+                currentFileName = "Preparing directory structure..."
+            )
+
+            // Reset prefix directory for a clean install
+            if (prefixDir.exists()) {
+                prefixDir.deleteRecursively()
+            }
+            prefixDir.mkdirs()
+            binDir.mkdirs()
+            libDir.mkdirs()
+            etcDir.mkdirs()
+            tmpDir.mkdirs()
+
+            var symlinksContent: String? = null
+            var extractedCount = 0
+
+            if (isDebsOnlyArchive) {
+                log("Unpacking DEB packages from archive into ${prefixDir.absolutePath}...")
+                extractDebsArchive(archiveToExtract, prefixDir, appContext) { count, total, pkgName ->
+                    val fraction = (count.toFloat() / total.toFloat()).coerceIn(0.05f, 0.95f)
+                    _installerState.value = LocalInstallerState.Extracting(
+                        extractedFilesCount = count,
+                        totalFilesEstimate = total,
+                        progressFraction = fraction,
+                        currentFileName = "Unpacking package: $pkgName"
+                    )
+                }
+            } else {
+                log("Extracting rootfs files from ZIP into ${prefixDir.absolutePath}...")
+                java.util.zip.ZipFile(archiveToExtract).use { zip ->
+                    val totalEntries = zip.size()
+                    val entries = zip.entries()
+
+                    while (entries.hasMoreElements()) {
+                        val entry = entries.nextElement()
+                        val rawName = entry.name
+
+                        if (rawName == "SYMLINKS.txt" || rawName.endsWith("/SYMLINKS.txt")) {
+                            zip.getInputStream(entry).use { inStream ->
+                                symlinksContent = inStream.bufferedReader(Charsets.UTF_8).readText()
+                            }
+                        } else {
+                            val entryName = rawName
+                                .removePrefix("./")
+                                .replaceFirst(Regex("^data/data/[^/]+/files/usr/"), "")
+                                .replaceFirst(Regex("^data/data/[^/]+/files/"), "")
+                                .removePrefix("usr/")
+                                .removePrefix("./")
+
+                            if (entryName.isNotBlank() && entryName != "/") {
+                                val targetFile = File(prefixDir, entryName)
+
+                                if (entry.isDirectory) {
+                                    targetFile.mkdirs()
+                                } else {
+                                    targetFile.parentFile?.mkdirs()
+                                    zip.getInputStream(entry).use { inStream ->
+                                        FileOutputStream(targetFile).use { fos ->
+                                            inStream.copyTo(fos)
+                                        }
+                                    }
+
+                                    // Mark executables
+                                    val isExecutableDir = targetFile.parentFile?.name in listOf("bin", "libexec", "applets", "sbin")
+                                    val isExecutablePath = targetFile.absolutePath.contains("/bin/") || targetFile.absolutePath.contains("/libexec/")
+                                    if (isExecutableDir || isExecutablePath || !targetFile.name.contains(".")) {
+                                        targetFile.setExecutable(true, false)
+                                        targetFile.setReadable(true, false)
+                                    }
+                                }
+                            }
+                        }
+
+                        extractedCount++
+                        if (extractedCount % 20 == 0 || extractedCount == totalEntries) {
+                            val fraction = (extractedCount.toFloat() / totalEntries.toFloat()).coerceIn(0.05f, 0.95f)
+                            _installerState.value = LocalInstallerState.Extracting(
+                                extractedFilesCount = extractedCount,
+                                totalFilesEstimate = totalEntries,
+                                progressFraction = fraction,
+                                currentFileName = rawName
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Clean up downloaded zip
+            tempZipFile.delete()
+
+            // STEP 3: Process Symlinks
+            val symlinks = symlinksContent
+            if (!symlinks.isNullOrBlank()) {
+                log("Creating system symlinks from SYMLINKS.txt...")
+                _installerState.value = LocalInstallerState.Configuring(
+                    stepDescription = "Creating system symlinks and bindings...",
+                    progressFraction = 0.80f
+                )
+
+                val lines = symlinks.lines()
+                for (line in lines) {
+                    val trimmed = line.trim()
+                    if (trimmed.isEmpty()) continue
+
+                    val parts = when {
+                        trimmed.contains("←") -> trimmed.split("←")
+                        trimmed.contains("<-") -> trimmed.split("<-")
+                        trimmed.contains("->") -> trimmed.split("->").reversed()
+                        else -> emptyList()
+                    }
+
+                    if (parts.size == 2) {
+                        val target = parts[0].trim()
+                        val rawRelPath = parts[1].trim()
+                        val symlinkRelPath = rawRelPath
+                            .removePrefix("./")
+                            .replaceFirst(Regex("^data/data/[^/]+/files/usr/"), "")
+                            .replaceFirst(Regex("^data/data/[^/]+/files/"), "")
+                            .removePrefix("usr/")
+                            .removePrefix("./")
+
+                        val symlinkFile = File(prefixDir, symlinkRelPath)
+
+                        try {
+                            symlinkFile.parentFile?.mkdirs()
+                            if (symlinkFile.exists() || isSymlink(symlinkFile)) {
+                                symlinkFile.delete()
+                            }
+                            Os.symlink(target, symlinkFile.absolutePath)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to create symlink '$target' -> '${symlinkFile.absolutePath}': ${e.message}")
+                        }
+                    }
+                }
+            }
+
+            // STEP 4: Configure Shell Profiles & Environment
+            log("Configuring shell profiles (.bashrc) and directory permissions...")
+            _installerState.value = LocalInstallerState.Configuring(
+                stepDescription = "Configuring shell profiles, paths, and environment...",
+                progressFraction = 0.90f
+            )
+            configureEnvironmentFiles(appContext, prefixDir, binDir, etcDir, homeDir, projectsDir)
+
+            // STEP 5: Strict Verification
+            _installerState.value = LocalInstallerState.Verifying(
+                testName = "Verifying Termux binaries and shell execution..."
+            )
+            delay(200)
+
+            val installedSize = calculateDirectorySize(prefixDir)
+            val installedSizeStr = formatFileSize(installedSize)
+            log("Total installed prefix size: $installedSizeStr ($installedSize bytes)")
+
+            if (installedSize < 5 * 1024 * 1024L) {
+                val errorMsg = "Verification failed: installed package directory is too small ($installedSizeStr). Installation is incomplete."
+                log("❌ $errorMsg")
+                _installerState.value = LocalInstallerState.Error(
+                    errorMessage = errorMsg,
+                    canRetry = true
+                )
+                return@withContext false
+            }
+
+            log("Running verification test command in shell...")
+            val testRes = executeCommand(
+                command = "echo 'GEMINI_LOCAL_TOOLS_OK' && pwd && (which bash || which sh || echo 'sh_ok')",
+                context = appContext
+            )
+            log("Verification output: ${testRes.output.trim()}")
+
+            if (!testRes.output.contains("GEMINI_LOCAL_TOOLS_OK")) {
+                val errorMsg = "Shell verification test failed: ${testRes.output}"
+                log("❌ $errorMsg")
+                _installerState.value = LocalInstallerState.Error(
+                    errorMessage = errorMsg,
+                    canRetry = true
+                )
+                return@withContext false
+            }
+
+            // Save installation state in preferences
+            authPreferences.setLocalToolsInstalled(true, BOOTSTRAP_VERSION)
+            authPreferences.setLocalToolsEnabled(true)
+            authPreferences.setTerminalToolEnabled(true)
+
+            _installerState.value = LocalInstallerState.Success(
+                message = "Termux Linux environment verified and installed successfully!",
+                prefixPath = prefixDir.absolutePath,
+                totalDiskUsageFormatted = getFormattedDiskSpace(appContext)
+            )
+            log("✅ Local environment ready and verified! Total space: ${getFormattedDiskSpace(appContext)}")
+            return@withContext true
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to install local tools: ${e.message}", e)
+            _installerState.value = LocalInstallerState.Error(
+                errorMessage = "Installation failed: ${e.localizedMessage ?: e.message}",
+                canRetry = true
+            )
+            return@withContext false
+        }
+    }
+
+    private fun validateZipIntegrity(file: File): Boolean {
+        if (!file.exists() || file.length() < MIN_BOOTSTRAP_SIZE_BYTES) {
+            Log.w(TAG, "File size check failed: ${file.length()} bytes (< 10 MB required)")
+            return false
+        }
+        return try {
+            java.util.zip.ZipFile(file).use { zip ->
+                val count = zip.size()
+                Log.d(TAG, "validateZipIntegrity: ZIP contains $count entries")
+                count > 0
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "ZIP integrity error: ${e.message}", e)
+            try {
+                ZipInputStream(BufferedInputStream(FileInputStream(file))).use { zis ->
+                    zis.nextEntry != null
+                }
+            } catch (_: Exception) {
+                false
+            }
+        }
+    }
+
+    private fun isSymlink(file: File): Boolean {
+        return try {
+            val canon = if (file.parent == null) file else File(file.parentFile?.canonicalFile, file.name)
+            canon.canonicalFile != canon.absoluteFile
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun extractDebsArchive(
+        archiveFile: File,
+        prefixDir: File,
+        appContext: Context,
+        onProgress: (Int, Int, String) -> Unit
+    ) {
+        val cacheDir = File(appContext.cacheDir, "deb_extract_tmp")
+        if (cacheDir.exists()) cacheDir.deleteRecursively()
+        cacheDir.mkdirs()
+
+        try {
+            var debsTarGzFile: File? = null
+
+            // 1. Try to open as a ZIP archive
+            var isZip = false
+            try {
+                java.util.zip.ZipFile(archiveFile).use { zip ->
+                    isZip = true
+                    val entries = zip.entries()
+                    while (entries.hasMoreElements()) {
+                        val entry = entries.nextElement()
+                        val name = entry.name
+                        if (name.endsWith("debs.tar.gz") || name.endsWith(".tar.gz") || name.endsWith(".tgz")) {
+                            val target = File(cacheDir, "debs.tar.gz")
+                            zip.getInputStream(entry).use { inStream ->
+                                FileOutputStream(target).use { outStream ->
+                                    inStream.copyTo(outStream)
+                                }
+                            }
+                            debsTarGzFile = target
+                            log("Extracted debs.tar.gz from zip archive (${formatFileSize(target.length())})")
+                            break
+                        } else if (name.endsWith(".deb")) {
+                            val target = File(cacheDir, name.substringAfterLast("/"))
+                            zip.getInputStream(entry).use { inStream ->
+                                FileOutputStream(target).use { outStream ->
+                                    inStream.copyTo(outStream)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                log("Not a standard ZIP: ${e.message}")
+            }
+
+            if (!isZip) {
+                debsTarGzFile = archiveFile
+            }
+
+            // 2. Unpack debs.tar.gz if found
+            if (debsTarGzFile != null && debsTarGzFile.exists()) {
+                try {
+                    TarArchiveInputStream(GzipCompressorInputStream(BufferedInputStream(FileInputStream(debsTarGzFile)))).use { tarIn ->
+                        var entry: TarArchiveEntry? = tarIn.nextEntry
+                        while (entry != null) {
+                            if (!entry.isDirectory && entry.name.endsWith(".deb")) {
+                                val debName = entry.name.substringAfterLast("/")
+                                val destDeb = File(cacheDir, debName)
+                                FileOutputStream(destDeb).use { fos ->
+                                    tarIn.copyTo(fos)
+                                }
+                            }
+                            entry = tarIn.nextEntry
+                        }
+                    }
+                } catch (e: Exception) {
+                    log("Error unpacking debs.tar.gz: ${e.message}")
+                }
+            }
+
+            val debFiles = cacheDir.listFiles { _, name -> name.endsWith(".deb") }?.toList() ?: emptyList()
+            log("Found ${debFiles.size} deb packages in cache to extract into ${prefixDir.absolutePath}")
+
+            val dpkgStatusDir = File(prefixDir, "var/lib/dpkg")
+            dpkgStatusDir.mkdirs()
+            File(dpkgStatusDir, "info").mkdirs()
+            File(dpkgStatusDir, "updates").mkdirs()
+            val dpkgStatusFile = File(dpkgStatusDir, "status")
+            if (!dpkgStatusFile.exists()) dpkgStatusFile.createNewFile()
+            val dpkgAvailFile = File(dpkgStatusDir, "available")
+            if (!dpkgAvailFile.exists()) dpkgAvailFile.createNewFile()
+
+            var extractedCount = 0
+            val totalDebs = debFiles.size.coerceAtLeast(1)
+
+            for (debFile in debFiles) {
+                try {
+                    val pkgName = debFile.name.substringBefore("_")
+                    extractSingleDebFile(debFile, prefixDir, dpkgStatusFile, appContext)
+                    log("✓ Extracted package ($extractedCount/$totalDebs): $pkgName")
+                } catch (e: Exception) {
+                    log("⚠ Failed extracting deb ${debFile.name}: ${e.message}")
+                }
+                extractedCount++
+                onProgress(extractedCount, totalDebs, debFile.name.substringBefore("_"))
+            }
+
+        } finally {
+            cacheDir.deleteRecursively()
+        }
+    }
+
+    private fun extractSingleDebFile(debFile: File, prefixDir: File, dpkgStatusFile: File, appContext: Context) {
+        val tempDebDir = File(appContext.cacheDir, "deb_tmp_${Math.abs(debFile.name.hashCode())}")
+        if (tempDebDir.exists()) tempDebDir.deleteRecursively()
+        tempDebDir.mkdirs()
+        try {
+            var dataTarFile: File? = null
+            var controlTarFile: File? = null
+
+            ArArchiveInputStream(BufferedInputStream(FileInputStream(debFile))).use { arIn ->
+                var arEntry: ArArchiveEntry? = arIn.nextEntry
+                while (arEntry != null) {
+                    val cleanName = arEntry.name.trim().removeSuffix("/")
+                    if (cleanName.startsWith("data.tar")) {
+                        val dest = File(tempDebDir, cleanName)
+                        FileOutputStream(dest).use { fos -> arIn.copyTo(fos) }
+                        dataTarFile = dest
+                    } else if (cleanName.startsWith("control.tar")) {
+                        val dest = File(tempDebDir, cleanName)
+                        FileOutputStream(dest).use { fos -> arIn.copyTo(fos) }
+                        controlTarFile = dest
+                    }
+                    arEntry = arIn.nextEntry
+                }
+            }
+
+            // 1. Extract data.tar.* into prefixDir
+            if (dataTarFile != null && dataTarFile.exists() && dataTarFile.length() > 0) {
+                val fileName = dataTarFile.name
+                val rawStream: InputStream = when {
+                    fileName.endsWith(".xz") -> XZCompressorInputStream(BufferedInputStream(FileInputStream(dataTarFile)))
+                    fileName.endsWith(".gz") || fileName.endsWith(".tgz") -> GzipCompressorInputStream(BufferedInputStream(FileInputStream(dataTarFile)))
+                    else -> BufferedInputStream(FileInputStream(dataTarFile))
+                }
+                TarArchiveInputStream(rawStream).use { tarIn ->
+                    var tarEntry: TarArchiveEntry? = tarIn.nextEntry
+                    while (tarEntry != null) {
+                        val rawTarName = tarEntry.name
+                        val normalized = rawTarName
+                            .removePrefix("./")
+                            .replaceFirst(Regex("^data/data/[^/]+/files/usr/"), "")
+                            .replaceFirst(Regex("^data/data/[^/]+/files/"), "")
+                            .removePrefix("usr/")
+                            .removePrefix("./")
+
+                        if (normalized.isNotBlank() && normalized != "/") {
+                            val targetFile = File(prefixDir, normalized)
+                            if (tarEntry.isDirectory) {
+                                targetFile.mkdirs()
+                            } else if (tarEntry.isSymbolicLink) {
+                                try {
+                                    targetFile.parentFile?.mkdirs()
+                                    if (targetFile.exists() || isSymlink(targetFile)) {
+                                        targetFile.delete()
+                                    }
+                                    Os.symlink(tarEntry.linkName, targetFile.absolutePath)
+                                } catch (e: Exception) {
+                                    // Non-fatal symlink notice
+                                }
+                            } else {
+                                targetFile.parentFile?.mkdirs()
+                                FileOutputStream(targetFile).use { fos ->
+                                    tarIn.copyTo(fos)
+                                }
+                                val isExec = targetFile.parentFile?.name in listOf("bin", "libexec", "applets", "sbin") ||
+                                        targetFile.absolutePath.contains("/bin/") ||
+                                        !targetFile.name.contains(".")
+                                if (isExec) {
+                                    targetFile.setExecutable(true, false)
+                                    targetFile.setReadable(true, false)
+                                }
+                            }
+                        }
+                        tarEntry = tarIn.nextEntry
+                    }
+                }
+            }
+
+            // 2. Extract control.tar.* into dpkgStatusFile
+            if (controlTarFile != null && controlTarFile.exists() && controlTarFile.length() > 0) {
+                val fileName = controlTarFile.name
+                val rawStream: InputStream = when {
+                    fileName.endsWith(".xz") -> XZCompressorInputStream(BufferedInputStream(FileInputStream(controlTarFile)))
+                    fileName.endsWith(".gz") || fileName.endsWith(".tgz") -> GzipCompressorInputStream(BufferedInputStream(FileInputStream(controlTarFile)))
+                    else -> BufferedInputStream(FileInputStream(controlTarFile))
+                }
+                TarArchiveInputStream(rawStream).use { tarIn ->
+                    var tarEntry: TarArchiveEntry? = tarIn.nextEntry
+                    while (tarEntry != null) {
+                        val cName = tarEntry.name.removePrefix("./")
+                        if (cName == "control") {
+                            val controlText = tarIn.bufferedReader(Charsets.UTF_8).readText()
+                            if (controlText.isNotBlank()) {
+                                FileOutputStream(dpkgStatusFile, true).bufferedWriter().use { writer ->
+                                    writer.write(controlText.trim())
+                                    writer.write("\nStatus: install ok installed\n\n")
+                                }
+                            }
+                        }
+                        tarEntry = tarIn.nextEntry
+                    }
+                }
+            }
+        } finally {
+            tempDebDir.deleteRecursively()
+        }
+    }
+
+    private fun setPermissionsRecursively(file: File) {
+        try {
+            if (file.isDirectory) {
+                file.setReadable(true, false)
+                file.setWritable(true, true)
+                file.setExecutable(true, false)
+                try {
+                    Os.chmod(file.absolutePath, 493) // 0755
+                } catch (_: Exception) {}
+                file.listFiles()?.forEach { child ->
+                    setPermissionsRecursively(child)
+                }
+            } else {
+                val isExec = file.parentFile?.name in listOf("bin", "libexec", "sbin", "applets") ||
+                        file.absolutePath.contains("/bin/") ||
+                        file.absolutePath.contains("/libexec/") ||
+                        !file.name.contains(".") ||
+                        file.name.endsWith(".so") ||
+                        file.name.endsWith(".sh")
+                file.setReadable(true, false)
+                if (isExec) {
+                    file.setExecutable(true, false)
+                    try {
+                        Os.chmod(file.absolutePath, 493) // 0755
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Permission setup error for ${file.name}: ${e.message}")
+        }
+    }
+
+    private fun configureEnvironmentFiles(
+        context: Context,
+        prefixDir: File,
+        binDir: File,
+        etcDir: File,
+        homeDir: File,
+        projectsDir: File
+    ) {
+        val dashFile = File(binDir, "dash")
+        val bashFile = File(binDir, "bash")
+        val shFile = File(binDir, "sh")
+
+        // Ensure dash has direct execute permission
+        if (dashFile.exists()) {
+            dashFile.setExecutable(true, false)
+            dashFile.setReadable(true, false)
+            try { Os.chmod(dashFile.absolutePath, 493) } catch (_: Exception) {}
+
+            if (!bashFile.exists()) {
+                try {
+                    Os.symlink("dash", bashFile.absolutePath)
+                } catch (_: Exception) {
+                    try { dashFile.copyTo(bashFile, overwrite = true) } catch (_: Exception) {}
+                }
+            }
+            if (!shFile.exists() || !shFile.canExecute()) {
+                try {
+                    if (shFile.exists() || isSymlink(shFile)) shFile.delete()
+                    Os.symlink("dash", shFile.absolutePath)
+                } catch (_: Exception) {
+                    try { dashFile.copyTo(shFile, overwrite = true) } catch (_: Exception) {}
+                }
+            }
+        }
+
+        // Apply 0755 permissions recursively
+        setPermissionsRecursively(prefixDir)
+        setPermissionsRecursively(homeDir)
+        setPermissionsRecursively(projectsDir)
+
+        // Setup $HOME/.bashrc
+        val bashrc = File(homeDir, ".bashrc")
+        bashrc.writeText(
+            """# Gemini Local Linux Environment
+export PREFIX="${prefixDir.absolutePath}"
+export HOME="${homeDir.absolutePath}"
+export PATH="${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/system/xbin"
+export TMPDIR="${prefixDir.absolutePath}/tmp"
+export LD_LIBRARY_PATH="${prefixDir.absolutePath}/lib:/system/lib64:/system/lib"
+export TERM="xterm-256color"
+export COLORTERM="truecolor"
+export LANG="en_US.UTF-8"
+export LC_ALL="en_US.UTF-8"
+
+alias ll='ls -la'
+alias la='ls -A'
+alias l='ls -CF'
+alias cls='clear'
+alias proj='cd ${projectsDir.absolutePath}'
+
+# Termux styled color prompt
+PS1='\[\033[01;32m\]gemini\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+""".trimIndent()
+        )
+
+        val profile = File(homeDir, ".profile")
+        profile.writeText(
+            """if [ -f "${bashrc.absolutePath}" ]; then
+    . "${bashrc.absolutePath}"
+fi
+""".trimIndent()
+        )
+
+        // Setup $PREFIX/etc/profile
+        val etcProfile = File(etcDir, "profile")
+        etcProfile.writeText(
+            """export PREFIX="${prefixDir.absolutePath}"
+export HOME="${homeDir.absolutePath}"
+export PATH="${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/system/xbin"
+export TMPDIR="${prefixDir.absolutePath}/tmp"
+export LD_LIBRARY_PATH="${prefixDir.absolutePath}/lib:/system/lib64:/system/lib"
+export TERM="xterm-256color"
+""".trimIndent()
+        )
+
+        // Ensure README in projects directory
+        val readme = File(projectsDir, "README.md")
+        if (!readme.exists()) {
+            readme.writeText(
+                """# Projects Directory
+This directory is your local workspace for coding and AI agent file operations.
+All files created here persist inside the application.
+""".trimIndent()
+            )
+        }
+    }
+
+    suspend fun executeCommand(
+        command: String,
+        context: Context? = null,
+        workingDir: String? = null,
+        customEnv: Map<String, String>? = null,
+        timeoutSeconds: Long = 60
+    ): LocalCommandResult = withContext(Dispatchers.IO) {
+        val startTime = System.currentTimeMillis()
+        val env = mutableMapOf<String, String>()
+
+        var resolvedWorkingDir = workingDir
+        if (context != null) {
+            val prefix = getPrefixDir(context)
+            val bin = getBinDir(context)
+            val lib = getLibDir(context)
+            val home = getHomeDir(context)
+            val tmp = getTmpDir(context)
+
+            env["PREFIX"] = prefix.absolutePath
+            env["HOME"] = home.absolutePath
+            env["PATH"] = "${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin"
+            env["TMPDIR"] = tmp.absolutePath
+            env["LD_LIBRARY_PATH"] = "${lib.absolutePath}:/system/lib64:/system/lib"
+            env["TERM"] = "xterm-256color"
+            env["COLORTERM"] = "truecolor"
+            env["LANG"] = "en_US.UTF-8"
+            env["LC_ALL"] = "en_US.UTF-8"
+
+            if (resolvedWorkingDir == null || !File(resolvedWorkingDir).exists()) {
+                resolvedWorkingDir = home.absolutePath
+            }
+        }
+
+        if (customEnv != null) {
+            env.putAll(customEnv)
+        }
+
+        val shellBinary = if (context != null) {
+            val localBash = File(getBinDir(context), "bash")
+            val localDash = File(getBinDir(context), "dash")
+            val localSh = File(getBinDir(context), "sh")
+            when {
+                localBash.exists() && localBash.canExecute() -> localBash.absolutePath
+                localDash.exists() && localDash.canExecute() -> localDash.absolutePath
+                localSh.exists() && localSh.canExecute() -> localSh.absolutePath
+                localDash.exists() -> localDash.absolutePath
+                localBash.exists() -> localBash.absolutePath
+                localSh.exists() -> localSh.absolutePath
+                else -> "/system/bin/sh"
+            }
+        } else {
+            "/system/bin/sh"
+        }
+
+        val processBuilder = ProcessBuilder(shellBinary, "-c", command)
+        if (resolvedWorkingDir != null && File(resolvedWorkingDir).exists()) {
+            processBuilder.directory(File(resolvedWorkingDir))
+        }
+
+        val procEnv = processBuilder.environment()
+        procEnv.putAll(env)
+        processBuilder.redirectErrorStream(true)
+
+        return@withContext try {
+            val process = processBuilder.start()
+            val outputBuilder = StringBuilder()
+
+            val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                outputBuilder.append(line).append("\n")
+            }
+
+            val exited = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+            val durationMs = System.currentTimeMillis() - startTime
+
+            if (!exited) {
+                process.destroyForcibly()
+                outputBuilder.append("\n[Process timed out after ${timeoutSeconds}s]")
+                LocalCommandResult(exitCode = 124, output = outputBuilder.toString().trim(), durationMs = durationMs)
+            } else {
+                val exitCode = process.exitValue()
+                LocalCommandResult(exitCode = exitCode, output = outputBuilder.toString().trim(), durationMs = durationMs)
+            }
+        } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - startTime
+            Log.e(TAG, "Command execution error: ${e.message}")
+            LocalCommandResult(
+                exitCode = 1,
+                output = "Execution failed: ${e.localizedMessage ?: e.message}",
+                durationMs = durationMs
+            )
+        }
+    }
+
+    fun resetEnvironment(context: Context) {
+        try {
+            LocalTerminalManager.closeAll()
+        } catch (_: Exception) {}
+
+        val prefix = getPrefixDir(context)
+        val tmp = getTmpDir(context)
+        if (prefix.exists()) {
+            prefix.deleteRecursively()
+        }
+        if (tmp.exists()) {
+            tmp.deleteRecursively()
+        }
+        _installerState.value = LocalInstallerState.Idle
+        Log.d(TAG, "Local environment cleared and reset.")
+    }
+}

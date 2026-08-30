@@ -38,9 +38,18 @@ class AuthPreferences(private val context: Context) {
         val CACHED_MODELS_JSON = stringPreferencesKey("cached_models_json")
         val CACHED_QUOTAS_JSON = stringPreferencesKey("cached_quotas_json")
         val CHAT_FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("chat_font_scale")
+        val IS_LOCAL_TOOLS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_local_tools_enabled")
+        val IS_LOCAL_TOOLS_INSTALLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_local_tools_installed")
+        val LOCAL_TOOLS_INSTALL_DATE = androidx.datastore.preferences.core.longPreferencesKey("local_tools_install_date")
+        val LOCAL_TOOLS_VERSION = stringPreferencesKey("local_tools_version")
         val AGY_BRIDGE_WS_URL = stringPreferencesKey("agy_bridge_ws_url")
         val AGY_BRIDGE_HTTP_URL = stringPreferencesKey("agy_bridge_http_url")
     }
+
+    val isLocalToolsEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_ENABLED] ?: false }
+    val isLocalToolsInstalled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_INSTALLED] ?: false }
+    val localToolsInstallDate: Flow<Long?> = context.dataStore.data.map { it[LOCAL_TOOLS_INSTALL_DATE] }
+    val localToolsVersion: Flow<String?> = context.dataStore.data.map { it[LOCAL_TOOLS_VERSION] }
 
     val agyBridgeWsUrl: Flow<String> = context.dataStore.data.map { it[AGY_BRIDGE_WS_URL] ?: "ws://127.0.0.1:8080" }
     val agyBridgeHttpUrl: Flow<String> = context.dataStore.data.map { it[AGY_BRIDGE_HTTP_URL] ?: "http://127.0.0.1:8080" }
@@ -155,6 +164,22 @@ class AuthPreferences(private val context: Context) {
     suspend fun setTerminalToolEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[IS_TERMINAL_TOOL_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setLocalToolsEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[IS_LOCAL_TOOLS_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setLocalToolsInstalled(installed: Boolean, version: String = "1.0.0") {
+        context.dataStore.edit { prefs ->
+            prefs[IS_LOCAL_TOOLS_INSTALLED] = installed
+            if (installed) {
+                prefs[LOCAL_TOOLS_INSTALL_DATE] = System.currentTimeMillis()
+                prefs[LOCAL_TOOLS_VERSION] = version
+            }
         }
     }
 
