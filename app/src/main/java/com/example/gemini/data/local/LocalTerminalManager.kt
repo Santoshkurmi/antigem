@@ -82,6 +82,7 @@ class LocalPtySession(
 
     override fun onSessionFinished(finishedSession: TerminalSession) {
         _isExited.value = true
+        LocalTerminalManager.closeSession(id)
     }
 
     override fun onCopyTextToClipboard(session: TerminalSession, text: String) {}

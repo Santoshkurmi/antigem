@@ -67,6 +67,13 @@ fun LocalTerminalContent(
         }
     }
 
+    // Auto close terminal dialog when all sessions are closed
+    LaunchedEffect(sessions) {
+        if (sessions.isEmpty()) {
+            onClose()
+        }
+    }
+
     val activeSession = sessions.find { it.id == activeSessionId }
         ?: sessions.firstOrNull()
         ?: remember { LocalTerminalManager.getOrCreatePrimarySession(context) }
@@ -80,9 +87,18 @@ fun LocalTerminalContent(
 
     var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
 
-    val sendKeyToTerminal: (String) -> Unit = { str ->
-        activeSession.write(str)
-        currentTerminalView?.requestFocus()
+    val sendKeyToTerminal: (Int, String) -> Unit = { keyCode, fallbackString ->
+        val view = currentTerminalView
+        val consumed = if (keyCode != 0 && view != null) {
+            val down = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
+            val up = KeyEvent(KeyEvent.ACTION_UP, keyCode)
+            view.dispatchKeyEvent(down) && view.dispatchKeyEvent(up)
+        } else false
+
+        if (!consumed) {
+            activeSession.write(fallbackString)
+        }
+        view?.requestFocus()
     }
 
     Box(
@@ -172,31 +188,6 @@ fun LocalTerminalContent(
                     }
                 }
 
-                // Font size controls
-                IconButton(
-                    onClick = {
-                        if (terminalTextSize > 18) {
-                            terminalTextSize -= 3
-                            currentTerminalView?.setTextSize(terminalTextSize)
-                        }
-                    },
-                    modifier = Modifier.size(26.dp)
-                ) {
-                    Text("A-", fontSize = 10.sp, color = Color.LightGray, fontWeight = FontWeight.Bold)
-                }
-
-                IconButton(
-                    onClick = {
-                        if (terminalTextSize < 60) {
-                            terminalTextSize += 3
-                            currentTerminalView?.setTextSize(terminalTextSize)
-                        }
-                    },
-                    modifier = Modifier.size(26.dp)
-                ) {
-                    Text("A+", fontSize = 10.sp, color = Color.LightGray, fontWeight = FontWeight.Bold)
-                }
-
                 // Close / Hide Button
                 IconButton(
                     onClick = onClose,
@@ -232,7 +223,18 @@ fun LocalTerminalContent(
                                 isFocusable = true
                                 isFocusableInTouchMode = true
                                 setTerminalViewClient(object : TerminalViewClient {
-                                    override fun onScale(scale: Float): Float = 1f
+                                    override fun onScale(scale: Float): Float {
+                                        if (scale < 0.9f || scale > 1.1f) {
+                                            val doIncrease = scale > 1.0f
+                                            val newSize = if (doIncrease) terminalTextSize + 1 else terminalTextSize - 1
+                                            if (newSize in 18..60) {
+                                                terminalTextSize = newSize
+                                                currentTerminalView?.setTextSize(terminalTextSize)
+                                            }
+                                            return 1.0f
+                                        }
+                                        return scale
+                                    }
                                     override fun onSingleTapUp(e: MotionEvent) {
                                         val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
                                         this@apply.requestFocus()
@@ -307,25 +309,25 @@ fun LocalTerminalContent(
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     TermuxKey(label = "ESC", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("\u001B")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_ESCAPE, "\u001B")
                     }
                     TermuxKey(label = "/", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("/")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_SLASH, "/")
                     }
                     TermuxKey(label = "-", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("-")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_MINUS, "-")
                     }
                     TermuxKey(label = "HOME", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("\u001B[H")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_HOME, "\u001B[H")
                     }
                     TermuxKey(label = "↑", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("\u001B[A")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_UP, "\u001B[A")
                     }
                     TermuxKey(label = "END", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("\u001B[F")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_END, "\u001B[F")
                     }
                     TermuxKey(label = "PGUP", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("\u001B[5~")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_UP, "\u001B[5~")
                     }
                 }
 
@@ -335,7 +337,7 @@ fun LocalTerminalContent(
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     TermuxKey(label = "↹", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("\t")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_TAB, "\t")
                     }
                     TermuxKey(
                         label = "CTRL",
@@ -352,16 +354,16 @@ fun LocalTerminalContent(
                         isAltActive = !isAltActive
                     }
                     TermuxKey(label = "←", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("\u001B[D")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_LEFT, "\u001B[D")
                     }
                     TermuxKey(label = "↓", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("\u001B[B")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_DOWN, "\u001B[B")
                     }
                     TermuxKey(label = "→", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("\u001B[C")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_RIGHT, "\u001B[C")
                     }
                     TermuxKey(label = "PGDN", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal("\u001B[6~")
+                        sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_DOWN, "\u001B[6~")
                     }
                 }
             }
