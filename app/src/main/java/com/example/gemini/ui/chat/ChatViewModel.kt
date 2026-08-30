@@ -231,8 +231,28 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     val chatFontScale = authPrefs.chatFontScale
+    val useSshTerminal = authPrefs.useSshTerminal
+    val termuxSshHost = authPrefs.termuxSshHost
+    val termuxSshPort = authPrefs.termuxSshPort
+    val termuxSshUser = authPrefs.termuxSshUser
+    val termuxSshPass = authPrefs.termuxSshPass
     val isLocalToolsEnabled = authPrefs.isLocalToolsEnabled
     val isLocalToolsInstalled = authPrefs.isLocalToolsInstalled
+
+    fun setUseSshTerminal(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.setUseSshTerminal(enabled)
+            if (enabled) {
+                authPrefs.setTerminalToolEnabled(true)
+            }
+        }
+    }
+
+    fun saveSshSettings(host: String, port: Int, user: String, pass: String) {
+        viewModelScope.launch {
+            authPrefs.saveSshSettings(host, port, user, pass)
+        }
+    }
 
     fun setLocalToolsEnabled(enabled: Boolean) {
         viewModelScope.launch {

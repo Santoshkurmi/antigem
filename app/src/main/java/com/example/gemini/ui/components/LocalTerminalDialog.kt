@@ -284,6 +284,14 @@ fun LocalTerminalContent(
                             if (tv.currentSession != activeSession.terminalSession) {
                                 tv.attachSession(activeSession.terminalSession)
                             }
+                            tv.setTerminalInputListener(object : TerminalView.TerminalInputListener {
+                                override fun onTerminalInput(text: String) {
+                                    activeSession.write(text)
+                                }
+                                override fun onTerminalInputCodePoint(prependEscape: Boolean, codePoint: Int) {
+                                    activeSession.writeCodePoint(prependEscape, codePoint)
+                                }
+                            })
                             activeSession.onTextChangedListener = {
                                 tv.post {
                                     tv.onScreenUpdated()

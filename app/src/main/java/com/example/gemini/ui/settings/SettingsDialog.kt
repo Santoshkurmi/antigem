@@ -35,6 +35,7 @@ import com.example.gemini.data.automation.AndroidAutomationService
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ModelQuota
 import com.example.gemini.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsDialog(
@@ -50,6 +51,11 @@ fun SettingsDialog(
     summaryModelId: String = "always_ask",
     isDevModeEnabled: Boolean = false,
     chatFontScale: Float = 1.0f,
+    useSshTerminal: Boolean = false,
+    sshHost: String = "127.0.0.1",
+    sshPort: Int = 8022,
+    sshUser: String = "root",
+    sshPass: String = "root",
     isLocalToolsEnabled: Boolean = false,
     isLocalToolsInstalled: Boolean = false,
     onLoginWithGoogle: () -> Unit,
@@ -63,6 +69,8 @@ fun SettingsDialog(
     onSetSummaryModelId: (String) -> Unit = {},
     onSetChatFontScale: (Float) -> Unit = {},
     onToggleDevMode: (Boolean) -> Unit = {},
+    onToggleUseSshTerminal: (Boolean) -> Unit = {},
+    onSaveSshSettings: (String, Int, String, String) -> Unit = { _, _, _, _ -> },
     onToggleLocalTools: (Boolean) -> Unit = {},
     onInstallLocalTools: () -> Unit = {},
     onOpenLocalTerminal: () -> Unit = {},
@@ -81,6 +89,14 @@ fun SettingsDialog(
         isStorageGranted = isStoragePermissionGranted(context)
         onDispose { }
     }
+
+    val coroutineScope = rememberCoroutineScope()
+    var hostState by remember(sshHost) { mutableStateOf(sshHost) }
+    var portState by remember(sshPort) { mutableStateOf(sshPort.toString()) }
+    var userState by remember(sshUser) { mutableStateOf(sshUser) }
+    var passState by remember(sshPass) { mutableStateOf(sshPass) }
+    var sshTestStatus by remember { mutableStateOf<String?>(null) }
+    var isTestingSsh by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -120,6 +136,7 @@ fun SettingsDialog(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
+                            // SSH Terminal Toggle
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
@@ -127,14 +144,14 @@ fun SettingsDialog(
                                 Icon(
                                     imageVector = Icons.Outlined.Terminal,
                                     contentDescription = null,
-                                    tint = if (isLocalToolsEnabled) QuotaGreen else ClaudeTerracotta,
+                                    tint = if (useSshTerminal) QuotaGreen else ClaudeTerracotta,
                                     modifier = Modifier.size(22.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "Local Linux Tools & Terminal",
+                                            text = "Use Terminal via SSH",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 14.sp,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -144,21 +161,21 @@ fun SettingsDialog(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(4.dp))
                                                 .background(
-                                                    if (isLocalToolsInstalled) QuotaGreen.copy(alpha = 0.15f)
-                                                    else ClaudeTerracotta.copy(alpha = 0.15f)
+                                                    if (useSshTerminal) QuotaGreen.copy(alpha = 0.15f)
+                                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                                                 )
                                                 .padding(horizontal = 6.dp, vertical = 1.dp)
                                         ) {
                                             Text(
-                                                text = if (isLocalToolsInstalled) "Installed" else "Not Installed",
+                                                text = if (useSshTerminal) "SSH Mode" else "Local Mode",
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isLocalToolsInstalled) QuotaGreen else ClaudeTerracotta
+                                                color = if (useSshTerminal) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                             )
                                         }
                                     }
                                     Text(
-                                        text = "Termux native Linux shell, PTY interactive terminal, and package tools",
+                                        text = if (useSshTerminal) "Connect to Termux sshd without local installation" else "Run shell using local app environment",
                                         fontSize = 11.5.sp,
                                         lineHeight = 15.sp,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
@@ -166,24 +183,90 @@ fun SettingsDialog(
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Switch(
-                                    checked = isLocalToolsEnabled,
+                                    checked = useSshTerminal,
                                     onCheckedChange = { checked ->
-                                        if (checked && !isLocalToolsInstalled) {
-                                            onInstallLocalTools()
-                                        } else {
-                                            onToggleLocalTools(checked)
-                                        }
+                                        onToggleUseSshTerminal(checked)
                                     },
                                     colors = SwitchDefaults.colors(
                                         checkedThumbColor = Color.White,
-                                        checkedTrackColor = if (isLocalToolsInstalled) QuotaGreen else ClaudeTerracotta
+                                        checkedTrackColor = QuotaGreen
                                     )
                                 )
                             }
 
-                            if (isLocalToolsInstalled) {
+                            if (useSshTerminal) {
                                 Spacer(modifier = Modifier.height(10.dp))
                                 HorizontalDivider(thickness = 0.6.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = hostState,
+                                        onValueChange = {
+                                            hostState = it
+                                            onSaveSshSettings(it, portState.toIntOrNull() ?: 8022, userState, passState)
+                                        },
+                                        label = { Text("Host", fontSize = 11.sp) },
+                                        modifier = Modifier.weight(2f),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    OutlinedTextField(
+                                        value = portState,
+                                        onValueChange = {
+                                            portState = it
+                                            onSaveSshSettings(hostState, it.toIntOrNull() ?: 8022, userState, passState)
+                                        },
+                                        label = { Text("Port", fontSize = 11.sp) },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = userState,
+                                        onValueChange = {
+                                            userState = it
+                                            onSaveSshSettings(hostState, portState.toIntOrNull() ?: 8022, it, passState)
+                                        },
+                                        label = { Text("Username", fontSize = 11.sp) },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    OutlinedTextField(
+                                        value = passState,
+                                        onValueChange = {
+                                            passState = it
+                                            onSaveSshSettings(hostState, portState.toIntOrNull() ?: 8022, userState, it)
+                                        },
+                                        label = { Text("Password", fontSize = 11.sp) },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                }
+
+                                if (sshTestStatus != null) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = sshTestStatus ?: "",
+                                        fontSize = 11.5.sp,
+                                        color = if (sshTestStatus?.startsWith("✓") == true) QuotaGreen else Color.Red,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+
                                 Spacer(modifier = Modifier.height(10.dp))
 
                                 Row(
@@ -199,46 +282,157 @@ fun SettingsDialog(
                                     ) {
                                         Icon(imageVector = Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(15.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Open Terminal", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("Open SSH Terminal", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                     }
 
                                     OutlinedButton(
-                                        onClick = onInstallLocalTools,
+                                        onClick = {
+                                            isTestingSsh = true
+                                            sshTestStatus = "Connecting to SSH server..."
+                                            coroutineScope.launch {
+                                                val res = com.example.gemini.data.ssh.TermuxSshManager.testConnection(
+                                                    host = hostState.trim(),
+                                                    port = portState.toIntOrNull() ?: 8022,
+                                                    user = userState.trim(),
+                                                    pass = passState
+                                                )
+                                                isTestingSsh = false
+                                                if (res.isSuccess) {
+                                                    sshTestStatus = "✓ SSH connection successful!"
+                                                } else {
+                                                    sshTestStatus = "✗ Failed: ${res.exceptionOrNull()?.localizedMessage ?: "Connection refused"}"
+                                                }
+                                            }
+                                        },
                                         modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        enabled = !isTestingSsh,
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        if (isTestingSsh) {
+                                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                        } else {
+                                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Test Connection", fontSize = 12.sp)
+                                    }
+                                }
+                            } else {
+                                // Existing Local Tools UI
+                                Spacer(modifier = Modifier.height(10.dp))
+                                HorizontalDivider(thickness = 0.6.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "Local Linux Environment",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(
+                                                        if (isLocalToolsInstalled) QuotaGreen.copy(alpha = 0.15f)
+                                                        else ClaudeTerracotta.copy(alpha = 0.15f)
+                                                    )
+                                                    .padding(horizontal = 6.dp, vertical = 1.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (isLocalToolsInstalled) "Installed" else "Not Installed",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isLocalToolsInstalled) QuotaGreen else ClaudeTerracotta
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = "Embedded bootstrap filesystem for local shell execution",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Switch(
+                                        checked = isLocalToolsEnabled,
+                                        onCheckedChange = { checked ->
+                                            if (checked && !isLocalToolsInstalled) {
+                                                onInstallLocalTools()
+                                            } else {
+                                                onToggleLocalTools(checked)
+                                            }
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color.White,
+                                            checkedTrackColor = if (isLocalToolsInstalled) QuotaGreen else ClaudeTerracotta
+                                        )
+                                    )
+                                }
+
+                                if (isLocalToolsInstalled) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = onOpenLocalTerminal,
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(15.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Open Terminal", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = onInstallLocalTools,
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Reinstall", fontSize = 12.sp)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    OutlinedButton(
+                                        onClick = onResetLocalTools,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.4f)),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Red)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Clear & Reset Environment", fontSize = 12.sp, color = Color.Red, fontWeight = FontWeight.Medium)
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedButton(
+                                        onClick = onInstallLocalTools,
+                                        modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(8.dp),
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                                     ) {
-                                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        Icon(imageVector = Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(15.dp), tint = ClaudeTerracotta)
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Reinstall", fontSize = 12.sp)
+                                        Text("Download & Setup Tools Locally (>30 MB)", fontSize = 12.sp, color = ClaudeTerracotta, fontWeight = FontWeight.SemiBold)
                                     }
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                OutlinedButton(
-                                    onClick = onResetLocalTools,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(8.dp),
-                                    border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.4f)),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Red)
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Clear & Reset Environment", fontSize = 12.sp, color = Color.Red, fontWeight = FontWeight.Medium)
-                                }
-                            } else {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedButton(
-                                    onClick = onInstallLocalTools,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(15.dp), tint = ClaudeTerracotta)
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Download & Setup Tools Locally (>30 MB)", fontSize = 12.sp, color = ClaudeTerracotta, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }

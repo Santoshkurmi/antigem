@@ -143,6 +143,11 @@ fun ChatScreen(
     val quotaSummary by viewModel.quotaSummary.collectAsState()
     val isLocalToolsEnabled by viewModel.isLocalToolsEnabled.collectAsState(initial = false)
     val isLocalToolsInstalled by viewModel.isLocalToolsInstalled.collectAsState(initial = false)
+    val useSshTerminal by viewModel.useSshTerminal.collectAsState(initial = false)
+    val sshHost by viewModel.termuxSshHost.collectAsState(initial = "127.0.0.1")
+    val sshPort by viewModel.termuxSshPort.collectAsState(initial = 8022)
+    val sshUser by viewModel.termuxSshUser.collectAsState(initial = "root")
+    val sshPass by viewModel.termuxSshPass.collectAsState(initial = "root")
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -621,7 +626,9 @@ fun ChatScreen(
                             )
                         }
                         IconButton(onClick = {
-                            if (isLocalToolsInstalled && isLocalToolsEnabled) {
+                            if (useSshTerminal) {
+                                showLocalTerminalDialog = true
+                            } else if (isLocalToolsInstalled && isLocalToolsEnabled) {
                                 showLocalTerminalDialog = true
                             } else if (isLocalToolsInstalled) {
                                 viewModel.setLocalToolsEnabled(true)
@@ -633,7 +640,7 @@ fun ChatScreen(
                             Icon(
                                 imageVector = Icons.Outlined.Terminal,
                                 contentDescription = "Terminal",
-                                tint = if (isLocalToolsInstalled && isLocalToolsEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                tint = if (useSshTerminal || (isLocalToolsInstalled && isLocalToolsEnabled)) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                         }
                         IconButton(onClick = { showCustomSystemPromptDialog = true }) {
@@ -1149,6 +1156,11 @@ fun ChatScreen(
             summaryModelId = summaryModelIdPref,
             isDevModeEnabled = isDevModeEnabled,
             chatFontScale = chatFontScale,
+            useSshTerminal = useSshTerminal,
+            sshHost = sshHost,
+            sshPort = sshPort,
+            sshUser = sshUser,
+            sshPass = sshPass,
             isLocalToolsEnabled = isLocalToolsEnabled,
             isLocalToolsInstalled = isLocalToolsInstalled,
             onLoginWithGoogle = {
@@ -1178,6 +1190,8 @@ fun ChatScreen(
             onSetSummaryModelId = { viewModel.setSummaryModelId(it) },
             onSetChatFontScale = { viewModel.setChatFontScale(it) },
             onToggleDevMode = { viewModel.setDevModeEnabled(it) },
+            onToggleUseSshTerminal = { viewModel.setUseSshTerminal(it) },
+            onSaveSshSettings = { h, p, u, pass -> viewModel.saveSshSettings(h, p, u, pass) },
             onToggleLocalTools = { viewModel.setLocalToolsEnabled(it) },
             onInstallLocalTools = { showLocalToolsInstallDialog = true },
             onOpenLocalTerminal = { showLocalTerminalDialog = true },

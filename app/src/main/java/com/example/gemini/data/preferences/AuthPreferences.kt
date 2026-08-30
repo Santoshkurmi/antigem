@@ -44,8 +44,10 @@ class AuthPreferences(private val context: Context) {
         val LOCAL_TOOLS_VERSION = stringPreferencesKey("local_tools_version")
         val AGY_BRIDGE_WS_URL = stringPreferencesKey("agy_bridge_ws_url")
         val AGY_BRIDGE_HTTP_URL = stringPreferencesKey("agy_bridge_http_url")
+        val USE_SSH_TERMINAL = androidx.datastore.preferences.core.booleanPreferencesKey("use_ssh_terminal")
     }
 
+    val useSshTerminal: Flow<Boolean> = context.dataStore.data.map { it[USE_SSH_TERMINAL] ?: false }
     val isLocalToolsEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_ENABLED] ?: false }
     val isLocalToolsInstalled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_INSTALLED] ?: false }
     val localToolsInstallDate: Flow<Long?> = context.dataStore.data.map { it[LOCAL_TOOLS_INSTALL_DATE] }
@@ -164,6 +166,21 @@ class AuthPreferences(private val context: Context) {
     suspend fun setTerminalToolEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[IS_TERMINAL_TOOL_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setUseSshTerminal(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[USE_SSH_TERMINAL] = enabled
+        }
+    }
+
+    suspend fun saveSshSettings(host: String, port: Int, user: String, pass: String) {
+        context.dataStore.edit { prefs ->
+            prefs[TERMUX_SSH_HOST] = host
+            prefs[TERMUX_SSH_PORT] = port.toString()
+            prefs[TERMUX_SSH_USER] = user
+            prefs[TERMUX_SSH_PASS] = pass
         }
     }
 

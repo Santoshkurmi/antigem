@@ -295,11 +295,32 @@ public final class TerminalView extends View {
         this.mClient = client;
     }
 
-    /**
-     * Sets whether terminal view key logging is enabled or not.
-     *
-     * @param value The boolean value that defines the state.
-     */
+    public interface TerminalInputListener {
+        void onTerminalInput(String text);
+        void onTerminalInputCodePoint(boolean prependEscape, int codePoint);
+    }
+    private TerminalInputListener mInputListener;
+
+    public void setTerminalInputListener(TerminalInputListener listener) {
+        this.mInputListener = listener;
+    }
+
+    public void sendInputToSession(String text) {
+        if (mInputListener != null) {
+            mInputListener.onTerminalInput(text);
+        } else if (mTermSession != null) {
+            mTermSession.write(text);
+        }
+    }
+
+    public void sendInputCodePointToSession(boolean prependEscape, int codePoint) {
+        if (mInputListener != null) {
+            mInputListener.onTerminalInputCodePoint(prependEscape, codePoint);
+        } else if (mTermSession != null) {
+            mTermSession.writeCodePoint(prependEscape, codePoint);
+        }
+    }
+
     public void setIsTerminalViewKeyLoggingEnabled(boolean value) {
         TERMINAL_VIEW_KEY_LOGGING_ENABLED = value;
     }
@@ -806,7 +827,7 @@ public final class TerminalView extends View {
         } else if (event.isSystem() && (!mClient.shouldBackButtonBeMappedToEscape() || keyCode != KeyEvent.KEYCODE_BACK)) {
             return super.onKeyDown(keyCode, event);
         } else if (event.getAction() == KeyEvent.ACTION_MULTIPLE && keyCode == KeyEvent.KEYCODE_UNKNOWN) {
-            mTermSession.write(event.getCharacters());
+            sendInputToSession(event.getCharacters());
             return true;
         } else if (keyCode == KeyEvent.KEYCODE_LANGUAGE_SWITCH) {
             return super.onKeyDown(keyCode, event);
@@ -930,7 +951,7 @@ public final class TerminalView extends View {
             }
 
             // If left alt, send escape before the code point to make e.g. Alt+B and Alt+F work in readline:
-            mTermSession.writeCodePoint(altDown, codePoint);
+            sendInputCodePointToSession(altDown, codePoint);
         }
     }
 
@@ -946,7 +967,7 @@ public final class TerminalView extends View {
         TerminalEmulator term = mTermSession.getEmulator();
         String code = KeyHandler.getCode(keyCode, keyMod, term.isCursorKeysApplicationMode(), term.isKeypadApplicationMode());
         if (code == null) return false;
-        mTermSession.write(code);
+        sendInputToSession(code);
         return true;
     }
 
@@ -1102,7 +1123,7 @@ public final class TerminalView extends View {
     @Override
     public void autofill(AutofillValue value) {
         if (value.isText()) {
-            mTermSession.write(value.getTextValue().toString());
+            sendInputToSession(value.getTextValue().toString());
         }
 
         resetAutoFill();
