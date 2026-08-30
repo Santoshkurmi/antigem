@@ -1,18 +1,21 @@
 package com.example.gemini.ui.settings
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -27,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
+import com.example.gemini.data.automation.AndroidAutomationService
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ModelQuota
 import com.example.gemini.theme.*
@@ -64,8 +69,18 @@ fun SettingsDialog(
     onResetLocalTools: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    var manualToken by remember { mutableStateOf("") }
-    var showManualInput by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val isAutomationActive by AndroidAutomationService.isServiceActive.collectAsState()
+
+    var isStorageGranted by remember {
+        mutableStateOf(isStoragePermissionGranted(context))
+    }
+
+    // Refresh permission state on resume/interaction
+    DisposableEffect(Unit) {
+        isStorageGranted = isStoragePermissionGranted(context)
+        onDispose { }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -76,7 +91,7 @@ fun SettingsDialog(
             color = MaterialTheme.colorScheme.surface,
             modifier = Modifier
                 .fillMaxWidth(0.92f)
-                .fillMaxHeight(0.88f)
+                .fillMaxHeight(0.85f)
                 .padding(vertical = 16.dp)
         ) {
             Column(
@@ -98,426 +113,7 @@ fun SettingsDialog(
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    // Account info card
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = if (userEmail != null) Icons.Outlined.CheckCircle else Icons.AutoMirrored.Outlined.Login,
-                                    contentDescription = null,
-                                    tint = if (userEmail != null) QuotaGreen else ClaudeTerracotta,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = userEmail ?: "Not logged in",
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.5.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "Project: $projectId • Tier: ${tier.uppercase()}",
-                                        fontSize = 11.5.sp,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                    )
-                                }
-
-                                if (userEmail != null) {
-                                    OutlinedButton(
-                                        onClick = onLogout,
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            contentColor = MaterialTheme.colorScheme.error
-                                        ),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
-                                    ) {
-                                        Text("Log Out", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // If logged in
-                    if (userEmail != null) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            color = QuotaGreen.copy(alpha = 0.1f)
-                        ) {
-                            Text(
-                                text = "✓ Active session authorized. Log out to connect another account.",
-                                fontSize = 11.5.sp,
-                                color = QuotaGreen,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                            )
-                        }
-                    } else {
-                        // Login Buttons (Google OAuth & Paste Token)
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            Button(
-                                onClick = onLoginWithGoogle,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                            ) {
-                                Text("Google OAuth", fontSize = 13.sp, color = Color.White)
-                            }
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            OutlinedButton(
-                                onClick = { showManualInput = !showManualInput },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Text(if (showManualInput) "Close Input" else "Paste URL / Code", fontSize = 13.sp)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Localhost Server Checkbox Card
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isServerListening) QuotaGreen.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable(enabled = !isServerLoading) {
-                                        onToggleServer(!isServerListening)
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "Localhost Server (:51121)",
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(
-                                                    if (isServerListening) QuotaGreen.copy(alpha = 0.15f)
-                                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                                                )
-                                                .padding(horizontal = 6.dp, vertical = 1.dp)
-                                        ) {
-                                            Text(
-                                                text = if (isServerListening) "Listening" else "Stopped",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isServerListening) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "Listens for automatic browser callback on port 51121",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                    )
-                                }
-
-                                if (isServerLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp,
-                                        color = ClaudeTerracotta
-                                    )
-                                } else {
-                                    Checkbox(
-                                        checked = isServerListening,
-                                        onCheckedChange = { onToggleServer(it) },
-                                        colors = CheckboxDefaults.colors(
-                                            checkedColor = QuotaGreen,
-                                            checkmarkColor = Color.White
-                                        )
-                                    )
-                                }
-                            }
-                        }
-
-                        if (showManualInput) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            OutlinedTextField(
-                                value = manualToken,
-                                onValueChange = { manualToken = it },
-                                placeholder = { Text("Paste Callback URL (http://...) or Code (4/0...)", fontSize = 12.sp) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                singleLine = true
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Button(
-                                onClick = {
-                                    if (manualToken.isNotBlank()) {
-                                        onManualTokenEntered(manualToken.trim())
-                                        manualToken = ""
-                                        showManualInput = false
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("Apply URL / Code / Token", fontSize = 13.sp)
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // Chat Font Size Section
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Chat Font Size (${(chatFontScale * 100).toInt()}%)",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Scale all chat text, code blocks, and markdown proportionally",
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-                            )
-                        }
-                        if (chatFontScale != 1.0f) {
-                            TextButton(
-                                onClick = { onSetChatFontScale(1.0f) },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text("Reset (1.0x)", fontSize = 12.sp, color = ClaudeTerracotta)
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("A", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Slider(
-                                    value = chatFontScale,
-                                    onValueChange = { onSetChatFontScale(it) },
-                                    valueRange = 0.75f..1.60f,
-                                    steps = 16,
-                                    modifier = Modifier.weight(1f),
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = ClaudeTerracotta,
-                                        activeTrackColor = ClaudeTerracotta
-                                    )
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text("A", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            // Preset Buttons
-                            val scalePresets = listOf(0.85f to "Small", 1.00f to "Normal", 1.15f to "Medium", 1.30f to "Large", 1.50f to "Huge")
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                scalePresets.forEach { (presetVal, label) ->
-                                    val isSelected = kotlin.math.abs(chatFontScale - presetVal) < 0.04f
-                                    Surface(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .clickable { onSetChatFontScale(presetVal) },
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.surface,
-                                        border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                                    ) {
-                                        Box(
-                                            modifier = Modifier.padding(vertical = 6.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = label,
-                                                fontSize = 11.5.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // Enabled Models Selection
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Models in Chat",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Select models you want to use in the chat selector",
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-                            )
-                        }
-                        TextButton(
-                            onClick = onEnableAllModels,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text("Select All", fontSize = 12.sp, color = ClaudeTerracotta)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    ) {
-                        Column(modifier = Modifier.padding(8.dp)) {
-                            if (availableModels.isEmpty()) {
-                                Text(
-                                    text = "No models available yet. Connect your Google account above to load your models.",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                    modifier = Modifier.padding(vertical = 8.dp)
-                                )
-                            } else {
-                                availableModels.forEach { model ->
-                                    val isEnabled = enabledModelIds == null || model.id in enabledModelIds
-                                    val quota = quotas.find { it.modelId == model.id }
-                                    val pct = quota?.percentage
-
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .clickable { onToggleModelEnabled(model.id, !isEnabled) }
-                                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Checkbox(
-                                            checked = isEnabled,
-                                            onCheckedChange = { checked -> onToggleModelEnabled(model.id, checked) },
-                                            colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = model.displayName,
-                                                fontSize = 13.5.sp,
-                                                fontWeight = if (isEnabled) FontWeight.SemiBold else FontWeight.Normal,
-                                                color = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                            )
-                                            if (pct != null) {
-                                                val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
-                                                Text(
-                                                    text = "Remaining Quota: $pct%",
-                                                    fontSize = 11.sp,
-                                                    color = badgeColor
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    // Developer Mode & Telemetry Card
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.DataObject,
-                                    contentDescription = null,
-                                    tint = ClaudeTerracotta,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Developer Mode",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "Live token telemetry, cache hit ratios, raw JSON payload inspector & prompt overrides",
-                                        fontSize = 11.5.sp,
-                                        lineHeight = 15.sp,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Switch(
-                                    checked = isDevModeEnabled,
-                                    onCheckedChange = onToggleDevMode,
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = ClaudeTerracotta
-                                    )
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    // Local Environment & Tools (Termux-like) Card
+                    // 1. LOCAL ENVIRONMENT & TERMINAL TOOLS
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
@@ -538,7 +134,7 @@ fun SettingsDialog(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "Enable Tools Locally",
+                                            text = "Local Linux Tools & Terminal",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 14.sp,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -562,7 +158,7 @@ fun SettingsDialog(
                                         }
                                     }
                                     Text(
-                                        text = "Termux-like native Linux shell, command execution, and file tools locally inside app sandbox",
+                                        text = "Termux native Linux shell, PTY interactive terminal, and package tools",
                                         fontSize = 11.5.sp,
                                         lineHeight = 15.sp,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
@@ -648,77 +244,230 @@ fun SettingsDialog(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // Quotas List Header
-                    Row(
+                    // 2. PERMISSIONS SECTION
+                    Card(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        Text(
-                            text = "Live Model Quotas",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                        IconButton(onClick = onRefreshQuotas, modifier = Modifier.size(28.dp)) {
-                            Icon(
-                                imageVector = Icons.Outlined.Refresh,
-                                contentDescription = "Refresh",
-                                tint = ClaudeTerracotta,
-                                modifier = Modifier.size(18.dp)
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Security,
+                                    contentDescription = null,
+                                    tint = ClaudeTerracotta,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "App Permissions",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "System permissions for terminal file access and UI automation",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
+                            HorizontalDivider(thickness = 0.6.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            Spacer(modifier = Modifier.height(10.dp))
 
-                    if (availableModels.isEmpty()) {
-                        Text(
-                            text = "No quota information. Log in to view live model quotas.",
-                            fontSize = 12.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(vertical = 6.dp)
-                        )
-                    } else {
-                        availableModels.forEach { model ->
-                            val quota = quotas.find { it.modelId == model.id }
-                            val pct = quota?.percentage ?: 0
-                            val barColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
-
-                            Column(
+                            // Storage / SDCard Permission
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        requestStoragePermission(context)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Folder,
+                                    contentDescription = null,
+                                    tint = if (isStorageGranted) QuotaGreen else ClaudeTerracotta,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = model.displayName,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Medium,
+                                        text = "All Files & Storage (/sdcard)",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = if (quota?.remainingFraction != null) "$pct%" else "N/A",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = barColor
+                                        text = "Read & write files in /sdcard, Downloads, and internal storage",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                LinearProgressIndicator(
-                                    progress = { (pct / 100f).coerceIn(0f, 1f) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = barColor,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isStorageGranted) QuotaGreen.copy(alpha = 0.15f) else ClaudeTerracotta.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = if (isStorageGranted) "Granted ✓" else "Grant",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isStorageGranted) QuotaGreen else ClaudeTerracotta,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Accessibility & Automation Permission
+                            val isAccessibilityEnabled = isAutomationActive || AndroidAutomationService.isRunning()
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.TouchApp,
+                                    contentDescription = null,
+                                    tint = if (isAccessibilityEnabled) QuotaGreen else ClaudeTerracotta,
+                                    modifier = Modifier.size(20.dp)
                                 )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Automation Service",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Allows AI to control apps, tap screens, and run workflows",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isAccessibilityEnabled) QuotaGreen.copy(alpha = 0.15f) else ClaudeTerracotta.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = if (isAccessibilityEnabled) "Enabled ✓" else "Enable",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isAccessibilityEnabled) QuotaGreen else ClaudeTerracotta,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 3. CHAT FONT SIZE SECTION
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Chat Font Size (${(chatFontScale * 100).toInt()}%)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Scale all chat text, code blocks, and markdown",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                            )
+                        }
+                        if (chatFontScale != 1.0f) {
+                            TextButton(
+                                onClick = { onSetChatFontScale(1.0f) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text("Reset (1.0x)", fontSize = 12.sp, color = ClaudeTerracotta)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("A", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Slider(
+                                    value = chatFontScale,
+                                    onValueChange = { onSetChatFontScale(it) },
+                                    valueRange = 0.75f..1.60f,
+                                    steps = 16,
+                                    modifier = Modifier.weight(1f),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = ClaudeTerracotta,
+                                        activeTrackColor = ClaudeTerracotta
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text("A", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Preset Buttons
+                            val scalePresets = listOf(0.85f to "Small", 1.00f to "Normal", 1.15f to "Medium", 1.30f to "Large", 1.50f to "Huge")
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                scalePresets.forEach { (presetVal, label) ->
+                                    val isSelected = kotlin.math.abs(chatFontScale - presetVal) < 0.04f
+                                    Surface(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { onSetChatFontScale(presetVal) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.padding(vertical = 6.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                fontSize = 11.5.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -738,5 +487,32 @@ fun SettingsDialog(
                 }
             }
         }
+    }
+}
+
+private fun isStoragePermissionGranted(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        Environment.isExternalStorageManager()
+    } else {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+    }
+}
+
+private fun requestStoragePermission(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                data = Uri.parse("package:${context.packageName}")
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+            context.startActivity(intent)
+        }
+    } else {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:${context.packageName}")
+        }
+        context.startActivity(intent)
     }
 }

@@ -1,24 +1,16 @@
 package com.example.gemini.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
-import android.widget.Toast
-import androidx.compose.animation.*
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -27,27 +19,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.gemini.data.local.LocalEnvironmentManager
-import com.example.gemini.data.local.LocalInteractiveSession
+import com.example.gemini.data.local.LocalPtySession
 import com.example.gemini.data.local.LocalTerminalManager
 import com.example.gemini.theme.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.termux.terminal.TerminalSession
+import com.termux.view.TerminalView
+import com.termux.view.TerminalViewClient
 
 @Composable
 fun LocalTerminalDialog(
@@ -70,7 +56,6 @@ fun LocalTerminalContent(
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     val sessions by LocalTerminalManager.sessions.collectAsState()
     val activeSessionId by LocalTerminalManager.activeSessionId.collectAsState()
@@ -86,68 +71,18 @@ fun LocalTerminalContent(
         ?: sessions.firstOrNull()
         ?: remember { LocalTerminalManager.getOrCreatePrimarySession(context) }
 
-    val lines by activeSession.lines.collectAsState()
-    val isBusy by activeSession.isBusy.collectAsState()
     val isExited by activeSession.isExited.collectAsState()
+    val title by activeSession.title.collectAsState()
 
-    var commandInput by remember { mutableStateOf(TextFieldValue("")) }
-    val history = remember { mutableStateListOf<String>() }
-    var historyIndex by remember { mutableStateOf(-1) }
-
-    val listState = rememberLazyListState()
-    var terminalFontSize by remember { mutableStateOf(12.5.sp) }
+    var terminalTextSize by remember { mutableIntStateOf(34) }
     var isCtrlActive by remember { mutableStateOf(false) }
     var isAltActive by remember { mutableStateOf(false) }
 
-    val focusRequester = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
+    var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
 
-    var lastExecutedCmd by remember { mutableStateOf("") }
-    var lastExecutionTime by remember { mutableLongStateOf(0L) }
-
-    val executeCurrentCommand: (String) -> Unit = { rawCmd ->
-        val now = System.currentTimeMillis()
-        val cmd = rawCmd.trimEnd('\r', '\n')
-
-        // Prevent duplicate execution within 250ms
-        if (now - lastExecutionTime > 250L || cmd != lastExecutedCmd) {
-            lastExecutedCmd = cmd
-            lastExecutionTime = now
-
-            if (cmd.isNotBlank()) {
-                history.add(cmd)
-                historyIndex = -1
-                if (isCtrlActive) {
-                    val firstChar = cmd.trim().first().lowercaseChar()
-                    val ctrlCode = (firstChar.code - 'a'.code + 1).toChar().toString()
-                    activeSession.sendRawInput(ctrlCode)
-                    isCtrlActive = false
-                } else {
-                    activeSession.executeCommand(cmd)
-                }
-            } else {
-                activeSession.executeCommand("")
-            }
-        }
-        commandInput = TextFieldValue("")
-    }
-
-    val onKeyAction: (() -> Unit) -> Unit = { action ->
-        action()
-        try { focusRequester.requestFocus() } catch (_: Exception) {}
-    }
-
-    // Auto-focus on start & auto-scroll to bottom on new output or typing
-    LaunchedEffect(Unit) {
-        delay(150)
-        keyboardController?.show()
-        try { focusRequester.requestFocus() } catch (_: Exception) {}
-    }
-
-    LaunchedEffect(lines.size, commandInput.text) {
-        if (lines.isNotEmpty()) {
-            listState.animateScrollToItem(lines.size)
-        }
+    val sendKeyToTerminal: (String) -> Unit = { str ->
+        activeSession.write(str)
+        currentTerminalView?.requestFocus()
     }
 
     Box(
@@ -170,18 +105,12 @@ fun LocalTerminalContent(
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Status dot (Green when active, Red when exited, Amber when busy)
+                // Status dot (Green when active, Red when exited)
                 Box(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(
-                            when {
-                                isExited -> Color.Red
-                                isBusy -> ClaudeTerracotta
-                                else -> QuotaGreen
-                            }
-                        )
+                        .background(if (isExited) Color.Red else QuotaGreen)
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -245,51 +174,28 @@ fun LocalTerminalContent(
 
                 // Font size controls
                 IconButton(
-                    onClick = { if (terminalFontSize.value > 9) terminalFontSize = (terminalFontSize.value - 1).sp },
+                    onClick = {
+                        if (terminalTextSize > 18) {
+                            terminalTextSize -= 3
+                            currentTerminalView?.setTextSize(terminalTextSize)
+                        }
+                    },
                     modifier = Modifier.size(26.dp)
                 ) {
                     Text("A-", fontSize = 10.sp, color = Color.LightGray, fontWeight = FontWeight.Bold)
                 }
 
                 IconButton(
-                    onClick = { if (terminalFontSize.value < 18) terminalFontSize = (terminalFontSize.value + 1).sp },
+                    onClick = {
+                        if (terminalTextSize < 60) {
+                            terminalTextSize += 3
+                            currentTerminalView?.setTextSize(terminalTextSize)
+                        }
+                    },
                     modifier = Modifier.size(26.dp)
                 ) {
                     Text("A+", fontSize = 10.sp, color = Color.LightGray, fontWeight = FontWeight.Bold)
                 }
-
-                // Copy entire screen
-                IconButton(
-                    onClick = {
-                        val text = lines.joinToString("\n") { it.rawText }
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("Terminal", text))
-                        Toast.makeText(context, "Copied terminal output", Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.size(26.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.ContentCopy,
-                        contentDescription = "Copy Output",
-                        tint = Color.LightGray,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-
-                // Clear screen
-                IconButton(
-                    onClick = { activeSession.clearLines() },
-                    modifier = Modifier.size(26.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.DeleteSweep,
-                        contentDescription = "Clear",
-                        tint = Color.LightGray,
-                        modifier = Modifier.size(15.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(4.dp))
 
                 // Close / Hide Button
                 IconButton(
@@ -305,98 +211,84 @@ fun LocalTerminalContent(
                 }
             }
 
-            // TERMINAL OUTPUT SCREEN (LazyColumn) + PINNED INLINE PROMPT ROW
-            Column(
+            // NATIVE TERMUX TERMINAL VIEW (Full PTY, TUI support for nano, vim, htop, etc.)
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .background(Color(0xFF000000))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        keyboardController?.show()
-                        try { focusRequester.requestFocus() } catch (_: Exception) {}
+                    .clickable {
+                        currentTerminalView?.requestFocus()
+                        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                        currentTerminalView?.let { imm.showSoftInput(it, 0) }
                     }
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
-                // 1. SCROLLABLE TERMINAL OUTPUT BUFFER
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) {
-                    items(lines, key = { it.id }) { line ->
-                        Text(
-                            text = line.annotatedString,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = terminalFontSize,
-                            lineHeight = (terminalFontSize.value * 1.35f).sp,
-                            color = Color(0xFFE4E4E7),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-
-                // 2. PINNED ACTIVE PROMPT ROW (Outside LazyColumn, permanently focused & mounted!)
-                val homePath = LocalEnvironmentManager.getHomeDir(context).canonicalPath
-                val dirName = if (activeSession.workingDirectory.startsWith(homePath)) {
-                    val rel = activeSession.workingDirectory.removePrefix(homePath)
-                    if (rel.isEmpty()) "~" else "~$rel"
-                } else {
-                    activeSession.workingDirectory.substringAfterLast("/").ifBlank { "/" }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "➜ ",
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = terminalFontSize,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF10B981) // Green arrow
-                    )
-                    Text(
-                        text = "$dirName ",
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = terminalFontSize,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF38BDF8) // Cyan dir
-                    )
-
-                    // Permanently mounted BasicTextField - never unmounts, never loses focus!
-                    BasicTextField(
-                        value = commandInput,
-                        onValueChange = { newValue ->
-                            if (newValue.text.contains("\n")) {
-                                val cmd = newValue.text.substringBefore("\n")
-                                commandInput = TextFieldValue("")
-                                executeCurrentCommand(cmd)
-                            } else {
-                                commandInput = newValue
+                key(activeSession.id) {
+                    AndroidView(
+                        factory = { ctx ->
+                            TerminalView(ctx, null).apply {
+                                setTextSize(terminalTextSize)
+                                isFocusable = true
+                                isFocusableInTouchMode = true
+                                setTerminalViewClient(object : TerminalViewClient {
+                                    override fun onScale(scale: Float): Float = 1f
+                                    override fun onSingleTapUp(e: MotionEvent) {
+                                        val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                                        this@apply.requestFocus()
+                                        imm.showSoftInput(this@apply, 0)
+                                    }
+                                    override fun shouldBackButtonBeMappedToEscape(): Boolean = false
+                                    override fun shouldEnforceCharBasedInput(): Boolean = true
+                                    override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
+                                    override fun isTerminalViewSelected(): Boolean = true
+                                    override fun copyModeChanged(copyMode: Boolean) {}
+                                    override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean = false
+                                    override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
+                                    override fun onLongPress(event: MotionEvent): Boolean = false
+                                    override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean = false
+                                    override fun readControlKey(): Boolean = isCtrlActive
+                                    override fun readAltKey(): Boolean = isAltActive
+                                    override fun readShiftKey(): Boolean = false
+                                    override fun readFnKey(): Boolean = false
+                                    override fun onEmulatorSet() {}
+                                    override fun logError(tag: String, message: String) {}
+                                    override fun logWarn(tag: String, message: String) {}
+                                    override fun logInfo(tag: String, message: String) {}
+                                    override fun logDebug(tag: String, message: String) {}
+                                    override fun logVerbose(tag: String, message: String) {}
+                                    override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) {}
+                                    override fun logStackTrace(tag: String, e: Exception) {}
+                                })
+                                attachSession(activeSession.terminalSession)
+                                activeSession.onTextChangedListener = {
+                                    post {
+                                        onScreenUpdated()
+                                        invalidate()
+                                    }
+                                }
+                                currentTerminalView = this
+                                post {
+                                    requestFocus()
+                                    val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                                    imm.showSoftInput(this, 0)
+                                }
                             }
                         },
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(focusRequester),
-                        textStyle = androidx.compose.ui.text.TextStyle(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = terminalFontSize,
-                            color = Color.White
-                        ),
-                        cursorBrush = SolidColor(Color.White),
-                        singleLine = false,
-                        maxLines = 1,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Ascii,
-                            imeAction = ImeAction.None,
-                            autoCorrectEnabled = false
-                        )
+                        update = { tv ->
+                            tv.setTextSize(terminalTextSize)
+                            if (tv.currentSession != activeSession.terminalSession) {
+                                tv.attachSession(activeSession.terminalSession)
+                            }
+                            activeSession.onTextChangedListener = {
+                                tv.post {
+                                    tv.onScreenUpdated()
+                                    tv.invalidate()
+                                }
+                            }
+                            currentTerminalView = tv
+                        },
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
@@ -415,37 +307,25 @@ fun LocalTerminalContent(
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     TermuxKey(label = "ESC", modifier = Modifier.weight(1f)) {
-                        onKeyAction { activeSession.sendEsc() }
+                        sendKeyToTerminal("\u001B")
                     }
                     TermuxKey(label = "/", modifier = Modifier.weight(1f)) {
-                        onKeyAction {
-                            commandInput = TextFieldValue(commandInput.text + "/", androidx.compose.ui.text.TextRange(commandInput.text.length + 1))
-                        }
+                        sendKeyToTerminal("/")
                     }
                     TermuxKey(label = "-", modifier = Modifier.weight(1f)) {
-                        onKeyAction {
-                            commandInput = TextFieldValue(commandInput.text + "-", androidx.compose.ui.text.TextRange(commandInput.text.length + 1))
-                        }
+                        sendKeyToTerminal("-")
                     }
                     TermuxKey(label = "HOME", modifier = Modifier.weight(1f)) {
-                        onKeyAction { activeSession.sendHome() }
+                        sendKeyToTerminal("\u001B[H")
                     }
                     TermuxKey(label = "↑", modifier = Modifier.weight(1f)) {
-                        onKeyAction {
-                            if (history.isNotEmpty()) {
-                                if (historyIndex < history.size - 1) historyIndex++
-                                val cmd = history[history.size - 1 - historyIndex]
-                                commandInput = TextFieldValue(cmd, androidx.compose.ui.text.TextRange(cmd.length))
-                            } else {
-                                activeSession.sendArrowUp()
-                            }
-                        }
+                        sendKeyToTerminal("\u001B[A")
                     }
                     TermuxKey(label = "END", modifier = Modifier.weight(1f)) {
-                        onKeyAction { activeSession.sendEnd() }
+                        sendKeyToTerminal("\u001B[F")
                     }
                     TermuxKey(label = "PGUP", modifier = Modifier.weight(1f)) {
-                        onKeyAction { activeSession.sendPgUp() }
+                        sendKeyToTerminal("\u001B[5~")
                     }
                 }
 
@@ -455,44 +335,33 @@ fun LocalTerminalContent(
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     TermuxKey(label = "↹", modifier = Modifier.weight(1f)) {
-                        onKeyAction { activeSession.sendTab() }
+                        sendKeyToTerminal("\t")
                     }
                     TermuxKey(
                         label = "CTRL",
                         isActive = isCtrlActive,
                         modifier = Modifier.weight(1f)
                     ) {
-                        onKeyAction { isCtrlActive = !isCtrlActive }
+                        isCtrlActive = !isCtrlActive
                     }
                     TermuxKey(
                         label = "ALT",
                         isActive = isAltActive,
                         modifier = Modifier.weight(1f)
                     ) {
-                        onKeyAction { isAltActive = !isAltActive }
+                        isAltActive = !isAltActive
                     }
                     TermuxKey(label = "←", modifier = Modifier.weight(1f)) {
-                        onKeyAction { activeSession.sendArrowLeft() }
+                        sendKeyToTerminal("\u001B[D")
                     }
                     TermuxKey(label = "↓", modifier = Modifier.weight(1f)) {
-                        onKeyAction {
-                            if (historyIndex > 0) {
-                                historyIndex--
-                                val cmd = history[history.size - 1 - historyIndex]
-                                commandInput = TextFieldValue(cmd, androidx.compose.ui.text.TextRange(cmd.length))
-                            } else if (historyIndex == 0) {
-                                historyIndex = -1
-                                commandInput = TextFieldValue("")
-                            } else {
-                                activeSession.sendArrowDown()
-                            }
-                        }
+                        sendKeyToTerminal("\u001B[B")
                     }
                     TermuxKey(label = "→", modifier = Modifier.weight(1f)) {
-                        onKeyAction { activeSession.sendArrowRight() }
+                        sendKeyToTerminal("\u001B[C")
                     }
                     TermuxKey(label = "PGDN", modifier = Modifier.weight(1f)) {
-                        onKeyAction { activeSession.sendPgDn() }
+                        sendKeyToTerminal("\u001B[6~")
                     }
                 }
             }
