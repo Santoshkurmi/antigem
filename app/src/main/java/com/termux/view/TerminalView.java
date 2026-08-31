@@ -1018,17 +1018,35 @@ public final class TerminalView extends View {
         return true;
     }
 
+    private final Runnable mDebouncedUpdateSizeRunnable = new Runnable() {
+        @Override
+        public void run() {
+            updateSizeInternal();
+        }
+    };
+
     /**
      * This is called during layout when the size of this view has changed. If you were just added to the view
      * hierarchy, you're called with the old values of 0.
      */
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        updateSize();
+        if (oldh > 0 && h > 0 && Math.abs(h - oldh) > 0) {
+            // Smooth keyboard transition: debounce PTY SIGWINCH reflow so animation is fluid and continuous
+            removeCallbacks(mDebouncedUpdateSizeRunnable);
+            postDelayed(mDebouncedUpdateSizeRunnable, 80);
+            invalidate();
+        } else {
+            updateSizeInternal();
+        }
     }
 
     /** Check if the terminal size in rows and columns should be updated. */
     public void updateSize() {
+        updateSizeInternal();
+    }
+
+    private void updateSizeInternal() {
         int viewWidth = getWidth();
         int viewHeight = getHeight();
         if (viewWidth == 0 || viewHeight == 0 || mTermSession == null) return;

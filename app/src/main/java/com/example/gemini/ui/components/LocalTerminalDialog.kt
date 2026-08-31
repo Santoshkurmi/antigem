@@ -305,18 +305,18 @@ fun LocalTerminalContent(
                 }
             }
 
-            // EXTRA-KEYS TOOLBAR (Exact 2-Row Termux Layout from Screenshot)
+            // EXTRA-KEYS TOOLBAR (Seamless integrated buttons, bold text, transparent bg)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF0C0C0E))
-                    .padding(horizontal = 4.dp, vertical = 3.dp),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+                    .background(Color.Transparent)
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 // ROW 1: ESC | / | - | HOME | ↑ | END | PGUP
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     TermuxKey(label = "ESC", modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_ESCAPE, "\u001B")
@@ -344,7 +344,7 @@ fun LocalTerminalContent(
                 // ROW 2: ↹ (TAB) | CTRL | ALT | ← | ↓ | → | PGDN
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     TermuxKey(label = "↹", modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_TAB, "\t")
@@ -391,10 +391,10 @@ private fun TermuxKey(
     Surface(
         modifier = modifier
             .height(34.dp)
-            .clip(RoundedCornerShape(3.dp))
+            .clip(RoundedCornerShape(4.dp))
             .clickable { onClick() },
-        color = if (isActive) ClaudeTerracotta else Color(0xFF1E1E22),
-        shape = RoundedCornerShape(3.dp)
+        color = if (isActive) ClaudeTerracotta.copy(alpha = 0.35f) else Color.Transparent,
+        shape = RoundedCornerShape(4.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -402,10 +402,10 @@ private fun TermuxKey(
         ) {
             Text(
                 text = label,
-                fontSize = 11.5.sp,
+                fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace,
-                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                color = if (isActive) Color.White else Color(0xFFE2E8F0)
+                fontWeight = FontWeight.Bold,
+                color = if (isActive) ClaudeTerracotta else Color(0xFFEEEEEE)
             )
         }
     }
