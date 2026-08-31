@@ -85,10 +85,34 @@ type ChatMessage struct {
 
 // ConversationSummary represents a conversation list entry.
 type ConversationSummary struct {
-	ID         string `json:"id"`
-	Title      string `json:"title"`
-	CreatedAt  string `json:"created_at"`
-	StepsCount int    `json:"steps_count"`
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	CreatedAt    string `json:"created_at"`
+	StepsCount   int    `json:"steps_count"`
+	IsRunning    bool   `json:"isRunning"`
+	LastActivity string `json:"lastActivity,omitempty"`
+}
+
+// ConversationListResponse represents a paged list of conversations.
+type ConversationListResponse struct {
+	Conversations []ConversationSummary `json:"conversations"`
+	Total         int                   `json:"total"`
+	Page          int                   `json:"page"`
+	Limit         int                   `json:"limit"`
+	HasMore       bool                  `json:"hasMore"`
+}
+
+// StreamSnapshot represents an in-flight stream snapshot for reconnecting clients.
+type StreamSnapshot struct {
+	Type           string     `json:"type"` // "stream_snapshot"
+	ConversationID string     `json:"conversationId"`
+	IsRunning      bool       `json:"isRunning"`
+	Status         string     `json:"status"` // "IDLE", "THINKING", "EXECUTING_TOOL", "GENERATING_TEXT"
+	Seq            int64      `json:"seq"`
+	Prompt         string     `json:"prompt,omitempty"`
+	Thought        string     `json:"thought"`
+	Content        string     `json:"content"`
+	ActiveTools    []ToolCall `json:"activeTools"`
 }
 
 // ActiveInstance represents an active agy worker session in RAM.

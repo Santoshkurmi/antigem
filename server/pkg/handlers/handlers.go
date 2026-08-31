@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,7 +68,7 @@ func (h *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) StatusHandler(w http.ResponseWriter, r *http.Request) {
-	instances := h.Pool.GetActiveInstances()
+	instances := h.Pool.ListInstances()
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":    "ok",
 		"uptime":    time.Since(startTime).Seconds(),
@@ -94,7 +95,7 @@ func (h *Handler) QuotasHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) InstancesHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"instances": h.Pool.GetActiveInstances(),
+		"instances": h.Pool.ListInstances(),
 	})
 }
 
@@ -104,13 +105,9 @@ func (h *Handler) TerminateInstanceHandler(w http.ResponseWriter, r *http.Reques
 	if len(parts) >= 4 {
 		convID = parts[3]
 	}
-	terminated := h.Pool.TerminateInstance(convID)
-	status := "not_found"
-	if terminated {
-		status = "terminated"
-	}
+	h.Pool.TerminateInstance(convID)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":         status,
+		"status":         "terminated",
 		"conversationId": convID,
 	})
 }
@@ -121,6 +118,25 @@ type convWithModTime struct {
 }
 
 func (h *Handler) ConversationsHandler(w http.ResponseWriter, r *http.Request) {
+	searchQuery := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	if searchQuery == "" {
+		searchQuery = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("query")))
+	}
+
+	page := 1
+	if pStr := r.URL.Query().Get("page"); pStr != "" {
+		if pVal, err := strconv.Atoi(pStr); err == nil && pVal > 0 {
+			page = pVal
+		}
+	}
+
+	limit := 30
+	if lStr := r.URL.Query().Get("limit"); lStr != "" {
+		if lVal, err := strconv.Atoi(lStr); err == nil && lVal >= 0 {
+			limit = lVal
+		}
+	}
+
 	var results []convWithModTime
 	seen := make(map[string]bool)
 
@@ -147,6 +163,7 @@ func (h *Handler) ConversationsHandler(w http.ResponseWriter, r *http.Request) {
 			if len(title) > 8 {
 				title = title[:8]
 			}
+			firstPrompt := ""
 
 			titleFile := filepath.Join(h.Cfg.BrainDir, convID, "custom_title.txt")
 			if tData, err := os.ReadFile(titleFile); err == nil && len(tData) > 0 {
@@ -172,6 +189,7 @@ func (h *Handler) ConversationsHandler(w http.ResponseWriter, r *http.Request) {
 						if err := json.Unmarshal([]byte(line), &step); err == nil && step.Type == "USER_INPUT" && step.Content != "" {
 							cleanPrompt := transcript.ExtractPromptText(step.Content)
 							if cleanPrompt != "" {
+								firstPrompt = cleanPrompt
 								if len(cleanPrompt) > 36 {
 									title = cleanPrompt[:36] + "..."
 								} else {
@@ -185,12 +203,26 @@ func (h *Handler) ConversationsHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
+			// Filter by search query if specified
+			if searchQuery != "" {
+				matchesID := strings.Contains(strings.ToLower(convID), searchQuery)
+				matchesTitle := strings.Contains(strings.ToLower(title), searchQuery)
+				matchesPrompt := strings.Contains(strings.ToLower(firstPrompt), searchQuery)
+				if !matchesID && !matchesTitle && !matchesPrompt {
+					continue
+				}
+			}
+
+			isRunning := h.Pool.IsRunning(convID)
+
 			results = append(results, convWithModTime{
 				summary: models.ConversationSummary{
-					ID:         convID,
-					Title:      title,
-					CreatedAt:  stat.ModTime().UTC().Format(time.RFC3339),
-					StepsCount: 1,
+					ID:           convID,
+					Title:        title,
+					CreatedAt:    stat.ModTime().UTC().Format(time.RFC3339),
+					StepsCount:   1,
+					IsRunning:    isRunning,
+					LastActivity: stat.ModTime().UTC().Format(time.RFC3339),
 				},
 				modTime: stat.ModTime(),
 			})
@@ -202,12 +234,35 @@ func (h *Handler) ConversationsHandler(w http.ResponseWriter, r *http.Request) {
 		return results[i].modTime.After(results[j].modTime)
 	})
 
-	var list []models.ConversationSummary
-	for _, r := range results {
-		list = append(list, r.summary)
+	total := len(results)
+	var paged []models.ConversationSummary
+
+	if limit > 0 {
+		start := (page - 1) * limit
+		if start < total {
+			end := start + limit
+			if end > total {
+				end = total
+			}
+			for i := start; i < end; i++ {
+				paged = append(paged, results[i].summary)
+			}
+		}
+	} else {
+		for _, r := range results {
+			paged = append(paged, r.summary)
+		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{"conversations": list})
+	hasMore := limit > 0 && ((page * limit) < total)
+
+	writeJSON(w, http.StatusOK, models.ConversationListResponse{
+		Conversations: paged,
+		Total:         total,
+		Page:          page,
+		Limit:         limit,
+		HasMore:       hasMore,
+	})
 }
 
 func (h *Handler) ConversationMessagesHandler(w http.ResponseWriter, r *http.Request) {

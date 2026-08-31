@@ -28,7 +28,9 @@ data class AgyConversationSummary(
     val id: String,
     val title: String,
     val createdAt: String,
-    val stepsCount: Int = 0
+    val stepsCount: Int = 0,
+    val isRunning: Boolean = false,
+    val lastActivity: String? = null
 )
 
 data class AgyProjectSummary(
@@ -55,16 +57,27 @@ enum class BridgeConnectionState {
 }
 
 sealed class AgyStreamEvent {
-    data class TextChunk(val text: String) : AgyStreamEvent()
-    data class ThoughtChunk(val thought: String, val durationMs: Long? = null) : AgyStreamEvent()
-    data class ToolChunk(val tool: ToolCall) : AgyStreamEvent()
+    data class TextChunk(val text: String, val seq: Long? = null) : AgyStreamEvent()
+    data class ThoughtChunk(val thought: String, val durationMs: Long? = null, val seq: Long? = null) : AgyStreamEvent()
+    data class ToolChunk(val tool: ToolCall, val seq: Long? = null) : AgyStreamEvent()
     data class InstanceStatus(val status: String, val message: String? = null, val conversationId: String? = null) : AgyStreamEvent()
     data class SessionAttached(val conversationId: String, val isRunning: Boolean, val prompt: String? = null) : AgyStreamEvent()
+    data class StreamSnapshot(
+        val conversationId: String,
+        val isRunning: Boolean,
+        val status: String,
+        val seq: Long,
+        val prompt: String? = null,
+        val thought: String = "",
+        val content: String = "",
+        val activeTools: List<ToolCall> = emptyList()
+    ) : AgyStreamEvent()
     data class QuotaUpdate(val quotaSummary: com.example.gemini.domain.model.QuotaSummaryResponse) : AgyStreamEvent()
     data class Completed(
         val tokenUsage: TokenUsage?,
         val conversationId: String? = null,
-        val fullResponse: String? = null
+        val fullResponse: String? = null,
+        val seq: Long? = null
     ) : AgyStreamEvent()
     data class Error(val message: String) : AgyStreamEvent()
 }
@@ -227,10 +240,16 @@ class AgyBridgeService(
         }
     }
 
-    suspend fun fetchConversations(httpBaseUrl: String = DEFAULT_HTTP_URL): Result<List<AgyConversationSummary>> = withContext(Dispatchers.IO) {
+    suspend fun fetchConversations(
+        searchQuery: String? = null,
+        page: Int = 1,
+        limit: Int = 30,
+        httpBaseUrl: String = DEFAULT_HTTP_URL
+    ): Result<List<AgyConversationSummary>> = withContext(Dispatchers.IO) {
         try {
+            val qParam = if (!searchQuery.isNullOrBlank()) "&q=${java.net.URLEncoder.encode(searchQuery, "UTF-8")}" else ""
             val request = Request.Builder()
-                .url("$httpBaseUrl/api/conversations")
+                .url("$httpBaseUrl/api/conversations?page=$page&limit=$limit$qParam")
                 .get()
                 .build()
 
@@ -250,7 +269,9 @@ class AgyBridgeService(
                             id = obj.getString("id"),
                             title = obj.optString("title", "Conversation"),
                             createdAt = obj.optString("created_at", ""),
-                            stepsCount = obj.optInt("steps_count", 0)
+                            stepsCount = obj.optInt("steps_count", 0),
+                            isRunning = obj.optBoolean("isRunning", false),
+                            lastActivity = obj.optString("lastActivity").takeIf { it.isNotBlank() }
                         )
                     )
                 }
@@ -642,10 +663,51 @@ class AgyBridgeService(
                             }
                         }
 
+                        "stream_snapshot" -> {
+                            val convId = root.optString("conversationId")
+                            val isRunning = root.optBoolean("isRunning", false)
+                            val status = root.optString("status", "IDLE")
+                            val seq = root.optLong("seq", 0L)
+                            val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
+                            val thought = root.optString("thought", "")
+                            val content = root.optString("content", "")
+                            val toolsArr = root.optJSONArray("activeTools")
+                            val tools = mutableListOf<ToolCall>()
+                            if (toolsArr != null) {
+                                for (i in 0 until toolsArr.length()) {
+                                    val tObj = toolsArr.optJSONObject(i) ?: continue
+                                    tools.add(
+                                        ToolCall(
+                                            id = tObj.optString("id"),
+                                            name = tObj.optString("name"),
+                                            command = tObj.optString("command"),
+                                            status = tObj.optString("status", "RUNNING"),
+                                            output = tObj.optString("output", "")
+                                        )
+                                    )
+                                }
+                            }
+                            if (convId.isNotBlank()) assignedConversationId = convId
+                            _connectionState.value = if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.StreamSnapshot(
+                                    conversationId = convId,
+                                    isRunning = isRunning,
+                                    status = status,
+                                    seq = seq,
+                                    prompt = prompt,
+                                    thought = thought,
+                                    content = content,
+                                    activeTools = tools
+                                )
+                            )
+                        }
+
                         "session_attached" -> {
                             val convId = root.optString("conversationId")
                             val isRunning = root.optBoolean("isRunning", false)
                             val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
+                            if (convId.isNotBlank()) assignedConversationId = convId
                             _connectionState.value = if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
                             trySend(AgyStreamEvent.SessionAttached(conversationId = convId, isRunning = isRunning, prompt = prompt))
                         }
@@ -738,6 +800,44 @@ class AgyBridgeService(
                     val type = root.optString("type")
 
                     when (type) {
+                        "stream_snapshot" -> {
+                            val convId = root.optString("conversationId")
+                            val isRunning = root.optBoolean("isRunning", false)
+                            val status = root.optString("status", "IDLE")
+                            val seq = root.optLong("seq", 0L)
+                            val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
+                            val thought = root.optString("thought", "")
+                            val content = root.optString("content", "")
+                            val toolsArr = root.optJSONArray("activeTools")
+                            val tools = mutableListOf<ToolCall>()
+                            if (toolsArr != null) {
+                                for (i in 0 until toolsArr.length()) {
+                                    val tObj = toolsArr.optJSONObject(i) ?: continue
+                                    tools.add(
+                                        ToolCall(
+                                            id = tObj.optString("id"),
+                                            name = tObj.optString("name"),
+                                            command = tObj.optString("command"),
+                                            status = tObj.optString("status", "RUNNING"),
+                                            output = tObj.optString("output", "")
+                                        )
+                                    )
+                                }
+                            }
+                            _connectionState.value = if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.StreamSnapshot(
+                                    conversationId = convId,
+                                    isRunning = isRunning,
+                                    status = status,
+                                    seq = seq,
+                                    prompt = prompt,
+                                    thought = thought,
+                                    content = content,
+                                    activeTools = tools
+                                )
+                            )
+                        }
                         "session_attached" -> {
                             val convId = root.optString("conversationId")
                             val isRunning = root.optBoolean("isRunning", false)

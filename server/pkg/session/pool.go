@@ -19,11 +19,17 @@ type WsSender interface {
 	SendJSON(v interface{}) error
 }
 
-// ActiveTurn tracks a currently running turn and its listeners.
+// ActiveTurn tracks a currently running turn, sequence numbers, and its listeners.
 type ActiveTurn struct {
 	Listeners      []WsSender
 	Prompt         string
 	StartTime      time.Time
+	LastActivity   time.Time
+	Seq            int64
+	Status         string // "THINKING", "EXECUTING_TOOL", "GENERATING_TEXT"
+	ThoughtBuffer  strings.Builder
+	ContentBuffer  strings.Builder
+	ActiveTools    []models.ToolCall
 	BufferedEvents []map[string]interface{}
 	IsDone         bool
 	Mu             sync.Mutex
@@ -112,28 +118,49 @@ func (s *SessionInstance) Spawn(manager *SessionPoolManager) {
 }
 
 func (s *SessionInstance) listenStdout(manager *SessionPoolManager) {
-	scanner := bufio.NewScanner(s.Stdout)
-	buf := make([]byte, 1024*1024)
-	scanner.Buffer(buf, 10*1024*1024)
+	reader := bufio.NewReaderSize(s.Stdout, 10*1024*1024)
 
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
+	for {
+		lineBytes, err := reader.ReadBytes('\n')
+		if len(lineBytes) > 0 {
+			line := strings.TrimSpace(string(lineBytes))
+			if line != "" {
+				var parsed map[string]interface{}
+				if jsonErr := json.Unmarshal([]byte(line), &parsed); jsonErr == nil {
+					s.handleParsedEvent(parsed, manager)
+				}
+			}
 		}
 
-		var parsed map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &parsed); err != nil {
-			continue
+		if err != nil {
+			if err != io.EOF {
+				fmt.Printf("[SessionPool] Stdout read error: %v\n", err)
+			}
+			break
 		}
-
-		s.handleParsedEvent(parsed, manager)
 	}
 
 	s.Mu.Lock()
+	turn := s.CurrentTurn
 	s.IsReady = false
 	s.Cmd = nil
 	s.Mu.Unlock()
+
+	// Ensure any pending turn is closed with a done event so the client never hangs!
+	if turn != nil {
+		turn.Mu.Lock()
+		if !turn.IsDone {
+			turn.IsDone = true
+			for _, listener := range turn.Listeners {
+				_ = listener.SendJSON(map[string]interface{}{
+					"type":     "done",
+					"exitCode": 0,
+					"message":  "Process completed",
+				})
+			}
+		}
+		turn.Mu.Unlock()
+	}
 }
 
 func (s *SessionInstance) handleParsedEvent(parsed map[string]interface{}, manager *SessionPoolManager) {
@@ -154,6 +181,7 @@ func (s *SessionInstance) handleParsedEvent(parsed map[string]interface{}, manag
 	s.Mu.Unlock()
 
 	if evType == "init" && turn != nil {
+		turn.Mu.Lock()
 		for _, listener := range turn.Listeners {
 			_ = listener.SendJSON(map[string]interface{}{
 				"type":           "instance_status",
@@ -161,20 +189,32 @@ func (s *SessionInstance) handleParsedEvent(parsed map[string]interface{}, manag
 				"conversationId": s.ConversationID,
 			})
 		}
+		turn.Mu.Unlock()
 	}
 
 	if turn != nil {
 		turn.Mu.Lock()
+		turn.LastActivity = time.Now()
+		turn.Seq++
 		turn.BufferedEvents = append(turn.BufferedEvents, parsed)
 
 		if evType == "step_update" {
 			if stepUpdate, ok := parsed["step_update"].(map[string]interface{}); ok {
 				stepType, _ := stepUpdate["step_type"].(string)
 				textDelta, _ := stepUpdate["text_delta"].(string)
+				thoughtDelta, _ := stepUpdate["thought_delta"].(string)
 
-				if stepType == "agent_response" && textDelta != "" {
+				if thoughtDelta != "" || stepType == "thought" {
+					turn.Status = "THINKING"
+					if thoughtDelta != "" {
+						turn.ThoughtBuffer.WriteString(thoughtDelta)
+					}
+				} else if stepType == "agent_response" && textDelta != "" {
+					turn.Status = "GENERATING_TEXT"
+					turn.ContentBuffer.WriteString(textDelta)
 					fmt.Print(textDelta)
 				} else if stepType == "tool" || stepUpdate["tool_info"] != nil || stepUpdate["tool_name"] != nil {
+					turn.Status = "EXECUTING_TOOL"
 					toolName := "tool"
 					if tn, ok := stepUpdate["tool_name"].(string); ok && tn != "" {
 						toolName = tn
@@ -223,10 +263,11 @@ func (s *SessionInstance) handleParsedEvent(parsed map[string]interface{}, manag
 			fmt.Printf("=======================================================\n\n")
 		}
 
-		// Broadcast to all active turn listeners
+		// Broadcast to all active turn listeners with seq tag
 		for _, listener := range turn.Listeners {
 			_ = listener.SendJSON(map[string]interface{}{
 				"type": "agy_event",
+				"seq":  turn.Seq,
 				"data": parsed,
 			})
 		}
@@ -236,6 +277,7 @@ func (s *SessionInstance) handleParsedEvent(parsed map[string]interface{}, manag
 			for _, listener := range turn.Listeners {
 				_ = listener.SendJSON(map[string]interface{}{
 					"type":     "done",
+					"seq":      turn.Seq,
 					"exitCode": 0,
 				})
 			}
@@ -251,7 +293,7 @@ func (s *SessionInstance) handleParsedEvent(parsed map[string]interface{}, manag
 	}
 }
 
-// AttachClient connects a WebSocket listener to an ongoing turn.
+// AttachClient connects a WebSocket listener to an ongoing turn using StreamSnapshot.
 func (s *SessionInstance) AttachClient(ws WsSender) bool {
 	s.Mu.Lock()
 	turn := s.CurrentTurn
@@ -271,20 +313,23 @@ func (s *SessionInstance) AttachClient(ws WsSender) bool {
 	}
 
 	turn.Mu.Lock()
+	defer turn.Mu.Unlock()
+
 	turn.Listeners = append(turn.Listeners, ws)
-	_ = ws.SendJSON(map[string]interface{}{
-		"type":           "session_attached",
-		"conversationId": s.ConversationID,
-		"isRunning":      true,
-		"prompt":         turn.Prompt,
+
+	// Send comprehensive in-flight snapshot with sequence number
+	_ = ws.SendJSON(models.StreamSnapshot{
+		Type:           "stream_snapshot",
+		ConversationID: s.ConversationID,
+		IsRunning:      true,
+		Status:         turn.Status,
+		Seq:            turn.Seq,
+		Prompt:         turn.Prompt,
+		Thought:        turn.ThoughtBuffer.String(),
+		Content:        turn.ContentBuffer.String(),
+		ActiveTools:    turn.ActiveTools,
 	})
-	for _, ev := range turn.BufferedEvents {
-		_ = ws.SendJSON(map[string]interface{}{
-			"type": "agy_event",
-			"data": ev,
-		})
-	}
-	turn.Mu.Unlock()
+
 	return true
 }
 
@@ -311,6 +356,9 @@ func (s *SessionInstance) SendTurn(prompt string, ws WsSender) {
 			Listeners:      []WsSender{ws},
 			Prompt:         prompt,
 			StartTime:      time.Now(),
+			LastActivity:   time.Now(),
+			Seq:            0,
+			Status:         "THINKING",
 			BufferedEvents: make([]map[string]interface{}, 0),
 			IsDone:         false,
 		}
@@ -417,6 +465,24 @@ func (m *SessionPoolManager) getKey(model, convID, wsDir string) string {
 	return fmt.Sprintf("%s__%s__%s", mID, cID, wDir)
 }
 
+// IsRunning checks if there is an active turn executing for a conversation.
+func (m *SessionPoolManager) IsRunning(convID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, inst := range m.sessions {
+		if inst.ConversationID == convID {
+			inst.Mu.Lock()
+			running := inst.CurrentTurn != nil && !inst.CurrentTurn.IsDone
+			inst.Mu.Unlock()
+			if running {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // GetOrCreate retrieves an existing warm instance or spawns a new one.
 func (m *SessionPoolManager) GetOrCreate(model, convID, wsDir string) *SessionInstance {
 	m.mu.Lock()
@@ -453,140 +519,134 @@ func (m *SessionPoolManager) GetOrCreate(model, convID, wsDir string) *SessionIn
 		return existing
 	}
 
-	// Prune oldest idle session if over capacity
-	if len(m.sessions) >= m.maxSessions {
-		var oldestKey string
-		var oldestTime time.Time
-		for k, s := range m.sessions {
-			if s.CurrentTurn == nil && (oldestKey == "" || s.LastUsed.Before(oldestTime)) {
-				oldestKey = k
-				oldestTime = s.LastUsed
-			}
-		}
-		if oldestKey != "" {
-			fmt.Printf("[SessionPool] Pruning idle instance: %s\n", oldestKey)
-			m.sessions[oldestKey].Destroy()
-			delete(m.sessions, oldestKey)
-		}
-	}
+	m.evictOldSessionsIfNeeded()
 
-	inst := &SessionInstance{
+	newInstance := &SessionInstance{
 		Model:          targetModel,
 		ConversationID: convID,
 		WorkspaceDir:   targetWs,
-		IsReady:        false,
 		CreatedAt:      time.Now(),
 		LastUsed:       time.Now(),
 		OnResultHook:   m.OnResultHook,
 	}
+	m.sessions[key] = newInstance
+	newInstance.Spawn(m)
 
-	m.sessions[key] = inst
-	inst.Spawn(m)
-	return inst
+	return newInstance
 }
 
-// Prewarm warms an instance in background.
-func (m *SessionPoolManager) Prewarm(model, convID, wsDir string) {
-	m.GetOrCreate(model, convID, wsDir)
+// Prewarm warms up an instance ahead of time.
+func (m *SessionPoolManager) Prewarm(model, convID, wsDir string) *SessionInstance {
+	return m.GetOrCreate(model, convID, wsDir)
 }
 
-// RegisterAssignedConversation binds a dynamically assigned conversation ID to the pool map.
-func (m *SessionPoolManager) RegisterAssignedConversation(model, convID, wsDir string, inst *SessionInstance) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	key := m.getKey(model, convID, wsDir)
-	m.sessions[key] = inst
-}
-
-// FindRunningSession locates any session actively executing a prompt turn.
+// FindRunningSession locates a currently active session for a conversation.
 func (m *SessionPoolManager) FindRunningSession(convID string) *SessionInstance {
-	if convID == "" {
-		return nil
-	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	for _, s := range m.sessions {
-		if s.ConversationID == convID && s.CurrentTurn != nil && !s.CurrentTurn.IsDone {
-			return s
+	for _, inst := range m.sessions {
+		if inst.ConversationID == convID {
+			inst.Mu.Lock()
+			running := inst.CurrentTurn != nil && !inst.CurrentTurn.IsDone
+			inst.Mu.Unlock()
+			if running {
+				return inst
+			}
 		}
 	}
 	return nil
 }
 
-// AbortSession aborts a conversation.
+// AbortSession interrupts the active turn for a conversation.
 func (m *SessionPoolManager) AbortSession(convID string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	if convID == "" {
-		for _, s := range m.sessions {
-			s.Destroy()
-		}
-		m.sessions = make(map[string]*SessionInstance)
-		return
-	}
-
-	for key, s := range m.sessions {
-		if s.ConversationID == convID || strings.Contains(key, fmt.Sprintf("__%s__", convID)) {
-			fmt.Printf("[SessionPool] Aborting generation for conversation: %s\n", convID)
-			model := s.Model
-			wsDir := s.WorkspaceDir
-			s.Destroy()
-			delete(m.sessions, key)
-			go m.Prewarm(model, convID, wsDir)
+	for _, inst := range m.sessions {
+		if inst.ConversationID == convID || convID == "" {
+			inst.Abort()
 		}
 	}
 }
 
-// TerminateInstance terminates a conversation instance.
-func (m *SessionPoolManager) TerminateInstance(convID string) bool {
+// TerminateInstance stops and removes a session.
+func (m *SessionPoolManager) TerminateInstance(convID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	found := false
-	for key, s := range m.sessions {
-		if s.ConversationID == convID || strings.Contains(key, fmt.Sprintf("__%s__", convID)) {
-			fmt.Printf("[SessionPool] Explicitly terminating instance for conversation: %s\n", convID)
-			s.Destroy()
+	for key, inst := range m.sessions {
+		if inst.ConversationID == convID || convID == "" {
+			inst.Destroy()
 			delete(m.sessions, key)
-			found = true
+			fmt.Printf("[SessionPool] Terminated and removed instance for conv: %s\n", convID)
 		}
 	}
-	return found
 }
 
-// GetActiveInstances returns list of active instances.
-func (m *SessionPoolManager) GetActiveInstances() []models.ActiveInstance {
+// ListInstances returns telemetry summaries for all active worker instances in RAM.
+func (m *SessionPoolManager) ListInstances() []models.ActiveInstance {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	var list []models.ActiveInstance
-	for _, s := range m.sessions {
-		if s.Cmd != nil && s.Cmd.Process != nil {
-			pid := s.Cmd.Process.Pid
-			uptime := int64(time.Since(s.CreatedAt).Seconds())
-			lastUsed := int64(time.Since(s.LastUsed).Seconds())
-			cID := s.ConversationID
-			if cID == "" {
-				cID = "new"
-			}
-			list = append(list, models.ActiveInstance{
-				ConversationID:     cID,
-				Model:              s.Model,
-				WorkspaceDir:       s.WorkspaceDir,
-				PID:                pid,
-				UptimeSeconds:      uptime,
-				LastUsedAgoSeconds: lastUsed,
-				IsReady:            s.IsReady,
-				IsBusy:             s.CurrentTurn != nil,
-			})
+	now := time.Now()
+
+	for _, inst := range m.sessions {
+		inst.Mu.Lock()
+		pid := 0
+		if inst.Cmd != nil && inst.Cmd.Process != nil {
+			pid = inst.Cmd.Process.Pid
 		}
+		isBusy := inst.CurrentTurn != nil && !inst.CurrentTurn.IsDone
+		list = append(list, models.ActiveInstance{
+			ConversationID:     inst.ConversationID,
+			Model:              inst.Model,
+			WorkspaceDir:       inst.WorkspaceDir,
+			PID:                pid,
+			UptimeSeconds:      int64(now.Sub(inst.CreatedAt).Seconds()),
+			LastUsedAgoSeconds: int64(now.Sub(inst.LastUsed).Seconds()),
+			IsReady:            inst.IsReady,
+			IsBusy:             isBusy,
+		})
+		inst.Mu.Unlock()
 	}
+
 	return list
 }
 
-func dirExists(p string) bool {
-	info, err := os.Stat(p)
-	return err == nil && info.IsDir()
+func (m *SessionPoolManager) evictOldSessionsIfNeeded() {
+	if len(m.sessions) < m.maxSessions {
+		return
+	}
+
+	var oldestKey string
+	var oldestTime time.Time = time.Now()
+
+	for key, inst := range m.sessions {
+		inst.Mu.Lock()
+		isBusy := inst.CurrentTurn != nil && !inst.CurrentTurn.IsDone
+		inst.Mu.Unlock()
+
+		if !isBusy && (oldestKey == "" || inst.LastUsed.Before(oldestTime)) {
+			oldestKey = key
+			oldestTime = inst.LastUsed
+		}
+	}
+
+	if oldestKey != "" {
+		if inst, ok := m.sessions[oldestKey]; ok {
+			fmt.Printf("[SessionPool] Evicting oldest idle instance: %s\n", oldestKey)
+			inst.Destroy()
+			delete(m.sessions, oldestKey)
+		}
+	}
+}
+
+func dirExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	stat, err := os.Stat(path)
+	return err == nil && stat.IsDir()
 }

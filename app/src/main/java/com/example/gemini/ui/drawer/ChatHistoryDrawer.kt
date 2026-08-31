@@ -36,6 +36,7 @@ fun ChatHistoryDrawer(
     onNewChat: () -> Unit,
     onDeleteConversation: (String) -> Unit,
     onTerminateInstance: (String) -> Unit = {},
+    onSearchQueryChange: (String) -> Unit = {},
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -139,7 +140,10 @@ fun ChatHistoryDrawer(
             // Search Bar
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { searchQuery = it },
+                onValueChange = {
+                    searchQuery = it
+                    onSearchQueryChange(it)
+                },
                 placeholder = { Text("Search chats...", fontSize = 13.5.sp) },
                 leadingIcon = {
                     Icon(

@@ -198,9 +198,9 @@ fun ChatScreen(
     val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
     val isLoadingConversation by viewModel.isLoadingConversation.collectAsState()
 
-    // Fresh LazyListState per conversation initialized directly at the bottom
+    // Fresh LazyListState per conversation
     val convKey = currentConv?.id ?: "empty"
-    val listState = remember(convKey) { LazyListState(firstVisibleItemIndex = Int.MAX_VALUE) }
+    val listState = remember(convKey) { LazyListState(firstVisibleItemIndex = 0) }
     var lastScrolledConvId by remember { mutableStateOf<String?>(null) }
     var lastScrolledMessageCount by remember { mutableStateOf(-1) }
 
@@ -476,6 +476,9 @@ fun ChatScreen(
                 },
                 onTerminateInstance = { id ->
                     viewModel.terminateInstance(id)
+                },
+                onSearchQueryChange = { query ->
+                    viewModel.searchConversations(query)
                 },
                 onOpenSettings = {
                     showSettingsDialog = true
