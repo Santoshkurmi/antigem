@@ -284,39 +284,23 @@ class AgyHubClient(
 
     // ==================== CONVERSATION MANAGEMENT ====================
 
-    private val conversationCache = java.util.concurrent.ConcurrentHashMap<String, Conversation>()
-
-    fun removeCachedConversation(id: String) {
-        conversationCache.remove(id)
-    }
-
-    fun getCachedConversations(): List<Conversation> {
-        return conversationCache.values.toList().sortedByDescending { it.updatedAt }
-    }
-
     /**
      * Subscribes to live conversation summaries via JetboxSubscribeToSummaries.
-     * Accumulates all updates in conversationCache so conversations never disappear on incremental updates.
+     * Streams conversation updates directly from daemon without local caching.
      */
     fun subscribeToSummaries(hubUrl: String = DEFAULT_HUB_URL): Flow<List<Conversation>> = flow {
-        if (conversationCache.isNotEmpty()) {
-            emit(conversationCache.values.toList().sortedByDescending { it.updatedAt })
-        }
-
         callStream("JetboxSubscribeToSummaries", "{}", hubUrl).collect { frameJson ->
             try {
                 val root = JSONObject(frameJson)
                 val updates = root.optJSONObject("updates")
                 if (updates != null) {
+                    val frameList = mutableListOf<Conversation>()
                     val keys = updates.keys()
                     while (keys.hasNext()) {
                         val cid = keys.next()
                         val obj = updates.getJSONObject(cid)
                         val summary = obj.optString("summary", "Conversation").ifBlank { "Conversation" }
-                        val stepCount = obj.optInt("stepCount", 0)
                         val lastModStr = obj.optString("lastModifiedTime", "")
-                        val status = obj.optString("status", "")
-                        val isRunning = status.contains("RUNNING", ignoreCase = true)
 
                         var lastModEpoch = System.currentTimeMillis()
                         if (lastModStr.isNotBlank()) {
@@ -324,26 +308,25 @@ class AgyHubClient(
                                 val cleanIso = if (lastModStr.length > 19) lastModStr.substring(0, 19) else lastModStr
                                 lastModEpoch = ISO_FORMAT.parse(cleanIso)?.time ?: System.currentTimeMillis()
                             } catch (e: Exception) {
-                                // Fallback
+                                // Fallback to current time
                             }
                         }
 
-                        val existing = conversationCache[cid]
-                        val createdEpoch = existing?.createdAt ?: lastModEpoch
-
-                        conversationCache[cid] = Conversation(
-                            id = cid,
-                            title = summary,
-                            modelId = existing?.modelId?.takeIf { it.isNotBlank() } ?: "MODEL_PLACEHOLDER_M319",
-                            sessionId = cid,
-                            summary = summary,
-                            createdAt = createdEpoch,
-                            updatedAt = lastModEpoch
+                        frameList.add(
+                            Conversation(
+                                id = cid,
+                                title = summary,
+                                modelId = "gemini-3.7-flash-high",
+                                sessionId = cid,
+                                summary = summary,
+                                createdAt = lastModEpoch,
+                                updatedAt = lastModEpoch
+                            )
                         )
                     }
-
-                    val sorted = conversationCache.values.toList().sortedByDescending { it.updatedAt }
-                    emit(sorted)
+                    if (frameList.isNotEmpty()) {
+                        emit(frameList)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing conversation updates: ${e.message}")
@@ -419,11 +402,7 @@ class AgyHubClient(
             put("cascadeId", cascadeId)
         }.toString()
 
-        val res = callUnary("DeleteCascadeTrajectory", payload, hubUrl).map { true }
-        if (res.isSuccess) {
-            conversationCache.remove(cascadeId)
-        }
-        res
+        callUnary("DeleteCascadeTrajectory", payload, hubUrl).map { true }
     }
 
     /**
@@ -483,7 +462,7 @@ class AgyHubClient(
     }
 
     /**
-     * Loads raw trajectory steps for a conversation
+     * Loads raw trajectory steps for a conversation via Connect-RPC Unary
      */
     suspend fun getCascadeTrajectorySteps(
         cascadeId: String,
@@ -491,19 +470,10 @@ class AgyHubClient(
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
-                put("cascade_id", cascadeId)
-                put("trajectory_verbosity", 2)
+                put("cascadeId", cascadeId)
+                put("trajectoryVerbosity", 2)
             }.toString()
-
-            var latestJson = ""
-            callStream("GetCascadeTrajectorySteps", payload, hubUrl).collect { frameJson ->
-                latestJson = frameJson
-            }
-            if (latestJson.isNotBlank()) {
-                Result.success(latestJson)
-            } else {
-                Result.failure(Exception("No trajectory steps returned"))
-            }
+            callUnary("GetCascadeTrajectorySteps", payload, hubUrl)
         } catch (e: Exception) {
             Log.e(TAG, "getCascadeTrajectorySteps failed: ${e.message}")
             Result.failure(e)
@@ -513,7 +483,7 @@ class AgyHubClient(
     // ==================== MODELS & QUOTA TELEMETRY ====================
 
     /**
-     * Fetches all available models from daemon and maps them to AiModel
+     * Fetches all available models from daemon via Unary Connect-RPC and maps them to AiModel
      */
     suspend fun getAvailableModels(
         forceRefresh: Boolean = false,
@@ -521,14 +491,14 @@ class AgyHubClient(
     ): Result<List<AiModel>> = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
-                put("force_refresh", forceRefresh)
+                put("forceRefresh", forceRefresh)
             }.toString()
 
-            var modelsJson = ""
-            callStream("GetAvailableModels", payload, hubUrl).collect { frameJson ->
-                modelsJson = frameJson
+            val res = callUnary("GetAvailableModels", payload, hubUrl)
+            if (!res.isSuccess) {
+                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("Failed to fetch models"))
             }
-
+            val modelsJson = res.getOrThrow()
             if (modelsJson.isBlank()) {
                 return@withContext Result.failure(Exception("Empty models response"))
             }

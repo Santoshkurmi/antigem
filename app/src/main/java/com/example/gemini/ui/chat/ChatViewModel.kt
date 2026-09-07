@@ -3,7 +3,6 @@ package com.example.gemini.ui.chat
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gemini.data.local.LocalChatStorage
 import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.AntigravityApiService
 import com.example.gemini.data.remote.GoogleOAuthManager
@@ -28,7 +27,6 @@ import java.util.UUID
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val storage = LocalChatStorage(application)
     val authPreferences = AuthPreferences(application)
     private val authPrefs get() = authPreferences
     private val apiService = AntigravityApiService()
@@ -38,7 +36,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val automationExecutor = com.example.gemini.data.automation.AutomationToolExecutor(application)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    val conversations: StateFlow<List<Conversation>> = storage.conversations
+    private val _conversations = MutableStateFlow<List<Conversation>>(emptyList())
+    val conversations: StateFlow<List<Conversation>> = _conversations.asStateFlow()
 
     private val _currentConversation = MutableStateFlow<Conversation?>(null)
     val currentConversation: StateFlow<Conversation?> = _currentConversation.asStateFlow()
@@ -223,9 +222,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val conv = _currentConversation.value ?: return
         val updated = conv.copy(customSystemPrompt = if (prompt.isNullOrBlank()) null else prompt.trim())
         _currentConversation.value = updated
-        viewModelScope.launch {
-            storage.saveConversation(updated)
-        }
+        _conversations.value = _conversations.value.map { if (it.id == updated.id) updated else it }
     }
 
     val chatFontScale = authPrefs.chatFontScale
@@ -293,10 +290,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val lastSummary = updated.filter { it.role == MessageRole.SUMMARY }.lastOrNull()?.content
         val updatedConv = conv.copy(summary = lastSummary)
         _currentConversation.value = updatedConv
-        viewModelScope.launch {
-            storage.saveMessages(conv.id, updated)
-            storage.saveConversation(updatedConv)
-        }
+        _conversations.value = _conversations.value.map { if (it.id == updatedConv.id) updatedConv else it }
     }
 
     fun deleteSummaryMessage(messageId: String) {
@@ -307,10 +301,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val updatedConv = conv.copy(summary = lastSummary)
         _currentConversation.value = updatedConv
         _postponedThreshold.value = null
-        viewModelScope.launch {
-            storage.saveMessages(conv.id, updated)
-            storage.saveConversation(updatedConv)
-        }
+        _conversations.value = _conversations.value.map { if (it.id == updatedConv.id) updatedConv else it }
     }
 
     fun updateSummary(newSummary: String) {
@@ -321,9 +312,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val conv = _currentConversation.value ?: return
             val updated = conv.copy(summary = if (newSummary.isBlank()) null else newSummary)
             _currentConversation.value = updated
-            viewModelScope.launch {
-                storage.saveConversation(updated)
-            }
+            _conversations.value = _conversations.value.map { if (it.id == updated.id) updated else it }
         }
     }
 
@@ -336,9 +325,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val updated = conv.copy(summary = null)
             _currentConversation.value = updated
             _postponedThreshold.value = null
-            viewModelScope.launch {
-                storage.saveConversation(updated)
-            }
+            _conversations.value = _conversations.value.map { if (it.id == updated.id) updated else it }
         }
     }
 
@@ -411,8 +398,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _currentConversation.value = updatedConv
                 _postponedThreshold.value = null
                 _summaryError.value = null
-                storage.saveMessages(conv.id, updatedMessages)
-                storage.saveConversation(updatedConv)
+                _conversations.value = _conversations.value.map { if (it.id == updatedConv.id) updatedConv else it }
 
                 // If a user message was queued during summarization, dispatch it now!
                 val pending = _pendingQueuedUserMessage.value
@@ -511,37 +497,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            // Instantly restore cached models and quotas from local storage
-            authPrefs.cachedModelsJson.firstOrNull()?.let { modelsJson ->
-                if (!modelsJson.isNullOrBlank()) {
-                    try {
-                        val cachedModels = json.decodeFromString<List<AiModel>>(modelsJson)
-                        if (cachedModels.isNotEmpty()) {
-                            _availableModels.value = cachedModels
-                            recomputeEnabledModels()
-                        }
-                    } catch (e: Exception) {}
-                }
-            }
-            authPrefs.cachedQuotasJson.firstOrNull()?.let { quotasJson ->
-                if (!quotasJson.isNullOrBlank()) {
-                    try {
-                        val cachedQuotas = json.decodeFromString<List<ModelQuota>>(quotasJson)
-                        _quotas.value = cachedQuotas
-                    } catch (e: Exception) {}
-                }
-            }
-        }
-
-        viewModelScope.launch {
-            storage.init()
-            startNewChat()
-            _isLoadingConversation.value = false
-
             authPrefs.userEmail.collect { _userEmail.value = it }
         }
 
         viewModelScope.launch {
+            startNewChat()
             syncAgyConversations()
         }
 
@@ -624,25 +584,34 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private var syncJob: Job? = null
 
     fun syncAgyConversations() {
-        val cached = agyHubClient.getCachedConversations()
-        if (cached.isNotEmpty()) {
-            viewModelScope.launch {
-                storage.setConversations(cached)
-            }
-        }
-
         if (syncJob?.isActive == true) return
         syncJob = viewModelScope.launch {
+            _isLoadingConversation.value = true
             try {
                 val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
                 agyHubClient.subscribeToSummaries(hubUrl).collect { summaries ->
                     if (summaries.isNotEmpty()) {
-                        storage.setConversations(summaries)
+                        val currentMap = _conversations.value.associateBy { it.id }.toMutableMap()
+                        for (conv in summaries) {
+                            currentMap[conv.id] = conv
+                        }
+                        _conversations.value = currentMap.values.sortedByDescending { it.updatedAt }
                         _isServerOnline.value = true
+                        _conversationError.value = null
+                        _isLoadingConversation.value = false
                     }
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ChatViewModel", "subscribeToSummaries failed: ${e.message}")
+                _isServerOnline.value = false
+                val rawErr = e.message ?: "Connection failed"
+                val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("8090") || rawErr.contains("Failed to connect", ignoreCase = true)) {
+                    "Cannot connect to Antigravity Hub on port 8090. Make sure 'agy --hub' is running."
+                } else {
+                    "Antigravity Hub unreachable: $rawErr"
+                }
+                _conversationError.value = helpfulMsg
+                _isLoadingConversation.value = false
             }
         }
     }
@@ -701,8 +670,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         )
         _currentConversation.value = newConv
         _messages.value = emptyList()
-        _conversationError.value = null
         _isLoadingConversation.value = false
+        if (_isServerOnline.value == true) {
+            _conversationError.value = null
+        }
     }
 
     fun selectConversation(id: String) {
@@ -711,7 +682,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _conversationError.value = null
             _messages.value = emptyList()
             try {
-                val conv = storage.conversations.value.find { it.id == id }
+                val conv = _conversations.value.find { it.id == id }
                     ?: Conversation(id = id, title = "Antigravity Chat", sessionId = id)
                 _currentConversation.value = conv
                 if (conv.modelId.isNotBlank()) {
@@ -725,10 +696,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     val parsed = agyHubClient.parseStepsToChatMessages(stepsJson, id)
                     _messages.value = parsed
                     _isServerOnline.value = true
+                    _conversationError.value = null
                 } else {
                     _messages.value = emptyList()
+                    _isServerOnline.value = false
                     val rawErr = res.exceptionOrNull()?.message ?: "Unknown error"
-                    val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("8090")) {
+                    val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("8090") || rawErr.contains("Failed to connect", ignoreCase = true)) {
                         "Cannot connect to Antigravity Hub on port 8090. Make sure 'agy --hub' is running."
                     } else {
                         "Failed to load conversation: $rawErr"
@@ -738,8 +711,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 android.util.Log.e("GeminiApp", "Error selecting conversation: ${e.message}")
+                _isServerOnline.value = false
                 val rawErr = e.message ?: "Unknown error"
-                val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("8090")) {
+                val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("8090") || rawErr.contains("Failed to connect", ignoreCase = true)) {
                     "Cannot connect to Antigravity Hub on port 8090. Make sure 'agy --hub' is running."
                 } else {
                     "Error loading conversation: $rawErr"
@@ -907,7 +881,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 isStreaming = false,
                                 tokenUsage = event.tokenUsage
                             )
-                            storage.saveMessages(conv.id, _messages.value, touchTimestamp = false)
                             refreshActiveInstances()
                         }
                         is com.example.gemini.data.remote.AgyStreamEvent.Error -> {
@@ -918,7 +891,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 content = if (contentBuilder.isNotEmpty()) "$contentBuilder\n\n⚠️ ${event.message}" else "⚠️ ${event.message}",
                                 isStreaming = false
                             )
-                            storage.saveMessages(conv.id, _messages.value, touchTimestamp = false)
                             refreshActiveInstances()
                         }
                         is com.example.gemini.data.remote.AgyStreamEvent.QuotaUpdate -> {
@@ -935,11 +907,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteConversation(id: String) {
         viewModelScope.launch {
+            _conversations.value = _conversations.value.filter { it.id != id }
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
             agyHubClient.deleteCascadeTrajectory(id, hubUrl)
-            storage.deleteConversation(id)
             if (_currentConversation.value?.id == id) {
-                val remaining = storage.conversations.value.filter { it.id != id }
+                val remaining = _conversations.value
                 if (remaining.isNotEmpty()) {
                     selectConversation(remaining.first().id)
                 } else {
@@ -981,10 +953,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (conv != null) {
             val updated = conv.copy(modelId = modelId)
             _currentConversation.value = updated
-            val existsInStorage = storage.conversations.value.any { it.id == conv.id }
+            _conversations.value = _conversations.value.map { if (it.id == updated.id) updated else it }
+            val existsInStorage = _conversations.value.any { it.id == conv.id }
             if (existsInStorage) {
                 viewModelScope.launch {
-                    storage.saveConversation(updated)
                     val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
                     val currentProject = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value
                     agyBridgeService.prewarm(
@@ -1050,7 +1022,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value = updatedList
 
         viewModelScope.launch {
-            storage.saveConversation(updatedConv)
+            _conversations.value = _conversations.value.map { if (it.id == updatedConv.id) updatedConv else it }
             executeStream(updatedConv, updatedList)
         }
     }
@@ -1070,7 +1042,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val truncated = current.take(index + 1)
                 _messages.value = truncated
                 viewModelScope.launch {
-                    storage.saveMessages(conv.id, truncated)
                     executeStream(conv, truncated)
                 }
             } else {
@@ -1082,7 +1053,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val truncated = current.take(index)
             _messages.value = truncated
             viewModelScope.launch {
-                storage.saveMessages(conv.id, truncated)
                 executeStream(conv, truncated)
             }
         }
@@ -1101,9 +1071,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             // Remove this message and any subsequent messages so user can edit and send fresh
             val truncated = current.take(index)
             _messages.value = truncated
-            viewModelScope.launch {
-                storage.saveMessages(conv.id, truncated)
-            }
         }
         return targetMsg.content
     }
@@ -1388,9 +1355,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (conv != null && extractedTitle.isNotBlank() && conv.title != extractedTitle) {
                     val updated = conv.copy(title = extractedTitle)
                     _currentConversation.value = updated
-                    viewModelScope.launch {
-                        storage.saveConversation(updated)
-                    }
+                    _conversations.value = _conversations.value.map { if (it.id == updated.id) updated else it }
                 }
             }
         }
@@ -1453,15 +1418,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         _quotas.value = updatedQuotas
-        viewModelScope.launch {
-            try {
-                val quotasStr = json.encodeToString(updatedQuotas)
-                authPrefs.saveCachedModelsAndQuotas(
-                    json.encodeToString(_availableModels.value),
-                    quotasStr
-                )
-            } catch (_: Exception) {}
-        }
     }
 
     fun refreshQuotas(force: Boolean = true) {
@@ -1751,7 +1707,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 toolCalls = finalToolCalls,
                 isStreaming = false
             )
-            storage.saveMessages(conv.id, _messages.value)
 
             if (finalStatus != "TERMINATED") {
                 val currentHistory = _messages.value.filter { it.id != messageId }
@@ -1799,8 +1754,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         )
 
         viewModelScope.launch {
-            storage.saveMessages(conv.id, _messages.value)
-
             val currentHistory = _messages.value.filter { it.id != messageId }
             val syntheticHistory = currentHistory + listOf(
                 ChatMessage(
@@ -1846,10 +1799,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             toolCalls = finalToolCalls,
             isStreaming = false
         )
-
-        viewModelScope.launch {
-            storage.saveMessages(conv.id, _messages.value)
-        }
 
         // Show interactive action dialog
         _terminatedToolDialog.value = Pair(terminatedToolCall, messageId)
@@ -1906,8 +1855,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         )
 
         viewModelScope.launch {
-            storage.saveMessages(conv.id, _messages.value)
-
             val currentHistory = _messages.value.filter { it.id != messageId }
             val syntheticHistory = currentHistory + listOf(
                 ChatMessage(
@@ -1953,8 +1900,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         )
 
         viewModelScope.launch {
-            storage.saveMessages(conv.id, _messages.value)
-
             val currentHistory = _messages.value.filter { it.id != messageId }
             val syntheticHistory = currentHistory + listOf(
                 ChatMessage(

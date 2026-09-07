@@ -35,8 +35,6 @@ class AuthPreferences(private val context: Context) {
         val SUMMARY_MODEL_ID = stringPreferencesKey("summary_model_id")
         val ENABLED_MODELS = androidx.datastore.preferences.core.stringSetPreferencesKey("enabled_models")
         val IS_DEV_MODE_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_dev_mode_enabled")
-        val CACHED_MODELS_JSON = stringPreferencesKey("cached_models_json")
-        val CACHED_QUOTAS_JSON = stringPreferencesKey("cached_quotas_json")
         val CHAT_FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("chat_font_scale")
         val IS_LOCAL_TOOLS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_local_tools_enabled")
         val IS_LOCAL_TOOLS_INSTALLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_local_tools_installed")
@@ -66,8 +64,6 @@ class AuthPreferences(private val context: Context) {
     val userEmail: Flow<String?> = context.dataStore.data.map { it[USER_EMAIL] }
     val enabledModelIds: Flow<Set<String>?> = context.dataStore.data.map { it[ENABLED_MODELS] }
     val isDevModeEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_DEV_MODE_ENABLED] ?: false }
-    val cachedModelsJson: Flow<String?> = context.dataStore.data.map { it[CACHED_MODELS_JSON] }
-    val cachedQuotasJson: Flow<String?> = context.dataStore.data.map { it[CACHED_QUOTAS_JSON] }
     val chatFontScale: Flow<Float> = context.dataStore.data.map { it[CHAT_FONT_SCALE] ?: 1.0f }
 
     val termuxSshHost: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_HOST] ?: "127.0.0.1" }
@@ -230,12 +226,6 @@ class AuthPreferences(private val context: Context) {
         }
     }
 
-    suspend fun saveCachedModelsAndQuotas(modelsJson: String, quotasJson: String) {
-        context.dataStore.edit { prefs ->
-            prefs[CACHED_MODELS_JSON] = modelsJson
-            prefs[CACHED_QUOTAS_JSON] = quotasJson
-        }
-    }
 
     suspend fun saveChatFontScale(scale: Float) {
         context.dataStore.edit { prefs ->

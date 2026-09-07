@@ -166,9 +166,11 @@ fun ChatScreen(
     LaunchedEffect(conversationError) {
         val err = conversationError
         if (!err.isNullOrBlank()) {
+            snackbarHostState.currentSnackbarData?.dismiss()
             snackbarHostState.showSnackbar(
                 message = err,
-                duration = SnackbarDuration.Long
+                duration = SnackbarDuration.Long,
+                withDismissAction = true
             )
         }
     }
@@ -502,7 +504,16 @@ fun ChatScreen(
         }
     ) {
         Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = {
+                SnackbarHost(hostState = snackbarHostState) { data ->
+                    Snackbar(
+                        snackbarData = data,
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
             topBar = {
                 TopAppBar(
                     title = {
@@ -762,7 +773,12 @@ fun ChatScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = {
-                                    currentConv?.id?.let { viewModel.selectConversation(it) }
+                                    val convId = currentConv?.id
+                                    if (convId != null) {
+                                        viewModel.selectConversation(convId)
+                                    } else {
+                                        viewModel.syncAgyConversations()
+                                    }
                                 },
                                 shape = RoundedCornerShape(10.dp)
                             ) {
