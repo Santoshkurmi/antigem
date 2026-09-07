@@ -18,10 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -36,6 +33,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val authPrefs get() = authPreferences
     private val apiService = AntigravityApiService()
     private val agyBridgeService = com.example.gemini.data.remote.AgyBridgeService()
+    private val agyHubClient = com.example.gemini.data.remote.AgyHubClient()
     private val oauthManager = GoogleOAuthManager()
     private val automationExecutor = com.example.gemini.data.automation.AutomationToolExecutor(application)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -503,7 +501,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private var currentConvPage = 1
     private var hasMoreConversations = false
 
-    private val messagesMemoryCache = java.util.concurrent.ConcurrentHashMap<String, List<ChatMessage>>()
     private var lastPrewarmedConvId: String? = null
     private var lastPrewarmedModelId: String? = null
     private var lastPrewarmedProjectPath: String? = null
@@ -622,68 +619,32 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun searchConversations(query: String) {
         _searchQuery.value = query
-        currentConvPage = 1
-        loadConversationsPage(query = query, page = 1)
     }
 
-    fun loadNextConversationsPage() {
-        if (!hasMoreConversations || _isSearchingConversations.value) return
-        currentConvPage++
-        loadConversationsPage(query = _searchQuery.value, page = currentConvPage, append = true)
-    }
-
-    fun loadConversationsPage(query: String? = null, page: Int = 1, append: Boolean = false) {
-        val effectiveQuery = query ?: _searchQuery.value
-        viewModelScope.launch {
-            _isSearchingConversations.value = true
-            try {
-                val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
-                val res = agyBridgeService.fetchConversations(searchQuery = effectiveQuery, page = page, limit = 30, httpBaseUrl = httpUrl)
-                if (res.isSuccess) {
-                    val agyList = res.getOrThrow()
-                    val mapped = agyList.map { agy ->
-                        val agyTime = parseIsoTimestamp(agy.createdAt)
-                        Conversation(
-                            id = agy.id,
-                            title = if (agy.title.isNotBlank()) agy.title else "Antigravity Chat",
-                            modelId = "gemini-3.7-flash-high",
-                            sessionId = agy.id,
-                            createdAt = agyTime,
-                            updatedAt = agyTime
-                        )
-                    }
-                    if (append) {
-                        val current = storage.conversations.value
-                        storage.setConversations(current + mapped)
-                    } else {
-                        storage.setConversations(mapped)
-                    }
-                    hasMoreConversations = agyList.size >= 30
-                    refreshActiveInstances()
-                }
-            } catch (e: Exception) {
-                android.util.Log.w("ChatViewModel", "loadConversationsPage failed: ${e.message}")
-            } finally {
-                _isSearchingConversations.value = false
-            }
-        }
-    }
-
-    private fun parseIsoTimestamp(isoString: String?): Long {
-        if (isoString.isNullOrBlank()) return System.currentTimeMillis()
-        return try {
-            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).apply {
-                timeZone = java.util.TimeZone.getTimeZone("UTC")
-            }
-            val clean = isoString.substringBefore(".").removeSuffix("Z")
-            sdf.parse(clean)?.time ?: System.currentTimeMillis()
-        } catch (e: Throwable) {
-            System.currentTimeMillis()
-        }
-    }
+    private var syncJob: Job? = null
 
     fun syncAgyConversations() {
-        loadConversationsPage()
+        val cached = agyHubClient.getCachedConversations()
+        if (cached.isNotEmpty()) {
+            viewModelScope.launch {
+                storage.setConversations(cached)
+            }
+        }
+
+        if (syncJob?.isActive == true) return
+        syncJob = viewModelScope.launch {
+            try {
+                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                agyHubClient.subscribeToSummaries(hubUrl).collect { summaries ->
+                    if (summaries.isNotEmpty()) {
+                        storage.setConversations(summaries)
+                        _isServerOnline.value = true
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "subscribeToSummaries failed: ${e.message}")
+            }
+        }
     }
 
     fun onProjectChanged(projectPath: String) {
@@ -748,36 +709,42 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoadingConversation.value = true
             _conversationError.value = null
+            _messages.value = emptyList()
             try {
                 val conv = storage.conversations.value.find { it.id == id }
-                if (conv != null) {
-                    _currentConversation.value = conv
+                    ?: Conversation(id = id, title = "Antigravity Chat", sessionId = id)
+                _currentConversation.value = conv
+                if (conv.modelId.isNotBlank()) {
                     _selectedModelId.value = conv.modelId
+                }
 
-                    val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
-                    val isOnline = agyBridgeService.checkServerHealth(httpUrl)
-                    _isServerOnline.value = isOnline
-
-                    if (isOnline) {
-                        val res = agyBridgeService.fetchConversationMessages(id, httpUrl)
-                        if (res.isSuccess) {
-                            val fetched = res.getOrThrow()
-                            messagesMemoryCache[id] = fetched
-                            storage.saveMessages(id, fetched)
-                            _messages.value = fetched
-                        } else {
-                            val inRam = messagesMemoryCache[id] ?: storage.getMessages(id)
-                            _messages.value = inRam
-                        }
-                        attachToRunningConversationIfAny(id, conv)
+                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                val res = agyHubClient.getCascadeTrajectorySteps(id, hubUrl)
+                if (res.isSuccess) {
+                    val stepsJson = res.getOrThrow()
+                    val parsed = agyHubClient.parseStepsToChatMessages(stepsJson, id)
+                    _messages.value = parsed
+                    _isServerOnline.value = true
+                } else {
+                    _messages.value = emptyList()
+                    val rawErr = res.exceptionOrNull()?.message ?: "Unknown error"
+                    val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("8090")) {
+                        "Cannot connect to Antigravity Hub on port 8090. Make sure 'agy --hub' is running."
                     } else {
-                        val inRam = messagesMemoryCache[id] ?: storage.getMessages(id)
-                        _messages.value = inRam
+                        "Failed to load conversation: $rawErr"
                     }
+                    _conversationError.value = helpfulMsg
+                    android.util.Log.w("ChatViewModel", "getCascadeTrajectorySteps failed: $helpfulMsg")
                 }
             } catch (e: Exception) {
                 android.util.Log.e("GeminiApp", "Error selecting conversation: ${e.message}")
-                _conversationError.value = "Error loading conversation: ${e.message}"
+                val rawErr = e.message ?: "Unknown error"
+                val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("8090")) {
+                    "Cannot connect to Antigravity Hub on port 8090. Make sure 'agy --hub' is running."
+                } else {
+                    "Error loading conversation: $rawErr"
+                }
+                _conversationError.value = helpfulMsg
             } finally {
                 _isLoadingConversation.value = false
             }
@@ -941,7 +908,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 tokenUsage = event.tokenUsage
                             )
                             storage.saveMessages(conv.id, _messages.value, touchTimestamp = false)
-                            messagesMemoryCache[conv.id] = _messages.value
                             refreshActiveInstances()
                         }
                         is com.example.gemini.data.remote.AgyStreamEvent.Error -> {
@@ -953,7 +919,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 isStreaming = false
                             )
                             storage.saveMessages(conv.id, _messages.value, touchTimestamp = false)
-                            messagesMemoryCache[conv.id] = _messages.value
                             refreshActiveInstances()
                         }
                         is com.example.gemini.data.remote.AgyStreamEvent.QuotaUpdate -> {
@@ -969,14 +934,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteConversation(id: String) {
-        messagesMemoryCache.remove(id)
         viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            agyHubClient.deleteCascadeTrajectory(id, hubUrl)
             storage.deleteConversation(id)
-            val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
-            agyBridgeService.deleteConversation(id, httpUrl)
-            refreshActiveInstances()
             if (_currentConversation.value?.id == id) {
-                val remaining = storage.conversations.value
+                val remaining = storage.conversations.value.filter { it.id != id }
                 if (remaining.isNotEmpty()) {
                     selectConversation(remaining.first().id)
                 } else {
@@ -986,17 +949,27 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateConversationTitle(id: String, newTitle: String) {
-        val cleanTitle = newTitle.trim()
-        val conv = storage.conversations.value.find { it.id == id } ?: _currentConversation.value ?: return
-        val updated = conv.copy(title = cleanTitle)
-        if (_currentConversation.value?.id == id) {
-            _currentConversation.value = updated
-        }
+    fun forkConversation(id: String) {
         viewModelScope.launch {
-            storage.saveConversation(updated)
-            val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
-            agyBridgeService.updateConversationTitle(id, cleanTitle, httpUrl)
+            _isLoadingConversation.value = true
+            _conversationError.value = null
+            try {
+                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                val res = agyHubClient.forkConversation(sourceCascadeId = id, forkAtStepIndex = null, hubUrl = hubUrl)
+                if (res.isSuccess) {
+                    val newCascadeId = res.getOrThrow()
+                    if (newCascadeId.isNotBlank()) {
+                        selectConversation(newCascadeId)
+                    }
+                } else {
+                    _conversationError.value = "Fork failed: ${res.exceptionOrNull()?.message}"
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "Fork failed: ${e.message}")
+                _conversationError.value = "Fork error: ${e.message}"
+            } finally {
+                _isLoadingConversation.value = false
+            }
         }
     }
 
@@ -1075,14 +1048,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         val updatedList = _messages.value + userMsg
         _messages.value = updatedList
-        messagesMemoryCache[updatedConv.id] = updatedList
 
         viewModelScope.launch {
             storage.saveConversation(updatedConv)
-            storage.saveMessages(updatedConv.id, updatedList, touchTimestamp = true)
-            val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
-            agyBridgeService.updateConversationTitle(updatedConv.id, updatedConv.title, httpUrl)
-            refreshActiveInstances()
             executeStream(updatedConv, updatedList)
         }
     }
@@ -1180,6 +1148,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         priorTextPrefix: String = ""
     ) {
         _isStreaming.value = true
+        _bridgeStatusMessage.value = null
 
         val assistantMsgId = existingAssistantMsgId ?: UUID.randomUUID().toString()
         if (existingAssistantMsgId == null) {
@@ -1187,7 +1156,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 id = assistantMsgId,
                 conversationId = conv.id,
                 role = MessageRole.ASSISTANT,
-                content = "",
+                content = priorTextPrefix,
                 toolCalls = existingToolCalls,
                 isStreaming = true
             )
@@ -1199,209 +1168,195 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 thought = "",
                 thoughtDuration = null,
                 toolCalls = existingToolCalls,
-                isStreaming = true
+                isStreaming = true,
+                forceImmediate = true
             )
         }
 
-        val startTime = System.currentTimeMillis()
-        val contentBuilder = StringBuilder(priorTextPrefix)
-        var inThought = false
-        val activeToolsMap = mutableMapOf<String, com.example.gemini.domain.model.ToolCall>()
-        existingToolCalls.forEach { activeToolsMap[it.id] = it }
-
-        val wsUrl = authPrefs.agyBridgeWsUrl.firstOrNull() ?: "ws://127.0.0.1:8080"
+        val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
         val userPrompt = currentHistory.lastOrNull { it.role == MessageRole.USER }?.content ?: ""
-        val currentProject = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value
-
-        var currentEffectiveConvId = conv.id
+        val modelEnum = if (_selectedModelId.value.isNotBlank()) _selectedModelId.value else "MODEL_PLACEHOLDER_M319"
+        val selectedModel = _enabledModels.value.find { it.id == modelEnum }
+        val supportsThinking = selectedModel?.supportsThinking ?: (modelEnum.contains("thinking", ignoreCase = true) || modelEnum.contains("flash", ignoreCase = true) || modelEnum.contains("pro", ignoreCase = true))
+        val thinkingBudget = if (supportsThinking) 8192 else 0
 
         streamingJob = viewModelScope.launch {
+            val plannerThoughts = mutableMapOf<Int, String>()
+            val plannerResponses = mutableMapOf<Int, String>()
+            val activeToolsMap = mutableMapOf<String, com.example.gemini.domain.model.ToolCall>()
+            existingToolCalls.forEach { activeToolsMap[it.id] = it }
+
             try {
-                agyBridgeService.streamPrompt(
-                    prompt = userPrompt,
-                    model = _selectedModelId.value.ifBlank { "gemini-3.7-flash-high" },
-                    conversationId = conv.id,
-                    workspaceDir = currentProject?.path,
-                    wsUrl = wsUrl
-                ).collect { event ->
-                    when (event) {
-                        is com.example.gemini.data.remote.AgyStreamEvent.StreamSnapshot -> {
-                            if (!event.conversationId.isNullOrBlank() && event.conversationId != currentEffectiveConvId) {
-                                val newId = event.conversationId
-                                storage.updateConversationId(currentEffectiveConvId, newId)
-                                currentEffectiveConvId = newId
-                                _currentConversation.value = _currentConversation.value?.copy(id = newId)
-                                messagesMemoryCache.remove(conv.id)
-                                messagesMemoryCache[newId] = _messages.value
-                            }
-                            if (event.thought.isNotBlank() && contentBuilder.isEmpty()) {
-                                contentBuilder.append("<!-- thought -->\n").append(event.thought).append("\n<!-- /thought -->\n")
-                            }
-                            if (event.content.isNotBlank() && !contentBuilder.contains(event.content)) {
-                                contentBuilder.append(event.content)
-                            }
-                            event.activeTools.forEach { t ->
-                                activeToolsMap[t.id] = t
-                                val marker = "<!-- tool_call:${t.id} -->"
-                                if (!contentBuilder.contains(marker)) {
-                                    contentBuilder.append("\n$marker\n")
-                                }
-                            }
-                            updateAssistantMessage(
-                                msgId = assistantMsgId,
-                                content = contentBuilder.toString(),
-                                thought = event.thought.takeIf { it.isNotBlank() },
-                                toolCalls = activeToolsMap.values.toList(),
-                                isStreaming = true
-                            )
-                        }
-                        is com.example.gemini.data.remote.AgyStreamEvent.SessionAttached -> {}
-                        is com.example.gemini.data.remote.AgyStreamEvent.InstanceStatus -> {
-                            if (!event.conversationId.isNullOrBlank() && event.conversationId != currentEffectiveConvId) {
-                                val newId = event.conversationId!!
-                                storage.updateConversationId(currentEffectiveConvId, newId)
-                                currentEffectiveConvId = newId
-                                _currentConversation.value = _currentConversation.value?.copy(id = newId)
-                                messagesMemoryCache.remove(conv.id)
-                                messagesMemoryCache[newId] = _messages.value
-                            }
-                            if (event.status == "creating") {
-                                _bridgeStatusMessage.value = event.message ?: "Creating new instance for this chat..."
-                            } else if (event.status == "ready") {
-                                _bridgeStatusMessage.value = null
-                                refreshActiveInstances()
-                            }
-                        }
-                        is com.example.gemini.data.remote.AgyStreamEvent.ThoughtChunk -> {
-                            _bridgeStatusMessage.value = null
-                            if (!inThought) {
-                                inThought = true
-                                contentBuilder.append("\n<!-- thought -->\n")
-                            }
-                            contentBuilder.append(event.thought)
-                            updateAssistantMessage(
-                                msgId = assistantMsgId,
-                                content = contentBuilder.toString(),
-                                thought = null,
-                                thoughtDuration = null,
-                                toolCalls = activeToolsMap.values.toList(),
-                                isStreaming = true
-                            )
-                        }
-                        is com.example.gemini.data.remote.AgyStreamEvent.TextChunk -> {
-                            _bridgeStatusMessage.value = null
-                            if (inThought) {
-                                inThought = false
-                                contentBuilder.append("\n<!-- /thought -->\n")
-                            }
-                            contentBuilder.append(event.text)
-                            updateAssistantMessage(
-                                msgId = assistantMsgId,
-                                content = contentBuilder.toString(),
-                                thought = null,
-                                thoughtDuration = null,
-                                toolCalls = activeToolsMap.values.toList(),
-                                isStreaming = true
-                            )
-                        }
-                        is com.example.gemini.data.remote.AgyStreamEvent.ToolChunk -> {
-                            _bridgeStatusMessage.value = null
-                            if (inThought) {
-                                inThought = false
-                                contentBuilder.append("\n<!-- /thought -->\n")
-                            }
-                            activeToolsMap[event.tool.id] = event.tool
-                            val marker = "<!-- tool_call:${event.tool.id} -->"
-                            if (!contentBuilder.contains(marker)) {
-                                contentBuilder.append("\n$marker\n")
-                            }
-                            updateAssistantMessage(
-                                msgId = assistantMsgId,
-                                content = contentBuilder.toString(),
-                                thought = null,
-                                thoughtDuration = null,
-                                toolCalls = activeToolsMap.values.toList(),
-                                isStreaming = true
-                            )
-                        }
-                        is com.example.gemini.data.remote.AgyStreamEvent.Completed -> {
-                            if (inThought) {
-                                inThought = false
-                                contentBuilder.append("\n<!-- /thought -->\n")
-                            }
-                            _isStreaming.value = false
-                            _bridgeStatusMessage.value = null
-                            if (!event.conversationId.isNullOrBlank() && event.conversationId != currentEffectiveConvId) {
-                                val newId = event.conversationId!!
-                                storage.updateConversationId(currentEffectiveConvId, newId)
-                                currentEffectiveConvId = newId
-                                _currentConversation.value = _currentConversation.value?.copy(id = newId)
-                                messagesMemoryCache.remove(conv.id)
-                                messagesMemoryCache[newId] = _messages.value
-                            }
-                            val finalContent = if (!event.fullResponse.isNullOrBlank() && event.fullResponse.length >= contentBuilder.length) {
-                                event.fullResponse
-                            } else {
-                                contentBuilder.toString()
-                            }
-                            updateAssistantMessage(
-                                msgId = assistantMsgId,
-                                content = finalContent,
-                                thought = null,
-                                thoughtDuration = null,
-                                toolCalls = activeToolsMap.values.toList(),
-                                isStreaming = false,
-                                tokenUsage = event.tokenUsage
-                            )
-                            storage.saveMessages(currentEffectiveConvId, _messages.value, touchTimestamp = true)
-                            syncAgyConversations()
-                        }
-                        is com.example.gemini.data.remote.AgyStreamEvent.QuotaUpdate -> {
-                            applyQuotaSummary(event.quotaSummary)
-                        }
-                        is com.example.gemini.data.remote.AgyStreamEvent.Error -> {
-                            if (inThought) {
-                                inThought = false
-                                contentBuilder.append("\n<!-- /thought -->\n")
-                            }
-                            _isStreaming.value = false
-                            _bridgeStatusMessage.value = null
-                            val errText = if (contentBuilder.isNotEmpty()) {
-                                "${contentBuilder}\n\n⚠️ ${event.message}"
-                            } else {
-                                "⚠️ ${event.message}"
-                            }
-                            updateAssistantMessage(
-                                msgId = assistantMsgId,
-                                content = errText,
-                                thought = null,
-                                thoughtDuration = null,
-                                toolCalls = activeToolsMap.values.toList(),
-                                isStreaming = false
-                            )
-                            storage.saveMessages(currentEffectiveConvId, _messages.value, touchTimestamp = false)
-                        }
+                // Ensure cascade session exists on daemon
+                val startRes = agyHubClient.startCascade(
+                    cascadeId = conv.id,
+                    modelEnum = modelEnum,
+                    hubUrl = hubUrl
+                )
+                if (startRes.isFailure) {
+                    android.util.Log.w("ChatViewModel", "startCascade warning: ${startRes.exceptionOrNull()?.message}")
+                }
+
+                // Launch sendUserPrompt asynchronously so streamAgentStateUpdates is already listening
+                launch(Dispatchers.IO) {
+                    val sendRes = agyHubClient.sendUserPrompt(
+                        cascadeId = conv.id,
+                        text = userPrompt,
+                        modelEnum = modelEnum,
+                        thinkingBudget = thinkingBudget,
+                        autoExecutionPolicy = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
+                        hubUrl = hubUrl
+                    )
+                    if (sendRes.isFailure) {
+                        android.util.Log.e("ChatViewModel", "sendUserPrompt error: ${sendRes.exceptionOrNull()?.message}")
                     }
                 }
-            } catch (e: Exception) {
-                if (inThought) {
-                    inThought = false
-                    contentBuilder.append("\n<!-- /thought -->\n")
+
+                var lastThrottleTime = 0L
+                val THROTTLE_WINDOW_MS = 60L
+
+                // Stream agent state updates
+                agyHubClient.streamAgentStateUpdates(conv.id, hubUrl).collect { frameJson ->
+                    try {
+                        val root = org.json.JSONObject(frameJson)
+                        val update = root.optJSONObject("update") ?: return@collect
+                        val status = update.optString("status", update.optString("executableStatus", ""))
+
+                        val stepsUpdate = update.optJSONObject("mainTrajectoryUpdate")?.optJSONObject("stepsUpdate")
+                        val stepsArr = stepsUpdate?.optJSONArray("steps")
+
+                        if (stepsArr != null) {
+                            for (i in 0 until stepsArr.length()) {
+                                val s = stepsArr.getJSONObject(i)
+                                val stepIndex = s.optInt("stepIndex", i)
+
+                                if (s.has("plannerResponse")) {
+                                    val pr = s.getJSONObject("plannerResponse")
+                                    val th = pr.optString("thinking", "")
+                                    val resp = pr.optString("response", "")
+
+                                    if (th.isNotBlank()) {
+                                        plannerThoughts[stepIndex] = th
+                                    }
+                                    if (resp.isNotBlank()) {
+                                        plannerResponses[stepIndex] = resp
+                                    }
+                                }
+
+                                if (s.has("runCommand")) {
+                                    val rc = s.getJSONObject("runCommand")
+                                    val cmd = rc.optString("commandLine", rc.optString("proposedCommandLine", ""))
+                                    val out = rc.optJSONObject("combinedOutput")?.optString("full") ?: rc.optString("output", "")
+                                    val stepStatus = s.optString("status", "SUCCESS")
+                                    val toolStatus = if (stepStatus.contains("WAIT", ignoreCase = true)) "WAITING"
+                                    else if (stepStatus.contains("ERROR", ignoreCase = true) || stepStatus.contains("FAIL", ignoreCase = true)) "FAILED"
+                                    else "SUCCESS"
+
+                                    val tid = "tool_${conv.id}_$stepIndex"
+                                    activeToolsMap[tid] = com.example.gemini.domain.model.ToolCall(
+                                        id = tid,
+                                        name = "bash",
+                                        command = cmd,
+                                        output = out,
+                                        status = toolStatus
+                                    )
+                                }
+
+                                if (s.has("modifyFile") || s.has("codeAction")) {
+                                    val ca = s.optJSONObject("codeAction") ?: s.optJSONObject("modifyFile")
+                                    val uri = ca?.optString("uri", "") ?: ""
+                                    val path = uri.removePrefix("file://")
+                                    val diff = ca?.optString("diff", "") ?: ""
+                                    val tid = "tool_edit_${conv.id}_$stepIndex"
+                                    activeToolsMap[tid] = com.example.gemini.domain.model.ToolCall(
+                                        id = tid,
+                                        name = "edit_file",
+                                        command = path,
+                                        output = diff,
+                                        status = "SUCCESS"
+                                    )
+                                }
+
+                                if (s.has("searchWeb")) {
+                                    val sw = s.getJSONObject("searchWeb")
+                                    val query = sw.optString("query", "")
+                                    val summary = sw.optString("summary", "")
+                                    val tid = "tool_web_${conv.id}_$stepIndex"
+                                    activeToolsMap[tid] = com.example.gemini.domain.model.ToolCall(
+                                        id = tid,
+                                        name = "web_search",
+                                        command = query,
+                                        output = summary,
+                                        status = "SUCCESS"
+                                    )
+                                }
+                            }
+                        }
+
+                        val combinedText = if (plannerResponses.isNotEmpty()) {
+                            plannerResponses.toSortedMap().values.joinToString("\n\n")
+                        } else {
+                            priorTextPrefix
+                        }
+                        val combinedThought = if (plannerThoughts.isNotEmpty()) {
+                            plannerThoughts.toSortedMap().values.joinToString("\n\n")
+                        } else null
+
+                        val now = System.currentTimeMillis()
+                        val isDone = status == "CASCADE_RUN_STATUS_IDLE" ||
+                                (stepsArr != null && stepsArr.length() > 0 &&
+                                 stepsArr.getJSONObject(stepsArr.length() - 1).optString("status") == "CORTEX_STEP_STATUS_DONE" &&
+                                 stepsArr.getJSONObject(stepsArr.length() - 1).optString("type") == "CORTEX_STEP_TYPE_PLANNER_RESPONSE" &&
+                                 status != "CASCADE_RUN_STATUS_RUNNING")
+
+                        if (now - lastThrottleTime >= THROTTLE_WINDOW_MS || isDone) {
+                            lastThrottleTime = now
+                            updateAssistantMessage(
+                                msgId = assistantMsgId,
+                                content = combinedText,
+                                thought = combinedThought,
+                                toolCalls = activeToolsMap.values.toList(),
+                                isStreaming = !isDone,
+                                forceImmediate = isDone
+                            )
+                        }
+
+                        if (isDone) {
+                            _isStreaming.value = false
+                            streamingJob?.cancel()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ChatViewModel", "Error parsing stream frame: ${e.message}")
+                    }
                 }
+
+                // Streaming finished: fetch canonical trajectory steps to ensure 100% accuracy
                 _isStreaming.value = false
-                _bridgeStatusMessage.value = null
+                val trajectoryRes = agyHubClient.getCascadeTrajectorySteps(conv.id, hubUrl)
+                if (trajectoryRes.isSuccess) {
+                    val fullMessages = agyHubClient.parseStepsToChatMessages(trajectoryRes.getOrThrow(), conv.id)
+                    if (fullMessages.isNotEmpty()) {
+                        _messages.value = fullMessages
+                    }
+                }
+
+                refreshQuotas()
+                syncAgyConversations()
+
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "executeStream error: ${e.message}", e)
+                _isStreaming.value = false
+                val currentText = plannerResponses.toSortedMap().values.joinToString("\n\n")
                 updateAssistantMessage(
                     msgId = assistantMsgId,
-                    content = if (contentBuilder.isNotEmpty()) "$contentBuilder\n\n⚠️ ${e.message}" else "⚠️ Stream error: ${e.message}",
-                    thought = null,
-                    thoughtDuration = null,
+                    content = if (currentText.isNotEmpty()) "$currentText\n\n⚠️ ${e.message}" else "⚠️ Stream error: ${e.message}",
+                    thought = plannerThoughts.toSortedMap().values.joinToString("\n\n").takeIf { it.isNotBlank() },
                     toolCalls = activeToolsMap.values.toList(),
-                    isStreaming = false
+                    isStreaming = false,
+                    forceImmediate = true
                 )
-                storage.saveMessages(currentEffectiveConvId, _messages.value, touchTimestamp = false)
             } finally {
-                messagesMemoryCache[currentEffectiveConvId] = _messages.value
-                refreshActiveInstances()
+                _isStreaming.value = false
             }
         }
     }
@@ -1420,7 +1375,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         forceImmediate: Boolean = false
     ) {
         val now = System.currentTimeMillis()
-        if (!forceImmediate && isStreaming && (now - lastStreamUpdateTime < 200)) {
+        if (!forceImmediate && isStreaming && (now - lastStreamUpdateTime < 60)) {
             return
         }
         lastStreamUpdateTime = now
@@ -1455,30 +1410,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 rawPayload = rawPayload ?: existing.rawPayload
             )
             _messages.value = list
-            _currentConversation.value?.let { messagesMemoryCache[it.id] = list }
             android.util.Log.d("PERF_TRACE", "🌊 [Streaming Emit] ID=${msgId.take(8)}, len=${content.length}, isStreaming=$isStreaming")
         }
     }
 
     fun stopStreaming() {
         val conv = _currentConversation.value
-        viewModelScope.launch {
-            val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
-            agyBridgeService.abort(conv?.id, httpUrl)
-        }
         streamingJob?.cancel()
         _isStreaming.value = false
         _bridgeStatusMessage.value = null
+
         if (conv != null) {
+            viewModelScope.launch {
+                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                agyHubClient.cancelCascadeInvocation(conv.id, hubUrl)
+            }
+
             val list = _messages.value.map {
                 if (it.isStreaming) it.copy(isStreaming = false) else it
             }
             _messages.value = list
-            messagesMemoryCache[conv.id] = list
-            viewModelScope.launch {
-                storage.saveMessages(conv.id, list, touchTimestamp = false)
-                refreshActiveInstances()
-            }
         }
     }
 
@@ -1517,9 +1468,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isRefreshingModels.value = true
             try {
-                val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
-                val modelsDeferred = async { agyBridgeService.fetchModels(httpUrl) }
-                val quotasDeferred = async { agyBridgeService.fetchQuotas(httpUrl, force = force) }
+                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                val modelsDeferred = async { agyHubClient.getAvailableModels(forceRefresh = force, hubUrl = hubUrl) }
+                val quotasDeferred = async { agyHubClient.retrieveUserQuotaSummary(hubUrl = hubUrl) }
 
                 val modelsRes = modelsDeferred.await()
                 val quotasRes = quotasDeferred.await()
@@ -1530,7 +1481,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         _availableModels.value = models
                         recomputeEnabledModels()
                         if (_selectedModelId.value.isBlank() || !models.any { it.id == _selectedModelId.value }) {
-                            _selectedModelId.value = models.firstOrNull { it.id.contains("flash-high", ignoreCase = true) }?.id
+                            _selectedModelId.value = models.firstOrNull { it.id.contains("flash", ignoreCase = true) || it.id.contains("319", ignoreCase = true) }?.id
                                 ?: models.first().id
                         }
                     }
@@ -1539,8 +1490,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (quotasRes.isSuccess) {
                     applyQuotaSummary(quotasRes.getOrThrow())
                 }
+
+                val userRes = agyHubClient.getLocalUserInfo(hubUrl)
+                if (userRes.isSuccess) {
+                    val (username, _) = userRes.getOrThrow()
+                    if (username.isNotBlank()) {
+                        _userEmail.value = username
+                    }
+                }
             } catch (e: Exception) {
-                android.util.Log.e("GeminiApp", "Error refreshing models & quotas: ${e.message}")
+                android.util.Log.e("GeminiApp", "Error refreshing models & quotas from hub: ${e.message}")
             } finally {
                 _isRefreshingModels.value = false
             }
@@ -1628,15 +1587,33 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun login() {
+        viewModelScope.launch {
+            try {
+                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                agyHubClient.login(hubUrl)
+                delay(1500)
+                refreshQuotas(force = true)
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "login failed: ${e.message}")
+            }
+        }
+    }
+
     fun logout() {
         stopOAuthServer()
         pendingPkceVerifier = null
         viewModelScope.launch {
+            try {
+                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                agyHubClient.authLogout(hubUrl)
+            } catch (_: Exception) {}
             authPrefs.clearAuth()
             _userEmail.value = null
             _projectId.value = "rising-fact-p41fc"
             _tier.value = "pro"
             _quotas.value = emptyList()
+            _quotaSummary.value = null
             android.util.Log.d("GeminiApp", "[OAuth] Logged out successfully")
         }
     }

@@ -159,9 +159,19 @@ fun ChatScreen(
     var showCustomSystemPromptDialog by remember { mutableStateOf(false) }
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
-    var showEditTitleDialog by remember { mutableStateOf(false) }
     var showAttachmentSelector by remember { mutableStateOf(false) }
-    var editTitleText by remember { mutableStateOf("") }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(conversationError) {
+        val err = conversationError
+        if (!err.isNullOrBlank()) {
+            snackbarHostState.showSnackbar(
+                message = err,
+                duration = SnackbarDuration.Long
+            )
+        }
+    }
 
     val attachments by viewModel.attachments.collectAsState()
     val isUploadingAttachment by viewModel.isUploadingAttachment.collectAsState()
@@ -474,6 +484,10 @@ fun ChatScreen(
                 onDeleteConversation = { id ->
                     viewModel.deleteConversation(id)
                 },
+                onForkConversation = { id ->
+                    viewModel.forkConversation(id)
+                    scope.launch { drawerState.close() }
+                },
                 onTerminateInstance = { id ->
                     viewModel.terminateInstance(id)
                 },
@@ -488,35 +502,19 @@ fun ChatScreen(
         }
     ) {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {
                         Column {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable {
-                                        editTitleText = currentConv?.title ?: ""
-                                        showEditTitleDialog = true
-                                    }
-                            ) {
-                                Text(
-                                    text = currentConv?.title?.takeIf { it.isNotBlank() } ?: "Antigravity Chat",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Rename Chat",
-                                    modifier = Modifier.size(13.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-                                )
-                            }
+                            Text(
+                                text = currentConv?.title?.takeIf { it.isNotBlank() } ?: "Antigravity Chat",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                             Spacer(modifier = Modifier.height(2.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box {
@@ -595,9 +593,48 @@ fun ChatScreen(
 
                                 Spacer(modifier = Modifier.width(6.dp))
 
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = ClaudeTerracotta.copy(alpha = 0.15f),
+                                    border = androidx.compose.foundation.BorderStroke(0.5.dp, ClaudeTerracotta.copy(alpha = 0.4f)),
+                                    modifier = Modifier.clickable {
+                                        showModelSelector = true
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AutoAwesome,
+                                            contentDescription = "Select Model",
+                                            modifier = Modifier.size(10.dp),
+                                            tint = ClaudeTerracotta
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = currentModel.displayName.ifBlank { "Model" },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = ClaudeTerracotta,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(13.dp),
+                                            tint = ClaudeTerracotta
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(6.dp))
+
                                 ConnectionStatusBadge(
                                     state = connectionState,
-                                    bridgeUrl = "http://127.0.0.1:8080",
+                                    bridgeUrl = "http://127.0.0.1:8090",
                                     activeInstances = activeInstances,
                                     onReconnect = { viewModel.syncAgyConversations() }
                                 )
@@ -692,16 +729,7 @@ fun ChatScreen(
                         .fillMaxWidth()
                 ) {
                     if (isLoadingConversation) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(36.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                strokeWidth = 2.5.dp
-                            )
-                        }
+                        com.example.gemini.ui.components.ConversationLoadingSkeleton()
                     } else if (!conversationError.isNullOrBlank() && messages.isEmpty()) {
                         Column(
                             modifier = Modifier
@@ -1436,53 +1464,6 @@ fun ChatScreen(
             messages = messages,
             onOpenSystemPrompt = { showCustomSystemPromptDialog = true },
             onDismiss = { showChatTelemetryDialog = false }
-        )
-    }
-
-    // Rename Chat Title Dialog
-    if (showEditTitleDialog) {
-        AlertDialog(
-            onDismissRequest = { showEditTitleDialog = false },
-            shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface,
-            title = {
-                Text(
-                    text = "Rename Chat",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            },
-            text = {
-                OutlinedTextField(
-                    value = editTitleText,
-                    onValueChange = { editTitleText = it },
-                    label = { Text("Chat Title") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val trimmed = editTitleText.trim()
-                        if (trimmed.isNotBlank()) {
-                            currentConv?.id?.let { id ->
-                                viewModel.updateConversationTitle(id, trimmed)
-                            }
-                        }
-                        showEditTitleDialog = false
-                    }
-                ) {
-                    Text("Save", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEditTitleDialog = false }) {
-                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                }
-            }
         )
     }
 

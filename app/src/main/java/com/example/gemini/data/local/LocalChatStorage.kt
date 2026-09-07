@@ -17,8 +17,6 @@ class LocalChatStorage(private val context: Context) {
     private val _conversations = MutableStateFlow<List<Conversation>>(emptyList())
     val conversations: StateFlow<List<Conversation>> = _conversations.asStateFlow()
 
-    private val inMemoryMessages = ConcurrentHashMap<String, List<ChatMessage>>()
-
     suspend fun init() = withContext(Dispatchers.IO) {
         // Clean up legacy cache files if any existed to prevent stale disk state
         try {
@@ -30,7 +28,11 @@ class LocalChatStorage(private val context: Context) {
     }
 
     suspend fun setConversations(list: List<Conversation>) = withContext(Dispatchers.Default) {
-        _conversations.value = list.distinctBy { it.id }.sortedByDescending { it.updatedAt }
+        val currentMap = _conversations.value.associateBy { it.id }.toMutableMap()
+        for (c in list) {
+            currentMap[c.id] = c
+        }
+        _conversations.value = currentMap.values.toList().sortedByDescending { it.updatedAt }
     }
 
     suspend fun loadConversations(): List<Conversation> = withContext(Dispatchers.Default) {
@@ -50,11 +52,11 @@ class LocalChatStorage(private val context: Context) {
 
     suspend fun deleteConversation(conversationId: String) = withContext(Dispatchers.Default) {
         _conversations.value = _conversations.value.filter { it.id != conversationId }
-        inMemoryMessages.remove(conversationId)
     }
 
     suspend fun getMessages(conversationId: String): List<ChatMessage> = withContext(Dispatchers.Default) {
-        inMemoryMessages[conversationId] ?: emptyList()
+        // No caching of chat messages - all messages are loaded directly from the daemon API
+        emptyList()
     }
 
     suspend fun saveMessages(
@@ -62,13 +64,7 @@ class LocalChatStorage(private val context: Context) {
         messages: List<ChatMessage>,
         touchTimestamp: Boolean = false
     ) = withContext(Dispatchers.Default) {
-        inMemoryMessages[conversationId] = messages
-        if (touchTimestamp) {
-            val conv = _conversations.value.find { it.id == conversationId }
-            if (conv != null) {
-                saveConversation(conv.copy(updatedAt = System.currentTimeMillis()))
-            }
-        }
+        // No caching of chat messages - all messages are loaded directly from the daemon API
     }
 
     suspend fun updateConversationId(oldId: String, newId: String) = withContext(Dispatchers.Default) {
@@ -79,10 +75,6 @@ class LocalChatStorage(private val context: Context) {
             val conv = current[index]
             current[index] = conv.copy(id = newId)
             _conversations.value = current.distinctBy { it.id }.sortedByDescending { it.updatedAt }
-        }
-        val msgs = inMemoryMessages.remove(oldId)
-        if (msgs != null) {
-            inMemoryMessages[newId] = msgs.map { it.copy(conversationId = newId) }
         }
     }
 

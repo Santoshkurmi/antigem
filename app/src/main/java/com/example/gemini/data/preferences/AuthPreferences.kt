@@ -44,6 +44,7 @@ class AuthPreferences(private val context: Context) {
         val LOCAL_TOOLS_VERSION = stringPreferencesKey("local_tools_version")
         val AGY_BRIDGE_WS_URL = stringPreferencesKey("agy_bridge_ws_url")
         val AGY_BRIDGE_HTTP_URL = stringPreferencesKey("agy_bridge_http_url")
+        val AGY_HUB_URL = stringPreferencesKey("agy_hub_url")
         val USE_SSH_TERMINAL = androidx.datastore.preferences.core.booleanPreferencesKey("use_ssh_terminal")
     }
 
@@ -55,6 +56,7 @@ class AuthPreferences(private val context: Context) {
 
     val agyBridgeWsUrl: Flow<String> = context.dataStore.data.map { it[AGY_BRIDGE_WS_URL] ?: "ws://127.0.0.1:8080" }
     val agyBridgeHttpUrl: Flow<String> = context.dataStore.data.map { it[AGY_BRIDGE_HTTP_URL] ?: "http://127.0.0.1:8080" }
+    val agyHubUrl: Flow<String> = context.dataStore.data.map { it[AGY_HUB_URL] ?: "http://127.0.0.1:8090" }
 
     val accessToken: Flow<String?> = context.dataStore.data.map { it[ACCESS_TOKEN] }
     val refreshToken: Flow<String?> = context.dataStore.data.map { it[REFRESH_TOKEN] }
@@ -238,6 +240,12 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveChatFontScale(scale: Float) {
         context.dataStore.edit { prefs ->
             prefs[CHAT_FONT_SCALE] = scale
+        }
+    }
+
+    suspend fun saveAgyHubUrl(url: String) {
+        context.dataStore.edit { prefs ->
+            prefs[AGY_HUB_URL] = url
         }
     }
 
