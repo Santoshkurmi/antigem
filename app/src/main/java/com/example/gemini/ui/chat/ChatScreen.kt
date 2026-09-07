@@ -55,12 +55,9 @@ import com.example.gemini.ui.components.ActiveContextSummaryCard
 import com.example.gemini.ui.components.AttachmentSelectorBottomSheet
 import com.example.gemini.ui.components.ChatInputBar
 import com.example.gemini.ui.components.ChatTelemetryDialog
-import com.example.gemini.ui.components.ContextSummarizeAlertBanner
-import com.example.gemini.ui.components.CustomSystemPromptDialog
 import com.example.gemini.ui.components.LiveSummarizingCard
 import com.example.gemini.ui.components.MessageBubble
 import com.example.gemini.ui.components.RawPayloadDialog
-import com.example.gemini.ui.components.SummaryModelPickerDialog
 import com.example.gemini.ui.components.TerminalInspectorDialog
 import com.example.gemini.ui.components.LocalTerminalDialog
 import com.example.gemini.ui.settings.LocalToolsInstallDialog
@@ -69,7 +66,6 @@ import com.example.gemini.ui.drawer.ChatHistoryDrawer
 import com.example.gemini.ui.models.ModelSelectorBottomSheet
 import com.example.gemini.ui.models.ThinkingSelectorBottomSheet
 import com.example.gemini.ui.settings.SettingsDialog
-import com.example.gemini.ui.tools.ToolsBottomSheet
 import android.util.Log
 import com.example.gemini.ui.components.MarkdownBlock
 import com.example.gemini.ui.components.MarkdownBlockView
@@ -125,13 +121,10 @@ fun ChatScreen(
     val userEmail by viewModel.userEmail.collectAsState()
     val projectId by viewModel.projectId.collectAsState()
     val tier by viewModel.tier.collectAsState()
-    val isSummarizing by viewModel.isSummarizing.collectAsState()
     val summarizingModelName by viewModel.summarizingModelName.collectAsState()
-    val summaryError by viewModel.summaryError.collectAsState()
     val pendingQueuedUserMessage by viewModel.pendingQueuedUserMessage.collectAsState()
     val contextWindowLimit by viewModel.contextWindowLimit.collectAsState()
-    val postponedThreshold by viewModel.postponedThreshold.collectAsState()
-    val showSummaryModelPicker by viewModel.showSummaryModelPicker.collectAsState()
+
     val summaryModelIdPref by viewModel.summaryModelIdPref.collectAsState()
     val isDevModeEnabled by viewModel.isDevModeEnabled.collectAsState()
     val chatFontScale by viewModel.chatFontScale.collectAsState(initial = 1.0f)
@@ -151,12 +144,10 @@ fun ChatScreen(
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
-    var showToolsSheet by remember { mutableStateOf(false) }
     var showTerminalInspector by remember { mutableStateOf(false) }
     var showLocalTerminalDialog by remember { mutableStateOf(false) }
     var showLocalToolsInstallDialog by remember { mutableStateOf(false) }
     var showRawPayloadDialog by remember { mutableStateOf<String?>(null) }
-    var showCustomSystemPromptDialog by remember { mutableStateOf(false) }
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showAttachmentSelector by remember { mutableStateOf(false) }
@@ -662,20 +653,6 @@ fun ChatScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { viewModel.openManualSummaryPicker() }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Compress,
-                                contentDescription = "Summarize Context",
-                                tint = if (!currentConv?.summary.isNullOrBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-                            )
-                        }
-                        IconButton(onClick = { showToolsSheet = true }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Handyman,
-                                contentDescription = "Tools",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-                            )
-                        }
                         IconButton(onClick = {
                             if (useSshTerminal) {
                                 showLocalTerminalDialog = true
@@ -692,13 +669,6 @@ fun ChatScreen(
                                 imageVector = Icons.Outlined.Terminal,
                                 contentDescription = "Terminal",
                                 tint = if (useSshTerminal || (isLocalToolsInstalled && isLocalToolsEnabled)) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-                            )
-                        }
-                        IconButton(onClick = { showCustomSystemPromptDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Psychology,
-                                contentDescription = "Chat System Prompt",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                         }
                         IconButton(onClick = onNavigateToIde) {
@@ -1251,13 +1221,7 @@ fun ChatScreen(
         )
     }
 
-    // AI Tools & Capabilities Bottom Sheet (Termux SSH Terminal Access)
-    if (showToolsSheet) {
-        ToolsBottomSheet(
-            authPreferences = viewModel.authPreferences,
-            onDismiss = { showToolsSheet = false }
-        )
-    }
+
 
     // Confirmation Dialog for Edit / Retry when deleting subsequent output
     pendingMessageAction?.let { action ->
@@ -1402,21 +1366,7 @@ fun ChatScreen(
         )
     }
 
-    // Context Summary Model Picker Dialog
-    if (showSummaryModelPicker) {
-        SummaryModelPickerDialog(
-            availableModels = enabledModels,
-            currentChatModelId = selectedModelId,
-            defaultModelId = summaryModelIdPref,
-            errorMessage = summaryError,
-            onSelectModel = { 
-                viewModel.requestSummarization(it) {
-                    android.widget.Toast.makeText(context, "Context summary updated!", android.widget.Toast.LENGTH_SHORT).show()
-                }
-            },
-            onDismiss = { viewModel.dismissSummaryModelPicker() }
-        )
-    }
+
 
     // Termux Terminal Inspector Dialog
     if (showTerminalInspector) {
@@ -1450,16 +1400,7 @@ fun ChatScreen(
         )
     }
 
-    // Custom System Prompt Override Dialog
-    if (showCustomSystemPromptDialog) {
-        CustomSystemPromptDialog(
-            initialPrompt = currentConv?.customSystemPrompt,
-            conversationId = currentConv?.id,
-            workspaceDir = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path,
-            onSavePrompt = { viewModel.updateCustomSystemPrompt(it) },
-            onDismiss = { showCustomSystemPromptDialog = false }
-        )
-    }
+
 
     // Attachment Selector Bottom Sheet
     if (showAttachmentSelector) {
@@ -1478,7 +1419,6 @@ fun ChatScreen(
         ChatTelemetryDialog(
             conversation = currentConv,
             messages = messages,
-            onOpenSystemPrompt = { showCustomSystemPromptDialog = true },
             onDismiss = { showChatTelemetryDialog = false }
         )
     }

@@ -7,7 +7,6 @@ import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.AntigravityApiService
 import com.example.gemini.data.remote.GoogleOAuthManager
 import com.example.gemini.data.remote.StreamEvent
-import com.example.gemini.domain.context.ContextCompactor
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.Conversation
@@ -106,9 +105,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _postponedThreshold = MutableStateFlow<Int?>(null)
     val postponedThreshold: StateFlow<Int?> = _postponedThreshold.asStateFlow()
 
-    private val _showSummaryModelPicker = MutableStateFlow(false)
-    val showSummaryModelPicker: StateFlow<Boolean> = _showSummaryModelPicker.asStateFlow()
-
     private val _attachments = MutableStateFlow<List<com.example.gemini.domain.model.ChatAttachment>>(emptyList())
     val attachments: StateFlow<List<com.example.gemini.domain.model.ChatAttachment>> = _attachments.asStateFlow()
 
@@ -200,16 +196,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissTerminatedToolDialog() {
         _terminatedToolDialog.value = null
-    }
-
-    fun openManualSummaryPicker() {
-        _summaryError.value = null
-        _showSummaryModelPicker.value = true
-    }
-
-    fun dismissSummaryModelPicker() {
-        _showSummaryModelPicker.value = false
-        _summaryError.value = null
     }
 
     fun setDevModeEnabled(enabled: Boolean) {
@@ -326,95 +312,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _currentConversation.value = updated
             _postponedThreshold.value = null
             _conversations.value = _conversations.value.map { if (it.id == updated.id) updated else it }
-        }
-    }
-
-    fun requestSummarization(modelId: String, onFinished: (() -> Unit)? = null) {
-        val conv = _currentConversation.value ?: return
-        val currentMessages = _messages.value
-        if (currentMessages.isEmpty()) {
-            _summaryError.value = "No messages in chat to summarize yet."
-            _showSummaryModelPicker.value = true
-            return
-        }
-
-        // Dismiss picker immediately so user returns to chat and sees live progress banner
-        _showSummaryModelPicker.value = false
-        _isSummarizing.value = true
-        _summaryError.value = null
-
-        val modelObj = _availableModels.value.find { it.id == modelId }
-        _summarizingModelName.value = modelObj?.displayName ?: modelId
-
-        // Insert a live streaming summary message at the current end of the chat!
-        val liveSummaryMessage = ChatMessage(
-            conversationId = conv.id,
-            role = MessageRole.SUMMARY,
-            content = "",
-            isStreaming = true
-        )
-        _messages.value = _messages.value + liveSummaryMessage
-
-        viewModelScope.launch {
-            val token = getValidAccessToken()
-            if (token.isNullOrBlank()) {
-                _summaryError.value = "Not logged in. Please sign in via Settings."
-                _isSummarizing.value = false
-                _messages.value = _messages.value.filterNot { it.id == liveSummaryMessage.id }
-                _showSummaryModelPicker.value = true
-                return@launch
-            }
-
-            val turnsToFilter = currentMessages.filter { it.role != MessageRole.SUMMARY }
-            val windowLimit = _contextWindowLimit.value
-            val (olderMessages, _) = ContextCompactor.splitHistory(turnsToFilter, windowLimit)
-            val messagesToSummarize = if (olderMessages.isNotEmpty()) olderMessages else turnsToFilter
-
-            android.util.Log.d("GeminiApp", "[ViewModel] Calling ContextCompactor.executeSummarization for conv: ${conv.id}")
-            val result = ContextCompactor.executeSummarization(
-                apiService = apiService,
-                token = token,
-                projectId = _projectId.value,
-                modelId = modelId,
-                messagesToSummarize = messagesToSummarize,
-                existingSummary = conv.summary
-            )
-
-            _isSummarizing.value = false
-
-            if (result.isSuccess) {
-                val summarizationResult = result.getOrThrow()
-                val newSummary = summarizationResult.summary
-                val newTitle = summarizationResult.title?.takeIf { it.isNotBlank() } ?: conv.title
-                android.util.Log.d("GeminiApp", "[ViewModel] Summarization succeeded! New Title: '$newTitle', updating summary message ${liveSummaryMessage.id}")
-                val updatedMessages = _messages.value.map {
-                    if (it.id == liveSummaryMessage.id) {
-                        it.copy(content = newSummary, isStreaming = false)
-                    } else it
-                }
-                _messages.value = updatedMessages
-
-                val updatedConv = conv.copy(summary = newSummary, title = newTitle)
-                _currentConversation.value = updatedConv
-                _postponedThreshold.value = null
-                _summaryError.value = null
-                _conversations.value = _conversations.value.map { if (it.id == updatedConv.id) updatedConv else it }
-
-                // If a user message was queued during summarization, dispatch it now!
-                val pending = _pendingQueuedUserMessage.value
-                _pendingQueuedUserMessage.value = null
-                if (!pending.isNullOrBlank()) {
-                    executeStream(updatedConv, updatedMessages)
-                }
-
-                onFinished?.invoke()
-            } else {
-                val err = result.exceptionOrNull()?.localizedMessage ?: "Unknown error"
-                android.util.Log.e("GeminiApp", "[ViewModel] Summarization failed: $err")
-                _messages.value = _messages.value.filterNot { it.id == liveSummaryMessage.id }
-                _summaryError.value = err
-                _showSummaryModelPicker.value = true
-            }
         }
     }
 

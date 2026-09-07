@@ -30,7 +30,7 @@ import java.util.Locale
 fun ChatTelemetryDialog(
     conversation: Conversation?,
     messages: List<ChatMessage>,
-    onOpenSystemPrompt: () -> Unit,
+    onOpenSystemPrompt: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val numberFormat = NumberFormat.getNumberInstance(Locale.US)
@@ -200,13 +200,15 @@ fun ChatTelemetryDialog(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            TextButton(
-                                onClick = {
-                                    onDismiss()
-                                    onOpenSystemPrompt()
+                            if (onOpenSystemPrompt != null) {
+                                TextButton(
+                                    onClick = {
+                                        onDismiss()
+                                        onOpenSystemPrompt()
+                                    }
+                                ) {
+                                    Text("Edit", fontSize = 12.5.sp, color = ClaudeTerracotta, fontWeight = FontWeight.SemiBold)
                                 }
-                            ) {
-                                Text("Edit", fontSize = 12.5.sp, color = ClaudeTerracotta, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
