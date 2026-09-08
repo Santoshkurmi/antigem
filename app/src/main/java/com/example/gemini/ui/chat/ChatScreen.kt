@@ -326,7 +326,11 @@ fun ChatScreen(
                     it.status == "RUNNING" || it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE" 
                 }
                 val contentToParse = if (!msg.thoughtText.isNullOrEmpty() && !msg.content.contains("<!-- thought") && !msg.content.contains("<thought")) {
-                    "<!-- thought -->\n${msg.thoughtText}\n<!-- /thought -->\n${msg.content}"
+                    if (msg.content.isBlank()) {
+                        "<!-- thought -->\n${msg.thoughtText}"
+                    } else {
+                        "<!-- thought -->\n${msg.thoughtText}\n<!-- /thought -->\n${msg.content}"
+                    }
                 } else {
                     msg.content
                 }
@@ -339,7 +343,7 @@ fun ChatScreen(
                             block = block
                         ))
                     }
-                    if (!hasActiveRunningTool) {
+                    if (!hasActiveRunningTool && msg.content.isNotBlank()) {
                         result.add(ChatFeedItem.AssistantTyping(msg.id, selectedModelId))
                     }
                 } else if (!hasActiveRunningTool) {

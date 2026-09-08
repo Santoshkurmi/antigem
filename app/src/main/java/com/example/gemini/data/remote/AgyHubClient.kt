@@ -190,7 +190,11 @@ class AgyHubClient(
             }
             .build()
 
-        val resp = client.newCall(req).execute()
+        val call = client.newCall(req)
+        kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.invokeOnCompletion {
+            call.cancel()
+        }
+        val resp = call.execute()
         if (!resp.isSuccessful) {
             val err = resp.body?.string() ?: "HTTP ${resp.code}"
             resp.close()
@@ -248,9 +252,99 @@ class AgyHubClient(
                 val jsonStr = String(payload, Charsets.UTF_8)
                 onFrame(jsonStr)
             } else if (flag == 0x80) {
-                // Trailers reached, stream finished
+                val trailerText = String(payload, Charsets.UTF_8)
+                val statusMatch = Regex("grpc-status:\\s*(\\d+)").find(trailerText)
+                val statusCode = statusMatch?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                if (statusCode != 0) {
+                    val messageMatch = Regex("grpc-message:\\s*([^\r\n]+)").find(trailerText)
+                    val msg = messageMatch?.groupValues?.getOrNull(1) ?: "gRPC status $statusCode"
+                    Log.w(TAG, "gRPC stream finished with error ($statusCode): $msg")
+                }
                 break
             }
+        }
+    }
+
+    data class GrpcResult(val frames: List<String>, val status: Int, val message: String?)
+
+    private fun parseGrpcWebBody(bodyBytes: ByteArray): GrpcResult {
+        val jsonFrames = mutableListOf<String>()
+        var status = 0
+        var message: String? = null
+        var offset = 0
+        while (offset + 5 <= bodyBytes.size) {
+            val flag = bodyBytes[offset].toInt() and 0xFF
+            val len = ((bodyBytes[offset + 1].toInt() and 0xFF) shl 24) or
+                    ((bodyBytes[offset + 2].toInt() and 0xFF) shl 16) or
+                    ((bodyBytes[offset + 3].toInt() and 0xFF) shl 8) or
+                    (bodyBytes[offset + 4].toInt() and 0xFF)
+            offset += 5
+            if (len <= 0) continue
+            if (offset + len > bodyBytes.size) break
+
+            val payload = bodyBytes.copyOfRange(offset, offset + len)
+            offset += len
+
+            if (flag == 0x00) {
+                jsonFrames.add(String(payload, Charsets.UTF_8))
+            } else if (flag == 0x80) {
+                val trailerText = String(payload, Charsets.UTF_8)
+                val statusMatch = Regex("grpc-status:\\s*(\\d+)").find(trailerText)
+                val messageMatch = Regex("grpc-message:\\s*([^\r\n]+)").find(trailerText)
+                status = statusMatch?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                message = messageMatch?.groupValues?.getOrNull(1)
+            }
+        }
+        return GrpcResult(jsonFrames, status, message)
+    }
+
+    /**
+     * Executes a unary gRPC-Web call with full status and trailer verification
+     */
+    suspend fun executeGrpcWebCall(
+        endpoint: String,
+        payloadJson: String,
+        hubUrl: String = DEFAULT_HUB_URL
+    ): Result<GrpcResult> = withContext(Dispatchers.IO) {
+        val token = getOrFetchCsrfToken(hubUrl)
+        val base = hubUrl.trimEnd('/')
+        val url = "$base/exa.language_server_pb.LanguageServerService/$endpoint"
+        val frameBytes = encodeFrame(payloadJson)
+
+        try {
+            val req = Request.Builder()
+                .url(url)
+                .post(frameBytes.toRequestBody(GRPC_WEB_MEDIA_TYPE))
+                .header("Content-Type", "application/grpc-web+json")
+                .header("X-Grpc-Web", "1")
+                .apply {
+                    if (token.isNotBlank()) {
+                        header("x-codeium-csrf-token", token)
+                    }
+                }
+                .build()
+
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    val err = resp.body?.string() ?: "HTTP ${resp.code}"
+                    return@withContext Result.failure(Exception("$endpoint failed: $err"))
+                }
+                val headerStatus = resp.header("grpc-status")?.toIntOrNull()
+                if (headerStatus != null && headerStatus != 0) {
+                    val headerMsg = resp.header("grpc-message") ?: "gRPC status $headerStatus"
+                    return@withContext Result.failure(Exception("$endpoint error ($headerStatus): $headerMsg"))
+                }
+                val bodyBytes = resp.body?.bytes() ?: ByteArray(0)
+                val res = parseGrpcWebBody(bodyBytes)
+                if (res.status != 0) {
+                    val errMsg = res.message ?: "gRPC error status ${res.status}"
+                    return@withContext Result.failure(Exception("$endpoint error (${res.status}): $errMsg"))
+                }
+                Result.success(res)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "executeGrpcWebCall $endpoint failed: ${e.message}")
+            Result.failure(e)
         }
     }
 
@@ -415,50 +509,25 @@ class AgyHubClient(
         hubUrl: String = DEFAULT_HUB_URL
     ): Result<String> = withContext(Dispatchers.IO) {
         val cid = cascadeId
+        val normalizedUri = if (workspaceUri.isNotBlank()) {
+            if (workspaceUri.startsWith("file://")) workspaceUri else "file://$workspaceUri"
+        } else ""
         val payload = JSONObject().apply {
             put("source", "CORTEX_TRAJECTORY_SOURCE_CASCADE_CLIENT")
             put("cascadeId", cid)
             put("requestedModel", modelEnum)
-            if (workspaceUri.isNotBlank()) {
-                put("workspaceUris", JSONArray().put(workspaceUri))
-                put("overrideWorkspaceUris", JSONArray().put(workspaceUri))
+            if (normalizedUri.isNotBlank()) {
+                put("workspaceUris", JSONArray().put(normalizedUri))
+                put("overrideWorkspaceUris", JSONArray().put(normalizedUri))
             } else {
                 put("projectEnvConfig", JSONObject().apply {
-                    put("projectId", "default-cli-project")
+                    put("projectId", "outside-of-project")
                     put("defaultProjectEnvironment", JSONObject())
                 })
             }
         }.toString()
 
-        val frameBytes = encodeFrame(payload)
-        val token = getOrFetchCsrfToken(hubUrl)
-        val base = hubUrl.trimEnd('/')
-        val url = "$base/exa.language_server_pb.LanguageServerService/StartCascade"
-
-        try {
-            val req = Request.Builder()
-                .url(url)
-                .post(frameBytes.toRequestBody(GRPC_WEB_MEDIA_TYPE))
-                .header("Content-Type", "application/grpc-web+json")
-                .header("X-Grpc-Web", "1")
-                .apply {
-                    if (token.isNotBlank()) {
-                        header("x-codeium-csrf-token", token)
-                    }
-                }
-                .build()
-
-            client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    val err = resp.body?.string() ?: "HTTP ${resp.code}"
-                    return@withContext Result.failure(Exception("StartCascade failed: $err"))
-                }
-                Result.success(cid)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "startCascade failed: ${e.message}")
-            Result.failure(e)
-        }
+        executeGrpcWebCall("StartCascade", payload, hubUrl).map { cid }
     }
 
     /**
@@ -644,7 +713,7 @@ class AgyHubClient(
     // ==================== MESSAGING & EXECUTION ====================
 
     /**
-     * Sends a user prompt to SendUserCascadeMessage with structured options
+     * Sends a user prompt to SendUserCascadeMessage with structured options matching agyClient.js
      */
     suspend fun sendUserPrompt(
         cascadeId: String,
@@ -672,11 +741,24 @@ class AgyHubClient(
                     })
                     put("supportsThinking", thinkingBudget > 0)
                     put("thinkingBudget", thinkingBudget)
+                    put("knowledgeConfig", JSONObject())
+                    put("useAiCredits", false)
+                    put("supportsLatexRendering", true)
                 })
                 put("executorConfig", JSONObject().apply {
                     put("useCoreDirect", true)
                 })
+                put("conversationHistoryConfig", JSONObject())
             })
+            put("customAgentSpec", JSONObject().apply {
+                put("builtinAgent", JSONObject().apply {
+                    put("defaultAgent", JSONObject().apply {
+                        put("isGoogle", false)
+                        put("isInteractive", true)
+                    })
+                })
+            })
+            put("deliveryStrategy", "MESSAGE_DELIVERY_STRATEGY_WHEN_IDLE")
         }.toString()
 
         sendUserCascadeMessage(payload, hubUrl)
@@ -688,37 +770,7 @@ class AgyHubClient(
     suspend fun sendUserCascadeMessage(
         payloadJson: String,
         hubUrl: String = DEFAULT_HUB_URL
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        val token = getOrFetchCsrfToken(hubUrl)
-        val base = hubUrl.trimEnd('/')
-        val url = "$base/exa.language_server_pb.LanguageServerService/SendUserCascadeMessage"
-        val frameBytes = encodeFrame(payloadJson)
-
-        try {
-            val req = Request.Builder()
-                .url(url)
-                .post(frameBytes.toRequestBody(GRPC_WEB_MEDIA_TYPE))
-                .header("Content-Type", "application/grpc-web+json")
-                .header("X-Grpc-Web", "1")
-                .apply {
-                    if (token.isNotBlank()) {
-                        header("x-codeium-csrf-token", token)
-                    }
-                }
-                .build()
-
-            client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    val err = resp.body?.string() ?: "HTTP ${resp.code}"
-                    return@withContext Result.failure(Exception("SendUserCascadeMessage failed: $err"))
-                }
-                Result.success(Unit)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "sendUserCascadeMessage failed: ${e.message}")
-            Result.failure(e)
-        }
-    }
+    ): Result<Unit> = executeGrpcWebCall("SendUserCascadeMessage", payloadJson, hubUrl).map { }
 
     /**
      * Streams real-time updates for an active conversation via StreamAgentStateUpdates
@@ -745,52 +797,100 @@ class AgyHubClient(
     suspend fun cancelCascadeInvocation(
         cascadeId: String,
         hubUrl: String = DEFAULT_HUB_URL
-    ): Result<Unit> = withContext(Dispatchers.IO) {
+    ): Result<Unit> {
         val payload = JSONObject().apply {
             put("cascadeId", cascadeId)
             put("killBackgroundTasks", true)
         }.toString()
+        return executeGrpcWebCall("CancelCascadeInvocation", payload, hubUrl).map { }
+    }
 
-        val token = getOrFetchCsrfToken(hubUrl)
-        val base = hubUrl.trimEnd('/')
-        val url = "$base/exa.language_server_pb.LanguageServerService/CancelCascadeInvocation"
-        val frameBytes = encodeFrame(payload)
-
-        try {
-            val req = Request.Builder()
-                .url(url)
-                .post(frameBytes.toRequestBody(GRPC_WEB_MEDIA_TYPE))
-                .header("Content-Type", "application/grpc-web+json")
-                .header("X-Grpc-Web", "1")
-                .apply {
-                    if (token.isNotBlank()) {
-                        header("x-codeium-csrf-token", token)
+    /**
+     * Handles interactive user approval or denial for cascade permission steps
+     */
+    suspend fun handleCascadeUserInteraction(
+        cascadeId: String,
+        stepIndex: Int,
+        trajectoryId: String = "",
+        allow: Boolean = true,
+        scope: String = "PERMISSION_SCOPE_ONCE",
+        userDenyInstruction: String = "",
+        hubUrl: String = DEFAULT_HUB_URL
+    ): Result<Unit> {
+        val payload = JSONObject().apply {
+            put("cascadeId", cascadeId)
+            put("interaction", JSONObject().apply {
+                if (trajectoryId.isNotBlank()) {
+                    put("trajectoryId", trajectoryId)
+                }
+                put("stepIndex", stepIndex)
+                put("permission", JSONObject().apply {
+                    put("allow", allow)
+                    if (allow) {
+                        put("scope", scope)
+                    } else {
+                        put("userDenyInstruction", userDenyInstruction.ifBlank { "User rejected this command." })
                     }
-                }
-                .build()
+                })
+            })
+        }.toString()
+        return executeGrpcWebCall("HandleCascadeUserInteraction", payload, hubUrl).map { }
+    }
 
-            client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    val err = resp.body?.string() ?: "HTTP ${resp.code}"
-                    return@withContext Result.failure(Exception("CancelCascadeInvocation failed: $err"))
-                }
-                Result.success(Unit)
+    /**
+     * Resolves all outstanding or blocking steps in a cascade
+     */
+    suspend fun resolveOutstandingSteps(
+        cascadeId: String,
+        hubUrl: String = DEFAULT_HUB_URL
+    ): Result<Unit> {
+        val payload = JSONObject().apply {
+            put("cascadeId", cascadeId)
+        }.toString()
+        return executeGrpcWebCall("ResolveOutstandingSteps", payload, hubUrl).map { }
+    }
+
+    /**
+     * Finds the index of the last user step in a steps array
+     */
+    fun findLastUserStepIndex(steps: JSONArray): Int {
+        var lastIndex = 0
+        for (i in (steps.length() - 1) downTo 0) {
+            val step = steps.optJSONObject(i) ?: continue
+            val stepType = step.optString("type", "")
+            if (stepType == "CORTEX_STEP_TYPE_USER_INPUT" || step.has("userInput")) {
+                val stepInfo = step.optJSONObject("metadata")?.optJSONObject("sourceTrajectoryStepInfo")
+                return stepInfo?.optInt("stepIndex", step.optInt("stepIndex", i)) ?: step.optInt("stepIndex", i)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "cancelCascadeInvocation failed: ${e.message}")
-            Result.failure(e)
         }
+        return lastIndex
     }
 
     /**
      * Parses raw trajectory steps JSON into a list of ChatMessage turns (User and Assistant)
      */
     fun parseStepsToChatMessages(stepsJson: String, conversationId: String): List<ChatMessage> {
-        val messages = mutableListOf<ChatMessage>()
         try {
             val root = JSONObject(stepsJson)
-            val steps = root.optJSONArray("steps") ?: return emptyList()
+            val steps = root.optJSONArray("steps")
+                ?: root.optJSONObject("update")?.optJSONObject("mainTrajectoryUpdate")?.optJSONObject("stepsUpdate")?.optJSONArray("steps")
+                ?: root.optJSONObject("mainTrajectoryUpdate")?.optJSONObject("stepsUpdate")?.optJSONArray("steps")
+                ?: root.optJSONObject("stepsUpdate")?.optJSONArray("steps")
+                ?: return emptyList()
 
+            return parseStepsArrayToChatMessages(steps, conversationId)
+        } catch (e: Exception) {
+            Log.e(TAG, "parseStepsToChatMessages error: ${e.message}")
+            return emptyList()
+        }
+    }
+
+    /**
+     * Parses a JSONArray of trajectory steps into a list of ChatMessage turns (User and Assistant)
+     */
+    fun parseStepsArrayToChatMessages(steps: JSONArray, conversationId: String): List<ChatMessage> {
+        val messages = mutableListOf<ChatMessage>()
+        try {
             var currentAssistantMsg: ChatMessage? = null
             val currentAssistantTools = mutableListOf<ToolCall>()
             val currentAssistantThought = StringBuilder()
@@ -817,9 +917,10 @@ class AgyHubClient(
             }
 
             for (i in 0 until steps.length()) {
-                val step = steps.getJSONObject(i)
+                val step = steps.optJSONObject(i) ?: continue
                 val stepType = step.optString("type", "")
-                val stepIndex = step.optInt("stepIndex", i)
+                val stepInfo = step.optJSONObject("metadata")?.optJSONObject("sourceTrajectoryStepInfo")
+                val stepIndex = stepInfo?.optInt("stepIndex", step.optInt("stepIndex", i)) ?: step.optInt("stepIndex", i)
 
                 if (stepType == "CORTEX_STEP_TYPE_USER_INPUT" || step.has("userInput")) {
                     flushAssistant()
@@ -866,14 +967,28 @@ class AgyHubClient(
                         }
                     }
 
-                    if (step.has("runCommand")) {
-                        val rc = step.getJSONObject("runCommand")
-                        val cmd = rc.optString("commandLine", rc.optString("proposedCommandLine", ""))
-                        val out = rc.optJSONObject("combinedOutput")?.optString("full") ?: rc.optString("output", "")
+                    val reqInteraction = step.optJSONObject("requestedInteraction")
+                    val isWaitingPermission = reqInteraction?.has("permission") == true
+                    val genericArgs = step.optJSONObject("generic")?.optJSONObject("args")
+                    val isGenericCmd = genericArgs?.has("CommandLine") == true
+
+                    if (step.has("runCommand") || isWaitingPermission || isGenericCmd) {
+                        val rc = step.optJSONObject("runCommand")
+                        val cmd = when {
+                            rc != null -> rc.optString("commandLine", rc.optString("proposedCommandLine", ""))
+                            isGenericCmd -> genericArgs.optString("CommandLine", "")
+                            isWaitingPermission -> reqInteraction.optJSONObject("permission")?.optJSONObject("resource")?.optString("target", "") ?: ""
+                            else -> ""
+                        }
+                        val out = rc?.optJSONObject("combinedOutput")?.optString("full") ?: rc?.optString("output", "") ?: ""
                         val status = step.optString("status", "SUCCESS")
-                        val toolStatus = if (status.contains("WAIT", ignoreCase = true)) "WAITING"
-                        else if (status.contains("ERROR", ignoreCase = true) || status.contains("FAIL", ignoreCase = true)) "FAILED"
-                        else "SUCCESS"
+                        val toolStatus = when {
+                            isWaitingPermission || status.contains("WAIT", ignoreCase = true) -> "PENDING_APPROVAL"
+                            status.contains("RUN", ignoreCase = true) -> "RUNNING"
+                            status.contains("ERROR", ignoreCase = true) || status.contains("FAIL", ignoreCase = true) -> "FAILED"
+                            status.contains("CANCEL", ignoreCase = true) || status.contains("REJECT", ignoreCase = true) -> "REJECTED"
+                            else -> "SUCCESS"
+                        }
                         currentAssistantTools.add(
                             ToolCall(
                                 id = "tool_${conversationId}_$stepIndex",
@@ -915,11 +1030,70 @@ class AgyHubClient(
                             )
                         )
                     }
+
+                    if (step.has("viewFile")) {
+                        val vf = step.getJSONObject("viewFile")
+                        val path = vf.optString("absolutePath", "").removePrefix("file://")
+                        val content = vf.optString("content", "")
+                        currentAssistantTools.add(
+                            ToolCall(
+                                id = "tool_view_${conversationId}_$stepIndex",
+                                name = "view_file",
+                                command = path,
+                                output = content,
+                                status = "SUCCESS"
+                            )
+                        )
+                    }
+
+                    if (step.has("listDirectory")) {
+                        val ld = step.getJSONObject("listDirectory")
+                        val dir = ld.optString("directoryPath", "").removePrefix("file://")
+                        currentAssistantTools.add(
+                            ToolCall(
+                                id = "tool_list_${conversationId}_$stepIndex",
+                                name = "list_dir",
+                                command = dir,
+                                output = ld.optString("output", ""),
+                                status = "SUCCESS"
+                            )
+                        )
+                    }
+
+                    if (step.has("find")) {
+                        val f = step.getJSONObject("find")
+                        val pat = f.optString("pattern", "")
+                        val dir = f.optString("searchDirectory", "")
+                        currentAssistantTools.add(
+                            ToolCall(
+                                id = "tool_find_${conversationId}_$stepIndex",
+                                name = "find",
+                                command = "$pat in $dir",
+                                output = f.optString("truncatedOutput", ""),
+                                status = "SUCCESS"
+                            )
+                        )
+                    }
+
+                    if (step.has("generateImage")) {
+                        val gi = step.getJSONObject("generateImage")
+                        val prompt = gi.optString("prompt", "")
+                        val uri = gi.optJSONObject("generatedMedia")?.optString("uri", "") ?: gi.optString("uri", "")
+                        currentAssistantTools.add(
+                            ToolCall(
+                                id = "tool_genimg_${conversationId}_$stepIndex",
+                                name = "generate_image",
+                                command = prompt,
+                                output = uri,
+                                status = "SUCCESS"
+                            )
+                        )
+                    }
                 }
             }
             flushAssistant()
         } catch (e: Exception) {
-            Log.e(TAG, "parseStepsToChatMessages error: ${e.message}")
+            Log.e(TAG, "parseStepsArrayToChatMessages error: ${e.message}")
         }
         return messages
     }
