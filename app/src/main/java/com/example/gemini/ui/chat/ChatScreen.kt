@@ -6,6 +6,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
@@ -88,7 +90,7 @@ enum class ScrollDirection { UP, DOWN }
 
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel = viewModel(),
@@ -234,6 +236,31 @@ fun ChatScreen(
     var showScrollButton by remember { mutableStateOf(false) }
     var shouldAutoScroll by remember { mutableStateOf(true) }
 
+    val density = LocalDensity.current
+    val imeInsets = WindowInsets.ime
+    var isKeyboardAnimating by remember { mutableStateOf(false) }
+
+    // Synchronized Chat & Keyboard movement:
+    // When keyboard rises, scroll list up in lockstep with the rising input bar so messages above it stay visible.
+    // When keyboard hides, Compose & Android handle layout expansion natively.
+    LaunchedEffect(imeInsets, density, listState) {
+        var previousIme = imeInsets.getBottom(density)
+
+        snapshotFlow { imeInsets.getBottom(density) }
+            .collect { currentIme ->
+                val delta = currentIme - previousIme
+                if (delta > 0 && feedItems.isNotEmpty()) {
+                    isKeyboardAnimating = true
+                    // Keyboard is rising / opening
+                    listState.scrollBy(delta.toFloat())
+                }
+                if (currentIme == 0) {
+                    isKeyboardAnimating = false
+                }
+                previousIme = currentIme
+            }
+    }
+
     // Decoupled asynchronous scroll observer - zero recomposition during pixel scroll
     LaunchedEffect(listState) {
         var prevIdx = 0
@@ -241,7 +268,7 @@ fun ChatScreen(
         snapshotFlow {
             Triple(listState.isScrollInProgress, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
         }.collect { (isScrolling, currentIndex, currentOffset) ->
-            if (isScrolling) {
+            if (isScrolling && !isKeyboardAnimating) {
                 showScrollButton = true
                 val newDir = if (currentIndex < prevIdx || (currentIndex == prevIdx && currentOffset < prevOff)) {
                     ScrollDirection.UP
