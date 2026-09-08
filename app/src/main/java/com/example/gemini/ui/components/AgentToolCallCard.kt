@@ -120,10 +120,11 @@ fun AgentToolCallCard(
                         modifier = Modifier.size(15.dp)
                     )
                 } else if (isRunning) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        strokeWidth = 2.dp,
-                        color = ClaudeTerracotta
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(ClaudeTerracotta)
                     )
                 } else if (isSuccess) {
                     Icon(

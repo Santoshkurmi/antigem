@@ -63,18 +63,6 @@ fun FloatingTerminalInspector(
     val runningCommandsCount = tabs.flatMap { it.commands }.count { it.status == CommandStatus.RUNNING }
     val isAnyTabBusy = tabs.any { it.status == SessionTabStatus.BUSY }
 
-    // Pulsing animation for active running sessions
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.18f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-
     // Floating HUD Pill
     Box(modifier = modifier) {
         Surface(
@@ -97,7 +85,6 @@ fun FloatingTerminalInspector(
                     Box(
                         modifier = Modifier
                             .size(9.dp)
-                            .scale(pulseScale)
                             .clip(CircleShape)
                             .background(ClaudeTerracotta)
                     )
@@ -508,10 +495,11 @@ private fun TerminalInspectorDialogContent(
                             .background(if (commandInput.isNotBlank()) ClaudeTerracotta else Color.DarkGray)
                     ) {
                         if (isExecutingManual) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
+                            Icon(
+                                imageVector = Icons.Default.HourglassTop,
+                                contentDescription = "Running",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
                             )
                         } else {
                             Icon(

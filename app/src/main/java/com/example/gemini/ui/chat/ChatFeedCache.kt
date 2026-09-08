@@ -109,10 +109,8 @@ object ChatFeedCache {
                             block = block
                         ))
                     }
-                    if (!hasActiveRunningTool && msg.content.isNotBlank()) {
-                        result.add(ChatFeedItem.AssistantTyping(msg.id, selectedModelId))
-                    }
                 } else if (!hasActiveRunningTool) {
+                    // Only show waiting indicator before ANY output or tool call has appeared
                     result.add(ChatFeedItem.AssistantTyping(msg.id, selectedModelId))
                 }
             }

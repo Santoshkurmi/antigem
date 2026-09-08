@@ -559,14 +559,6 @@ fun ChatScreen(
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.width(6.dp))
-
-                                ConnectionStatusBadge(
-                                    state = connectionState,
-                                    bridgeUrl = "http://127.0.0.1:8090",
-                                    activeInstances = activeInstances,
-                                    onReconnect = { viewModel.syncAgyConversations() }
-                                )
                             }
                         }
                     },

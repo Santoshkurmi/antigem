@@ -376,7 +376,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _isServerOnline = MutableStateFlow<Boolean?>(null)
     val isServerOnline: StateFlow<Boolean?> = _isServerOnline.asStateFlow()
 
-    val connectionState: StateFlow<com.example.gemini.data.remote.BridgeConnectionState> = agyBridgeService.connectionState
+    val connectionState: StateFlow<com.example.gemini.data.remote.BridgeConnectionState> = combine(_isServerOnline, _isStreaming) { online, streaming ->
+        when {
+            online == false -> com.example.gemini.data.remote.BridgeConnectionState.OFFLINE_ERROR
+            streaming -> com.example.gemini.data.remote.BridgeConnectionState.STREAMING
+            online == true -> com.example.gemini.data.remote.BridgeConnectionState.CONNECTED_READY
+            else -> com.example.gemini.data.remote.BridgeConnectionState.CONNECTING
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, com.example.gemini.data.remote.BridgeConnectionState.CONNECTED_READY)
 
     private val _conversationError = MutableStateFlow<String?>(null)
     val conversationError: StateFlow<String?> = _conversationError.asStateFlow()

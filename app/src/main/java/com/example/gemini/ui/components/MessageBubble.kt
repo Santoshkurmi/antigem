@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.theme.ClaudeTerracotta
+import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -238,12 +239,7 @@ fun MessageBubble(
                         )
                     }
 
-                    // Show follow-up thinking / typing indicator ONLY after command execution is finished and AI is streaming/thinking
-                    if (message.isStreaming && !hasActiveRunningTool) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ModelTypingIndicator(modelId = modelId)
-                    }
-                } else if (message.isStreaming && !hasActiveRunningTool) {
+                } else if (message.isStreaming && !hasActiveRunningTool && message.content.isEmpty() && message.thoughtText.isNullOrEmpty() && message.toolCalls.isEmpty()) {
                     ModelTypingIndicator(modelId = modelId)
                 }
 
@@ -535,83 +531,53 @@ fun AssistantMessageFooter(
     }
 }
 
+private val WAITING_PHRASES = listOf(
+    "Consulting AGY",
+    "Cooking response",
+    "Crafting answer",
+    "Gathering context",
+    "Working on it",
+    "Synthesizing",
+    "Connecting dots",
+    "Analyzing request",
+    "Formulating response"
+)
+
 @Composable
 fun ModelTypingIndicator(
     modelId: String,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "dots")
+    val phrase = remember(modelId) { WAITING_PHRASES.random() }
 
-    @Composable
-    fun animateDot(delay: Int): Float {
-        val anim by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = -6f,
-            animationSpec = infiniteRepeatable(
-                animation = keyframes {
-                    durationMillis = 1000
-                    0f at 0
-                    -6f at 300
-                    0f at 600
-                    0f at 1000
-                },
-                repeatMode = RepeatMode.Restart,
-                initialStartOffset = StartOffset(delay)
-            ),
-            label = "dot_bounce"
-        )
-        return anim
-    }
-
-    val offset1 = animateDot(0)
-    val offset2 = animateDot(200)
-    val offset3 = animateDot(400)
-
-    val label = when {
-        modelId.contains("claude", ignoreCase = true) -> "Claude is thinking..."
-        modelId.contains("gemini", ignoreCase = true) -> "Gemini is thinking..."
-        modelId.contains("gpt", ignoreCase = true) -> "GPT is thinking..."
-        else -> "Thinking..."
-    }
-
-    Row(
+    Box(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
-        Box(
-            modifier = Modifier
-                .size(7.dp)
-                .graphicsLayer { translationY = offset1 }
-                .clip(CircleShape)
-                .background(ClaudeTerracotta)
-        )
-        Spacer(modifier = Modifier.width(5.dp))
-        Box(
-            modifier = Modifier
-                .size(7.dp)
-                .graphicsLayer { translationY = offset2 }
-                .clip(CircleShape)
-                .background(ClaudeTerracotta.copy(alpha = 0.8f))
-        )
-        Spacer(modifier = Modifier.width(5.dp))
-        Box(
-            modifier = Modifier
-                .size(7.dp)
-                .graphicsLayer { translationY = offset3 }
-                .clip(CircleShape)
-                .background(ClaudeTerracotta.copy(alpha = 0.6f))
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
+        WaitingDotsText(phrase = phrase)
     }
+}
+
+@Composable
+private fun WaitingDotsText(phrase: String) {
+    val dots by produceState(initialValue = ".") {
+        var count = 1
+        while (true) {
+            delay(1000L)
+            count = (count % 3) + 1
+            value = ".".repeat(count)
+        }
+    }
+
+    Text(
+        text = "$phrase$dots",
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+    )
 }
 
 @Composable

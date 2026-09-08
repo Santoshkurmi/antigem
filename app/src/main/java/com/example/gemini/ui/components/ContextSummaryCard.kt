@@ -308,33 +308,6 @@ fun LiveSummarizingCard(
     pendingQueuedMessage: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "dots")
-
-    @Composable
-    fun animateDot(delay: Int): Float {
-        val anim by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = -5f,
-            animationSpec = infiniteRepeatable(
-                animation = keyframes {
-                    durationMillis = 900
-                    0f at 0
-                    -5f at 300
-                    0f at 600
-                    0f at 900
-                },
-                repeatMode = RepeatMode.Restart,
-                initialStartOffset = StartOffset(delay)
-            ),
-            label = "dot"
-        )
-        return anim
-    }
-
-    val offset1 = animateDot(0)
-    val offset2 = animateDot(180)
-    val offset3 = animateDot(360)
-
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -348,7 +321,6 @@ fun LiveSummarizingCard(
                 Box(
                     modifier = Modifier
                         .size(6.dp)
-                        .graphicsLayer { translationY = offset1 }
                         .clip(CircleShape)
                         .background(ClaudeTerracotta)
                 )
@@ -356,7 +328,6 @@ fun LiveSummarizingCard(
                 Box(
                     modifier = Modifier
                         .size(6.dp)
-                        .graphicsLayer { translationY = offset2 }
                         .clip(CircleShape)
                         .background(ClaudeTerracotta.copy(alpha = 0.8f))
                 )
@@ -364,7 +335,6 @@ fun LiveSummarizingCard(
                 Box(
                     modifier = Modifier
                         .size(6.dp)
-                        .graphicsLayer { translationY = offset3 }
                         .clip(CircleShape)
                         .background(ClaudeTerracotta.copy(alpha = 0.6f))
                 )

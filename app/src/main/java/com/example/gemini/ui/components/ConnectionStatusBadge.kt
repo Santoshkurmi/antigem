@@ -34,33 +34,13 @@ fun ConnectionStatusBadge(
 ) {
     var showDialog by remember { mutableStateOf(false) }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "badgePulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.4f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 0.2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
-
-    val (dotColor, isPulsing, labelText) = when (state) {
-        BridgeConnectionState.CONNECTED_READY -> Triple(Color(0xFF4CAF50), false, "Bridge Ready")
-        BridgeConnectionState.STREAMING -> Triple(Color(0xFF4CAF50), true, "Generating...")
-        BridgeConnectionState.SPAWNING_INSTANCE -> Triple(Color(0xFFFFB300), true, "Warming Instance...")
-        BridgeConnectionState.CONNECTING -> Triple(Color(0xFF2196F3), true, "Connecting...")
-        BridgeConnectionState.RECONNECTING -> Triple(Color(0xFF2196F3), true, "Reconnecting...")
-        BridgeConnectionState.OFFLINE_ERROR -> Triple(Color(0xFFF44336), false, "Bridge Offline")
+    val (dotColor, labelText) = when (state) {
+        BridgeConnectionState.CONNECTED_READY -> Pair(Color(0xFF4CAF50), "Bridge Ready")
+        BridgeConnectionState.STREAMING -> Pair(Color(0xFF4CAF50), "Generating...")
+        BridgeConnectionState.SPAWNING_INSTANCE -> Pair(Color(0xFFFFB300), "Warming Instance...")
+        BridgeConnectionState.CONNECTING -> Pair(Color(0xFF2196F3), "Connecting...")
+        BridgeConnectionState.RECONNECTING -> Pair(Color(0xFF2196F3), "Reconnecting...")
+        BridgeConnectionState.OFFLINE_ERROR -> Pair(Color(0xFFF44336), "Bridge Offline")
     }
 
     Box(
@@ -70,22 +50,12 @@ fun ConnectionStatusBadge(
             .padding(horizontal = 6.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            if (isPulsing) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .scale(pulseScale)
-                        .background(dotColor.copy(alpha = pulseAlpha), CircleShape)
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(9.dp)
-                    .background(dotColor, CircleShape)
-                    .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
-            )
-        }
+        Box(
+            modifier = Modifier
+                .size(9.dp)
+                .background(dotColor, CircleShape)
+                .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape)
+        )
     }
 
     if (showDialog) {

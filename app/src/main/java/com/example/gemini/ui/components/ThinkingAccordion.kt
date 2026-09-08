@@ -79,23 +79,13 @@ fun ThinkingAccordion(
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                // Pulsing dot during streaming
+                // Static dot during streaming
                 if (isStreaming) {
-                    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                    val alpha by infiniteTransition.animateFloat(
-                        initialValue = 0.3f,
-                        targetValue = 1f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(600, easing = LinearEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "alpha"
-                    )
                     Box(
                         modifier = Modifier
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(ClaudeTerracotta.copy(alpha = alpha))
+                            .background(ClaudeTerracotta)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
