@@ -519,46 +519,6 @@ fun ChatScreen(
                                         }
                                     }
                                 }
-
-                                Spacer(modifier = Modifier.width(6.dp))
-
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = ClaudeTerracotta.copy(alpha = 0.15f),
-                                    border = androidx.compose.foundation.BorderStroke(0.5.dp, ClaudeTerracotta.copy(alpha = 0.4f)),
-                                    modifier = Modifier.clickable {
-                                        showModelSelector = true
-                                    }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.AutoAwesome,
-                                            contentDescription = "Select Model",
-                                            modifier = Modifier.size(10.dp),
-                                            tint = ClaudeTerracotta
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = currentModel.displayName.ifBlank { "Model" },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = ClaudeTerracotta,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Icon(
-                                            imageVector = Icons.Default.ArrowDropDown,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(13.dp),
-                                            tint = ClaudeTerracotta
-                                        )
-                                    }
-                                }
-
                             }
                         }
                     },

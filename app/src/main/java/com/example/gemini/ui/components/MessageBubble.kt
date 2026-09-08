@@ -550,14 +550,18 @@ fun ModelTypingIndicator(
 ) {
     val phrase = remember(modelId) { WAITING_PHRASES.random() }
 
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        contentAlignment = Alignment.CenterStart
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = ClaudeTerracotta.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.22f))
     ) {
-        WaitingDotsText(phrase = phrase)
+        Box(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            WaitingDotsText(phrase = phrase)
+        }
     }
 }
 
@@ -574,9 +578,10 @@ private fun WaitingDotsText(phrase: String) {
 
     Text(
         text = "$phrase$dots",
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        fontSize = 12.5.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = ClaudeTerracotta,
+        letterSpacing = 0.2.sp
     )
 }
 
