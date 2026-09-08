@@ -1019,6 +1019,29 @@ class AgyHubClient(
     }
 
     /**
+     * Extracts an error message from a trajectory step if present.
+     */
+    fun extractStepError(step: JSONObject): String? {
+        val errObj = step.optJSONObject("error")
+        val errMsg = errObj?.optString("message", "")?.takeIf { it.isNotBlank() }
+            ?: errObj?.optString("shortError", "")?.takeIf { it.isNotBlank() }
+            ?: step.optString("executionError", "").takeIf { it.isNotBlank() }
+            ?: step.optString("error", "").takeIf { it.isNotBlank() }
+            ?: step.optJSONObject("plannerResponse")?.optJSONObject("error")?.optString("message", "")?.takeIf { it.isNotBlank() }
+
+        if (!errMsg.isNullOrBlank()) {
+            return errMsg
+        }
+
+        val status = step.optString("status", "")
+        if (status.contains("ERROR", ignoreCase = true) || status.contains("FAIL", ignoreCase = true)) {
+            val shortStatus = status.removePrefix("CORTEX_STEP_STATUS_").lowercase().replace('_', ' ')
+            return "Model step error ($shortStatus)"
+        }
+        return null
+    }
+
+    /**
      * Parses steps array into chat messages with chronological tool ordering and live status
      */
     fun parseStepsArrayToChatMessages(steps: JSONArray, conversationId: String): List<ChatMessage> {
@@ -1104,6 +1127,12 @@ class AgyHubClient(
                         val marker = "<!-- tool_call:${tool.id} -->"
                         val existing = turnStepTexts[stepIndex]
                         turnStepTexts[stepIndex] = if (existing != null) "$marker\n\n$existing" else marker
+                    } else {
+                        val stepErr = extractStepError(step)
+                        if (stepErr != null) {
+                            val existing = turnStepTexts[stepIndex]
+                            turnStepTexts[stepIndex] = if (existing != null) "$existing\n\n⚠️ $stepErr" else "⚠️ $stepErr"
+                        }
                     }
                 }
             }

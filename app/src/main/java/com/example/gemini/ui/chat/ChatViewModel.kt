@@ -706,6 +706,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                                 if (tool != null) {
                                                     currentActiveToolsMap[tool.id] = tool
                                                     currentTurnToolMarkers[stepIndex] = "<!-- tool_call:${tool.id} -->"
+                                                } else {
+                                                    val stepErr = agyHubClient.extractStepError(st)
+                                                    if (stepErr != null) {
+                                                        val existing = currentPlannerResponses[stepIndex]
+                                                        currentPlannerResponses[stepIndex] = if (existing != null) "$existing\n\n⚠️ $stepErr" else "⚠️ $stepErr"
+                                                    }
                                                 }
                                                 if (st.has("plannerResponse")) {
                                                     val pr = st.getJSONObject("plannerResponse")
@@ -736,6 +742,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 val execId = meta.optString("executionId", "")
                                 if (err.isNotBlank() && !seenToolStepKeys.contains("exec-err-$execId")) {
                                     seenToolStepKeys.add("exec-err-$execId")
+                                    hasSeenTurnActivity = true
                                     withContext(Dispatchers.Main) {
                                         if (activeStreamConversationId != conversationId) return@withContext
                                         val cur = _messages.value.find { it.id == currentAssistantMsgId }
@@ -788,6 +795,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 if (tool != null) {
                                     currentActiveToolsMap[tool.id] = tool
                                     currentTurnToolMarkers[stepIndex] = "<!-- tool_call:${tool.id} -->"
+                                } else {
+                                    val stepErr = agyHubClient.extractStepError(s)
+                                    if (stepErr != null) {
+                                        val existing = currentPlannerResponses[stepIndex]
+                                        currentPlannerResponses[stepIndex] = if (existing != null) "$existing\n\n⚠️ $stepErr" else "⚠️ $stepErr"
+                                        hasSeenTurnActivity = true
+                                    }
                                 }
                             }
                         }
@@ -795,6 +809,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         if (status.contains("RUNNING", ignoreCase = true) ||
                             status.contains("WAITING", ignoreCase = true)
                         ) {
+                        if (status.contains("RUNNING", ignoreCase = true)) {
+                            hasSeenTurnActivity = true
+                            _isStreaming.value = true
+                        } else if (status.contains("WAITING", ignoreCase = true)) {
                             hasSeenTurnActivity = true
                         }
 
@@ -826,6 +844,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 status.contains("COMPLETED", ignoreCase = true)
 
                         val isTurnDone = isStatusIdle && !isWaitingInteraction && (hasSeenTurnActivity || _isStreaming.value)
+                        val isTurnDone = isStatusIdle && !isWaitingInteraction && hasSeenTurnActivity
 
                         withContext(Dispatchers.Main) {
                             if (activeStreamConversationId != conversationId) return@withContext
@@ -878,6 +897,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             if (isWaitingInteraction) {
                                 _isStreaming.value = false
                             } else if (isTurnDone) {
+                                if (targetId != null) {
+                                    val finalMsg = _messages.value.find { it.id == targetId }
+                                    if (finalMsg != null && finalMsg.content.isBlank() && finalMsg.toolCalls.isEmpty() && finalMsg.thoughtText.isNullOrBlank()) {
+                                        updateAssistantMessage(
+                                            msgId = targetId,
+                                            content = "⚠️ The model stopped without returning a response. Please try sending your message again.",
+                                            isStreaming = false,
+                                            forceImmediate = true
+                                        )
+                                    }
+                                }
                                 _isStreaming.value = false
                                 hasSeenTurnActivity = false
                                 currentPlannerThoughts.clear()
@@ -1178,6 +1208,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 currentTurnToolMarkers.clear()
 
                 val sendRes = agyHubClient.sendUserPrompt(
+                var sendRes = agyHubClient.sendUserPrompt(
                     cascadeId = conv.id,
                     text = userPrompt,
                     modelEnum = modelEnum,
@@ -1189,6 +1220,33 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (sendRes.isFailure) {
                     val err = sendRes.exceptionOrNull()?.message ?: "Failed to send message"
                     Log.e("ChatViewModel", "sendUserPrompt error: $err")
+                    // If trajectory was not found on daemon (e.g. daemon restarted or session expired),
+                    // attempt to re-start cascade and retry sending the prompt once!
+                    if (err.contains("trajectory not found", ignoreCase = true) || err.contains("not found", ignoreCase = true)) {
+                        Log.i("ChatViewModel", "Trajectory not found on daemon. Attempting to restart cascade ${conv.id} and retry...")
+                        val restartRes = agyHubClient.startCascade(
+                            cascadeId = conv.id,
+                            modelEnum = modelEnum,
+                            workspaceUri = workspaceUri,
+                            hubUrl = hubUrl
+                        )
+                        if (restartRes.isSuccess) {
+                            knownDaemonCascadeIds.add(conv.id)
+                            sendRes = agyHubClient.sendUserPrompt(
+                                cascadeId = conv.id,
+                                text = userPrompt,
+                                modelEnum = modelEnum,
+                                thinkingBudget = thinkingBudget,
+                                autoExecutionPolicy = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
+                                hubUrl = hubUrl
+                            )
+                        }
+                    }
+                }
+
+                if (sendRes.isFailure) {
+                    val err = sendRes.exceptionOrNull()?.message ?: "Failed to send message"
+                    Log.e("ChatViewModel", "sendUserPrompt final error: $err")
                     withContext(Dispatchers.Main) {
                         _isStreaming.value = false
                         hasSeenTurnActivity = false
