@@ -365,6 +365,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val knownDaemonCascadeIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
     @Volatile
+    private var isPromptInFlight = false
+    @Volatile
     private var hasSeenTurnActivity = false
     @Volatile
     private var hasStartedRunning = false
@@ -568,6 +570,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentAssistantMsgId = null
         currentTurnStartStep = 0
         totalStepsCount = 0
+        isPromptInFlight = false
         hasStartedRunning = false
         hasSeenTurnActivity = false
         currentPlannerThoughts.clear()
@@ -601,6 +604,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentAssistantMsgId = null
         currentTurnStartStep = 0
         totalStepsCount = 0
+        isPromptInFlight = false
         hasStartedRunning = false
         hasSeenTurnActivity = false
         currentPlannerThoughts.clear()
@@ -844,15 +848,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
 
-                        if (status.contains("RUNNING", ignoreCase = true)) {
-                            hasStartedRunning = true
-                            hasSeenTurnActivity = true
-                            _isStreaming.value = true
-                        } else if (status.contains("WAITING", ignoreCase = true)) {
-                            hasStartedRunning = true
-                            hasSeenTurnActivity = true
-                        } else if (hasSeenTurnActivity) {
-                            hasStartedRunning = true
+                        if (!isPromptInFlight) {
+                            if (status.contains("RUNNING", ignoreCase = true)) {
+                                hasStartedRunning = true
+                                hasSeenTurnActivity = true
+                                _isStreaming.value = true
+                            } else if (status.contains("WAITING", ignoreCase = true)) {
+                                hasStartedRunning = true
+                                hasSeenTurnActivity = true
+                            } else if (hasSeenTurnActivity) {
+                                hasStartedRunning = true
+                            }
                         }
 
                         val allIndices = (currentTurnToolMarkers.keys + currentPlannerResponses.keys).toSortedSet()
@@ -882,7 +888,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 status.contains("IDLE", ignoreCase = true) ||
                                 status.contains("COMPLETED", ignoreCase = true)
 
-                        val isTurnDone = isStatusIdle && !isWaitingInteraction && hasStartedRunning
+                        val isTurnDone = isStatusIdle && !isWaitingInteraction && hasStartedRunning && !isPromptInFlight
 
                         withContext(Dispatchers.Main) {
                             if (activeStreamConversationId != conversationId) return@withContext
@@ -949,6 +955,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 _isStreaming.value = false
                                 hasStartedRunning = false
                                 hasSeenTurnActivity = false
+                                isPromptInFlight = false
                                 currentPlannerThoughts.clear()
                                 currentPlannerResponses.clear()
                                 currentActiveToolsMap.clear()
@@ -1162,6 +1169,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         priorTextPrefix: String = ""
     ) {
         _isStreaming.value = true
+        isPromptInFlight = true
         _bridgeStatusMessage.value = null
 
         val assistantMsgId = existingAssistantMsgId ?: UUID.randomUUID().toString()
@@ -1218,6 +1226,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         val err = startRes.exceptionOrNull()?.message ?: "Failed to start conversation on daemon"
                         Log.e("ChatViewModel", "startCascade error: $err")
                         withContext(Dispatchers.Main) {
+                            isPromptInFlight = false
                             _isStreaming.value = false
                             hasSeenTurnActivity = false
                             updateAssistantMessage(
@@ -1283,10 +1292,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                if (sendRes.isFailure) {
+                if (sendRes.isSuccess) {
+                    currentTurnStartStep = totalStepsCount
+                    isPromptInFlight = false
+                } else {
                     val err = sendRes.exceptionOrNull()?.message ?: "Failed to send message"
                     Log.e("ChatViewModel", "sendUserPrompt final error: $err")
                     withContext(Dispatchers.Main) {
+                        isPromptInFlight = false
                         _isStreaming.value = false
                         hasSeenTurnActivity = false
                         updateAssistantMessage(
@@ -1300,6 +1313,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "sendUserPrompt exception: ${e.message}", e)
                 withContext(Dispatchers.Main) {
+                    isPromptInFlight = false
                     _isStreaming.value = false
                     hasSeenTurnActivity = false
                     updateAssistantMessage(
