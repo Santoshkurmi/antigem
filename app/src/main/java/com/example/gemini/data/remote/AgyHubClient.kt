@@ -886,33 +886,168 @@ class AgyHubClient(
     }
 
     /**
-     * Parses a JSONArray of trajectory steps into a list of ChatMessage turns (User and Assistant)
+     * Extracts a ToolCall from a trajectory step if the step represents a tool invocation.
+     */
+    fun extractToolCallFromStep(
+        step: JSONObject,
+        stepIndex: Int,
+        conversationId: String
+    ): ToolCall? {
+        val reqInteraction = step.optJSONObject("requestedInteraction")
+        val isWaitingPermission = reqInteraction?.has("permission") == true
+        val genericArgs = step.optJSONObject("generic")?.optJSONObject("args")
+        val isGenericCmd = genericArgs?.has("CommandLine") == true
+        val stepStatus = step.optString("status", "")
+
+        fun resolveStatus(hasOutput: Boolean, isPending: Boolean = false): String {
+            return when {
+                isPending || stepStatus.contains("WAIT", ignoreCase = true) -> "PENDING_APPROVAL"
+                stepStatus.contains("RUN", ignoreCase = true) -> "RUNNING"
+                stepStatus.contains("ERROR", ignoreCase = true) || stepStatus.contains("FAIL", ignoreCase = true) -> "FAILED"
+                stepStatus.contains("CANCEL", ignoreCase = true) || stepStatus.contains("REJECT", ignoreCase = true) -> "REJECTED"
+                !hasOutput && !stepStatus.contains("SUCCESS", ignoreCase = true) && !stepStatus.contains("DONE", ignoreCase = true) -> "RUNNING"
+                else -> "SUCCESS"
+            }
+        }
+
+        if (step.has("runCommand") || isWaitingPermission || isGenericCmd) {
+            val rc = step.optJSONObject("runCommand")
+            val cmd = when {
+                rc != null -> rc.optString("commandLine", rc.optString("proposedCommandLine", ""))
+                isGenericCmd -> genericArgs.optString("CommandLine", "")
+                isWaitingPermission -> reqInteraction.optJSONObject("permission")?.optJSONObject("resource")?.optString("target", "") ?: ""
+                else -> ""
+            }
+            val out = rc?.optJSONObject("combinedOutput")?.optString("full") ?: rc?.optString("output", "") ?: ""
+            val toolStatus = resolveStatus(out.isNotBlank(), isWaitingPermission)
+            return ToolCall(
+                id = "tool_${conversationId}_$stepIndex",
+                name = "bash",
+                command = cmd,
+                output = out,
+                status = toolStatus
+            )
+        }
+
+        if (step.has("modifyFile") || step.has("codeAction")) {
+            val ca = step.optJSONObject("codeAction") ?: step.optJSONObject("modifyFile")
+            val uri = ca?.optString("uri", "") ?: ""
+            val path = uri.removePrefix("file://")
+            val diff = ca?.optString("diff", "") ?: ""
+            val toolStatus = resolveStatus(diff.isNotBlank())
+            return ToolCall(
+                id = "tool_edit_${conversationId}_$stepIndex",
+                name = "edit_file",
+                command = path,
+                output = diff,
+                status = toolStatus
+            )
+        }
+
+        if (step.has("searchWeb")) {
+            val sw = step.getJSONObject("searchWeb")
+            val query = sw.optString("query", "")
+            val summary = sw.optString("summary", "")
+            val toolStatus = resolveStatus(summary.isNotBlank())
+            return ToolCall(
+                id = "tool_web_${conversationId}_$stepIndex",
+                name = "web_search",
+                command = query,
+                output = summary,
+                status = toolStatus
+            )
+        }
+
+        if (step.has("viewFile")) {
+            val vf = step.getJSONObject("viewFile")
+            val path = vf.optString("absolutePath", "").removePrefix("file://")
+            val content = vf.optString("content", "")
+            val toolStatus = resolveStatus(content.isNotBlank())
+            return ToolCall(
+                id = "tool_view_${conversationId}_$stepIndex",
+                name = "view_file",
+                command = path,
+                output = content,
+                status = toolStatus
+            )
+        }
+
+        if (step.has("listDirectory")) {
+            val ld = step.getJSONObject("listDirectory")
+            val dir = ld.optString("directoryPath", "").removePrefix("file://")
+            val out = ld.optString("output", "")
+            val toolStatus = resolveStatus(out.isNotBlank())
+            return ToolCall(
+                id = "tool_list_${conversationId}_$stepIndex",
+                name = "list_dir",
+                command = dir,
+                output = out,
+                status = toolStatus
+            )
+        }
+
+        if (step.has("find")) {
+            val f = step.getJSONObject("find")
+            val pat = f.optString("pattern", "")
+            val dir = f.optString("searchDirectory", "")
+            val out = f.optString("truncatedOutput", "")
+            val toolStatus = resolveStatus(out.isNotBlank())
+            return ToolCall(
+                id = "tool_find_${conversationId}_$stepIndex",
+                name = "find",
+                command = "$pat in $dir",
+                output = out,
+                status = toolStatus
+            )
+        }
+
+        if (step.has("generateImage")) {
+            val gi = step.getJSONObject("generateImage")
+            val prompt = gi.optString("prompt", "")
+            val uri = gi.optJSONObject("generatedMedia")?.optString("uri", "") ?: gi.optString("uri", "")
+            val toolStatus = resolveStatus(uri.isNotBlank())
+            return ToolCall(
+                id = "tool_genimg_${conversationId}_$stepIndex",
+                name = "generate_image",
+                command = prompt,
+                output = uri,
+                status = toolStatus
+            )
+        }
+
+        return null
+    }
+
+    /**
+     * Parses steps array into chat messages with chronological tool ordering and live status
      */
     fun parseStepsArrayToChatMessages(steps: JSONArray, conversationId: String): List<ChatMessage> {
         val messages = mutableListOf<ChatMessage>()
         try {
-            var currentAssistantMsg: ChatMessage? = null
-            val currentAssistantTools = mutableListOf<ToolCall>()
-            val currentAssistantThought = StringBuilder()
-            val currentAssistantText = StringBuilder()
+            val turnTools = linkedMapOf<String, ToolCall>()
+            val turnStepTexts = sortedMapOf<Int, String>()
+            val turnStepThoughts = sortedMapOf<Int, String>()
+            var turnAssistantId: String? = null
 
             fun flushAssistant() {
-                if (currentAssistantMsg != null || currentAssistantThought.isNotEmpty() || currentAssistantText.isNotEmpty() || currentAssistantTools.isNotEmpty()) {
+                if (turnAssistantId != null || turnStepThoughts.isNotEmpty() || turnStepTexts.isNotEmpty() || turnTools.isNotEmpty()) {
+                    val content = turnStepTexts.values.joinToString("\n\n").trim()
+                    val thoughtText = turnStepThoughts.values.joinToString("\n\n").trim().takeIf { it.isNotBlank() }
                     messages.add(
                         ChatMessage(
-                            id = UUID.randomUUID().toString(),
+                            id = turnAssistantId ?: UUID.randomUUID().toString(),
                             conversationId = conversationId,
                             role = MessageRole.ASSISTANT,
-                            content = currentAssistantText.toString().trim(),
-                            thoughtText = currentAssistantThought.toString().trim().takeIf { it.isNotBlank() },
-                            toolCalls = currentAssistantTools.toList(),
+                            content = content,
+                            thoughtText = thoughtText,
+                            toolCalls = turnTools.values.toList(),
                             isStreaming = false
                         )
                     )
-                    currentAssistantThought.clear()
-                    currentAssistantText.clear()
-                    currentAssistantTools.clear()
-                    currentAssistantMsg = null
+                    turnStepThoughts.clear()
+                    turnStepTexts.clear()
+                    turnTools.clear()
+                    turnAssistantId = null
                 }
             }
 
@@ -946,148 +1081,29 @@ class AgyHubClient(
                         )
                     }
                 } else {
-                    currentAssistantMsg = ChatMessage(
-                        id = "assistant_${conversationId}_$stepIndex",
-                        conversationId = conversationId,
-                        role = MessageRole.ASSISTANT,
-                        content = ""
-                    )
+                    if (turnAssistantId == null) {
+                        turnAssistantId = "assistant_${conversationId}_$stepIndex"
+                    }
 
                     if (step.has("plannerResponse")) {
                         val pr = step.getJSONObject("plannerResponse")
                         val th = pr.optString("thinking", "")
                         val resp = pr.optString("response", "")
                         if (th.isNotBlank()) {
-                            if (currentAssistantThought.isNotEmpty()) currentAssistantThought.append("\n\n")
-                            currentAssistantThought.append(th)
+                            turnStepThoughts[stepIndex] = th
                         }
                         if (resp.isNotBlank()) {
-                            if (currentAssistantText.isNotEmpty()) currentAssistantText.append("\n\n")
-                            currentAssistantText.append(resp)
+                            val existing = turnStepTexts[stepIndex]
+                            turnStepTexts[stepIndex] = if (existing != null) "$existing\n\n$resp" else resp
                         }
                     }
 
-                    val reqInteraction = step.optJSONObject("requestedInteraction")
-                    val isWaitingPermission = reqInteraction?.has("permission") == true
-                    val genericArgs = step.optJSONObject("generic")?.optJSONObject("args")
-                    val isGenericCmd = genericArgs?.has("CommandLine") == true
-
-                    if (step.has("runCommand") || isWaitingPermission || isGenericCmd) {
-                        val rc = step.optJSONObject("runCommand")
-                        val cmd = when {
-                            rc != null -> rc.optString("commandLine", rc.optString("proposedCommandLine", ""))
-                            isGenericCmd -> genericArgs.optString("CommandLine", "")
-                            isWaitingPermission -> reqInteraction.optJSONObject("permission")?.optJSONObject("resource")?.optString("target", "") ?: ""
-                            else -> ""
-                        }
-                        val out = rc?.optJSONObject("combinedOutput")?.optString("full") ?: rc?.optString("output", "") ?: ""
-                        val status = step.optString("status", "SUCCESS")
-                        val toolStatus = when {
-                            isWaitingPermission || status.contains("WAIT", ignoreCase = true) -> "PENDING_APPROVAL"
-                            status.contains("RUN", ignoreCase = true) -> "RUNNING"
-                            status.contains("ERROR", ignoreCase = true) || status.contains("FAIL", ignoreCase = true) -> "FAILED"
-                            status.contains("CANCEL", ignoreCase = true) || status.contains("REJECT", ignoreCase = true) -> "REJECTED"
-                            else -> "SUCCESS"
-                        }
-                        currentAssistantTools.add(
-                            ToolCall(
-                                id = "tool_${conversationId}_$stepIndex",
-                                name = "bash",
-                                command = cmd,
-                                output = out,
-                                status = toolStatus
-                            )
-                        )
-                    }
-
-                    if (step.has("modifyFile") || step.has("codeAction")) {
-                        val ca = step.optJSONObject("codeAction") ?: step.optJSONObject("modifyFile")
-                        val uri = ca?.optString("uri", "") ?: ""
-                        val path = uri.removePrefix("file://")
-                        val diff = ca?.optString("diff", "") ?: ""
-                        currentAssistantTools.add(
-                            ToolCall(
-                                id = "tool_edit_${conversationId}_$stepIndex",
-                                name = "edit_file",
-                                command = path,
-                                output = diff,
-                                status = "SUCCESS"
-                            )
-                        )
-                    }
-
-                    if (step.has("searchWeb")) {
-                        val sw = step.getJSONObject("searchWeb")
-                        val query = sw.optString("query", "")
-                        val summary = sw.optString("summary", "")
-                        currentAssistantTools.add(
-                            ToolCall(
-                                id = "tool_web_${conversationId}_$stepIndex",
-                                name = "web_search",
-                                command = query,
-                                output = summary,
-                                status = "SUCCESS"
-                            )
-                        )
-                    }
-
-                    if (step.has("viewFile")) {
-                        val vf = step.getJSONObject("viewFile")
-                        val path = vf.optString("absolutePath", "").removePrefix("file://")
-                        val content = vf.optString("content", "")
-                        currentAssistantTools.add(
-                            ToolCall(
-                                id = "tool_view_${conversationId}_$stepIndex",
-                                name = "view_file",
-                                command = path,
-                                output = content,
-                                status = "SUCCESS"
-                            )
-                        )
-                    }
-
-                    if (step.has("listDirectory")) {
-                        val ld = step.getJSONObject("listDirectory")
-                        val dir = ld.optString("directoryPath", "").removePrefix("file://")
-                        currentAssistantTools.add(
-                            ToolCall(
-                                id = "tool_list_${conversationId}_$stepIndex",
-                                name = "list_dir",
-                                command = dir,
-                                output = ld.optString("output", ""),
-                                status = "SUCCESS"
-                            )
-                        )
-                    }
-
-                    if (step.has("find")) {
-                        val f = step.getJSONObject("find")
-                        val pat = f.optString("pattern", "")
-                        val dir = f.optString("searchDirectory", "")
-                        currentAssistantTools.add(
-                            ToolCall(
-                                id = "tool_find_${conversationId}_$stepIndex",
-                                name = "find",
-                                command = "$pat in $dir",
-                                output = f.optString("truncatedOutput", ""),
-                                status = "SUCCESS"
-                            )
-                        )
-                    }
-
-                    if (step.has("generateImage")) {
-                        val gi = step.getJSONObject("generateImage")
-                        val prompt = gi.optString("prompt", "")
-                        val uri = gi.optJSONObject("generatedMedia")?.optString("uri", "") ?: gi.optString("uri", "")
-                        currentAssistantTools.add(
-                            ToolCall(
-                                id = "tool_genimg_${conversationId}_$stepIndex",
-                                name = "generate_image",
-                                command = prompt,
-                                output = uri,
-                                status = "SUCCESS"
-                            )
-                        )
+                    val tool = extractToolCallFromStep(step, stepIndex, conversationId)
+                    if (tool != null) {
+                        turnTools[tool.id] = tool
+                        val marker = "<!-- tool_call:${tool.id} -->"
+                        val existing = turnStepTexts[stepIndex]
+                        turnStepTexts[stepIndex] = if (existing != null) "$marker\n\n$existing" else marker
                     }
                 }
             }

@@ -369,6 +369,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val currentPlannerThoughts = java.util.concurrent.ConcurrentHashMap<Int, String>()
     private val currentPlannerResponses = java.util.concurrent.ConcurrentHashMap<Int, String>()
     private val currentActiveToolsMap = java.util.concurrent.ConcurrentHashMap<String, com.example.gemini.domain.model.ToolCall>()
+    private val currentTurnToolMarkers = java.util.concurrent.ConcurrentHashMap<Int, String>()
 
     private val _isServerOnline = MutableStateFlow<Boolean?>(null)
     val isServerOnline: StateFlow<Boolean?> = _isServerOnline.asStateFlow()
@@ -562,6 +563,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentPlannerThoughts.clear()
         currentPlannerResponses.clear()
         currentActiveToolsMap.clear()
+        currentTurnToolMarkers.clear()
         _isStreaming.value = false
         _bridgeStatusMessage.value = null
 
@@ -593,6 +595,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentPlannerThoughts.clear()
         currentPlannerResponses.clear()
         currentActiveToolsMap.clear()
+        currentTurnToolMarkers.clear()
         _isStreaming.value = false
         _bridgeStatusMessage.value = null
         _messages.value = emptyList()
@@ -678,6 +681,40 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                         _isStreaming.value = isRunning && !isWaiting
                                         if (isRunning || isWaiting) {
                                             hasSeenTurnActivity = true
+                                            val lastAssistant = parsed.lastOrNull { it.role == MessageRole.ASSISTANT }
+                                            currentAssistantMsgId = lastAssistant?.id
+
+                                            // Seed active turn state so subsequent delta chunks won't drop existing tools!
+                                            var lastUserStepIdx = -1
+                                            for (k in 0 until stepsArr.length()) {
+                                                val st = stepsArr.optJSONObject(k) ?: continue
+                                                val stType = st.optString("type", "")
+                                                if (stType == "CORTEX_STEP_TYPE_USER_INPUT" || st.has("userInput")) {
+                                                    lastUserStepIdx = k
+                                                }
+                                            }
+                                            val startTurnIdx = (lastUserStepIdx + 1).coerceAtLeast(0)
+                                            for (k in startTurnIdx until stepsArr.length()) {
+                                                val st = stepsArr.optJSONObject(k) ?: continue
+                                                val stepInfo = st.optJSONObject("metadata")?.optJSONObject("sourceTrajectoryStepInfo")
+                                                val stepIndex = when {
+                                                    stepInfo?.has("stepIndex") == true -> stepInfo.getInt("stepIndex")
+                                                    st.has("stepIndex") -> st.getInt("stepIndex")
+                                                    else -> k
+                                                }
+                                                val tool = agyHubClient.extractToolCallFromStep(st, stepIndex, conversationId)
+                                                if (tool != null) {
+                                                    currentActiveToolsMap[tool.id] = tool
+                                                    currentTurnToolMarkers[stepIndex] = "<!-- tool_call:${tool.id} -->"
+                                                }
+                                                if (st.has("plannerResponse")) {
+                                                    val pr = st.getJSONObject("plannerResponse")
+                                                    val th = pr.optString("thinking", "")
+                                                    val resp = pr.optString("response", "")
+                                                    if (th.isNotBlank()) currentPlannerThoughts[stepIndex] = th
+                                                    if (resp.isNotBlank()) currentPlannerResponses[stepIndex] = resp
+                                                }
+                                            }
                                         }
                                     } else {
                                         _messages.value = emptyList()
@@ -747,121 +784,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     if (resp.isNotBlank()) currentPlannerResponses[stepIndex] = resp
                                 }
 
-                                val reqInteraction = s.optJSONObject("requestedInteraction")
-                                val isWaitingPermission = reqInteraction?.has("permission") == true
-                                val genericArgs = s.optJSONObject("generic")?.optJSONObject("args")
-                                val isGenericCmd = genericArgs?.has("CommandLine") == true
-
-                                if (s.has("runCommand") || isWaitingPermission || isGenericCmd) {
-                                    val rc = s.optJSONObject("runCommand")
-                                    val cmd = when {
-                                        rc != null -> rc.optString("commandLine", rc.optString("proposedCommandLine", ""))
-                                        isGenericCmd -> genericArgs.optString("CommandLine", "")
-                                        isWaitingPermission -> reqInteraction.optJSONObject("permission")?.optJSONObject("resource")?.optString("target", "") ?: ""
-                                        else -> ""
-                                    }
-                                    val out = rc?.optJSONObject("combinedOutput")?.optString("full") ?: rc?.optString("output", "") ?: ""
-                                    val stepStatus = s.optString("status", "SUCCESS")
-                                    val toolStatus = when {
-                                        isWaitingPermission || stepStatus.contains("WAIT", ignoreCase = true) -> "PENDING_APPROVAL"
-                                        stepStatus.contains("RUN", ignoreCase = true) -> "RUNNING"
-                                        stepStatus.contains("ERROR", ignoreCase = true) || stepStatus.contains("FAIL", ignoreCase = true) -> "FAILED"
-                                        stepStatus.contains("CANCEL", ignoreCase = true) || stepStatus.contains("REJECT", ignoreCase = true) -> "REJECTED"
-                                        else -> "SUCCESS"
-                                    }
-
-                                    val tid = "tool_${conversationId}_$stepIndex"
-                                    currentActiveToolsMap[tid] = com.example.gemini.domain.model.ToolCall(
-                                        id = tid,
-                                        name = "bash",
-                                        command = cmd,
-                                        output = out,
-                                        status = toolStatus
-                                    )
-                                }
-
-                                if (s.has("modifyFile") || s.has("codeAction")) {
-                                    val ca = s.optJSONObject("codeAction") ?: s.optJSONObject("modifyFile")
-                                    val uri = ca?.optString("uri", "") ?: ""
-                                    val path = uri.removePrefix("file://")
-                                    val diff = ca?.optString("diff", "") ?: ""
-                                    val tid = "tool_edit_${conversationId}_$stepIndex"
-                                    currentActiveToolsMap[tid] = com.example.gemini.domain.model.ToolCall(
-                                        id = tid,
-                                        name = "edit_file",
-                                        command = path,
-                                        output = diff,
-                                        status = "SUCCESS"
-                                    )
-                                }
-
-                                if (s.has("viewFile")) {
-                                    val vf = s.getJSONObject("viewFile")
-                                    val path = vf.optString("absolutePath", "").removePrefix("file://")
-                                    val content = vf.optString("content", "")
-                                    val tid = "tool_view_${conversationId}_$stepIndex"
-                                    currentActiveToolsMap[tid] = com.example.gemini.domain.model.ToolCall(
-                                        id = tid,
-                                        name = "view_file",
-                                        command = path,
-                                        output = content,
-                                        status = "SUCCESS"
-                                    )
-                                }
-
-                                if (s.has("searchWeb")) {
-                                    val sw = s.getJSONObject("searchWeb")
-                                    val query = sw.optString("query", "")
-                                    val summary = sw.optString("summary", "")
-                                    val tid = "tool_web_${conversationId}_$stepIndex"
-                                    currentActiveToolsMap[tid] = com.example.gemini.domain.model.ToolCall(
-                                        id = tid,
-                                        name = "web_search",
-                                        command = query,
-                                        output = summary,
-                                        status = "SUCCESS"
-                                    )
-                                }
-
-                                if (s.has("listDirectory")) {
-                                    val ld = s.getJSONObject("listDirectory")
-                                    val dir = ld.optString("directoryPath", "").removePrefix("file://")
-                                    val tid = "tool_list_${conversationId}_$stepIndex"
-                                    currentActiveToolsMap[tid] = com.example.gemini.domain.model.ToolCall(
-                                        id = tid,
-                                        name = "list_dir",
-                                        command = dir,
-                                        output = ld.optString("output", ""),
-                                        status = "SUCCESS"
-                                    )
-                                }
-
-                                if (s.has("find")) {
-                                    val f = s.getJSONObject("find")
-                                    val pat = f.optString("pattern", "")
-                                    val dir = f.optString("searchDirectory", "")
-                                    val tid = "tool_find_${conversationId}_$stepIndex"
-                                    currentActiveToolsMap[tid] = com.example.gemini.domain.model.ToolCall(
-                                        id = tid,
-                                        name = "find",
-                                        command = "$pat in $dir",
-                                        output = f.optString("truncatedOutput", ""),
-                                        status = "SUCCESS"
-                                    )
-                                }
-
-                                if (s.has("generateImage")) {
-                                    val gi = s.getJSONObject("generateImage")
-                                    val prompt = gi.optString("prompt", "")
-                                    val uri = gi.optJSONObject("generatedMedia")?.optString("uri", "") ?: gi.optString("uri", "")
-                                    val tid = "tool_genimg_${conversationId}_$stepIndex"
-                                    currentActiveToolsMap[tid] = com.example.gemini.domain.model.ToolCall(
-                                        id = tid,
-                                        name = "generate_image",
-                                        command = prompt,
-                                        output = uri,
-                                        status = "SUCCESS"
-                                    )
+                                val tool = agyHubClient.extractToolCallFromStep(s, stepIndex, conversationId)
+                                if (tool != null) {
+                                    currentActiveToolsMap[tool.id] = tool
+                                    currentTurnToolMarkers[stepIndex] = "<!-- tool_call:${tool.id} -->"
                                 }
                             }
                         }
@@ -872,11 +798,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             hasSeenTurnActivity = true
                         }
 
-                        val combinedText = if (currentPlannerResponses.isNotEmpty()) {
-                            currentPlannerResponses.toSortedMap().values.joinToString("\n\n")
-                        } else ""
+                        val allIndices = (currentTurnToolMarkers.keys + currentPlannerResponses.keys).toSortedSet()
+                        val textChunks = mutableListOf<String>()
+                        for (idx in allIndices) {
+                            val marker = currentTurnToolMarkers[idx]
+                            val resp = currentPlannerResponses[idx]
+                            if (marker != null && !resp.isNullOrBlank()) {
+                                textChunks.add("$marker\n\n$resp")
+                            } else if (marker != null) {
+                                textChunks.add(marker)
+                            } else if (!resp.isNullOrBlank()) {
+                                textChunks.add(resp)
+                            }
+                        }
+                        val combinedText = textChunks.joinToString("\n\n").trim()
+
                         val combinedThought = if (currentPlannerThoughts.isNotEmpty()) {
-                            currentPlannerThoughts.toSortedMap().values.joinToString("\n\n")
+                            currentPlannerThoughts.toSortedMap().values.joinToString("\n\n").trim().takeIf { it.isNotBlank() }
                         } else null
 
                         val hasPendingApprovalTool = currentActiveToolsMap.values.any { it.status == "PENDING_APPROVAL" }
@@ -898,11 +836,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             val isMsgStreaming = !isTurnDone && !isWaitingInteraction && _isStreaming.value
 
                             if (targetId != null) {
+                                currentAssistantMsgId = targetId
                                 val curMsg = _messages.value.find { it.id == targetId }
                                 if (curMsg != null) {
                                     val newContent = if (combinedText.isNotBlank()) combinedText else curMsg.content
                                     val newThought = combinedThought ?: curMsg.thoughtText
-                                    val newTools = if (currentActiveToolsMap.isNotEmpty()) currentActiveToolsMap.values.toList() else curMsg.toolCalls
+
+                                    val mergedTools = LinkedHashMap<String, com.example.gemini.domain.model.ToolCall>()
+                                    for (t in curMsg.toolCalls) {
+                                        mergedTools[t.id] = t
+                                    }
+                                    for ((id, t) in currentActiveToolsMap) {
+                                        mergedTools[id] = t
+                                    }
+                                    val newTools = mergedTools.values.toList()
+
                                     updateAssistantMessage(
                                         msgId = targetId,
                                         content = newContent,
@@ -935,6 +883,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 currentPlannerThoughts.clear()
                                 currentPlannerResponses.clear()
                                 currentActiveToolsMap.clear()
+                                currentTurnToolMarkers.clear()
                                 currentAssistantMsgId = null
                                 refreshQuotas()
                                 syncAgyConversations()
@@ -1226,6 +1175,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 currentPlannerThoughts.clear()
                 currentPlannerResponses.clear()
                 currentActiveToolsMap.clear()
+                currentTurnToolMarkers.clear()
 
                 val sendRes = agyHubClient.sendUserPrompt(
                     cascadeId = conv.id,
@@ -1325,6 +1275,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentPlannerThoughts.clear()
         currentPlannerResponses.clear()
         currentActiveToolsMap.clear()
+        currentTurnToolMarkers.clear()
         currentAssistantMsgId = null
         _bridgeStatusMessage.value = null
 
