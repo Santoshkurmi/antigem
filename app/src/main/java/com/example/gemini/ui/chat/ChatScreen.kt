@@ -86,15 +86,7 @@ import kotlinx.coroutines.launch
 
 enum class ScrollDirection { UP, DOWN }
 
-sealed class ChatFeedItem(val key: String, val contentType: String) {
-    data class Summary(val message: ChatMessage) : ChatFeedItem("summary_${message.id}", "SUMMARY")
-    data class User(val message: ChatMessage) : ChatFeedItem("user_${message.id}", "USER")
-    data class AssistantThinking(val messageId: String, val thoughtText: String, val durationMs: Long?, val isStreaming: Boolean) : ChatFeedItem("thought_$messageId", "THOUGHT")
-    data class AssistantBlock(val messageId: String, val blockIndex: Int, val block: MarkdownBlock) : ChatFeedItem("${messageId}_b$blockIndex", "ASSISTANT_BLOCK")
-    data class AssistantTyping(val messageId: String, val modelId: String) : ChatFeedItem("typing_$messageId", "TYPING")
-    data class AssistantFooter(val message: ChatMessage) : ChatFeedItem("footer_${message.id}", "FOOTER")
-    data class StreamingMessage(val message: ChatMessage) : ChatFeedItem("streaming_${message.id}", "STREAMING")
-}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -201,9 +193,21 @@ fun ChatScreen(
     val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
     val isLoadingConversation by viewModel.isLoadingConversation.collectAsState()
 
-    // Fresh LazyListState per conversation
+    // Granular block-level feed item expansion from pre-warmed background cache (0ms UI thread work)
+    val feedItems = remember(messages, selectedModelId) {
+        ChatFeedCache.buildFeedItems(messages, selectedModelId)
+    }
+
+    // Fresh LazyListState per conversation — initialize directly at bottom so item 0 is NEVER composed
     val convKey = currentConv?.id ?: "empty"
-    val listState = remember(convKey) { LazyListState(firstVisibleItemIndex = 0) }
+    val initialBottomIndex = remember(convKey, isLoadingConversation) {
+        if (!isLoadingConversation && feedItems.isNotEmpty()) {
+            feedItems.size - 1
+        } else 0
+    }
+    val listState = remember(convKey, isLoadingConversation) {
+        LazyListState(firstVisibleItemIndex = initialBottomIndex)
+    }
     var lastScrolledConvId by remember { mutableStateOf<String?>(null) }
     var lastScrolledMessageCount by remember { mutableStateOf(-1) }
 
@@ -273,89 +277,6 @@ fun ChatScreen(
 
     var userSentMessageTrigger by remember { mutableStateOf(0) }
 
-    // Immutable Cache for completed historical messages (zero AST parsing during streaming)
-    val feedItemCache = remember { mutableMapOf<String, List<ChatFeedItem>>() }
-
-    // Granular block-level feed item expansion for smooth 120 FPS virtualization
-    val feedItems = remember(messages) {
-        val t0 = System.nanoTime()
-        val result = mutableListOf<ChatFeedItem>()
-        for (msg in messages) {
-            if (!msg.isStreaming) {
-                val cacheKey = "${msg.id}_${msg.content.hashCode()}_${msg.toolCalls.hashCode()}_${msg.thoughtText?.hashCode() ?: 0}"
-                val cached = feedItemCache[cacheKey]
-                if (cached != null) {
-                    result.addAll(cached)
-                    continue
-                }
-                val msgItems = mutableListOf<ChatFeedItem>()
-                when (msg.role) {
-                    MessageRole.SUMMARY -> {
-                        msgItems.add(ChatFeedItem.Summary(msg))
-                    }
-                    MessageRole.USER -> {
-                        msgItems.add(ChatFeedItem.User(msg))
-                    }
-                    MessageRole.ASSISTANT -> {
-                        val contentToParse = if (!msg.thoughtText.isNullOrEmpty() && !msg.content.contains("<!-- thought") && !msg.content.contains("<thought")) {
-                            "<!-- thought -->\n${msg.thoughtText}\n<!-- /thought -->\n${msg.content}"
-                        } else {
-                            msg.content
-                        }
-                        if (contentToParse.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
-                            val blocks = parseMarkdownBlocks(contentToParse, msg.toolCalls)
-                            blocks.forEachIndexed { idx, block ->
-                                msgItems.add(ChatFeedItem.AssistantBlock(
-                                    messageId = msg.id,
-                                    blockIndex = idx,
-                                    block = block
-                                ))
-                            }
-                        }
-                        if (msg.content.isNotEmpty()) {
-                            msgItems.add(ChatFeedItem.AssistantFooter(msg))
-                        }
-                    }
-                    else -> {}
-                }
-                feedItemCache[cacheKey] = msgItems
-                result.addAll(msgItems)
-            } else {
-                // Active streaming message: virtualize blocks directly in LazyColumn so only visible blocks compose!
-                val hasActiveRunningTool = msg.toolCalls.any { 
-                    it.status == "RUNNING" || it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE" 
-                }
-                val contentToParse = if (!msg.thoughtText.isNullOrEmpty() && !msg.content.contains("<!-- thought") && !msg.content.contains("<thought")) {
-                    if (msg.content.isBlank()) {
-                        "<!-- thought -->\n${msg.thoughtText}"
-                    } else {
-                        "<!-- thought -->\n${msg.thoughtText}\n<!-- /thought -->\n${msg.content}"
-                    }
-                } else {
-                    msg.content
-                }
-                if (contentToParse.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
-                    val blocks = parseMarkdownBlocks(contentToParse, msg.toolCalls)
-                    blocks.forEachIndexed { idx, block ->
-                        result.add(ChatFeedItem.AssistantBlock(
-                            messageId = msg.id,
-                            blockIndex = idx,
-                            block = block
-                        ))
-                    }
-                    if (!hasActiveRunningTool && msg.content.isNotBlank()) {
-                        result.add(ChatFeedItem.AssistantTyping(msg.id, selectedModelId))
-                    }
-                } else if (!hasActiveRunningTool) {
-                    result.add(ChatFeedItem.AssistantTyping(msg.id, selectedModelId))
-                }
-            }
-        }
-        val dt = (System.nanoTime() - t0) / 1_000_000.0
-        Log.d("PERF_TRACE", "⚡ [FeedItems Calc] count=${result.size}, took=${"%.2f".format(dt)}ms")
-        result
-    }
-
     // Always scroll to very bottom when a conversation is opened or loaded
     LaunchedEffect(currentConv?.id, messages.size, feedItems.size) {
         val convId = currentConv?.id
@@ -364,7 +285,9 @@ fun ChatScreen(
                 lastScrolledConvId = convId
                 lastScrolledMessageCount = messages.size
                 shouldAutoScroll = true
-                listState.scrollToItem(maxOf(0, feedItems.size - 1))
+                if (listState.firstVisibleItemIndex < feedItems.size - 2) {
+                    listState.scrollToItem(maxOf(0, feedItems.size - 1))
+                }
             }
         }
     }
@@ -377,15 +300,15 @@ fun ChatScreen(
         }
     }
 
-    // Smart auto-scroll during streaming: follows live stream until user drags up
+    // Smart auto-scroll during streaming: follows live stream smoothly
     val lastMsg = messages.lastOrNull()
     val lastContentLen = lastMsg?.content?.length ?: 0
     val lastThoughtLen = lastMsg?.thoughtText?.length ?: 0
+    val contentBucket = (lastContentLen + lastThoughtLen) / 50
 
-    LaunchedEffect(feedItems.size, lastContentLen, lastThoughtLen, isStreaming) {
+    LaunchedEffect(feedItems.size, contentBucket, isStreaming) {
         if (feedItems.isNotEmpty() && isStreaming && shouldAutoScroll && !listState.isScrollInProgress) {
             listState.scrollToItem(maxOf(0, feedItems.size - 1))
-            Log.d("PERF_TRACE", "📜 [Auto-Scroll] target=${feedItems.size - 1}, items=${feedItems.size}")
         }
     }
 
@@ -882,13 +805,14 @@ fun ChatScreen(
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 16.dp, vertical = 1.dp)
                                         ) {
+                                            val isTool = feedItem.block is MarkdownBlock.AgentTool
                                             MarkdownBlockView(
                                                 block = feedItem.block,
-                                                onApproveTool = { toolCall -> viewModel.approveAndExecuteTerminalTool(toolCall, feedItem.messageId) },
-                                                onRejectTool = { toolCall -> viewModel.rejectTerminalTool(toolCall, feedItem.messageId) },
-                                                onTerminateTool = { toolCall -> viewModel.terminateRunningTerminalTool(toolCall, feedItem.messageId) },
-                                                onSubmitChoices = { toolCall, summaryPayload -> viewModel.submitUserChoices(toolCall, feedItem.messageId, summaryPayload) },
-                                                onSkipChoices = { toolCall -> viewModel.skipUserChoices(toolCall, feedItem.messageId) }
+                                                onApproveTool = if (isTool) { { toolCall -> viewModel.approveAndExecuteTerminalTool(toolCall, feedItem.messageId) } } else null,
+                                                onRejectTool = if (isTool) { { toolCall -> viewModel.rejectTerminalTool(toolCall, feedItem.messageId) } } else null,
+                                                onTerminateTool = if (isTool) { { toolCall -> viewModel.terminateRunningTerminalTool(toolCall, feedItem.messageId) } } else null,
+                                                onSubmitChoices = if (isTool) { { toolCall, summaryPayload -> viewModel.submitUserChoices(toolCall, feedItem.messageId, summaryPayload) } } else null,
+                                                onSkipChoices = if (isTool) { { toolCall -> viewModel.skipUserChoices(toolCall, feedItem.messageId) } } else null
                                             )
                                         }
                                     }

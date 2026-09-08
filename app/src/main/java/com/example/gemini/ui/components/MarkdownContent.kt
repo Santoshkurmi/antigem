@@ -73,22 +73,39 @@ import java.util.regex.Pattern
 
 enum class TableAlignment { LEFT, CENTER, RIGHT }
 
+@androidx.compose.runtime.Immutable
 sealed class MarkdownBlock {
+    @androidx.compose.runtime.Immutable
     data class Paragraph(val text: String) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class AgentThought(val thought: String, val durationMs: Long? = null, val isStreaming: Boolean = false) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class AgentTool(val toolCall: com.example.gemini.domain.model.ToolCall) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class Header(val level: Int, val text: String) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class Bullet(val indent: Int, val text: String) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class Numbered(val number: String, val text: String) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class Task(val isChecked: Boolean, val text: String) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class Blockquote(val text: String) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class Code(val language: String, val code: String) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class Math(val latex: String, val isDisplay: Boolean = true) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class Mermaid(val code: String) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class InteractiveUi(val htmlCode: String, val title: String = "Interactive App") : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class Image(val alt: String, val url: String) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class Details(val summary: String, val body: String, val defaultOpen: Boolean = false) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     data class Table(val headers: List<String>, val rows: List<List<String>>, val alignments: List<TableAlignment>) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
     object HorizontalRule : MarkdownBlock()
 }
 

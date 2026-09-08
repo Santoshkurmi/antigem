@@ -665,72 +665,77 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         // Chunk 0: Initial full conversation sync
                         if (isFirstChunk) {
                             isFirstChunk = false
+
+                            val (parsedMessages, isRunning, isWaiting) = withContext(Dispatchers.Default) {
+                                if (stepsArr != null && stepsArr.length() > 0) {
+                                    val parsed = agyHubClient.parseStepsArrayToChatMessages(stepsArr, conversationId)
+                                    val lastStep = stepsArr.optJSONObject(stepsArr.length() - 1)
+                                    val lastStatus = lastStep?.optString("status", "") ?: ""
+                                    val running = status.contains("RUNNING", ignoreCase = true) ||
+                                            lastStatus.contains("RUNNING", ignoreCase = true)
+                                    val waiting = status.contains("WAITING", ignoreCase = true) ||
+                                            lastStatus.contains("WAITING", ignoreCase = true)
+
+                                    if (running || waiting) {
+                                        var lastUserStepIdx = -1
+                                        for (k in 0 until stepsArr.length()) {
+                                            val st = stepsArr.optJSONObject(k) ?: continue
+                                            val stType = st.optString("type", "")
+                                            if (stType == "CORTEX_STEP_TYPE_USER_INPUT" || st.has("userInput")) {
+                                                lastUserStepIdx = k
+                                            }
+                                        }
+                                        val startTurnIdx = (lastUserStepIdx + 1).coerceAtLeast(0)
+                                        for (k in startTurnIdx until stepsArr.length()) {
+                                            val st = stepsArr.optJSONObject(k) ?: continue
+                                            val stepInfo = st.optJSONObject("metadata")?.optJSONObject("sourceTrajectoryStepInfo")
+                                            val stepIndex = when {
+                                                stepInfo?.has("stepIndex") == true -> stepInfo.getInt("stepIndex")
+                                                st.has("stepIndex") -> st.getInt("stepIndex")
+                                                else -> k
+                                            }
+                                            val tool = agyHubClient.extractToolCallFromStep(st, stepIndex, conversationId)
+                                            if (tool != null) {
+                                                currentActiveToolsMap[tool.id] = tool
+                                                currentTurnToolMarkers[stepIndex] = "<!-- tool_call:${tool.id} -->"
+                                            } else {
+                                                val stepErr = agyHubClient.extractStepError(st)
+                                                if (stepErr != null) {
+                                                    val existing = currentPlannerResponses[stepIndex]
+                                                    currentPlannerResponses[stepIndex] = if (existing != null) "$existing\n\n⚠️ $stepErr" else "⚠️ $stepErr"
+                                                }
+                                            }
+                                            if (st.has("plannerResponse")) {
+                                                val pr = st.getJSONObject("plannerResponse")
+                                                val th = pr.optString("thinking", "")
+                                                val resp = pr.optString("response", "")
+                                                if (th.isNotBlank()) currentPlannerThoughts[stepIndex] = th
+                                                if (resp.isNotBlank()) currentPlannerResponses[stepIndex] = resp
+                                            }
+                                        }
+                                    }
+                                    com.example.gemini.ui.chat.ChatFeedCache.prewarm(parsed)
+                                    Triple(parsed, running, waiting)
+                                } else {
+                                    Triple(emptyList<ChatMessage>(), false, false)
+                                }
+                            }
+
                             withContext(Dispatchers.Main) {
                                 if (activeStreamConversationId != conversationId) return@withContext
-                                _isLoadingConversation.value = false
                                 _conversationError.value = null
 
                                 // NEVER overwrite messages or cancel streaming if user is actively generating/sending a message!
                                 if (!_isStreaming.value) {
-                                    if (stepsArr != null && stepsArr.length() > 0) {
-                                        val parsed = agyHubClient.parseStepsArrayToChatMessages(stepsArr, conversationId)
-                                        val lastStep = stepsArr.optJSONObject(stepsArr.length() - 1)
-                                        val lastStatus = lastStep?.optString("status", "") ?: ""
-                                        val isRunning = status.contains("RUNNING", ignoreCase = true) ||
-                                                lastStatus.contains("RUNNING", ignoreCase = true)
-                                        val isWaiting = status.contains("WAITING", ignoreCase = true) ||
-                                                lastStatus.contains("WAITING", ignoreCase = true)
-
-                                        _messages.value = parsed
-                                        _isStreaming.value = isRunning && !isWaiting
-                                        if (isRunning || isWaiting) {
-                                            hasSeenTurnActivity = true
-                                            val lastAssistant = parsed.lastOrNull { it.role == MessageRole.ASSISTANT }
-                                            currentAssistantMsgId = lastAssistant?.id
-
-                                            // Seed active turn state so subsequent delta chunks won't drop existing tools!
-                                            var lastUserStepIdx = -1
-                                            for (k in 0 until stepsArr.length()) {
-                                                val st = stepsArr.optJSONObject(k) ?: continue
-                                                val stType = st.optString("type", "")
-                                                if (stType == "CORTEX_STEP_TYPE_USER_INPUT" || st.has("userInput")) {
-                                                    lastUserStepIdx = k
-                                                }
-                                            }
-                                            val startTurnIdx = (lastUserStepIdx + 1).coerceAtLeast(0)
-                                            for (k in startTurnIdx until stepsArr.length()) {
-                                                val st = stepsArr.optJSONObject(k) ?: continue
-                                                val stepInfo = st.optJSONObject("metadata")?.optJSONObject("sourceTrajectoryStepInfo")
-                                                val stepIndex = when {
-                                                    stepInfo?.has("stepIndex") == true -> stepInfo.getInt("stepIndex")
-                                                    st.has("stepIndex") -> st.getInt("stepIndex")
-                                                    else -> k
-                                                }
-                                                val tool = agyHubClient.extractToolCallFromStep(st, stepIndex, conversationId)
-                                                if (tool != null) {
-                                                    currentActiveToolsMap[tool.id] = tool
-                                                    currentTurnToolMarkers[stepIndex] = "<!-- tool_call:${tool.id} -->"
-                                                } else {
-                                                    val stepErr = agyHubClient.extractStepError(st)
-                                                    if (stepErr != null) {
-                                                        val existing = currentPlannerResponses[stepIndex]
-                                                        currentPlannerResponses[stepIndex] = if (existing != null) "$existing\n\n⚠️ $stepErr" else "⚠️ $stepErr"
-                                                    }
-                                                }
-                                                if (st.has("plannerResponse")) {
-                                                    val pr = st.getJSONObject("plannerResponse")
-                                                    val th = pr.optString("thinking", "")
-                                                    val resp = pr.optString("response", "")
-                                                    if (th.isNotBlank()) currentPlannerThoughts[stepIndex] = th
-                                                    if (resp.isNotBlank()) currentPlannerResponses[stepIndex] = resp
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        _messages.value = emptyList()
-                                        _isStreaming.value = false
+                                    _messages.value = parsedMessages
+                                    _isStreaming.value = isRunning && !isWaiting
+                                    if (isRunning || isWaiting) {
+                                        hasSeenTurnActivity = true
+                                        val lastAssistant = parsedMessages.lastOrNull { it.role == MessageRole.ASSISTANT }
+                                        currentAssistantMsgId = lastAssistant?.id
                                     }
                                 }
+                                _isLoadingConversation.value = false
                             }
                             return@collect
                         }
