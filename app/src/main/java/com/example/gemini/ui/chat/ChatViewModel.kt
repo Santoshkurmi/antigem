@@ -366,6 +366,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val knownDaemonCascadeIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
     @Volatile
     private var hasSeenTurnActivity = false
+    @Volatile
+    private var hasStartedRunning = false
     private val currentPlannerThoughts = java.util.concurrent.ConcurrentHashMap<Int, String>()
     private val currentPlannerResponses = java.util.concurrent.ConcurrentHashMap<Int, String>()
     private val currentActiveToolsMap = java.util.concurrent.ConcurrentHashMap<String, com.example.gemini.domain.model.ToolCall>()
@@ -559,6 +561,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentAssistantMsgId = null
         currentTurnStartStep = 0
         totalStepsCount = 0
+        hasStartedRunning = false
         hasSeenTurnActivity = false
         currentPlannerThoughts.clear()
         currentPlannerResponses.clear()
@@ -591,6 +594,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentAssistantMsgId = null
         currentTurnStartStep = 0
         totalStepsCount = 0
+        hasStartedRunning = false
         hasSeenTurnActivity = false
         currentPlannerThoughts.clear()
         currentPlannerResponses.clear()
@@ -768,6 +772,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         if (stepsArr != null) {
                             for (i in 0 until stepsArr.length()) {
                                 val s = stepsArr.optJSONObject(i) ?: continue
+                                val stepType = s.optString("type", "")
+
+                                // User input is NOT model activity — skip it!
+                                if (stepType == "CORTEX_STEP_TYPE_USER_INPUT" || s.has("userInput")) {
+                                    continue
+                                }
+
                                 val stepInfo = s.optJSONObject("metadata")?.optJSONObject("sourceTrajectoryStepInfo")
                                 val stepIndex = when {
                                     stepInfo?.has("stepIndex") == true -> stepInfo.getInt("stepIndex")
@@ -776,44 +787,60 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     else -> i
                                 }
 
+                                // Skip steps belonging to previous turns
+                                if (stepIndex < currentTurnStartStep) {
+                                    continue
+                                }
+
                                 if (stepIndex >= totalStepsCount) {
                                     totalStepsCount = stepIndex + 1
                                 }
 
                                 hasNewTurnSteps = true
-                                hasSeenTurnActivity = true
 
                                 if (s.has("plannerResponse")) {
                                     val pr = s.getJSONObject("plannerResponse")
                                     val th = pr.optString("thinking", "")
                                     val resp = pr.optString("response", "")
-                                    if (th.isNotBlank()) currentPlannerThoughts[stepIndex] = th
-                                    if (resp.isNotBlank()) currentPlannerResponses[stepIndex] = resp
+                                    if (th.isNotBlank()) {
+                                        currentPlannerThoughts[stepIndex] = th
+                                        hasSeenTurnActivity = true
+                                        hasStartedRunning = true
+                                    }
+                                    if (resp.isNotBlank()) {
+                                        currentPlannerResponses[stepIndex] = resp
+                                        hasSeenTurnActivity = true
+                                        hasStartedRunning = true
+                                    }
                                 }
 
                                 val tool = agyHubClient.extractToolCallFromStep(s, stepIndex, conversationId)
                                 if (tool != null) {
                                     currentActiveToolsMap[tool.id] = tool
                                     currentTurnToolMarkers[stepIndex] = "<!-- tool_call:${tool.id} -->"
+                                    hasSeenTurnActivity = true
+                                    hasStartedRunning = true
                                 } else {
                                     val stepErr = agyHubClient.extractStepError(s)
                                     if (stepErr != null) {
                                         val existing = currentPlannerResponses[stepIndex]
                                         currentPlannerResponses[stepIndex] = if (existing != null) "$existing\n\n⚠️ $stepErr" else "⚠️ $stepErr"
                                         hasSeenTurnActivity = true
+                                        hasStartedRunning = true
                                     }
                                 }
                             }
                         }
 
-                        if (status.contains("RUNNING", ignoreCase = true) ||
-                            status.contains("WAITING", ignoreCase = true)
-                        ) {
                         if (status.contains("RUNNING", ignoreCase = true)) {
+                            hasStartedRunning = true
                             hasSeenTurnActivity = true
                             _isStreaming.value = true
                         } else if (status.contains("WAITING", ignoreCase = true)) {
+                            hasStartedRunning = true
                             hasSeenTurnActivity = true
+                        } else if (hasSeenTurnActivity) {
+                            hasStartedRunning = true
                         }
 
                         val allIndices = (currentTurnToolMarkers.keys + currentPlannerResponses.keys).toSortedSet()
@@ -843,8 +870,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 status.contains("IDLE", ignoreCase = true) ||
                                 status.contains("COMPLETED", ignoreCase = true)
 
-                        val isTurnDone = isStatusIdle && !isWaitingInteraction && (hasSeenTurnActivity || _isStreaming.value)
-                        val isTurnDone = isStatusIdle && !isWaitingInteraction && hasSeenTurnActivity
+                        val isTurnDone = isStatusIdle && !isWaitingInteraction && hasStartedRunning
 
                         withContext(Dispatchers.Main) {
                             if (activeStreamConversationId != conversationId) return@withContext
@@ -909,6 +935,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     }
                                 }
                                 _isStreaming.value = false
+                                hasStartedRunning = false
                                 hasSeenTurnActivity = false
                                 currentPlannerThoughts.clear()
                                 currentPlannerResponses.clear()
@@ -1201,13 +1228,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Reset turn boundary and state for this active turn
                 currentTurnStartStep = totalStepsCount
+                hasStartedRunning = false
                 hasSeenTurnActivity = false
                 currentPlannerThoughts.clear()
                 currentPlannerResponses.clear()
                 currentActiveToolsMap.clear()
                 currentTurnToolMarkers.clear()
 
-                val sendRes = agyHubClient.sendUserPrompt(
                 var sendRes = agyHubClient.sendUserPrompt(
                     cascadeId = conv.id,
                     text = userPrompt,
@@ -1329,6 +1356,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val conv = _currentConversation.value
         streamingJob?.cancel()
         _isStreaming.value = false
+        hasStartedRunning = false
         hasSeenTurnActivity = false
         currentPlannerThoughts.clear()
         currentPlannerResponses.clear()
