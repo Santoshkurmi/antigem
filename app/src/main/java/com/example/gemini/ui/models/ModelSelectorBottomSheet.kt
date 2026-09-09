@@ -226,25 +226,24 @@ fun QuotaBadgeChip(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.background,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+        color = MaterialTheme.colorScheme.background
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(5.5.dp)
+                    .size(5.dp)
                     .clip(CircleShape)
                     .background(dotColor)
             )
             Spacer(modifier = Modifier.width(5.dp))
             Text(
                 text = text,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                 letterSpacing = 0.1.sp
             )
         }
@@ -273,24 +272,27 @@ private fun MainCategoryListView(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 20.dp)
     ) {
-        // Compact Header
-        Row(
+        // Compact Centered Header
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(vertical = 4.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "Select Model",
-                    fontSize = 17.sp,
+                    fontSize = 17.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = if (availableModelsCount > 0) "$availableModelsCount models available" else "No models loaded",
-                    fontSize = 11.5.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    textAlign = TextAlign.Center
                 )
             }
 
@@ -312,7 +314,9 @@ private fun MainCategoryListView(
             IconButton(
                 onClick = onRefresh,
                 enabled = !isRefreshing,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier
+                    .size(36.dp)
+                    .align(Alignment.CenterEnd)
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Refresh,
@@ -325,7 +329,7 @@ private fun MainCategoryListView(
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         if (availableModelsCount == 0) {
             Column(
@@ -612,16 +616,13 @@ private fun TieredModelGroupCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .defaultMinSize(minHeight = 60.dp)
             .clip(RoundedCornerShape(12.dp)),
         color = cardBg,
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(
-            1.dp,
-            if (isAnyVariantSelected) brandColor.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-        )
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -667,11 +668,7 @@ private fun TieredModelGroupCard(
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { onSelectModel(variant.model.id) },
                         shape = RoundedCornerShape(8.dp),
-                        color = if (isSelected) brandColor else brandColor.copy(alpha = 0.1f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) brandColor else brandColor.copy(alpha = 0.25f)
-                        )
+                        color = if (isSelected) brandColor else brandColor.copy(alpha = 0.12f)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -717,22 +714,18 @@ private fun CategoryNavigationTile(
     onClick: () -> Unit
 ) {
     val isDark = isSystemInDarkTheme()
-    val isHighlighted = activeModelName != null
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .defaultMinSize(minHeight = 88.dp)
             .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() },
         color = if (isDark) ClaudeDarkSurface else Color.White,
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(
-            if (isHighlighted) 1.5.dp else 1.dp,
-            if (isHighlighted) brandColor.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-        )
+        shape = RoundedCornerShape(14.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -759,8 +752,9 @@ private fun CategoryNavigationTile(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(3.dp))
+
                 if (activeModelName != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -780,6 +774,12 @@ private fun CategoryNavigationTile(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                } else {
+                    Text(
+                        text = "Tap to choose model",
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                    )
                 }
 
                 if (!line1.isNullOrBlank() || !line2.isNullOrBlank()) {
@@ -804,7 +804,7 @@ private fun CategoryNavigationTile(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                 contentDescription = "Open $title",
-                tint = if (isHighlighted) brandColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                tint = if (activeModelName != null) brandColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
                 modifier = Modifier.size(14.dp)
             )
         }
@@ -823,24 +823,25 @@ private fun ModelRowItem(
     val brandColor = if (model.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
 
     val isDark = isSystemInDarkTheme()
+    val cardBg = if (isSelected) {
+        if (isDark) ClaudeDarkSurface else Color.White
+    } else {
+        if (isDark) ClaudeDarkSurface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.85f)
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .defaultMinSize(minHeight = 60.dp)
+            .clip(RoundedCornerShape(12.dp))
             .clickable { onSelect() },
-        color = if (isSelected) {
-            if (isDark) ClaudeDarkSurface else Color.White
-        } else {
-            Color.Transparent
-        },
-        shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(
-            1.dp,
-            if (isSelected) brandColor.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
-        )
+        color = cardBg,
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -852,12 +853,28 @@ private fun ModelRowItem(
             )
 
             if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = brandColor,
-                    modifier = Modifier.size(18.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(brandColor.copy(alpha = 0.15f))
+                        .padding(horizontal = 7.dp, vertical = 3.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = brandColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "Active",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = brandColor
+                        )
+                    }
+                }
             }
         }
     }
