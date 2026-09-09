@@ -62,8 +62,15 @@ fun AgentToolCallCard(
     var isExpanded by remember { mutableStateOf(false) }
 
     val isSearch = toolCall.name == "web_search" || toolCall.name == "search"
-    val isReader = toolCall.name == "read_url" || toolCall.name == "web_reader"
+    val isReader = toolCall.name == "read_url" || toolCall.name == "read_url_content" || toolCall.name == "web_reader"
     val isMath = toolCall.name == "math" || toolCall.name == "cas" || toolCall.name == "math_eval"
+    val isViewFile = toolCall.name == "view_file" || toolCall.name == "viewFile"
+    val isEditFile = toolCall.name == "edit_file" || toolCall.name == "modifyFile" || toolCall.name == "write_to_file" || toolCall.name == "replace_file_content" || toolCall.name == "codeAction" || toolCall.name == "fileChange"
+    val isListDir = toolCall.name == "list_dir" || toolCall.name == "listDirectory"
+    val isFind = toolCall.name == "find" || toolCall.name == "find_by_name"
+    val isGrep = toolCall.name == "grep_search" || toolCall.name == "code_search"
+    val isGenImg = toolCall.name == "generate_image" || toolCall.name == "generateImage"
+    val isBash = toolCall.name == "bash" || toolCall.name == "run_command" || toolCall.name == "terminal" || (!isSearch && !isReader && !isMath && !isViewFile && !isEditFile && !isListDir && !isFind && !isGrep && !isGenImg)
 
     val isPendingApproval = toolCall.status == "PENDING_APPROVAL"
     val isRunning = toolCall.status == "RUNNING"
@@ -155,10 +162,15 @@ fun AgentToolCallCard(
                         modifier = Modifier.size(15.dp)
                     )
                 } else {
-                    val toolIcon = when (toolCall.name) {
-                        "web_search", "search" -> Icons.Outlined.Search
-                        "read_url", "web_reader" -> Icons.Outlined.Language
-                        "math", "cas", "math_eval" -> Icons.Outlined.Functions
+                    val toolIcon = when {
+                        isSearch -> Icons.Outlined.Search
+                        isReader -> Icons.Outlined.Language
+                        isMath -> Icons.Outlined.Functions
+                        isViewFile -> Icons.Default.Description
+                        isEditFile -> Icons.Default.Edit
+                        isListDir -> Icons.Default.Folder
+                        isFind || isGrep -> Icons.Default.Search
+                        isGenImg -> Icons.Default.Image
                         else -> Icons.Default.Terminal
                     }
                     Icon(
@@ -177,11 +189,23 @@ fun AgentToolCallCard(
                     isRunning && isSearch -> "Searching Web:"
                     isRunning && isReader -> "Fetching Page:"
                     isRunning && isMath -> "Evaluating CAS Math:"
+                    isRunning && isViewFile -> "Viewing File:"
+                    isRunning && isEditFile -> "Editing File:"
+                    isRunning && isListDir -> "Listing Directory:"
+                    isRunning && (isFind || isGrep) -> "Searching Code:"
+                    isRunning && isGenImg -> "Generating Image:"
                     isRunning -> "Executing in Termux:"
+
                     isSuccess && isSearch -> "Web Search:"
                     isSuccess && isReader -> "Read Webpage:"
                     isSuccess && isMath -> "Symja CAS Math Engine:"
+                    isSuccess && isViewFile -> "Viewed File:"
+                    isSuccess && isEditFile -> "Edited File:"
+                    isSuccess && isListDir -> "Listed Directory:"
+                    isSuccess && (isFind || isGrep) -> "Searched Code:"
+                    isSuccess && isGenImg -> "Generated Image:"
                     isSuccess -> "Executed:"
+
                     isTerminated -> "Terminated:"
                     isRejected -> "Rejected:"
                     isFailed -> "Failed:"
@@ -208,7 +232,7 @@ fun AgentToolCallCard(
 
                 Text(
                     text = toolCall.command,
-                    fontFamily = if (isSearch) FontFamily.Default else FontFamily.Monospace,
+                    fontFamily = if (isBash) FontFamily.Monospace else FontFamily.Default,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -217,7 +241,7 @@ fun AgentToolCallCard(
                 )
 
                 // Terminate (Stop) Button while Running
-                if (isRunning && onTerminate != null && !isSearch && !isReader) {
+                if (isRunning && onTerminate != null && isBash) {
                     IconButton(
                         onClick = { onTerminate(toolCall) },
                         modifier = Modifier
@@ -287,6 +311,13 @@ fun AgentToolCallCard(
 
             // Pending Approval Action Bar
             if (isPendingApproval) {
+                val pendingTitle = when {
+                    isEditFile -> "AI wants to modify this file:"
+                    isViewFile -> "AI wants to view this file:"
+                    isListDir -> "AI wants to inspect this directory:"
+                    isBash -> "AI wants to execute this shell command in Termux:"
+                    else -> "AI wants to run this tool:"
+                }
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -294,7 +325,7 @@ fun AgentToolCallCard(
                         .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
                     Text(
-                        text = "AI wants to execute this shell command in Termux:",
+                        text = pendingTitle,
                         fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -305,8 +336,8 @@ fun AgentToolCallCard(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "$ ${toolCall.command}",
-                            fontFamily = FontFamily.Monospace,
+                            text = if (isBash) "$ ${toolCall.command}" else toolCall.command,
+                            fontFamily = if (isBash) FontFamily.Monospace else FontFamily.Default,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
                             color = ClaudeTerracotta,
@@ -339,13 +370,13 @@ fun AgentToolCallCard(
                         ) {
                             Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "Run Command", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                            Text(text = if (isBash) "Run Command" else "Allow", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
 
-            // Expanded Terminal Output
+            // Expanded Terminal / Tool Output
             AnimatedVisibility(
                 visible = isExpanded,
                 enter = fadeIn() + expandVertically(),
@@ -366,11 +397,17 @@ fun AgentToolCallCard(
                             isSearch -> "Search Query: \"${toolCall.command}\""
                             isReader -> "URL: ${toolCall.command}"
                             isMath -> "CAS Expr: ${toolCall.command}"
+                            isViewFile -> "File: ${toolCall.command}"
+                            isEditFile -> "File: ${toolCall.command}"
+                            isListDir -> "Directory: ${toolCall.command}"
+                            isGrep -> "Grep: ${toolCall.command}"
+                            isFind -> "Find: ${toolCall.command}"
+                            isGenImg -> "Prompt: ${toolCall.command}"
                             else -> "$ ${toolCall.command}"
                         }
                         Text(
                             text = commandPrefix,
-                            fontFamily = if (isSearch) FontFamily.Default else FontFamily.Monospace,
+                            fontFamily = if (isBash) FontFamily.Monospace else FontFamily.Default,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.5.sp,
                             color = ClaudeTerracotta,
@@ -380,7 +417,7 @@ fun AgentToolCallCard(
                         IconButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("Command Output", toolCall.output)
+                                val clip = ClipData.newPlainText("Tool Output", toolCall.output)
                                 clipboard.setPrimaryClip(clip)
                                 Toast.makeText(context, "Output copied", Toast.LENGTH_SHORT).show()
                             },
@@ -398,8 +435,22 @@ fun AgentToolCallCard(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     if (toolCall.output.isEmpty()) {
+                        val emptyMessage = when {
+                            isRunning && isViewFile -> "Reading file contents..."
+                            isRunning && isEditFile -> "Applying file modifications..."
+                            isRunning && isListDir -> "Scanning directory..."
+                            isRunning && (isFind || isGrep) -> "Searching..."
+                            isRunning && isBash -> "Running in Termux..."
+                            isRunning -> "Processing..."
+                            isPendingApproval -> "(Waiting for approval)"
+                            isViewFile -> "(File inspected by model)"
+                            isEditFile -> "(File modification completed)"
+                            isListDir -> "(Directory contents scanned)"
+                            isFind || isGrep -> "(Search completed - no output)"
+                            else -> "(No output returned)"
+                        }
                         Text(
-                            text = if (isRunning) "Running in Termux..." else if (isPendingApproval) "(Waiting for approval)" else "(No output returned)",
+                            text = emptyMessage,
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             color = Color.Gray

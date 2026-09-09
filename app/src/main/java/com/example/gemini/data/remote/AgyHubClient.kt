@@ -989,9 +989,11 @@ class AgyHubClient(
     ): ToolCall? {
         val reqInteraction = step.optJSONObject("requestedInteraction")
         val isWaitingPermission = reqInteraction?.has("permission") == true
-        val genericArgs = step.optJSONObject("generic")?.optJSONObject("args")
-        val isGenericCmd = genericArgs?.has("CommandLine") == true
+        val meta = step.optJSONObject("metadata")
+        val toolSummary = meta?.optString("toolSummary", "")?.trim() ?: ""
+        val toolAction = meta?.optString("toolAction", "")?.trim() ?: ""
         val stepStatus = step.optString("status", "")
+        val stepType = step.optString("type", "")
 
         fun resolveStatus(hasOutput: Boolean, isPending: Boolean = false): String {
             return when {
@@ -1004,108 +1006,301 @@ class AgyHubClient(
             }
         }
 
-        if (step.has("runCommand") || isWaitingPermission || isGenericCmd) {
+        // 1. Terminal / Shell command
+        if (step.has("runCommand") || (isWaitingPermission && step.optJSONObject("runCommand") != null)) {
             val rc = step.optJSONObject("runCommand")
             val cmd = when {
                 rc != null -> rc.optString("commandLine", rc.optString("proposedCommandLine", ""))
-                isGenericCmd -> genericArgs.optString("CommandLine", "")
                 isWaitingPermission -> reqInteraction.optJSONObject("permission")?.optJSONObject("resource")?.optString("target", "") ?: ""
                 else -> ""
             }
             val out = rc?.optJSONObject("combinedOutput")?.optString("full") ?: rc?.optString("output", "") ?: ""
-            val toolStatus = resolveStatus(out.isNotBlank(), isWaitingPermission)
+            val exitCode = if (rc != null && rc.has("exitCode")) rc.optInt("exitCode", 0) else null
+            val toolStatus = resolveStatus(out.isNotBlank() || exitCode != null, isWaitingPermission)
             return ToolCall(
                 id = "tool_${conversationId}_$stepIndex",
                 name = "bash",
-                command = cmd,
+                command = cmd.ifBlank { toolSummary },
                 output = out,
-                status = toolStatus
+                status = toolStatus,
+                exitCode = exitCode
             )
         }
 
-        if (step.has("modifyFile") || step.has("codeAction")) {
-            val ca = step.optJSONObject("codeAction") ?: step.optJSONObject("modifyFile")
-            val uri = ca?.optString("uri", "") ?: ""
-            val path = uri.removePrefix("file://")
-            val diff = ca?.optString("diff", "") ?: ""
-            val toolStatus = resolveStatus(diff.isNotBlank())
-            return ToolCall(
-                id = "tool_edit_${conversationId}_$stepIndex",
-                name = "edit_file",
-                command = path,
-                output = diff,
-                status = toolStatus
-            )
-        }
+        // 2. View File
+        if (step.has("viewFile") || stepType.contains("VIEW_FILE")) {
+            val vf = step.optJSONObject("viewFile") ?: JSONObject()
+            val rawPath = vf.optString("absolutePathUri", vf.optString("absolutePath", "")).removePrefix("file://")
+            val startLine = vf.optInt("startLine", -1)
+            val endLine = vf.optInt("endLine", -1)
+            val lineRange = if (startLine > 0 && endLine > 0) " (lines $startLine-$endLine)"
+                else if (endLine > 0) " (lines 1-$endLine)"
+                else ""
+            val fileName = rawPath.substringAfterLast('/').ifBlank { rawPath }
+            val cmd = if (fileName.isNotBlank()) "$fileName$lineRange" else toolSummary.ifBlank { "View File" }
 
-        if (step.has("searchWeb")) {
-            val sw = step.getJSONObject("searchWeb")
-            val query = sw.optString("query", "")
-            val summary = sw.optString("summary", "")
-            val toolStatus = resolveStatus(summary.isNotBlank())
-            return ToolCall(
-                id = "tool_web_${conversationId}_$stepIndex",
-                name = "web_search",
-                command = query,
-                output = summary,
-                status = toolStatus
-            )
-        }
+            val mediaUri = vf.optJSONObject("mediaData")?.optString("uri", "") ?: ""
+            val numLines = vf.optInt("numLines", 0)
+            val numBytes = vf.optInt("numBytes", 0)
+            val rawContent = vf.optString("content", "")
 
-        if (step.has("viewFile")) {
-            val vf = step.getJSONObject("viewFile")
-            val path = vf.optString("absolutePath", "").removePrefix("file://")
-            val content = vf.optString("content", "")
-            val toolStatus = resolveStatus(content.isNotBlank())
+            val out = when {
+                rawContent.isNotBlank() -> rawContent
+                mediaUri.isNotBlank() -> "[Image: $mediaUri]"
+                numLines > 0 || numBytes > 0 -> "$rawPath\n$numLines lines, $numBytes bytes"
+                rawPath.isNotBlank() -> rawPath
+                else -> toolAction.ifBlank { toolSummary }
+            }
+
             return ToolCall(
                 id = "tool_view_${conversationId}_$stepIndex",
                 name = "view_file",
-                command = path,
-                output = content,
-                status = toolStatus
+                command = cmd,
+                output = out,
+                status = resolveStatus(out.isNotBlank())
             )
         }
 
-        if (step.has("listDirectory")) {
-            val ld = step.getJSONObject("listDirectory")
-            val dir = ld.optString("directoryPath", "").removePrefix("file://")
-            val out = ld.optString("output", "")
-            val toolStatus = resolveStatus(out.isNotBlank())
+        // 3. List Directory
+        if (step.has("listDirectory") || stepType.contains("LIST_DIRECTORY")) {
+            val ld = step.optJSONObject("listDirectory") ?: JSONObject()
+            val rawDir = ld.optString("directoryPathUri", ld.optString("directoryPath", "")).removePrefix("file://")
+            val dirName = rawDir.substringAfterLast('/').ifBlank { rawDir }
+            val cmd = if (dirName.isNotBlank()) dirName else toolSummary.ifBlank { "Directory" }
+
+            val resultsArr = ld.optJSONArray("results")
+            val out = if (resultsArr != null && resultsArr.length() > 0) {
+                val items = mutableListOf<String>()
+                for (idx in 0 until resultsArr.length()) {
+                    val item = resultsArr.getJSONObject(idx)
+                    val name = item.optString("name", "")
+                    val isDir = item.optBoolean("isDir", false)
+                    val size = item.optString("sizeBytes", "")
+                    val prefix = if (isDir) "📁" else "📄"
+                    val suffix = if (size.isNotBlank()) " ($size bytes)" else ""
+                    items.add("$prefix $name$suffix")
+                }
+                items.joinToString("\n")
+            } else {
+                ld.optString("output", rawDir.ifBlank { toolAction.ifBlank { toolSummary } })
+            }
+
             return ToolCall(
                 id = "tool_list_${conversationId}_$stepIndex",
                 name = "list_dir",
-                command = dir,
+                command = cmd,
                 output = out,
-                status = toolStatus
+                status = resolveStatus(out.isNotBlank())
             )
         }
 
-        if (step.has("find")) {
-            val f = step.getJSONObject("find")
-            val pat = f.optString("pattern", "")
-            val dir = f.optString("searchDirectory", "")
-            val out = f.optString("truncatedOutput", "")
-            val toolStatus = resolveStatus(out.isNotBlank())
+        // 4. Grep Search
+        if (step.has("grepSearch") || stepType.contains("GREP")) {
+            val gs = step.optJSONObject("grepSearch") ?: JSONObject()
+            val query = gs.optString("query", "")
+            val rawPath = gs.optString("searchPathUri", gs.optString("searchPath", "")).removePrefix("file://")
+            val pathDisplay = rawPath.substringAfterLast('/').ifBlank { rawPath }
+            val cmd = if (query.isNotBlank()) "\"$query\" in $pathDisplay" else toolSummary.ifBlank { "Search Code" }
+            val total = gs.optInt("totalResults", -1)
+            val commandRun = gs.optString("commandRun", "")
+            val out = when {
+                total >= 0 -> "$total matches found for \"$query\" in $rawPath\n$commandRun"
+                commandRun.isNotBlank() -> commandRun
+                else -> toolAction.ifBlank { toolSummary }
+            }
+            return ToolCall(
+                id = "tool_grep_${conversationId}_$stepIndex",
+                name = "grep_search",
+                command = cmd,
+                output = out,
+                status = resolveStatus(true)
+            )
+        }
+
+        // 5. Find Files
+        if ((step.has("find") || stepType.contains("FIND")) && !stepType.contains("FINDINGS")) {
+            val f = step.optJSONObject("find") ?: JSONObject()
+            val pat = f.optString("pattern", "*")
+            val rawDir = f.optString("searchDirectory", "").removePrefix("file://")
+            val dir = rawDir.substringAfterLast('/')
+            val cmd = if (dir.isNotBlank()) "$pat in $dir" else toolSummary.ifBlank { "Find $pat" }
+            val out = f.optString("truncatedOutput", f.optString("output", rawDir.ifBlank { toolAction.ifBlank { toolSummary } }))
             return ToolCall(
                 id = "tool_find_${conversationId}_$stepIndex",
                 name = "find",
-                command = "$pat in $dir",
+                command = cmd,
                 output = out,
-                status = toolStatus
+                status = resolveStatus(out.isNotBlank())
             )
         }
 
-        if (step.has("generateImage")) {
-            val gi = step.getJSONObject("generateImage")
+        // 6. Modify / Edit File
+        if (step.has("modifyFile") || step.has("codeAction") || step.has("fileChange") ||
+            stepType.contains("FILE_CHANGE") || stepType.contains("CODE_ACTION")) {
+            val ca = step.optJSONObject("codeAction")
+                ?: step.optJSONObject("modifyFile")
+                ?: step.optJSONObject("fileChange")
+                ?: JSONObject()
+            val uri = ca.optString("uri", ca.optString("absolutePathUri", ca.optString("path", "")))
+            val path = uri.removePrefix("file://")
+            val fileName = path.substringAfterLast('/').ifBlank { path }
+            val diff = ca.optString("diff", ca.optString("patch", ca.optString("content", "")))
+            val cmd = if (fileName.isNotBlank()) fileName else toolSummary.ifBlank { "Edit File" }
+            val out = diff.ifBlank { toolAction.ifBlank { toolSummary.ifBlank { "File modified" } } }
+            return ToolCall(
+                id = "tool_edit_${conversationId}_$stepIndex",
+                name = "edit_file",
+                command = cmd,
+                output = out,
+                status = resolveStatus(true)
+            )
+        }
+
+        // 7. Search Web
+        if (step.has("searchWeb") || stepType.contains("SEARCH_WEB")) {
+            val sw = step.optJSONObject("searchWeb") ?: JSONObject()
+            val query = sw.optString("query", "")
+            val summary = sw.optString("summary", "")
+            return ToolCall(
+                id = "tool_web_${conversationId}_$stepIndex",
+                name = "web_search",
+                command = query.ifBlank { toolSummary.ifBlank { "Web Search" } },
+                output = summary,
+                status = resolveStatus(summary.isNotBlank())
+            )
+        }
+
+        // 8. Read URL Content
+        if (step.has("readUrlContent") || stepType.contains("READ_URL")) {
+            val ru = step.optJSONObject("readUrlContent") ?: JSONObject()
+            val url = ru.optString("url", "")
+            val content = ru.optString("markdown", ru.optString("content", ""))
+            return ToolCall(
+                id = "tool_read_${conversationId}_$stepIndex",
+                name = "read_url",
+                command = url.ifBlank { toolSummary.ifBlank { "Read URL" } },
+                output = content,
+                status = resolveStatus(content.isNotBlank())
+            )
+        }
+
+        // 9. Generate Image
+        if (step.has("generateImage") || stepType.contains("GENERATE_IMAGE")) {
+            val gi = step.optJSONObject("generateImage") ?: JSONObject()
             val prompt = gi.optString("prompt", "")
             val uri = gi.optJSONObject("generatedMedia")?.optString("uri", "") ?: gi.optString("uri", "")
-            val toolStatus = resolveStatus(uri.isNotBlank())
             return ToolCall(
                 id = "tool_genimg_${conversationId}_$stepIndex",
                 name = "generate_image",
-                command = prompt,
+                command = prompt.ifBlank { toolSummary.ifBlank { "Generate Image" } },
                 output = uri,
-                status = toolStatus
+                status = resolveStatus(uri.isNotBlank())
+            )
+        }
+
+        // 10. Generic Tool Call
+        if (step.has("generic")) {
+            val generic = step.getJSONObject("generic")
+            val args = generic.optJSONObject("args")
+            val toolCallMeta = meta?.optJSONObject("toolCall")
+            val metaName = toolCallMeta?.optString("name", "")?.lowercase() ?: ""
+
+            when {
+                args?.has("CommandLine") == true || metaName == "run_command" -> {
+                    val cmd = args?.optString("CommandLine", "") ?: ""
+                    return ToolCall(
+                        id = "tool_${conversationId}_$stepIndex",
+                        name = "bash",
+                        command = cmd.ifBlank { toolSummary },
+                        output = toolAction,
+                        status = resolveStatus(false)
+                    )
+                }
+                args?.has("AbsolutePath") == true || metaName == "view_file" -> {
+                    val path = (args?.optString("AbsolutePath", "") ?: "").removePrefix("file://")
+                    val fileName = path.substringAfterLast('/').ifBlank { path }
+                    return ToolCall(
+                        id = "tool_view_${conversationId}_$stepIndex",
+                        name = "view_file",
+                        command = if (fileName.isNotBlank()) fileName else toolSummary.ifBlank { "View File" },
+                        output = path.ifBlank { toolAction },
+                        status = resolveStatus(false)
+                    )
+                }
+                args?.has("TargetFile") == true || metaName == "edit_file" || metaName == "write_to_file" || metaName == "replace_file_content" -> {
+                    val path = (args?.optString("TargetFile", "") ?: "").removePrefix("file://")
+                    val fileName = path.substringAfterLast('/').ifBlank { path }
+                    val desc = args?.optString("Instruction", args.optString("Description", "")) ?: ""
+                    return ToolCall(
+                        id = "tool_edit_${conversationId}_$stepIndex",
+                        name = "edit_file",
+                        command = if (fileName.isNotBlank()) fileName else toolSummary.ifBlank { "Edit File" },
+                        output = if (desc.isNotBlank()) "$path\n$desc" else path.ifBlank { toolAction },
+                        status = resolveStatus(false)
+                    )
+                }
+                args?.has("DirectoryPath") == true || metaName == "list_dir" -> {
+                    val dir = (args?.optString("DirectoryPath", "") ?: "").removePrefix("file://")
+                    val dirName = dir.substringAfterLast('/').ifBlank { dir }
+                    return ToolCall(
+                        id = "tool_list_${conversationId}_$stepIndex",
+                        name = "list_dir",
+                        command = if (dirName.isNotBlank()) dirName else toolSummary.ifBlank { "Directory" },
+                        output = dir.ifBlank { toolAction },
+                        status = resolveStatus(false)
+                    )
+                }
+                args?.has("Query") == true && args.has("SearchPath") -> {
+                    val q = args.optString("Query", "")
+                    val sp = args.optString("SearchPath", "").removePrefix("file://")
+                    return ToolCall(
+                        id = "tool_grep_${conversationId}_$stepIndex",
+                        name = "grep_search",
+                        command = "\"$q\" in ${sp.substringAfterLast('/')}",
+                        output = toolAction,
+                        status = resolveStatus(false)
+                    )
+                }
+                args?.has("Url") == true || metaName == "read_url_content" -> {
+                    val url = args?.optString("Url", "") ?: ""
+                    return ToolCall(
+                        id = "tool_read_${conversationId}_$stepIndex",
+                        name = "read_url",
+                        command = url.ifBlank { toolSummary },
+                        output = toolAction,
+                        status = resolveStatus(false)
+                    )
+                }
+                else -> {
+                    val fallbackTitle = toolSummary.ifBlank { metaName.ifBlank { "Tool" } }
+                    return ToolCall(
+                        id = "tool_gen_${conversationId}_$stepIndex",
+                        name = metaName.ifBlank { "tool" },
+                        command = fallbackTitle,
+                        output = toolAction,
+                        status = resolveStatus(false)
+                    )
+                }
+            }
+        }
+
+        // 11. Final fallback when toolSummary is available
+        if (toolSummary.isNotBlank()) {
+            val name = when {
+                stepType.contains("VIEW") -> "view_file"
+                stepType.contains("LIST") -> "list_dir"
+                stepType.contains("FIND") -> "find"
+                stepType.contains("GREP") -> "grep_search"
+                stepType.contains("FILE") || stepType.contains("CODE") -> "edit_file"
+                stepType.contains("COMMAND") -> "bash"
+                else -> "tool"
+            }
+            return ToolCall(
+                id = "tool_step_${conversationId}_$stepIndex",
+                name = name,
+                command = toolSummary,
+                output = toolAction.ifBlank { toolSummary },
+                status = resolveStatus(true)
             )
         }
 
