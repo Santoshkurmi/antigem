@@ -1,6 +1,9 @@
 package com.example.gemini.ui.chat
 
 import android.app.Application
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gemini.data.preferences.AuthPreferences
@@ -528,6 +531,109 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun isNetworkConnected(): Boolean {
+        return try {
+            val cm = getApplication<Application>().getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val net = cm?.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(net) ?: return false
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } catch (e: Exception) {
+            android.util.Log.e("ChatViewModel", "Error checking network connectivity: ${e.message}", e)
+            false
+        }
+    }
+
+    private val _agyAuthInfo = MutableStateFlow(com.example.gemini.data.remote.AgyHubClient.AgyAuthInfo())
+    val agyAuthInfo: StateFlow<com.example.gemini.data.remote.AgyHubClient.AgyAuthInfo> = _agyAuthInfo.asStateFlow()
+
+    private val _isAuthBusy = MutableStateFlow(false)
+    val isAuthBusy: StateFlow<Boolean> = _isAuthBusy.asStateFlow()
+
+    private val _authFeedbackMessage = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 1)
+    val authFeedbackMessage: SharedFlow<String> = _authFeedbackMessage.asSharedFlow()
+
+    private var loginPollJob: Job? = null
+
+    fun checkAgyAuthStatus() {
+        viewModelScope.launch {
+            if (!isNetworkConnected()) {
+                android.util.Log.d("ChatViewModel", "Skipping auth status check: device is offline.")
+                _agyAuthInfo.value = _agyAuthInfo.value.copy(isOffline = true)
+                return@launch
+            }
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val res = agyHubClient.fetchDetailedAuthInfo(hubUrl)
+            if (res.isSuccess) {
+                val info = res.getOrThrow()
+                _agyAuthInfo.value = info
+                if (info.isLoggedIn) {
+                    refreshQuotas(force = false)
+                }
+            }
+        }
+    }
+
+    fun loginToAgyHub() {
+        if (_isAuthBusy.value) return
+        if (!isNetworkConnected()) {
+            _authFeedbackMessage.tryEmit("Cannot sign in: no internet connection.")
+            return
+        }
+        _isAuthBusy.value = true
+        loginPollJob?.cancel()
+
+        viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            _authFeedbackMessage.tryEmit("Opening browser for Antigravity sign-in...")
+
+            // Poll every 2s for completion, up to 3 minutes
+            loginPollJob = launch {
+                val startTime = System.currentTimeMillis()
+                while (isActive && System.currentTimeMillis() - startTime < 180_000) {
+                    delay(2000)
+                    if (isNetworkConnected()) {
+                        val res = agyHubClient.fetchDetailedAuthInfo(hubUrl)
+                        if (res.isSuccess && res.getOrThrow().isLoggedIn) {
+                            _agyAuthInfo.value = res.getOrThrow()
+                            _isAuthBusy.value = false
+                            _authFeedbackMessage.tryEmit("Signed in successfully!")
+                            refreshQuotas(force = true)
+                            break
+                        }
+                    }
+                }
+                _isAuthBusy.value = false
+            }
+
+            try {
+                agyHubClient.login(hubUrl)
+            } catch (e: Exception) {
+                android.util.Log.d("ChatViewModel", "Login request initiated: ${e.message}")
+            }
+        }
+    }
+
+    fun logoutFromAgyHub() {
+        if (_isAuthBusy.value) return
+        _isAuthBusy.value = true
+        loginPollJob?.cancel()
+
+        viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            try {
+                agyHubClient.authLogout(hubUrl)
+                _agyAuthInfo.value = com.example.gemini.data.remote.AgyHubClient.AgyAuthInfo(isLoggedIn = false)
+                _authFeedbackMessage.tryEmit("Logged out successfully.")
+                refreshQuotas(force = true)
+            } catch (e: Exception) {
+                _authFeedbackMessage.tryEmit("Logout error: ${e.message}")
+            } finally {
+                _isAuthBusy.value = false
+            }
+        }
+    }
+
     val connectionState: StateFlow<com.example.gemini.data.remote.BridgeConnectionState> = combine(_isServerOnline, _isStreaming) { online, streaming ->
         when {
             online == false -> com.example.gemini.data.remote.BridgeConnectionState.OFFLINE_ERROR
@@ -618,9 +724,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         // Periodic auto-reconnect monitor for Hub RPC streams & Bridge (every 20 seconds)
         viewModelScope.launch {
             checkBridgeHealth()
+            checkAgyAuthStatus()
             while (currentCoroutineContext().isActive) {
                 delay(20_000)
                 checkBridgeHealth()
+                checkAgyAuthStatus()
                 if (_isServerOnline.value != true || syncJob?.isActive != true) {
                     android.util.Log.d("ChatViewModel", "Periodic check: reconnecting hub streams...")
                     syncAgyConversations(force = false)
@@ -745,6 +853,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
         refreshQuotas()
         checkBridgeHealth()
+        checkAgyAuthStatus()
         viewModelScope.launch {
             com.example.gemini.data.daemon.TermuxDaemonManager.checkHealthAndReconnect(isSilent = false)
         }

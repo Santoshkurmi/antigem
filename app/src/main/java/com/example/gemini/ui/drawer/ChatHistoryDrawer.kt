@@ -32,6 +32,11 @@ import com.example.gemini.ui.components.SidebarChatListSkeleton
 import java.text.SimpleDateFormat
 import java.util.*
 
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.automirrored.outlined.Login
+import coil.compose.AsyncImage
+import com.example.gemini.data.remote.AgyHubClient
+
 @Composable
 fun ChatHistoryDrawer(
     conversations: List<Conversation>,
@@ -40,6 +45,8 @@ fun ChatHistoryDrawer(
     isLoading: Boolean = false,
     errorMessage: String? = null,
     isStreaming: Boolean = false,
+    authInfo: AgyHubClient.AgyAuthInfo = AgyHubClient.AgyAuthInfo(),
+    isAuthBusy: Boolean = false,
     onRetry: () -> Unit = {},
     onSelectConversation: (String) -> Unit,
     onNewChat: () -> Unit,
@@ -48,11 +55,14 @@ fun ChatHistoryDrawer(
     onTerminateInstance: (String) -> Unit = {},
     onSearchQueryChange: (String) -> Unit = {},
     onOpenSettings: () -> Unit,
+    onLogin: () -> Unit = {},
+    onLogout: () -> Unit = {},
     isOpen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var instanceToTerminate by remember { mutableStateOf<Pair<com.example.gemini.data.remote.AgyActiveInstance, String>?>(null) }
+    var showProfileDialog by remember { mutableStateOf(false) }
 
     val filtered = remember(conversations, searchQuery) {
         if (searchQuery.isBlank()) conversations
@@ -436,26 +446,137 @@ fun ChatHistoryDrawer(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
             )
 
-            // Settings Bottom Bar
+            // Bottom Bar: Settings (Left) & Profile/Login (Right)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onOpenSettings() }
-                    .padding(vertical = 12.dp, horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = "Settings",
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Settings & Quotas",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
+                // Settings on left
+                Surface(
+                    onClick = onOpenSettings,
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Transparent,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Settings",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                // Profile / Login on right
+                if (isAuthBusy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .padding(2.dp),
+                        strokeWidth = 2.dp,
+                        color = ClaudeTerracotta
+                    )
+                } else if (authInfo.isLoggedIn) {
+                    // Profile avatar button
+                    Surface(
+                        onClick = { showProfileDialog = true },
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            ClaudeTerracotta.copy(alpha = 0.4f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (!authInfo.profilePictureUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = authInfo.profilePictureUrl,
+                                    contentDescription = "Profile Picture",
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape)
+                                        .background(ClaudeTerracotta),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    val initial = authInfo.username.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+                                    Text(
+                                        text = initial,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                            if (authInfo.username.isNotBlank()) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = authInfo.username,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.widthIn(max = 76.dp),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // Not logged in -> Sign In button
+                    FilledTonalButton(
+                        onClick = onLogin,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = ClaudeTerracotta.copy(alpha = 0.15f),
+                            contentColor = ClaudeTerracotta
+                        ),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.Login,
+                            contentDescription = "Sign In",
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Sign In",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            if (showProfileDialog) {
+                ProfileDetailDialog(
+                    authInfo = authInfo,
+                    onDismiss = { showProfileDialog = false },
+                    onLogout = onLogout
                 )
             }
         }

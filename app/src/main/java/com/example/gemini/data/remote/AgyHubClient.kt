@@ -435,8 +435,18 @@ class AgyHubClient(
 
     // ==================== AUTHENTICATION METHODS ====================
 
+    data class AgyAuthInfo(
+        val isLoggedIn: Boolean = false,
+        val username: String = "",
+        val homeDir: String = "",
+        val userTier: String = "",
+        val profilePictureUrl: String? = null,
+        val grantedScopes: List<String> = emptyList(),
+        val isOffline: Boolean = false
+    )
+
     suspend fun login(hubUrl: String = DEFAULT_HUB_URL): Result<Unit> =
-        callUnary("Login", "{}", hubUrl).map { }
+        callUnary("Login", JSONObject().apply { put("isGcpTos", false) }.toString(), hubUrl).map { }
 
     suspend fun authLogout(hubUrl: String = DEFAULT_HUB_URL): Result<Unit> =
         callUnary("AuthLogout", "{}", hubUrl).map { }
@@ -445,7 +455,8 @@ class AgyHubClient(
         callUnary("GetAuthStatus", "{}", hubUrl).map { body ->
             try {
                 val json = JSONObject(body)
-                json.optBoolean("hasValidAuth", false)
+                val authResult = json.optJSONObject("authResult") ?: json
+                authResult.optBoolean("hasValidAuth", false)
             } catch (e: Exception) {
                 false
             }
@@ -458,6 +469,64 @@ class AgyHubClient(
             val username = json.optString("username", "")
             val homeDir = json.optString("homeDirUri", "")
             username to homeDir
+        }
+    }
+
+    suspend fun fetchDetailedAuthInfo(hubUrl: String = DEFAULT_HUB_URL): Result<AgyAuthInfo> = withContext(Dispatchers.IO) {
+        try {
+            val authResultCall = callUnary("GetAuthStatus", "{}", hubUrl)
+            if (authResultCall.isFailure) {
+                return@withContext Result.failure(authResultCall.exceptionOrNull() ?: Exception("Failed to query GetAuthStatus"))
+            }
+            val authBody = authResultCall.getOrThrow()
+            val authJson = JSONObject(authBody)
+            val authResult = authJson.optJSONObject("authResult")
+            val hasValidAuth = authResult?.optBoolean("hasValidAuth", false) ?: false
+
+            if (!hasValidAuth) {
+                return@withContext Result.success(AgyAuthInfo(isLoggedIn = false))
+            }
+
+            val scopesList = mutableListOf<String>()
+            val scopesArr = authResult?.optJSONArray("grantedScopes")
+            if (scopesArr != null) {
+                for (i in 0 until scopesArr.length()) {
+                    scopesList.add(scopesArr.getString(i))
+                }
+            }
+
+            var username = ""
+            var homeDir = ""
+            try {
+                val userBody = callUnary("GetLocalUserInfo", "{}", hubUrl).getOrNull() ?: "{}"
+                val userJson = JSONObject(userBody)
+                username = userJson.optString("username", "")
+                homeDir = userJson.optString("homeDirUri", "")
+            } catch (_: Exception) {}
+
+            var userTier = ""
+            var profilePic: String? = null
+            try {
+                val statusBody = callUnary("GetUserStatus", "{}", hubUrl).getOrNull() ?: "{}"
+                val statusJson = JSONObject(statusBody)
+                val userStatus = statusJson.optJSONObject("userStatus")
+                val tierObj = userStatus?.optJSONObject("userTier")
+                userTier = tierObj?.optString("name", "") ?: ""
+                profilePic = userStatus?.optString("profilePictureUrl", "")?.takeIf { it.isNotBlank() }
+            } catch (_: Exception) {}
+
+            Result.success(
+                AgyAuthInfo(
+                    isLoggedIn = true,
+                    username = username,
+                    homeDir = homeDir,
+                    userTier = userTier,
+                    profilePictureUrl = profilePic,
+                    grantedScopes = scopesList
+                )
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 

@@ -205,6 +205,18 @@ fun ChatScreen(
         }
     }
 
+    val agyAuthInfo by viewModel.agyAuthInfo.collectAsState()
+    val isAuthBusy by viewModel.isAuthBusy.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.authFeedbackMessage.collect { msg ->
+            snackbarHostState.showSnackbar(
+                message = msg,
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
+
     val attachments by viewModel.attachments.collectAsState()
     val isUploadingAttachment by viewModel.isUploadingAttachment.collectAsState()
 
@@ -513,6 +525,14 @@ fun ChatScreen(
                 },
                 onSearchQueryChange = { query ->
                     viewModel.searchConversations(query)
+                },
+                authInfo = agyAuthInfo,
+                isAuthBusy = isAuthBusy,
+                onLogin = {
+                    viewModel.loginToAgyHub()
+                },
+                onLogout = {
+                    viewModel.logoutFromAgyHub()
                 },
                 onOpenSettings = {
                     showSettingsDialog = true
