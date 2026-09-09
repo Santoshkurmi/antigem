@@ -68,7 +68,6 @@ fun ModelSelectorBottomSheet(
     var activeCategory by remember { mutableStateOf<CategoryType?>(null) }
 
     val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true
         skipPartiallyExpanded = false
     )
     val coroutineScope = rememberCoroutineScope()
@@ -93,8 +92,6 @@ fun ModelSelectorBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .wrapContentHeight()
-                .animateContentSize()
                 .height(expandedHeight)
                 .padding(horizontal = 18.dp)
         ) {
@@ -109,7 +106,6 @@ fun ModelSelectorBottomSheet(
                                 slideOutHorizontally { width -> width } + fadeOut()
                     }
                 },
-                modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 modifier = Modifier.fillMaxSize(),
                 label = "category_transition"
             ) { currentCategory ->
@@ -126,7 +122,6 @@ fun ModelSelectorBottomSheet(
                         isRefreshing = isRefreshing,
                         onRefresh = onRefresh,
                         onSelectCategory = { category -> activeCategory = category },
-                        modifier = Modifier.fillMaxWidth().wrapContentHeight()
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -141,7 +136,6 @@ fun ModelSelectorBottomSheet(
                         brandColor = brandColor,
                         models = categoryModels,
                         selectedModelId = selectedModelId,
-                        onBack = { activeCategory = null },
                         onBack = {
                             activeCategory = null
                             coroutineScope.launch {
@@ -152,7 +146,6 @@ fun ModelSelectorBottomSheet(
                             onSelectModel(modelId)
                             onDismiss()
                         },
-                        modifier = Modifier.fillMaxWidth()
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -519,8 +512,6 @@ private fun CategoryModelsSubView(
     }
 
     val groupedModels = remember(models) { groupModelsByBaseName(models) }
-    val configuration = LocalConfiguration.current
-    val maxHeight = (configuration.screenHeightDp * 0.58f).dp
 
     Column(
         modifier = modifier
@@ -565,8 +556,6 @@ private fun CategoryModelsSubView(
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 120.dp, max = maxHeight),
-            contentPadding = PaddingValues(bottom = 8.dp),
                 .weight(1f),
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
