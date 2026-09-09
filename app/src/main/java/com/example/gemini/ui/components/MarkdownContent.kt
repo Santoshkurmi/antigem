@@ -951,26 +951,67 @@ fun MarkdownTableView(
     val isDark = isSystemInDarkTheme()
     val density = LocalDensity.current
 
+    val numCols = maxOf(
+        table.headers.size,
+        table.rows.maxOfOrNull { it.size } ?: 0,
+        table.alignments.size
+    )
+    if (numCols == 0) return
+
+    val normalizedHeaders = remember(table.headers, numCols) {
+        if (table.headers.size < numCols) {
+            table.headers + List(numCols - table.headers.size) { "" }
+        } else {
+            table.headers.take(numCols)
+        }
+    }
+    val normalizedRows = remember(table.rows, numCols) {
+        table.rows.map { row ->
+            if (row.size < numCols) {
+                row + List(numCols - row.size) { "" }
+            } else {
+                row.take(numCols)
+            }
+        }
+    }
+
     // Memoize cell AnnotatedStrings so table layout & scrolling takes 0.00ms
     val cachedHeaders = remember(table.headers, isDark, density) {
         table.headers.map { header ->
+    val cachedHeaders = remember(normalizedHeaders, isDark, density) {
+        normalizedHeaders.map { header ->
             buildRichAnnotatedString(header, false, isDark, density)
         }
     }
     val cachedRows = remember(table.rows, isDark, density) {
         table.rows.map { row ->
+    val cachedRows = remember(normalizedRows, isDark, density) {
+        normalizedRows.map { row ->
             row.map { cell ->
                 buildRichAnnotatedString(cell, false, isDark, density)
             }
         }
     }
 
+    // Compute consistent natural column widths for every column based on maximum content length
+    val colNaturalWidths = remember(normalizedHeaders, normalizedRows, numCols) {
+        (0 until numCols).map { colIdx ->
+            val headerLen = normalizedHeaders.getOrNull(colIdx)?.length ?: 0
+            val maxRowLen = normalizedRows.maxOfOrNull { it.getOrNull(colIdx)?.length ?: 0 } ?: 0
+            val maxLen = maxOf(headerLen, maxRowLen)
+            // Average character width ~8.5dp at 13sp + padding (24dp) + safety buffer
+            (maxLen * 8.5f + 28f).coerceIn(80f, 280f)
+        }
+    }
+
     SideEffect {
         val dt = (System.nanoTime() - t0) / 1_000_000.0
         Log.d("PERF_TRACE", "📊 [Table Comp] rows=${table.rows.size}, cols=${table.headers.size}, cells=${table.headers.size + table.rows.sumOf { it.size }}, took=${"%.2f".format(dt)}ms")
+        Log.d("PERF_TRACE", "📊 [Table Comp] rows=${table.rows.size}, cols=$numCols, took=${"%.2f".format(dt)}ms")
     }
 
     Surface(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
@@ -981,6 +1022,7 @@ fun MarkdownTableView(
             ),
         shape = RoundedCornerShape(10.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+            )
     ) {
         Column(
             modifier = Modifier
@@ -1016,13 +1058,48 @@ fun MarkdownTableView(
                             )
                         )
                     }
+        val availableWidthDp = maxWidth.value
+        val hasBoundedWidth = maxWidth != androidx.compose.ui.unit.Dp.Infinity &&
+                maxWidth != androidx.compose.ui.unit.Dp.Unspecified &&
+                availableWidthDp > 0f
+        val totalNaturalWidth = colNaturalWidths.sum()
+        val dividerTotalWidth = ((numCols - 1).coerceAtLeast(0) * 1f)
+        val netAvailableWidth = (availableWidthDp - dividerTotalWidth).coerceAtLeast(0f)
+
+        // Scale widths to fill available space if it fits comfortably without wrapping too small,
+        // otherwise retain natural widths and allow smooth horizontal scrolling.
+        val finalWidths = remember(colNaturalWidths, netAvailableWidth, totalNaturalWidth, hasBoundedWidth) {
+            if (hasBoundedWidth && netAvailableWidth > totalNaturalWidth && totalNaturalWidth > 0f) {
+                val scale = netAvailableWidth / totalNaturalWidth
+                if (scale <= 2.2f) {
+                    colNaturalWidths.map { (it * scale).dp }
+                } else {
+                    colNaturalWidths.map { (it * 1.5f).dp }
                 }
+            } else {
+                colNaturalWidths.map { it.dp }
             }
+        }
 
             HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+        val tableTotalWidth = remember(finalWidths, numCols) {
+            finalWidths.fold(0.dp) { acc, dp -> acc + dp } + (numCols - 1).coerceAtLeast(0).dp
+        }
 
             // Table Data Rows
             cachedRows.forEachIndexed { rowIdx, rowCells ->
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
+        ) {
+            val dividerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+
+            Column(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .width(tableTotalWidth)
+            ) {
+                // Table Header Row
                 Row(
                     modifier = Modifier
                         .background(
@@ -1030,25 +1107,49 @@ fun MarkdownTableView(
                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
                         )
                         .padding(vertical = 2.dp)
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f))
                 ) {
                     rowCells.forEachIndexed { colIdx, cellResult ->
+                    cachedHeaders.forEachIndexed { colIdx, headerResult ->
+                        if (colIdx > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(1.dp)
+                                    .background(dividerColor)
+                            )
+                        }
+
+                        val colWidth = finalWidths.getOrElse(colIdx) { 100.dp }
                         val alignment = table.alignments.getOrElse(colIdx) { TableAlignment.LEFT }
                         val textAlign = when (alignment) {
                             TableAlignment.CENTER -> TextAlign.Center
                             TableAlignment.RIGHT -> TextAlign.End
                             TableAlignment.LEFT -> TextAlign.Start
                         }
+
                         Box(
                             modifier = Modifier
                                 .widthIn(min = 90.dp, max = 220.dp)
                                 .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .width(colWidth)
+                                .fillMaxHeight()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.TopStart
                         ) {
                             Text(
                                 text = cellResult.annotatedString,
                                 inlineContent = cellResult.inlineContent,
+                                text = headerResult.annotatedString,
+                                inlineContent = headerResult.inlineContent,
+                                modifier = Modifier.fillMaxWidth(),
                                 style = TextStyle(
                                     fontSize = 14.sp,
                                     lineHeight = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     textAlign = textAlign
                                 )
@@ -1059,6 +1160,62 @@ fun MarkdownTableView(
 
                 if (rowIdx < cachedRows.size - 1) {
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+
+                // Table Data Rows
+                cachedRows.forEachIndexed { rowIdx, rowCells ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min)
+                            .background(
+                                if (rowIdx % 2 == 0) Color.Transparent
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
+                            )
+                    ) {
+                        rowCells.forEachIndexed { colIdx, cellResult ->
+                            if (colIdx > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .width(1.dp)
+                                        .background(dividerColor)
+                                )
+                            }
+
+                            val colWidth = finalWidths.getOrElse(colIdx) { 100.dp }
+                            val alignment = table.alignments.getOrElse(colIdx) { TableAlignment.LEFT }
+                            val textAlign = when (alignment) {
+                                TableAlignment.CENTER -> TextAlign.Center
+                                TableAlignment.RIGHT -> TextAlign.End
+                                TableAlignment.LEFT -> TextAlign.Start
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .width(colWidth)
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                contentAlignment = Alignment.TopStart
+                            ) {
+                                Text(
+                                    text = cellResult.annotatedString,
+                                    inlineContent = cellResult.inlineContent,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    style = TextStyle(
+                                        fontSize = 13.sp,
+                                        lineHeight = 19.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        textAlign = textAlign
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    if (rowIdx < cachedRows.size - 1) {
+                        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    }
                 }
             }
         }
@@ -1769,6 +1926,21 @@ fun parseMarkdownBlocks(
 }
 
 /**
+ * Splits a markdown table row by '|', handling escaped pipes '\|' and trimming whitespace.
+ */
+private fun splitTableRow(line: String): List<String> {
+    var trimmed = line.trim()
+    if (trimmed.startsWith("|")) trimmed = trimmed.substring(1)
+    if (trimmed.endsWith("|") && !trimmed.endsWith("\\|")) trimmed = trimmed.substring(0, trimmed.length - 1)
+
+    val placeholder = "\u0000"
+    val safeLine = trimmed.replace("\\|", placeholder)
+    return safeLine.split("|").map { cell ->
+        cell.replace(placeholder, "|").trim()
+    }
+}
+
+/**
  * Parses markdown table header, separator, and data rows.
  */
 private fun parseTable(lines: List<String>, startIndex: Int): Pair<MarkdownBlock.Table, Int>? {
@@ -1781,6 +1953,8 @@ private fun parseTable(lines: List<String>, startIndex: Int): Pair<MarkdownBlock
     val sepCells = sepLine.split("|")
         .map { it.trim() }
         .filter { it.isNotEmpty() }
+    val sepCells = splitTableRow(sepLine)
+    if (sepCells.isEmpty() || !sepCells.all { it.replace(" ", "").matches(Regex("^:?-+:?$")) }) return null
 
     if (sepCells.isEmpty() || !sepCells.all { it.matches(Regex("^:?-+:?$")) }) return null
 
@@ -1792,12 +1966,30 @@ private fun parseTable(lines: List<String>, startIndex: Int): Pair<MarkdownBlock
 
     val headers = if (rawHeaders.isNotEmpty()) rawHeaders else sepCells.mapIndexed { idx, _ -> "Column ${idx + 1}" }
 
+    val rawHeaders = splitTableRow(headerLine)
     val alignments = sepCells.map { cell ->
         val left = cell.startsWith(":")
         val right = cell.endsWith(":")
+        val clean = cell.replace(" ", "")
+        val left = clean.startsWith(":")
+        val right = clean.endsWith(":")
         if (left && right) TableAlignment.CENTER
         else if (right) TableAlignment.RIGHT
         else TableAlignment.LEFT
+    }
+
+    val numCols = maxOf(rawHeaders.size, sepCells.size)
+    val headers = if (rawHeaders.isNotEmpty()) {
+        if (rawHeaders.size < numCols) rawHeaders + List(numCols - rawHeaders.size) { "" }
+        else rawHeaders.take(numCols)
+    } else {
+        (1..numCols).map { "Column $it" }
+    }
+
+    val normalizedAlignments = if (alignments.size < numCols) {
+        alignments + List(numCols - alignments.size) { TableAlignment.LEFT }
+    } else {
+        alignments.take(numCols)
     }
 
     val rows = mutableListOf<List<String>>()
@@ -1809,10 +2001,17 @@ private fun parseTable(lines: List<String>, startIndex: Int): Pair<MarkdownBlock
             .map { it.trim() }
             .filterIndexed { idx, cell ->
                 !(idx == 0 && cell.isEmpty()) && !(idx == rowLine.split("|").lastIndex && cell.isEmpty())
+        val rawCells = splitTableRow(rowLine)
+        if (rawCells.isNotEmpty()) {
+            val normalizedCells = if (rawCells.size < numCols) {
+                rawCells + List(numCols - rawCells.size) { "" }
+            } else {
+                rawCells.take(numCols)
             }
 
         if (rawCells.isNotEmpty()) {
             rows.add(rawCells)
+            rows.add(normalizedCells)
             currIndex++
         } else {
             break
@@ -1820,4 +2019,5 @@ private fun parseTable(lines: List<String>, startIndex: Int): Pair<MarkdownBlock
     }
 
     return Pair(MarkdownBlock.Table(headers, rows, alignments), currIndex)
+    return Pair(MarkdownBlock.Table(headers, rows, normalizedAlignments), currIndex)
 }
