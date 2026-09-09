@@ -1,5 +1,6 @@
 package com.example.gemini.ui.drawer
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.domain.model.Conversation
 import com.example.gemini.theme.ClaudeTerracotta
+import com.example.gemini.ui.components.SidebarChatListSkeleton
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -34,6 +36,9 @@ fun ChatHistoryDrawer(
     conversations: List<Conversation>,
     currentConversationId: String?,
     activeInstances: List<com.example.gemini.data.remote.AgyActiveInstance> = emptyList(),
+    isLoading: Boolean = false,
+    errorMessage: String? = null,
+    onRetry: () -> Unit = {},
     onSelectConversation: (String) -> Unit,
     onNewChat: () -> Unit,
     onDeleteConversation: (String) -> Unit,
@@ -164,135 +169,200 @@ fun ChatHistoryDrawer(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Chat History List
-            LazyColumn(
+            val showSkeleton = (isLoading || conversations.isEmpty()) && conversations.isEmpty() && errorMessage.isNullOrBlank()
+
+            Crossfade(
+                targetState = when {
+                    showSkeleton -> "loading"
+                    !errorMessage.isNullOrBlank() && conversations.isEmpty() -> "error"
+                    filtered.isEmpty() -> "empty"
+                    else -> "content"
+                },
+                label = "drawerChatListFade",
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-            ) {
-                items(filtered, key = { it.id }) { conv ->
-                    val isSelected = conv.id == currentConversationId
-                    val activeInst = activeInstances.find { it.conversationId == conv.id }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (isSelected) MaterialTheme.colorScheme.surfaceVariant
-                                else Color.Transparent
-                            )
-                            .clickable { onSelectConversation(conv.id) }
-                            .padding(horizontal = 10.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.ChatBubbleOutline,
-                            contentDescription = null,
-                            tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp)
-                        )
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
+            ) { state ->
+                when (state) {
+                    "loading" -> {
+                        SidebarChatListSkeleton()
+                    }
+                    "error" -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
                             Text(
-                                text = conv.title,
-                                fontSize = 13.5.sp,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                text = "Unable to load chats",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                        }
-
-                        if (activeInst != null) {
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = Color(0xFF4CAF50).copy(alpha = 0.15f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.5f)),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .clickable {
-                                        instanceToTerminate = activeInst to conv.title
-                                    }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = errorMessage ?: "Connection error",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                fontSize = 12.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = onRetry,
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                             ) {
+                                Text("Retry", fontSize = 12.5.sp)
+                            }
+                        }
+                    }
+                    "empty" -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = 40.dp),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            Text(
+                                text = if (searchQuery.isNotBlank()) "No chats found matching \"$searchQuery\"" else "No recent chats",
+                                fontSize = 13.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                            )
+                        }
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(filtered, key = { it.id }) { conv ->
+                                val isSelected = conv.id == currentConversationId
+                                val activeInst = activeInstances.find { it.conversationId == conv.id }
+
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.surfaceVariant
+                                            else Color.Transparent
+                                        )
+                                        .clickable { onSelectConversation(conv.id) }
+                                        .padding(horizontal = 10.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .background(Color(0xFF4CAF50), androidx.compose.foundation.shape.CircleShape)
+                                    Icon(
+                                        imageVector = Icons.Outlined.ChatBubbleOutline,
+                                        contentDescription = null,
+                                        tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(18.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "RUNNING",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF2E7D32)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(6.dp))
-                        }
 
-                        var menuExpanded by remember { mutableStateOf(false) }
+                                    Spacer(modifier = Modifier.width(10.dp))
 
-                        Box {
-                            IconButton(
-                                onClick = { menuExpanded = true },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "Options",
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-
-                            DropdownMenu(
-                                expanded = menuExpanded,
-                                onDismissRequest = { menuExpanded = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Fork Conversation", fontSize = 13.5.sp) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.CallSplit,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onForkConversation(conv.id)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            "Delete Conversation",
+                                            text = conv.title,
                                             fontSize = 13.5.sp,
-                                            color = MaterialTheme.colorScheme.error
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onDeleteConversation(conv.id)
                                     }
-                                )
+
+                                    if (activeInst != null) {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = Color(0xFF4CAF50).copy(alpha = 0.15f),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.5f)),
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .clickable {
+                                                    instanceToTerminate = activeInst to conv.title
+                                                }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .background(Color(0xFF4CAF50), androidx.compose.foundation.shape.CircleShape)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = "RUNNING",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF2E7D32)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
+
+                                    var menuExpanded by remember { mutableStateOf(false) }
+
+                                    Box {
+                                        IconButton(
+                                            onClick = { menuExpanded = true },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.MoreVert,
+                                                contentDescription = "Options",
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+
+                                        DropdownMenu(
+                                            expanded = menuExpanded,
+                                            onDismissRequest = { menuExpanded = false }
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Fork Conversation", fontSize = 13.5.sp) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.AutoMirrored.Filled.CallSplit,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    onForkConversation(conv.id)
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        "Delete Conversation",
+                                                        fontSize = 13.5.sp,
+                                                        color = MaterialTheme.colorScheme.error
+                                                    )
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Delete,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.error,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    onDeleteConversation(conv.id)
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

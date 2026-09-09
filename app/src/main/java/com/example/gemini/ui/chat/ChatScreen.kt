@@ -459,6 +459,9 @@ fun ChatScreen(
                 conversations = conversations,
                 currentConversationId = currentConv?.id,
                 activeInstances = activeInstances,
+                isLoading = isLoadingConversation,
+                errorMessage = conversationError,
+                onRetry = { viewModel.retryConnections() },
                 onSelectConversation = { id ->
                     viewModel.selectConversation(id)
                     scope.launch { drawerState.close() }

@@ -163,3 +163,49 @@ fun ConversationLoadingSkeleton(
         }
     }
 }
+
+@Composable
+fun SidebarChatListSkeleton(
+    modifier: Modifier = Modifier,
+    itemCount: Int = 8
+) {
+    val brush = shimmerBrush()
+    val widths = listOf(0.78f, 0.60f, 0.88f, 0.52f, 0.70f, 0.82f, 0.65f, 0.75f)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        repeat(itemCount) { index ->
+            val fraction = widths[index % widths.size]
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Chat bubble icon placeholder
+                Box(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(brush)
+                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                // Title bar placeholder
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction)
+                        .height(13.5.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+            }
+        }
+    }
+}
