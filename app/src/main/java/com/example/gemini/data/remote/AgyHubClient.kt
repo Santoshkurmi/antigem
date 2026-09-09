@@ -643,6 +643,72 @@ class AgyHubClient(
     }
 
     /**
+     * Reverts the entire last user message turn on the AGY hub daemon trajectory.
+     */
+    suspend fun revertLastUserMessage(
+        cascadeId: String,
+        modelEnum: String = "MODEL_PLACEHOLDER_M319",
+        hubUrl: String = DEFAULT_HUB_URL
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            val stepsRes = getCascadeTrajectorySteps(cascadeId, hubUrl)
+            if (!stepsRes.isSuccess) {
+                return@withContext Result.failure(stepsRes.exceptionOrNull() ?: Exception("Failed to get trajectory steps"))
+            }
+            val stepsJson = JSONObject(stepsRes.getOrThrow())
+            val stepsArr = stepsJson.optJSONArray("steps") ?: JSONArray()
+            var lastUserIdx = -1
+            for (i in (stepsArr.length() - 1) downTo 0) {
+                val st = stepsArr.optJSONObject(i) ?: continue
+                if (st.has("userInput") || st.optString("type") == "CORTEX_STEP_TYPE_USER_INPUT") {
+                    lastUserIdx = i
+                    break
+                }
+            }
+
+            if (lastUserIdx <= 0) {
+                // First message or none: delete trajectory from server
+                deleteCascadeTrajectory(cascadeId, hubUrl)
+                return@withContext Result.success(-1)
+            }
+
+            val targetStep = (lastUserIdx - 1).coerceAtLeast(0)
+            val revertPayload = JSONObject().apply {
+                put("cascadeId", cascadeId)
+                put("stepIndex", targetStep)
+                put("overrideConfig", JSONObject().apply {
+                    put("plannerConfig", JSONObject().apply {
+                        put("toolConfig", JSONObject().apply {
+                            put("runCommand", JSONObject().apply {
+                                put("autoCommandConfig", JSONObject().apply {
+                                    put("autoExecutionPolicy", "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER")
+                                })
+                            })
+                            put("notifyUser", JSONObject())
+                        })
+                        put("requestedModel", JSONObject().apply {
+                            put("model", modelEnum)
+                        })
+                        put("knowledgeConfig", JSONObject())
+                        put("useAiCredits", false)
+                        put("supportsLatexRendering", true)
+                    })
+                    put("conversationHistoryConfig", JSONObject())
+                })
+            }.toString()
+
+            val revertRes = callUnary("RevertToCascadeStep", revertPayload, hubUrl)
+            if (!revertRes.isSuccess) {
+                return@withContext Result.failure(revertRes.exceptionOrNull() ?: Exception("RevertToCascadeStep failed"))
+            }
+            Result.success(targetStep)
+        } catch (e: Exception) {
+            Log.e(TAG, "revertLastUserMessage failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Reads a file via LanguageServerService/ReadFile RPC.
      * Returns base64 encoded content string.
      */

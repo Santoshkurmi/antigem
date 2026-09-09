@@ -1342,11 +1342,68 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val isLastUserMsg = index >= current.indexOfLast { it.role == MessageRole.USER }
 
         if (isLastUserMsg) {
-            // Remove this message and any subsequent messages so user can edit and send fresh
             val truncated = current.take(index)
             _messages.value = truncated
         }
         return targetMsg.content
+    }
+
+    /**
+     * Reverts the last user message: restores prompt text and attachments to the input box,
+     * immediately prunes it from the local UI, and sends an undo RPC to the AGY hub daemon.
+     */
+    fun revertAndEditLastUserMessage(targetMsg: ChatMessage, onRestored: (String) -> Unit) {
+        val conv = _currentConversation.value ?: return
+        val current = _messages.value
+        val index = current.indexOfFirst { it.id == targetMsg.id }
+        if (index < 0) return
+
+        persistentStreamJob?.cancel()
+        persistentStreamJob = null
+        _isStreaming.value = false
+        isPromptInFlight = false
+
+        val truncated = current.take(index)
+        _messages.value = truncated
+
+        val imageRegex = Regex("""\[Attached Image:\s*([^\]]+)\]\([^\)]+\)""", RegexOption.IGNORE_CASE)
+        val fileRegex = Regex("""\[Attached File:\s*([^\]]+)\]\([^\)]+\)""", RegexOption.IGNORE_CASE)
+        var cleanText = targetMsg.content
+            .replace(imageRegex, "")
+            .replace(fileRegex, "")
+            .trim()
+        if (cleanText == "Voice note" || cleanText == "Voice message") {
+            cleanText = ""
+        }
+
+        if (targetMsg.attachments.isNotEmpty()) {
+            _attachments.value = targetMsg.attachments
+        }
+
+        onRestored(cleanText)
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val modelEnum = com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
+            val res = agyHubClient.revertLastUserMessage(conv.id, modelEnum, hubUrl)
+            if (res.isSuccess) {
+                val targetStep = res.getOrThrow()
+                if (targetStep < 0) {
+                    withContext(Dispatchers.Main) {
+                        _messages.value = emptyList()
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        startPersistentStream(conv.id)
+                    }
+                }
+            } else {
+                android.util.Log.w("ChatViewModel", "revertLastUserMessage failed on hub: ${res.exceptionOrNull()?.message}")
+                withContext(Dispatchers.Main) {
+                    startPersistentStream(conv.id)
+                }
+            }
+        }
     }
 
     suspend fun getValidAccessToken(forceRefresh: Boolean = false): String? {

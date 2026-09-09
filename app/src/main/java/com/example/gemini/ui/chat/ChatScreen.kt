@@ -789,33 +789,22 @@ fun ChatScreen(
                                         }
                                     }
                                     is ChatFeedItem.User -> {
+                                        val msgIndex = messages.indexOfFirst { it.id == feedItem.message.id }
+                                        val isLastUserMsg = messages.indexOfLast { it.role == MessageRole.USER } == msgIndex
+                                        val willDeleteOutput = isLastUserMsg && msgIndex < messages.lastIndex
                                         UserMessageBubble(
                                             message = feedItem.message,
+                                            isLastUserMessage = isLastUserMsg,
                                             isDevModeEnabled = isDevModeEnabled,
                                             onEdit = { targetMsg ->
-                                                val msgIndex = messages.indexOfFirst { it.id == targetMsg.id }
-                                                val isLastUserMsg = messages.indexOfLast { it.role == MessageRole.USER } == msgIndex
-                                                val willDeleteOutput = isLastUserMsg && msgIndex < messages.lastIndex
                                                 if (willDeleteOutput) {
                                                     pendingMessageAction = PendingMessageAction(MessageActionType.EDIT, targetMsg)
                                                 } else {
-                                                    val text = viewModel.prepareEditMessage(targetMsg.id)
-                                                    if (text != null) {
-                                                        val tfv = TextFieldValue(text, selection = TextRange(text.length))
+                                                    viewModel.revertAndEditLastUserMessage(targetMsg) { restoredText ->
+                                                        val tfv = TextFieldValue(restoredText, selection = TextRange(restoredText.length))
                                                         textFieldValue = tfv
                                                         viewModel.setDraft(activeConversationKey, tfv)
                                                     }
-                                                }
-                                            },
-                                            onRetry = { targetMsg ->
-                                                val msgIndex = messages.indexOfFirst { it.id == targetMsg.id }
-                                                val isLastUserMsg = targetMsg.role == MessageRole.USER && (messages.indexOfLast { it.role == MessageRole.USER } == msgIndex)
-                                                val willDeleteOutput = (targetMsg.role == MessageRole.ASSISTANT) || (isLastUserMsg && msgIndex < messages.lastIndex)
-                                                if (willDeleteOutput) {
-                                                    pendingMessageAction = PendingMessageAction(MessageActionType.RETRY, targetMsg)
-                                                } else {
-                                                    viewModel.retryMessage(targetMsg.id)
-                                                    userSentMessageTrigger++
                                                 }
                                             },
                                             onViewRawPayload = { payloadJson ->
@@ -1258,9 +1247,8 @@ fun ChatScreen(
                     onClick = {
                         val target = action.message
                         if (action.type == MessageActionType.EDIT) {
-                            val text = viewModel.prepareEditMessage(target.id)
-                            if (text != null) {
-                                val tfv = TextFieldValue(text, selection = TextRange(text.length))
+                            viewModel.revertAndEditLastUserMessage(target) { restoredText ->
+                                val tfv = TextFieldValue(restoredText, selection = TextRange(restoredText.length))
                                 textFieldValue = tfv
                                 viewModel.setDraft(activeConversationKey, tfv)
                             }

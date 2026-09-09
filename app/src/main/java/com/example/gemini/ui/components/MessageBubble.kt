@@ -332,6 +332,7 @@ fun MessageBubble(
 @Composable
 fun UserMessageBubble(
     message: ChatMessage,
+    isLastUserMessage: Boolean = false,
     isDevModeEnabled: Boolean = false,
     onEdit: (ChatMessage) -> Unit = {},
     onRetry: (ChatMessage) -> Unit = {},
@@ -398,14 +399,39 @@ fun UserMessageBubble(
 
                 // 4. Text content (if not just placeholder "Voice note")
                 val displayContent = formatUserDisplayContent(message.content)
+                val lineCount = remember(displayContent) { displayContent.lines().size }
+                val isLongText = remember(displayContent, lineCount) { lineCount > 6 || displayContent.length > 350 }
+                var isTextExpanded by remember { mutableStateOf(false) }
+
                 if (displayContent.isNotBlank() && !(audioAtts.isNotEmpty() && (displayContent == "Voice note" || displayContent == "Voice message"))) {
-                    SelectionContainer {
-                        Text(
-                            text = displayContent,
-                            fontSize = 15.sp,
-                            lineHeight = 22.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                    Column {
+                        SelectionContainer {
+                            Text(
+                                text = displayContent,
+                                fontSize = 15.sp,
+                                lineHeight = 22.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = if (isLongText && !isTextExpanded) 6 else Int.MAX_VALUE,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (isLongText) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { isTextExpanded = !isTextExpanded }
+                                    .padding(vertical = 2.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isTextExpanded) "Show less ▲" else "Show more (${lineCount} lines) ▼",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = ClaudeTerracotta
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -441,44 +467,27 @@ fun UserMessageBubble(
                     )
                 }
 
-                Spacer(modifier = Modifier.width(4.dp))
-
-                // Edit Prompt
-                IconButton(
-                    onClick = {
-                        onEdit(message)
-                        showUserActions = false
-                    },
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Edit,
-                        contentDescription = "Edit prompt",
-                        tint = ClaudeTerracotta,
-                        modifier = Modifier.size(15.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                // Retry Prompt
-                IconButton(
-                    onClick = {
-                        onRetry(message)
-                        showUserActions = false
-                    },
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Refresh,
-                        contentDescription = "Retry prompt",
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.size(16.dp)
-                    )
+                // Edit Prompt (ONLY shown for the last user message)
+                if (isLastUserMessage) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = {
+                            onEdit(message)
+                            showUserActions = false
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = "Undo and edit prompt",
+                            tint = ClaudeTerracotta,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
                 }
 
                 val payloadToShow = message.rawContent ?: message.rawPayload
-                if (!payloadToShow.isNullOrBlank()) {
+                if (isDevModeEnabled && !payloadToShow.isNullOrBlank()) {
                     Spacer(modifier = Modifier.width(4.dp))
                     IconButton(
                         onClick = {
