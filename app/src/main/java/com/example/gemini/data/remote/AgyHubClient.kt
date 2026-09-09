@@ -848,6 +848,13 @@ class AgyHubClient(
 
     // ==================== MESSAGING & EXECUTION ====================
 
+data class AgyMediaItem(
+    val mimeType: String,
+    val base64: String,
+    val durationSeconds: Int = 0,
+    val description: String = "Voice note"
+)
+
     /**
      * Sends a user prompt to SendUserCascadeMessage with structured options matching agyClient.js
      */
@@ -857,12 +864,28 @@ class AgyHubClient(
         modelEnum: String = "",
         thinkingBudget: Int = 8192,
         autoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
+        media: List<AgyMediaItem> = emptyList(),
         hubUrl: String = DEFAULT_HUB_URL
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val resolvedModel = resolveModelEnum(modelEnum)
+        val promptText = if (text.isNotBlank()) text else if (media.isNotEmpty()) (media.firstOrNull()?.description ?: "Voice note") else ""
         val payload = JSONObject().apply {
             put("cascadeId", cascadeId)
-            put("items", JSONArray().put(JSONObject().put("text", text)))
+            put("items", JSONArray().put(JSONObject().put("text", promptText)))
+            if (media.isNotEmpty()) {
+                val mediaArr = JSONArray()
+                for (m in media) {
+                    mediaArr.put(JSONObject().apply {
+                        put("mimeType", m.mimeType)
+                        put("inlineData", m.base64)
+                        if (m.durationSeconds > 0) {
+                            put("durationSeconds", m.durationSeconds)
+                        }
+                        put("description", m.description)
+                    })
+                }
+                put("media", mediaArr)
+            }
             put("cascadeConfig", JSONObject().apply {
                 put("plannerConfig", JSONObject().apply {
                     put("toolConfig", JSONObject().apply {
@@ -1538,6 +1561,7 @@ class AgyHubClient(
                     flushAssistant()
                     val userInput = step.optJSONObject("userInput")
                     var userText = ""
+                    val userAttachments = mutableListOf<com.example.gemini.domain.model.ChatAttachment>()
                     if (userInput != null) {
                         val items = userInput.optJSONArray("items")
                         if (items != null && items.length() > 0) {
@@ -1545,14 +1569,40 @@ class AgyHubClient(
                         } else {
                             userText = userInput.optString("content", "")
                         }
+
+                        val mediaArr = userInput.optJSONArray("media")
+                        if (mediaArr != null) {
+                            for (mIdx in 0 until mediaArr.length()) {
+                                val mObj = mediaArr.optJSONObject(mIdx) ?: continue
+                                val mime = mObj.optString("mimeType", "")
+                                val inline = mObj.optString("inlineData", "")
+                                val desc = mObj.optString("description", "Voice note")
+                                val dur = mObj.optInt("durationSeconds", 0)
+                                val isAud = mime.startsWith("audio/")
+                                val isImg = mime.startsWith("image/")
+                                userAttachments.add(
+                                    com.example.gemini.domain.model.ChatAttachment(
+                                        id = "att_${conversationId}_${stepIndex}_$mIdx",
+                                        name = desc,
+                                        path = "",
+                                        isImage = isImg,
+                                        isAudio = isAud,
+                                        durationSeconds = dur,
+                                        mimeType = mime,
+                                        base64 = inline
+                                    )
+                                )
+                            }
+                        }
                     }
-                    if (userText.isNotBlank()) {
+                    if (userText.isNotBlank() || userAttachments.isNotEmpty()) {
                         messages.add(
                             ChatMessage(
                                 id = "user_${conversationId}_$stepIndex",
                                 conversationId = conversationId,
                                 role = MessageRole.USER,
                                 content = userText,
+                                attachments = userAttachments,
                                 stepIndex = stepIndex
                             )
                         )

@@ -2,11 +2,13 @@ package com.example.gemini.data.daemon
 
 import android.content.Context
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -55,6 +57,12 @@ object TermuxDaemonManager {
     private val _openTabs = MutableStateFlow<List<OpenTab>>(emptyList())
     val openTabs: StateFlow<List<OpenTab>> = _openTabs.asStateFlow()
 
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var autoReconnectJob: Job? = null
+
+    private val _serverReconnectedEvent = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
+    val serverReconnectedEvent: SharedFlow<Unit> = _serverReconnectedEvent.asSharedFlow()
+
     private var prefs: android.content.SharedPreferences? = null
 
     fun init(context: Context) {
@@ -64,6 +72,12 @@ object TermuxDaemonManager {
         if (!savedName.isNullOrBlank() && !savedPath.isNullOrBlank()) {
             _activeProject.value = ProjectItem(savedName, savedPath)
         }
+
+        // Immediately check daemon status and start continuous auto-reconnection monitor
+        scope.launch {
+            ensureDaemonStarted()
+        }
+        startAutoReconnectMonitor()
     }
 
     fun setActiveProject(project: ProjectItem?) {
@@ -160,6 +174,37 @@ object TermuxDaemonManager {
         _logs.value = emptyList()
     }
 
+    fun startAutoReconnectMonitor() {
+        if (autoReconnectJob?.isActive == true) return
+        autoReconnectJob = scope.launch {
+            while (isActive) {
+                delay(12_000)
+                checkHealthAndReconnect(isSilent = true)
+            }
+        }
+    }
+
+    suspend fun checkHealthAndReconnect(isSilent: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        val previousStatus = _status.value
+        val isHealthy = IdeApiClient.checkHealth()
+        if (isHealthy) {
+            _status.value = DaemonStatus.RUNNING
+            _statusMessage.value = "Running on ${IdeApiClient.baseUrl.removePrefix("http://")}"
+            if (previousStatus != DaemonStatus.RUNNING) {
+                log("✅ Unified Bridge & IDE Daemon is online on ${IdeApiClient.baseUrl}!")
+                _serverReconnectedEvent.tryEmit(Unit)
+            }
+            true
+        } else {
+            _status.value = DaemonStatus.ERROR
+            _statusMessage.value = "Port 8080 Offline"
+            if (!isSilent || previousStatus == DaemonStatus.RUNNING) {
+                log("❌ Server is offline on ${IdeApiClient.baseUrl}/api/health")
+            }
+            false
+        }
+    }
+
     suspend fun ensureDaemonStarted(
         context: Context? = null,
         host: String = "127.0.0.1",
@@ -167,19 +212,11 @@ object TermuxDaemonManager {
         user: String = "",
         pass: String = ""
     ): Boolean = withContext(Dispatchers.IO) {
+        _status.value = DaemonStatus.STARTING
         _statusMessage.value = "Checking port 8080..."
-        log("Checking HTTP healthcheck at http://127.0.0.1:8080/api/health...")
-
-        if (IdeApiClient.checkHealth()) {
-            _status.value = DaemonStatus.RUNNING
-            _statusMessage.value = "Running on 127.0.0.1:8080"
-            log("✅ Unified Bridge & IDE Daemon is online on 127.0.0.1:8080!")
-            return@withContext true
-        }
-
-        _status.value = DaemonStatus.ERROR
-        _statusMessage.value = "Port 8080 Offline"
-        log("❌ Server is offline on http://127.0.0.1:8080/api/health")
-        return@withContext false
+        log("Checking HTTP healthcheck at ${IdeApiClient.baseUrl}/api/health...")
+        val ok = checkHealthAndReconnect(isSilent = false)
+        startAutoReconnectMonitor()
+        ok
     }
 }

@@ -14,6 +14,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.example.gemini.theme.GeminiTheme
 import com.example.gemini.ui.chat.ChatScreen
 import com.example.gemini.ui.chat.ChatViewModel
@@ -85,6 +87,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        lifecycleScope.launch {
+            com.example.gemini.data.daemon.TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
         }
     }
 

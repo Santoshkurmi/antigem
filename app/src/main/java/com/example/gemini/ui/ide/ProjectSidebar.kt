@@ -50,6 +50,8 @@ fun ProjectSidebar(
     var showCreateFileDialog by remember { mutableStateOf<String?>(null) } // parentPath
     var isNewFolderMode by remember { mutableStateOf(false) }
     var newItemName by remember { mutableStateOf("") }
+    val daemonStatus by com.example.gemini.data.daemon.TermuxDaemonManager.status.collectAsState()
+    val daemonMessage by com.example.gemini.data.daemon.TermuxDaemonManager.statusMessage.collectAsState()
 
     Column(
         modifier = modifier
@@ -299,11 +301,53 @@ fun ProjectSidebar(
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = if (activeProject == null) "Open or create a project to view files" else "Project is empty",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (daemonStatus != com.example.gemini.data.daemon.DaemonStatus.RUNNING) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = null,
+                                tint = Color(0xFFFF5252),
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "IDE Server Offline",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Checking port 8080 (auto-retrying)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = onRefreshTree,
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Retry Now", fontSize = 13.sp)
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = if (activeProject == null) "Open or create a project to view files" else "Project is empty",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             } else {
                 LazyColumn(
@@ -329,8 +373,6 @@ fun ProjectSidebar(
         }
 
         // --- 4. Daemon Connection Status & Logs Footer ---
-        val daemonStatus by com.example.gemini.data.daemon.TermuxDaemonManager.status.collectAsState()
-        val daemonMessage by com.example.gemini.data.daemon.TermuxDaemonManager.statusMessage.collectAsState()
         var showDaemonLogsDialog by remember { mutableStateOf(false) }
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -383,6 +425,20 @@ fun ProjectSidebar(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+                if (daemonStatus != com.example.gemini.data.daemon.DaemonStatus.RUNNING) {
+                    IconButton(
+                        onClick = onRefreshTree,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Retry",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
                 }
                 Icon(
                     imageVector = Icons.Default.Terminal,

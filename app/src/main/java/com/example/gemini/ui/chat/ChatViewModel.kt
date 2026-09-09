@@ -9,14 +9,17 @@ import com.example.gemini.data.remote.GoogleOAuthManager
 import com.example.gemini.data.remote.StreamEvent
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
+import com.example.gemini.domain.model.ChatAttachment
 import com.example.gemini.domain.model.Conversation
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.domain.model.ModelQuota
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -512,6 +515,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             refreshQuotas()
         }
+
+        // Periodic auto-reconnect monitor for Hub RPC streams (every 20 seconds)
+        viewModelScope.launch {
+            while (currentCoroutineContext().isActive) {
+                delay(20_000)
+                if (_isServerOnline.value != true || syncJob?.isActive != true) {
+                    android.util.Log.d("ChatViewModel", "Periodic check: reconnecting hub streams...")
+                    syncAgyConversations(force = false)
+                    val convId = _currentConversation.value?.id
+                    if (!convId.isNullOrBlank() && persistentStreamJob?.isActive != true) {
+                        startPersistentStream(convId)
+                    }
+                }
+            }
+        }
     }
 
     fun getDraft(conversationId: String): androidx.compose.ui.text.input.TextFieldValue {
@@ -560,37 +578,85 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private var syncJob: Job? = null
 
-    fun syncAgyConversations() {
-        if (syncJob?.isActive == true) return
+    fun syncAgyConversations(force: Boolean = false) {
+        if (!force && syncJob?.isActive == true) return
+        syncJob?.cancel()
         syncJob = viewModelScope.launch {
             _isLoadingConversation.value = true
-            try {
-                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-                agyHubClient.subscribeToSummaries(hubUrl).collect { summaries ->
-                    if (summaries.isNotEmpty()) {
-                        val currentMap = _conversations.value.associateBy { it.id }.toMutableMap()
-                        for (conv in summaries) {
-                            currentMap[conv.id] = conv
-                            knownDaemonCascadeIds.add(conv.id)
+            while (currentCoroutineContext().isActive) {
+                try {
+                    val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                    agyHubClient.subscribeToSummaries(hubUrl).collect { summaries ->
+                        if (summaries.isNotEmpty()) {
+                            val currentMap = _conversations.value.associateBy { it.id }.toMutableMap()
+                            for (conv in summaries) {
+                                currentMap[conv.id] = conv
+                                knownDaemonCascadeIds.add(conv.id)
+                            }
+                            _conversations.value = currentMap.values.sortedByDescending { it.updatedAt }
+                            _isServerOnline.value = true
+                            _conversationError.value = null
+                            _isLoadingConversation.value = false
                         }
-                        _conversations.value = currentMap.values.sortedByDescending { it.updatedAt }
-                        _isServerOnline.value = true
-                        _conversationError.value = null
-                        _isLoadingConversation.value = false
                     }
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) {
+                        break
+                    }
+                    android.util.Log.e("ChatViewModel", "subscribeToSummaries failed: ${e.message}")
+                    _isServerOnline.value = false
+                    val rawErr = e.message ?: "Connection failed"
+                    val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("8090") || rawErr.contains("Failed to connect", ignoreCase = true)) {
+                        "Cannot connect to Antigravity Hub on port 8090. Make sure 'agy --hub' is running."
+                    } else {
+                        "Antigravity Hub unreachable: $rawErr"
+                    }
+                    if (_conversations.value.isEmpty()) {
+                        _conversationError.value = helpfulMsg
+                    }
+                    _isLoadingConversation.value = false
+                    delay(20_000) // Auto-retry conversation sync every 20 seconds while offline
                 }
-            } catch (e: Exception) {
-                android.util.Log.e("ChatViewModel", "subscribeToSummaries failed: ${e.message}")
-                _isServerOnline.value = false
-                val rawErr = e.message ?: "Connection failed"
-                val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("8090") || rawErr.contains("Failed to connect", ignoreCase = true)) {
-                    "Cannot connect to Antigravity Hub on port 8090. Make sure 'agy --hub' is running."
-                } else {
-                    "Antigravity Hub unreachable: $rawErr"
-                }
-                _conversationError.value = helpfulMsg
-                _isLoadingConversation.value = false
             }
+        }
+    }
+
+    /**
+     * Retries all connections: both sidebar conversation list and active chat stream
+     */
+    fun retryConnections() {
+        _conversationError.value = null
+        _isLoadingConversation.value = true
+        syncAgyConversations(force = true)
+        val convId = _currentConversation.value?.id
+        if (!convId.isNullOrBlank()) {
+            startPersistentStream(convId)
+        }
+        refreshQuotas()
+        viewModelScope.launch {
+            com.example.gemini.data.daemon.TermuxDaemonManager.checkHealthAndReconnect(isSilent = false)
+        }
+    }
+
+    /**
+     * Called when the app comes into focus / foreground.
+     * Checks both RPC streams and reconnects if dropped.
+     */
+    fun onAppForegrounded() {
+        android.util.Log.d("ChatViewModel", "App foregrounded: inspecting RPC streams...")
+        viewModelScope.launch {
+            val convId = _currentConversation.value?.id
+            val isSyncActive = syncJob?.isActive == true
+            val isStreamActive = persistentStreamJob?.isActive == true
+
+            if (!isSyncActive || _isServerOnline.value != true) {
+                syncAgyConversations(force = true)
+            }
+            if (!convId.isNullOrBlank() && (!isStreamActive || _isServerOnline.value != true)) {
+                startPersistentStream(convId)
+            }
+            refreshQuotas()
+            com.example.gemini.data.daemon.TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
         }
     }
 
@@ -1108,12 +1174,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun addAttachment(attachment: ChatAttachment) {
+        _attachments.value = _attachments.value + attachment
+    }
+
     fun sendMessage(content: String) {
         if ((content.isBlank() && _attachments.value.isEmpty()) || _isStreaming.value) return
 
         val currentAtts = _attachments.value
-        val attText = if (currentAtts.isNotEmpty()) {
-            val listStr = currentAtts.joinToString("\n") { att ->
+        val audioAtts = currentAtts.filter { it.isAudio }
+        val nonAudioAtts = currentAtts.filter { !it.isAudio }
+
+        val attText = if (nonAudioAtts.isNotEmpty()) {
+            val listStr = nonAudioAtts.joinToString("\n") { att ->
                 if (att.isImage) {
                     "[Attached Image: ${att.name}](file://${att.path})"
                 } else {
@@ -1123,14 +1196,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             if (content.isNotBlank()) "\n\n$listStr" else listStr
         } else ""
 
-        val finalPrompt = (content.trim() + attText).trim()
+        val rawPrompt = (content.trim() + attText).trim()
+        val finalPrompt = if (rawPrompt.isNotBlank()) rawPrompt else if (audioAtts.isNotEmpty()) "Voice note" else ""
         _attachments.value = emptyList()
 
         val conv = _currentConversation.value ?: return
         val userMsg = ChatMessage(
             conversationId = conv.id,
             role = MessageRole.USER,
-            content = finalPrompt
+            content = finalPrompt,
+            attachments = currentAtts
         )
 
         var updatedConv = conv
@@ -1147,9 +1222,31 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val updatedList = _messages.value + userMsg
         _messages.value = updatedList
 
+        // Prepare media payload for voice notes
+        val mediaList = mutableListOf<com.example.gemini.data.remote.AgyHubClient.AgyMediaItem>()
+        for (aud in audioAtts) {
+            val b64 = when {
+                !aud.base64.isNullOrBlank() -> aud.base64
+                aud.path.isNotBlank() && java.io.File(aud.path).exists() -> {
+                    android.util.Base64.encodeToString(java.io.File(aud.path).readBytes(), android.util.Base64.NO_WRAP)
+                }
+                else -> null
+            }
+            if (!b64.isNullOrBlank()) {
+                mediaList.add(
+                    com.example.gemini.data.remote.AgyHubClient.AgyMediaItem(
+                        mimeType = aud.mimeType ?: "audio/mp4",
+                        base64 = b64,
+                        durationSeconds = aud.durationSeconds,
+                        description = aud.name.ifBlank { "Voice note" }
+                    )
+                )
+            }
+        }
+
         viewModelScope.launch {
             _conversations.value = _conversations.value.map { if (it.id == updatedConv.id) updatedConv else it }
-            executeStream(updatedConv, updatedList)
+            executeStream(updatedConv, updatedList, mediaItems = mediaList)
         }
     }
 
@@ -1238,7 +1335,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         isRetryAfterRefresh: Boolean = false,
         existingAssistantMsgId: String? = null,
         existingToolCalls: List<com.example.gemini.domain.model.ToolCall> = emptyList(),
-        priorTextPrefix: String = ""
+        priorTextPrefix: String = "",
+        mediaItems: List<com.example.gemini.data.remote.AgyHubClient.AgyMediaItem> = emptyList()
     ) {
         _isStreaming.value = true
         isPromptInFlight = true
@@ -1334,6 +1432,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     modelEnum = modelEnum,
                     thinkingBudget = thinkingBudget,
                     autoExecutionPolicy = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
+                    media = mediaItems,
                     hubUrl = hubUrl
                 )
 
@@ -1358,6 +1457,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 modelEnum = modelEnum,
                                 thinkingBudget = thinkingBudget,
                                 autoExecutionPolicy = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
+                                media = mediaItems,
                                 hubUrl = hubUrl
                             )
                         }

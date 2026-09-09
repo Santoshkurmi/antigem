@@ -32,7 +32,7 @@ data class SearchMatch(
 
 object IdeApiClient {
     private const val TAG = "IdeApiClient"
-    private const val BASE_URL = "http://127.0.0.1:8080"
+    var baseUrl: String = "http://127.0.0.1:8080"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)
@@ -45,7 +45,7 @@ object IdeApiClient {
     suspend fun checkHealth(): Boolean = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
-                .url("$BASE_URL/api/health")
+                .url("$baseUrl/api/health")
                 .get()
                 .build()
             client.newCall(request).execute().use { response ->
@@ -60,7 +60,7 @@ object IdeApiClient {
     suspend fun getProjects(): List<ProjectItem> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
-                .url("$BASE_URL/api/projects")
+                .url("$baseUrl/api/projects")
                 .get()
                 .build()
             client.newCall(request).execute().use { response ->
@@ -107,7 +107,7 @@ object IdeApiClient {
             }.toString()
 
             val request = Request.Builder()
-                .url("$BASE_URL/api/projects/create")
+                .url("$baseUrl/api/projects/create")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -125,7 +125,7 @@ object IdeApiClient {
 
     suspend fun getFileTree(dir: String? = null): List<FileNode> = withContext(Dispatchers.IO) {
         try {
-            val url = if (!dir.isNullOrBlank()) "$BASE_URL/api/tree?dir=${java.net.URLEncoder.encode(dir, "UTF-8")}" else "$BASE_URL/api/tree"
+            val url = if (!dir.isNullOrBlank()) "$baseUrl/api/tree?dir=${java.net.URLEncoder.encode(dir, "UTF-8")}" else "$baseUrl/api/tree"
             val request = Request.Builder()
                 .url(url)
                 .get()
@@ -164,7 +164,7 @@ object IdeApiClient {
 
     suspend fun readFile(path: String): String? = withContext(Dispatchers.IO) {
         try {
-            val url = "$BASE_URL/api/file/read?path=${java.net.URLEncoder.encode(path, "UTF-8")}"
+            val url = "$baseUrl/api/file/read?path=${java.net.URLEncoder.encode(path, "UTF-8")}"
             val request = Request.Builder().url(url).get().build()
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) response.body?.string() else null
@@ -182,7 +182,7 @@ object IdeApiClient {
                 put("content", content)
             }.toString()
             val request = Request.Builder()
-                .url("$BASE_URL/api/file/save")
+                .url("$baseUrl/api/file/save")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
             client.newCall(request).execute().use { it.isSuccessful }
@@ -201,7 +201,7 @@ object IdeApiClient {
                 put("replacement", replacement)
             }.toString()
             val request = Request.Builder()
-                .url("$BASE_URL/api/file/patch")
+                .url("$baseUrl/api/file/patch")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
             client.newCall(request).execute().use { it.isSuccessful }
@@ -218,7 +218,7 @@ object IdeApiClient {
                 put("isDir", isDir)
             }.toString()
             val request = Request.Builder()
-                .url("$BASE_URL/api/file/create")
+                .url("$baseUrl/api/file/create")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
             client.newCall(request).execute().use { it.isSuccessful }
@@ -233,7 +233,7 @@ object IdeApiClient {
                 put("path", path)
             }.toString()
             val request = Request.Builder()
-                .url("$BASE_URL/api/file/delete")
+                .url("$baseUrl/api/file/delete")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
             client.newCall(request).execute().use { it.isSuccessful }
@@ -249,7 +249,7 @@ object IdeApiClient {
                 put("newPath", newPath)
             }.toString()
             val request = Request.Builder()
-                .url("$BASE_URL/api/file/rename")
+                .url("$baseUrl/api/file/rename")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
             client.newCall(request).execute().use { it.isSuccessful }
@@ -262,9 +262,9 @@ object IdeApiClient {
         try {
             val encodedQ = java.net.URLEncoder.encode(query, "UTF-8")
             val url = if (!dir.isNullOrBlank()) {
-                "$BASE_URL/api/search?q=$encodedQ&dir=${java.net.URLEncoder.encode(dir, "UTF-8")}"
+                "$baseUrl/api/search?q=$encodedQ&dir=${java.net.URLEncoder.encode(dir, "UTF-8")}"
             } else {
-                "$BASE_URL/api/search?q=$encodedQ"
+                "$baseUrl/api/search?q=$encodedQ"
             }
 
             val request = Request.Builder().url(url).get().build()

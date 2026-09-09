@@ -36,6 +36,9 @@ import com.example.gemini.data.daemon.OpenTab
 import com.example.gemini.data.daemon.ProjectItem
 import com.example.gemini.data.daemon.TermuxDaemonManager
 import com.example.gemini.theme.ClaudeTerracotta
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,6 +61,7 @@ fun IdeScreen(
 
     fun refreshProjectsAndTree() {
         coroutineScope.launch {
+            TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
             val projs = IdeApiClient.getProjects()
             projects = projs
             val current = TermuxDaemonManager.activeProject.value
@@ -72,9 +76,28 @@ fun IdeScreen(
 
     // Initialize Go daemon & load projects
     LaunchedEffect(Unit) {
-        coroutineScope.launch {
-            TermuxDaemonManager.ensureDaemonStarted()
+        TermuxDaemonManager.ensureDaemonStarted()
+        refreshProjectsAndTree()
+    }
+
+    // React immediately whenever daemon reconnects in the background
+    LaunchedEffect(Unit) {
+        TermuxDaemonManager.serverReconnectedEvent.collect {
             refreshProjectsAndTree()
+        }
+    }
+
+    // Recheck connection and reload file tree when app is brought to foreground
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshProjectsAndTree()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 

@@ -48,6 +48,7 @@ data class ChatMessage(
     val rawContent: String? = null,
     val contextSummary: String? = null,
     val stepIndex: Int? = null,
+    val attachments: List<ChatAttachment> = emptyList(),
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -57,9 +58,13 @@ data class ChatAttachment(
     val name: String,
     val path: String,
     val isImage: Boolean = false,
+    val isAudio: Boolean = false,
     val localUri: String? = null,
     val size: Long = 0L,
-    val url: String? = null
+    val url: String? = null,
+    val durationSeconds: Int = 0,
+    val mimeType: String? = null,
+    val base64: String? = null
 )
 
 @Serializable

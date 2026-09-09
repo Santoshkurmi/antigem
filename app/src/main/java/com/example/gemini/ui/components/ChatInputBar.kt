@@ -1,14 +1,13 @@
 package com.example.gemini.ui.components
 
 import android.Manifest
-import android.app.Activity
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.speech.RecognizerIntent
+import android.media.MediaRecorder
+import android.os.Build
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -27,6 +26,8 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.gemini.domain.model.AiModel
@@ -55,6 +57,12 @@ import com.example.gemini.domain.model.ModelFamily
 import com.example.gemini.domain.model.ModelQuota
 import com.example.gemini.domain.model.ThinkingPreference
 import com.example.gemini.theme.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import java.io.File
+import java.util.UUID
 
 /**
  * Elegant 4-bar audio waveform icon matching Claude's signature voice mode button.
@@ -89,7 +97,7 @@ fun ClaudeWaveformIcon(
 /**
  * Claude Android style unified input bar:
  * - Single rounded container enclosing text field, attachments, [+] button, model selector pill, and voice recorder / send button.
- * - Dynamic voice recorder icon matching Claude's circular waveform design.
+ * - Dynamic microphone icon with native MediaRecorder audio recording, stop & attach, or direct send.
  */
 @Composable
 fun ChatInputBar(
@@ -106,32 +114,75 @@ fun ChatInputBar(
     attachments: List<ChatAttachment> = emptyList(),
     isUploadingAttachment: Boolean = false,
     onRemoveAttachment: (String) -> Unit = {},
+    onAddAttachment: (ChatAttachment) -> Unit = {},
     onAttachClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val coroutineScope = rememberCoroutineScope()
     val isDark = isSystemInDarkTheme()
 
-    // Voice recognition launcher
-    val speechRecognizerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val spokenText = result.data
-                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                ?.firstOrNull()
-            if (!spokenText.isNullOrBlank()) {
-                val oldText = textFieldValue.text
-                val newText = if (oldText.isBlank()) spokenText else "$oldText $spokenText"
-                onTextFieldValueChange(
-                    TextFieldValue(
-                        text = newText,
-                        selection = TextRange(newText.length)
-                    )
-                )
+    // Audio recording state
+    var isRecordingAudio by remember { mutableStateOf(false) }
+    var recordingDurationSeconds by remember { mutableIntStateOf(0) }
+    var mediaRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    var currentRecordingFile by remember { mutableStateOf<File?>(null) }
+    var recordingJob by remember { mutableStateOf<Job?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                mediaRecorder?.stop()
+                mediaRecorder?.release()
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun startAudioRecording() {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasPermission) {
+            return
+        }
+
+        try {
+            val audioFile = File(context.cacheDir, "voice_note_${System.currentTimeMillis()}.m4a")
+            currentRecordingFile = audioFile
+
+            val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(context)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaRecorder()
             }
+
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            recorder.setAudioEncodingBitRate(128000)
+            recorder.setAudioSamplingRate(44100)
+            recorder.setOutputFile(audioFile.absolutePath)
+            recorder.prepare()
+            recorder.start()
+
+            mediaRecorder = recorder
+            isRecordingAudio = true
+            recordingDurationSeconds = 0
+
+            recordingJob = coroutineScope.launch {
+                while (isRecordingAudio && isActive) {
+                    delay(1000)
+                    recordingDurationSeconds++
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ChatInputBar", "Failed to start recording: ${e.message}")
+            Toast.makeText(context, "Could not start audio recording", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -139,39 +190,78 @@ fun ChatInputBar(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to ${selectedModel.displayName.split(" ").firstOrNull() ?: "Gemini"}...")
-            }
-            try {
-                speechRecognizerLauncher.launch(intent)
-            } catch (e: ActivityNotFoundException) {
-                Toast.makeText(context, "Voice input not available on this device", Toast.LENGTH_SHORT).show()
-            }
+            startAudioRecording()
         } else {
-            Toast.makeText(context, "Microphone permission required for voice input", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Microphone permission required for voice recording", Toast.LENGTH_SHORT).show()
         }
     }
 
-    fun launchVoiceInput() {
+    fun triggerMicClick() {
         val hasPermission = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
 
         if (hasPermission) {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to ${selectedModel.displayName.split(" ").firstOrNull() ?: "Gemini"}...")
-            }
-            try {
-                speechRecognizerLauncher.launch(intent)
-            } catch (e: ActivityNotFoundException) {
-                Toast.makeText(context, "Voice input not available on this device", Toast.LENGTH_SHORT).show()
-            }
+            startAudioRecording()
         } else {
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    fun stopAudioRecording(andSend: Boolean) {
+        val file = currentRecordingFile
+        val dur = recordingDurationSeconds
+        recordingJob?.cancel()
+
+        try {
+            mediaRecorder?.stop()
+            mediaRecorder?.release()
+        } catch (e: Exception) {
+            Log.w("ChatInputBar", "Error stopping recorder: ${e.message}")
+        } finally {
+            mediaRecorder = null
+            isRecordingAudio = false
+            currentRecordingFile = null
+            recordingDurationSeconds = 0
+        }
+
+        if (file != null && file.exists() && file.length() > 0) {
+            val att = ChatAttachment(
+                id = UUID.randomUUID().toString(),
+                name = "Voice Note (${formatAudioDuration(dur)})",
+                path = file.absolutePath,
+                isAudio = true,
+                durationSeconds = dur,
+                size = file.length(),
+                mimeType = "audio/mp4"
+            )
+
+            if (andSend) {
+                onAddAttachment(att)
+                val trimmed = textFieldValue.text.trim()
+                onSendMessage(trimmed)
+                onTextFieldValueChange(TextFieldValue(""))
+            } else {
+                onAddAttachment(att)
+            }
+        }
+    }
+
+    fun cancelAudioRecording() {
+        val file = currentRecordingFile
+        recordingJob?.cancel()
+        try {
+            mediaRecorder?.stop()
+            mediaRecorder?.release()
+        } catch (_: Exception) {}
+        finally {
+            mediaRecorder = null
+            isRecordingAudio = false
+            currentRecordingFile = null
+            recordingDurationSeconds = 0
+        }
+        file?.delete()
     }
 
     val canSend = textFieldValue.text.trim().isNotEmpty() || attachments.isNotEmpty()
@@ -196,13 +286,112 @@ fun ChatInputBar(
                     if (isDark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
                 )
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 6.dp, vertical = 6.dp)
-                ) {
-                    // 1. Text Field Area on Top
-                    TextField(
+                if (isRecordingAudio) {
+                    val infiniteTransition = rememberInfiniteTransition(label = "recPulse")
+                    val pulseAlpha by infiniteTransition.animateFloat(
+                        initialValue = 0.25f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(600, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "recAlpha"
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Pulsing red recording dot
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFE53935).copy(alpha = pulseAlpha))
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Icon(
+                            imageVector = Icons.Rounded.Mic,
+                            contentDescription = null,
+                            tint = Color(0xFFE53935),
+                            modifier = Modifier.size(18.dp)
+                        )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        Text(
+                            text = "Recording... ${formatAudioDuration(recordingDurationSeconds)}",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        // Cancel / Discard
+                        IconButton(
+                            onClick = { cancelAudioRecording() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = "Cancel recording",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Stop & Attach (lets user enter more text)
+                        Surface(
+                            onClick = { stopAudioRecording(andSend = false) },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Stop,
+                                    contentDescription = "Stop & Attach",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Send directly
+                        Surface(
+                            onClick = { stopAudioRecording(andSend = true) },
+                            shape = CircleShape,
+                            color = ClaudeTerracotta,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowUpward,
+                                    contentDescription = "Send voice note",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 6.dp, vertical = 6.dp)
+                    ) {
+                        // 1. Text Field Area on Top
+                        TextField(
                         value = textFieldValue,
                         onValueChange = onTextFieldValueChange,
                         placeholder = {
@@ -285,6 +474,13 @@ fun ChatInputBar(
                                                 modifier = Modifier
                                                     .size(28.dp)
                                                     .clip(RoundedCornerShape(6.dp))
+                                            )
+                                        } else if (att.isAudio) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Mic,
+                                                contentDescription = null,
+                                                tint = ClaudeTerracotta,
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         } else {
                                             Icon(
@@ -452,19 +648,24 @@ fun ChatInputBar(
                                 }
                             }
                         } else {
-                            // Claude-style Voice Recorder Button
+                            // Claude-style Microphone Voice Recorder Button
                             val voiceBgColor = if (isDark) Color(0xFFEDEDED) else Color(0xFF1F1F1F)
                             val voiceIconColor = if (isDark) Color(0xFF1B1B1B) else Color.White
 
                             Surface(
-                                onClick = { launchVoiceInput() },
+                                onClick = { triggerMicClick() },
                                 shape = CircleShape,
                                 color = voiceBgColor,
                                 shadowElevation = 1.dp,
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    ClaudeWaveformIcon(color = voiceIconColor)
+                                    Icon(
+                                        imageVector = Icons.Rounded.Mic,
+                                        contentDescription = "Record voice note",
+                                        tint = voiceIconColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
                             }
                         }
@@ -473,4 +674,5 @@ fun ChatInputBar(
             }
         }
     }
+}
 }

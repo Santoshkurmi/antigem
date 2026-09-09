@@ -38,9 +38,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.collectAsState
 import com.example.gemini.data.daemon.FileNode
@@ -101,6 +104,22 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.onAppForegrounded()
+                scope.launch {
+                    TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     val conversations by viewModel.conversations.collectAsState()
     val currentConv by viewModel.currentConversation.collectAsState()
@@ -365,6 +384,25 @@ fun ChatScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        TermuxDaemonManager.serverReconnectedEvent.collect {
+            var list = IdeApiClient.getProjects()
+            if (list.isEmpty()) {
+                val httpUrl = viewModel.authPreferences.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+                val res = com.example.gemini.data.remote.AgyBridgeService().fetchProjects(httpUrl)
+                if (res.isSuccess) {
+                    list = res.getOrThrow().map { ProjectItem(it.name, it.path) }
+                }
+            }
+            if (list.isNotEmpty()) {
+                chatProjectsList = list
+                if (activeChatProject == null) {
+                    TermuxDaemonManager.setActiveProject(list.first())
+                }
+            }
+        }
+    }
+
     LaunchedEffect(activeChatProject) {
         if (activeChatProject != null) {
             scope.launch {
@@ -480,6 +518,7 @@ fun ChatScreen(
                                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                         modifier = Modifier.clickable {
                                             scope.launch {
+                                                TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
                                                 var list = IdeApiClient.getProjects()
                                                 if (list.isEmpty()) {
                                                     val httpUrl = viewModel.authPreferences.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
@@ -650,12 +689,7 @@ fun ChatScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = {
-                                    val convId = currentConv?.id
-                                    if (convId != null) {
-                                        viewModel.selectConversation(convId)
-                                    } else {
-                                        viewModel.syncAgyConversations()
-                                    }
+                                    viewModel.retryConnections()
                                 },
                                 shape = RoundedCornerShape(10.dp)
                             ) {
@@ -1037,6 +1071,7 @@ fun ChatScreen(
                     attachments = attachments,
                     isUploadingAttachment = isUploadingAttachment,
                     onRemoveAttachment = { viewModel.removeAttachment(it) },
+                    onAddAttachment = { viewModel.addAttachment(it) },
                     onAttachClick = { showAttachmentSelector = true }
                 )
             }

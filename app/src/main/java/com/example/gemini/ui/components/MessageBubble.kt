@@ -345,19 +345,31 @@ fun UserMessageBubble(
 
         Box(
             modifier = Modifier
-                .widthIn(max = 320.dp)
+                .widthIn(max = 330.dp)
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .clickable { showUserActions = !showUserActions }
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            SelectionContainer {
-                Text(
-                    text = message.content,
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Audio attachments player
+                val audioAtts = message.attachments.filter { it.isAudio }
+                for (att in audioAtts) {
+                    ChatAudioPlayer(attachment = att)
+                }
+
+                // Text content (if not just placeholder "Voice note")
+                val displayContent = message.content.trim()
+                if (displayContent.isNotBlank() && !(audioAtts.isNotEmpty() && (displayContent == "Voice note" || displayContent == "Voice message"))) {
+                    SelectionContainer {
+                        Text(
+                            text = displayContent,
+                            fontSize = 15.sp,
+                            lineHeight = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             }
         }
 
