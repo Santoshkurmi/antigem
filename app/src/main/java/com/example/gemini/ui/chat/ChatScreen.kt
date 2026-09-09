@@ -461,6 +461,7 @@ fun ChatScreen(
                 activeInstances = activeInstances,
                 isLoading = isLoadingConversation,
                 errorMessage = conversationError,
+                isStreaming = isStreaming,
                 onRetry = { viewModel.retryConnections() },
                 isOpen = drawerState.isOpen || drawerState.targetValue == DrawerValue.Open,
                 onSelectConversation = { id ->

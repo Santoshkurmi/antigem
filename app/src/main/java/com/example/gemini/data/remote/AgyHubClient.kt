@@ -478,8 +478,13 @@ class AgyHubClient(
                     while (keys.hasNext()) {
                         val cid = keys.next()
                         val obj = updates.getJSONObject(cid)
-                        val summary = obj.optString("summary", "Conversation").ifBlank { "Conversation" }
+                        val annotations = obj.optJSONObject("annotations")
+                        val annTitle = annotations?.optString("title")?.takeIf { it.isNotBlank() }
+                        val summary = annTitle ?: obj.optString("summary", "Conversation").ifBlank { "Conversation" }
                         val lastModStr = obj.optString("lastModifiedTime", "")
+                        val status = obj.optString("status", "")
+                        val isRunning = status.contains("RUNNING", ignoreCase = true)
+                        val stepCount = obj.optInt("stepCount", 0)
 
                         var lastModEpoch = System.currentTimeMillis()
                         if (lastModStr.isNotBlank()) {
@@ -499,7 +504,9 @@ class AgyHubClient(
                                 sessionId = cid,
                                 summary = summary,
                                 createdAt = lastModEpoch,
-                                updatedAt = lastModEpoch
+                                updatedAt = lastModEpoch,
+                                isRunning = isRunning,
+                                stepCount = stepCount
                             )
                         )
                     }

@@ -1217,7 +1217,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             updatedConv = updatedConv.copy(title = cleanTitle)
         }
 
-        updatedConv = updatedConv.copy(updatedAt = System.currentTimeMillis())
+        updatedConv = updatedConv.copy(updatedAt = System.currentTimeMillis(), isRunning = true)
         _currentConversation.value = updatedConv
 
         val updatedList = _messages.value + userMsg

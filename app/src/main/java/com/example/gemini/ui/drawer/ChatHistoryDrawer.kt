@@ -39,6 +39,7 @@ fun ChatHistoryDrawer(
     activeInstances: List<com.example.gemini.data.remote.AgyActiveInstance> = emptyList(),
     isLoading: Boolean = false,
     errorMessage: String? = null,
+    isStreaming: Boolean = false,
     onRetry: () -> Unit = {},
     onSelectConversation: (String) -> Unit,
     onNewChat: () -> Unit,
@@ -264,6 +265,7 @@ fun ChatHistoryDrawer(
                             items(filtered, key = { it.id }) { conv ->
                                 val isSelected = conv.id == currentConversationId
                                 val activeInst = activeInstances.find { it.conversationId == conv.id }
+                                val isConvRunning = conv.isRunning || (conv.id == currentConversationId && isStreaming) || activeInst != null
 
                                 Row(
                                     modifier = Modifier
@@ -278,12 +280,23 @@ fun ChatHistoryDrawer(
                                         .padding(horizontal = 10.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.ChatBubbleOutline,
-                                        contentDescription = null,
-                                        tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.ChatBubbleOutline,
+                                            contentDescription = null,
+                                            tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        if (isConvRunning) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(7.dp)
+                                                    .align(Alignment.TopEnd)
+                                                    .offset(x = 2.dp, y = (-2).dp)
+                                                    .background(Color(0xFF4CAF50), androidx.compose.foundation.shape.CircleShape)
+                                            )
+                                        }
+                                    }
 
                                     Spacer(modifier = Modifier.width(10.dp))
 
@@ -345,6 +358,14 @@ fun ChatHistoryDrawer(
                                             }
                                         }
                                         Spacer(modifier = Modifier.width(6.dp))
+                                    } else if (isConvRunning) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(horizontal = 2.dp)
+                                                .size(7.dp)
+                                                .background(Color(0xFF4CAF50), androidx.compose.foundation.shape.CircleShape)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
                                     }
 
                                     var menuExpanded by remember { mutableStateOf(false) }

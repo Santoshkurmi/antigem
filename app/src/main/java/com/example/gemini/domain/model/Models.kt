@@ -76,7 +76,9 @@ data class Conversation(
     val summary: String? = null,
     val customSystemPrompt: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isRunning: Boolean = false,
+    val stepCount: Int = 0
 )
 
 enum class ModelFamily {
