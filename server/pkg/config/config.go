@@ -30,13 +30,36 @@ func LoadConfig() *Config {
 
 	workspace := os.Getenv("WORKSPACE_DIR")
 	if workspace == "" {
-		workspace = filepath.Join(home, "projects", "gemini")
+		candidates := []string{
+			"/home/cat/extra",
+			filepath.Join(home, "extra"),
+			filepath.Join(home, "projects", "gemini"),
+			filepath.Join(home, "projects"),
+		}
+		for _, c := range candidates {
+			if fi, err := os.Stat(c); err == nil && fi.IsDir() {
+				workspace = c
+				break
+			}
+		}
+		if workspace == "" {
+			if wd, err := os.Getwd(); err == nil {
+				workspace = wd
+			}
+		}
 	}
 
 	appData := filepath.Join(home, ".gemini", "antigravity-cli")
 	brain := filepath.Join(appData, "brain")
 	tokenFile := filepath.Join(appData, "antigravity-oauth-token")
 	projectsBase := filepath.Join(home, "projects")
+	if fi, err := os.Stat(projectsBase); err != nil || !fi.IsDir() {
+		if fi2, err2 := os.Stat("/home/cat/extra"); err2 == nil && fi2.IsDir() {
+			projectsBase = "/home/cat/extra"
+		} else if fi3, err3 := os.Stat(workspace); err3 == nil && fi3.IsDir() {
+			projectsBase = workspace
+		}
+	}
 
 	return &Config{
 		Port:            port,

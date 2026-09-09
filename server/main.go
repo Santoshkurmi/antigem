@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log"
@@ -13,32 +14,114 @@ import (
 
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/handlers"
+	"gemini-server/pkg/hub"
 	"gemini-server/pkg/models_discovery"
 	"gemini-server/pkg/quota"
-	"gemini-server/pkg/session"
 	"gemini-server/pkg/ws"
 )
+
+func printUsage() {
+	fmt.Println(`antiGem Go IDE Server & AGY Hub Supervisor
+
+Usage:
+  go run main.go [flags]
+
+Flags:
+  -f, --force, --f       Force start AGY Hub automatically without prompting
+  -p, --port <port>      Port for the Go IDE Server (default: 8080)
+  --hub-port <port>      Port for the AGY Hub RPC server (default: 8090)
+  --no-hub               Skip launching AGY Hub (run IDE server only)
+  -d, --dir <path>       Custom workspace directory
+  -h, --help             Show help documentation`)
+}
 
 func main() {
 	cfg := config.LoadConfig()
 
-	var hub *ws.Hub
+	var forceStart bool
+	var skipHub bool
+	hubPort := "8090"
 
-	onResultHook := func() {
-		time.Sleep(600 * time.Millisecond)
-		updatedQuotas := quota.FetchQuotaSummary(cfg.TokenFile, true)
-		if hub != nil && updatedQuotas != nil {
-			hub.Broadcast(map[string]interface{}{
-				"type": "quota_update",
-				"data": updatedQuotas,
-			})
+	// Parse command line arguments
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		switch {
+		case arg == "-f" || arg == "--f" || arg == "--force" || arg == "-force":
+			forceStart = true
+		case arg == "--no-hub" || arg == "-n" || arg == "--skip-hub":
+			skipHub = true
+		case strings.HasPrefix(arg, "--port="):
+			cfg.Port = strings.TrimPrefix(arg, "--port=")
+		case arg == "-p" || arg == "--port":
+			if i+1 < len(os.Args) {
+				cfg.Port = os.Args[i+1]
+				i++
+			}
+		case strings.HasPrefix(arg, "--hub-port="):
+			hubPort = strings.TrimPrefix(arg, "--hub-port=")
+		case arg == "--hub-port":
+			if i+1 < len(os.Args) {
+				hubPort = os.Args[i+1]
+				i++
+			}
+		case strings.HasPrefix(arg, "--dir="):
+			cfg.WorkspaceDir = strings.TrimPrefix(arg, "--dir=")
+		case arg == "-d" || arg == "--dir" || arg == "--workspace":
+			if i+1 < len(os.Args) {
+				cfg.WorkspaceDir = os.Args[i+1]
+				i++
+			}
+		case arg == "-h" || arg == "--help":
+			printUsage()
+			os.Exit(0)
 		}
 	}
 
-	pool := session.NewSessionPoolManager(cfg.WorkspaceDir, 5, onResultHook)
-	h := handlers.NewHandler(cfg, pool)
-	hub = ws.NewHub(cfg, pool)
-	h.SetHub(hub)
+	// Stylized Banner
+	fmt.Println("\033[1;36m============================================================\033[0m")
+	fmt.Println("\033[1;32m  ⚡ antiGem Go IDE Server & AGY Hub Supervisor\033[0m")
+	fmt.Println("\033[1;36m============================================================\033[0m")
+	fmt.Printf("  \033[1m• IDE Server Port:\033[0m  http://0.0.0.0:%s\n", cfg.Port)
+	fmt.Printf("  \033[1m• Projects Dir:\033[0m     %s\n", cfg.ProjectsBaseDir)
+	fmt.Printf("  \033[1m• Target Hub Port:\033[0m  %s\n", hubPort)
+	fmt.Println("\033[1;36m============================================================\033[0m")
+
+	// Determine if AGY Hub should be started
+	shouldStartHub := false
+	if !skipHub {
+		if forceStart {
+			fmt.Println(" \033[33m⚡ Force flag (-f) detected: auto-starting AGY Hub...\033[0m")
+			shouldStartHub = true
+		} else {
+			// Interactive user prompt
+			fmt.Print(" \033[1;33m? Do you want to start AGY Hub server (port " + hubPort + ")? [Y/n]: \033[0m")
+			reader := bufio.NewReader(os.Stdin)
+			input, err := reader.ReadString('\n')
+			if err == nil {
+				trimmed := strings.ToLower(strings.TrimSpace(input))
+				if trimmed == "" || trimmed == "y" || trimmed == "yes" {
+					shouldStartHub = true
+				} else {
+					fmt.Println(" \033[90mℹ Skipping AGY Hub. Running IDE Server only.\033[0m")
+				}
+			} else {
+				// Non-interactive fallback (e.g. piped or redirected stdin) -> default to starting hub
+				shouldStartHub = true
+			}
+		}
+	}
+
+	var hubMgr *hub.HubManager
+	if shouldStartHub {
+		hubMgr = hub.NewHubManager(hubPort, cfg.WorkspaceDir, cfg.AppDataDir)
+		if err := hubMgr.Start(); err != nil {
+			fmt.Printf(" \033[31m[!] Warning starting AGY Hub:\033[0m %v\n", err)
+		}
+	}
+
+	wsHub := ws.NewHub(cfg)
+	h := handlers.NewHandler(cfg, hubMgr)
+	h.SetHub(wsHub)
 
 	mux := http.NewServeMux()
 
@@ -117,16 +200,16 @@ func main() {
 	mux.Handle("/attachments/", h.AttachmentsFileServer())
 
 	// WebSocket Endpoint
-	mux.HandleFunc("/ws", hub.ServeWS)
+	mux.HandleFunc("/ws", wsHub.ServeWS)
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
-			hub.ServeWS(w, r)
+			wsHub.ServeWS(w, r)
 			return
 		}
 		if r.URL.Path == "/" {
 			w.Header().Set("Content-Type", "text/plain")
-			_, _ = w.Write([]byte(fmt.Sprintf("Antigravity Bridge Daemon (Go High-Performance Engine) running on :%s\n", cfg.Port)))
+			_, _ = w.Write([]byte(fmt.Sprintf("antiGem IDE Server running on :%s\n", cfg.Port)))
 			return
 		}
 		http.NotFound(w, r)
@@ -154,11 +237,24 @@ func main() {
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		fmt.Printf("🚀 Antigravity Go Bridge Server running at http://localhost:%s\n", cfg.Port)
-		// 1. Refresh dynamic models from agy in background
+		fmt.Printf(" \033[32m🚀 antiGem IDE Server running at http://0.0.0.0:%s\033[0m\n\n", cfg.Port)
+
+		// Refresh dynamic models in background if needed
 		go models_discovery.FetchAvailableModels(false)
-		// 2. Pre-warm default session immediately
-		pool.Prewarm("gemini-3.7-flash-high", "", cfg.WorkspaceDir)
+
+		// Background periodic quota broadcast
+		go func() {
+			for {
+				time.Sleep(30 * time.Second)
+				updatedQuotas := quota.FetchQuotaSummary(cfg.TokenFile, false)
+				if updatedQuotas != nil {
+					wsHub.Broadcast(map[string]interface{}{
+						"type": "quota_update",
+						"data": updatedQuotas,
+					})
+				}
+			}
+		}()
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
@@ -166,10 +262,14 @@ func main() {
 	}()
 
 	<-stopChan
-	fmt.Println("\n🛑 Shutting down Go server gracefully...")
+	fmt.Println("\n🛑 Shutting down antiGem server gracefully...")
+
+	if hubMgr != nil {
+		hubMgr.Stop()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = server.Shutdown(ctx)
-	pool.AbortSession("")
-	fmt.Println("✅ Go server stopped.")
+	fmt.Println("✅ antiGem Go server stopped.")
 }

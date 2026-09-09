@@ -9,7 +9,6 @@ import (
 	"github.com/gorilla/websocket"
 
 	"gemini-server/pkg/config"
-	"gemini-server/pkg/session"
 )
 
 var upgrader = websocket.Upgrader{
@@ -31,15 +30,13 @@ func (c *ClientConn) SendJSON(v interface{}) error {
 
 type Hub struct {
 	Cfg     *config.Config
-	Pool    *session.SessionPoolManager
 	clients map[*ClientConn]bool
 	mu      sync.RWMutex
 }
 
-func NewHub(cfg *config.Config, pool *session.SessionPoolManager) *Hub {
+func NewHub(cfg *config.Config) *Hub {
 	return &Hub{
 		Cfg:     cfg,
-		Pool:    pool,
 		clients: make(map[*ClientConn]bool),
 	}
 }
@@ -53,7 +50,7 @@ func (h *Hub) Broadcast(msg interface{}) {
 }
 
 type clientMessage struct {
-	Type           string `json:"type"` // "send_prompt", "attach_session", "abort", "ping"
+	Type           string `json:"type"` // "ping", "attach_session", "abort"
 	ConversationID string `json:"conversationId"`
 	Model          string `json:"model"`
 	Prompt         string `json:"prompt"`
@@ -72,14 +69,11 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	h.clients[client] = true
 	h.mu.Unlock()
 
-	fmt.Println("[WS] Client connected")
-
 	defer func() {
 		h.mu.Lock()
 		delete(h.clients, client)
 		h.mu.Unlock()
 		_ = rawConn.Close()
-		fmt.Println("[WS] Client disconnected")
 	}()
 
 	for {
@@ -97,41 +91,27 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		case "ping":
 			_ = client.SendJSON(map[string]string{"type": "pong"})
 
-		case "send_prompt":
-			targetModel := msg.Model
-			if targetModel == "" {
-				targetModel = "gemini-3.7-flash-high"
-			}
-			targetConv := msg.ConversationID
-			if targetConv == "new" {
-				targetConv = ""
-			}
-
-			sessionInst := h.Pool.GetOrCreate(targetModel, targetConv, msg.WorkspaceDir)
-			sessionInst.SendTurn(msg.Prompt, client)
-
 		case "attach_session":
-			running := h.Pool.FindRunningSession(msg.ConversationID)
-			if running != nil {
-				fmt.Printf("[WS] Reconnecting / attaching client to running turn for conv: %s\n", msg.ConversationID)
-				running.AttachClient(client)
-			} else {
-				_ = client.SendJSON(map[string]interface{}{
-					"type":           "session_attached",
-					"conversationId": msg.ConversationID,
-					"isRunning":      false,
-				})
-				_ = client.SendJSON(map[string]interface{}{
-					"type":     "done",
-					"exitCode": 0,
-				})
-			}
+			_ = client.SendJSON(map[string]interface{}{
+				"type":           "session_attached",
+				"conversationId": msg.ConversationID,
+				"isRunning":      false,
+			})
+			_ = client.SendJSON(map[string]interface{}{
+				"type":     "done",
+				"exitCode": 0,
+			})
 
 		case "abort":
-			h.Pool.AbortSession(msg.ConversationID)
 			_ = client.SendJSON(map[string]interface{}{
 				"type":           "aborted",
 				"conversationId": msg.ConversationID,
+			})
+
+		case "send_prompt":
+			_ = client.SendJSON(map[string]interface{}{
+				"type":  "error",
+				"error": "Chat is managed directly via AGY Hub on port 8090",
 			})
 		}
 	}

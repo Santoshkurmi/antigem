@@ -17,10 +17,10 @@ import (
 
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/models"
+	"gemini-server/pkg/hub"
 	"gemini-server/pkg/models_discovery"
 	"gemini-server/pkg/quota"
 	"gemini-server/pkg/scanner"
-	"gemini-server/pkg/session"
 	"gemini-server/pkg/transcript"
 )
 
@@ -34,15 +34,15 @@ type Broadcaster interface {
 }
 
 type Handler struct {
-	Cfg  *config.Config
-	Pool *session.SessionPoolManager
-	Hub  Broadcaster
+	Cfg        *config.Config
+	HubManager *hub.HubManager
+	Hub        Broadcaster
 }
 
-func NewHandler(cfg *config.Config, pool *session.SessionPoolManager) *Handler {
+func NewHandler(cfg *config.Config, hubMgr *hub.HubManager) *Handler {
 	return &Handler{
-		Cfg:  cfg,
-		Pool: pool,
+		Cfg:        cfg,
+		HubManager: hubMgr,
 	}
 }
 
@@ -63,20 +63,30 @@ func (h *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":    "ok",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"version":   "1.0.0",
+		"version":   "2.0.0",
 	})
 }
 
 func (h *Handler) StatusHandler(w http.ResponseWriter, r *http.Request) {
-	instances := h.Pool.ListInstances()
+	hubActive := false
+	hubPort := "8090"
+	if h.HubManager != nil {
+		hubActive = h.HubManager.IsRunning()
+		hubPort = h.HubManager.HubPort
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":    "ok",
 		"uptime":    time.Since(startTime).Seconds(),
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"version":   "1.0.0",
+		"version":   "2.0.0",
+		"hub": map[string]interface{}{
+			"active":  hubActive,
+			"port":    hubPort,
+			"address": fmt.Sprintf("http://127.0.0.1:%s", hubPort),
+		},
 		"pool": map[string]interface{}{
-			"activeSessions": len(instances),
-			"instances":      instances,
+			"activeSessions": 0,
+			"instances":      []interface{}{},
 		},
 	})
 }
@@ -95,7 +105,7 @@ func (h *Handler) QuotasHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) InstancesHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"instances": h.Pool.ListInstances(),
+		"instances": []interface{}{},
 	})
 }
 
@@ -105,7 +115,6 @@ func (h *Handler) TerminateInstanceHandler(w http.ResponseWriter, r *http.Reques
 	if len(parts) >= 4 {
 		convID = parts[3]
 	}
-	h.Pool.TerminateInstance(convID)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":         "terminated",
 		"conversationId": convID,
@@ -213,7 +222,7 @@ func (h *Handler) ConversationsHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			isRunning := h.Pool.IsRunning(convID)
+			isRunning := false
 
 			results = append(results, convWithModTime{
 				summary: models.ConversationSummary{
@@ -306,7 +315,6 @@ func (h *Handler) UpdateConversationTitleHandler(w http.ResponseWriter, r *http.
 
 func (h *Handler) DeleteConversationHandler(w http.ResponseWriter, r *http.Request) {
 	convID := strings.TrimPrefix(r.URL.Path, "/api/conversations/")
-	h.Pool.TerminateInstance(convID)
 
 	convDir := filepath.Join(h.Cfg.BrainDir, convID)
 	_ = os.RemoveAll(convDir)
@@ -332,9 +340,8 @@ func (h *Handler) PrewarmConversationHandler(w http.ResponseWriter, r *http.Requ
 		targetModel = "gemini-3.7-flash-high"
 	}
 
-	h.Pool.Prewarm(targetModel, convID, req.WorkspaceDir)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":         "warming",
+		"status":         "ready",
 		"model":          targetModel,
 		"conversationId": convID,
 		"workspaceDir":   req.WorkspaceDir,
@@ -346,7 +353,6 @@ func (h *Handler) AbortHandler(w http.ResponseWriter, r *http.Request) {
 		ConversationID string `json:"conversationId"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
-	h.Pool.AbortSession(req.ConversationID)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":         "aborted",
 		"conversationId": req.ConversationID,
