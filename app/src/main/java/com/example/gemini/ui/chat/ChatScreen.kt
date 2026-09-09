@@ -70,6 +70,7 @@ import com.example.gemini.data.local.LocalEnvironmentManager
 import com.example.gemini.ui.drawer.ChatHistoryDrawer
 import com.example.gemini.ui.models.ModelSelectorBottomSheet
 import com.example.gemini.ui.models.ThinkingSelectorBottomSheet
+import com.example.gemini.ui.components.ToolApprovalDialog
 import com.example.gemini.ui.settings.SettingsDialog
 import android.util.Log
 import com.example.gemini.ui.components.MarkdownBlock
@@ -165,6 +166,19 @@ fun ChatScreen(
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showAttachmentSelector by remember { mutableStateOf(false) }
+
+    val pendingApprovals by viewModel.pendingApprovals.collectAsState()
+    var isApprovalDialogDismissed by remember { mutableStateOf(false) }
+    var lastSeenApprovalIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    val currentApprovalIds = remember(pendingApprovals) { pendingApprovals.map { it.toolCall.id }.toSet() }
+    LaunchedEffect(currentApprovalIds) {
+        val newIds = currentApprovalIds - lastSeenApprovalIds
+        if (newIds.isNotEmpty()) {
+            isApprovalDialogDismissed = false
+        }
+        lastSeenApprovalIds = currentApprovalIds
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -1042,6 +1056,45 @@ fun ChatScreen(
                     }
                 }
 
+                // Pending Permissions Re-open Floating Banner (if user dismissed the popup dialog)
+                if (pendingApprovals.isNotEmpty() && isApprovalDialogDismissed) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFFF59E0B).copy(alpha = 0.16f),
+                            border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { isApprovalDialogDismissed = false }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Security,
+                                    contentDescription = null,
+                                    tint = Color(0xFFF59E0B),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (pendingApprovals.size == 1) "1 command awaiting approval • Tap to review"
+                                    else "${pendingApprovals.size} commands awaiting approval • Tap to review",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFF59E0B)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)
                 ChatInputBar(
                     selectedModel = currentModel,
@@ -1314,6 +1367,27 @@ fun ChatScreen(
         )
     }
 
+    // Tool / Command Permission Approval Popup Dialog
+    if (pendingApprovals.isNotEmpty() && !isApprovalDialogDismissed) {
+        ToolApprovalDialog(
+            pendingApprovals = pendingApprovals,
+            onApprove = { toolCall, msgId ->
+                viewModel.approveAndExecuteTerminalTool(toolCall, msgId)
+            },
+            onReject = { toolCall, msgId ->
+                viewModel.rejectTerminalTool(toolCall, msgId)
+            },
+            onApproveAll = {
+                viewModel.approveAllPendingTools(pendingApprovals)
+            },
+            onRejectAll = {
+                viewModel.rejectAllPendingTools(pendingApprovals)
+            },
+            onDismiss = {
+                isApprovalDialogDismissed = true
+            }
+        )
+    }
 
 
     // Termux Terminal Inspector Dialog

@@ -28,6 +28,11 @@ import android.util.Log
 import org.json.JSONObject
 import java.util.UUID
 
+data class PendingToolApproval(
+    val toolCall: com.example.gemini.domain.model.ToolCall,
+    val messageId: String
+)
+
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     val authPreferences = AuthPreferences(application)
@@ -47,6 +52,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
+
+    val pendingApprovals: StateFlow<List<PendingToolApproval>> = _messages.map { msgs ->
+        msgs.filter { it.role == com.example.gemini.domain.model.MessageRole.ASSISTANT }
+            .flatMap { msg ->
+                msg.toolCalls.filter { it.status == "PENDING_APPROVAL" }
+                    .map { PendingToolApproval(it, msg.id) }
+            }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _isStreaming = MutableStateFlow(false)
     val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
@@ -1929,6 +1942,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val err = res.exceptionOrNull()?.message ?: "Failed to reject tool"
                 Log.e("ChatViewModel", "handleCascadeUserInteraction (deny) error: $err")
             }
+        }
+    }
+
+    fun approveAllPendingTools(list: List<PendingToolApproval>) {
+        list.forEach { approval ->
+            approveAndExecuteTerminalTool(approval.toolCall, approval.messageId)
+        }
+    }
+
+    fun rejectAllPendingTools(list: List<PendingToolApproval>, reason: String? = null) {
+        list.forEach { approval ->
+            rejectTerminalTool(approval.toolCall, approval.messageId, reason)
         }
     }
 
