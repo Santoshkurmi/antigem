@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.gemini.data.remote.HubMediaResolver
 import com.example.gemini.theme.ClaudeTerracotta
 import com.example.gemini.theme.GeminiBlue
 import com.example.gemini.theme.QuotaGreen
@@ -882,7 +883,7 @@ fun MarkdownDetailsView(
 }
 
 /**
- * Renders an Image in Markdown using Coil with rounded corners and viewer intent.
+ * Renders an Image in Markdown using Coil with rounded corners and full-screen viewer.
  */
 @Composable
 fun MarkdownImageView(
@@ -890,6 +891,17 @@ fun MarkdownImageView(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var showFullDialog by remember { mutableStateOf(false) }
+    var resolvedUrl by remember(image.url) {
+        mutableStateOf(HubMediaResolver.getResolvedUriSync(context, image.url))
+    }
+
+    LaunchedEffect(image.url) {
+        if (!HubMediaResolver.isLocalOrCached(context, image.url)) {
+            val res = HubMediaResolver.resolveMediaUri(context, image.url)
+            if (res.isNotBlank()) resolvedUrl = res
+        }
+    }
 
     Column(
         modifier = modifier
@@ -905,17 +917,14 @@ fun MarkdownImageView(
                     RoundedCornerShape(12.dp)
                 )
                 .clickable {
-                    try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(image.url))
-                        context.startActivity(intent)
-                    } catch (_: Exception) {}
+                    showFullDialog = true
                 },
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ) {
             AsyncImage(
                 model = ImageRequest.Builder(context)
-                    .data(image.url)
+                    .data(resolvedUrl)
                     .crossfade(true)
                     .build(),
                 contentDescription = image.alt,
@@ -936,6 +945,14 @@ fun MarkdownImageView(
                 textAlign = TextAlign.Center
             )
         }
+    }
+
+    if (showFullDialog) {
+        FullScreenImageDialog(
+            imageUrl = resolvedUrl,
+            title = image.alt,
+            onDismiss = { showFullDialog = false }
+        )
     }
 }
 
@@ -1784,11 +1801,30 @@ fun parseMarkdownBlocks(
         }
 
         // 5. Standalone Markdown Images: ![alt](url)
-        val imageMatch = Regex("^\\s*!\\[(.*?)\\]\\((https?://[^\\s)]+)\\)\\s*$").find(line)
+        val imageMatch = Regex("^\\s*!\\[(.*?)\\]\\(((?:https?://|file://|content://|data:image/)[^\\s)]+)\\)\\s*$", RegexOption.IGNORE_CASE).find(line)
         if (imageMatch != null) {
             val alt = imageMatch.groupValues[1]
             val url = imageMatch.groupValues[2]
             result.add(MarkdownBlock.Image(alt = alt, url = url))
+            i++
+            continue
+        }
+
+        // 5b. Standalone file or image links: [alt](path.jpg/png) or ![alt](path.jpg)
+        val linkImgMatch = Regex("^\\s*!?\\[(.*?)\\]\\(([^\\s)]+\\.(?:png|jpe?g|webp|gif|svg)(?:\\?[^\\s)]*)?)\\)\\s*$", RegexOption.IGNORE_CASE).find(line)
+        if (linkImgMatch != null) {
+            val alt = linkImgMatch.groupValues[1]
+            val url = linkImgMatch.groupValues[2]
+            result.add(MarkdownBlock.Image(alt = alt, url = url))
+            i++
+            continue
+        }
+
+        // 5c. Bare image URLs on a single line
+        val bareImageMatch = Regex("^\\s*((?:https?://|file://)\\S+\\.(?:png|jpe?g|webp|gif|svg)(?:\\?\\S*)?)\\s*$", RegexOption.IGNORE_CASE).find(line)
+        if (bareImageMatch != null) {
+            val url = bareImageMatch.groupValues[1]
+            result.add(MarkdownBlock.Image(alt = "", url = url))
             i++
             continue
         }

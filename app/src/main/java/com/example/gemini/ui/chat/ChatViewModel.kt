@@ -415,6 +415,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (prevStepWithMarker == null) {
             currentTurnToolMarkers[stepIndex] = "<!-- tool_call:$targetId -->"
         }
+
+        if (normName == "generate_image" && unifiedTool.output.isNotBlank()) {
+            viewModelScope.launch {
+                com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(getApplication(), unifiedTool.output, agyHubClient)
+            }
+        }
     }
 
     private val _isServerOnline = MutableStateFlow<Boolean?>(null)
@@ -775,6 +781,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                         }
                                     }
                                     com.example.gemini.ui.chat.ChatFeedCache.prewarm(parsed)
+                                    parsed.flatMap { it.toolCalls }.filter {
+                                        it.name == "generate_image" && it.output.isNotBlank()
+                                    }.forEach { tc ->
+                                        com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(getApplication(), tc.output, agyHubClient)
+                                    }
                                     Triple(parsed, running, waiting)
                                 } else {
                                     Triple(emptyList<ChatMessage>(), false, false)

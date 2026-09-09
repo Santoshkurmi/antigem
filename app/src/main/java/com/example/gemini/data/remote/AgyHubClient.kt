@@ -635,6 +635,37 @@ class AgyHubClient(
         }
     }
 
+    /**
+     * Reads a file via LanguageServerService/ReadFile RPC.
+     * Returns base64 encoded content string.
+     */
+    suspend fun readFileAsBase64(
+        uri: String,
+        hubUrl: String = DEFAULT_HUB_URL
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val formattedUri = if (uri.startsWith("file://") || uri.startsWith("http://") || uri.startsWith("https://")) {
+                uri
+            } else {
+                "file://$uri"
+            }
+            val payload = JSONObject().apply {
+                put("uri", formattedUri)
+            }.toString()
+            val res = callUnary("ReadFile", payload, hubUrl)
+            if (!res.isSuccess) {
+                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("ReadFile failed"))
+            }
+            val jsonStr = res.getOrThrow()
+            val json = JSONObject(jsonStr)
+            val content = json.optString("content", json.optString("data", ""))
+            Result.success(content)
+        } catch (e: Exception) {
+            Log.e(TAG, "readFileAsBase64 failed for $uri: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     // ==================== MODELS & QUOTA TELEMETRY ====================
 
     /**
@@ -1214,13 +1245,17 @@ class AgyHubClient(
         if (step.has("generateImage") || stepType.contains("GENERATE_IMAGE")) {
             val gi = step.optJSONObject("generateImage") ?: JSONObject()
             val prompt = gi.optString("prompt", "")
-            val uri = gi.optJSONObject("generatedMedia")?.optString("uri", "") ?: gi.optString("uri", "")
+            val gm = gi.optJSONObject("generatedMedia")
+            val mimeType = gm?.optString("mimeType", "image/jpeg")?.ifBlank { "image/jpeg" } ?: "image/jpeg"
+            val inlineData = gm?.optString("inlineData", gm.optString("inline_data", "")) ?: ""
+            val rawUri = gm?.optString("uri", "")?.ifBlank { gi.optString("uri", "") } ?: ""
+            val output = if (inlineData.isNotBlank()) "data:$mimeType;base64,$inlineData" else rawUri
             return ToolCall(
                 id = "tool_genimg_${conversationId}_$stepIndex",
                 name = "generate_image",
                 command = prompt.ifBlank { toolSummary.ifBlank { "Generate Image" } },
-                output = uri,
-                status = resolveStatus(uri.isNotBlank())
+                output = output,
+                status = resolveStatus(output.isNotBlank())
             )
         }
 
@@ -1320,12 +1355,14 @@ class AgyHubClient(
                 }
                 args?.has("Prompt") == true || metaName == "generate_image" -> {
                     val prompt = args?.optString("Prompt", "") ?: ""
+                    val content = step.optString("content", step.optJSONObject("generic")?.optString("content", "") ?: "")
+                    val rawOutput = if (content.isNotBlank()) content else toolAction
                     return ToolCall(
                         id = "tool_genimg_${conversationId}_$stepIndex",
                         name = "generate_image",
                         command = prompt.ifBlank { toolSummary.ifBlank { "Generate Image" } },
-                        output = toolAction,
-                        status = resolveStatus(false)
+                        output = rawOutput,
+                        status = resolveStatus(content.isNotBlank())
                     )
                 }
                 else -> {
