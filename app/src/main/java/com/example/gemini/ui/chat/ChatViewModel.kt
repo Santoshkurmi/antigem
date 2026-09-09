@@ -382,6 +382,41 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val currentActiveToolsMap = java.util.concurrent.ConcurrentHashMap<String, com.example.gemini.domain.model.ToolCall>()
     private val currentTurnToolMarkers = java.util.concurrent.ConcurrentHashMap<Int, String>()
 
+    private fun registerOrUpdateTurnTool(
+        tool: com.example.gemini.domain.model.ToolCall,
+        stepIndex: Int
+    ) {
+        val normName = com.example.gemini.data.remote.AgyHubClient.normalizeToolName(tool.name)
+
+        val existingEntry = currentActiveToolsMap.entries.find { (k, v) ->
+            k == tool.id || (
+                com.example.gemini.data.remote.AgyHubClient.normalizeToolName(v.name) == normName &&
+                (v.command == tool.command || tool.command.isBlank() || v.command.isBlank() || tool.name == v.name) &&
+                (v.status == "RUNNING" || v.status == "PENDING_APPROVAL" || tool.id == k)
+            )
+        }
+
+        val targetId = existingEntry?.key ?: tool.id
+        val unifiedTool = tool.copy(id = targetId, name = normName)
+
+        if (existingEntry != null && existingEntry.key != tool.id) {
+            currentActiveToolsMap.remove(tool.id)
+        }
+        currentActiveToolsMap[targetId] = unifiedTool
+
+        val oldMarker = if (existingEntry != null && existingEntry.key != tool.id) "<!-- tool_call:${tool.id} -->" else null
+        if (oldMarker != null) {
+            val oldStep = currentTurnToolMarkers.entries.find { it.value == oldMarker }?.key
+            if (oldStep != null) {
+                currentTurnToolMarkers.remove(oldStep)
+            }
+        }
+        val prevStepWithMarker = currentTurnToolMarkers.entries.find { it.value == "<!-- tool_call:$targetId -->" }?.key
+        if (prevStepWithMarker == null) {
+            currentTurnToolMarkers[stepIndex] = "<!-- tool_call:$targetId -->"
+        }
+    }
+
     private val _isServerOnline = MutableStateFlow<Boolean?>(null)
     val isServerOnline: StateFlow<Boolean?> = _isServerOnline.asStateFlow()
 
@@ -722,8 +757,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                             }
                                             val tool = agyHubClient.extractToolCallFromStep(st, stepIndex, conversationId)
                                             if (tool != null) {
-                                                currentActiveToolsMap[tool.id] = tool
-                                                currentTurnToolMarkers[stepIndex] = "<!-- tool_call:${tool.id} -->"
+                                                registerOrUpdateTurnTool(tool, stepIndex)
                                             } else {
                                                 val stepErr = agyHubClient.extractStepError(st)
                                                 if (stepErr != null) {
@@ -847,8 +881,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                                 val tool = agyHubClient.extractToolCallFromStep(s, stepIndex, conversationId)
                                 if (tool != null) {
-                                    currentActiveToolsMap[tool.id] = tool
-                                    currentTurnToolMarkers[stepIndex] = "<!-- tool_call:${tool.id} -->"
+                                    registerOrUpdateTurnTool(tool, stepIndex)
                                     hasSeenTurnActivity = true
                                     hasStartedRunning = true
                                 } else {
@@ -925,6 +958,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                         mergedTools[t.id] = t
                                     }
                                     for ((id, t) in currentActiveToolsMap) {
+                                        val normTName = com.example.gemini.data.remote.AgyHubClient.normalizeToolName(t.name)
+                                        if (t.status != "RUNNING" && t.status != "PENDING_APPROVAL") {
+                                            mergedTools.entries.removeIf { (oldId, oldT) ->
+                                                oldId != id && com.example.gemini.data.remote.AgyHubClient.normalizeToolName(oldT.name) == normTName &&
+                                                    oldT.status == "RUNNING" &&
+                                                    (oldT.command == t.command || oldT.command.isBlank() || t.command.isBlank())
+                                            }
+                                        }
                                         mergedTools[id] = t
                                     }
                                     val newTools = mergedTools.values.toList()

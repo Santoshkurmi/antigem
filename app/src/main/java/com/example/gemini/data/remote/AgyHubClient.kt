@@ -60,6 +60,19 @@ class AgyHubClient(
         @Volatile
         private var defaultModelEnum: String = ""
 
+        fun normalizeToolName(name: String): String = when (name.lowercase().trim()) {
+            "web_search", "search_web", "search" -> "web_search"
+            "read_url", "read_url_content", "web_reader" -> "read_url"
+            "run_command", "terminal", "bash" -> "bash"
+            "view_file", "viewfile" -> "view_file"
+            "edit_file", "modifyfile", "write_to_file", "replace_file_content", "codeaction", "filechange" -> "edit_file"
+            "list_dir", "listdirectory" -> "list_dir"
+            "find", "find_by_name" -> "find"
+            "grep_search", "code_search" -> "grep_search"
+            "generate_image", "generateimage" -> "generate_image"
+            else -> name.lowercase().trim()
+        }
+
         fun updateModelRegistry(models: List<AiModel>) {
             if (models.isEmpty()) return
             models.forEach { m ->
@@ -1155,16 +1168,30 @@ class AgyHubClient(
             )
         }
 
-        // 7. Search Web
-        if (step.has("searchWeb") || stepType.contains("SEARCH_WEB")) {
-            val sw = step.optJSONObject("searchWeb") ?: JSONObject()
-            val query = sw.optString("query", "")
-            val summary = sw.optString("summary", "")
+        // 6.5. Check for search results in content (trajectory history)
+        val rawContent = step.optString("content", "")
+        if (rawContent.contains("The search for") && rawContent.contains("returned the following summary")) {
+            val query = Regex("""The search for "(.*?)" returned""").find(rawContent)?.groupValues?.get(1) ?: ""
+            val summary = rawContent.substringAfter("returned the following summary:").trim()
             return ToolCall(
                 id = "tool_web_${conversationId}_$stepIndex",
                 name = "web_search",
                 command = query.ifBlank { toolSummary.ifBlank { "Web Search" } },
-                output = summary,
+                output = summary.ifBlank { rawContent },
+                status = resolveStatus(true)
+            )
+        }
+
+        // 7. Search Web
+        if (step.has("searchWeb") || stepType.contains("SEARCH_WEB")) {
+            val sw = step.optJSONObject("searchWeb") ?: JSONObject()
+            val query = sw.optString("query", "")
+            val summary = sw.optString("summary", sw.optString("output", step.optString("content", "")))
+            return ToolCall(
+                id = "tool_web_${conversationId}_$stepIndex",
+                name = "web_search",
+                command = query.ifBlank { toolSummary.ifBlank { "Web Search" } },
+                output = summary.ifBlank { toolAction },
                 status = resolveStatus(summary.isNotBlank())
             )
         }
@@ -1270,11 +1297,55 @@ class AgyHubClient(
                         status = resolveStatus(false)
                     )
                 }
+                args?.has("query") == true || args?.has("Query") == true || metaName == "search_web" -> {
+                    val query = (args?.optString("query", args.optString("Query", "")) ?: "").trim().removeSurrounding("\"")
+                    val title = query.ifBlank { toolSummary.ifBlank { "Web Search" } }
+                    return ToolCall(
+                        id = "tool_web_${conversationId}_$stepIndex",
+                        name = "web_search",
+                        command = title,
+                        output = toolAction.ifBlank { title },
+                        status = resolveStatus(false)
+                    )
+                }
+                args?.has("Pattern") == true || metaName == "find_by_name" -> {
+                    val pattern = args?.optString("Pattern", "") ?: ""
+                    return ToolCall(
+                        id = "tool_find_${conversationId}_$stepIndex",
+                        name = "find",
+                        command = pattern.ifBlank { toolSummary.ifBlank { "Find Files" } },
+                        output = toolAction,
+                        status = resolveStatus(false)
+                    )
+                }
+                args?.has("Prompt") == true || metaName == "generate_image" -> {
+                    val prompt = args?.optString("Prompt", "") ?: ""
+                    return ToolCall(
+                        id = "tool_genimg_${conversationId}_$stepIndex",
+                        name = "generate_image",
+                        command = prompt.ifBlank { toolSummary.ifBlank { "Generate Image" } },
+                        output = toolAction,
+                        status = resolveStatus(false)
+                    )
+                }
                 else -> {
                     val fallbackTitle = toolSummary.ifBlank { metaName.ifBlank { "Tool" } }
+                    val unifiedName = normalizeToolName(metaName.ifBlank { "tool" })
+                    val idPrefix = when (unifiedName) {
+                        "web_search" -> "tool_web_"
+                        "read_url" -> "tool_read_"
+                        "bash" -> "tool_"
+                        "view_file" -> "tool_view_"
+                        "edit_file" -> "tool_edit_"
+                        "list_dir" -> "tool_list_"
+                        "find" -> "tool_find_"
+                        "grep_search" -> "tool_grep_"
+                        "generate_image" -> "tool_genimg_"
+                        else -> "tool_gen_"
+                    }
                     return ToolCall(
-                        id = "tool_gen_${conversationId}_$stepIndex",
-                        name = metaName.ifBlank { "tool" },
+                        id = "${idPrefix}${conversationId}_$stepIndex",
+                        name = unifiedName,
                         command = fallbackTitle,
                         output = toolAction,
                         status = resolveStatus(false)
@@ -1292,10 +1363,25 @@ class AgyHubClient(
                 stepType.contains("GREP") -> "grep_search"
                 stepType.contains("FILE") || stepType.contains("CODE") -> "edit_file"
                 stepType.contains("COMMAND") -> "bash"
+                stepType.contains("SEARCH") -> "web_search"
+                stepType.contains("READ") || stepType.contains("URL") -> "read_url"
+                stepType.contains("IMAGE") -> "generate_image"
                 else -> "tool"
             }
+            val idPrefix = when (name) {
+                "view_file" -> "tool_view_"
+                "list_dir" -> "tool_list_"
+                "find" -> "tool_find_"
+                "grep_search" -> "tool_grep_"
+                "edit_file" -> "tool_edit_"
+                "bash" -> "tool_"
+                "web_search" -> "tool_web_"
+                "read_url" -> "tool_read_"
+                "generate_image" -> "tool_genimg_"
+                else -> "tool_step_"
+            }
             return ToolCall(
-                id = "tool_step_${conversationId}_$stepIndex",
+                id = "${idPrefix}${conversationId}_$stepIndex",
                 name = name,
                 command = toolSummary,
                 output = toolAction.ifBlank { toolSummary },
@@ -1454,10 +1540,25 @@ class AgyHubClient(
 
                     val tool = extractToolCallFromStep(step, stepIndex, conversationId)
                     if (tool != null) {
-                        turnTools[tool.id] = tool
-                        val marker = "<!-- tool_call:${tool.id} -->"
-                        val existing = turnStepTexts[stepIndex]
-                        turnStepTexts[stepIndex] = if (existing != null) "$marker\n\n$existing" else marker
+                        val normName = normalizeToolName(tool.name)
+                        val existingKey = turnTools.entries.find { (k, v) ->
+                            k == tool.id || (
+                                normalizeToolName(v.name) == normName &&
+                                (v.command == tool.command || tool.command.isBlank() || v.command.isBlank()) &&
+                                (v.status == "RUNNING" || v.status == "PENDING_APPROVAL")
+                            )
+                        }?.key
+
+                        val targetId = existingKey ?: tool.id
+                        val unifiedTool = tool.copy(id = targetId, name = normName)
+                        turnTools[targetId] = unifiedTool
+
+                        val marker = "<!-- tool_call:$targetId -->"
+                        val alreadyHasMarker = turnStepTexts.values.any { it.contains(marker) }
+                        if (!alreadyHasMarker) {
+                            val existing = turnStepTexts[stepIndex]
+                            turnStepTexts[stepIndex] = if (existing != null) "$marker\n\n$existing" else marker
+                        }
                     } else {
                         val stepErr = extractStepError(step)
                         if (stepErr != null) {

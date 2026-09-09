@@ -1857,9 +1857,17 @@ fun parseMarkdownBlocks(
     }
 
     // Append any tool calls that were not explicitly embedded in the text
-    val handledToolIds = result.filterIsInstance<MarkdownBlock.AgentTool>().map { it.toolCall.id }.toSet()
+    val handledTools = result.filterIsInstance<MarkdownBlock.AgentTool>().map { it.toolCall }
+    val handledToolIds = handledTools.map { it.id }.toSet()
     toolCalls.filter { it.id !in handledToolIds }.forEach { orphanTool ->
-        result.add(MarkdownBlock.AgentTool(orphanTool))
+        val orphanNorm = com.example.gemini.data.remote.AgyHubClient.normalizeToolName(orphanTool.name)
+        val alreadyCovered = handledTools.any {
+            com.example.gemini.data.remote.AgyHubClient.normalizeToolName(it.name) == orphanNorm &&
+            (it.command == orphanTool.command || it.command.isBlank() || orphanTool.command.isBlank())
+        }
+        if (!alreadyCovered) {
+            result.add(MarkdownBlock.AgentTool(orphanTool))
+        }
     }
 
     return result
