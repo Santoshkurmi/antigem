@@ -15,8 +15,6 @@ import (
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/handlers"
 	"gemini-server/pkg/hub"
-	"gemini-server/pkg/models_discovery"
-	"gemini-server/pkg/quota"
 	"gemini-server/pkg/ws"
 )
 
@@ -238,23 +236,6 @@ func main() {
 
 	go func() {
 		fmt.Printf(" \033[32m🚀 antiGem IDE Server running at http://0.0.0.0:%s\033[0m\n\n", cfg.Port)
-
-		// Refresh dynamic models in background if needed
-		go models_discovery.FetchAvailableModels(false)
-
-		// Background periodic quota broadcast
-		go func() {
-			for {
-				time.Sleep(30 * time.Second)
-				updatedQuotas := quota.FetchQuotaSummary(cfg.TokenFile, false)
-				if updatedQuotas != nil {
-					wsHub.Broadcast(map[string]interface{}{
-						"type": "quota_update",
-						"data": updatedQuotas,
-					})
-				}
-			}
-		}()
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)

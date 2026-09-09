@@ -16,10 +16,8 @@ import (
 	"time"
 
 	"gemini-server/pkg/config"
-	"gemini-server/pkg/models"
 	"gemini-server/pkg/hub"
-	"gemini-server/pkg/models_discovery"
-	"gemini-server/pkg/quota"
+	"gemini-server/pkg/models"
 	"gemini-server/pkg/scanner"
 	"gemini-server/pkg/transcript"
 )
@@ -92,15 +90,11 @@ func (h *Handler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ModelsHandler(w http.ResponseWriter, r *http.Request) {
-	force := strings.HasSuffix(r.URL.Path, "/refresh")
-	modelsList := models_discovery.FetchAvailableModels(force)
-	writeJSON(w, http.StatusOK, map[string]interface{}{"models": modelsList})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"models": []interface{}{}})
 }
 
 func (h *Handler) QuotasHandler(w http.ResponseWriter, r *http.Request) {
-	force := strings.HasSuffix(r.URL.Path, "/refresh")
-	quotas := quota.FetchQuotaSummary(h.Cfg.TokenFile, force)
-	writeJSON(w, http.StatusOK, quotas)
+	writeJSON(w, http.StatusOK, map[string]interface{}{})
 }
 
 func (h *Handler) InstancesHandler(w http.ResponseWriter, r *http.Request) {
