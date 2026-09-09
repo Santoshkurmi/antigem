@@ -34,6 +34,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
+import coil.compose.AsyncImage
+import android.net.Uri
+import android.content.Intent
+import java.io.File
+import com.example.gemini.data.remote.HubMediaResolver
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.theme.ClaudeTerracotta
@@ -332,6 +340,15 @@ fun UserMessageBubble(
 ) {
     val context = LocalContext.current
     var showUserActions by remember { mutableStateOf(false) }
+    var previewImageUrl by remember { mutableStateOf<String?>(null) }
+
+    if (previewImageUrl != null) {
+        FullScreenImageDialog(
+            imageUrl = previewImageUrl!!,
+            title = "Image Preview",
+            onDismiss = { previewImageUrl = null }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -352,14 +369,35 @@ fun UserMessageBubble(
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Audio attachments player
+                // 1. Audio attachments player
                 val audioAtts = message.attachments.filter { it.isAudio }
                 for (att in audioAtts) {
                     ChatAudioPlayer(attachment = att)
                 }
 
-                // Text content (if not just placeholder "Voice note")
-                val displayContent = message.content.trim()
+                // 2. Image attachments preview
+                val imageAtts = message.attachments.filter {
+                    it.isImage || it.name.endsWith(".jpg", true) || it.name.endsWith(".png", true) ||
+                            it.name.endsWith(".jpeg", true) || it.name.endsWith(".webp", true) ||
+                            it.name.endsWith(".gif", true) || it.mimeType?.startsWith("image/") == true
+                }
+                if (imageAtts.isNotEmpty()) {
+                    UserMessageImagesGrid(
+                        attachments = imageAtts,
+                        onImageClick = { previewImageUrl = it }
+                    )
+                }
+
+                // 3. Document / other attachments
+                val docAtts = message.attachments.filter { !it.isAudio && !imageAtts.contains(it) }
+                if (docAtts.isNotEmpty()) {
+                    for (doc in docAtts) {
+                        UserMessageDocumentItem(attachment = doc)
+                    }
+                }
+
+                // 4. Text content (if not just placeholder "Voice note")
+                val displayContent = formatUserDisplayContent(message.content)
                 if (displayContent.isNotBlank() && !(audioAtts.isNotEmpty() && (displayContent == "Voice note" || displayContent == "Voice message"))) {
                     SelectionContainer {
                         Text(
@@ -711,6 +749,199 @@ fun ContextSummaryCheckpointBanner(
                         fontSize = 12.sp,
                         lineHeight = 18.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatUserDisplayContent(content: String): String {
+    val imageRegex = Regex("""\[Attached Image:\s*([^\]]+)\]\([^\)]+\)""", RegexOption.IGNORE_CASE)
+    val fileRegex = Regex("""\[Attached File:\s*([^\]]+)\]\([^\)]+\)""", RegexOption.IGNORE_CASE)
+    return content
+        .replace(imageRegex) { "[${it.groupValues[1].trim()}]" }
+        .replace(fileRegex) { "[${it.groupValues[1].trim()}]" }
+        .trim()
+}
+
+@Composable
+private fun UserMessageImageItem(
+    attachment: com.example.gemini.domain.model.ChatAttachment,
+    modifier: Modifier = Modifier,
+    onImageClick: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val rawUri = remember(attachment) {
+        attachment.localUri ?: attachment.url ?: (if (attachment.path.startsWith("file://") || attachment.path.startsWith("http")) attachment.path else "file://${attachment.path}")
+    }
+    var resolvedUri by remember(rawUri) {
+        mutableStateOf(HubMediaResolver.getResolvedUriSync(context, rawUri))
+    }
+
+    LaunchedEffect(rawUri) {
+        if (!HubMediaResolver.isLocalOrCached(context, rawUri)) {
+            val res = HubMediaResolver.resolveMediaUri(context, rawUri)
+            if (res.isNotBlank()) {
+                resolvedUri = res
+            }
+        }
+    }
+
+    val finalUri = resolvedUri.ifBlank { rawUri }
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onImageClick(finalUri) }
+    ) {
+        AsyncImage(
+            model = finalUri,
+            contentDescription = attachment.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Composable
+private fun UserMessageImagesGrid(
+    attachments: List<com.example.gemini.domain.model.ChatAttachment>,
+    onImageClick: (String) -> Unit
+) {
+    if (attachments.isEmpty()) return
+
+    if (attachments.size == 1) {
+        UserMessageImageItem(
+            attachment = attachments.first(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp),
+            onImageClick = onImageClick
+        )
+    } else if (attachments.size == 2) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            for (att in attachments) {
+                UserMessageImageItem(
+                    attachment = att,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(130.dp),
+                    onImageClick = onImageClick
+                )
+            }
+        }
+    } else {
+        // 3 or more images: chunked in rows of 2
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            val chunks = attachments.chunked(2)
+            for (row in chunks) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    for (att in row) {
+                        UserMessageImageItem(
+                            attachment = att,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(110.dp),
+                            onImageClick = onImageClick
+                        )
+                    }
+                    if (row.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UserMessageDocumentItem(
+    attachment: com.example.gemini.domain.model.ChatAttachment
+) {
+    val context = LocalContext.current
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.background.copy(alpha = 0.55f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable {
+                try {
+                    val uri = when {
+                        !attachment.localUri.isNullOrBlank() -> Uri.parse(attachment.localUri)
+                        attachment.path.isNotBlank() && File(attachment.path).exists() -> {
+                            val file = File(attachment.path)
+                            androidx.core.content.FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                file
+                            )
+                        }
+                        attachment.path.isNotBlank() -> {
+                            val cached = HubMediaResolver.getLocalCacheFile(context, attachment.path)
+                            if (cached.exists() && cached.length() > 0) {
+                                androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    cached
+                                )
+                            } else {
+                                null
+                            }
+                        }
+                        else -> null
+                    }
+                    if (uri != null) {
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(uri, attachment.mimeType ?: "*/*")
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Open ${attachment.name}"))
+                    } else {
+                        Toast.makeText(context, attachment.name, Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Cannot open: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.InsertDriveFile,
+                contentDescription = null,
+                tint = ClaudeTerracotta,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = attachment.name,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (attachment.size > 0L) {
+                    val sizeKb = attachment.size / 1024.0
+                    val sizeStr = if (sizeKb >= 1024) String.format("%.1f MB", sizeKb / 1024.0) else String.format("%.0f KB", sizeKb)
+                    Text(
+                        text = sizeStr,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
             }

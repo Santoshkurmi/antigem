@@ -1601,6 +1601,41 @@ data class AgyMediaItem(
                                 )
                             }
                         }
+
+                        // Extract image and document attachments from prompt markdown links:
+                        // e.g. [Attached Image: filename](file:///path) or [Attached File: filename](file:///path)
+                        val imageRegex = Regex("""\[Attached Image:\s*([^\]]+)\]\(([^)]+)\)""", RegexOption.IGNORE_CASE)
+                        val fileRegex = Regex("""\[Attached File:\s*([^\]]+)\]\(([^)]+)\)""", RegexOption.IGNORE_CASE)
+
+                        imageRegex.findAll(userText).forEachIndexed { idx, match ->
+                            val attName = match.groupValues[1].trim()
+                            val rawPath = match.groupValues[2].trim()
+                            val cleanPath = if (rawPath.startsWith("file://")) rawPath.removePrefix("file://") else rawPath
+                            userAttachments.add(
+                                com.example.gemini.domain.model.ChatAttachment(
+                                    id = "att_${conversationId}_${stepIndex}_img_$idx",
+                                    name = attName,
+                                    path = cleanPath,
+                                    isImage = true,
+                                    isAudio = false
+                                )
+                            )
+                        }
+
+                        fileRegex.findAll(userText).forEachIndexed { idx, match ->
+                            val attName = match.groupValues[1].trim()
+                            val rawPath = match.groupValues[2].trim()
+                            val cleanPath = if (rawPath.startsWith("file://")) rawPath.removePrefix("file://") else rawPath
+                            userAttachments.add(
+                                com.example.gemini.domain.model.ChatAttachment(
+                                    id = "att_${conversationId}_${stepIndex}_file_$idx",
+                                    name = attName,
+                                    path = cleanPath,
+                                    isImage = false,
+                                    isAudio = false
+                                )
+                            )
+                        }
                     }
                     if (userText.isNotBlank() || userAttachments.isNotEmpty()) {
                         messages.add(

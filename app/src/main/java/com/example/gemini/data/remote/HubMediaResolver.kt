@@ -19,13 +19,17 @@ object HubMediaResolver {
     private val memoryCache = ConcurrentHashMap<String, String>() // rawUri -> localUri
     private val downloadMutex = Mutex()
 
+    @Volatile
+    var activeHubUrl: String = AgyHubClient.DEFAULT_HUB_URL
+
     /**
      * Obtains the target local cache file for a given raw URI.
      */
     fun getLocalCacheFile(context: Context, rawUri: String): File {
         val clean = rawUri.removePrefix("file://")
         val baseName = clean.substringAfterLast('/').ifBlank { "img_${System.currentTimeMillis()}.jpg" }
-        val safeName = baseName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val pathHash = clean.hashCode().let { if (it < 0) -it else it }.toString(16)
+        val safeName = "${pathHash}_${baseName.replace(Regex("[^a-zA-Z0-9._-]"), "_")}"
         val dir = File(context.cacheDir, "hub_media").apply { if (!exists()) mkdirs() }
         return File(dir, safeName)
     }
@@ -83,7 +87,7 @@ object HubMediaResolver {
         context: Context,
         rawUri: String,
         agyHubClient: AgyHubClient = AgyHubClient(),
-        hubUrl: String = AgyHubClient.DEFAULT_HUB_URL
+        hubUrl: String = activeHubUrl
     ): String = withContext(Dispatchers.IO) {
         if (rawUri.isBlank()) return@withContext ""
         if (rawUri.startsWith("data:image/") || rawUri.startsWith("http://") || rawUri.startsWith("https://") || rawUri.startsWith("content://")) {

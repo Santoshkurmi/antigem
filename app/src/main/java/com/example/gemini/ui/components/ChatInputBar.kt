@@ -1,6 +1,7 @@
 package com.example.gemini.ui.components
 
 import android.Manifest
+import android.content.Intent
 import android.media.MediaRecorder
 import android.os.Build
 import android.util.Log
@@ -11,6 +12,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -37,9 +39,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import android.net.Uri
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -266,6 +270,15 @@ fun ChatInputBar(
 
     val canSend = textFieldValue.text.trim().isNotEmpty() || attachments.isNotEmpty()
     val familyColor = if (selectedModel.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
+    var previewImageUrl by remember { mutableStateOf<String?>(null) }
+
+    if (previewImageUrl != null) {
+        FullScreenImageDialog(
+            imageUrl = previewImageUrl!!,
+            title = "Attachment Preview",
+            onDismiss = { previewImageUrl = null }
+        )
+    }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -458,51 +471,109 @@ fun ChatInputBar(
                             }
 
                             for (att in attachments) {
+                                val isImg = att.isImage || att.name.endsWith(".jpg", true) || att.name.endsWith(".png", true) ||
+                                        att.name.endsWith(".jpeg", true) || att.name.endsWith(".webp", true) ||
+                                        att.name.endsWith(".gif", true) || att.mimeType?.startsWith("image/") == true
+
+                                val imgSource = remember(att) {
+                                    when {
+                                        !att.localUri.isNullOrBlank() -> att.localUri
+                                        !att.url.isNullOrBlank() -> att.url
+                                        att.path.isNotBlank() -> if (att.path.startsWith("file://") || att.path.startsWith("http")) att.path else "file://${att.path}"
+                                        else -> null
+                                    }
+                                }
+
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
                                     color = MaterialTheme.colorScheme.background,
                                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(start = 6.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        if (att.isImage) {
-                                            val imgSource = att.url ?: att.localUri ?: "file://${att.path}"
-                                            AsyncImage(
-                                                model = imgSource,
-                                                contentDescription = att.name,
-                                                modifier = Modifier
-                                                    .size(28.dp)
-                                                    .clip(RoundedCornerShape(6.dp))
-                                            )
-                                        } else if (att.isAudio) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Mic,
-                                                contentDescription = null,
-                                                tint = ClaudeTerracotta,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        } else {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Outlined.InsertDriveFile,
-                                                contentDescription = null,
-                                                tint = ClaudeTerracotta,
-                                                modifier = Modifier.size(20.dp)
+                                        // Clickable preview + name container
+                                        Row(
+                                            modifier = Modifier
+                                                .clickable {
+                                                    if (isImg && imgSource != null) {
+                                                        previewImageUrl = imgSource
+                                                    } else {
+                                                        try {
+                                                            val uri = when {
+                                                                !att.url.isNullOrBlank() && (att.url.startsWith("content://") || att.url.startsWith("file://")) -> Uri.parse(att.url)
+                                                                att.path.isNotBlank() && File(att.path).exists() -> {
+                                                                    val file = File(att.path)
+                                                                    androidx.core.content.FileProvider.getUriForFile(
+                                                                        context,
+                                                                        "${context.packageName}.fileprovider",
+                                                                        file
+                                                                    )
+                                                                }
+                                                                !att.url.isNullOrBlank() -> Uri.parse(att.url)
+                                                                else -> null
+                                                            }
+                                                            if (uri != null) {
+                                                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                                    setDataAndType(uri, att.mimeType ?: "*/*")
+                                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                                }
+                                                                context.startActivity(Intent.createChooser(intent, "Open ${att.name}"))
+                                                            } else {
+                                                                Toast.makeText(context, att.name, Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        } catch (e: Exception) {
+                                                            Toast.makeText(context, "Cannot open: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                }
+                                                .padding(start = 5.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (isImg && imgSource != null) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                ) {
+                                                    AsyncImage(
+                                                        model = imgSource,
+                                                        contentDescription = att.name,
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                }
+                                            } else if (att.isAudio) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Mic,
+                                                    contentDescription = null,
+                                                    tint = ClaudeTerracotta,
+                                                    modifier = Modifier.size(20.dp).padding(start = 4.dp)
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Outlined.InsertDriveFile,
+                                                    contentDescription = null,
+                                                    tint = ClaudeTerracotta,
+                                                    modifier = Modifier.size(20.dp).padding(start = 4.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = att.name,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.widthIn(max = 130.dp)
                                             )
                                         }
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = att.name,
-                                            fontSize = 11.5.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
+
+                                        Spacer(modifier = Modifier.width(2.dp))
                                         IconButton(
                                             onClick = { onRemoveAttachment(att.id) },
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(24.dp).padding(end = 4.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Outlined.Close,

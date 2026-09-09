@@ -132,58 +132,84 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _isUploadingAttachment = MutableStateFlow(false)
     val isUploadingAttachment: StateFlow<Boolean> = _isUploadingAttachment.asStateFlow()
 
-    fun addAttachmentFromUri(uri: android.net.Uri, context: android.content.Context) {
+    fun addAttachmentsFromUris(uris: List<android.net.Uri>, context: android.content.Context) {
+        if (uris.isEmpty()) return
         viewModelScope.launch {
             _isUploadingAttachment.value = true
             try {
-                val contentResolver = context.contentResolver
-                var fileName = "attachment_${System.currentTimeMillis()}"
-                var fileSize = 0L
-
-                val cursor = contentResolver.query(uri, null, null, null, null)
-                cursor?.use {
-                    if (it.moveToFirst()) {
-                        val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                        val sizeIndex = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
-                        if (nameIndex >= 0) fileName = it.getString(nameIndex) ?: fileName
-                        if (sizeIndex >= 0) fileSize = it.getLong(sizeIndex)
-                    }
+                for (uri in uris) {
+                    processAndUploadUri(uri, context)
                 }
-
-                val bytes = withContext(Dispatchers.IO) {
-                    contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                }
-
-                if (bytes != null) {
-                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                    val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
-                    val currentProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
-                    val res = agyBridgeService.uploadAttachment(
-                        filename = fileName,
-                        base64Data = base64,
-                        projectPath = currentProjPath,
-                        httpBaseUrl = httpUrl
-                    )
-                    if (res.isSuccess) {
-                        val att = res.getOrThrow().copy(localUri = uri.toString())
-                        _attachments.value = _attachments.value + att
-                    } else {
-                        val isImg = fileName.endsWith(".jpg", true) || fileName.endsWith(".png", true) || fileName.endsWith(".webp", true) || fileName.endsWith(".jpeg", true)
-                        val fallback = com.example.gemini.domain.model.ChatAttachment(
-                            name = fileName,
-                            path = uri.toString(),
-                            isImage = isImg,
-                            localUri = uri.toString(),
-                            size = fileSize
-                        )
-                        _attachments.value = _attachments.value + fallback
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("ChatViewModel", "Failed to add attachment from uri: ${e.message}")
             } finally {
                 _isUploadingAttachment.value = false
             }
+        }
+    }
+
+    fun addAttachmentFromUri(uri: android.net.Uri, context: android.content.Context) {
+        addAttachmentsFromUris(listOf(uri), context)
+    }
+
+    private suspend fun processAndUploadUri(uri: android.net.Uri, context: android.content.Context) {
+        try {
+            val contentResolver = context.contentResolver
+            var fileName = "attachment_${System.currentTimeMillis()}"
+            var fileSize = 0L
+
+            val cursor = contentResolver.query(uri, null, null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val sizeIndex = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (nameIndex >= 0) fileName = it.getString(nameIndex) ?: fileName
+                    if (sizeIndex >= 0) fileSize = it.getLong(sizeIndex)
+                }
+            }
+
+            val mimeType = contentResolver.getType(uri)
+            val isImg = (mimeType != null && mimeType.startsWith("image/")) ||
+                    fileName.endsWith(".jpg", true) || fileName.endsWith(".png", true) ||
+                    fileName.endsWith(".webp", true) || fileName.endsWith(".jpeg", true) ||
+                    fileName.endsWith(".gif", true) || fileName.endsWith(".bmp", true)
+
+            val bytes = withContext(Dispatchers.IO) {
+                contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }
+
+            if (bytes != null) {
+                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+                val currentProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
+                val res = agyBridgeService.uploadAttachment(
+                    filename = fileName,
+                    base64Data = base64,
+                    projectPath = currentProjPath,
+                    httpBaseUrl = httpUrl
+                )
+                if (res.isSuccess) {
+                    val att = res.getOrThrow().let {
+                        it.copy(
+                            localUri = uri.toString(),
+                            isImage = isImg || it.isImage,
+                            mimeType = mimeType ?: it.mimeType,
+                            size = if (it.size > 0) it.size else fileSize
+                        )
+                    }
+                    _attachments.value = _attachments.value + att
+                } else {
+                    val fallback = com.example.gemini.domain.model.ChatAttachment(
+                        name = fileName,
+                        path = uri.toString(),
+                        isImage = isImg,
+                        localUri = uri.toString(),
+                        size = fileSize,
+                        mimeType = mimeType
+                    )
+                    _attachments.value = _attachments.value + fallback
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ChatViewModel", "Failed to add attachment from uri $uri: ${e.message}")
         }
     }
 
@@ -781,6 +807,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         persistentStreamJob = viewModelScope.launch(Dispatchers.IO) {
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            com.example.gemini.data.remote.HubMediaResolver.activeHubUrl = hubUrl
             var isFirstChunk = true
             val seenToolStepKeys = mutableSetOf<String>()
 
@@ -863,7 +890,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     parsed.flatMap { it.toolCalls }.filter {
                                         it.name == "generate_image" && it.output.isNotBlank()
                                     }.forEach { tc ->
-                                        com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(getApplication(), tc.output, agyHubClient)
+                                        com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(getApplication(), tc.output, agyHubClient, hubUrl)
+                                    }
+                                    parsed.flatMap { it.attachments }.filter { it.isImage && it.path.isNotBlank() }.forEach { att ->
+                                        val rawUri = if (att.path.startsWith("file://") || att.path.startsWith("http")) att.path else "file://${att.path}"
+                                        com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(getApplication(), rawUri, agyHubClient, hubUrl)
                                     }
                                     Triple(parsed, running, waiting)
                                 } else {

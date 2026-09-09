@@ -198,15 +198,19 @@ fun ChatScreen(
     val isUploadingAttachment by viewModel.isUploadingAttachment.collectAsState()
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.addAttachmentFromUri(it, context) }
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            viewModel.addAttachmentsFromUris(uris, context)
+        }
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.addAttachmentFromUri(it, context) }
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            viewModel.addAttachmentsFromUris(uris, context)
+        }
     }
     var activeConversationKey by remember { mutableStateOf(currentConv?.id ?: "new") }
     var textFieldValue by remember {
