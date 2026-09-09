@@ -20,8 +20,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.graphics.Color
 import com.example.gemini.domain.model.ThinkingLevel
 import com.example.gemini.domain.model.ThinkingPreference
+import com.example.gemini.theme.ClaudeDarkSurface
 import com.example.gemini.theme.ClaudeTerracotta
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,7 +39,8 @@ fun ThinkingSelectorBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp,
         dragHandle = { BottomSheetDefaults.DragHandle() },
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
@@ -77,9 +81,11 @@ fun ThinkingSelectorBottomSheet(
 
             // Level Options
             ThinkingLevel.values().forEach { level ->
+                val isDark = isSystemInDarkTheme()
                 val isSelected = selectedLevel == level
                 val borderColor = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                val bgColor = if (isSelected) ClaudeTerracotta.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                val unselectedBg = if (isDark) ClaudeDarkSurface else Color.White
+                val bgColor = if (isSelected) ClaudeTerracotta.copy(alpha = 0.08f) else unselectedBg
 
                 Card(
                     modifier = Modifier

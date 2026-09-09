@@ -6,6 +6,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -77,7 +78,8 @@ fun ModelSelectorBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
@@ -223,7 +225,7 @@ fun QuotaBadgeChip(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+        color = MaterialTheme.colorScheme.background,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
     ) {
         Row(
@@ -596,11 +598,18 @@ private fun TieredModelGroupCard(
         ModelFamily.OTHER -> MaterialTheme.colorScheme.primary
     }
 
+    val isDark = isSystemInDarkTheme()
+    val cardBg = if (isAnyVariantSelected) {
+        if (isDark) ClaudeDarkSurface else Color.White
+    } else {
+        if (isDark) ClaudeDarkSurface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.85f)
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp)),
-        color = if (isAnyVariantSelected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        color = cardBg,
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(
             1.dp,
@@ -702,14 +711,15 @@ private fun CategoryNavigationTile(
     brandColor: Color,
     onClick: () -> Unit
 ) {
+    val isDark = isSystemInDarkTheme()
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() },
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        color = if (isDark) ClaudeDarkSurface else Color.White,
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -799,11 +809,12 @@ private fun ActiveModelCard(
         qGroup?.weekly?.countdown ?: quota?.weeklyResetCountdown
     )
 
+    val isDark = isSystemInDarkTheme()
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-        border = BorderStroke(1.dp, familyColor.copy(alpha = 0.3f))
+        color = if (isDark) ClaudeDarkSurface else Color.White,
+        border = BorderStroke(1.dp, familyColor.copy(alpha = 0.35f))
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
@@ -864,16 +875,21 @@ private fun ModelRowItem(
 ) {
     val brandColor = if (model.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
 
+    val isDark = isSystemInDarkTheme()
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .clickable { onSelect() },
-        color = if (isSelected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        color = if (isSelected) {
+            if (isDark) ClaudeDarkSurface else Color.White
+        } else {
+            Color.Transparent
+        },
         shape = RoundedCornerShape(10.dp),
         border = BorderStroke(
             1.dp,
-            if (isSelected) brandColor.copy(alpha = 0.4f) else Color.Transparent
+            if (isSelected) brandColor.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
         )
     ) {
         Row(

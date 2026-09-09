@@ -280,10 +280,10 @@ fun ChatInputBar(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                color = if (isDark) Color(0xFF222226) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                color = if (isDark) Color(0xFF21211E) else Color.White,
                 border = BorderStroke(
                     1.dp,
-                    if (isDark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+                    if (isDark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                 )
             ) {
                 if (isRecordingAudio) {
@@ -351,7 +351,7 @@ fun ChatInputBar(
                         Surface(
                             onClick = { stopAudioRecording(andSend = false) },
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            color = MaterialTheme.colorScheme.background,
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
                             modifier = Modifier.size(36.dp)
                         ) {
@@ -435,7 +435,8 @@ fun ChatInputBar(
                             if (isUploadingAttachment) {
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                                    color = MaterialTheme.colorScheme.background,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -459,7 +460,7 @@ fun ChatInputBar(
                             for (att in attachments) {
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                                    color = MaterialTheme.colorScheme.background,
                                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                 ) {
                                     Row(
@@ -527,7 +528,8 @@ fun ChatInputBar(
                         Surface(
                             onClick = onAttachClick,
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                            color = MaterialTheme.colorScheme.background,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
                             modifier = Modifier.size(34.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -550,7 +552,7 @@ fun ChatInputBar(
                                 onOpenModelSelector()
                             },
                             shape = RoundedCornerShape(18.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+                            color = MaterialTheme.colorScheme.background,
                             border = BorderStroke(
                                 1.dp,
                                 MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)

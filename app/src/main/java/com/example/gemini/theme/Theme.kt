@@ -12,11 +12,14 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+import androidx.compose.ui.graphics.Color
+
 private val DarkColorScheme = darkColorScheme(
     primary = ClaudeTerracotta,
     secondary = ClaudeTerracottaDark,
     background = ClaudeDarkBg,
-    surface = ClaudeDarkSurface,
+    surface = ClaudeDarkBg,
+    surfaceTint = Color.Transparent,
     onPrimary = TextPrimaryDark,
     onBackground = TextPrimaryDark,
     onSurface = TextPrimaryDark,
@@ -27,7 +30,8 @@ private val LightColorScheme = lightColorScheme(
     primary = ClaudeTerracotta,
     secondary = ClaudeTerracottaDark,
     background = ClaudeCream,
-    surface = ClaudeWarmSurface,
+    surface = ClaudeCream,
+    surfaceTint = Color.Transparent,
     onPrimary = TextPrimaryLight,
     onBackground = TextPrimaryLight,
     onSurface = TextPrimaryLight,

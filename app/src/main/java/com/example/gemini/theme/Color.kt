@@ -5,10 +5,10 @@ import androidx.compose.ui.graphics.Color
 // Claude-inspired warm color palette
 val ClaudeTerracotta = Color(0xFFD97706)
 val ClaudeTerracottaDark = Color(0xFFB45309)
-val ClaudeCream = Color(0xFFFBF9F5)
-val ClaudeWarmSurface = Color(0xFFF3EFEA)
-val ClaudeUserBubbleLight = Color(0xFFECE6DD)
-val ClaudeThinkingLight = Color(0xFFF4EFE6)
+val ClaudeCream = Color(0xFFF9F9FB)
+val ClaudeWarmSurface = Color(0xFFF9F9FB)
+val ClaudeUserBubbleLight = Color(0xFFE8EAED)
+val ClaudeThinkingLight = Color(0xFFF1F3F5)
 
 val ClaudeDarkBg = Color(0xFF181816)
 val ClaudeDarkSurface = Color(0xFF232320)
