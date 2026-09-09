@@ -24,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -46,6 +48,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import android.net.Uri
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -99,6 +102,42 @@ fun ClaudeWaveformIcon(
 }
 
 /**
+ * Live audio waveform visualizer that dynamically draws bars reflecting
+ * real-time microphone input volume amplitude.
+ */
+@Composable
+fun LiveAudioWaveform(
+    amplitudes: List<Float>,
+    isPaused: Boolean,
+    modifier: Modifier = Modifier,
+    barColor: Color = Color(0xFFE53935)
+) {
+    Canvas(modifier = modifier) {
+        val count = amplitudes.size.coerceAtLeast(1)
+        val spacing = 2.dp.toPx()
+        val totalSpacing = spacing * (count - 1)
+        val availableWidth = size.width - totalSpacing
+        val barWidth = (availableWidth / count).coerceIn(2.dp.toPx(), 4.dp.toPx())
+        val maxHeight = size.height
+        val midY = maxHeight / 2f
+
+        for (i in amplitudes.indices) {
+            val amp = amplitudes[i]
+            val barHeight = (maxHeight * amp).coerceAtLeast(3.dp.toPx())
+            val x = i * (barWidth + spacing)
+            val top = midY - (barHeight / 2f)
+
+            drawRoundRect(
+                color = if (isPaused) barColor.copy(alpha = 0.35f) else barColor,
+                topLeft = Offset(x, top),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+            )
+        }
+    }
+}
+
+/**
  * Claude Android style unified input bar:
  * - Single rounded container enclosing text field, attachments, [+] button, model selector pill, and voice recorder / send button.
  * - Dynamic microphone icon with native MediaRecorder audio recording, stop & attach, or direct send.
@@ -130,10 +169,12 @@ fun ChatInputBar(
 
     // Audio recording state
     var isRecordingAudio by remember { mutableStateOf(false) }
+    var isRecordingPaused by remember { mutableStateOf(false) }
     var recordingDurationSeconds by remember { mutableIntStateOf(0) }
     var mediaRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var currentRecordingFile by remember { mutableStateOf<File?>(null) }
     var recordingJob by remember { mutableStateOf<Job?>(null) }
+    val waveformAmplitudes = remember { mutableStateListOf<Float>() }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -176,17 +217,64 @@ fun ChatInputBar(
 
             mediaRecorder = recorder
             isRecordingAudio = true
+            isRecordingPaused = false
             recordingDurationSeconds = 0
+            waveformAmplitudes.clear()
+            repeat(24) { waveformAmplitudes.add(0.08f) }
 
             recordingJob = coroutineScope.launch {
+                var msElapsed = 0L
                 while (isRecordingAudio && isActive) {
-                    delay(1000)
-                    recordingDurationSeconds++
+                    delay(50)
+                    if (!isRecordingPaused) {
+                        msElapsed += 50
+                        if (msElapsed >= 1000) {
+                            msElapsed -= 1000
+                            recordingDurationSeconds++
+                        }
+
+                        val maxAmp = try {
+                            recorder.maxAmplitude
+                        } catch (_: Exception) { 0 }
+
+                        val normalized = (maxAmp.toFloat() / 22000f).coerceIn(0f, 1f)
+                        val target = (normalized * 0.92f + 0.08f).coerceIn(0.08f, 1f)
+
+                        if (waveformAmplitudes.size >= 24) {
+                            waveformAmplitudes.removeAt(0)
+                        }
+                        waveformAmplitudes.add(target)
+                    } else {
+                        if (waveformAmplitudes.size >= 24) {
+                            waveformAmplitudes.removeAt(0)
+                        }
+                        val last = waveformAmplitudes.lastOrNull() ?: 0.08f
+                        waveformAmplitudes.add((last * 0.85f).coerceAtLeast(0.08f))
+                    }
                 }
             }
         } catch (e: Exception) {
             Log.e("ChatInputBar", "Failed to start recording: ${e.message}")
             Toast.makeText(context, "Could not start audio recording", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun togglePauseAudioRecording() {
+        val rec = mediaRecorder ?: return
+        try {
+            if (isRecordingPaused) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    rec.resume()
+                }
+                isRecordingPaused = false
+            } else {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    rec.pause()
+                }
+                isRecordingPaused = true
+            }
+        } catch (e: Exception) {
+            Log.w("ChatInputBar", "Error toggling pause: ${e.message}")
         }
     }
 
@@ -226,8 +314,10 @@ fun ChatInputBar(
         } finally {
             mediaRecorder = null
             isRecordingAudio = false
+            isRecordingPaused = false
             currentRecordingFile = null
             recordingDurationSeconds = 0
+            waveformAmplitudes.clear()
         }
 
         if (file != null && file.exists() && file.length() > 0) {
@@ -262,8 +352,10 @@ fun ChatInputBar(
         finally {
             mediaRecorder = null
             isRecordingAudio = false
+            isRecordingPaused = false
             currentRecordingFile = null
             recordingDurationSeconds = 0
+            waveformAmplitudes.clear()
         }
         file?.delete()
     }
@@ -314,38 +406,67 @@ fun ChatInputBar(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Pulsing red recording dot
+                        // Pulsing red recording dot (steady amber if paused)
                         Box(
                             modifier = Modifier
-                                .size(10.dp)
+                                .size(9.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFE53935).copy(alpha = pulseAlpha))
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Icon(
-                            imageVector = Icons.Rounded.Mic,
-                            contentDescription = null,
-                            tint = Color(0xFFE53935),
-                            modifier = Modifier.size(18.dp)
+                                .background(
+                                    if (isRecordingPaused) Color(0xFFFFA000)
+                                    else Color(0xFFE53935).copy(alpha = pulseAlpha)
+                                )
                         )
 
                         Spacer(modifier = Modifier.width(6.dp))
 
+                        // Duration timer
                         Text(
-                            text = "Recording... ${formatAudioDuration(recordingDurationSeconds)}",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            text = formatAudioDuration(recordingDurationSeconds),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (isRecordingPaused) Color(0xFFFFA000) else MaterialTheme.colorScheme.onSurface
                         )
 
-                        Spacer(modifier = Modifier.weight(1f))
+                        Spacer(modifier = Modifier.width(6.dp))
 
-                        // Cancel / Discard
+                        // Real-time live audio waveform visualizer based on speaking volume
+                        LiveAudioWaveform(
+                            amplitudes = waveformAmplitudes,
+                            isPaused = isRecordingPaused,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(26.dp)
+                                .padding(horizontal = 4.dp),
+                            barColor = if (isRecordingPaused) Color(0xFFFFA000) else Color(0xFFE53935)
+                        )
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // 1. Pause / Resume button
+                        Surface(
+                            onClick = { togglePauseAudioRecording() },
+                            shape = CircleShape,
+                            color = if (isRecordingPaused) Color(0xFFFFA000).copy(alpha = 0.15f) else MaterialTheme.colorScheme.background,
+                            border = BorderStroke(1.dp, if (isRecordingPaused) Color(0xFFFFA000) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isRecordingPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                    contentDescription = if (isRecordingPaused) "Resume" else "Pause",
+                                    tint = if (isRecordingPaused) Color(0xFFFFA000) else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // 2. Cancel / Discard
                         IconButton(
                             onClick = { cancelAudioRecording() },
                             modifier = Modifier.size(32.dp)
@@ -358,41 +479,41 @@ fun ChatInputBar(
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
 
-                        // Stop & Attach (lets user enter more text)
+                        // 3. Stop & Attach
                         Surface(
                             onClick = { stopAudioRecording(andSend = false) },
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.background,
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(34.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Stop,
                                     contentDescription = "Stop & Attach",
                                     tint = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
 
-                        // Send directly
+                        // 4. Send directly
                         Surface(
                             onClick = { stopAudioRecording(andSend = true) },
                             shape = CircleShape,
                             color = ClaudeTerracotta,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(34.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowUpward,
                                     contentDescription = "Send voice note",
                                     tint = Color.White,
-                                    modifier = Modifier.size(19.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
