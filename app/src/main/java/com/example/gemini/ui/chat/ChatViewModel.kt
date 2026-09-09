@@ -63,6 +63,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedModelId = MutableStateFlow("")
     val selectedModelId: StateFlow<String> = _selectedModelId.asStateFlow()
 
+    val preferredModelName: StateFlow<String> = authPrefs.preferredModelName
+        .map { it ?: "" }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
     private val _thinkingPreference = MutableStateFlow(com.example.gemini.domain.model.ThinkingPreference())
     val thinkingPreference: StateFlow<com.example.gemini.domain.model.ThinkingPreference> = _thinkingPreference.asStateFlow()
 
@@ -347,15 +351,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val filtered = if (enabledSet.isNullOrEmpty()) {
             all
         } else {
-            all.filter { it.id in enabledSet }
+            all.filter { it.id in enabledSet || it.key in enabledSet }
         }
         _enabledModels.value = if (filtered.isNotEmpty()) filtered else all
 
-        // If current selected model is not in enabled list, switch to first enabled model
+        // Only switch if user has an explicit filter AND current selection is not in the filtered enabled list
         val currentSelected = _selectedModelId.value
-        if (_enabledModels.value.isNotEmpty() && (currentSelected.isBlank() || _enabledModels.value.none { it.id == currentSelected })) {
-            _enabledModels.value.firstOrNull()?.let {
-                selectModel(it.id)
+        if (!enabledSet.isNullOrEmpty() && currentSelected.isNotBlank()) {
+            val isCurrentEnabled = _enabledModels.value.any { it.id == currentSelected || it.key == currentSelected }
+            if (!isCurrentEnabled) {
+                _enabledModels.value.firstOrNull()?.let {
+                    selectModel(it.id)
+                }
             }
         }
     }
@@ -424,6 +431,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
+            val savedId = authPrefs.preferredModelId.firstOrNull()
+            val savedKey = authPrefs.preferredModelKey.firstOrNull()
+            val initial = savedId ?: savedKey ?: ""
+            if (initial.isNotBlank() && _selectedModelId.value.isBlank()) {
+                _selectedModelId.value = initial
+            }
             startNewChat()
             syncAgyConversations()
         }
@@ -545,7 +558,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
             val conv = _currentConversation.value
-            val model = _selectedModelId.value.ifBlank { "gemini-3.7-flash-high" }
+            val model = _selectedModelId.value.ifBlank { _availableModels.value.firstOrNull()?.id ?: "" }
             agyBridgeService.prewarm(
                 conversationId = conv?.id,
                 model = model,
@@ -580,7 +593,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _isStreaming.value = false
         _bridgeStatusMessage.value = null
 
-        val modelToUse = if (_selectedModelId.value.isNotBlank()) _selectedModelId.value else (_enabledModels.value.firstOrNull()?.id ?: "")
+        val modelToUse = if (_selectedModelId.value.isNotBlank()) {
+            com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
+        } else {
+            (_enabledModels.value.firstOrNull()?.id ?: "")
+        }
         val newConv = Conversation(
             id = UUID.randomUUID().toString(),
             title = "New Chat",
@@ -622,9 +639,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val conv = _conversations.value.find { it.id == id }
                 ?: Conversation(id = id, title = "Antigravity Chat", sessionId = id)
             _currentConversation.value = conv
-            if (conv.modelId.isNotBlank()) {
-                _selectedModelId.value = conv.modelId
-            }
+            // Keep globally selected model intact across all chats
             knownDaemonCascadeIds.add(id)
 
             // Connect persistent stream for this conversation.
@@ -1032,7 +1047,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val updated = conv.copy(modelId = modelId)
             _currentConversation.value = updated
             _conversations.value = _conversations.value.map { if (it.id == updated.id) updated else it }
-            val existsInStorage = _conversations.value.any { it.id == conv.id }
+        }
+        val modelObj = _availableModels.value.find { it.id == modelId || it.key == modelId }
+        val modelKey = modelObj?.key ?: ""
+        val modelName = modelObj?.displayName ?: ""
+        viewModelScope.launch {
+            authPrefs.savePreferredModel(modelId = modelId, modelKey = modelKey, displayName = modelName)
         }
     }
 
@@ -1199,7 +1219,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
         val userPrompt = currentHistory.lastOrNull { it.role == MessageRole.USER }?.content ?: ""
-        val modelEnum = if (_selectedModelId.value.isNotBlank()) _selectedModelId.value else "MODEL_PLACEHOLDER_M319"
+        val modelEnum = com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
         val selectedModel = _enabledModels.value.find { it.id == modelEnum }
         val supportsThinking = selectedModel?.supportsThinking ?: (modelEnum.contains("thinking", ignoreCase = true) || modelEnum.contains("flash", ignoreCase = true) || modelEnum.contains("pro", ignoreCase = true))
         val thinkingBudget = if (supportsThinking) 8192 else 0
@@ -1406,8 +1426,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun applyQuotaSummary(summary: com.example.gemini.domain.model.QuotaSummaryResponse) {
         _quotaSummary.value = summary
-        val geminiGroup = summary.groups.find { it.groupId == "gemini" }
-        val claudeGroup = summary.groups.find { it.groupId == "claude_gpt" }
+        val geminiGroup = summary.groups.find {
+            it.groupId == "gemini" || it.groupName.contains("gemini", ignoreCase = true)
+        }
+        val claudeGroup = summary.groups.find {
+            it.groupId == "claude_gpt" || it.groupName.contains("claude", ignoreCase = true) || it.groupName.contains("gpt", ignoreCase = true)
+        }
 
         val updatedQuotas = _availableModels.value.map { model ->
             val isClaude = model.family == com.example.gemini.domain.model.ModelFamily.CLAUDE
@@ -1440,12 +1464,40 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (modelsRes.isSuccess) {
                     val models = modelsRes.getOrThrow()
                     if (models.isNotEmpty()) {
+                        com.example.gemini.data.remote.AgyHubClient.updateModelRegistry(models)
                         _availableModels.value = models
-                        recomputeEnabledModels()
-                        if (_selectedModelId.value.isBlank() || !models.any { it.id == _selectedModelId.value }) {
-                            _selectedModelId.value = models.firstOrNull { it.id.contains("flash", ignoreCase = true) || it.id.contains("319", ignoreCase = true) }?.id
-                                ?: models.first().id
+                        val currentSelected = _selectedModelId.value
+                        val existingValidModel = if (currentSelected.isNotBlank()) {
+                            models.find { it.id == currentSelected || it.key == currentSelected }
+                        } else null
+
+                        if (existingValidModel != null) {
+                            // Current selection is already valid! Keep it and ensure canonical id
+                            if (_selectedModelId.value != existingValidModel.id) {
+                                _selectedModelId.value = existingValidModel.id
+                            }
+                        } else {
+                            // First run or need to restore saved preference
+                            val savedId = authPrefs.preferredModelId.firstOrNull()
+                            val savedKey = authPrefs.preferredModelKey.firstOrNull()
+                            val savedName = authPrefs.preferredModelName.firstOrNull()
+
+                            val matched = models.find {
+                                (!savedKey.isNullOrBlank() && (it.key.equals(savedKey, ignoreCase = true) || it.id == savedKey)) ||
+                                (!savedName.isNullOrBlank() && it.displayName.equals(savedName, ignoreCase = true)) ||
+                                (!savedId.isNullOrBlank() && (it.id == savedId || it.key == savedId))
+                            }
+
+                            if (matched != null) {
+                                _selectedModelId.value = matched.id
+                                authPrefs.savePreferredModel(modelId = matched.id, modelKey = matched.key, displayName = matched.displayName)
+                            } else {
+                                val preferred = models.find { it.key.contains("3.8") || it.key.contains("flash") } ?: models.first()
+                                _selectedModelId.value = preferred.id
+                            }
                         }
+
+                        recomputeEnabledModels()
                     }
                 }
 

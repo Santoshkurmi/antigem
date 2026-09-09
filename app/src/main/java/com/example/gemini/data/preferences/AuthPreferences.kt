@@ -44,8 +44,14 @@ class AuthPreferences(private val context: Context) {
         val AGY_BRIDGE_HTTP_URL = stringPreferencesKey("agy_bridge_http_url")
         val AGY_HUB_URL = stringPreferencesKey("agy_hub_url")
         val USE_SSH_TERMINAL = androidx.datastore.preferences.core.booleanPreferencesKey("use_ssh_terminal")
+        val PREFERRED_MODEL_ID = stringPreferencesKey("preferred_model_id")
+        val PREFERRED_MODEL_KEY = stringPreferencesKey("preferred_model_key")
+        val PREFERRED_MODEL_NAME = stringPreferencesKey("preferred_model_name")
     }
 
+    val preferredModelId: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_ID] }
+    val preferredModelKey: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_KEY] }
+    val preferredModelName: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_NAME] }
     val useSshTerminal: Flow<Boolean> = context.dataStore.data.map { it[USE_SSH_TERMINAL] ?: false }
     val isLocalToolsEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_ENABLED] ?: false }
     val isLocalToolsInstalled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_INSTALLED] ?: false }
@@ -236,6 +242,18 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveAgyHubUrl(url: String) {
         context.dataStore.edit { prefs ->
             prefs[AGY_HUB_URL] = url
+        }
+    }
+
+    suspend fun savePreferredModel(modelId: String, modelKey: String = "", displayName: String = "") {
+        context.dataStore.edit { prefs ->
+            prefs[PREFERRED_MODEL_ID] = modelId
+            if (modelKey.isNotBlank()) {
+                prefs[PREFERRED_MODEL_KEY] = modelKey
+            }
+            if (displayName.isNotBlank()) {
+                prefs[PREFERRED_MODEL_NAME] = displayName
+            }
         }
     }
 

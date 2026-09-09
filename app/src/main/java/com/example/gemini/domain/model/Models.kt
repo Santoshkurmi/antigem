@@ -66,7 +66,7 @@ data class ChatAttachment(
 data class Conversation(
     val id: String = UUID.randomUUID().toString(),
     val title: String = "New Chat",
-    val modelId: String = "claude-sonnet-4-5-thinking",
+    val modelId: String = "",
     val sessionId: String = UUID.randomUUID().toString(),
     val summary: String? = null,
     val customSystemPrompt: String? = null,
@@ -85,13 +85,16 @@ data class AiModel(
     val id: String,
     val displayName: String,
     val family: ModelFamily = when {
-        id.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
-        id.contains("gemini", ignoreCase = true) -> ModelFamily.GEMINI
+        id.contains("claude", ignoreCase = true) || displayName.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
+        id.contains("gemini", ignoreCase = true) || displayName.contains("gemini", ignoreCase = true) -> ModelFamily.GEMINI
         else -> ModelFamily.OTHER
     },
     val supportsThinking: Boolean = id.contains("thinking", ignoreCase = true) || id.contains("flash", ignoreCase = true) || id.contains("pro", ignoreCase = true) || id.contains("high", ignoreCase = true) || id.contains("medium", ignoreCase = true) || id.contains("low", ignoreCase = true),
     val description: String = "",
-    val isDefault: Boolean = false
+    val isDefault: Boolean = false,
+    val key: String = "",
+    val baseName: String = "",
+    val tier: String? = null
 ) {
     companion object {
         val DEFAULT_MODELS = emptyList<AiModel>()
@@ -99,8 +102,8 @@ data class AiModel(
         fun fromApi(id: String, displayName: String?, description: String? = null): AiModel {
             val name = displayName?.takeIf { it.isNotBlank() } ?: formatModelName(id)
             val family = when {
-                id.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
-                id.contains("gemini", ignoreCase = true) -> ModelFamily.GEMINI
+                id.contains("claude", ignoreCase = true) || name.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
+                id.contains("gemini", ignoreCase = true) || name.contains("gemini", ignoreCase = true) -> ModelFamily.GEMINI
                 else -> ModelFamily.OTHER
             }
             val thinking = id.contains("thinking", ignoreCase = true) || id.contains("flash", ignoreCase = true) || id.contains("pro", ignoreCase = true) || id.contains("high", ignoreCase = true) || id.contains("medium", ignoreCase = true) || id.contains("low", ignoreCase = true)
@@ -109,23 +112,44 @@ data class AiModel(
                 ModelFamily.GEMINI -> "Google Gemini via Antigravity"
                 ModelFamily.OTHER -> "OpenAI / Other Model via Antigravity"
             }
+            var baseName = name
+            var tier: String? = null
+            val tierMatch = Regex("^(.*?)\\s*\\((High|Medium|Low|Med|Thinking)\\)$", RegexOption.IGNORE_CASE).find(name)
+            if (tierMatch != null) {
+                baseName = tierMatch.groupValues[1].trim()
+                tier = tierMatch.groupValues[2].replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+            }
             return AiModel(
                 id = id,
                 displayName = name,
                 family = family,
                 supportsThinking = thinking,
-                description = desc
+                description = desc,
+                key = id,
+                baseName = baseName,
+                tier = tier
             )
         }
 
         private fun formatModelName(id: String): String {
+            if (id.startsWith("MODEL_", ignoreCase = true)) {
+                return "Gemini"
+            }
             return id.split("-", "_").joinToString(" ") { part ->
                 part.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
             }
         }
 
-        fun findInList(models: List<AiModel>, id: String): AiModel {
-            return models.find { it.id == id } ?: if (id.isNotBlank()) fromApi(id, null) else AiModel("gemini", "Select Model")
+        fun findInList(models: List<AiModel>, id: String, fallbackDisplayName: String? = null): AiModel {
+            val found = models.find { it.id == id || (it.key.isNotBlank() && it.key.equals(id, ignoreCase = true)) }
+            if (found != null) return found
+            if (!fallbackDisplayName.isNullOrBlank()) {
+                return fromApi(id.ifBlank { "gemini" }, fallbackDisplayName)
+            }
+            if (id.isNotBlank() && !id.startsWith("MODEL_", ignoreCase = true)) {
+                return fromApi(id, null)
+            }
+            return if (models.isNotEmpty()) models.first() else AiModel("gemini", "Gemini")
         }
     }
 }

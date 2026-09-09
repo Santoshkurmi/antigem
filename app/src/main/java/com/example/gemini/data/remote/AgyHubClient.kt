@@ -25,6 +25,8 @@ import org.json.JSONObject
 import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
@@ -49,6 +51,76 @@ class AgyHubClient(
         private val CSRF_PATTERN = Pattern.compile(""""csrfToken":\s*"([^"]+)"""")
         private val ISO_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
+        }
+
+        // Dynamic model resolution registry - NO hardcoded model mapping enums!
+        private val keyToModelEnum = ConcurrentHashMap<String, String>()
+        private val nameToModelEnum = ConcurrentHashMap<String, String>()
+        private val allValidEnums = CopyOnWriteArraySet<String>()
+        @Volatile
+        private var defaultModelEnum: String = ""
+
+        fun updateModelRegistry(models: List<AiModel>) {
+            if (models.isEmpty()) return
+            models.forEach { m ->
+                allValidEnums.add(m.id)
+                if (m.key.isNotBlank()) {
+                    keyToModelEnum[m.key.lowercase()] = m.id
+                }
+                keyToModelEnum[m.displayName.lowercase()] = m.id
+                if (m.baseName.isNotBlank()) {
+                    nameToModelEnum[m.baseName.lowercase()] = m.id
+                }
+            }
+            if (defaultModelEnum.isBlank() || !allValidEnums.contains(defaultModelEnum)) {
+                defaultModelEnum = models.firstOrNull {
+                    it.displayName.contains("flash", ignoreCase = true) || it.key.contains("flash", ignoreCase = true)
+                }?.id ?: models.first().id
+            }
+        }
+
+        fun resolveModelEnum(rawInput: String?): String {
+            if (rawInput.isNullOrBlank()) return defaultModelEnum.ifBlank { "MODEL_PLACEHOLDER_M319" }
+
+            // 1. If it's already a valid modelEnum known from daemon
+            if (allValidEnums.contains(rawInput)) return rawInput
+
+            val lower = rawInput.lowercase().trim()
+            keyToModelEnum[lower]?.let { return it }
+            nameToModelEnum[lower]?.let { return it }
+
+            // 2. Substring search in registered keys
+            for ((k, v) in keyToModelEnum) {
+                if (lower.contains(k) || k.contains(lower)) return v
+            }
+
+            // 3. If it looks like a direct model enum (starts with MODEL_)
+            if (rawInput.startsWith("MODEL_")) return rawInput
+
+            return defaultModelEnum.ifBlank { rawInput }
+        }
+
+        fun formatQuotaResetCountdown(isoString: String?): String {
+            if (isoString.isNullOrBlank()) return ""
+            return try {
+                val clean = isoString.substringBefore('.').substringBefore('Z')
+                val target = ISO_FORMAT.parse(clean)?.time ?: return ""
+                val diffMs = target - System.currentTimeMillis()
+                if (diffMs <= 0) return "Resetting now"
+
+                val totalMins = diffMs / (1000 * 60)
+                val days = totalMins / (60 * 24)
+                val hours = (totalMins % (60 * 24)) / 60
+                val mins = totalMins % 60
+
+                val parts = mutableListOf<String>()
+                if (days > 0) parts.add("${days}d")
+                if (hours > 0 || days > 0) parts.add("${hours}h")
+                parts.add("${mins}m")
+                "Resets in " + parts.joinToString(" ")
+            } catch (e: Exception) {
+                ""
+            }
         }
     }
 
@@ -410,7 +482,7 @@ class AgyHubClient(
                             Conversation(
                                 id = cid,
                                 title = summary,
-                                modelId = "gemini-3.7-flash-high",
+                                modelId = "",
                                 sessionId = cid,
                                 summary = summary,
                                 createdAt = lastModEpoch,
@@ -504,18 +576,19 @@ class AgyHubClient(
      */
     suspend fun startCascade(
         cascadeId: String = UUID.randomUUID().toString(),
-        modelEnum: String = "MODEL_PLACEHOLDER_M319",
+        modelEnum: String = "",
         workspaceUri: String = "",
         hubUrl: String = DEFAULT_HUB_URL
     ): Result<String> = withContext(Dispatchers.IO) {
         val cid = cascadeId
+        val resolvedModel = resolveModelEnum(modelEnum)
         val normalizedUri = if (workspaceUri.isNotBlank()) {
             if (workspaceUri.startsWith("file://")) workspaceUri else "file://$workspaceUri"
         } else ""
         val payload = JSONObject().apply {
             put("source", "CORTEX_TRAJECTORY_SOURCE_CASCADE_CLIENT")
             put("cascadeId", cid)
-            put("requestedModel", modelEnum)
+            put("requestedModel", resolvedModel)
             if (normalizedUri.isNotBlank()) {
                 put("workspaceUris", JSONArray().put(normalizedUri))
                 put("overrideWorkspaceUris", JSONArray().put(normalizedUri))
@@ -615,6 +688,14 @@ class AgyHubClient(
                 val modelEnum = details.optString("model", key)
                 val supportsThinking = details.optBoolean("supportsThinking", false)
 
+                var baseName = displayName
+                var tier: String? = null
+                val tierMatch = Regex("^(.*?)\\s*\\((High|Medium|Low|Med|Thinking)\\)$", RegexOption.IGNORE_CASE).find(baseName)
+                if (tierMatch != null) {
+                    baseName = tierMatch.groupValues[1].trim()
+                    tier = tierMatch.groupValues[2].replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                }
+
                 val family = when {
                     displayName.contains("claude", ignoreCase = true) || key.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
                     displayName.contains("gemini", ignoreCase = true) || key.contains("gemini", ignoreCase = true) -> ModelFamily.GEMINI
@@ -627,11 +708,15 @@ class AgyHubClient(
                         displayName = displayName,
                         family = family,
                         supportsThinking = supportsThinking,
-                        description = details.optString("description", "")
+                        description = details.optString("description", ""),
+                        key = key,
+                        baseName = baseName,
+                        tier = tier
                     )
                 )
             }
 
+            updateModelRegistry(resultList)
             Result.success(resultList)
         } catch (e: Exception) {
             Log.e(TAG, "getAvailableModels failed: ${e.message}")
@@ -670,6 +755,7 @@ class AgyHubClient(
                         val usedPct = String.format(Locale.US, "%.1f%%", (1.0f - remFraction) * 100f)
                         val resetTime = b.optString("resetTime", "").takeIf { it.isNotBlank() }
                         val bDesc = b.optString("description", "")
+                        val countdown = formatQuotaResetCountdown(resetTime)
 
                         val windowInfo = QuotaWindowInfo(
                             window = window,
@@ -678,19 +764,26 @@ class AgyHubClient(
                             remainingPct = remPct,
                             usedPct = usedPct,
                             resetTime = resetTime,
+                            countdown = countdown,
                             description = bDesc
                         )
 
                         if (window.contains("5h", ignoreCase = true)) {
                             fiveHourInfo = windowInfo
-                        } else if (window.contains("week", ignoreCase = true)) {
+                        } else if (window.contains("week", ignoreCase = true) || window.contains("7d", ignoreCase = true)) {
                             weeklyInfo = windowInfo
                         }
                     }
 
+                    val gId = when {
+                        dispName.contains("gemini", ignoreCase = true) -> "gemini"
+                        dispName.contains("claude", ignoreCase = true) || dispName.contains("gpt", ignoreCase = true) -> "claude_gpt"
+                        else -> dispName.lowercase().replace(" ", "_")
+                    }
+
                     groupsList.add(
                         ModelQuotaGroup(
-                            groupId = dispName.lowercase().replace(" ", "_"),
+                            groupId = gId,
                             groupName = dispName,
                             description = desc,
                             fiveHour = fiveHourInfo,
@@ -718,11 +811,12 @@ class AgyHubClient(
     suspend fun sendUserPrompt(
         cascadeId: String,
         text: String,
-        modelEnum: String = "MODEL_PLACEHOLDER_M319",
+        modelEnum: String = "",
         thinkingBudget: Int = 8192,
         autoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
         hubUrl: String = DEFAULT_HUB_URL
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        val resolvedModel = resolveModelEnum(modelEnum)
         val payload = JSONObject().apply {
             put("cascadeId", cascadeId)
             put("items", JSONArray().put(JSONObject().put("text", text)))
@@ -737,7 +831,7 @@ class AgyHubClient(
                         put("notifyUser", JSONObject())
                     })
                     put("requestedModel", JSONObject().apply {
-                        put("model", modelEnum)
+                        put("model", resolvedModel)
                     })
                     put("supportsThinking", thinkingBudget > 0)
                     put("thinkingBudget", thinkingBudget)
@@ -1022,17 +1116,60 @@ class AgyHubClient(
      * Extracts an error message from a trajectory step if present.
      */
     fun extractStepError(step: JSONObject): String? {
-        val errObj = step.optJSONObject("error")
-        val errMsg = errObj?.optString("message", "")?.takeIf { it.isNotBlank() }
-            ?: errObj?.optString("shortError", "")?.takeIf { it.isNotBlank() }
-            ?: step.optString("executionError", "").takeIf { it.isNotBlank() }
-            ?: step.optString("error", "").takeIf { it.isNotBlank() }
-            ?: step.optJSONObject("plannerResponse")?.optJSONObject("error")?.optString("message", "")?.takeIf { it.isNotBlank() }
+        // 1. Check errorMessage object (standard daemon CORTEX_STEP_TYPE_ERROR_MESSAGE)
+        val errMsgObj = step.optJSONObject("errorMessage")
+        if (errMsgObj != null) {
+            val err = errMsgObj.optJSONObject("error")
+            val shortError = err?.optString("shortError", "")?.takeIf { it.isNotBlank() }
+            val userError = err?.optString("userErrorMessage", "")?.takeIf { it.isNotBlank() }
+            val directMsg = err?.optString("message", "")?.takeIf { it.isNotBlank() }
+                ?: errMsgObj.optString("message", "").takeIf { it.isNotBlank() }
 
-        if (!errMsg.isNullOrBlank()) {
-            return errMsg
+            if (!userError.isNullOrBlank() && !shortError.isNullOrBlank() && userError != shortError) {
+                return "$userError: $shortError"
+            }
+            if (!shortError.isNullOrBlank()) return shortError
+            if (!userError.isNullOrBlank()) return userError
+            if (!directMsg.isNullOrBlank()) return directMsg
         }
 
+        // 2. Direct error object
+        val errObj = step.optJSONObject("error")
+        if (errObj != null) {
+            val shortError = errObj.optString("shortError", "").takeIf { it.isNotBlank() }
+            val userError = errObj.optString("userErrorMessage", "").takeIf { it.isNotBlank() }
+            val message = errObj.optString("message", "").takeIf { it.isNotBlank() }
+            if (!userError.isNullOrBlank() && !shortError.isNullOrBlank() && userError != shortError) {
+                return "$userError: $shortError"
+            }
+            if (!shortError.isNullOrBlank()) return shortError
+            if (!userError.isNullOrBlank()) return userError
+            if (!message.isNullOrBlank()) return message
+        }
+
+        val directErr = step.optString("error", "").takeIf { it.isNotBlank() }
+            ?: step.optString("executionError", "").takeIf { it.isNotBlank() }
+        if (directErr != null) {
+            return directErr
+        }
+
+        // 3. Check inside plannerResponse error
+        val plannerErr = step.optJSONObject("plannerResponse")?.optJSONObject("error")
+        if (plannerErr != null) {
+            val shortError = plannerErr.optString("shortError", "").takeIf { it.isNotBlank() }
+            val msg = plannerErr.optString("message", "").takeIf { it.isNotBlank() }
+            if (!shortError.isNullOrBlank()) return shortError
+            if (!msg.isNullOrBlank()) return msg
+        }
+
+        // 4. If step type indicates error
+        val stepType = step.optString("type", "")
+        if (stepType.contains("ERROR", ignoreCase = true)) {
+            val desc = step.optString("description", "").takeIf { it.isNotBlank() }
+            return desc ?: "Agent execution terminated due to error."
+        }
+
+        // 5. If status indicates error or failure
         val status = step.optString("status", "")
         if (status.contains("ERROR", ignoreCase = true) || status.contains("FAIL", ignoreCase = true)) {
             val shortStatus = status.removePrefix("CORTEX_STEP_STATUS_").lowercase().replace('_', ' ')

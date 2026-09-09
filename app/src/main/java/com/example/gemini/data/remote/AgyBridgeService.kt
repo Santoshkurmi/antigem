@@ -173,41 +173,56 @@ class AgyBridgeService(
 
         for (i in 0 until groupsArr.length()) {
             val groupObj = groupsArr.getJSONObject(i)
-            val groupId = groupObj.optString("groupId", "")
+            val rawGroupId = groupObj.optString("groupId", "")
             val groupName = groupObj.optString("groupName", "")
             val desc = groupObj.optString("description", "")
 
+            val gId = when {
+                rawGroupId.isNotBlank() -> rawGroupId
+                groupName.contains("gemini", ignoreCase = true) -> "gemini"
+                groupName.contains("claude", ignoreCase = true) || groupName.contains("gpt", ignoreCase = true) -> "claude_gpt"
+                else -> groupName.lowercase().replace(" ", "_")
+            }
+
             val fiveHourObj = groupObj.optJSONObject("fiveHour")
             val fiveHour = fiveHourObj?.let {
+                val rTime = it.optString("resetTime", "").takeIf { t -> t.isNotBlank() }
+                val cd = it.optString("countdown", "").ifBlank {
+                    AgyHubClient.formatQuotaResetCountdown(rTime)
+                }
                 com.example.gemini.domain.model.QuotaWindowInfo(
                     window = it.optString("window", "5h"),
                     displayName = it.optString("displayName", ""),
                     remainingFraction = it.optDouble("remainingFraction", 1.0).toFloat(),
                     remainingPct = it.optString("remainingPct", "100.0%"),
                     usedPct = it.optString("usedPct", "0.0%"),
-                    resetTime = it.optString("resetTime", "").takeIf { t -> t.isNotBlank() },
-                    countdown = it.optString("countdown", ""),
+                    resetTime = rTime,
+                    countdown = cd,
                     description = it.optString("description", "")
                 )
             }
 
             val weeklyObj = groupObj.optJSONObject("weekly")
             val weekly = weeklyObj?.let {
+                val rTime = it.optString("resetTime", "").takeIf { t -> t.isNotBlank() }
+                val cd = it.optString("countdown", "").ifBlank {
+                    AgyHubClient.formatQuotaResetCountdown(rTime)
+                }
                 com.example.gemini.domain.model.QuotaWindowInfo(
                     window = it.optString("window", "weekly"),
                     displayName = it.optString("displayName", ""),
                     remainingFraction = it.optDouble("remainingFraction", 1.0).toFloat(),
                     remainingPct = it.optString("remainingPct", "100.0%"),
                     usedPct = it.optString("usedPct", "0.0%"),
-                    resetTime = it.optString("resetTime", "").takeIf { t -> t.isNotBlank() },
-                    countdown = it.optString("countdown", ""),
+                    resetTime = rTime,
+                    countdown = cd,
                     description = it.optString("description", "")
                 )
             }
 
             groupsList.add(
                 com.example.gemini.domain.model.ModelQuotaGroup(
-                    groupId = groupId,
+                    groupId = gId,
                     groupName = groupName,
                     description = desc,
                     fiveHour = fiveHour,
@@ -502,7 +517,7 @@ class AgyBridgeService(
                     list.add(
                         AgyActiveInstance(
                             conversationId = obj.getString("conversationId"),
-                            model = obj.optString("model", "gemini-3.7-flash-high"),
+                            model = obj.optString("model", ""),
                             workspaceDir = obj.optString("workspaceDir", ""),
                             pid = obj.optLong("pid", 0),
                             uptimeSeconds = obj.optLong("uptimeSeconds", 0),
@@ -536,7 +551,7 @@ class AgyBridgeService(
 
     fun streamPrompt(
         prompt: String,
-        model: String = "gemini-3.7-flash-high",
+        model: String = "",
         conversationId: String? = null,
         workspaceDir: String? = null,
         wsUrl: String = DEFAULT_WS_URL

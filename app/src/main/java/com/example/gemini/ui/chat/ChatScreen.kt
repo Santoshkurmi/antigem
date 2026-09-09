@@ -128,6 +128,7 @@ fun ChatScreen(
     val conversationError by viewModel.conversationError.collectAsState()
     val activeInstances by viewModel.activeInstances.collectAsState()
     val quotaSummary by viewModel.quotaSummary.collectAsState()
+    val preferredModelName by viewModel.preferredModelName.collectAsState()
     val isLocalToolsEnabled by viewModel.isLocalToolsEnabled.collectAsState(initial = false)
     val isLocalToolsInstalled by viewModel.isLocalToolsInstalled.collectAsState(initial = false)
     val useSshTerminal by viewModel.useSshTerminal.collectAsState(initial = false)
@@ -339,7 +340,7 @@ fun ChatScreen(
         }
     }
 
-    val currentModel = AiModel.findInList(enabledModels, selectedModelId)
+    val currentModel = AiModel.findInList(enabledModels, selectedModelId, preferredModelName)
     val currentQuota = quotas.find { it.modelId == selectedModelId }
 
     val activeChatProject by TermuxDaemonManager.activeProject.collectAsState()

@@ -276,20 +276,26 @@ private fun MainCategoryListView(
             )
 
             // Category Navigation Tiles
-            val geminiGroup = quotaSummary?.groups?.find { it.groupId == "gemini" }
-            val claudeGroup = quotaSummary?.groups?.find { it.groupId == "claude_gpt" }
+            val geminiGroup = quotaSummary?.groups?.find {
+                it.groupId == "gemini" || it.groupName.contains("gemini", ignoreCase = true)
+            }
+            val claudeGroup = quotaSummary?.groups?.find {
+                it.groupId == "claude_gpt" || it.groupName.contains("claude", ignoreCase = true) || it.groupName.contains("gpt", ignoreCase = true)
+            }
 
             if (claudeModelsCount > 0) {
                 val fiveHour = claudeGroup?.fiveHour
                 val weekly = claudeGroup?.weekly
                 val line1 = if (fiveHour != null) {
-                    "5-Hour: ${fiveHour.remainingPct} left (${fiveHour.usedPct} used) • ${fiveHour.countdown}"
+                    "5-Hour: ${fiveHour.remainingPct} left (${fiveHour.usedPct} used)" +
+                            (if (fiveHour.countdown.isNotBlank()) " • ${fiveHour.countdown}" else "")
                 } else {
                     val q = quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.CLAUDE } }
                     if (q?.percentage != null) "5-Hour: ${q.percentage}% left • Resets in ${q.resetCountdown ?: "soon"}" else "5-Hour: 100% available"
                 }
                 val line2 = if (weekly != null) {
-                    "Weekly: ${weekly.remainingPct} left (${weekly.usedPct} used) • ${weekly.countdown}"
+                    "Weekly: ${weekly.remainingPct} left (${weekly.usedPct} used)" +
+                            (if (weekly.countdown.isNotBlank()) " • ${weekly.countdown}" else "")
                 } else null
 
                 CategoryNavigationTile(
@@ -308,13 +314,15 @@ private fun MainCategoryListView(
                 val fiveHour = geminiGroup?.fiveHour
                 val weekly = geminiGroup?.weekly
                 val line1 = if (fiveHour != null) {
-                    "5-Hour: ${fiveHour.remainingPct} left (${fiveHour.usedPct} used) • ${fiveHour.countdown}"
+                    "5-Hour: ${fiveHour.remainingPct} left (${fiveHour.usedPct} used)" +
+                            (if (fiveHour.countdown.isNotBlank()) " • ${fiveHour.countdown}" else "")
                 } else {
                     val q = quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.GEMINI } }
                     if (q?.percentage != null) "5-Hour: ${q.percentage}% left • Resets in ${q.resetCountdown ?: "soon"}" else "5-Hour: 100% available"
                 }
                 val line2 = if (weekly != null) {
-                    "Weekly: ${weekly.remainingPct} left (${weekly.usedPct} used) • ${weekly.countdown}"
+                    "Weekly: ${weekly.remainingPct} left (${weekly.usedPct} used)" +
+                            (if (weekly.countdown.isNotBlank()) " • ${weekly.countdown}" else "")
                 } else null
 
                 CategoryNavigationTile(
@@ -333,13 +341,15 @@ private fun MainCategoryListView(
                 val fiveHour = geminiGroup?.fiveHour
                 val weekly = geminiGroup?.weekly
                 val line1 = if (fiveHour != null) {
-                    "5-Hour: ${fiveHour.remainingPct} left (${fiveHour.usedPct} used) • ${fiveHour.countdown}"
+                    "5-Hour: ${fiveHour.remainingPct} left (${fiveHour.usedPct} used)" +
+                            (if (fiveHour.countdown.isNotBlank()) " • ${fiveHour.countdown}" else "")
                 } else {
                     val q = quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.OTHER } }
                     if (q?.percentage != null) "5-Hour: ${q.percentage}% left • Resets in ${q.resetCountdown ?: "soon"}" else "5-Hour: 100% available"
                 }
                 val line2 = if (weekly != null) {
-                    "Weekly: ${weekly.remainingPct} left (${weekly.usedPct} used) • ${weekly.countdown}"
+                    "Weekly: ${weekly.remainingPct} left (${weekly.usedPct} used)" +
+                            (if (weekly.countdown.isNotBlank()) " • ${weekly.countdown}" else "")
                 } else null
 
                 CategoryNavigationTile(
@@ -378,29 +388,35 @@ private fun groupModelsByBaseName(models: List<AiModel>): List<SubGroupedModel> 
     val map = LinkedHashMap<String, MutableList<AiModel>>()
 
     for (model in models) {
-        val id = model.id
-        val baseId = when {
-            id.endsWith("-high", ignoreCase = true) -> id.substringBeforeLast("-high")
-            id.endsWith("-medium", ignoreCase = true) -> id.substringBeforeLast("-medium")
-            id.endsWith("-med", ignoreCase = true) -> id.substringBeforeLast("-med")
-            id.endsWith("-low", ignoreCase = true) -> id.substringBeforeLast("-low")
-            id.endsWith("-extra-low", ignoreCase = true) -> id.substringBeforeLast("-extra-low")
-            else -> id
+        val baseId = if (model.baseName.isNotBlank()) {
+            model.baseName
+        } else {
+            val id = model.key.ifBlank { model.id }
+            when {
+                id.endsWith("-high", ignoreCase = true) -> id.substringBeforeLast("-high")
+                id.endsWith("-medium", ignoreCase = true) -> id.substringBeforeLast("-medium")
+                id.endsWith("-med", ignoreCase = true) -> id.substringBeforeLast("-med")
+                id.endsWith("-low", ignoreCase = true) -> id.substringBeforeLast("-low")
+                id.endsWith("-extra-low", ignoreCase = true) -> id.substringBeforeLast("-extra-low")
+                else -> id
+            }
         }
         map.getOrPut(baseId) { mutableListOf() }.add(model)
     }
 
     return map.map { (baseId, modelList) ->
         val first = modelList.first()
-        val cleanBaseName = first.displayName
-            .replace(Regex("\\s*\\((High|Medium|Low|Med|Thinking)\\)", RegexOption.IGNORE_CASE), "")
-            .trim()
+        val cleanBaseName = first.baseName.ifBlank {
+            first.displayName
+                .replace(Regex("\\s*\\((High|Medium|Low|Med|Thinking)\\)", RegexOption.IGNORE_CASE), "")
+                .trim()
+        }
 
         val variants = modelList.map { m ->
-            val label = when {
-                m.id.endsWith("-high", ignoreCase = true) || m.displayName.contains("High", ignoreCase = true) -> "High"
-                m.id.endsWith("-medium", ignoreCase = true) || m.id.endsWith("-med", ignoreCase = true) || m.displayName.contains("Medium", ignoreCase = true) || m.displayName.contains("Med", ignoreCase = true) -> "Medium"
-                m.id.endsWith("-low", ignoreCase = true) || m.displayName.contains("Low", ignoreCase = true) -> "Low"
+            val label = m.tier?.ifBlank { null } ?: when {
+                m.key.endsWith("-high", ignoreCase = true) || m.id.endsWith("-high", ignoreCase = true) || m.displayName.contains("High", ignoreCase = true) -> "High"
+                m.key.endsWith("-medium", ignoreCase = true) || m.key.endsWith("-med", ignoreCase = true) || m.id.endsWith("-medium", ignoreCase = true) || m.displayName.contains("Medium", ignoreCase = true) || m.displayName.contains("Med", ignoreCase = true) -> "Medium"
+                m.key.endsWith("-low", ignoreCase = true) || m.id.endsWith("-low", ignoreCase = true) || m.displayName.contains("Low", ignoreCase = true) -> "Low"
                 else -> ""
             }
             ModelVariant(m, label)
