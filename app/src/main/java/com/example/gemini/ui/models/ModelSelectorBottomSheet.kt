@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.domain.model.AiModel
@@ -348,17 +349,18 @@ private fun MainCategoryListView(
                 )
             }
         } else {
-            // Active Model Card (Compact, no "CURRENTLY ACTIVE" label or "Active" tag)
-            if (activeModel != null) {
-                ActiveModelCard(
-                    model = activeModel,
-                    quota = quotas.find { it.modelId == activeModel.id },
-                    quotaSummary = quotaSummary
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-            }
-
             // Category Navigation Tiles: Gemini FIRST, Claude SECOND
+            val isClaudeActive = activeModel != null && (
+                activeModel.family == ModelFamily.CLAUDE ||
+                activeModel.id.contains("claude", ignoreCase = true) ||
+                activeModel.displayName.contains("claude", ignoreCase = true)
+            ) && !activeModel.id.contains("gpt", ignoreCase = true) && !activeModel.displayName.contains("gpt", ignoreCase = true)
+            val isGeminiActive = activeModel != null && !isClaudeActive
+
+            val cleanActiveModelName = activeModel?.displayName
+                ?.replace(Regex("\\s*\\(?Thinking\\)?", RegexOption.IGNORE_CASE), "")
+                ?.trim()
+
             val geminiGroup = quotaSummary?.groups?.find {
                 it.groupId == "gemini" || it.groupName.contains("gemini", ignoreCase = true)
             }
@@ -388,6 +390,7 @@ private fun MainCategoryListView(
 
                 CategoryNavigationTile(
                     title = "Google Gemini",
+                    activeModelName = if (isGeminiActive) cleanActiveModelName else null,
                     line1 = line1,
                     fraction1 = fiveHourFraction,
                     line2 = line2,
@@ -396,7 +399,7 @@ private fun MainCategoryListView(
                     brandColor = GeminiBlue,
                     onClick = { onSelectCategory(CategoryType.GEMINI) }
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
             }
 
             // 2. Anthropic Claude (Second, no GPT in title!)
@@ -421,6 +424,7 @@ private fun MainCategoryListView(
 
                 CategoryNavigationTile(
                     title = "Anthropic Claude",
+                    activeModelName = if (isClaudeActive) cleanActiveModelName else null,
                     line1 = line1,
                     fraction1 = fiveHourFraction,
                     line2 = line2,
@@ -703,6 +707,7 @@ private fun TieredModelGroupCard(
 @Composable
 private fun CategoryNavigationTile(
     title: String,
+    activeModelName: String? = null,
     line1: String?,
     fraction1: Float?,
     line2: String? = null,
@@ -712,45 +717,73 @@ private fun CategoryNavigationTile(
     onClick: () -> Unit
 ) {
     val isDark = isSystemInDarkTheme()
+    val isHighlighted = activeModelName != null
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() },
         color = if (isDark) ClaudeDarkSurface else Color.White,
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(
+            if (isHighlighted) 1.5.dp else 1.dp,
+            if (isHighlighted) brandColor.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+        )
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = title,
-                        fontSize = 14.5.sp,
+                        fontSize = 15.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(7.dp))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .background(brandColor.copy(alpha = 0.12f))
-                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                            .padding(horizontal = 6.dp, vertical = 1.5.dp)
                     ) {
                         Text(
                             text = "$count",
-                            fontSize = 10.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = brandColor
                         )
                     }
                 }
 
-                if (!line1.isNullOrBlank() || !line2.isNullOrBlank()) {
+                if (activeModelName != null) {
                     Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Active",
+                            tint = brandColor,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = activeModelName,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = brandColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                if (!line1.isNullOrBlank() || !line2.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -766,100 +799,14 @@ private fun CategoryNavigationTile(
                 }
             }
 
+            Spacer(modifier = Modifier.width(8.dp))
+
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                 contentDescription = "Open $title",
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                modifier = Modifier.size(13.dp)
+                tint = if (isHighlighted) brandColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                modifier = Modifier.size(14.dp)
             )
-        }
-    }
-}
-
-/**
- * Top Featured Card showing the active model.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ActiveModelCard(
-    model: AiModel,
-    quota: ModelQuota?,
-    quotaSummary: com.example.gemini.domain.model.QuotaSummaryResponse? = null
-) {
-    val familyColor = if (model.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
-    val qGroup = if (model.family == ModelFamily.CLAUDE) {
-        quotaSummary?.groups?.find { it.groupId == "claude_gpt" || it.groupName.contains("claude", ignoreCase = true) || it.groupName.contains("gpt", ignoreCase = true) }
-    } else {
-        quotaSummary?.groups?.find { it.groupId == "gemini" || it.groupName.contains("gemini", ignoreCase = true) }
-    }
-
-    val fiveHourFraction = qGroup?.fiveHour?.remainingFraction ?: quota?.remainingFraction
-    val weeklyFraction = qGroup?.weekly?.remainingFraction ?: quota?.weeklyRemainingFraction
-
-    val line1 = buildQuotaSummaryLine(
-        "5h",
-        fiveHourFraction,
-        qGroup?.fiveHour?.resetTime ?: quota?.resetTime,
-        qGroup?.fiveHour?.countdown ?: quota?.resetCountdown
-    )
-    val line2 = buildQuotaSummaryLine(
-        "7d",
-        weeklyFraction,
-        qGroup?.weekly?.resetTime ?: quota?.weeklyResetCountdown,
-        qGroup?.weekly?.countdown ?: quota?.weeklyResetCountdown
-    )
-
-    val isDark = isSystemInDarkTheme()
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = if (isDark) ClaudeDarkSurface else Color.White,
-        border = BorderStroke(1.dp, familyColor.copy(alpha = 0.35f))
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = model.displayName,
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                if (model.supportsThinking) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(ClaudeTerracotta.copy(alpha = 0.15f))
-                            .padding(horizontal = 4.5.dp, vertical = 1.dp)
-                    ) {
-                        Text(
-                            text = "Thinking",
-                            fontSize = 9.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = ClaudeTerracotta
-                        )
-                    }
-                }
-            }
-
-            if (!line1.isNullOrBlank() || !line2.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (!line1.isNullOrBlank()) {
-                        QuotaBadgeChip(text = line1, fraction = fiveHourFraction)
-                    }
-                    if (!line2.isNullOrBlank()) {
-                        QuotaBadgeChip(text = line2, fraction = weeklyFraction)
-                    }
-                }
-            }
         }
     }
 }
@@ -897,29 +844,12 @@ private fun ModelRowItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = model.displayName,
+                text = model.displayName.replace(Regex("\\s*\\(?Thinking\\)?", RegexOption.IGNORE_CASE), "").trim(),
                 fontSize = 14.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)
             )
-
-            if (model.supportsThinking) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(ClaudeTerracotta.copy(alpha = 0.12f))
-                        .padding(horizontal = 4.dp, vertical = 1.dp)
-                ) {
-                    Text(
-                        text = "Thinking",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ClaudeTerracotta
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-            }
 
             if (isSelected) {
                 Icon(
