@@ -14,7 +14,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-
+import android.app.UiModeManager
+import android.content.Context
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 private val DarkColorScheme = darkColorScheme(
     primary = ClaudeTerracotta,
     secondary = ClaudeTerracottaDark,
@@ -45,8 +56,61 @@ val LocalIsDarkTheme = staticCompositionLocalOf { false }
 fun isAppInDarkTheme(): Boolean = LocalIsDarkTheme.current
 
 @Composable
+fun isSystemInDarkThemeRobust(): Boolean {
+    val context = LocalContext.current
+    val composeIsDark = isSystemInDarkTheme()
+
+    var secureNightMode by remember {
+        mutableIntStateOf(
+            try {
+                Settings.Secure.getInt(context.contentResolver, "ui_night_mode", -1)
+            } catch (e: Exception) {
+                -1
+            }
+        )
+    }
+
+    DisposableEffect(context) {
+        val uri = Settings.Secure.getUriFor("ui_night_mode")
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                try {
+                    secureNightMode = Settings.Secure.getInt(context.contentResolver, "ui_night_mode", -1)
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            }
+        }
+        try {
+            context.contentResolver.registerContentObserver(uri, false, observer)
+        } catch (e: Exception) {
+            // Ignore
+        }
+        onDispose {
+            try {
+                context.contentResolver.unregisterContentObserver(observer)
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
+
+    val uiModeManager = remember(context) {
+        context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+    }
+    val isMgrDark = uiModeManager?.nightMode == UiModeManager.MODE_NIGHT_YES
+
+    return when {
+        secureNightMode == 2 -> true
+        secureNightMode == 1 -> false
+        isMgrDark -> true
+        else -> composeIsDark
+    }
+}
+
+@Composable
 fun GeminiTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = isSystemInDarkThemeRobust(),
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme

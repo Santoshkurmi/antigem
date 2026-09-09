@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val themeMode by chatViewModel.themeMode.collectAsState(initial = "SYSTEM")
-            val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val isSystemDark = com.example.gemini.theme.isSystemInDarkThemeRobust()
             val useDarkTheme = when (themeMode) {
                 "DARK" -> true
                 "LIGHT" -> false

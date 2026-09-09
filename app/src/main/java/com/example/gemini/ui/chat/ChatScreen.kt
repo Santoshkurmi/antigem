@@ -147,6 +147,7 @@ fun ChatScreen(
     val chatFontScale by viewModel.chatFontScale.collectAsState(initial = 1.0f)
     val bridgeStatusMessage by viewModel.bridgeStatusMessage.collectAsState()
     val isServerOnline by viewModel.isServerOnline.collectAsState()
+    val isBridgeOnline by viewModel.isBridgeOnline.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val conversationError by viewModel.conversationError.collectAsState()
     val activeInstances by viewModel.activeInstances.collectAsState()
@@ -1192,6 +1193,7 @@ fun ChatScreen(
             agyHubUrl = agyHubUrl,
             agyBridgeHttpUrl = agyBridgeHttpUrl,
             isServerOnline = isServerOnline == true,
+            isBridgeOnline = isBridgeOnline == true,
             useSshTerminal = useSshTerminal,
             sshHost = sshHost,
             sshPort = sshPort,

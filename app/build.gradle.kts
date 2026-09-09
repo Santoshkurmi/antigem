@@ -114,9 +114,6 @@ dependencies {
   // HTML Parser & Web Content Scraper (Free Web Search & Webpage Reader)
   implementation("org.jsoup:jsoup:1.18.3")
 
-  // Symja Computer Algebra System (CAS) - Pure Symbolic & Numeric Math Engine
-  implementation("org.matheclipse:matheclipse-core:3.2.0")
-
   // Sora Editor (Industry standard Android Code Editor)
   implementation("io.github.Rosemoe.sora-editor:editor:0.23.6")
   implementation("io.github.Rosemoe.sora-editor:language-textmate:0.23.6")
@@ -128,7 +125,7 @@ dependencies {
 
   // Termux Terminal Emulator with Native PTY Support (Terminal View is compiled from source)
   implementation("com.github.termux.termux-app:terminal-emulator:v0.118.1")
-  implementation("com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava")
+  implementation("com.google.guava:listenablefuture:1.0")
 
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)

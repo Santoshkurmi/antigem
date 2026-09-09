@@ -41,7 +41,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val agyBridgeService = com.example.gemini.data.remote.AgyBridgeService()
     private val agyHubClient = com.example.gemini.data.remote.AgyHubClient()
     private val oauthManager = GoogleOAuthManager()
-    private val automationExecutor = com.example.gemini.data.automation.AutomationToolExecutor(application)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private val _conversations = MutableStateFlow<List<Conversation>>(emptyList())
@@ -500,6 +499,35 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _isServerOnline = MutableStateFlow<Boolean?>(null)
     val isServerOnline: StateFlow<Boolean?> = _isServerOnline.asStateFlow()
 
+    private val _isBridgeOnline = MutableStateFlow<Boolean?>(null)
+    val isBridgeOnline: StateFlow<Boolean?> = _isBridgeOnline.asStateFlow()
+
+    fun checkBridgeHealth() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyBridgeService.DEFAULT_HTTP_URL
+            val base = bridgeUrl.trimEnd('/')
+            val endpoints = listOf("$base/api/health", "$base/health", base)
+            var reachable = false
+            for (ep in endpoints) {
+                try {
+                    val conn = (java.net.URL(ep).openConnection() as java.net.HttpURLConnection).apply {
+                        connectTimeout = 2500
+                        readTimeout = 2500
+                        requestMethod = "GET"
+                        instanceFollowRedirects = true
+                    }
+                    val code = conn.responseCode
+                    conn.disconnect()
+                    if (code in 200..399) {
+                        reachable = true
+                        break
+                    }
+                } catch (_: Exception) {}
+            }
+            _isBridgeOnline.value = reachable
+        }
+    }
+
     val connectionState: StateFlow<com.example.gemini.data.remote.BridgeConnectionState> = combine(_isServerOnline, _isStreaming) { online, streaming ->
         when {
             online == false -> com.example.gemini.data.remote.BridgeConnectionState.OFFLINE_ERROR
@@ -587,10 +615,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             refreshQuotas()
         }
 
-        // Periodic auto-reconnect monitor for Hub RPC streams (every 20 seconds)
+        // Periodic auto-reconnect monitor for Hub RPC streams & Bridge (every 20 seconds)
         viewModelScope.launch {
+            checkBridgeHealth()
             while (currentCoroutineContext().isActive) {
                 delay(20_000)
+                checkBridgeHealth()
                 if (_isServerOnline.value != true || syncJob?.isActive != true) {
                     android.util.Log.d("ChatViewModel", "Periodic check: reconnecting hub streams...")
                     syncAgyConversations(force = false)
@@ -714,6 +744,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             startPersistentStream(convId)
         }
         refreshQuotas()
+        checkBridgeHealth()
         viewModelScope.launch {
             com.example.gemini.data.daemon.TermuxDaemonManager.checkHealthAndReconnect(isSilent = false)
         }
