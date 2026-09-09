@@ -19,7 +19,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
+import com.example.gemini.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -348,7 +348,7 @@ fun NativeMathView(
     isDisplay: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val textColor = if (isDark) android.graphics.Color.parseColor("#ECECF1") else android.graphics.Color.parseColor("#1A1A1A")
     val density = LocalDensity.current
     val textSizePx = with(density) { (if (isDisplay) 18.sp else 15.sp).toPx() }
@@ -437,7 +437,7 @@ fun MermaidDiagramView(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     var selectedTab by remember { mutableStateOf(0) } // 0 = Diagram, 1 = Code
     var isCopied by remember { mutableStateOf(false) }
 
@@ -965,7 +965,7 @@ fun MarkdownTableView(
     modifier: Modifier = Modifier
 ) {
     val t0 = System.nanoTime()
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val density = LocalDensity.current
 
     val numCols = maxOf(
@@ -1204,7 +1204,7 @@ fun FormattedInlineText(
     ),
     isStrikethrough: Boolean = false
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val density = LocalDensity.current
     val fileLinkHandler = LocalFileLinkHandler.current
 

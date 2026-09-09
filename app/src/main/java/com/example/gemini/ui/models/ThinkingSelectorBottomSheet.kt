@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.isSystemInDarkTheme
+import com.example.gemini.theme.isAppInDarkTheme
 import androidx.compose.ui.graphics.Color
 import com.example.gemini.domain.model.ThinkingLevel
 import com.example.gemini.domain.model.ThinkingPreference
@@ -81,7 +81,7 @@ fun ThinkingSelectorBottomSheet(
 
             // Level Options
             ThinkingLevel.values().forEach { level ->
-                val isDark = isSystemInDarkTheme()
+                val isDark = isAppInDarkTheme()
                 val isSelected = selectedLevel == level
                 val borderColor = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                 val unselectedBg = if (isDark) ClaudeDarkSurface else Color.White

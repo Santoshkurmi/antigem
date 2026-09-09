@@ -6,7 +6,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
+import com.example.gemini.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -606,7 +606,7 @@ private fun TieredModelGroupCard(
         ModelFamily.OTHER -> MaterialTheme.colorScheme.primary
     }
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val cardBg = if (isAnyVariantSelected) {
         if (isDark) ClaudeDarkSurface else Color.White
     } else {
@@ -713,7 +713,7 @@ private fun CategoryNavigationTile(
     brandColor: Color,
     onClick: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
 
     Surface(
         modifier = Modifier
@@ -822,7 +822,7 @@ private fun ModelRowItem(
 ) {
     val brandColor = if (model.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val cardBg = if (isSelected) {
         if (isDark) ClaudeDarkSurface else Color.White
     } else {

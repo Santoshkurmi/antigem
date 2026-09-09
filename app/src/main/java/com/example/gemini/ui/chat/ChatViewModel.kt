@@ -259,6 +259,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     val chatFontScale = authPrefs.chatFontScale
+    val themeMode = authPrefs.themeMode
+    val agyHubUrl = authPrefs.agyHubUrl
+    val agyBridgeHttpUrl = authPrefs.agyBridgeHttpUrl
+    val terminalFontSize = authPrefs.terminalFontSize
+    val terminalCursorStyle = authPrefs.terminalCursorStyle
+    val terminalBufferSize = authPrefs.terminalBufferSize
+    val terminalTheme = authPrefs.terminalTheme
+
     val useSshTerminal = authPrefs.useSshTerminal
     val termuxSshHost = authPrefs.termuxSshHost
     val termuxSshPort = authPrefs.termuxSshPort
@@ -266,6 +274,30 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val termuxSshPass = authPrefs.termuxSshPass
     val isLocalToolsEnabled = authPrefs.isLocalToolsEnabled
     val isLocalToolsInstalled = authPrefs.isLocalToolsInstalled
+
+    fun setThemeMode(mode: String) {
+        viewModelScope.launch {
+            authPrefs.saveThemeMode(mode)
+        }
+    }
+
+    fun saveServerUrls(hubUrl: String, bridgeUrl: String) {
+        viewModelScope.launch {
+            if (hubUrl.isNotBlank()) {
+                authPrefs.saveAgyHubUrl(hubUrl.trim())
+            }
+            if (bridgeUrl.isNotBlank()) {
+                authPrefs.saveAgyBridgeHttpUrl(bridgeUrl.trim())
+            }
+            retryConnections()
+        }
+    }
+
+    fun saveTerminalPreferences(fontSize: Int, cursorStyle: String, bufferSize: Int, theme: String) {
+        viewModelScope.launch {
+            authPrefs.saveTerminalPreferences(fontSize, cursorStyle, bufferSize, theme)
+        }
+    }
 
     fun setUseSshTerminal(enabled: Boolean) {
         viewModelScope.launch {

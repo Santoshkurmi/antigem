@@ -3,6 +3,9 @@ package com.example.gemini.ui.chat
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -156,6 +159,13 @@ fun ChatScreen(
     val sshPort by viewModel.termuxSshPort.collectAsState(initial = 8022)
     val sshUser by viewModel.termuxSshUser.collectAsState(initial = "root")
     val sshPass by viewModel.termuxSshPass.collectAsState(initial = "root")
+    val themeMode by viewModel.themeMode.collectAsState(initial = "SYSTEM")
+    val agyHubUrl by viewModel.agyHubUrl.collectAsState(initial = "http://127.0.0.1:8090")
+    val agyBridgeHttpUrl by viewModel.agyBridgeHttpUrl.collectAsState(initial = "http://127.0.0.1:8080")
+    val terminalFontSize by viewModel.terminalFontSize.collectAsState(initial = 13)
+    val terminalCursorStyle by viewModel.terminalCursorStyle.collectAsState(initial = "BLOCK")
+    val terminalBufferSize by viewModel.terminalBufferSize.collectAsState(initial = 2000)
+    val terminalTheme by viewModel.terminalTheme.collectAsState(initial = "DEFAULT")
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -1152,8 +1162,19 @@ fun ChatScreen(
         )
     }
 
-    // Settings Dialog
-    if (showSettingsDialog) {
+    // Settings Full-Screen Animated Overlay
+    AnimatedVisibility(
+        visible = showSettingsDialog,
+        enter = slideInHorizontally(
+            initialOffsetX = { it },
+            animationSpec = tween(320, easing = FastOutSlowInEasing)
+        ) + fadeIn(animationSpec = tween(250)),
+        exit = slideOutHorizontally(
+            targetOffsetX = { it },
+            animationSpec = tween(280, easing = FastOutLinearInEasing)
+        ) + fadeOut(animationSpec = tween(200)),
+        modifier = Modifier.fillMaxSize()
+    ) {
         SettingsDialog(
             userEmail = userEmail,
             projectId = projectId,
@@ -1167,11 +1188,19 @@ fun ChatScreen(
             summaryModelId = summaryModelIdPref,
             isDevModeEnabled = isDevModeEnabled,
             chatFontScale = chatFontScale,
+            themeMode = themeMode,
+            agyHubUrl = agyHubUrl,
+            agyBridgeHttpUrl = agyBridgeHttpUrl,
+            isServerOnline = isServerOnline == true,
             useSshTerminal = useSshTerminal,
             sshHost = sshHost,
             sshPort = sshPort,
             sshUser = sshUser,
             sshPass = sshPass,
+            terminalFontSize = terminalFontSize,
+            terminalCursorStyle = terminalCursorStyle,
+            terminalBufferSize = terminalBufferSize,
+            terminalTheme = terminalTheme,
             isLocalToolsEnabled = isLocalToolsEnabled,
             isLocalToolsInstalled = isLocalToolsInstalled,
             onLoginWithGoogle = {
@@ -1200,6 +1229,9 @@ fun ChatScreen(
             onSetContextWindowLimit = { viewModel.setContextWindowLimit(it) },
             onSetSummaryModelId = { viewModel.setSummaryModelId(it) },
             onSetChatFontScale = { viewModel.setChatFontScale(it) },
+            onSetThemeMode = { viewModel.setThemeMode(it) },
+            onSaveServerUrls = { hub, bridge -> viewModel.saveServerUrls(hub, bridge) },
+            onSaveTerminalPreferences = { size, cursor, buf, thm -> viewModel.saveTerminalPreferences(size, cursor, buf, thm) },
             onToggleDevMode = { viewModel.setDevModeEnabled(it) },
             onToggleUseSshTerminal = { viewModel.setUseSshTerminal(it) },
             onSaveSshSettings = { h, p, u, pass -> viewModel.saveSshSettings(h, p, u, pass) },

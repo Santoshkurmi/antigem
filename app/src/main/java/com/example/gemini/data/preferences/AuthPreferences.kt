@@ -47,6 +47,11 @@ class AuthPreferences(private val context: Context) {
         val PREFERRED_MODEL_ID = stringPreferencesKey("preferred_model_id")
         val PREFERRED_MODEL_KEY = stringPreferencesKey("preferred_model_key")
         val PREFERRED_MODEL_NAME = stringPreferencesKey("preferred_model_name")
+        val APP_THEME_MODE = stringPreferencesKey("app_theme_mode") // "SYSTEM", "DARK", "LIGHT"
+        val TERMINAL_FONT_SIZE = androidx.datastore.preferences.core.intPreferencesKey("terminal_font_size")
+        val TERMINAL_CURSOR_STYLE = stringPreferencesKey("terminal_cursor_style")
+        val TERMINAL_BUFFER_SIZE = androidx.datastore.preferences.core.intPreferencesKey("terminal_buffer_size")
+        val TERMINAL_THEME = stringPreferencesKey("terminal_theme")
     }
 
     val preferredModelId: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_ID] }
@@ -71,6 +76,11 @@ class AuthPreferences(private val context: Context) {
     val enabledModelIds: Flow<Set<String>?> = context.dataStore.data.map { it[ENABLED_MODELS] }
     val isDevModeEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_DEV_MODE_ENABLED] ?: false }
     val chatFontScale: Flow<Float> = context.dataStore.data.map { it[CHAT_FONT_SCALE] ?: 1.0f }
+    val themeMode: Flow<String> = context.dataStore.data.map { it[APP_THEME_MODE] ?: "SYSTEM" }
+    val terminalFontSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_FONT_SIZE] ?: 13 }
+    val terminalCursorStyle: Flow<String> = context.dataStore.data.map { it[TERMINAL_CURSOR_STYLE] ?: "BLOCK" }
+    val terminalBufferSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_BUFFER_SIZE] ?: 2000 }
+    val terminalTheme: Flow<String> = context.dataStore.data.map { it[TERMINAL_THEME] ?: "DEFAULT" }
 
     val termuxSshHost: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_HOST] ?: "127.0.0.1" }
     val termuxSshPort: Flow<Int> = context.dataStore.data.map { it[TERMUX_SSH_PORT]?.toIntOrNull() ?: 8022 }
@@ -242,6 +252,29 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveAgyHubUrl(url: String) {
         context.dataStore.edit { prefs ->
             prefs[AGY_HUB_URL] = url
+        }
+    }
+
+    suspend fun saveAgyBridgeHttpUrl(url: String) {
+        context.dataStore.edit { prefs ->
+            prefs[AGY_BRIDGE_HTTP_URL] = url
+            val ws = url.replaceFirst("http://", "ws://").replaceFirst("https://", "wss://")
+            prefs[AGY_BRIDGE_WS_URL] = ws
+        }
+    }
+
+    suspend fun saveThemeMode(mode: String) {
+        context.dataStore.edit { prefs ->
+            prefs[APP_THEME_MODE] = mode
+        }
+    }
+
+    suspend fun saveTerminalPreferences(fontSize: Int, cursorStyle: String, bufferSize: Int, theme: String) {
+        context.dataStore.edit { prefs ->
+            prefs[TERMINAL_FONT_SIZE] = fontSize
+            prefs[TERMINAL_CURSOR_STYLE] = cursorStyle
+            prefs[TERMINAL_BUFFER_SIZE] = bufferSize
+            prefs[TERMINAL_THEME] = theme
         }
     }
 
