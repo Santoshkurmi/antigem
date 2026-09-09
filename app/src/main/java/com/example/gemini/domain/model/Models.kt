@@ -86,8 +86,7 @@ data class AiModel(
     val displayName: String,
     val family: ModelFamily = when {
         id.contains("claude", ignoreCase = true) || displayName.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
-        id.contains("gemini", ignoreCase = true) || displayName.contains("gemini", ignoreCase = true) -> ModelFamily.GEMINI
-        else -> ModelFamily.OTHER
+        else -> ModelFamily.GEMINI
     },
     val supportsThinking: Boolean = id.contains("thinking", ignoreCase = true) || id.contains("flash", ignoreCase = true) || id.contains("pro", ignoreCase = true) || id.contains("high", ignoreCase = true) || id.contains("medium", ignoreCase = true) || id.contains("low", ignoreCase = true),
     val description: String = "",
@@ -103,14 +102,13 @@ data class AiModel(
             val name = displayName?.takeIf { it.isNotBlank() } ?: formatModelName(id)
             val family = when {
                 id.contains("claude", ignoreCase = true) || name.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
-                id.contains("gemini", ignoreCase = true) || name.contains("gemini", ignoreCase = true) -> ModelFamily.GEMINI
-                else -> ModelFamily.OTHER
+                else -> ModelFamily.GEMINI
             }
             val thinking = id.contains("thinking", ignoreCase = true) || id.contains("flash", ignoreCase = true) || id.contains("pro", ignoreCase = true) || id.contains("high", ignoreCase = true) || id.contains("medium", ignoreCase = true) || id.contains("low", ignoreCase = true)
             val desc = description ?: when (family) {
                 ModelFamily.CLAUDE -> "Anthropic Claude via Antigravity"
                 ModelFamily.GEMINI -> "Google Gemini via Antigravity"
-                ModelFamily.OTHER -> "OpenAI / Other Model via Antigravity"
+                ModelFamily.OTHER -> "Other Model via Antigravity"
             }
             var baseName = name
             var tier: String? = null

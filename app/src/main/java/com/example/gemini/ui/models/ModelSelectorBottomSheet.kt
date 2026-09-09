@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,11 +35,12 @@ import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ModelFamily
 import com.example.gemini.domain.model.ModelQuota
 import com.example.gemini.theme.*
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 enum class CategoryType {
-    CLAUDE,
     GEMINI,
-    OTHER
+    CLAUDE
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,10 +55,12 @@ fun ModelSelectorBottomSheet(
     onSelectModel: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Group models by category / family
-    val claudeModels = availableModels.filter { it.family == ModelFamily.CLAUDE }
-    val geminiModels = availableModels.filter { it.family == ModelFamily.GEMINI }
-    val otherModels = availableModels.filter { it.family != ModelFamily.CLAUDE && it.family != ModelFamily.GEMINI }
+    // Group models into two groups: Claude and Gemini (with GPT-OSS and others under Gemini)
+    val claudeModels = availableModels.filter {
+        (it.family == ModelFamily.CLAUDE || it.id.contains("claude", ignoreCase = true) || it.displayName.contains("claude", ignoreCase = true)) &&
+                !it.id.contains("gpt", ignoreCase = true) && !it.displayName.contains("gpt", ignoreCase = true)
+    }
+    val geminiModels = availableModels.filter { it !in claudeModels }
 
     val activeModel = availableModels.find { it.id == selectedModelId }
 
@@ -65,7 +69,11 @@ fun ModelSelectorBottomSheet(
 
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true
+        skipPartiallyExpanded = false
     )
+    val coroutineScope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
+    val expandedHeight = (configuration.screenHeightDp * 0.78f).dp
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -77,13 +85,18 @@ fun ModelSelectorBottomSheet(
         // Intercept back press when inside a subcategory inside the sheet window
         BackHandler(enabled = activeCategory != null) {
             activeCategory = null
+            coroutineScope.launch {
+                sheetState.partialExpand()
+            }
         }
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.85f)
-                .padding(horizontal = 20.dp)
+                .wrapContentHeight()
+                .animateContentSize()
+                .height(expandedHeight)
+                .padding(horizontal = 18.dp)
         ) {
             AnimatedContent(
                 targetState = activeCategory,
@@ -96,6 +109,7 @@ fun ModelSelectorBottomSheet(
                                 slideOutHorizontally { width -> width } + fadeOut()
                     }
                 },
+                modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 modifier = Modifier.fillMaxSize(),
                 label = "category_transition"
             ) { currentCategory ->
@@ -106,35 +120,39 @@ fun ModelSelectorBottomSheet(
                         availableModels = availableModels,
                         claudeModelsCount = claudeModels.size,
                         geminiModelsCount = geminiModels.size,
-                        otherModelsCount = otherModels.size,
                         availableModelsCount = availableModels.size,
                         quotas = quotas,
                         quotaSummary = quotaSummary,
                         isRefreshing = isRefreshing,
                         onRefresh = onRefresh,
                         onSelectCategory = { category -> activeCategory = category },
+                        modifier = Modifier.fillMaxWidth().wrapContentHeight()
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
                     // Sub-Sheet: Models inside the chosen category
-                    val (categoryTitle, categoryIcon, brandColor, categoryModels) = when (currentCategory) {
-                        CategoryType.CLAUDE -> Quadruple("Anthropic Claude Models", Icons.Outlined.AutoAwesome, ClaudeTerracotta, claudeModels)
-                        CategoryType.GEMINI -> Quadruple("Google Gemini Models", Icons.Outlined.AutoAwesome, GeminiBlue, geminiModels)
-                        CategoryType.OTHER -> Quadruple("Other Antigravity Models", Icons.Outlined.AutoAwesome, MaterialTheme.colorScheme.primary, otherModels)
+                    val (categoryTitle, brandColor, categoryModels) = when (currentCategory) {
+                        CategoryType.GEMINI -> Triple("Google Gemini", GeminiBlue, geminiModels)
+                        CategoryType.CLAUDE -> Triple("Anthropic Claude", ClaudeTerracotta, claudeModels)
                     }
 
                     CategoryModelsSubView(
                         title = categoryTitle,
-                        icon = categoryIcon,
                         brandColor = brandColor,
                         models = categoryModels,
                         selectedModelId = selectedModelId,
-                        quotas = quotas,
                         onBack = { activeCategory = null },
+                        onBack = {
+                            activeCategory = null
+                            coroutineScope.launch {
+                                sheetState.partialExpand()
+                            }
+                        },
                         onSelectModel = { modelId ->
                             onSelectModel(modelId)
                             onDismiss()
                         },
+                        modifier = Modifier.fillMaxWidth()
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -143,7 +161,99 @@ fun ModelSelectorBottomSheet(
     }
 }
 
-private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+/**
+ * Main Level Sheet View
+ */
+/**
+ * Helpers to format clean, modern quota lines like "5h · 15% · 2h 4m" and "Weekly · 85% · 3d 21h".
+ */
+fun formatCleanCountdown(isoString: String?, rawCountdown: String? = null): String {
+    if (!isoString.isNullOrBlank()) {
+        try {
+            val clean = isoString.substringBefore('.').substringBefore('Z')
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }
+            val target = sdf.parse(clean)?.time
+            if (target != null) {
+                val diffMs = target - System.currentTimeMillis()
+                if (diffMs <= 0) return "Ready"
+                val totalMins = diffMs / (1000 * 60)
+                val days = totalMins / (60 * 24)
+                val hours = (totalMins % (60 * 24)) / 60
+                val mins = totalMins % 60
+                return when {
+                    days > 0 && hours > 0 -> "${days}d ${hours}h"
+                    days > 0 -> "${days}d"
+                    hours > 0 && mins > 0 -> "${hours}h ${mins}m"
+                    hours > 0 -> "${hours}h"
+                    else -> "${mins}m"
+                }
+            }
+        } catch (_: Exception) {}
+    }
+    if (!rawCountdown.isNullOrBlank()) {
+        return rawCountdown.removePrefix("Resets in ").removePrefix("Reset in ").removePrefix("• ").trim()
+    }
+    return ""
+}
+
+fun buildQuotaSummaryLine(
+    windowLabel: String,
+    fraction: Float?,
+    resetTime: String?,
+    rawCountdown: String?
+): String? {
+    if (fraction == null) return null
+    val pct = (fraction * 100f).roundToInt().coerceIn(0, 100)
+    val time = formatCleanCountdown(resetTime, rawCountdown)
+    return if (time.isNotBlank()) {
+        "$windowLabel · $pct% · $time"
+    } else {
+        "$windowLabel · $pct%"
+    }
+}
+
+@Composable
+fun QuotaBadgeChip(
+    text: String,
+    fraction: Float?,
+    modifier: Modifier = Modifier
+) {
+    val pct = fraction?.let { (it * 100f).roundToInt().coerceIn(0, 100) } ?: 100
+    val dotColor = when {
+        pct > 50 -> QuotaGreen
+        pct > 20 -> QuotaAmber
+        else -> QuotaRed
+    }
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(5.5.dp)
+                    .clip(CircleShape)
+                    .background(dotColor)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = text,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                letterSpacing = 0.1.sp
+            )
+        }
+    }
+}
 
 /**
  * Main Level Sheet View
@@ -154,7 +264,6 @@ private fun MainCategoryListView(
     availableModels: List<AiModel>,
     claudeModelsCount: Int,
     geminiModelsCount: Int,
-    otherModelsCount: Int,
     availableModelsCount: Int,
     quotas: List<ModelQuota>,
     quotaSummary: com.example.gemini.domain.model.QuotaSummaryResponse? = null,
@@ -166,26 +275,26 @@ private fun MainCategoryListView(
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 24.dp)
+            .padding(bottom = 20.dp)
     ) {
-        // Header
+        // Compact Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
+                .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Select Model",
-                    fontSize = 19.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = if (availableModelsCount > 0) "$availableModelsCount models available" else "No models loaded",
-                    fontSize = 12.5.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
 
@@ -207,75 +316,54 @@ private fun MainCategoryListView(
             IconButton(
                 onClick = onRefresh,
                 enabled = !isRefreshing,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(32.dp)
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Refresh,
                     contentDescription = "Refresh models & quotas",
                     tint = ClaudeTerracotta,
                     modifier = Modifier
-                        .size(22.dp)
+                        .size(20.dp)
                         .rotate(rotation)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         if (availableModelsCount == 0) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 48.dp, horizontal = 16.dp),
+                    .padding(vertical = 24.dp, horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "No Models Loaded",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Connect your Google account in Settings or tap refresh to load your active models.",
-                    fontSize = 13.sp,
+                    fontSize = 12.5.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     textAlign = TextAlign.Center
                 )
             }
         } else {
-            // 1. Featured Active Model at the Top
+            // Active Model Card (Compact, no "CURRENTLY ACTIVE" label or "Active" tag)
             if (activeModel != null) {
-                Text(
-                    text = "CURRENTLY ACTIVE",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    letterSpacing = 0.6.sp,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
-                )
                 ActiveModelCard(
                     model = activeModel,
-                    quota = quotas.find { it.modelId == activeModel.id }
+                    quota = quotas.find { it.modelId == activeModel.id },
+                    quotaSummary = quotaSummary
                 )
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(
-                    thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                )
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
             }
 
-            Text(
-                text = "CHOOSE MODEL CATEGORY",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                letterSpacing = 0.6.sp,
-                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-            )
-
-            // Category Navigation Tiles
+            // Category Navigation Tiles: Gemini FIRST, Claude SECOND
             val geminiGroup = quotaSummary?.groups?.find {
                 it.groupId == "gemini" || it.groupName.contains("gemini", ignoreCase = true)
             }
@@ -283,85 +371,69 @@ private fun MainCategoryListView(
                 it.groupId == "claude_gpt" || it.groupName.contains("claude", ignoreCase = true) || it.groupName.contains("gpt", ignoreCase = true)
             }
 
-            if (claudeModelsCount > 0) {
-                val fiveHour = claudeGroup?.fiveHour
-                val weekly = claudeGroup?.weekly
-                val line1 = if (fiveHour != null) {
-                    "5-Hour: ${fiveHour.remainingPct} left (${fiveHour.usedPct} used)" +
-                            (if (fiveHour.countdown.isNotBlank()) " • ${fiveHour.countdown}" else "")
-                } else {
-                    val q = quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.CLAUDE } }
-                    if (q?.percentage != null) "5-Hour: ${q.percentage}% left • Resets in ${q.resetCountdown ?: "soon"}" else "5-Hour: 100% available"
-                }
-                val line2 = if (weekly != null) {
-                    "Weekly: ${weekly.remainingPct} left (${weekly.usedPct} used)" +
-                            (if (weekly.countdown.isNotBlank()) " • ${weekly.countdown}" else "")
-                } else null
-
-                CategoryNavigationTile(
-                    title = "Anthropic Claude & GPT",
-                    line1 = line1,
-                    line2 = line2,
-                    count = claudeModelsCount,
-                    icon = Icons.Outlined.AutoAwesome,
-                    brandColor = ClaudeTerracotta,
-                    onClick = { onSelectCategory(CategoryType.CLAUDE) }
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-            }
-
+            // 1. Google Gemini (First!)
             if (geminiModelsCount > 0) {
                 val fiveHour = geminiGroup?.fiveHour
                 val weekly = geminiGroup?.weekly
-                val line1 = if (fiveHour != null) {
-                    "5-Hour: ${fiveHour.remainingPct} left (${fiveHour.usedPct} used)" +
-                            (if (fiveHour.countdown.isNotBlank()) " • ${fiveHour.countdown}" else "")
-                } else {
-                    val q = quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.GEMINI } }
-                    if (q?.percentage != null) "5-Hour: ${q.percentage}% left • Resets in ${q.resetCountdown ?: "soon"}" else "5-Hour: 100% available"
-                }
-                val line2 = if (weekly != null) {
-                    "Weekly: ${weekly.remainingPct} left (${weekly.usedPct} used)" +
-                            (if (weekly.countdown.isNotBlank()) " • ${weekly.countdown}" else "")
-                } else null
+                val fiveHourFraction = fiveHour?.remainingFraction ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.GEMINI } }?.remainingFraction
+                val weeklyFraction = weekly?.remainingFraction ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.GEMINI } }?.weeklyRemainingFraction
+
+                val line1 = buildQuotaSummaryLine(
+                    "5h",
+                    fiveHourFraction,
+                    fiveHour?.resetTime,
+                    fiveHour?.countdown ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.GEMINI } }?.resetCountdown
+                )
+                val line2 = buildQuotaSummaryLine(
+                    "7d",
+                    weeklyFraction,
+                    weekly?.resetTime,
+                    weekly?.countdown ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.GEMINI } }?.weeklyResetCountdown
+                )
 
                 CategoryNavigationTile(
                     title = "Google Gemini",
                     line1 = line1,
+                    fraction1 = fiveHourFraction,
                     line2 = line2,
+                    fraction2 = weeklyFraction,
                     count = geminiModelsCount,
-                    icon = Icons.Outlined.AutoAwesome,
                     brandColor = GeminiBlue,
                     onClick = { onSelectCategory(CategoryType.GEMINI) }
                 )
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
-            if (otherModelsCount > 0) {
-                val fiveHour = geminiGroup?.fiveHour
-                val weekly = geminiGroup?.weekly
-                val line1 = if (fiveHour != null) {
-                    "5-Hour: ${fiveHour.remainingPct} left (${fiveHour.usedPct} used)" +
-                            (if (fiveHour.countdown.isNotBlank()) " • ${fiveHour.countdown}" else "")
-                } else {
-                    val q = quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.OTHER } }
-                    if (q?.percentage != null) "5-Hour: ${q.percentage}% left • Resets in ${q.resetCountdown ?: "soon"}" else "5-Hour: 100% available"
-                }
-                val line2 = if (weekly != null) {
-                    "Weekly: ${weekly.remainingPct} left (${weekly.usedPct} used)" +
-                            (if (weekly.countdown.isNotBlank()) " • ${weekly.countdown}" else "")
-                } else null
+            // 2. Anthropic Claude (Second, no GPT in title!)
+            if (claudeModelsCount > 0) {
+                val fiveHour = claudeGroup?.fiveHour
+                val weekly = claudeGroup?.weekly
+                val fiveHourFraction = fiveHour?.remainingFraction ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.CLAUDE } }?.remainingFraction
+                val weeklyFraction = weekly?.remainingFraction ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.CLAUDE } }?.weeklyRemainingFraction
+
+                val line1 = buildQuotaSummaryLine(
+                    "5h",
+                    fiveHourFraction,
+                    fiveHour?.resetTime,
+                    fiveHour?.countdown ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.CLAUDE } }?.resetCountdown
+                )
+                val line2 = buildQuotaSummaryLine(
+                    "7d",
+                    weeklyFraction,
+                    weekly?.resetTime,
+                    weekly?.countdown ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.CLAUDE } }?.weeklyResetCountdown
+                )
 
                 CategoryNavigationTile(
-                    title = "Other Antigravity Models",
+                    title = "Anthropic Claude",
                     line1 = line1,
+                    fraction1 = fiveHourFraction,
                     line2 = line2,
-                    count = otherModelsCount,
-                    icon = Icons.Outlined.AutoAwesome,
-                    brandColor = MaterialTheme.colorScheme.primary,
-                    onClick = { onSelectCategory(CategoryType.OTHER) }
+                    fraction2 = weeklyFraction,
+                    count = claudeModelsCount,
+                    brandColor = ClaudeTerracotta,
+                    onClick = { onSelectCategory(CategoryType.CLAUDE) }
                 )
-                Spacer(modifier = Modifier.height(10.dp))
             }
         }
     }
@@ -435,11 +507,9 @@ private fun groupModelsByBaseName(models: List<AiModel>): List<SubGroupedModel> 
 @Composable
 private fun CategoryModelsSubView(
     title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     brandColor: Color,
     models: List<AiModel>,
     selectedModelId: String,
-    quotas: List<ModelQuota>,
     onBack: () -> Unit,
     onSelectModel: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -449,66 +519,63 @@ private fun CategoryModelsSubView(
     }
 
     val groupedModels = remember(models) { groupModelsByBaseName(models) }
+    val configuration = LocalConfiguration.current
+    val maxHeight = (configuration.screenHeightDp * 0.58f).dp
 
     Column(
         modifier = modifier
-            .padding(bottom = 24.dp)
+            .padding(bottom = 16.dp)
     ) {
-        // Back Header
+        // Compact Back Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
+                .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
                 onClick = onBack,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(32.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back to categories",
                     tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
-            Spacer(modifier = Modifier.width(4.dp))
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = brandColor,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    fontSize = 17.5.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "${groupedModels.size} base model${if (groupedModels.size != 1) "s" else ""} • ${models.size} variants",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    text = "${groupedModels.size} base models • ${models.size} variants",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(min = 120.dp, max = maxHeight),
+            contentPadding = PaddingValues(bottom = 8.dp),
                 .weight(1f),
-            contentPadding = PaddingValues(bottom = 16.dp)
+            contentPadding = PaddingValues(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             items(groupedModels, key = { it.baseId }) { group ->
                 if (group.variants.size > 1) {
                     TieredModelGroupCard(
                         group = group,
                         selectedModelId = selectedModelId,
-                        quota = quotas.find { it.modelId == selectedModelId || group.variants.any { v -> v.model.id == it.modelId } },
                         onSelectModel = onSelectModel
                     )
                 } else {
@@ -516,11 +583,9 @@ private fun CategoryModelsSubView(
                     ModelRowItem(
                         model = model,
                         isSelected = model.id == selectedModelId,
-                        quota = quotas.find { it.modelId == model.id },
                         onSelect = { onSelectModel(model.id) }
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
@@ -533,7 +598,6 @@ private fun CategoryModelsSubView(
 private fun TieredModelGroupCard(
     group: SubGroupedModel,
     selectedModelId: String,
-    quota: ModelQuota?,
     onSelectModel: (String) -> Unit
 ) {
     val isAnyVariantSelected = group.variants.any { it.model.id == selectedModelId }
@@ -546,70 +610,39 @@ private fun TieredModelGroupCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp)),
+            .clip(RoundedCornerShape(12.dp)),
         color = if (isAnyVariantSelected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         border = BorderStroke(
             1.dp,
             if (isAnyVariantSelected) brandColor.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
         )
     ) {
         Column(
-            modifier = Modifier.padding(14.dp)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(brandColor.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AutoAwesome,
-                        contentDescription = null,
-                        tint = brandColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = group.baseName,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    if (quota?.remainingFraction != null) {
-                        val pct = quota.percentage
-                        val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
-                        val countdownStr = quota.resetCountdown?.let { " • $it" } ?: ""
-                        Text(
-                            text = "5h: $pct% left$countdownStr",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = badgeColor,
-                            modifier = Modifier.padding(top = 1.dp)
-                        )
-                    }
-                }
+                Text(
+                    text = group.baseName,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
 
                 if (isAnyVariantSelected) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .background(brandColor.copy(alpha = 0.15f))
-                            .padding(horizontal = 7.dp, vertical = 2.5.dp)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = "Active",
-                            fontSize = 10.5.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = brandColor
                         )
@@ -617,58 +650,46 @@ private fun TieredModelGroupCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Thinking Effort Selector Pills
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text(
-                    text = "Thinking Effort:",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    group.variants.forEach { variant ->
-                        val isSelected = variant.model.id == selectedModelId
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { onSelectModel(variant.model.id) },
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) brandColor else brandColor.copy(alpha = 0.1f),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) brandColor else brandColor.copy(alpha = 0.25f)
-                            )
+                group.variants.forEach { variant ->
+                    val isSelected = variant.model.id == selectedModelId
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onSelectModel(variant.model.id) },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) brandColor else brandColor.copy(alpha = 0.1f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSelected) brandColor else brandColor.copy(alpha = 0.25f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                }
-                                Text(
-                                    text = variant.tierLabel.ifBlank { variant.model.displayName },
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(11.dp)
                                 )
+                                Spacer(modifier = Modifier.width(3.dp))
                             }
+                            Text(
+                                text = variant.tierLabel.ifBlank { variant.model.displayName },
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
                 }
@@ -680,213 +701,164 @@ private fun TieredModelGroupCard(
 /**
  * Clickable Category Tile with forward arrow navigating to the sub-sheet.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CategoryNavigationTile(
     title: String,
-    line1: String,
+    line1: String?,
+    fraction1: Float?,
     line2: String? = null,
+    fraction2: Float? = null,
     count: Int,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     brandColor: Color,
     onClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() },
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(brandColor.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = brandColor,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = title,
-                        fontSize = 15.sp,
+                        fontSize = 14.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .background(brandColor.copy(alpha = 0.12f))
-                            .padding(horizontal = 6.dp, vertical = 1.5.dp)
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
                     ) {
                         Text(
                             text = "$count",
-                            fontSize = 10.5.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = brandColor
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = line1,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                    maxLines = 1
-                )
-
-                if (!line2.isNullOrBlank()) {
-                    Text(
-                        text = line2,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                        maxLines = 1,
-                        modifier = Modifier.padding(top = 1.dp)
-                    )
+                if (!line1.isNullOrBlank() || !line2.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (!line1.isNullOrBlank()) {
+                            QuotaBadgeChip(text = line1, fraction = fraction1)
+                        }
+                        if (!line2.isNullOrBlank()) {
+                            QuotaBadgeChip(text = line2, fraction = fraction2)
+                        }
+                    }
                 }
             }
 
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                 contentDescription = "Open $title",
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                modifier = Modifier.size(15.dp)
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                modifier = Modifier.size(13.dp)
             )
         }
     }
 }
 
 /**
- * Top Featured Card showing the currently active model.
+ * Top Featured Card showing the active model.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ActiveModelCard(
     model: AiModel,
-    quota: ModelQuota?
+    quota: ModelQuota?,
+    quotaSummary: com.example.gemini.domain.model.QuotaSummaryResponse? = null
 ) {
     val familyColor = if (model.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
+    val qGroup = if (model.family == ModelFamily.CLAUDE) {
+        quotaSummary?.groups?.find { it.groupId == "claude_gpt" || it.groupName.contains("claude", ignoreCase = true) || it.groupName.contains("gpt", ignoreCase = true) }
+    } else {
+        quotaSummary?.groups?.find { it.groupId == "gemini" || it.groupName.contains("gemini", ignoreCase = true) }
+    }
+
+    val fiveHourFraction = qGroup?.fiveHour?.remainingFraction ?: quota?.remainingFraction
+    val weeklyFraction = qGroup?.weekly?.remainingFraction ?: quota?.weeklyRemainingFraction
+
+    val line1 = buildQuotaSummaryLine(
+        "5h",
+        fiveHourFraction,
+        qGroup?.fiveHour?.resetTime ?: quota?.resetTime,
+        qGroup?.fiveHour?.countdown ?: quota?.resetCountdown
+    )
+    val line2 = buildQuotaSummaryLine(
+        "7d",
+        weeklyFraction,
+        qGroup?.weekly?.resetTime ?: quota?.weeklyResetCountdown,
+        qGroup?.weekly?.countdown ?: quota?.weeklyResetCountdown
+    )
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-        border = BorderStroke(1.dp, familyColor.copy(alpha = 0.35f))
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        border = BorderStroke(1.dp, familyColor.copy(alpha = 0.3f))
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(familyColor.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.AutoAwesome,
-                    contentDescription = null,
-                    tint = familyColor,
-                    modifier = Modifier.size(22.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = model.displayName,
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-            }
 
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = model.displayName,
-                        fontSize = 15.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    if (model.supportsThinking) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(ClaudeTerracotta.copy(alpha = 0.15f))
-                                .padding(horizontal = 5.dp, vertical = 1.5.dp)
-                        ) {
-                            Text(
-                                text = "Thinking",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = ClaudeTerracotta
-                            )
-                        }
-                    }
-                }
-
-                if (model.description.isNotBlank()) {
-                    Text(
-                        text = model.description,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                        modifier = Modifier.padding(top = 2.dp),
-                        maxLines = 1
-                    )
-                }
-
-                if (quota?.remainingFraction != null) {
-                    val pct = quota.percentage
-                    val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
-                    val usedPctStr = quota.usedPercentage ?: "${100 - pct}%"
-                    val countdownStr = quota.resetCountdown?.let { " • $it" } ?: ""
-                    Text(
-                        text = "5h Limit: $pct% left ($usedPctStr used)$countdownStr",
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = badgeColor,
-                        modifier = Modifier.padding(top = 3.dp)
-                    )
-                    if (!quota.weeklyResetCountdown.isNullOrBlank() || !quota.weeklyUsedPercentage.isNullOrBlank()) {
-                        val weeklyPct = quota.weeklyRemainingFraction?.let { (it * 100).toInt() } ?: 100
-                        val weeklyUsedStr = quota.weeklyUsedPercentage ?: "${100 - weeklyPct}%"
-                        val weeklyCountdownStr = quota.weeklyResetCountdown?.let { " • $it" } ?: ""
+                if (model.supportsThinking) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(ClaudeTerracotta.copy(alpha = 0.15f))
+                            .padding(horizontal = 4.5.dp, vertical = 1.dp)
+                    ) {
                         Text(
-                            text = "Weekly: $weeklyPct% left ($weeklyUsedStr used)$weeklyCountdownStr",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                            modifier = Modifier.padding(top = 1.dp)
+                            text = "Thinking",
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ClaudeTerracotta
                         )
                     }
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(familyColor.copy(alpha = 0.15f))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = "Active",
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = familyColor
-                )
+            if (!line1.isNullOrBlank() || !line2.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (!line1.isNullOrBlank()) {
+                        QuotaBadgeChip(text = line1, fraction = fiveHourFraction)
+                    }
+                    if (!line2.isNullOrBlank()) {
+                        QuotaBadgeChip(text = line2, fraction = weeklyFraction)
+                    }
+                }
             }
         }
     }
@@ -899,92 +871,57 @@ private fun ActiveModelCard(
 private fun ModelRowItem(
     model: AiModel,
     isSelected: Boolean,
-    quota: ModelQuota?,
     onSelect: () -> Unit
 ) {
+    val brandColor = if (model.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable { onSelect() },
         color = if (isSelected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(10.dp),
         border = BorderStroke(
             1.dp,
-            if (isSelected) ClaudeTerracotta.copy(alpha = 0.4f) else Color.Transparent
+            if (isSelected) brandColor.copy(alpha = 0.4f) else Color.Transparent
         )
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = model.displayName,
-                        fontSize = 14.5.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+            Text(
+                text = model.displayName,
+                fontSize = 14.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
 
-                    if (model.supportsThinking) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(ClaudeTerracotta.copy(alpha = 0.12f))
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                        ) {
-                            Text(
-                                text = "Thinking",
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = ClaudeTerracotta
-                            )
-                        }
-                    }
-                }
-
-                if (model.description.isNotBlank()) {
+            if (model.supportsThinking) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(ClaudeTerracotta.copy(alpha = 0.12f))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                ) {
                     Text(
-                        text = model.description,
-                        fontSize = 11.5.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                        modifier = Modifier.padding(top = 2.dp),
-                        maxLines = 2
+                        text = "Thinking",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ClaudeTerracotta
                     )
                 }
-
-                if (quota?.remainingFraction != null) {
-                    val pct = quota.percentage
-                    val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 3.dp)
-                    ) {
-                        Text(
-                            text = "Quota: $pct%",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = badgeColor
-                        )
-                        if (quota.resetTime != null) {
-                            Text(
-                                text = " • Resets: ${quota.resetTime.take(16).replace("T", " ")}",
-                                fontSize = 10.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.width(8.dp))
             }
 
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = "Selected",
-                    tint = ClaudeTerracotta,
-                    modifier = Modifier.size(20.dp)
+                    tint = brandColor,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

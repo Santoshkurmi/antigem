@@ -698,8 +698,7 @@ class AgyHubClient(
 
                 val family = when {
                     displayName.contains("claude", ignoreCase = true) || key.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
-                    displayName.contains("gemini", ignoreCase = true) || key.contains("gemini", ignoreCase = true) -> ModelFamily.GEMINI
-                    else -> ModelFamily.OTHER
+                    else -> ModelFamily.GEMINI
                 }
 
                 resultList.add(
