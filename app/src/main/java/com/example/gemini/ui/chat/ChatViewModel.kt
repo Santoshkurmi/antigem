@@ -625,18 +625,28 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             while (currentCoroutineContext().isActive) {
                 try {
                     val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-                    agyHubClient.subscribeToSummaries(hubUrl).collect { summaries ->
-                        if (summaries.isNotEmpty()) {
-                            val currentMap = _conversations.value.associateBy { it.id }.toMutableMap()
-                            for (conv in summaries) {
-                                currentMap[conv.id] = conv
-                                knownDaemonCascadeIds.add(conv.id)
+                    agyHubClient.subscribeToSummaries(hubUrl).collect { update ->
+                        val currentMap = _conversations.value.associateBy { it.id }.toMutableMap()
+                        val activeId = _currentConversation.value?.id
+
+                        // Remove empty, deleted, or abandoned sessions
+                        for (delId in update.removedIds) {
+                            if (delId != activeId || _messages.value.isEmpty()) {
+                                currentMap.remove(delId)
+                                knownDaemonCascadeIds.remove(delId)
                             }
-                            _conversations.value = currentMap.values.sortedByDescending { it.updatedAt }
-                            _isServerOnline.value = true
-                            _conversationError.value = null
-                            _isLoadingConversation.value = false
                         }
+
+                        // Add or update valid conversations
+                        for (conv in update.updated) {
+                            currentMap[conv.id] = conv
+                            knownDaemonCascadeIds.add(conv.id)
+                        }
+
+                        _conversations.value = currentMap.values.sortedByDescending { it.updatedAt }
+                        _isServerOnline.value = true
+                        _conversationError.value = null
+                        _isLoadingConversation.value = false
                     }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) {
@@ -1143,6 +1153,25 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
                     }
+
+                    if (isFirstChunk) {
+                        // Stream closed immediately without emitting any frames (EOF).
+                        // This trajectory does not exist on the daemon (it was deleted or emptied).
+                        withContext(Dispatchers.Main) {
+                            if (activeStreamConversationId == conversationId) {
+                                _isLoadingConversation.value = false
+                                _conversations.value = _conversations.value.filter { it.id != conversationId }
+                                knownDaemonCascadeIds.remove(conversationId)
+                                if (_currentConversation.value?.id == conversationId) {
+                                    startNewChat()
+                                }
+                            }
+                        }
+                        break // Stop retrying non-existent conversation!
+                    } else {
+                        // Normal disconnection after receiving data; pause briefly before reconnecting
+                        delay(1000)
+                    }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) {
                         break
@@ -1164,6 +1193,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteConversation(id: String) {
         viewModelScope.launch {
             _conversations.value = _conversations.value.filter { it.id != id }
+            knownDaemonCascadeIds.remove(id)
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
             agyHubClient.deleteCascadeTrajectory(id, hubUrl)
             if (_currentConversation.value?.id == id) {
@@ -1382,6 +1412,25 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         onRestored(cleanText)
 
+        val isFirstUserMsg = index == 0 || current.none { it.role == MessageRole.USER && it.id != targetMsg.id }
+        if (isFirstUserMsg) {
+            // Optimistically clean up sidebar & switch to fresh new chat right away
+            _conversations.value = _conversations.value.filter { it.id != conv.id }
+            knownDaemonCascadeIds.remove(conv.id)
+            activeStreamConversationId = null
+            val modelToUse = if (_selectedModelId.value.isNotBlank()) {
+                com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
+            } else {
+                (_enabledModels.value.firstOrNull()?.id ?: "")
+            }
+            _currentConversation.value = Conversation(
+                id = UUID.randomUUID().toString(),
+                title = "New Chat",
+                modelId = modelToUse,
+                sessionId = UUID.randomUUID().toString()
+            )
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
             val modelEnum = com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
@@ -1390,7 +1439,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val targetStep = res.getOrThrow()
                 if (targetStep < 0) {
                     withContext(Dispatchers.Main) {
-                        _messages.value = emptyList()
+                        _conversations.value = _conversations.value.filter { it.id != conv.id }
+                        knownDaemonCascadeIds.remove(conv.id)
+                        if (_currentConversation.value?.id == conv.id) {
+                            startNewChat()
+                        }
                     }
                 } else {
                     withContext(Dispatchers.Main) {
@@ -1399,8 +1452,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } else {
                 android.util.Log.w("ChatViewModel", "revertLastUserMessage failed on hub: ${res.exceptionOrNull()?.message}")
-                withContext(Dispatchers.Main) {
-                    startPersistentStream(conv.id)
+                if (!isFirstUserMsg) {
+                    withContext(Dispatchers.Main) {
+                        startPersistentStream(conv.id)
+                    }
                 }
             }
         }

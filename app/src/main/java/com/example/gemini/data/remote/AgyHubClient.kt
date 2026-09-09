@@ -463,28 +463,43 @@ class AgyHubClient(
 
     // ==================== CONVERSATION MANAGEMENT ====================
 
+    data class SummariesUpdate(
+        val updated: List<Conversation>,
+        val removedIds: Set<String>
+    )
+
     /**
      * Subscribes to live conversation summaries via JetboxSubscribeToSummaries.
      * Streams conversation updates directly from daemon without local caching.
      */
-    fun subscribeToSummaries(hubUrl: String = DEFAULT_HUB_URL): Flow<List<Conversation>> = flow {
+    fun subscribeToSummaries(hubUrl: String = DEFAULT_HUB_URL): Flow<SummariesUpdate> = flow {
         callStream("JetboxSubscribeToSummaries", "{}", hubUrl).collect { frameJson ->
             try {
                 val root = JSONObject(frameJson)
                 val updates = root.optJSONObject("updates")
                 if (updates != null) {
                     val frameList = mutableListOf<Conversation>()
+                    val removedIds = mutableSetOf<String>()
                     val keys = updates.keys()
                     while (keys.hasNext()) {
                         val cid = keys.next()
                         val obj = updates.getJSONObject(cid)
                         val annotations = obj.optJSONObject("annotations")
                         val annTitle = annotations?.optString("title")?.takeIf { it.isNotBlank() }
-                        val summary = annTitle ?: obj.optString("summary", "Conversation").ifBlank { "Conversation" }
-                        val lastModStr = obj.optString("lastModifiedTime", "")
-                        val status = obj.optString("status", "")
-                        val isRunning = status.contains("RUNNING", ignoreCase = true)
+                        val rawSummary = obj.optString("summary", "").takeIf { it.isNotBlank() }
                         val stepCount = obj.optInt("stepCount", 0)
+                        val status = obj.optString("status", "")
+                        val isDeleted = status.contains("DELETED", ignoreCase = true)
+
+                        val hasContent = (annTitle != null || rawSummary != null || stepCount > 0) && !isDeleted
+                        if (!hasContent) {
+                            removedIds.add(cid)
+                            continue
+                        }
+
+                        val summary = annTitle ?: rawSummary ?: "Conversation"
+                        val lastModStr = obj.optString("lastModifiedTime", "")
+                        val isRunning = status.contains("RUNNING", ignoreCase = true)
 
                         var lastModEpoch = System.currentTimeMillis()
                         if (lastModStr.isNotBlank()) {
@@ -510,8 +525,8 @@ class AgyHubClient(
                             )
                         )
                     }
-                    if (frameList.isNotEmpty()) {
-                        emit(frameList)
+                    if (frameList.isNotEmpty() || removedIds.isNotEmpty()) {
+                        emit(SummariesUpdate(frameList, removedIds))
                     }
                 }
             } catch (e: Exception) {
