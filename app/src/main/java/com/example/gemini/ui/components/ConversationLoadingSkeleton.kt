@@ -197,11 +197,38 @@ fun SidebarChatListSkeleton(
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                // Title bar placeholder
+                // Title and time row placeholder
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .fillMaxWidth(fraction)
+                            .height(13.5.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(brush)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .width(22.dp)
+                            .height(11.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(brush)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Menu icon placeholder
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(fraction)
-                        .height(13.5.dp)
+                        .size(16.dp)
                         .clip(RoundedCornerShape(4.dp))
                         .background(brush)
                 )

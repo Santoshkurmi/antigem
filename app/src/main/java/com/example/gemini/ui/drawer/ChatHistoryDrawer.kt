@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallSplit
@@ -46,6 +47,7 @@ fun ChatHistoryDrawer(
     onTerminateInstance: (String) -> Unit = {},
     onSearchQueryChange: (String) -> Unit = {},
     onOpenSettings: () -> Unit,
+    isOpen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -54,6 +56,27 @@ fun ChatHistoryDrawer(
     val filtered = remember(conversations, searchQuery) {
         if (searchQuery.isBlank()) conversations
         else conversations.filter { it.title.contains(searchQuery, ignoreCase = true) }
+    }
+
+    val listState = rememberLazyListState()
+
+    // Scroll to active conversation whenever the drawer opens or active chat changes
+    LaunchedEffect(isOpen, currentConversationId, filtered.size) {
+        if (isOpen && filtered.isNotEmpty()) {
+            val targetIndex = if (!currentConversationId.isNullOrBlank()) {
+                filtered.indexOfFirst { it.id == currentConversationId }
+            } else 0
+            val scrollIndex = if (targetIndex >= 0) targetIndex else 0
+
+            if (scrollIndex == 0) {
+                listState.scrollToItem(0)
+            } else {
+                val visible = listState.layoutInfo.visibleItemsInfo.map { it.index }
+                if (scrollIndex !in visible) {
+                    listState.scrollToItem((scrollIndex - 1).coerceAtLeast(0))
+                }
+            }
+        }
     }
 
     if (instanceToTerminate != null) {
@@ -235,6 +258,7 @@ fun ChatHistoryDrawer(
                     }
                     else -> {
                         LazyColumn(
+                            state = listState,
                             modifier = Modifier.fillMaxSize()
                         ) {
                             items(filtered, key = { it.id }) { conv ->
@@ -263,16 +287,33 @@ fun ChatHistoryDrawer(
 
                                     Spacer(modifier = Modifier.width(10.dp))
 
-                                    Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Text(
                                             text = conv.title,
                                             fontSize = 13.5.sp,
                                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.weight(1f, fill = false)
                                         )
+
+                                        val timeStr = formatRelativeTime(conv.updatedAt)
+                                        if (timeStr.isNotBlank()) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = timeStr,
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                                            )
+                                        }
                                     }
+
+                                    Spacer(modifier = Modifier.width(4.dp))
 
                                     if (activeInst != null) {
                                         Surface(
@@ -397,5 +438,25 @@ fun ChatHistoryDrawer(
                 )
             }
         }
+    }
+}
+
+private fun formatRelativeTime(timestampMillis: Long): String {
+    if (timestampMillis <= 0L) return ""
+    val now = System.currentTimeMillis()
+    val diff = (now - timestampMillis).coerceAtLeast(0L)
+    val minutes = diff / 60_000L
+    val hours = diff / 3_600_000L
+    val days = diff / 86_400_000L
+    val months = days / 30L
+    val years = days / 365L
+
+    return when {
+        minutes < 1 -> "now"
+        hours < 1 -> "${minutes}m"
+        days < 1 -> "${hours}h"
+        days < 30 -> "${days}d"
+        days < 365 -> "${months.coerceAtLeast(1)}mo"
+        else -> "${years.coerceAtLeast(1)}y"
     }
 }

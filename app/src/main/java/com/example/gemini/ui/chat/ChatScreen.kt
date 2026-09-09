@@ -462,6 +462,7 @@ fun ChatScreen(
                 isLoading = isLoadingConversation,
                 errorMessage = conversationError,
                 onRetry = { viewModel.retryConnections() },
+                isOpen = drawerState.isOpen || drawerState.targetValue == DrawerValue.Open,
                 onSelectConversation = { id ->
                     viewModel.selectConversation(id)
                     scope.launch { drawerState.close() }

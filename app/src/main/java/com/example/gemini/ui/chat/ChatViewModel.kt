@@ -1217,6 +1217,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             updatedConv = updatedConv.copy(title = cleanTitle)
         }
 
+        updatedConv = updatedConv.copy(updatedAt = System.currentTimeMillis())
         _currentConversation.value = updatedConv
 
         val updatedList = _messages.value + userMsg
@@ -1245,7 +1246,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            _conversations.value = _conversations.value.map { if (it.id == updatedConv.id) updatedConv else it }
+            val exists = _conversations.value.any { it.id == updatedConv.id }
+            val newConversations = if (exists) {
+                _conversations.value.map { if (it.id == updatedConv.id) updatedConv else it }
+            } else {
+                listOf(updatedConv) + _conversations.value
+            }
+            _conversations.value = newConversations.sortedByDescending { it.updatedAt }
             executeStream(updatedConv, updatedList, mediaItems = mediaList)
         }
     }
