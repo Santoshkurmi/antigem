@@ -1,47 +1,96 @@
 package com.example.gemini.ui.components
 
+import android.Manifest
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import coil.compose.AsyncImage
 import com.example.gemini.domain.model.AiModel
+import com.example.gemini.domain.model.ChatAttachment
 import com.example.gemini.domain.model.ModelFamily
 import com.example.gemini.domain.model.ModelQuota
 import com.example.gemini.domain.model.ThinkingPreference
 import com.example.gemini.theme.*
 
-import androidx.compose.ui.text.input.TextFieldValue
+/**
+ * Elegant 4-bar audio waveform icon matching Claude's signature voice mode button.
+ */
+@Composable
+fun ClaudeWaveformIcon(
+    modifier: Modifier = Modifier,
+    color: Color = Color.Black
+) {
+    Canvas(modifier = modifier.size(16.dp)) {
+        val barWidth = 2.2.dp.toPx()
+        val spacing = 1.8.dp.toPx()
+        val heights = listOf(0.35f, 0.75f, 1.0f, 0.5f)
+        val totalWidth = heights.size * barWidth + (heights.size - 1) * spacing
+        val startX = (size.width - totalWidth) / 2f
+        val centerY = size.height / 2f
 
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.InsertDriveFile
-import coil.compose.AsyncImage
-import com.example.gemini.domain.model.ChatAttachment
+        heights.forEachIndexed { index, fraction ->
+            val barHeight = size.height * fraction
+            val x = startX + index * (barWidth + spacing)
+            val top = centerY - barHeight / 2f
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(x, top),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+            )
+        }
+    }
+}
 
+/**
+ * Claude Android style unified input bar:
+ * - Single rounded container enclosing text field, attachments, [+] button, model selector pill, and voice recorder / send button.
+ * - Dynamic voice recorder icon matching Claude's circular waveform design.
+ */
 @Composable
 fun ChatInputBar(
     selectedModel: AiModel,
@@ -60,264 +109,365 @@ fun ChatInputBar(
     onAttachClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val isDark = isSystemInDarkTheme()
+
+    // Voice recognition launcher
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spokenText = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+            if (!spokenText.isNullOrBlank()) {
+                val oldText = textFieldValue.text
+                val newText = if (oldText.isBlank()) spokenText else "$oldText $spokenText"
+                onTextFieldValueChange(
+                    TextFieldValue(
+                        text = newText,
+                        selection = TextRange(newText.length)
+                    )
+                )
+            }
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to ${selectedModel.displayName.split(" ").firstOrNull() ?: "Gemini"}...")
+            }
+            try {
+                speechRecognizerLauncher.launch(intent)
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(context, "Voice input not available on this device", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "Microphone permission required for voice input", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun launchVoiceInput() {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to ${selectedModel.displayName.split(" ").firstOrNull() ?: "Gemini"}...")
+            }
+            try {
+                speechRecognizerLauncher.launch(intent)
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(context, "Voice input not available on this device", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    val canSend = textFieldValue.text.trim().isNotEmpty() || attachments.isNotEmpty()
+    val familyColor = if (selectedModel.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.background,
-        tonalElevation = 2.dp
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 6.dp)
         ) {
-            // Model Selector & Thinking Selector Pills (Claude Style)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp, start = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Claude-style unified rounded input card
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = if (isDark) Color(0xFF222226) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                border = BorderStroke(
+                    1.dp,
+                    if (isDark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+                )
             ) {
-                // Model Selector Chip
-                val familyColor = if (selectedModel.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
-                        .clickable {
-                            focusManager.clearFocus(force = true)
-                            keyboardController?.hide()
-                            onOpenModelSelector()
-                        }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AutoAwesome,
-                        contentDescription = null,
-                        tint = familyColor,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = selectedModel.displayName,
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1
-                    )
-
-                    val pct = quota?.percentage
-                    if (pct != null) {
-                        Spacer(modifier = Modifier.width(5.dp))
-                        val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(badgeColor.copy(alpha = 0.15f))
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                        ) {
-                            Text(
-                                text = "$pct%",
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = badgeColor
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Switch Model",
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.size(15.dp)
-                    )
-                }
-            }
-
-            // Attachment Preview Chips Row
-            if (attachments.isNotEmpty() || isUploadingAttachment) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 6.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(horizontal = 6.dp, vertical = 6.dp)
                 ) {
-                    if (isUploadingAttachment) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
-                                    strokeWidth = 2.dp,
-                                    color = ClaudeTerracotta
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Uploading attachment...",
-                                    fontSize = 11.5.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-
-                    for (att in attachments) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(start = 6.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (att.isImage) {
-                                    val imgSource = att.url ?: att.localUri ?: "file://${att.path}"
-                                    AsyncImage(
-                                        model = imgSource,
-                                        contentDescription = att.name,
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Outlined.InsertDriveFile,
-                                        contentDescription = null,
-                                        tint = ClaudeTerracotta,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = att.name,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                IconButton(
-                                    onClick = { onRemoveAttachment(att.id) },
-                                    modifier = Modifier.size(20.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Close,
-                                        contentDescription = "Remove",
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Text Input & Send Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Text Input container
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = onAttachClick,
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Add,
-                            contentDescription = "Attach",
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
+                    // 1. Text Field Area on Top
                     TextField(
                         value = textFieldValue,
                         onValueChange = onTextFieldValueChange,
                         placeholder = {
                             Text(
-                                text = "Message ${selectedModel.displayName.split(" ").firstOrNull() ?: "Gemini"}...",
-                                fontSize = 14.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                text = "Reply to ${selectedModel.displayName.split(" ").firstOrNull() ?: "Gemini"}...",
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f)
                             )
                         },
                         modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 2.dp),
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
                             disabledContainerColor = Color.Transparent,
                             focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            cursorColor = ClaudeTerracotta
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = 15.sp,
+                            lineHeight = 21.sp
                         ),
                         maxLines = 6,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default)
                     )
-                }
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Action Button (Send / Stop)
-                val canSend = textFieldValue.text.trim().isNotEmpty() || attachments.isNotEmpty()
-                if (isStreaming) {
-                    IconButton(
-                        onClick = onStopStreaming,
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(ClaudeTerracotta)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                } else {
-                    IconButton(
-                        onClick = {
-                            val trimmed = textFieldValue.text.trim()
-                            if (canSend) {
-                                onSendMessage(trimmed)
-                                onTextFieldValueChange(TextFieldValue(""))
+                    // 2. Attachments Preview (if any)
+                    if (attachments.isNotEmpty() || isUploadingAttachment) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                                .horizontalScroll(rememberScrollState()),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (isUploadingAttachment) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp,
+                                            color = ClaudeTerracotta
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Uploading attachment...",
+                                            fontSize = 11.5.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
-                        },
-                        enabled = canSend,
+
+                            for (att in attachments) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(start = 6.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (att.isImage) {
+                                            val imgSource = att.url ?: att.localUri ?: "file://${att.path}"
+                                            AsyncImage(
+                                                model = imgSource,
+                                                contentDescription = att.name,
+                                                modifier = Modifier
+                                                    .size(28.dp)
+                                                    .clip(RoundedCornerShape(6.dp))
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Outlined.InsertDriveFile,
+                                                contentDescription = null,
+                                                tint = ClaudeTerracotta,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = att.name,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        IconButton(
+                                            onClick = { onRemoveAttachment(att.id) },
+                                            modifier = Modifier.size(20.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Close,
+                                                contentDescription = "Remove",
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Bottom Action Row: [+] [Model Chip] ... [Voice / Send / Stop Button]
+                    Row(
                         modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (canSend) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant
-                            )
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, end = 4.dp, bottom = 2.dp, top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowUpward,
-                            contentDescription = "Send",
-                            tint = if (canSend) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                            modifier = Modifier.size(20.dp)
-                        )
+                        // [+] Attachment Button
+                        Surface(
+                            onClick = onAttachClick,
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Add,
+                                    contentDescription = "Add attachments",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Model Selector Pill (Claude style)
+                        Surface(
+                            onClick = {
+                                focusManager.clearFocus(force = true)
+                                keyboardController?.hide()
+                                onOpenModelSelector()
+                            },
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = familyColor,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = selectedModel.displayName,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.widthIn(max = 165.dp)
+                                )
+
+                                val pct = quota?.percentage
+                                if (pct != null) {
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(badgeColor.copy(alpha = 0.15f))
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    ) {
+                                        Text(
+                                            text = "$pct%",
+                                            fontSize = 9.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = badgeColor
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Switch Model",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        // Action Button (Send / Stop / Voice Recorder)
+                        if (isStreaming) {
+                            Surface(
+                                onClick = onStopStreaming,
+                                shape = CircleShape,
+                                color = ClaudeTerracotta,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Stop,
+                                        contentDescription = "Stop",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        } else if (canSend) {
+                            Surface(
+                                onClick = {
+                                    val trimmed = textFieldValue.text.trim()
+                                    if (canSend) {
+                                        onSendMessage(trimmed)
+                                        onTextFieldValueChange(TextFieldValue(""))
+                                    }
+                                },
+                                shape = CircleShape,
+                                color = ClaudeTerracotta,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowUpward,
+                                        contentDescription = "Send",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+                            }
+                        } else {
+                            // Claude-style Voice Recorder Button
+                            val voiceBgColor = if (isDark) Color(0xFFEDEDED) else Color(0xFF1F1F1F)
+                            val voiceIconColor = if (isDark) Color(0xFF1B1B1B) else Color.White
+
+                            Surface(
+                                onClick = { launchVoiceInput() },
+                                shape = CircleShape,
+                                color = voiceBgColor,
+                                shadowElevation = 1.dp,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    ClaudeWaveformIcon(color = voiceIconColor)
+                                }
+                            }
+                        }
                     }
                 }
             }
