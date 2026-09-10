@@ -53,7 +53,8 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     APPEARANCE("Appearance & Theme", "Theme, dark mode, and chat font scaling"),
     SERVERS("Servers & Connectivity", "Configure AGY Hub (8090) and IDE Bridge (8080)"),
     MCP("MCP Servers", "Model Context Protocol tools & integrations"),
-    TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling")
+    TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling"),
+    COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,6 +117,14 @@ fun SettingsDialog(
     onToggleMcpServer: (String, Boolean) -> Unit = { _, _ -> },
     onSaveMcpServer: (com.example.gemini.domain.model.McpServerSpec) -> Unit = {},
     onDeleteMcpServer: (String) -> Unit = {},
+    commandAutoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
+    commandSandboxEnabled: Boolean = false,
+    requireApprovalForFileEdits: Boolean = false,
+    defaultApprovalScope: String = "PERMISSION_SCOPE_ONCE",
+    onSetCommandAutoExecutionPolicy: (String) -> Unit = {},
+    onSetCommandSandboxEnabled: (Boolean) -> Unit = {},
+    onSetRequireApprovalForFileEdits: (Boolean) -> Unit = {},
+    onSetDefaultApprovalScope: (String) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -228,6 +237,8 @@ fun SettingsDialog(
                         isBridgeOnline = isBridgeOnline,
                         useSshTerminal = useSshTerminal,
                         mcpServers = mcpServers,
+                        commandAutoExecutionPolicy = commandAutoExecutionPolicy,
+                        commandSandboxEnabled = commandSandboxEnabled,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onNavigate = { currentSection = it }
@@ -288,6 +299,19 @@ fun SettingsDialog(
                         onSaveTerminalPreferences = onSaveTerminalPreferences,
                         onOpenLocalTerminal = onOpenLocalTerminal
                     )
+
+                    SettingsSection.COMMANDS -> CommandsSubScreen(
+                        commandAutoExecutionPolicy = commandAutoExecutionPolicy,
+                        commandSandboxEnabled = commandSandboxEnabled,
+                        requireApprovalForFileEdits = requireApprovalForFileEdits,
+                        defaultApprovalScope = defaultApprovalScope,
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onSetCommandAutoExecutionPolicy = onSetCommandAutoExecutionPolicy,
+                        onSetCommandSandboxEnabled = onSetCommandSandboxEnabled,
+                        onSetRequireApprovalForFileEdits = onSetRequireApprovalForFileEdits,
+                        onSetDefaultApprovalScope = onSetDefaultApprovalScope
+                    )
                 }
             }
         }
@@ -302,6 +326,8 @@ private fun MainSettingsMenu(
     isBridgeOnline: Boolean,
     useSshTerminal: Boolean,
     mcpServers: List<com.example.gemini.domain.model.McpServerState>,
+    commandAutoExecutionPolicy: String,
+    commandSandboxEnabled: Boolean,
     cardBg: Color,
     cardBorder: BorderStroke,
     onNavigate: (SettingsSection) -> Unit
@@ -383,6 +409,25 @@ private fun MainSettingsMenu(
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.TERMINAL) }
+        )
+
+        // Section 5: Commands & Permissions
+        val (policyBadge, policyColor) = when {
+            commandAutoExecutionPolicy.contains("EAGER", ignoreCase = true) -> "⚡ Auto-Run" to QuotaGreen
+            commandAutoExecutionPolicy.contains("AUTO", ignoreCase = true) -> "🛡️ Smart Safety" to Color(0xFF00ACC1)
+            else -> "✋ Ask User" to Color(0xFFF59E0B)
+        }
+        val sandboxSummary = if (commandSandboxEnabled) "Sandbox ON" else "Sandbox OFF"
+        SettingsCategoryCard(
+            icon = Icons.Outlined.Security,
+            iconTint = policyColor,
+            title = "Commands & Permissions",
+            subtitle = "Policy: $policyBadge • $sandboxSummary",
+            badgeText = policyBadge,
+            badgeColor = policyColor,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.COMMANDS) }
         )
     }
 }
@@ -2346,4 +2391,333 @@ private fun TerminalSubScreen(
         }
     }
 }
+
+// ==========================================
+// SUB-SCREEN 5: COMMANDS & PERMISSIONS
+// ==========================================
+@Composable
+private fun CommandsSubScreen(
+    commandAutoExecutionPolicy: String,
+    commandSandboxEnabled: Boolean,
+    requireApprovalForFileEdits: Boolean,
+    defaultApprovalScope: String,
+    cardBg: Color,
+    cardBorder: BorderStroke,
+    onSetCommandAutoExecutionPolicy: (String) -> Unit,
+    onSetCommandSandboxEnabled: (Boolean) -> Unit,
+    onSetRequireApprovalForFileEdits: (Boolean) -> Unit,
+    onSetDefaultApprovalScope: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Section 1: Execution Policy Header
+        Column {
+            Text(
+                text = "Command Auto-Execution Policy",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Choose whether the AI runs shell commands immediately or halts to ask for user approval.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Policy Options List
+        val policyOptions = listOf(
+            Triple(
+                "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
+                "⚡ Auto-Run (Eager)",
+                "All commands execute automatically without asking. Maximum speed for hands-off coding workflows."
+            ) to ("Web UI Default" to QuotaGreen),
+            Triple(
+                "CASCADE_COMMANDS_AUTO_EXECUTION_AUTO",
+                "🛡️ Smart Safety (Auto)",
+                "Runs safe commands automatically. Prompts for approval before running potentially destructive operations (e.g. push, delete, outside workspace)."
+            ) to ("Recommended" to Color(0xFF00ACC1)),
+            Triple(
+                "CASCADE_COMMANDS_AUTO_EXECUTION_OFF",
+                "✋ Ask User Every Time (Off)",
+                "Suspends and asks for your explicit confirmation before executing every single terminal command."
+            ) to ("Full Control" to Color(0xFFF59E0B))
+        )
+
+        policyOptions.forEach { (option, badgeInfo) ->
+            val (policyKey, label, description) = option
+            val (badgeText, badgeColor) = badgeInfo
+            val isSelected = commandAutoExecutionPolicy.equals(policyKey, ignoreCase = true) ||
+                    (policyKey.endsWith("EAGER") && commandAutoExecutionPolicy.equals("EAGER", ignoreCase = true)) ||
+                    (policyKey.endsWith("AUTO") && commandAutoExecutionPolicy.equals("AUTO", ignoreCase = true)) ||
+                    (policyKey.endsWith("OFF") && commandAutoExecutionPolicy.equals("OFF", ignoreCase = true))
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onSetCommandAutoExecutionPolicy(policyKey) },
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isSelected) ClaudeTerracotta.copy(alpha = 0.08f) else cardBg
+                ),
+                border = BorderStroke(
+                    if (isSelected) 1.5.dp else 1.dp,
+                    if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    RadioButton(
+                        selected = isSelected,
+                        onClick = { onSetCommandAutoExecutionPolicy(policyKey) },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = ClaudeTerracotta
+                        ),
+                        modifier = Modifier.size(20.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = badgeColor.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = badgeText,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = badgeColor,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = description,
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Section 2: Security & Isolation
+        Column {
+            Text(
+                text = "Security & Sandbox",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Environment isolation and filesystem guardrails",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Toggle 1: Sandbox
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Terminal Sandbox Isolation",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (commandSandboxEnabled) "Enabled: isolates commands in sandbox without host network access"
+                            else "Disabled (Recommended for Hub): commands execute directly in your Termux / Linux environment",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 15.sp
+                        )
+                    }
+                    Switch(
+                        checked = commandSandboxEnabled,
+                        onCheckedChange = onSetCommandSandboxEnabled,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
+                    )
+                }
+
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                )
+
+                // Toggle 2: File Edit Approval
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Review File Edits & Writes",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Prompt for confirmation before assistant applies file edits or writes code to disk.",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 15.sp
+                        )
+                    }
+                    Switch(
+                        checked = requireApprovalForFileEdits,
+                        onCheckedChange = onSetRequireApprovalForFileEdits,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Section 3: Default Approval Scope
+        Column {
+            Text(
+                text = "Default Approval Scope",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "When you click approve, how long should permission remain granted?",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val scopes = listOf(
+                Triple("PERMISSION_SCOPE_ONCE", "Run Once", "Single call"),
+                Triple("PERMISSION_SCOPE_CONVERSATION", "This Chat", "Current session"),
+                Triple("PERMISSION_SCOPE_WORKSPACE", "Workspace", "Always")
+            )
+
+            scopes.forEach { (scopeKey, title, subtitle) ->
+                val isSelected = defaultApprovalScope == scopeKey
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onSetDefaultApprovalScope(scopeKey) },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.12f) else cardBg,
+                    border = BorderStroke(
+                        1.5.dp,
+                        if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(vertical = 12.dp, horizontal = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = title,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = subtitle,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // Section 4: Hub Sync Info Banner
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = QuotaGreen.copy(alpha = 0.08f),
+            border = BorderStroke(1.dp, QuotaGreen.copy(alpha = 0.25f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = QuotaGreen,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Settings automatically sync with Antigravity Hub via Jetbox RPC and persist across app sessions.",
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    lineHeight = 16.sp
+                )
+            }
+        }
+    }
+}
+
 

@@ -294,6 +294,49 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val isLocalToolsEnabled = authPrefs.isLocalToolsEnabled
     val isLocalToolsInstalled = authPrefs.isLocalToolsInstalled
 
+    val commandAutoExecutionPolicy = authPrefs.commandAutoExecutionPolicy
+    val commandSandboxEnabled = authPrefs.commandSandboxEnabled
+    val requireApprovalForFileEdits = authPrefs.requireApprovalForFileEdits
+    val defaultApprovalScope = authPrefs.defaultApprovalScope
+
+    fun setCommandAutoExecutionPolicy(policy: String) {
+        viewModelScope.launch {
+            authPrefs.setCommandAutoExecutionPolicy(policy)
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val sandbox = authPrefs.commandSandboxEnabled.firstOrNull() ?: false
+            agyHubClient.setUserSettings(
+                autoExecutionPolicy = policy,
+                enableTerminalSandbox = sandbox,
+                hubUrl = hubUrl
+            )
+        }
+    }
+
+    fun setCommandSandboxEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.setCommandSandboxEnabled(enabled)
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val policy = authPrefs.commandAutoExecutionPolicy.firstOrNull() ?: "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER"
+            agyHubClient.setUserSettings(
+                autoExecutionPolicy = policy,
+                enableTerminalSandbox = enabled,
+                hubUrl = hubUrl
+            )
+        }
+    }
+
+    fun setRequireApprovalForFileEdits(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.setRequireApprovalForFileEdits(enabled)
+        }
+    }
+
+    fun setDefaultApprovalScope(scope: String) {
+        viewModelScope.launch {
+            authPrefs.setDefaultApprovalScope(scope)
+        }
+    }
+
     fun setThemeMode(mode: String) {
         viewModelScope.launch {
             authPrefs.saveThemeMode(mode)
@@ -1779,12 +1822,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 currentActiveToolsMap.clear()
                 currentTurnToolMarkers.clear()
 
+                val currentAutoExecPolicy = authPrefs.commandAutoExecutionPolicy.firstOrNull() ?: "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER"
+
                 var sendRes = agyHubClient.sendUserPrompt(
                     cascadeId = conv.id,
                     text = userPrompt,
                     modelEnum = modelEnum,
                     thinkingBudget = thinkingBudget,
-                    autoExecutionPolicy = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
+                    autoExecutionPolicy = currentAutoExecPolicy,
                     media = mediaItems,
                     hubUrl = hubUrl
                 )
@@ -1809,7 +1854,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 text = userPrompt,
                                 modelEnum = modelEnum,
                                 thinkingBudget = thinkingBudget,
-                                autoExecutionPolicy = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
+                                autoExecutionPolicy = currentAutoExecPolicy,
                                 media = mediaItems,
                                 hubUrl = hubUrl
                             )
@@ -2202,7 +2247,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun approveAndExecuteTerminalTool(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String) {
+    fun approveAndExecuteTerminalTool(
+        toolCall: com.example.gemini.domain.model.ToolCall,
+        messageId: String,
+        scope: String? = null
+    ) {
         val conv = _currentConversation.value ?: return
         val stepIndex = toolCall.id.substringAfterLast("_").toIntOrNull() ?: 0
 
@@ -2224,12 +2273,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val resolvedScope = scope ?: authPrefs.defaultApprovalScope.firstOrNull() ?: "PERMISSION_SCOPE_ONCE"
             val res = agyHubClient.handleCascadeUserInteraction(
                 cascadeId = conv.id,
                 stepIndex = stepIndex,
                 trajectoryId = currentTrajectoryId,
                 allow = true,
-                scope = "PERMISSION_SCOPE_ONCE",
+                scope = resolvedScope,
                 hubUrl = hubUrl
             )
             if (res.isFailure) {

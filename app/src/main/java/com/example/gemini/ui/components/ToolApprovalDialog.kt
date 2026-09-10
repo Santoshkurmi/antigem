@@ -36,12 +36,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.domain.model.ToolCall
 import com.example.gemini.theme.ClaudeTerracotta
+import com.example.gemini.theme.QuotaGreen
 import com.example.gemini.ui.chat.PendingToolApproval
 
 @Composable
 fun ToolApprovalDialog(
     pendingApprovals: List<PendingToolApproval>,
-    onApprove: (ToolCall, String) -> Unit,
+    onApprove: (ToolCall, String, String) -> Unit,
     onReject: (ToolCall, String) -> Unit,
     onApproveAll: () -> Unit,
     onRejectAll: () -> Unit,
@@ -153,7 +154,7 @@ fun ToolApprovalDialog(
                     items(pendingApprovals, key = { it.toolCall.id }) { item ->
                         ToolApprovalItemCard(
                             approval = item,
-                            onApprove = { onApprove(item.toolCall, item.messageId) },
+                            onApprove = { scope -> onApprove(item.toolCall, item.messageId, scope) },
                             onReject = { onReject(item.toolCall, item.messageId) }
                         )
                     }
@@ -211,12 +212,13 @@ fun ToolApprovalDialog(
 @Composable
 private fun ToolApprovalItemCard(
     approval: PendingToolApproval,
-    onApprove: () -> Unit,
+    onApprove: (String) -> Unit,
     onReject: () -> Unit
 ) {
     val context = LocalContext.current
     val toolCall = approval.toolCall
     var isExpanded by remember { mutableStateOf(false) }
+    var showScopeMenu by remember { mutableStateOf(false) }
 
     val isBash = toolCall.name == "bash" || toolCall.name == "run_command" || toolCall.name == "terminal"
     val isEditFile = toolCall.name == "edit_file" || toolCall.name == "modifyFile" || toolCall.name == "write_to_file" || toolCall.name == "replace_file_content"
@@ -377,7 +379,7 @@ private fun ToolApprovalItemCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Action Buttons: Reject & Accept
+            // Action Buttons: Reject, Run Once, & Scope Options
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -404,7 +406,7 @@ private fun ToolApprovalItemCard(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Button(
-                    onClick = onApprove,
+                    onClick = { onApprove("PERMISSION_SCOPE_ONCE") },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
@@ -413,10 +415,62 @@ private fun ToolApprovalItemCard(
                     Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (isBash) "Accept & Run" else "Accept",
+                        text = if (isBash) "Run Once" else "Accept",
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold
                     )
+                }
+
+                if (isBash) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box {
+                        IconButton(
+                            onClick = { showScopeMenu = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Approval options",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showScopeMenu,
+                            onDismissRequest = { showScopeMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text("Always in This Chat", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                        Text("Allow this command for this conversation", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.size(16.dp))
+                                },
+                                onClick = {
+                                    showScopeMenu = false
+                                    onApprove("PERMISSION_SCOPE_CONVERSATION")
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text("Always in Workspace", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                        Text("Allow across entire workspace", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.Security, contentDescription = null, tint = QuotaGreen, modifier = Modifier.size(16.dp))
+                                },
+                                onClick = {
+                                    showScopeMenu = false
+                                    onApprove("PERMISSION_SCOPE_WORKSPACE")
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }

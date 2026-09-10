@@ -167,6 +167,10 @@ fun ChatScreen(
     val terminalCursorStyle by viewModel.terminalCursorStyle.collectAsState(initial = "BLOCK")
     val terminalBufferSize by viewModel.terminalBufferSize.collectAsState(initial = 2000)
     val terminalTheme by viewModel.terminalTheme.collectAsState(initial = "DEFAULT")
+    val commandAutoExecutionPolicy by viewModel.commandAutoExecutionPolicy.collectAsState(initial = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER")
+    val commandSandboxEnabled by viewModel.commandSandboxEnabled.collectAsState(initial = false)
+    val requireApprovalForFileEdits by viewModel.requireApprovalForFileEdits.collectAsState(initial = false)
+    val defaultApprovalScope by viewModel.defaultApprovalScope.collectAsState(initial = "PERMISSION_SCOPE_ONCE")
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -1278,6 +1282,14 @@ fun ChatScreen(
             onToggleMcpServer = { name, enabled -> viewModel.toggleMcpServer(name, enabled) },
             onSaveMcpServer = { spec -> viewModel.saveMcpServer(spec) },
             onDeleteMcpServer = { name -> viewModel.deleteMcpServer(name) },
+            commandAutoExecutionPolicy = commandAutoExecutionPolicy,
+            commandSandboxEnabled = commandSandboxEnabled,
+            requireApprovalForFileEdits = requireApprovalForFileEdits,
+            defaultApprovalScope = defaultApprovalScope,
+            onSetCommandAutoExecutionPolicy = { viewModel.setCommandAutoExecutionPolicy(it) },
+            onSetCommandSandboxEnabled = { viewModel.setCommandSandboxEnabled(it) },
+            onSetRequireApprovalForFileEdits = { viewModel.setRequireApprovalForFileEdits(it) },
+            onSetDefaultApprovalScope = { viewModel.setDefaultApprovalScope(it) },
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1430,8 +1442,8 @@ fun ChatScreen(
     if (pendingApprovals.isNotEmpty() && !isApprovalDialogDismissed) {
         ToolApprovalDialog(
             pendingApprovals = pendingApprovals,
-            onApprove = { toolCall, msgId ->
-                viewModel.approveAndExecuteTerminalTool(toolCall, msgId)
+            onApprove = { toolCall, msgId, scope ->
+                viewModel.approveAndExecuteTerminalTool(toolCall, msgId, scope)
             },
             onReject = { toolCall, msgId ->
                 viewModel.rejectTerminalTool(toolCall, msgId)

@@ -52,6 +52,10 @@ class AuthPreferences(private val context: Context) {
         val TERMINAL_CURSOR_STYLE = stringPreferencesKey("terminal_cursor_style")
         val TERMINAL_BUFFER_SIZE = androidx.datastore.preferences.core.intPreferencesKey("terminal_buffer_size")
         val TERMINAL_THEME = stringPreferencesKey("terminal_theme")
+        val COMMAND_AUTO_EXECUTION_POLICY = stringPreferencesKey("command_auto_execution_policy")
+        val COMMAND_SANDBOX_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("command_sandbox_enabled")
+        val REQUIRE_APPROVAL_FOR_FILE_EDITS = androidx.datastore.preferences.core.booleanPreferencesKey("require_approval_for_file_edits")
+        val DEFAULT_APPROVAL_SCOPE = stringPreferencesKey("default_approval_scope")
     }
 
     val preferredModelId: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_ID] }
@@ -98,6 +102,19 @@ class AuthPreferences(private val context: Context) {
     val isInteractiveUiToolEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_INTERACTIVE_UI_TOOL_ENABLED] ?: false }
     val contextWindowLimit: Flow<Int> = context.dataStore.data.map { it[CONTEXT_WINDOW_LIMIT] ?: 10 }
     val summaryModelId: Flow<String> = context.dataStore.data.map { it[SUMMARY_MODEL_ID] ?: "always_ask" }
+
+    val commandAutoExecutionPolicy: Flow<String> = context.dataStore.data.map {
+        it[COMMAND_AUTO_EXECUTION_POLICY] ?: "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER"
+    }
+    val commandSandboxEnabled: Flow<Boolean> = context.dataStore.data.map {
+        it[COMMAND_SANDBOX_ENABLED] ?: false
+    }
+    val requireApprovalForFileEdits: Flow<Boolean> = context.dataStore.data.map {
+        it[REQUIRE_APPROVAL_FOR_FILE_EDITS] ?: false
+    }
+    val defaultApprovalScope: Flow<String> = context.dataStore.data.map {
+        it[DEFAULT_APPROVAL_SCOPE] ?: "PERMISSION_SCOPE_ONCE"
+    }
 
     suspend fun setWebSearchToolEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
@@ -287,6 +304,30 @@ class AuthPreferences(private val context: Context) {
             if (displayName.isNotBlank()) {
                 prefs[PREFERRED_MODEL_NAME] = displayName
             }
+        }
+    }
+
+    suspend fun setCommandAutoExecutionPolicy(policy: String) {
+        context.dataStore.edit { prefs ->
+            prefs[COMMAND_AUTO_EXECUTION_POLICY] = policy
+        }
+    }
+
+    suspend fun setCommandSandboxEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[COMMAND_SANDBOX_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setRequireApprovalForFileEdits(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[REQUIRE_APPROVAL_FOR_FILE_EDITS] = enabled
+        }
+    }
+
+    suspend fun setDefaultApprovalScope(scope: String) {
+        context.dataStore.edit { prefs ->
+            prefs[DEFAULT_APPROVAL_SCOPE] = scope
         }
     }
 

@@ -1168,6 +1168,25 @@ data class AgyMediaItem(
     }
 
     /**
+     * Updates daemon user settings (auto execution policy & sandbox) via JetboxWriteState
+     */
+    suspend fun setUserSettings(
+        autoExecutionPolicy: String,
+        enableTerminalSandbox: Boolean = false,
+        hubUrl: String = DEFAULT_HUB_URL
+    ): Result<Unit> {
+        val payload = JSONObject().apply {
+            put("userConfig", JSONObject().apply {
+                put("userSettings", JSONObject().apply {
+                    put("enableTerminalSandbox", enableTerminalSandbox)
+                    put("autoExecutionPolicy", autoExecutionPolicy)
+                })
+            })
+        }.toString()
+        return executeGrpcWebCall("JetboxWriteState", payload, hubUrl).map { }
+    }
+
+    /**
      * Finds the index of the last user step in a steps array
      */
     fun findLastUserStepIndex(steps: JSONArray): Int {
