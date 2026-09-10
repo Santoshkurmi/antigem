@@ -768,3 +768,52 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
 }
+
+func (h *Handler) McpConfigHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	configPath := filepath.Join(h.Cfg.HomeDir, ".gemini", "antigravity", "mcp_config.json")
+	if r.Method == "GET" {
+		content, err := os.ReadFile(configPath)
+		if err != nil {
+			fallback := filepath.Join(h.Cfg.HomeDir, ".gemini", "config", "mcp_config.json")
+			content, err = os.ReadFile(fallback)
+			if err != nil {
+				content = []byte("{}")
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"path":    configPath,
+			"content": string(content),
+		})
+		return
+	}
+
+	if r.Method == "POST" {
+		var req struct {
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+			return
+		}
+		_ = os.MkdirAll(filepath.Dir(configPath), 0755)
+		if err := os.WriteFile(configPath, []byte(req.Content), 0644); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"path":    configPath,
+		})
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}

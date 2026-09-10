@@ -51,6 +51,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     MAIN("Settings & Preferences", "Configure your AntiGem experience"),
     APPEARANCE("Appearance & Theme", "Theme, dark mode, and chat font scaling"),
     SERVERS("Servers & Connectivity", "Configure AGY Hub (8090) and IDE Bridge (8080)"),
+    MCP("MCP Servers", "Model Context Protocol tools & integrations"),
     TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling")
 }
 
@@ -105,6 +106,12 @@ fun SettingsDialog(
     onInstallLocalTools: () -> Unit = {},
     onOpenLocalTerminal: () -> Unit = {},
     onResetLocalTools: () -> Unit = {},
+    mcpServers: List<com.example.gemini.domain.model.McpServerState> = emptyList(),
+    isMcpLoading: Boolean = false,
+    onRefreshMcpServers: () -> Unit = {},
+    onToggleMcpServer: (String, Boolean) -> Unit = { _, _ -> },
+    onSaveMcpServer: (com.example.gemini.domain.model.McpServerSpec) -> Unit = {},
+    onDeleteMcpServer: (String) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -216,6 +223,7 @@ fun SettingsDialog(
                         isServerOnline = isServerOnline,
                         isBridgeOnline = isBridgeOnline,
                         useSshTerminal = useSshTerminal,
+                        mcpServers = mcpServers,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onNavigate = { currentSection = it }
@@ -238,6 +246,17 @@ fun SettingsDialog(
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onSaveServerUrls = onSaveServerUrls
+                    )
+
+                    SettingsSection.MCP -> McpSubScreen(
+                        mcpServers = mcpServers,
+                        isLoading = isMcpLoading,
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onRefresh = onRefreshMcpServers,
+                        onToggleServer = onToggleMcpServer,
+                        onSaveServer = onSaveMcpServer,
+                        onDeleteServer = onDeleteMcpServer
                     )
 
                     SettingsSection.TERMINAL -> TerminalSubScreen(
@@ -275,6 +294,7 @@ private fun MainSettingsMenu(
     isServerOnline: Boolean,
     isBridgeOnline: Boolean,
     useSshTerminal: Boolean,
+    mcpServers: List<com.example.gemini.domain.model.McpServerState>,
     cardBg: Color,
     cardBorder: BorderStroke,
     onNavigate: (SettingsSection) -> Unit
@@ -321,7 +341,32 @@ private fun MainSettingsMenu(
             onClick = { onNavigate(SettingsSection.SERVERS) }
         )
 
-        // Section 3: Terminal & Shell
+        // Section 3: MCP Servers & Tools
+        val activeMcpCount = mcpServers.count { it.isEnabled }
+        val totalMcpCount = mcpServers.size
+        val mcpBadge = when {
+            totalMcpCount == 0 -> "0 Configured"
+            activeMcpCount > 0 -> "$activeMcpCount Active"
+            else -> "Disabled"
+        }
+        val mcpColor = when {
+            activeMcpCount > 0 -> QuotaGreen
+            totalMcpCount > 0 -> Color(0xFFFFA000)
+            else -> ClaudeTerracotta
+        }
+        SettingsCategoryCard(
+            icon = Icons.Outlined.Extension,
+            iconTint = mcpColor,
+            title = "MCP Servers & Tools",
+            subtitle = if (totalMcpCount > 0) "$totalMcpCount server(s) • global mcp_config.json" else "Model Context Protocol tools & integrations",
+            badgeText = mcpBadge,
+            badgeColor = mcpColor,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.MCP) }
+        )
+
+        // Section 4: Terminal & Shell
         SettingsCategoryCard(
             icon = Icons.Outlined.Terminal,
             iconTint = Color(0xFF00ACC1),
@@ -947,7 +992,774 @@ private fun ServersSubScreen(
 }
 
 // ==========================================
-// SUB-SCREEN 3: TERMINAL & SHELL SETTINGS
+// SUB-SCREEN 3: MCP SERVERS & TOOLS SETTINGS
+// ==========================================
+@Composable
+private fun McpSubScreen(
+    mcpServers: List<com.example.gemini.domain.model.McpServerState>,
+    isLoading: Boolean,
+    cardBg: Color,
+    cardBorder: BorderStroke,
+    onRefresh: () -> Unit,
+    onToggleServer: (String, Boolean) -> Unit,
+    onSaveServer: (com.example.gemini.domain.model.McpServerSpec) -> Unit,
+    onDeleteServer: (String) -> Unit
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    var serverToEdit by remember { mutableStateOf<com.example.gemini.domain.model.McpServerSpec?>(null) }
+    var serverToDelete by remember { mutableStateOf<String?>(null) }
+    var expandedTools by remember { mutableStateOf(setOf<String>()) }
+    var expandedErrors by remember { mutableStateOf(setOf<String>()) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Banner card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(ClaudeTerracotta.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Extension,
+                            contentDescription = null,
+                            tint = ClaudeTerracotta,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Model Context Protocol (MCP)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Global config: ~/.gemini/antigravity/mcp_config.json",
+                            fontSize = 11.5.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Configure local process (Stdio) or remote (SSE) MCP servers. Discovered tools are dynamically available to all models during chat turns.",
+                    fontSize = 12.5.sp,
+                    lineHeight = 17.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                )
+
+                // Top action row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onRefresh,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = !isLoading,
+                        contentPadding = PaddingValues(vertical = 10.dp, horizontal = 12.dp)
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = ClaudeTerracotta
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (isLoading) "Testing..." else "Test & Refresh", fontSize = 13.sp)
+                    }
+
+                    Button(
+                        onClick = {
+                            serverToEdit = null
+                            showDialog = true
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                        contentPadding = PaddingValues(vertical = 10.dp, horizontal = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Add Server", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Quick template chips
+        Text(
+            text = "Quick Presets & Templates",
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val presets = listOf(
+                Triple("Filesystem", "npx", listOf("-y", "@modelcontextprotocol/server-filesystem", "/home/cat")),
+                Triple("SQLite", "npx", listOf("-y", "@modelcontextprotocol/server-sqlite", "--db", "/home/cat/test.db")),
+                Triple("Fetch", "uvx", listOf("mcp-server-fetch"))
+            )
+            presets.forEach { (pName, cmd, args) ->
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            serverToEdit = com.example.gemini.domain.model.McpServerSpec(
+                                serverName = pName.lowercase(),
+                                command = cmd,
+                                args = args
+                            )
+                            showDialog = true
+                        }
+                ) {
+                    Box(
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "+ $pName",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
+
+        // Server list header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Configured Servers (${mcpServers.size})",
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (mcpServers.isNotEmpty()) {
+                val totalTools = mcpServers.sumOf { it.tools.size }
+                Text(
+                    text = "$totalTools tools available",
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        }
+
+        // Empty state
+        if (mcpServers.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = cardBorder
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Extension,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Text(
+                        text = "No MCP Servers Configured",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Add an MCP server to connect SQLite, filesystem, browser automation, or custom local tools to the assistant.",
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        // Server Cards
+        mcpServers.forEach { server ->
+            val isExpanded = expandedTools.contains(server.name)
+            val isErrorExpanded = expandedErrors.contains(server.name)
+            val isSse = server.spec?.serverUrl?.isNotBlank() == true
+
+            val statusColor = when {
+                !server.isEnabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                server.status.contains("RUNNING", ignoreCase = true) || server.status.contains("OK", ignoreCase = true) || server.tools.isNotEmpty() -> QuotaGreen
+                server.status.contains("ERROR", ignoreCase = true) || !server.error.isNullOrBlank() -> Color.Red
+                else -> Color(0xFFFFA000)
+            }
+            val statusLabel = when {
+                !server.isEnabled -> "Disabled"
+                server.status.contains("RUNNING", ignoreCase = true) || server.status.contains("OK", ignoreCase = true) || server.tools.isNotEmpty() -> "Ready"
+                server.status.contains("ERROR", ignoreCase = true) || !server.error.isNullOrBlank() -> "Error"
+                else -> server.status.removePrefix("MCP_SERVER_STATUS_").lowercase().replaceFirstChar { it.uppercase() }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = cardBorder
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Title and toggle row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSse) Color(0xFF1976D2).copy(alpha = 0.12f) else Color(0xFF7B1FA2).copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Extension,
+                                contentDescription = null,
+                                tint = if (isSse) Color(0xFF1976D2) else Color(0xFF7B1FA2),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = server.name,
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Transport badge
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (isSse) Color(0xFF1976D2).copy(alpha = 0.15f) else Color(0xFF7B1FA2).copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = if (isSse) "SSE" else "Stdio",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSse) Color(0xFF1976D2) else Color(0xFF7B1FA2),
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
+
+                                // Status badge
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = statusColor.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = statusLabel,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = statusColor,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Switch(
+                            checked = server.isEnabled,
+                            onCheckedChange = { onToggleServer(server.name, it) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = ClaudeTerracotta, checkedTrackColor = ClaudeTerracotta.copy(alpha = 0.4f))
+                        )
+                    }
+
+                    // Command or URL info
+                    val cmdText = if (isSse) {
+                        server.spec?.serverUrl ?: ""
+                    } else {
+                        val baseCmd = server.spec?.command ?: ""
+                        val argsJoined = server.spec?.args?.joinToString(" ") ?: ""
+                        "$baseCmd $argsJoined".trim()
+                    }
+                    if (cmdText.isNotBlank()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                        ) {
+                            Text(
+                                text = if (isSse) "URL: $cmdText" else "> $cmdText",
+                                fontSize = 11.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+
+                    // Error banner
+                    if (!server.error.isNullOrBlank()) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    expandedErrors = if (isErrorExpanded) expandedErrors - server.name else expandedErrors + server.name
+                                },
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.Red.copy(alpha = 0.1f),
+                            border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.3f))
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = Color.Red, modifier = Modifier.size(14.dp))
+                                        Text("Connection Issue", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Red)
+                                    }
+                                    Icon(
+                                        imageVector = if (isErrorExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = null,
+                                        tint = Color.Red,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                Text(
+                                    text = server.error,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color.Red,
+                                    maxLines = if (isErrorExpanded) 10 else 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Discovered tools accordion
+                    if (server.tools.isNotEmpty()) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    expandedTools = if (isExpanded) expandedTools - server.name else expandedTools + server.name
+                                },
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Icon(imageVector = Icons.Default.Build, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.size(14.dp))
+                                        Text(
+                                            text = "${server.tools.size} Discovered Tool${if (server.tools.size > 1) "s" else ""}",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+
+                                if (isExpanded) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                                    server.tools.forEach { tool ->
+                                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                            Text(
+                                                text = tool.name,
+                                                fontSize = 12.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                fontWeight = FontWeight.Bold,
+                                                color = ClaudeTerracotta
+                                            )
+                                            if (tool.description.isNotBlank()) {
+                                                Text(
+                                                    text = tool.description,
+                                                    fontSize = 11.5.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                    modifier = Modifier.padding(top = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Card Action buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                serverToEdit = server.spec ?: com.example.gemini.domain.model.McpServerSpec(serverName = server.name)
+                                showDialog = true
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Edit", fontSize = 12.sp)
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        TextButton(
+                            onClick = { serverToDelete = server.name },
+                            colors = ButtonDefaults.textButtonColors(contentColor = Color.Red),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Remove", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Delete confirmation dialog
+    if (serverToDelete != null) {
+        val targetName = serverToDelete ?: ""
+        AlertDialog(
+            onDismissRequest = { serverToDelete = null },
+            title = { Text("Remove MCP Server?") },
+            text = {
+                Text("Are you sure you want to remove \"$targetName\" from global mcp_config.json? The server and its tools will be disconnected.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteServer(targetName)
+                        serverToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Remove", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { serverToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Add / Edit Dialog
+    if (showDialog) {
+        AddEditMcpServerDialog(
+            initialSpec = serverToEdit,
+            onDismiss = {
+                showDialog = false
+                serverToEdit = null
+            },
+            onSave = { spec ->
+                onSaveServer(spec)
+                showDialog = false
+                serverToEdit = null
+            }
+        )
+    }
+}
+
+@Composable
+private fun AddEditMcpServerDialog(
+    initialSpec: com.example.gemini.domain.model.McpServerSpec?,
+    onDismiss: () -> Unit,
+    onSave: (com.example.gemini.domain.model.McpServerSpec) -> Unit
+) {
+    var isSse by remember { mutableStateOf(initialSpec?.serverUrl?.isNotBlank() == true) }
+    var name by remember { mutableStateOf(initialSpec?.serverName ?: "") }
+    var command by remember { mutableStateOf(initialSpec?.command ?: "") }
+    var argsText by remember { mutableStateOf(initialSpec?.args?.joinToString(" ") ?: "") }
+    var serverUrl by remember { mutableStateOf(initialSpec?.serverUrl ?: "") }
+    var envText by remember { mutableStateOf(initialSpec?.env?.map { "${it.key}=${it.value}" }?.joinToString("\n") ?: "") }
+    var validationError by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = if (initialSpec != null && initialSpec.serverName.isNotBlank()) "Edit MCP Server" else "Add MCP Server",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Transport Mode Selector
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { isSse = false },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (!isSse) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, if (!isSse) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                    ) {
+                        Box(modifier = Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "Stdio (Command)",
+                                fontSize = 12.sp,
+                                fontWeight = if (!isSse) FontWeight.Bold else FontWeight.Normal,
+                                color = if (!isSse) Color.White else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { isSse = true },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSse) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, if (isSse) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                    ) {
+                        Box(modifier = Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "SSE (Remote URL)",
+                                fontSize = 12.sp,
+                                fontWeight = if (isSse) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSse) Color.White else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+
+                // Server Name
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        validationError = null
+                    },
+                    label = { Text("Server Name *") },
+                    placeholder = { Text("e.g. filesystem, sqlite, github") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (!isSse) {
+                    // Command
+                    OutlinedTextField(
+                        value = command,
+                        onValueChange = {
+                            command = it
+                            validationError = null
+                        },
+                        label = { Text("Command *") },
+                        placeholder = { Text("e.g. npx, python3, node, uvx") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Arguments
+                    OutlinedTextField(
+                        value = argsText,
+                        onValueChange = { argsText = it },
+                        label = { Text("Arguments (space separated)") },
+                        placeholder = { Text("e.g. -y @modelcontextprotocol/server-filesystem /home/cat") },
+                        minLines = 2,
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Environment Variables
+                    OutlinedTextField(
+                        value = envText,
+                        onValueChange = { envText = it },
+                        label = { Text("Environment Variables (KEY=VALUE per line)") },
+                        placeholder = { Text("API_KEY=xyz\nDEBUG=true") },
+                        minLines = 2,
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    // Server URL
+                    OutlinedTextField(
+                        value = serverUrl,
+                        onValueChange = {
+                            serverUrl = it
+                            validationError = null
+                        },
+                        label = { Text("SSE Endpoint URL *") },
+                        placeholder = { Text("e.g. http://127.0.0.1:8000/sse") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                if (validationError != null) {
+                    Text(
+                        text = validationError ?: "",
+                        fontSize = 12.sp,
+                        color = Color.Red,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val cleanName = name.trim()
+                    if (cleanName.isBlank()) {
+                        validationError = "Server name is required"
+                        return@Button
+                    }
+
+                    val spec = if (!isSse) {
+                        val cleanCmd = command.trim()
+                        if (cleanCmd.isBlank()) {
+                            validationError = "Command is required"
+                            return@Button
+                        }
+                        // Parse arguments, supporting quoted strings
+                        val argsList = mutableListOf<String>()
+                        val regex = """[^\s"']+|"([^"]*)"|'([^']*)'""".toRegex()
+                        regex.findAll(argsText.trim()).forEach { m ->
+                            val arg = m.groups[1]?.value ?: m.groups[2]?.value ?: m.value
+                            if (arg.isNotBlank()) argsList.add(arg)
+                        }
+
+                        val envMap = mutableMapOf<String, String>()
+                        envText.lines().forEach { line ->
+                            val parts = line.split("=", limit = 2)
+                            if (parts.size == 2 && parts[0].trim().isNotBlank()) {
+                                envMap[parts[0].trim()] = parts[1].trim()
+                            }
+                        }
+
+                        com.example.gemini.domain.model.McpServerSpec(
+                            serverName = cleanName,
+                            command = cleanCmd,
+                            args = argsList,
+                            env = envMap,
+                            disabled = initialSpec?.disabled ?: false
+                        )
+                    } else {
+                        val cleanUrl = serverUrl.trim()
+                        if (cleanUrl.isBlank()) {
+                            validationError = "Server URL is required"
+                            return@Button
+                        }
+                        com.example.gemini.domain.model.McpServerSpec(
+                            serverName = cleanName,
+                            serverUrl = cleanUrl,
+                            disabled = initialSpec?.disabled ?: false
+                        )
+                    }
+
+                    onSave(spec)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+            ) {
+                Text("Save & Connect", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+// ==========================================
+// SUB-SCREEN 4: TERMINAL & SHELL SETTINGS
 // ==========================================
 @Composable
 private fun TerminalSubScreen(

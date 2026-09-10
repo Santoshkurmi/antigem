@@ -255,6 +255,8 @@ fun ChatScreen(
     val isOAuthServerListening by viewModel.isOAuthServerListening.collectAsState()
     val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
     val isLoadingConversation by viewModel.isLoadingConversation.collectAsState()
+    val mcpServers by viewModel.mcpServers.collectAsState()
+    val isMcpLoading by viewModel.isMcpLoading.collectAsState()
 
     // Granular block-level feed item expansion from pre-warmed background cache (0ms UI thread work)
     val feedItems = remember(messages, selectedModelId) {
@@ -1265,6 +1267,12 @@ fun ChatScreen(
                 viewModel.setLocalToolsEnabled(false)
                 scope.launch { viewModel.authPreferences.setLocalToolsInstalled(false) }
             },
+            mcpServers = mcpServers,
+            isMcpLoading = isMcpLoading,
+            onRefreshMcpServers = { viewModel.refreshMcpServers() },
+            onToggleMcpServer = { name, enabled -> viewModel.toggleMcpServer(name, enabled) },
+            onSaveMcpServer = { spec -> viewModel.saveMcpServer(spec) },
+            onDeleteMcpServer = { name -> viewModel.deleteMcpServer(name) },
             onDismiss = { showSettingsDialog = false }
         )
     }

@@ -289,4 +289,72 @@ object IdeApiClient {
             emptyList()
         }
     }
+
+    suspend fun getMcpConfig(): String? = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder().url("$baseUrl/api/mcp/config").get().build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string() ?: return@use null
+                    if (body.trim().startsWith("{")) {
+                        val obj = JSONObject(body)
+                        if (obj.has("content")) return@withContext obj.getString("content")
+                        return@withContext body
+                    }
+                    return@withContext body
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "getMcpConfig via /api/mcp/config failed: ${e.message}")
+        }
+
+        // Fallback to reading file directly via /api/file/read
+        val candidatePaths = listOf(
+            "/home/cat/.gemini/antigravity/mcp_config.json",
+            "${System.getProperty("user.home")}/.gemini/antigravity/mcp_config.json",
+            "/home/cat/.gemini/config/mcp_config.json"
+        )
+        for (p in candidatePaths) {
+            val content = readFile(p)
+            if (!content.isNullOrBlank()) return@withContext content
+            try {
+                val f = java.io.File(p)
+                if (f.exists()) return@withContext f.readText()
+            } catch (_: Exception) {}
+        }
+        null
+    }
+
+    suspend fun saveMcpConfig(content: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("content", content)
+            }.toString()
+            val req = Request.Builder()
+                .url("$baseUrl/api/mcp/config")
+                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) return@withContext true
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "saveMcpConfig via /api/mcp/config failed: ${e.message}")
+        }
+
+        val candidatePaths = listOf(
+            "/home/cat/.gemini/antigravity/mcp_config.json",
+            "${System.getProperty("user.home")}/.gemini/antigravity/mcp_config.json"
+        )
+        for (p in candidatePaths) {
+            val saved = saveFile(p, content)
+            if (saved) return@withContext true
+            try {
+                val f = java.io.File(p)
+                f.parentFile?.mkdirs()
+                f.writeText(content)
+                return@withContext true
+            } catch (_: Exception) {}
+        }
+        false
+    }
 }

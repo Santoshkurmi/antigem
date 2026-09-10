@@ -228,3 +228,33 @@ data class ModelQuota(
     val percentage: Int
         get() = remainingFraction?.let { (it * 100).toInt() } ?: 0
 }
+
+@Serializable
+data class McpToolInfo(
+    val name: String,
+    val description: String = "",
+    val inputSchema: String = ""
+)
+
+@Serializable
+data class McpServerSpec(
+    val serverName: String,
+    val command: String = "",
+    val args: List<String> = emptyList(),
+    val env: Map<String, String> = emptyMap(),
+    val serverUrl: String = "",
+    val headers: Map<String, String> = emptyMap(),
+    val disabled: Boolean = false,
+    val disabledTools: List<String> = emptyList()
+)
+
+@Serializable
+data class McpServerState(
+    val name: String,
+    val spec: McpServerSpec? = null,
+    val status: String = "MCP_SERVER_STATUS_UNKNOWN",
+    val error: String? = null,
+    val tools: List<McpToolInfo> = emptyList(),
+    val instructions: String? = null,
+    val isEnabled: Boolean = true
+)

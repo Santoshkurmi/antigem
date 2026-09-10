@@ -145,6 +145,7 @@ func main() {
 	mux.HandleFunc("/api/file/rename", h.FileRenameHandler)
 	mux.HandleFunc("/api/search", h.FileSearchHandler)
 	mux.HandleFunc("/api/upload", h.UploadHandler)
+	mux.HandleFunc("/api/mcp/config", h.McpConfigHandler)
 
 	// Git Source Control Endpoints
 	mux.HandleFunc("/api/git/status", h.GitStatusHandler)
