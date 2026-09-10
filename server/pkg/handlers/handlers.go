@@ -778,18 +778,23 @@ func (h *Handler) McpConfigHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	configPath := filepath.Join(h.Cfg.HomeDir, ".gemini", "antigravity", "mcp_config.json")
+	primaryConfigPath := filepath.Join(h.Cfg.HomeDir, ".gemini", "config", "mcp_config.json")
+	legacyConfigPath := filepath.Join(h.Cfg.HomeDir, ".gemini", "antigravity", "mcp_config.json")
+
 	if r.Method == "GET" {
-		content, err := os.ReadFile(configPath)
-		if err != nil {
-			fallback := filepath.Join(h.Cfg.HomeDir, ".gemini", "config", "mcp_config.json")
-			content, err = os.ReadFile(fallback)
-			if err != nil {
-				content = []byte("{}")
+		content, err := os.ReadFile(primaryConfigPath)
+		chosenPath := primaryConfigPath
+		if err != nil || len(strings.TrimSpace(string(content))) == 0 {
+			legacyContent, err2 := os.ReadFile(legacyConfigPath)
+			if err2 == nil && len(strings.TrimSpace(string(legacyContent))) > 0 {
+				content = legacyContent
+				chosenPath = legacyConfigPath
+			} else if err != nil {
+				content = []byte("{\n  \"mcpServers\": {}\n}")
 			}
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"path":    configPath,
+			"path":    chosenPath,
 			"content": string(content),
 		})
 		return
@@ -803,14 +808,20 @@ func (h *Handler) McpConfigHandler(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
 			return
 		}
-		_ = os.MkdirAll(filepath.Dir(configPath), 0755)
-		if err := os.WriteFile(configPath, []byte(req.Content), 0644); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		// Write to both primary (~/.gemini/config/mcp_config.json) and legacy (~/.gemini/antigravity/mcp_config.json)
+		_ = os.MkdirAll(filepath.Dir(primaryConfigPath), 0755)
+		errPrimary := os.WriteFile(primaryConfigPath, []byte(req.Content), 0644)
+
+		_ = os.MkdirAll(filepath.Dir(legacyConfigPath), 0755)
+		errLegacy := os.WriteFile(legacyConfigPath, []byte(req.Content), 0644)
+
+		if errPrimary != nil && errLegacy != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": errPrimary.Error()})
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"success": true,
-			"path":    configPath,
+			"path":    primaryConfigPath,
 		})
 		return
 	}

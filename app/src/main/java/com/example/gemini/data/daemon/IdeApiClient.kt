@@ -290,6 +290,10 @@ object IdeApiClient {
         }
     }
 
+    fun getEffectiveConfigPath(): String {
+        return "~/.gemini/config/mcp_config.json"
+    }
+
     suspend fun getMcpConfig(): String? = withContext(Dispatchers.IO) {
         try {
             val req = Request.Builder().url("$baseUrl/api/mcp/config").get().build()
@@ -307,21 +311,6 @@ object IdeApiClient {
         } catch (e: Exception) {
             Log.w(TAG, "getMcpConfig via /api/mcp/config failed: ${e.message}")
         }
-
-        // Fallback to reading file directly via /api/file/read
-        val candidatePaths = listOf(
-            "/home/cat/.gemini/antigravity/mcp_config.json",
-            "${System.getProperty("user.home")}/.gemini/antigravity/mcp_config.json",
-            "/home/cat/.gemini/config/mcp_config.json"
-        )
-        for (p in candidatePaths) {
-            val content = readFile(p)
-            if (!content.isNullOrBlank()) return@withContext content
-            try {
-                val f = java.io.File(p)
-                if (f.exists()) return@withContext f.readText()
-            } catch (_: Exception) {}
-        }
         null
     }
 
@@ -335,26 +324,11 @@ object IdeApiClient {
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
             client.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) return@withContext true
+                return@withContext resp.isSuccessful
             }
         } catch (e: Exception) {
             Log.w(TAG, "saveMcpConfig via /api/mcp/config failed: ${e.message}")
+            false
         }
-
-        val candidatePaths = listOf(
-            "/home/cat/.gemini/antigravity/mcp_config.json",
-            "${System.getProperty("user.home")}/.gemini/antigravity/mcp_config.json"
-        )
-        for (p in candidatePaths) {
-            val saved = saveFile(p, content)
-            if (saved) return@withContext true
-            try {
-                val f = java.io.File(p)
-                f.parentFile?.mkdirs()
-                f.writeText(content)
-                return@withContext true
-            } catch (_: Exception) {}
-        }
-        false
     }
 }

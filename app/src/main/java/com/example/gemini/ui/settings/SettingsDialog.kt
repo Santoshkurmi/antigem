@@ -108,6 +108,9 @@ fun SettingsDialog(
     onResetLocalTools: () -> Unit = {},
     mcpServers: List<com.example.gemini.domain.model.McpServerState> = emptyList(),
     isMcpLoading: Boolean = false,
+    mcpErrorMessage: String? = null,
+    mcpStatusMessage: String? = null,
+    onClearMcpStatus: () -> Unit = {},
     onRefreshMcpServers: () -> Unit = {},
     onToggleMcpServer: (String, Boolean) -> Unit = { _, _ -> },
     onSaveMcpServer: (com.example.gemini.domain.model.McpServerSpec) -> Unit = {},
@@ -251,6 +254,9 @@ fun SettingsDialog(
                     SettingsSection.MCP -> McpSubScreen(
                         mcpServers = mcpServers,
                         isLoading = isMcpLoading,
+                        errorMessage = mcpErrorMessage,
+                        statusMessage = mcpStatusMessage,
+                        onClearStatus = onClearMcpStatus,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onRefresh = onRefreshMcpServers,
@@ -998,6 +1004,9 @@ private fun ServersSubScreen(
 private fun McpSubScreen(
     mcpServers: List<com.example.gemini.domain.model.McpServerState>,
     isLoading: Boolean,
+    errorMessage: String? = null,
+    statusMessage: String? = null,
+    onClearStatus: () -> Unit = {},
     cardBg: Color,
     cardBorder: BorderStroke,
     onRefresh: () -> Unit,
@@ -1018,6 +1027,90 @@ private fun McpSubScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // Status banner
+        if (!statusMessage.isNullOrBlank()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = QuotaGreen.copy(alpha = 0.12f)),
+                border = BorderStroke(1.dp, QuotaGreen.copy(alpha = 0.35f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = QuotaGreen,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = statusMessage,
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = onClearStatus,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Dismiss",
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Error banner
+        if (!errorMessage.isNullOrBlank()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = errorMessage,
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = onClearStatus,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Dismiss",
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         // Banner card
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -1057,10 +1150,12 @@ private fun McpSubScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Global config: ~/.gemini/antigravity/mcp_config.json",
-                            fontSize = 11.5.sp,
+                            text = "Global config: ~/.gemini/config/mcp_config.json",
+                            fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -1136,9 +1231,10 @@ private fun McpSubScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             val presets = listOf(
-                Triple("Filesystem", "npx", listOf("-y", "@modelcontextprotocol/server-filesystem", "/home/cat")),
-                Triple("SQLite", "npx", listOf("-y", "@modelcontextprotocol/server-sqlite", "--db", "/home/cat/test.db")),
-                Triple("Fetch", "uvx", listOf("mcp-server-fetch"))
+                Triple("SQLite", "npx", listOf("-y", "@modelcontextprotocol/server-sqlite", "--db", "./data.db")),
+                Triple("Memory", "npx", listOf("-y", "@modelcontextprotocol/server-memory")),
+                Triple("Fetch", "npx", listOf("-y", "@modelcontextprotocol/server-fetch")),
+                Triple("Time", "npx", listOf("-y", "@modelcontextprotocol/server-time"))
             )
             presets.forEach { (pName, cmd, args) ->
                 Surface(
@@ -1158,7 +1254,7 @@ private fun McpSubScreen(
                         }
                 ) {
                     Box(
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -1651,7 +1747,7 @@ private fun AddEditMcpServerDialog(
                         value = argsText,
                         onValueChange = { argsText = it },
                         label = { Text("Arguments (space separated)") },
-                        placeholder = { Text("e.g. -y @modelcontextprotocol/server-filesystem /home/cat") },
+                        placeholder = { Text("e.g. -y @modelcontextprotocol/server-filesystem .") },
                         minLines = 2,
                         maxLines = 4,
                         modifier = Modifier.fillMaxWidth()

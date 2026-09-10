@@ -257,6 +257,8 @@ fun ChatScreen(
     val isLoadingConversation by viewModel.isLoadingConversation.collectAsState()
     val mcpServers by viewModel.mcpServers.collectAsState()
     val isMcpLoading by viewModel.isMcpLoading.collectAsState()
+    val mcpErrorMessage by viewModel.mcpErrorMessage.collectAsState()
+    val mcpStatusMessage by viewModel.mcpStatusMessage.collectAsState()
 
     // Granular block-level feed item expansion from pre-warmed background cache (0ms UI thread work)
     val feedItems = remember(messages, selectedModelId) {
@@ -1269,6 +1271,9 @@ fun ChatScreen(
             },
             mcpServers = mcpServers,
             isMcpLoading = isMcpLoading,
+            mcpErrorMessage = mcpErrorMessage,
+            mcpStatusMessage = mcpStatusMessage,
+            onClearMcpStatus = { viewModel.clearMcpStatus() },
             onRefreshMcpServers = { viewModel.refreshMcpServers() },
             onToggleMcpServer = { name, enabled -> viewModel.toggleMcpServer(name, enabled) },
             onSaveMcpServer = { spec -> viewModel.saveMcpServer(spec) },

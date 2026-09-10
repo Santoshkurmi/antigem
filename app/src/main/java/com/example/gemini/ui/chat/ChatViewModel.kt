@@ -143,6 +143,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _mcpErrorMessage = MutableStateFlow<String?>(null)
     val mcpErrorMessage: StateFlow<String?> = _mcpErrorMessage.asStateFlow()
 
+    private val _mcpStatusMessage = MutableStateFlow<String?>(null)
+    val mcpStatusMessage: StateFlow<String?> = _mcpStatusMessage.asStateFlow()
+
+    fun clearMcpStatus() {
+        _mcpStatusMessage.value = null
+        _mcpErrorMessage.value = null
+    }
+
     fun addAttachmentsFromUris(uris: List<android.net.Uri>, context: android.content.Context) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
@@ -2502,6 +2510,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isMcpLoading.value = true
             _mcpErrorMessage.value = null
+            _mcpStatusMessage.value = null
             try {
                 val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
                 val res = agyHubClient.refreshMcpServers(hubUrl)
@@ -2510,6 +2519,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 delay(400)
                 loadMcpServers()
+                val count = _mcpServers.value.size
+                val toolsCount = _mcpServers.value.sumOf { it.tools.size }
+                _mcpStatusMessage.value = "Refreshed: $count server(s) configured, $toolsCount tool(s) discovered"
             } catch (e: Exception) {
                 _mcpErrorMessage.value = e.message
                 _isMcpLoading.value = false
@@ -2549,6 +2561,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 } else it
             }
+            _mcpStatusMessage.value = if (enabled) "Enabled '$serverName'" else "Disabled '$serverName'"
         }
     }
 
@@ -2556,6 +2569,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isMcpLoading.value = true
             _mcpErrorMessage.value = null
+            _mcpStatusMessage.value = null
             try {
                 val rawConfig = com.example.gemini.data.daemon.IdeApiClient.getMcpConfig() ?: "{}"
                 val json = if (rawConfig.trim().startsWith("{")) org.json.JSONObject(rawConfig) else org.json.JSONObject()
@@ -2598,6 +2612,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                 delay(500)
                 loadMcpServers()
+                _mcpStatusMessage.value = "Saved '${spec.serverName}' and refreshed."
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "saveMcpServer error: ${e.message}", e)
                 _mcpErrorMessage.value = e.message
@@ -2610,6 +2625,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isMcpLoading.value = true
             _mcpErrorMessage.value = null
+            _mcpStatusMessage.value = null
             try {
                 val rawConfig = com.example.gemini.data.daemon.IdeApiClient.getMcpConfig() ?: "{}"
                 val json = if (rawConfig.trim().startsWith("{")) org.json.JSONObject(rawConfig) else org.json.JSONObject()
@@ -2624,6 +2640,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                 delay(500)
                 loadMcpServers()
+                _mcpStatusMessage.value = "Removed '$serverName'."
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "deleteMcpServer error: ${e.message}", e)
                 _mcpErrorMessage.value = e.message
