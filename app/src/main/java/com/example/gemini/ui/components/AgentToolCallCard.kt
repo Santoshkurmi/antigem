@@ -78,7 +78,10 @@ fun AgentToolCallCard(
     val isFind = toolCall.name == "find" || toolCall.name == "find_by_name"
     val isGrep = toolCall.name == "grep_search" || toolCall.name == "code_search"
     val isGenImg = toolCall.name == "generate_image" || toolCall.name == "generateImage"
-    val isBash = toolCall.name == "bash" || toolCall.name == "run_command" || toolCall.name == "terminal" || (!isSearch && !isReader && !isMath && !isViewFile && !isEditFile && !isListDir && !isFind && !isGrep && !isGenImg)
+    val isMcp = toolCall.name.startsWith("mcp_") || toolCall.name == "call_mcp_tool" ||
+        toolCall.interactionType == "mcp" || toolCall.name.contains("mcp", ignoreCase = true) ||
+        toolCall.name == "read_resource" || toolCall.name == "list_resources"
+    val isBash = toolCall.name == "bash" || toolCall.name == "run_command" || toolCall.name == "terminal" || (!isSearch && !isReader && !isMath && !isViewFile && !isEditFile && !isListDir && !isFind && !isGrep && !isGenImg && !isMcp)
 
     val isImageOutput = isGenImg || toolCall.output.startsWith("data:image/") ||
         (toolCall.output.startsWith("file://") && toolCall.output.matches(Regex(".*\\.(png|jpe?g|webp|gif)(\\?.*)?$", RegexOption.IGNORE_CASE)))
@@ -201,6 +204,7 @@ fun AgentToolCallCard(
                         isListDir -> Icons.Default.Folder
                         isFind || isGrep -> Icons.Default.Search
                         isGenImg -> Icons.Default.Image
+                        isMcp -> Icons.Default.Build
                         else -> Icons.Default.Terminal
                     }
                     Icon(
@@ -215,6 +219,7 @@ fun AgentToolCallCard(
 
                 // Action Label & Command
                 val actionPrefix = when {
+                    isPendingApproval && isMcp -> "Approve MCP Tool:"
                     isPendingApproval -> "Approval Needed:"
                     isRunning && isSearch -> "Searching Web:"
                     isRunning && isReader -> "Fetching Page:"
@@ -224,6 +229,7 @@ fun AgentToolCallCard(
                     isRunning && isListDir -> "Listing Directory:"
                     isRunning && (isFind || isGrep) -> "Searching Code:"
                     isRunning && isGenImg -> "Generating Image:"
+                    isRunning && isMcp -> "Executing MCP Tool:"
                     isRunning -> "Executing in Termux:"
 
                     isSuccess && isSearch -> "Web Search:"
@@ -234,6 +240,7 @@ fun AgentToolCallCard(
                     isSuccess && isListDir -> "Listed Directory:"
                     isSuccess && (isFind || isGrep) -> "Searched Code:"
                     isSuccess && isGenImg -> "Generated Image:"
+                    isSuccess && isMcp -> "MCP Tool Output:"
                     isSuccess -> "Executed:"
 
                     isTerminated -> "Terminated:"
@@ -262,7 +269,7 @@ fun AgentToolCallCard(
 
                 Text(
                     text = toolCall.command,
-                    fontFamily = if (isBash) FontFamily.Monospace else FontFamily.Default,
+                    fontFamily = if (isBash || isMcp) FontFamily.Monospace else FontFamily.Default,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -342,6 +349,7 @@ fun AgentToolCallCard(
             // Pending Approval Action Bar
             if (isPendingApproval) {
                 val pendingTitle = when {
+                    isMcp -> "AI wants to execute this MCP tool:"
                     isEditFile -> "AI wants to modify this file:"
                     isViewFile -> "AI wants to view this file:"
                     isListDir -> "AI wants to inspect this directory:"
@@ -367,7 +375,7 @@ fun AgentToolCallCard(
                     ) {
                         Text(
                             text = if (isBash) "$ ${toolCall.command}" else toolCall.command,
-                            fontFamily = if (isBash) FontFamily.Monospace else FontFamily.Default,
+                            fontFamily = if (isBash || isMcp) FontFamily.Monospace else FontFamily.Default,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
                             color = ClaudeTerracotta,
@@ -400,7 +408,7 @@ fun AgentToolCallCard(
                         ) {
                             Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = if (isBash) "Run Command" else "Allow", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                            Text(text = if (isBash) "Run Command" else if (isMcp) "Approve MCP" else "Allow", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -556,11 +564,12 @@ fun AgentToolCallCard(
                             isGrep -> "Grep: ${toolCall.command}"
                             isFind -> "Find: ${toolCall.command}"
                             isGenImg -> "Prompt: ${toolCall.command}"
-                            else -> "$ ${toolCall.command}"
+                            isMcp -> "MCP: ${toolCall.command}"
+                            else -> if (isBash) "$ ${toolCall.command}" else toolCall.command
                         }
                         Text(
                             text = commandPrefix,
-                            fontFamily = if (isBash) FontFamily.Monospace else FontFamily.Default,
+                            fontFamily = if (isBash || isMcp) FontFamily.Monospace else FontFamily.Default,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.5.sp,
                             color = ClaudeTerracotta,
@@ -593,6 +602,7 @@ fun AgentToolCallCard(
                             isRunning && isEditFile -> "Applying file modifications..."
                             isRunning && isListDir -> "Scanning directory..."
                             isRunning && (isFind || isGrep) -> "Searching..."
+                            isRunning && isMcp -> "Executing MCP tool..."
                             isRunning && isBash -> "Running in Termux..."
                             isRunning -> "Processing..."
                             isPendingApproval -> "(Waiting for approval)"
@@ -600,6 +610,7 @@ fun AgentToolCallCard(
                             isEditFile -> "(File modification completed)"
                             isListDir -> "(Directory contents scanned)"
                             isFind || isGrep -> "(Search completed - no output)"
+                            isMcp -> "(MCP tool executed - no output)"
                             else -> "(No output returned)"
                         }
                         Text(

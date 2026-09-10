@@ -19,7 +19,10 @@ data class ToolCall(
     val status: String = "RUNNING", // RUNNING, SUCCESS, FAILED, TERMINATED
     val output: String = "",
     val exitCode: Int? = null,
-    val durationMs: Long? = null
+    val durationMs: Long? = null,
+    val stepIndex: Int? = null,
+    val trajectoryId: String? = null,
+    val interactionType: String? = null
 )
 
 @Serializable

@@ -1641,7 +1641,17 @@ fun parseMarkdownBlocks(
             val toolMarkerMatch = TOOL_MARKER_REGEX.find(line)
             if (toolMarkerMatch != null) {
                 val toolId = toolMarkerMatch.groupValues[1]
+                val handledIds = result.filterIsInstance<MarkdownBlock.AgentTool>().map { it.toolCall.id }.toSet()
+                val targetStep = toolId.substringAfterLast("_")
                 val matchedTool = toolCalls.find { it.id == toolId }
+                    ?: toolCalls.find { tc ->
+                        tc.id !in handledIds && tc.id.substringAfterLast("_") == targetStep
+                    }
+                    ?: toolCalls.find { tc ->
+                        tc.id !in handledIds && (
+                            com.example.gemini.data.remote.AgyHubClient.normalizeToolName(tc.name) == com.example.gemini.data.remote.AgyHubClient.normalizeToolName(toolId.substringBefore("_").removePrefix("tool_"))
+                        )
+                    }
                 if (matchedTool != null) {
                     result.add(MarkdownBlock.AgentTool(matchedTool))
                 }

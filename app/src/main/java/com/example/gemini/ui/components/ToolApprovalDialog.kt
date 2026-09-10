@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,169 +40,143 @@ import com.example.gemini.theme.ClaudeTerracotta
 import com.example.gemini.theme.QuotaGreen
 import com.example.gemini.ui.chat.PendingToolApproval
 
+/**
+ * Docked inline tool approval panel positioned directly above the chat input box.
+ * Never dismissed accidentally by clicks outside; renders clean rows of approval requests.
+ */
 @Composable
-fun ToolApprovalDialog(
+fun ToolApprovalDockedPanel(
     pendingApprovals: List<PendingToolApproval>,
     onApprove: (ToolCall, String, String) -> Unit,
     onReject: (ToolCall, String) -> Unit,
     onApproveAll: () -> Unit,
     onRejectAll: () -> Unit,
-    onDismiss: () -> Unit
+    modifier: Modifier = Modifier
 ) {
     if (pendingApprovals.isEmpty()) return
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true,
-            usePlatformDefaultWidth = false
-        )
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 10.dp, bottomEnd = 10.dp),
+        color = Color(0xFF13141F),
+        border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f)),
+        shadowElevation = 8.dp
     ) {
-        Card(
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .widthIn(max = 520.dp)
-                .padding(vertical = 20.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
-            border = androidx.compose.foundation.BorderStroke(
-                1.5.dp,
-                Color(0xFFF59E0B).copy(alpha = 0.55f)
-            )
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp)
+            // Header Row: Status badge & Batch buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Header
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFF59E0B).copy(alpha = 0.16f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Security,
-                                contentDescription = null,
-                                tint = Color(0xFFF59E0B),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Text(
-                                text = "Permission Required",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = if (pendingApprovals.size == 1) "1 command requires your approval"
-                                else "${pendingApprovals.size} commands require approval",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(32.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFF59E0B).copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Dismiss",
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp)
+                            imageVector = Icons.Outlined.Security,
+                            contentDescription = null,
+                            tint = Color(0xFFF59E0B),
+                            modifier = Modifier.size(14.dp)
                         )
                     }
-                }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
-                HorizontalDivider(
-                    thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // List of pending approval tools (scrollable if many)
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f, fill = false)
-                        .heightIn(max = 420.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(pendingApprovals, key = { it.toolCall.id }) { item ->
-                        ToolApprovalItemCard(
-                            approval = item,
-                            onApprove = { scope -> onApprove(item.toolCall, item.messageId, scope) },
-                            onReject = { onReject(item.toolCall, item.messageId) }
-                        )
-                    }
-                }
-
-                // Batch Actions Footer (if multiple)
-                if (pendingApprovals.size > 1) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider(
-                        thickness = 0.5.dp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                    Text(
+                        text = "Permission Required",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFF59E0B),
+                        fontSize = 13.sp
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFFF59E0B).copy(alpha = 0.2f))
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
                     ) {
-                        OutlinedButton(
+                        Text(
+                            text = "${pendingApprovals.size}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFF59E0B)
+                        )
+                    }
+                }
+
+                if (pendingApprovals.size > 1) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        TextButton(
                             onClick = onRejectAll,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = Color(0xFFEF4444)
-                            ),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                Color(0xFFEF4444).copy(alpha = 0.4f)
-                            )
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(26.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Reject All", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "Reject All",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFEF4444)
+                            )
                         }
 
                         Button(
                             onClick = onApproveAll,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = ClaudeTerracotta
-                            )
+                            shape = RoundedCornerShape(6.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            modifier = Modifier.height(26.dp)
                         ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(15.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Accept All", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "Accept All",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Rows list: max height ensures chat isn't obscured
+            if (pendingApprovals.size == 1) {
+                val item = pendingApprovals.first()
+                ToolApprovalDockedItem(
+                    approval = item,
+                    onApprove = { scope -> onApprove(item.toolCall, item.messageId, scope) },
+                    onReject = { onReject(item.toolCall, item.messageId) }
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 250.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(pendingApprovals, key = { it.toolCall.id }) { item ->
+                        ToolApprovalDockedItem(
+                            approval = item,
+                            onApprove = { scope -> onApprove(item.toolCall, item.messageId, scope) },
+                            onReject = { onReject(item.toolCall, item.messageId) }
+                        )
                     }
                 }
             }
@@ -210,7 +185,7 @@ fun ToolApprovalDialog(
 }
 
 @Composable
-private fun ToolApprovalItemCard(
+fun ToolApprovalDockedItem(
     approval: PendingToolApproval,
     onApprove: (String) -> Unit,
     onReject: () -> Unit
@@ -241,27 +216,20 @@ private fun ToolApprovalItemCard(
         else -> Icons.Default.Build
     }
 
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF0E0F17)
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-        )
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFF0C0D15),
+        border = BorderStroke(1.dp, Color(0xFF25273D))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(10.dp)
         ) {
-            // Header Row: Type Badge + Expand/Collapse Indicator
+            // Header: Tool badge + expand toggle
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded },
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -298,88 +266,68 @@ private fun ToolApprovalItemCard(
                     )
                 }
 
-                // Expand / Collapse text button
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(start = 6.dp)
-                ) {
+                if (toolCall.command.length > 50 || toolCall.command.contains("\n")) {
                     Text(
                         text = if (isExpanded) "Collapse" else "Expand",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = ClaudeTerracotta
-                    )
-                    Icon(
-                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        tint = ClaudeTerracotta,
-                        modifier = Modifier.size(15.dp)
+                        color = ClaudeTerracotta,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { isExpanded = !isExpanded }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // Command Display Box
+            // Command / Action Preview
             Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xFF07080D),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF222436)),
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFF05060A),
+                border = BorderStroke(1.dp, Color(0xFF1B1C2A)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    if (isExpanded) {
-                        // Fully expanded command with copy action
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Text(
-                                text = if (isBash) "$ ${toolCall.command}" else toolCall.command,
-                                fontFamily = if (isBash) FontFamily.Monospace else FontFamily.Default,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = ClaudeTerracotta,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(end = 6.dp)
-                            )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isBash) "$ ${toolCall.command}" else toolCall.command,
+                        fontFamily = if (isBash) FontFamily.Monospace else FontFamily.Default,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = ClaudeTerracotta,
+                        maxLines = if (isExpanded) Int.MAX_VALUE else 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                            IconButton(
-                                onClick = {
-                                    val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clip.setPrimaryClip(ClipData.newPlainText("command", toolCall.command))
-                                    Toast.makeText(context, "Command copied", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.ContentCopy,
-                                    contentDescription = "Copy command",
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                        }
-                    } else {
-                        // Collapsed single/two-line preview
-                        Text(
-                            text = if (isBash) "$ ${toolCall.command}" else toolCall.command,
-                            fontFamily = if (isBash) FontFamily.Monospace else FontFamily.Default,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = ClaudeTerracotta,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                    IconButton(
+                        onClick = {
+                            val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clip.setPrimaryClip(ClipData.newPlainText("command", toolCall.command))
+                            Toast.makeText(context, "Command copied", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ContentCopy,
+                            contentDescription = "Copy command",
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier.size(13.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Action Buttons: Reject, Run Once, & Scope Options
+            // Actions Row: Reject, Run Once / Accept, Scope Dropdown
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -388,19 +336,19 @@ private fun ToolApprovalItemCard(
                 OutlinedButton(
                     onClick = onReject,
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                    modifier = Modifier.height(30.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                        contentColor = Color(0xFFEF4444)
                     ),
-                    border = androidx.compose.foundation.BorderStroke(
+                    border = BorderStroke(
                         1.dp,
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                        Color(0xFFEF4444).copy(alpha = 0.4f)
                     )
                 ) {
-                    Icon(imageVector = Icons.Default.Close, contentDescription = null, modifier = Modifier.size(13.dp))
+                    Icon(imageVector = Icons.Default.Close, contentDescription = null, modifier = Modifier.size(12.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Reject", fontSize = 11.5.sp)
+                    Text(text = "Reject", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -409,10 +357,10 @@ private fun ToolApprovalItemCard(
                     onClick = { onApprove("PERMISSION_SCOPE_ONCE") },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp),
+                    modifier = Modifier.height(30.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(13.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = if (isBash) "Run Once" else "Accept",
@@ -426,13 +374,13 @@ private fun ToolApprovalItemCard(
                     Box {
                         IconButton(
                             onClick = { showScopeMenu = true },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(30.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "Approval options",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                         }
                         DropdownMenu(
@@ -442,12 +390,12 @@ private fun ToolApprovalItemCard(
                             DropdownMenuItem(
                                 text = {
                                     Column {
-                                        Text("Always in This Chat", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                        Text("Allow this command for this conversation", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Always in This Chat", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                                        Text("Allow this command for this conversation", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Check, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.size(15.dp))
                                 },
                                 onClick = {
                                     showScopeMenu = false
@@ -457,12 +405,12 @@ private fun ToolApprovalItemCard(
                             DropdownMenuItem(
                                 text = {
                                     Column {
-                                        Text("Always in Workspace", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                        Text("Allow across entire workspace", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Always in Workspace", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                                        Text("Allow across entire workspace", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 },
                                 leadingIcon = {
-                                    Icon(Icons.Outlined.Security, contentDescription = null, tint = QuotaGreen, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Outlined.Security, contentDescription = null, tint = QuotaGreen, modifier = Modifier.size(15.dp))
                                 },
                                 onClick = {
                                     showScopeMenu = false
@@ -474,6 +422,42 @@ private fun ToolApprovalItemCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Floating Dialog variant retained for compatibility.
+ * Configured so clicking outside DOES NOT dismiss.
+ */
+@Composable
+fun ToolApprovalDialog(
+    pendingApprovals: List<PendingToolApproval>,
+    onApprove: (ToolCall, String, String) -> Unit,
+    onReject: (ToolCall, String) -> Unit,
+    onApproveAll: () -> Unit,
+    onRejectAll: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (pendingApprovals.isEmpty()) return
+
+    Dialog(
+        onDismissRequest = { /* Do not dismiss on outside click */ },
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        ToolApprovalDockedPanel(
+            pendingApprovals = pendingApprovals,
+            onApprove = onApprove,
+            onReject = onReject,
+            onApproveAll = onApproveAll,
+            onRejectAll = onRejectAll,
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .padding(16.dp)
+        )
     }
 }
 

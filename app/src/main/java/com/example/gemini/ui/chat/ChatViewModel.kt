@@ -516,7 +516,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val currentPlannerThoughts = java.util.concurrent.ConcurrentHashMap<Int, String>()
     private val currentPlannerResponses = java.util.concurrent.ConcurrentHashMap<Int, String>()
     private val currentActiveToolsMap = java.util.concurrent.ConcurrentHashMap<String, com.example.gemini.domain.model.ToolCall>()
-    private val currentTurnToolMarkers = java.util.concurrent.ConcurrentHashMap<Int, String>()
+    private val currentTurnToolMarkers = java.util.concurrent.ConcurrentHashMap<Int, java.util.concurrent.CopyOnWriteArrayList<String>>()
+    private val userRespondedToolIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val toolStepIndices = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    @Volatile private var currentWaitingStepIndex: Int? = null
 
     private fun registerOrUpdateTurnTool(
         tool: com.example.gemini.domain.model.ToolCall,
@@ -533,23 +536,48 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val targetId = existingEntry?.key ?: tool.id
-        val unifiedTool = tool.copy(id = targetId, name = normName)
+        val actualStepIdx = tool.stepIndex ?: stepIndex
+        toolStepIndices[tool.id] = actualStepIdx
+        toolStepIndices[targetId] = actualStepIdx
+
+        if (tool.status == "PENDING_APPROVAL") {
+            currentWaitingStepIndex = actualStepIdx
+        }
+
+        val isUserResponded = userRespondedToolIds.contains(tool.id) ||
+                userRespondedToolIds.contains(targetId) ||
+                userRespondedToolIds.contains("step_$actualStepIdx")
+
+        if (isUserResponded && tool.status == "PENDING_APPROVAL") {
+            return
+        }
+
+        val unifiedTool = tool.copy(
+            id = targetId,
+            name = normName,
+            stepIndex = actualStepIdx,
+            trajectoryId = tool.trajectoryId ?: currentTrajectoryId
+        )
 
         if (existingEntry != null && existingEntry.key != tool.id) {
             currentActiveToolsMap.remove(tool.id)
+            val oldIdx = toolStepIndices.remove(tool.id)
+            if (oldIdx != null && !toolStepIndices.containsKey(targetId)) {
+                toolStepIndices[targetId] = oldIdx
+            }
         }
         currentActiveToolsMap[targetId] = unifiedTool
 
+        val initialStepIndex = toolStepIndices.getOrPut(targetId) { actualStepIdx }
+
         val oldMarker = if (existingEntry != null && existingEntry.key != tool.id) "<!-- tool_call:${tool.id} -->" else null
         if (oldMarker != null) {
-            val oldStep = currentTurnToolMarkers.entries.find { it.value == oldMarker }?.key
-            if (oldStep != null) {
-                currentTurnToolMarkers.remove(oldStep)
-            }
+            currentTurnToolMarkers.values.forEach { it.remove(oldMarker) }
         }
-        val prevStepWithMarker = currentTurnToolMarkers.entries.find { it.value == "<!-- tool_call:$targetId -->" }?.key
-        if (prevStepWithMarker == null) {
-            currentTurnToolMarkers[stepIndex] = "<!-- tool_call:$targetId -->"
+        val targetMarker = "<!-- tool_call:$targetId -->"
+        val alreadyPresent = currentTurnToolMarkers.values.any { it.contains(targetMarker) }
+        if (!alreadyPresent) {
+            currentTurnToolMarkers.getOrPut(initialStepIndex) { java.util.concurrent.CopyOnWriteArrayList() }.add(targetMarker)
         }
 
         if (normName == "generate_image" && unifiedTool.output.isNotBlank()) {
@@ -979,6 +1007,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentPlannerResponses.clear()
         currentActiveToolsMap.clear()
         currentTurnToolMarkers.clear()
+        toolStepIndices.clear()
         _isStreaming.value = false
         _bridgeStatusMessage.value = null
 
@@ -1017,6 +1046,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentPlannerResponses.clear()
         currentActiveToolsMap.clear()
         currentTurnToolMarkers.clear()
+        toolStepIndices.clear()
+        userRespondedToolIds.clear()
+        currentTrajectoryId = ""
+        currentWaitingStepIndex = null
         _isStreaming.value = false
         _bridgeStatusMessage.value = null
         _messages.value = emptyList()
@@ -1084,13 +1117,41 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                             val (parsedMessages, isRunning, isWaiting) = withContext(Dispatchers.Default) {
                                 if (stepsArr != null && stepsArr.length() > 0) {
-                                    val parsed = agyHubClient.parseStepsArrayToChatMessages(stepsArr, conversationId)
+                                    val parsed = agyHubClient.parseStepsArrayToChatMessages(stepsArr, conversationId, status).toMutableList()
                                     val lastStep = stepsArr.optJSONObject(stepsArr.length() - 1)
                                     val lastStatus = lastStep?.optString("status", "") ?: ""
-                                    val running = status.contains("RUNNING", ignoreCase = true) ||
-                                            lastStatus.contains("RUNNING", ignoreCase = true)
-                                    val waiting = status.contains("WAITING", ignoreCase = true) ||
-                                            lastStatus.contains("WAITING", ignoreCase = true)
+                                    val hasRunningStep = status.contains("RUNNING", ignoreCase = true) ||
+                                            lastStatus.contains("RUNNING", ignoreCase = true) ||
+                                            (0 until stepsArr.length()).any {
+                                                val s = stepsArr.optJSONObject(it) ?: return@any false
+                                                val sStatus = s.optString("status", "")
+                                                val sType = s.optString("type", "")
+                                                val isDone = sStatus.contains("SUCCESS", ignoreCase = true) ||
+                                                        sStatus.contains("DONE", ignoreCase = true) ||
+                                                        sStatus.contains("COMPLET", ignoreCase = true) ||
+                                                        sStatus.contains("FAIL", ignoreCase = true) ||
+                                                        sStatus.contains("ERROR", ignoreCase = true)
+                                                if (isDone) return@any false
+
+                                                sStatus.contains("RUN", ignoreCase = true) ||
+                                                        (s.has("mcpTool") && !s.getJSONObject("mcpTool").has("result")) ||
+                                                        (s.has("callMcpTool") && !s.getJSONObject("callMcpTool").has("result")) ||
+                                                        sType.contains("MCP") ||
+                                                        (s.has("runCommand") && !s.getJSONObject("runCommand").has("exitCode") && !s.getJSONObject("runCommand").has("output"))
+                                            }
+                                    val hasWaitingStep = status.contains("WAITING", ignoreCase = true) ||
+                                            lastStatus.contains("WAITING", ignoreCase = true) ||
+                                            (0 until stepsArr.length()).any {
+                                                val s = stepsArr.optJSONObject(it) ?: return@any false
+                                                val sStatus = s.optString("status", "")
+                                                val sType = s.optString("type", "")
+                                                sStatus.contains("WAIT", ignoreCase = true) ||
+                                                        sType.contains("CONFIRM", ignoreCase = true) ||
+                                                        s.has("requestedInteraction") ||
+                                                        s.has("permission")
+                                            }
+                                    val running = hasRunningStep
+                                    val waiting = hasWaitingStep
 
                                     if (running || waiting) {
                                         var lastUserStepIdx = -1
@@ -1102,6 +1163,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                             }
                                         }
                                         val startTurnIdx = (lastUserStepIdx + 1).coerceAtLeast(0)
+                                        currentTurnStartStep = startTurnIdx
                                         for (k in startTurnIdx until stepsArr.length()) {
                                             val st = stepsArr.optJSONObject(k) ?: continue
                                             val stepInfo = st.optJSONObject("metadata")?.optJSONObject("sourceTrajectoryStepInfo")
@@ -1110,7 +1172,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                                 st.has("stepIndex") -> st.getInt("stepIndex")
                                                 else -> k
                                             }
-                                            val tool = agyHubClient.extractToolCallFromStep(st, stepIndex, conversationId)
+                                            val tool = agyHubClient.extractToolCallFromStep(st, stepIndex, conversationId, status)
                                             if (tool != null) {
                                                 registerOrUpdateTurnTool(tool, stepIndex)
                                             } else {
@@ -1128,6 +1190,35 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                                 if (resp.isNotBlank()) currentPlannerResponses[stepIndex] = resp
                                             }
                                         }
+
+                                        // Ensure active tools (including RUNNING and PENDING_APPROVAL) are attached to the assistant message
+                                        if (currentActiveToolsMap.isNotEmpty() || running || waiting) {
+                                            val lastAssistant = parsed.lastOrNull { it.role == MessageRole.ASSISTANT }
+                                            if (lastAssistant != null) {
+                                                val mergedTools = (lastAssistant.toolCalls + currentActiveToolsMap.values)
+                                                    .distinctBy { it.id }
+                                                    .map { t -> currentActiveToolsMap[t.id] ?: t }
+                                                val updatedLast = lastAssistant.copy(
+                                                    toolCalls = mergedTools,
+                                                    isStreaming = running && !waiting
+                                                )
+                                                val idx = parsed.indexOfLast { it.id == lastAssistant.id }
+                                                if (idx != -1) {
+                                                    parsed[idx] = updatedLast
+                                                }
+                                            } else {
+                                                val newAssistantMsg = ChatMessage(
+                                                    id = "assistant_${conversationId}_${System.currentTimeMillis()}",
+                                                    conversationId = conversationId,
+                                                    role = MessageRole.ASSISTANT,
+                                                    content = "",
+                                                    thoughtText = currentPlannerThoughts.values.lastOrNull(),
+                                                    toolCalls = currentActiveToolsMap.values.toList(),
+                                                    isStreaming = running && !waiting
+                                                )
+                                                parsed.add(newAssistantMsg)
+                                            }
+                                        }
                                     }
                                     com.example.gemini.ui.chat.ChatFeedCache.prewarm(parsed)
                                     parsed.flatMap { it.toolCalls }.filter {
@@ -1139,7 +1230,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                         val rawUri = if (att.path.startsWith("file://") || att.path.startsWith("http")) att.path else "file://${att.path}"
                                         com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(getApplication(), rawUri, agyHubClient, hubUrl)
                                     }
-                                    Triple(parsed, running, waiting)
+                                    Triple(parsed.toList(), running, waiting)
                                 } else {
                                     Triple(emptyList<ChatMessage>(), false, false)
                                 }
@@ -1155,6 +1246,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     _isStreaming.value = isRunning && !isWaiting
                                     if (isRunning || isWaiting) {
                                         hasSeenTurnActivity = true
+                                        hasStartedRunning = isRunning
                                         val lastAssistant = parsedMessages.lastOrNull { it.role == MessageRole.ASSISTANT }
                                         currentAssistantMsgId = lastAssistant?.id
                                     }
@@ -1211,9 +1303,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 val stepInfo = s.optJSONObject("metadata")?.optJSONObject("sourceTrajectoryStepInfo")
                                 val stepIndex = when {
                                     stepInfo?.has("stepIndex") == true -> stepInfo.getInt("stepIndex")
+                                    stepInfo?.has("step_index") == true -> stepInfo.getInt("step_index")
                                     indices != null && i < indices.length() -> indices.getInt(i)
                                     s.has("stepIndex") -> s.getInt("stepIndex")
-                                    else -> i
+                                    s.has("step_index") -> s.getInt("step_index")
+                                    totalLength > currentTurnStartStep && stepsArr.length() <= (totalLength - currentTurnStartStep) ->
+                                        totalLength - stepsArr.length() + i
+                                    else -> currentTurnStartStep + i
                                 }
 
                                 // Skip steps belonging to previous turns
@@ -1227,10 +1323,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                                 hasNewTurnSteps = true
 
-                                if (s.has("plannerResponse")) {
-                                    val pr = s.getJSONObject("plannerResponse")
-                                    val th = pr.optString("thinking", "")
-                                    val resp = pr.optString("response", "")
+                                if (s.has("plannerResponse") || stepType.contains("PLANNER")) {
+                                    val pr = s.optJSONObject("plannerResponse")
+                                    val th = pr?.optString("thinking", "")?.ifBlank { s.optString("thinking", "") } ?: s.optString("thinking", "")
+                                    val resp = pr?.optString("response", "")?.ifBlank {
+                                        pr?.optString("content", "")?.ifBlank { s.optString("content", "") }
+                                    } ?: s.optString("content", "")
                                     if (th.isNotBlank()) {
                                         currentPlannerThoughts[stepIndex] = th
                                         hasSeenTurnActivity = true
@@ -1243,7 +1341,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     }
                                 }
 
-                                val tool = agyHubClient.extractToolCallFromStep(s, stepIndex, conversationId)
+                                val tool = agyHubClient.extractToolCallFromStep(s, stepIndex, conversationId, status)
                                 if (tool != null) {
                                     registerOrUpdateTurnTool(tool, stepIndex)
                                     hasSeenTurnActivity = true
@@ -1273,17 +1371,39 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
 
+                        // Ensure EVERY active tool in currentActiveToolsMap has a marker in currentTurnToolMarkers
+                        for ((id, _) in currentActiveToolsMap) {
+                            val marker = "<!-- tool_call:$id -->"
+                            val hasMarker = currentTurnToolMarkers.values.any { it.contains(marker) }
+                            if (!hasMarker) {
+                                val sIdx = toolStepIndices[id] ?: currentTurnStartStep
+                                currentTurnToolMarkers.getOrPut(sIdx) { java.util.concurrent.CopyOnWriteArrayList() }.add(marker)
+                            }
+                        }
+
+                        val curMsgTools = _messages.value.find { it.id == currentAssistantMsgId }?.toolCalls ?: emptyList()
+                        for (t in curMsgTools) {
+                            val marker = "<!-- tool_call:${t.id} -->"
+                            val hasMarker = currentTurnToolMarkers.values.any { it.contains(marker) }
+                            if (!hasMarker) {
+                                val sIdx = toolStepIndices[t.id] ?: currentTurnStartStep
+                                currentTurnToolMarkers.getOrPut(sIdx) { java.util.concurrent.CopyOnWriteArrayList() }.add(marker)
+                            }
+                        }
+
                         val allIndices = (currentTurnToolMarkers.keys + currentPlannerResponses.keys).toSortedSet()
                         val textChunks = mutableListOf<String>()
                         for (idx in allIndices) {
-                            val marker = currentTurnToolMarkers[idx]
-                            val resp = currentPlannerResponses[idx]
-                            if (marker != null && !resp.isNullOrBlank()) {
-                                textChunks.add("$marker\n\n$resp")
-                            } else if (marker != null) {
-                                textChunks.add(marker)
-                            } else if (!resp.isNullOrBlank()) {
+                            val resp = currentPlannerResponses[idx]?.trim()
+                            val markers = currentTurnToolMarkers[idx]
+
+                            if (!resp.isNullOrBlank()) {
                                 textChunks.add(resp)
+                            }
+                            if (markers != null) {
+                                for (m in markers) {
+                                    textChunks.add(m)
+                                }
                             }
                         }
                         val combinedText = textChunks.joinToString("\n\n").trim()
@@ -1292,8 +1412,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             currentPlannerThoughts.toSortedMap().values.joinToString("\n\n").trim().takeIf { it.isNotBlank() }
                         } else null
 
+                        // If the daemon's status is WAITING (e.g. CASCADE_RUN_STATUS_WAITING_USER_INPUT),
+                        // any currently un-responded running tool in the active turn must transition to PENDING_APPROVAL!
+                        val isStatusWaiting = status.contains("WAITING", ignoreCase = true)
+                        if (isStatusWaiting) {
+                            for ((id, t) in currentActiveToolsMap) {
+                                val sIdx = t.stepIndex ?: toolStepIndices[id] ?: currentWaitingStepIndex ?: id.substringAfterLast("_").toIntOrNull() ?: -1
+                                val isResponded = userRespondedToolIds.contains(id) || userRespondedToolIds.contains("step_$sIdx")
+                                if (t.status == "RUNNING" && !isResponded) {
+                                    val actualIdx = if (sIdx >= 0) sIdx else t.stepIndex
+                                    currentActiveToolsMap[id] = t.copy(status = "PENDING_APPROVAL", stepIndex = actualIdx)
+                                    if (actualIdx != null) currentWaitingStepIndex = actualIdx
+                                }
+                            }
+                        }
+
                         val hasPendingApprovalTool = currentActiveToolsMap.values.any { it.status == "PENDING_APPROVAL" }
-                        val isWaitingInteraction = status.contains("WAITING", ignoreCase = true) || hasPendingApprovalTool
+                        val isWaitingInteraction = isStatusWaiting || hasPendingApprovalTool
                         val fullyIdle = update.optBoolean("fullyIdle", false)
                         val isStatusIdle = status == "CASCADE_RUN_STATUS_IDLE" ||
                                 fullyIdle ||
@@ -1329,6 +1464,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                                     oldT.status == "RUNNING" &&
                                                     (oldT.command == t.command || oldT.command.isBlank() || t.command.isBlank())
                                             }
+                                        }
+                                        val sIdx = t.stepIndex ?: toolStepIndices[id] ?: currentWaitingStepIndex ?: id.substringAfterLast("_").toIntOrNull() ?: -1
+                                        val isResponded = userRespondedToolIds.contains(id) || userRespondedToolIds.contains("step_$sIdx")
+                                        if (isResponded && t.status == "PENDING_APPROVAL") {
+                                            continue
                                         }
                                         mergedTools[id] = t
                                     }
@@ -1380,6 +1520,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 currentPlannerResponses.clear()
                                 currentActiveToolsMap.clear()
                                 currentTurnToolMarkers.clear()
+                                toolStepIndices.clear()
                                 currentAssistantMsgId = null
                                 refreshQuotas()
                                 syncAgyConversations()
@@ -1821,6 +1962,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 currentPlannerResponses.clear()
                 currentActiveToolsMap.clear()
                 currentTurnToolMarkers.clear()
+                toolStepIndices.clear()
+                userRespondedToolIds.clear()
 
                 val currentAutoExecPolicy = authPrefs.commandAutoExecutionPolicy.firstOrNull() ?: "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER"
 
@@ -1863,7 +2006,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 if (sendRes.isSuccess) {
-                    currentTurnStartStep = totalStepsCount
                     isPromptInFlight = false
                 } else {
                     val err = sendRes.exceptionOrNull()?.message ?: "Failed to send message"
@@ -2253,12 +2395,38 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         scope: String? = null
     ) {
         val conv = _currentConversation.value ?: return
-        val stepIndex = toolCall.id.substringAfterLast("_").toIntOrNull() ?: 0
+        val stepIndex = toolCall.stepIndex
+            ?: toolStepIndices[toolCall.id]
+            ?: currentWaitingStepIndex
+            ?: toolCall.id.substringAfterLast("_").toIntOrNull()
+            ?: 0
+        val trajectoryId = toolCall.trajectoryId?.takeIf { it.isNotBlank() }
+            ?: currentTrajectoryId
 
-        val runningToolCall = toolCall.copy(status = "RUNNING")
+        userRespondedToolIds.add(toolCall.id)
+        userRespondedToolIds.add("step_$stepIndex")
+
+        val runningToolCall = toolCall.copy(
+            status = "RUNNING",
+            stepIndex = stepIndex,
+            trajectoryId = trajectoryId
+        )
+        currentActiveToolsMap[toolCall.id] = runningToolCall
+        currentActiveToolsMap.entries.forEach { (k, v) ->
+            if (k.endsWith("_$stepIndex") || k == toolCall.id) {
+                currentActiveToolsMap[k] = v.copy(
+                    status = "RUNNING",
+                    stepIndex = stepIndex,
+                    trajectoryId = trajectoryId
+                )
+            }
+        }
+
         val msg = _messages.value.find { it.id == messageId }
         if (msg != null) {
-            val updatedToolCalls = msg.toolCalls.map { if (it.id == toolCall.id) runningToolCall else it }
+            val updatedToolCalls = msg.toolCalls.map {
+                if (it.id == toolCall.id || it.id.endsWith("_$stepIndex")) runningToolCall else it
+            }
             updateAssistantMessage(
                 msgId = messageId,
                 content = msg.content,
@@ -2274,32 +2442,88 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
             val resolvedScope = scope ?: authPrefs.defaultApprovalScope.firstOrNull() ?: "PERMISSION_SCOPE_ONCE"
+            val resolvedInteractionType = toolCall.interactionType
+                ?: if (toolCall.name.startsWith("mcp_") || toolCall.name == "call_mcp_tool" || toolCall.name == "read_resource" || toolCall.name == "list_resources") "mcp" else "permission"
             val res = agyHubClient.handleCascadeUserInteraction(
                 cascadeId = conv.id,
                 stepIndex = stepIndex,
-                trajectoryId = currentTrajectoryId,
+                trajectoryId = trajectoryId,
                 allow = true,
                 scope = resolvedScope,
+                interactionType = resolvedInteractionType,
                 hubUrl = hubUrl
             )
             if (res.isFailure) {
                 val err = res.exceptionOrNull()?.message ?: "Failed to approve tool"
                 Log.e("ChatViewModel", "handleCascadeUserInteraction (approve) error: $err")
+                _conversationError.value = "Approval failed: $err"
+                _isStreaming.value = false
+
+                // Roll back optimistic state on failure so UI accurately reflects reality
+                userRespondedToolIds.remove(toolCall.id)
+                userRespondedToolIds.remove("step_$stepIndex")
+                val reverted = toolCall.copy(status = "PENDING_APPROVAL", stepIndex = stepIndex)
+                currentActiveToolsMap[toolCall.id] = reverted
+                currentActiveToolsMap.entries.forEach { (k, v) ->
+                    if (k.endsWith("_$stepIndex") || k == toolCall.id) {
+                        currentActiveToolsMap[k] = v.copy(status = "PENDING_APPROVAL", stepIndex = stepIndex)
+                    }
+                }
+                val curMsg = _messages.value.find { it.id == messageId }
+                if (curMsg != null) {
+                    val revertedList = curMsg.toolCalls.map {
+                        if (it.id == toolCall.id || it.id.endsWith("_$stepIndex")) reverted else it
+                    }
+                    updateAssistantMessage(
+                        msgId = messageId,
+                        content = curMsg.content,
+                        thought = curMsg.thoughtText ?: "",
+                        thoughtDuration = curMsg.thoughtDurationMs,
+                        toolCalls = revertedList,
+                        isStreaming = false,
+                        forceImmediate = true
+                    )
+                }
             }
         }
     }
 
     fun rejectTerminalTool(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, reason: String? = null) {
         val conv = _currentConversation.value ?: return
-        val stepIndex = toolCall.id.substringAfterLast("_").toIntOrNull() ?: 0
+        val stepIndex = toolCall.stepIndex
+            ?: toolStepIndices[toolCall.id]
+            ?: currentWaitingStepIndex
+            ?: toolCall.id.substringAfterLast("_").toIntOrNull()
+            ?: 0
+        val trajectoryId = toolCall.trajectoryId?.takeIf { it.isNotBlank() }
+            ?: currentTrajectoryId
+
+        userRespondedToolIds.add(toolCall.id)
+        userRespondedToolIds.add("step_$stepIndex")
 
         val rejectedToolCall = toolCall.copy(
             status = "REJECTED",
-            output = reason ?: "[Command execution was rejected by user]"
+            output = reason ?: "[Command execution was rejected by user]",
+            stepIndex = stepIndex,
+            trajectoryId = trajectoryId
         )
+        currentActiveToolsMap[toolCall.id] = rejectedToolCall
+        currentActiveToolsMap.entries.forEach { (k, v) ->
+            if (k.endsWith("_$stepIndex") || k == toolCall.id) {
+                currentActiveToolsMap[k] = v.copy(
+                    status = "REJECTED",
+                    output = reason ?: "[Command execution was rejected by user]",
+                    stepIndex = stepIndex,
+                    trajectoryId = trajectoryId
+                )
+            }
+        }
+
         val msg = _messages.value.find { it.id == messageId }
         if (msg != null) {
-            val updatedToolCalls = msg.toolCalls.map { if (it.id == toolCall.id) rejectedToolCall else it }
+            val updatedToolCalls = msg.toolCalls.map {
+                if (it.id == toolCall.id || it.id.endsWith("_$stepIndex")) rejectedToolCall else it
+            }
             updateAssistantMessage(
                 msgId = messageId,
                 content = msg.content,
@@ -2313,17 +2537,47 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val resolvedInteractionType = toolCall.interactionType
+                ?: if (toolCall.name.startsWith("mcp_") || toolCall.name == "call_mcp_tool" || toolCall.name == "read_resource" || toolCall.name == "list_resources") "mcp" else "permission"
             val res = agyHubClient.handleCascadeUserInteraction(
                 cascadeId = conv.id,
                 stepIndex = stepIndex,
-                trajectoryId = currentTrajectoryId,
+                trajectoryId = trajectoryId,
                 allow = false,
                 userDenyInstruction = reason ?: "User rejected this command.",
+                interactionType = resolvedInteractionType,
                 hubUrl = hubUrl
             )
             if (res.isFailure) {
                 val err = res.exceptionOrNull()?.message ?: "Failed to reject tool"
                 Log.e("ChatViewModel", "handleCascadeUserInteraction (deny) error: $err")
+                _conversationError.value = "Rejection failed: $err"
+
+                // Roll back optimistic state on failure so UI accurately reflects reality
+                userRespondedToolIds.remove(toolCall.id)
+                userRespondedToolIds.remove("step_$stepIndex")
+                val reverted = toolCall.copy(status = "PENDING_APPROVAL", stepIndex = stepIndex)
+                currentActiveToolsMap[toolCall.id] = reverted
+                currentActiveToolsMap.entries.forEach { (k, v) ->
+                    if (k.endsWith("_$stepIndex") || k == toolCall.id) {
+                        currentActiveToolsMap[k] = v.copy(status = "PENDING_APPROVAL", stepIndex = stepIndex)
+                    }
+                }
+                val curMsg = _messages.value.find { it.id == messageId }
+                if (curMsg != null) {
+                    val revertedList = curMsg.toolCalls.map {
+                        if (it.id == toolCall.id || it.id.endsWith("_$stepIndex")) reverted else it
+                    }
+                    updateAssistantMessage(
+                        msgId = messageId,
+                        content = curMsg.content,
+                        thought = curMsg.thoughtText ?: "",
+                        thoughtDuration = curMsg.thoughtDurationMs,
+                        toolCalls = revertedList,
+                        isStreaming = false,
+                        forceImmediate = true
+                    )
+                }
             }
         }
     }

@@ -1132,26 +1132,86 @@ data class AgyMediaItem(
         allow: Boolean = true,
         scope: String = "PERMISSION_SCOPE_ONCE",
         userDenyInstruction: String = "",
+        interactionType: String = "permission",
         hubUrl: String = DEFAULT_HUB_URL
     ): Result<Unit> {
-        val payload = JSONObject().apply {
-            put("cascadeId", cascadeId)
-            put("interaction", JSONObject().apply {
-                if (trajectoryId.isNotBlank()) {
-                    put("trajectoryId", trajectoryId)
-                }
-                put("stepIndex", stepIndex)
-                put("permission", JSONObject().apply {
-                    put("allow", allow)
-                    if (allow) {
-                        put("scope", scope)
-                    } else {
-                        put("userDenyInstruction", userDenyInstruction.ifBlank { "User rejected this command." })
+        val scopeInt = when (scope.uppercase()) {
+            "PERMISSION_SCOPE_ONCE", "ONCE" -> 1
+            "PERMISSION_SCOPE_CONVERSATION", "CONVERSATION" -> 2
+            "PERMISSION_SCOPE_WORKSPACE", "WORKSPACE" -> 3
+            "PERMISSION_SCOPE_GLOBAL", "GLOBAL" -> 4
+            "PERMISSION_SCOPE_PROJECT", "PROJECT" -> 5
+            else -> 1
+        }
+
+        fun makePayload(type: String): String {
+            return JSONObject().apply {
+                put("cascadeId", cascadeId)
+                put("interaction", JSONObject().apply {
+                    if (trajectoryId.isNotBlank()) {
+                        put("trajectoryId", trajectoryId)
+                    }
+                    put("stepIndex", stepIndex)
+                    when (type) {
+                        "mcp" -> {
+                            put("mcp", JSONObject().apply {
+                                put("confirm", allow)
+                            })
+                        }
+                        "approvalInteraction" -> {
+                            put("approvalInteraction", JSONObject().apply {
+                                put("confirm", allow)
+                            })
+                        }
+                        "readUrlContent" -> {
+                            put("readUrlContent", JSONObject().apply {
+                                put("confirm", allow)
+                            })
+                        }
+                        "browserAction" -> {
+                            put("browserAction", JSONObject().apply {
+                                put("confirm", allow)
+                            })
+                        }
+                        else -> {
+                            put("permission", JSONObject().apply {
+                                put("allow", allow)
+                                if (allow) {
+                                    put("scope", scopeInt)
+                                } else {
+                                    put("userDenyInstruction", userDenyInstruction.ifBlank { "User rejected this command." })
+                                }
+                            })
+                        }
                     }
                 })
-            })
-        }.toString()
-        return executeGrpcWebCall("HandleCascadeUserInteraction", payload, hubUrl).map { }
+            }.toString()
+        }
+
+        val primaryPayload = makePayload(interactionType)
+        var res = executeGrpcWebCall("HandleCascadeUserInteraction", primaryPayload, hubUrl).map { }
+        if (res.isSuccess) return res
+
+        // Fallback sequence: try alternative interaction types
+        val fallbackTypes = when (interactionType) {
+            "mcp" -> listOf("approvalInteraction", "permission")
+            "approvalInteraction" -> listOf("permission", "mcp")
+            else -> listOf("approvalInteraction", "mcp")
+        }
+
+        for (fbType in fallbackTypes) {
+            val fallbackPayload = makePayload(fbType)
+            res = executeGrpcWebCall("HandleCascadeUserInteraction", fallbackPayload, hubUrl).map { }
+            if (res.isSuccess) return res
+        }
+
+        // If allow was requested and all failed, try resolveOutstandingSteps as final recovery
+        if (allow) {
+            val resolveRes = resolveOutstandingSteps(cascadeId, hubUrl)
+            if (resolveRes.isSuccess) return resolveRes
+        }
+
+        return res
     }
 
     /**
@@ -1214,7 +1274,8 @@ data class AgyMediaItem(
                 ?: root.optJSONObject("stepsUpdate")?.optJSONArray("steps")
                 ?: return emptyList()
 
-            return parseStepsArrayToChatMessages(steps, conversationId)
+            val status = root.optJSONObject("update")?.optString("status", "") ?: root.optString("status", "")
+            return parseStepsArrayToChatMessages(steps, conversationId, status)
         } catch (e: Exception) {
             Log.e(TAG, "parseStepsToChatMessages error: ${e.message}")
             return emptyList()
@@ -1227,20 +1288,130 @@ data class AgyMediaItem(
     fun extractToolCallFromStep(
         step: JSONObject,
         stepIndex: Int,
-        conversationId: String
+        conversationId: String,
+        cascadeStatus: String = ""
     ): ToolCall? {
+        val meta = step.optJSONObject("metadata")
+        val stepInfo = meta?.optJSONObject("sourceTrajectoryStepInfo")
+        val actualStepIndex = when {
+            stepInfo?.has("stepIndex") == true -> stepInfo.getInt("stepIndex")
+            step.has("stepIndex") -> step.getInt("stepIndex")
+            else -> stepIndex
+        }
+        val trajId = stepInfo?.optString("trajectoryId", "")?.takeIf { it.isNotBlank() }
+            ?: step.optString("trajectoryId", "").takeIf { it.isNotBlank() }
+
         val reqInteraction = step.optJSONObject("requestedInteraction")
-        val isWaitingPermission = reqInteraction?.has("permission") == true
+        val perm = reqInteraction?.optJSONObject("permission")
+            ?: reqInteraction?.optJSONObject("confirmation")
+            ?: step.optJSONObject("permission")
+            ?: meta?.optJSONObject("permission")
+
+        val stepType = step.optString("type", "")
+        val interactionType = when {
+            reqInteraction?.has("mcp") == true || step.has("mcpTool") || step.has("callMcpTool") || stepType.contains("MCP") ||
+                reqInteraction?.optString("type")?.contains("MCP", ignoreCase = true) == true -> "mcp"
+            perm != null || reqInteraction?.has("permission") == true -> "permission"
+            reqInteraction?.has("approvalInteraction") == true || (step.has("generic") && perm == null) -> "approvalInteraction"
+            reqInteraction?.has("readUrlContent") == true || step.has("readUrlContent") -> "readUrlContent"
+            reqInteraction?.has("browserAction") == true -> "browserAction"
+            else -> "permission"
+        }
+
+        val rawCall = extractRawToolCallFromStep(step, actualStepIndex, conversationId, cascadeStatus) ?: return null
+        return rawCall.copy(
+            stepIndex = actualStepIndex,
+            trajectoryId = trajId ?: rawCall.trajectoryId,
+            interactionType = rawCall.interactionType ?: interactionType
+        )
+    }
+
+    private fun extractRawToolCallFromStep(
+        step: JSONObject,
+        stepIndex: Int,
+        conversationId: String,
+        cascadeStatus: String = ""
+    ): ToolCall? {
         val meta = step.optJSONObject("metadata")
         val toolSummary = meta?.optString("toolSummary", "")?.trim() ?: ""
         val toolAction = meta?.optString("toolAction", "")?.trim() ?: ""
         val stepStatus = step.optString("status", "")
         val stepType = step.optString("type", "")
 
+        val reqInteraction = step.optJSONObject("requestedInteraction")
+        val perm = reqInteraction?.optJSONObject("permission")
+            ?: reqInteraction?.optJSONObject("confirmation")
+            ?: step.optJSONObject("permission")
+            ?: meta?.optJSONObject("permission")
+
+        val rc = step.optJSONObject("runCommand")
+        val generic = step.optJSONObject("generic")
+        val genericArgs = generic?.optJSONObject("args")
+
+        val metaTc = meta?.optJSONObject("toolCall")
+        val plannerPr = step.optJSONObject("plannerResponse")
+        val callsArr = step.optJSONArray("tool_calls")
+            ?: step.optJSONArray("toolCalls")
+            ?: plannerPr?.optJSONArray("toolCalls")
+            ?: plannerPr?.optJSONArray("tool_calls")
+        val firstTc = callsArr?.optJSONObject(0)
+
+        val realToolId = metaTc?.optString("id", "")?.takeIf { it.isNotBlank() }
+            ?: firstTc?.optString("id", "")?.takeIf { it.isNotBlank() }
+            ?: step.optString("callId", "").takeIf { it.isNotBlank() }
+            ?: step.optString("toolCallId", "").takeIf { it.isNotBlank() }
+
+        fun makeToolId(prefix: String): String {
+            return realToolId ?: "${prefix}${conversationId}_$stepIndex"
+        }
+
+        fun parseArgsJson(obj: JSONObject?): JSONObject? {
+            if (obj == null) return null
+            val direct = obj.optJSONObject("args") ?: obj.optJSONObject("argsJson") ?: obj.optJSONObject("arguments")
+            if (direct != null) return direct
+            val jsonStr = obj.optString("argumentsJson", "").takeIf { it.isNotBlank() }
+                ?: obj.optString("args", "").takeIf { it.isNotBlank() }
+            if (jsonStr != null) {
+                try { return JSONObject(jsonStr) } catch (_: Exception) {}
+            }
+            return null
+        }
+        val tcArgs = parseArgsJson(firstTc) ?: parseArgsJson(metaTc) ?: genericArgs
+
+        val isStepRunning = stepStatus.contains("RUN", ignoreCase = true)
+        val isStepDone = stepStatus.contains("SUCCESS", ignoreCase = true) ||
+                         stepStatus.contains("DONE", ignoreCase = true) ||
+                         stepStatus.contains("COMPLET", ignoreCase = true)
+
+        val isProposedRunCommand = rc != null && rc.has("proposedCommandLine") &&
+                rc.optString("commandLine", "").isBlank() &&
+                (rc.optJSONObject("combinedOutput")?.optString("full") ?: rc.optString("output", "")).isBlank() &&
+                !rc.has("exitCode")
+
+        val isProposedGenericCommand = genericArgs?.has("CommandLine") == true && !step.has("runCommand")
+
+        val isCascadeWaiting = cascadeStatus.contains("WAIT", ignoreCase = true)
+        val isWaitingPermission = !isStepRunning && !isStepDone && (
+            perm != null ||
+            (reqInteraction != null && (
+                reqInteraction.has("permission") ||
+                reqInteraction.has("confirmation") ||
+                reqInteraction.has("mcp") ||
+                reqInteraction.has("action") ||
+                reqInteraction.optString("type").contains("CONFIRM", ignoreCase = true) ||
+                reqInteraction.optString("type").contains("MCP", ignoreCase = true)
+            )) ||
+            stepType.contains("CONFIRM", ignoreCase = true) ||
+            stepStatus.contains("WAIT", ignoreCase = true) ||
+            isProposedRunCommand ||
+            isProposedGenericCommand ||
+            (isCascadeWaiting && !step.has("userInput") && (step.has("runCommand") || step.has("generic") || step.has("mcpTool") || step.has("callMcpTool") || stepType.contains("MCP")))
+        )
+
         fun resolveStatus(hasOutput: Boolean, isPending: Boolean = false): String {
             return when {
-                isPending || stepStatus.contains("WAIT", ignoreCase = true) -> "PENDING_APPROVAL"
-                stepStatus.contains("RUN", ignoreCase = true) -> "RUNNING"
+                isPending || stepStatus.contains("WAIT", ignoreCase = true) || (isCascadeWaiting && !hasOutput) -> "PENDING_APPROVAL"
+                stepStatus.contains("RUN", ignoreCase = true) || (cascadeStatus.contains("RUN", ignoreCase = true) && !hasOutput) -> "RUNNING"
                 stepStatus.contains("ERROR", ignoreCase = true) || stepStatus.contains("FAIL", ignoreCase = true) -> "FAILED"
                 stepStatus.contains("CANCEL", ignoreCase = true) || stepStatus.contains("REJECT", ignoreCase = true) -> "REJECTED"
                 !hasOutput && !stepStatus.contains("SUCCESS", ignoreCase = true) && !stepStatus.contains("DONE", ignoreCase = true) -> "RUNNING"
@@ -1248,24 +1419,361 @@ data class AgyMediaItem(
             }
         }
 
-        // 1. Terminal / Shell command
-        if (step.has("runCommand") || (isWaitingPermission && step.optJSONObject("runCommand") != null)) {
-            val rc = step.optJSONObject("runCommand")
-            val cmd = when {
-                rc != null -> rc.optString("commandLine", rc.optString("proposedCommandLine", ""))
-                isWaitingPermission -> reqInteraction.optJSONObject("permission")?.optJSONObject("resource")?.optString("target", "") ?: ""
-                else -> ""
+        // 0. Explicit Confirmation / Permission Request
+        if (isWaitingPermission) {
+            val isMcpWaiting = reqInteraction?.has("mcp") == true ||
+                reqInteraction?.optString("type")?.contains("MCP", ignoreCase = true) == true ||
+                step.has("mcpTool") || step.has("callMcpTool") || stepType.contains("MCP") ||
+                genericArgs?.has("ServerName") == true || tcArgs?.has("ServerName") == true
+
+            if (isMcpWaiting) {
+                val mcp = step.optJSONObject("mcpTool")
+                    ?: step.optJSONObject("callMcpTool")
+                    ?: step.optJSONObject("mcp")
+                    ?: reqInteraction?.optJSONObject("mcp")
+                val sName = mcp?.optString("serverName", "")?.ifBlank {
+                    tcArgs?.optString("ServerName", tcArgs.optString("serverName", genericArgs?.optString("ServerName", ""))) ?: ""
+                } ?: ""
+                val tName = mcp?.optJSONObject("toolCall")?.optString("name", "")?.ifBlank {
+                    mcp?.optString("toolName", mcp?.optString("name", ""))
+                }?.ifBlank {
+                    tcArgs?.optString("ToolName", tcArgs.optString("toolName", genericArgs?.optString("ToolName", ""))) ?: ""
+                } ?: ""
+                val cmdDisplay = if (sName.isNotBlank() && tName.isNotBlank()) "$sName / $tName"
+                    else if (tName.isNotBlank()) tName
+                    else toolSummary.ifBlank { "MCP Tool" }
+                val normName = if (sName.isNotBlank() && tName.isNotBlank()) "mcp_${sName}_$tName"
+                    else if (tName.isNotBlank()) "mcp_$tName"
+                    else "mcp_tool"
+                return ToolCall(
+                    id = makeToolId("tool_mcp_"),
+                    name = normName,
+                    command = cmdDisplay,
+                    output = toolAction.ifBlank { "[Awaiting confirmation]" },
+                    status = "PENDING_APPROVAL",
+                    interactionType = "mcp"
+                )
             }
+
+            val rawToolName = perm?.optString("toolName", "")?.ifBlank {
+                meta?.optJSONObject("toolCall")?.optString("name", "") ?: ""
+            }?.ifBlank {
+                step.optJSONObject("generic")?.optString("name", "") ?: ""
+            } ?: ""
+
+            val cmd = when {
+                rc != null && rc.optString("commandLine", rc.optString("proposedCommandLine", rc.optString("CommandLine", rc.optString("command", "")))).isNotBlank() ->
+                    rc.optString("commandLine", rc.optString("proposedCommandLine", rc.optString("CommandLine", rc.optString("command", ""))))
+                perm != null && perm.has("command") && perm.optString("command", "").isNotBlank() ->
+                    perm.optString("command")
+                perm?.optJSONObject("resource")?.optString("target", "")?.isNotBlank() == true ->
+                    perm.getJSONObject("resource").getString("target")
+                tcArgs?.has("CommandLine") == true ->
+                    tcArgs.getString("CommandLine")
+                tcArgs?.has("commandLine") == true ->
+                    tcArgs.getString("commandLine")
+                tcArgs?.has("command") == true ->
+                    tcArgs.getString("command")
+                tcArgs?.has("TargetFile") == true ->
+                    tcArgs.getString("TargetFile")
+                tcArgs?.has("AbsolutePath") == true ->
+                    tcArgs.getString("AbsolutePath")
+                tcArgs?.has("query") == true ->
+                    tcArgs.getString("query")
+                generic?.optString("name", "")?.isNotBlank() == true ->
+                    generic.getString("name")
+                else -> toolSummary.ifBlank { toolAction }
+            }
+            val normName = normalizeToolName(rawToolName.ifBlank { "bash" })
+            return ToolCall(
+                id = makeToolId("tool_"),
+                name = normName,
+                command = cmd.ifBlank { "Command execution" },
+                output = toolAction.ifBlank { "[Awaiting confirmation]" },
+                status = "PENDING_APPROVAL"
+            )
+        }
+
+        // 1. Terminal / Shell command
+        if (step.has("runCommand")) {
+            val cmd = rc?.optString("commandLine",
+                rc.optString("proposedCommandLine",
+                    rc.optString("CommandLine",
+                        rc.optString("command", ""))))?.takeIf { it.isNotBlank() }
+                ?: tcArgs?.optString("CommandLine", tcArgs.optString("commandLine", tcArgs.optString("command", "")))
+                ?: ""
             val out = rc?.optJSONObject("combinedOutput")?.optString("full") ?: rc?.optString("output", "") ?: ""
             val exitCode = if (rc != null && rc.has("exitCode")) rc.optInt("exitCode", 0) else null
-            val toolStatus = resolveStatus(out.isNotBlank() || exitCode != null, isWaitingPermission)
+            val isWaiting = isProposedRunCommand || isWaitingPermission || stepStatus.contains("WAIT", ignoreCase = true) || (isCascadeWaiting && out.isBlank() && exitCode == null)
+            val toolStatus = resolveStatus(out.isNotBlank() || exitCode != null, isWaiting)
             return ToolCall(
-                id = "tool_${conversationId}_$stepIndex",
+                id = makeToolId("tool_"),
                 name = "bash",
                 command = cmd.ifBlank { toolSummary },
-                output = out,
+                output = if (toolStatus == "PENDING_APPROVAL" && out.isBlank()) toolAction.ifBlank { "[Awaiting confirmation]" } else out,
                 status = toolStatus,
                 exitCode = exitCode
+            )
+        }
+
+        // 1.2 MCP Tool Call (e.g. CORTEX_STEP_TYPE_MCP_TOOL, mcpTool, callMcpTool)
+        if (step.has("mcpTool") || step.has("callMcpTool") || step.has("mcp") || stepType.contains("MCP")) {
+            val mcp = step.optJSONObject("mcpTool")
+                ?: step.optJSONObject("callMcpTool")
+                ?: step.optJSONObject("mcp")
+                ?: JSONObject()
+
+            val serverName = mcp.optString("serverName", mcp.optString("server", "")).trim()
+            val tcObj = mcp.optJSONObject("toolCall")
+                ?: mcp.optJSONObject("call")
+                ?: mcp.optJSONObject("mcpToolCall")
+            val rawToolName = tcObj?.optString("name", tcObj.optString("toolName", ""))
+                ?.ifBlank { mcp.optString("name", mcp.optString("toolName", "")) }
+                ?: ""
+            val toolName = rawToolName.trim()
+
+            // Arguments can be in argumentsJson (JSON string) or arguments/args (JSONObject)
+            val argsObj = tcObj?.optJSONObject("arguments")
+                ?: tcObj?.optJSONObject("args")
+                ?: mcp.optJSONObject("arguments")
+                ?: mcp.optJSONObject("args")
+            val argsJsonStr = tcObj?.optString("argumentsJson", "")?.takeIf { it.isNotBlank() }
+                ?: tcObj?.optString("argsJson", "")?.takeIf { it.isNotBlank() }
+                ?: mcp.optString("argumentsJson", "")?.takeIf { it.isNotBlank() }
+
+            val parsedArgsObj = argsObj ?: if (!argsJsonStr.isNullOrBlank()) {
+                try { JSONObject(argsJsonStr) } catch (_: Exception) { null }
+            } else null
+
+            val argsSummary = when {
+                parsedArgsObj != null -> {
+                    val keys = parsedArgsObj.keys().asSequence().toList()
+                    if (keys.isEmpty()) ""
+                    else if (keys.size == 1) {
+                        val k = keys[0]
+                        val v = parsedArgsObj.opt(k)?.toString() ?: ""
+                        if (v.length > 80) "$k: ${v.take(80)}..." else "$k: $v"
+                    } else {
+                        parsedArgsObj.toString()
+                    }
+                }
+                !argsJsonStr.isNullOrBlank() -> argsJsonStr.trim()
+                else -> ""
+            }
+
+            val commandDisplay = when {
+                serverName.isNotBlank() && toolName.isNotBlank() -> {
+                    if (argsSummary.isNotBlank()) "$serverName / $toolName($argsSummary)"
+                    else "$serverName / $toolName"
+                }
+                toolName.isNotBlank() -> {
+                    if (argsSummary.isNotBlank()) "$toolName($argsSummary)"
+                    else toolName
+                }
+                serverName.isNotBlank() -> "MCP: $serverName"
+                else -> toolSummary.ifBlank { "MCP Tool" }
+            }
+
+            // Extract Result/Output
+            val resObj = mcp.opt("result") ?: mcp.opt("response") ?: mcp.opt("output")
+            val resError = mcp.optString("error", "").takeIf { it.isNotBlank() }
+            val outStr = when {
+                resError != null -> "Error: $resError"
+                resObj is JSONObject -> {
+                    val contentArr = resObj.optJSONArray("content")
+                    if (contentArr != null && contentArr.length() > 0) {
+                        val sb = StringBuilder()
+                        for (ci in 0 until contentArr.length()) {
+                            val cObj = contentArr.optJSONObject(ci)
+                            val text = cObj?.optString("text", "") ?: ""
+                            if (text.isNotBlank()) {
+                                if (sb.isNotEmpty()) sb.append("\n")
+                                sb.append(text)
+                            }
+                        }
+                        if (sb.isNotEmpty()) sb.toString() else resObj.toString(2)
+                    } else {
+                        resObj.optString("value", resObj.optString("text", resObj.toString(2)))
+                    }
+                }
+                resObj is JSONArray -> resObj.toString(2)
+                resObj != null && resObj.toString().isNotBlank() -> resObj.toString()
+                else -> ""
+            }
+
+            val hasOutput = outStr.isNotBlank() || resError != null
+            val isWaiting = isWaitingPermission || (isCascadeWaiting && !hasOutput && !isStepRunning && !isStepDone)
+            val toolStatus = when {
+                resError != null -> "FAILED"
+                isWaiting -> "PENDING_APPROVAL"
+                isStepRunning || (!hasOutput && !isStepDone) -> "RUNNING"
+                else -> resolveStatus(hasOutput, isWaiting)
+            }
+
+            val normName = if (serverName.isNotBlank() && toolName.isNotBlank()) {
+                "mcp_${serverName}_$toolName"
+            } else if (toolName.isNotBlank()) {
+                "mcp_$toolName"
+            } else {
+                "mcp_tool"
+            }
+
+            return ToolCall(
+                id = makeToolId("tool_mcp_"),
+                name = normName,
+                command = commandDisplay,
+                output = if (toolStatus == "PENDING_APPROVAL" && outStr.isBlank()) {
+                    toolAction.ifBlank { "[Awaiting confirmation]" }
+                } else if (toolStatus == "RUNNING" && outStr.isBlank()) {
+                    toolAction.ifBlank { "Executing MCP tool..." }
+                } else {
+                    outStr
+                },
+                status = toolStatus,
+                interactionType = "mcp"
+            )
+        }
+
+        // 1.3 MCP Read Resource
+        if (step.has("readResource") || stepType.contains("READ_RESOURCE")) {
+            val rr = step.optJSONObject("readResource") ?: JSONObject()
+            val serverName = rr.optString("serverName", "")
+            val uri = rr.optString("uri", "")
+            val contents = rr.optString("contents", rr.optString("content", ""))
+            val cmd = if (uri.isNotBlank()) "$serverName: $uri" else toolSummary.ifBlank { "Read Resource" }
+            return ToolCall(
+                id = makeToolId("tool_mcp_res_"),
+                name = "read_resource",
+                command = cmd,
+                output = contents.ifBlank { toolAction },
+                status = resolveStatus(contents.isNotBlank()),
+                interactionType = "mcp"
+            )
+        }
+
+        // 1.4 MCP List Resources
+        if (step.has("listResources") || stepType.contains("LIST_RESOURCES")) {
+            val lr = step.optJSONObject("listResources") ?: JSONObject()
+            val serverName = lr.optString("serverName", "")
+            val cmd = if (serverName.isNotBlank()) "Resources on $serverName" else toolSummary.ifBlank { "List Resources" }
+            val resArr = lr.optJSONArray("resources")
+            val out = if (resArr != null && resArr.length() > 0) {
+                (0 until resArr.length()).mapNotNull { resArr.optJSONObject(it)?.optString("name", "") }.joinToString("\n")
+            } else lr.optString("output", toolAction)
+            return ToolCall(
+                id = makeToolId("tool_mcp_res_"),
+                name = "list_resources",
+                command = cmd,
+                output = out,
+                status = resolveStatus(out.isNotBlank()),
+                interactionType = "mcp"
+            )
+        }
+
+        // 1.5 Planner Response Tool Calls / Step Tool Calls (e.g. model-initiated commands or tools)
+        if (callsArr != null && callsArr.length() > 0) {
+            val tc = callsArr.optJSONObject(0)
+            if (tc != null) {
+                val tcName = tc.optString("name", "").ifBlank { tc.optString("toolName", "") }
+                val parsedArgs = parseArgsJson(tc) ?: tcArgs
+                val tcSummary = parsedArgs?.optString("toolSummary", "")?.trim()?.removeSurrounding("\"")?.ifBlank { toolSummary } ?: toolSummary
+                val tcAction = parsedArgs?.optString("toolAction", "")?.trim()?.removeSurrounding("\"")?.ifBlank { toolAction } ?: toolAction
+
+                val isMcpCall = tcName == "call_mcp_tool" || tcName.startsWith("mcp_") ||
+                        parsedArgs?.has("ServerName") == true || parsedArgs?.has("serverName") == true ||
+                        parsedArgs?.has("ToolName") == true || parsedArgs?.has("toolName") == true
+
+                val normName = when {
+                    isMcpCall -> {
+                        val sName = parsedArgs?.optString("ServerName", parsedArgs.optString("serverName", "")) ?: ""
+                        val tName = parsedArgs?.optString("ToolName", parsedArgs.optString("toolName", "")) ?: ""
+                        if (sName.isNotBlank() && tName.isNotBlank()) "mcp_${sName}_$tName"
+                        else if (tName.isNotBlank()) "mcp_$tName"
+                        else normalizeToolName(tcName.ifBlank { "mcp_tool" })
+                    }
+                    else -> normalizeToolName(tcName.ifBlank { "bash" })
+                }
+
+                val cmd = when {
+                    isMcpCall -> {
+                        val sName = parsedArgs?.optString("ServerName", parsedArgs.optString("serverName", "")) ?: ""
+                        val tName = parsedArgs?.optString("ToolName", parsedArgs.optString("toolName", "")) ?: ""
+                        val mcpArgs = parsedArgs?.opt("Arguments") ?: parsedArgs?.opt("arguments") ?: parsedArgs?.opt("args")
+                        val mcpArgsSummary = when (mcpArgs) {
+                            is JSONObject -> {
+                                val keys = mcpArgs.keys().asSequence().toList()
+                                if (keys.size == 1) {
+                                    val k = keys[0]
+                                    val v = mcpArgs.opt(k)?.toString() ?: ""
+                                    if (v.length > 80) "$k: ${v.take(80)}..." else "$k: $v"
+                                } else if (keys.isNotEmpty()) mcpArgs.toString() else ""
+                            }
+                            is String -> mcpArgs
+                            else -> ""
+                        }
+                        if (sName.isNotBlank() && tName.isNotBlank()) {
+                            if (mcpArgsSummary.isNotBlank()) "$sName / $tName($mcpArgsSummary)" else "$sName / $tName"
+                        } else if (tName.isNotBlank()) {
+                            if (mcpArgsSummary.isNotBlank()) "$tName($mcpArgsSummary)" else tName
+                        } else {
+                            tcSummary.ifBlank { tcName }
+                        }
+                    }
+                    parsedArgs?.has("CommandLine") == true -> parsedArgs.optString("CommandLine", "").trim().removeSurrounding("\"")
+                    parsedArgs?.has("commandLine") == true -> parsedArgs.optString("commandLine", "").trim().removeSurrounding("\"")
+                    parsedArgs?.has("command") == true -> parsedArgs.optString("command", "").trim().removeSurrounding("\"")
+                    parsedArgs?.has("AbsolutePath") == true -> parsedArgs.optString("AbsolutePath", "").trim().removeSurrounding("\"").removePrefix("file://")
+                    parsedArgs?.has("TargetFile") == true -> parsedArgs.optString("TargetFile", "").trim().removeSurrounding("\"").removePrefix("file://")
+                    parsedArgs?.has("DirectoryPath") == true -> parsedArgs.optString("DirectoryPath", "").trim().removeSurrounding("\"").removePrefix("file://")
+                    parsedArgs?.has("query") == true -> parsedArgs.optString("query", "").trim().removeSurrounding("\"")
+                    parsedArgs?.has("Query") == true -> parsedArgs.optString("Query", "").trim().removeSurrounding("\"")
+                    parsedArgs?.has("Prompt") == true -> parsedArgs.optString("Prompt", "").trim().removeSurrounding("\"")
+                    parsedArgs?.has("Url") == true -> parsedArgs.optString("Url", "").trim().removeSurrounding("\"")
+                    else -> tcSummary.ifBlank { tcAction }
+                }
+
+                val out = tc.optString("output", tc.optString("result", tcAction.ifBlank { tcSummary }))
+                val isWaiting = isWaitingPermission || isCascadeWaiting
+                val toolStatus = resolveStatus(out.isNotBlank() && out != tcAction, isWaiting)
+
+                val idPrefix = when {
+                    isMcpCall || normName.startsWith("mcp_") -> "tool_mcp_"
+                    normName == "bash" -> "tool_"
+                    normName == "view_file" -> "tool_view_"
+                    normName == "edit_file" -> "tool_edit_"
+                    normName == "list_dir" -> "tool_list_"
+                    normName == "grep_search" -> "tool_grep_"
+                    normName == "find" -> "tool_find_"
+                    normName == "web_search" -> "tool_web_"
+                    normName == "read_url" -> "tool_read_"
+                    normName == "generate_image" -> "tool_genimg_"
+                    else -> "tool_step_"
+                }
+
+                return ToolCall(
+                    id = makeToolId(idPrefix),
+                    name = normName,
+                    command = cmd.ifBlank { tcSummary.ifBlank { tcName } },
+                    output = if (toolStatus == "PENDING_APPROVAL" && out.isBlank()) tcAction.ifBlank { "[Awaiting confirmation]" } else out,
+                    status = toolStatus,
+                    interactionType = if (isMcpCall || normName.startsWith("mcp_")) "mcp" else null
+                )
+            }
+        }
+
+        // 1.8 Background Task / Running Task from Step Content
+        val rawContentStr = step.optString("content", "")
+        if (rawContentStr.contains("Tool is running as a background task", ignoreCase = true) ||
+            (stepStatus.contains("RUN", ignoreCase = true) && rawContentStr.contains("Task Description:", ignoreCase = true))) {
+            val taskDesc = Regex("""Task Description:\s*(.*)""").find(rawContentStr)?.groupValues?.get(1)?.trim() ?: ""
+            val taskId = Regex("""task id:\s*([^\s\n]+)""").find(rawContentStr)?.groupValues?.get(1)?.trim() ?: ""
+            val isWait = isWaitingPermission || isCascadeWaiting
+            return ToolCall(
+                id = makeToolId("tool_"),
+                name = "bash",
+                command = taskDesc.ifBlank { toolSummary.ifBlank { "Background task" } },
+                output = if (taskId.isNotBlank()) "Running background task ($taskId)..." else rawContentStr,
+                status = if (isWait) "PENDING_APPROVAL" else "RUNNING"
             )
         }
 
@@ -1295,7 +1803,7 @@ data class AgyMediaItem(
             }
 
             return ToolCall(
-                id = "tool_view_${conversationId}_$stepIndex",
+                id = makeToolId("tool_view_"),
                 name = "view_file",
                 command = cmd,
                 output = out,
@@ -1328,7 +1836,7 @@ data class AgyMediaItem(
             }
 
             return ToolCall(
-                id = "tool_list_${conversationId}_$stepIndex",
+                id = makeToolId("tool_list_"),
                 name = "list_dir",
                 command = cmd,
                 output = out,
@@ -1351,7 +1859,7 @@ data class AgyMediaItem(
                 else -> toolAction.ifBlank { toolSummary }
             }
             return ToolCall(
-                id = "tool_grep_${conversationId}_$stepIndex",
+                id = makeToolId("tool_grep_"),
                 name = "grep_search",
                 command = cmd,
                 output = out,
@@ -1368,7 +1876,7 @@ data class AgyMediaItem(
             val cmd = if (dir.isNotBlank()) "$pat in $dir" else toolSummary.ifBlank { "Find $pat" }
             val out = f.optString("truncatedOutput", f.optString("output", rawDir.ifBlank { toolAction.ifBlank { toolSummary } }))
             return ToolCall(
-                id = "tool_find_${conversationId}_$stepIndex",
+                id = makeToolId("tool_find_"),
                 name = "find",
                 command = cmd,
                 output = out,
@@ -1390,7 +1898,7 @@ data class AgyMediaItem(
             val cmd = if (fileName.isNotBlank()) fileName else toolSummary.ifBlank { "Edit File" }
             val out = diff.ifBlank { toolAction.ifBlank { toolSummary.ifBlank { "File modified" } } }
             return ToolCall(
-                id = "tool_edit_${conversationId}_$stepIndex",
+                id = makeToolId("tool_edit_"),
                 name = "edit_file",
                 command = cmd,
                 output = out,
@@ -1404,7 +1912,7 @@ data class AgyMediaItem(
             val query = Regex("""The search for "(.*?)" returned""").find(rawContent)?.groupValues?.get(1) ?: ""
             val summary = rawContent.substringAfter("returned the following summary:").trim()
             return ToolCall(
-                id = "tool_web_${conversationId}_$stepIndex",
+                id = makeToolId("tool_web_"),
                 name = "web_search",
                 command = query.ifBlank { toolSummary.ifBlank { "Web Search" } },
                 output = summary.ifBlank { rawContent },
@@ -1418,7 +1926,7 @@ data class AgyMediaItem(
             val query = sw.optString("query", "")
             val summary = sw.optString("summary", sw.optString("output", step.optString("content", "")))
             return ToolCall(
-                id = "tool_web_${conversationId}_$stepIndex",
+                id = makeToolId("tool_web_"),
                 name = "web_search",
                 command = query.ifBlank { toolSummary.ifBlank { "Web Search" } },
                 output = summary.ifBlank { toolAction },
@@ -1432,7 +1940,7 @@ data class AgyMediaItem(
             val url = ru.optString("url", "")
             val content = ru.optString("markdown", ru.optString("content", ""))
             return ToolCall(
-                id = "tool_read_${conversationId}_$stepIndex",
+                id = makeToolId("tool_read_"),
                 name = "read_url",
                 command = url.ifBlank { toolSummary.ifBlank { "Read URL" } },
                 output = content,
@@ -1450,7 +1958,7 @@ data class AgyMediaItem(
             val rawUri = gm?.optString("uri", "")?.ifBlank { gi.optString("uri", "") } ?: ""
             val output = if (inlineData.isNotBlank()) "data:$mimeType;base64,$inlineData" else rawUri
             return ToolCall(
-                id = "tool_genimg_${conversationId}_$stepIndex",
+                id = makeToolId("tool_genimg_"),
                 name = "generate_image",
                 command = prompt.ifBlank { toolSummary.ifBlank { "Generate Image" } },
                 output = output,
@@ -1464,27 +1972,28 @@ data class AgyMediaItem(
             val args = generic.optJSONObject("args")
             val toolCallMeta = meta?.optJSONObject("toolCall")
             val metaName = toolCallMeta?.optString("name", "")?.lowercase() ?: ""
+            val isGenericWaiting = isWaitingPermission || isCascadeWaiting
 
             when {
                 args?.has("CommandLine") == true || metaName == "run_command" -> {
                     val cmd = args?.optString("CommandLine", "") ?: ""
                     return ToolCall(
-                        id = "tool_${conversationId}_$stepIndex",
+                        id = makeToolId("tool_"),
                         name = "bash",
                         command = cmd.ifBlank { toolSummary },
-                        output = toolAction,
-                        status = resolveStatus(false)
+                        output = if (isGenericWaiting) toolAction.ifBlank { "[Awaiting confirmation]" } else toolAction,
+                        status = resolveStatus(false, isGenericWaiting)
                     )
                 }
                 args?.has("AbsolutePath") == true || metaName == "view_file" -> {
                     val path = (args?.optString("AbsolutePath", "") ?: "").removePrefix("file://")
                     val fileName = path.substringAfterLast('/').ifBlank { path }
                     return ToolCall(
-                        id = "tool_view_${conversationId}_$stepIndex",
+                        id = makeToolId("tool_view_"),
                         name = "view_file",
                         command = if (fileName.isNotBlank()) fileName else toolSummary.ifBlank { "View File" },
                         output = path.ifBlank { toolAction },
-                        status = resolveStatus(false)
+                        status = resolveStatus(false, isGenericWaiting)
                     )
                 }
                 args?.has("TargetFile") == true || metaName == "edit_file" || metaName == "write_to_file" || metaName == "replace_file_content" -> {
@@ -1492,64 +2001,64 @@ data class AgyMediaItem(
                     val fileName = path.substringAfterLast('/').ifBlank { path }
                     val desc = args?.optString("Instruction", args.optString("Description", "")) ?: ""
                     return ToolCall(
-                        id = "tool_edit_${conversationId}_$stepIndex",
+                        id = makeToolId("tool_edit_"),
                         name = "edit_file",
                         command = if (fileName.isNotBlank()) fileName else toolSummary.ifBlank { "Edit File" },
                         output = if (desc.isNotBlank()) "$path\n$desc" else path.ifBlank { toolAction },
-                        status = resolveStatus(false)
+                        status = resolveStatus(false, isGenericWaiting)
                     )
                 }
                 args?.has("DirectoryPath") == true || metaName == "list_dir" -> {
                     val dir = (args?.optString("DirectoryPath", "") ?: "").removePrefix("file://")
                     val dirName = dir.substringAfterLast('/').ifBlank { dir }
                     return ToolCall(
-                        id = "tool_list_${conversationId}_$stepIndex",
+                        id = makeToolId("tool_list_"),
                         name = "list_dir",
                         command = if (dirName.isNotBlank()) dirName else toolSummary.ifBlank { "Directory" },
                         output = dir.ifBlank { toolAction },
-                        status = resolveStatus(false)
+                        status = resolveStatus(false, isGenericWaiting)
                     )
                 }
                 args?.has("Query") == true && args.has("SearchPath") -> {
                     val q = args.optString("Query", "")
                     val sp = args.optString("SearchPath", "").removePrefix("file://")
                     return ToolCall(
-                        id = "tool_grep_${conversationId}_$stepIndex",
+                        id = makeToolId("tool_grep_"),
                         name = "grep_search",
                         command = "\"$q\" in ${sp.substringAfterLast('/')}",
                         output = toolAction,
-                        status = resolveStatus(false)
+                        status = resolveStatus(false, isGenericWaiting)
                     )
                 }
                 args?.has("Url") == true || metaName == "read_url_content" -> {
                     val url = args?.optString("Url", "") ?: ""
                     return ToolCall(
-                        id = "tool_read_${conversationId}_$stepIndex",
+                        id = makeToolId("tool_read_"),
                         name = "read_url",
                         command = url.ifBlank { toolSummary },
                         output = toolAction,
-                        status = resolveStatus(false)
+                        status = resolveStatus(false, isGenericWaiting)
                     )
                 }
                 args?.has("query") == true || args?.has("Query") == true || metaName == "search_web" -> {
                     val query = (args?.optString("query", args.optString("Query", "")) ?: "").trim().removeSurrounding("\"")
                     val title = query.ifBlank { toolSummary.ifBlank { "Web Search" } }
                     return ToolCall(
-                        id = "tool_web_${conversationId}_$stepIndex",
+                        id = makeToolId("tool_web_"),
                         name = "web_search",
                         command = title,
                         output = toolAction.ifBlank { title },
-                        status = resolveStatus(false)
+                        status = resolveStatus(false, isGenericWaiting)
                     )
                 }
                 args?.has("Pattern") == true || metaName == "find_by_name" -> {
                     val pattern = args?.optString("Pattern", "") ?: ""
                     return ToolCall(
-                        id = "tool_find_${conversationId}_$stepIndex",
+                        id = makeToolId("tool_find_"),
                         name = "find",
                         command = pattern.ifBlank { toolSummary.ifBlank { "Find Files" } },
                         output = toolAction,
-                        status = resolveStatus(false)
+                        status = resolveStatus(false, isGenericWaiting)
                     )
                 }
                 args?.has("Prompt") == true || metaName == "generate_image" -> {
@@ -1557,11 +2066,47 @@ data class AgyMediaItem(
                     val content = step.optString("content", step.optJSONObject("generic")?.optString("content", "") ?: "")
                     val rawOutput = if (content.isNotBlank()) content else toolAction
                     return ToolCall(
-                        id = "tool_genimg_${conversationId}_$stepIndex",
+                        id = makeToolId("tool_genimg_"),
                         name = "generate_image",
                         command = prompt.ifBlank { toolSummary.ifBlank { "Generate Image" } },
                         output = rawOutput,
-                        status = resolveStatus(content.isNotBlank())
+                        status = resolveStatus(content.isNotBlank(), isGenericWaiting)
+                    )
+                }
+                args?.has("ServerName") == true || args?.has("ToolName") == true || metaName == "call_mcp_tool" || metaName.startsWith("mcp_") -> {
+                    val sName = args?.optString("ServerName", args.optString("serverName", "")) ?: ""
+                    val tName = args?.optString("ToolName", args.optString("toolName", "")) ?: ""
+                    val mcpArgs = args?.opt("Arguments") ?: args?.opt("arguments") ?: args?.opt("args")
+                    val mcpArgsSummary = when (mcpArgs) {
+                        is JSONObject -> {
+                            val keys = mcpArgs.keys().asSequence().toList()
+                            if (keys.size == 1) {
+                                val k = keys[0]
+                                val v = mcpArgs.opt(k)?.toString() ?: ""
+                                if (v.length > 80) "$k: ${v.take(80)}..." else "$k: $v"
+                            } else if (keys.isNotEmpty()) mcpArgs.toString() else ""
+                        }
+                        is String -> mcpArgs
+                        else -> ""
+                    }
+                    val cmd = if (sName.isNotBlank() && tName.isNotBlank()) {
+                        if (mcpArgsSummary.isNotBlank()) "$sName / $tName($mcpArgsSummary)" else "$sName / $tName"
+                    } else if (tName.isNotBlank()) {
+                        if (mcpArgsSummary.isNotBlank()) "$tName($mcpArgsSummary)" else tName
+                    } else toolSummary.ifBlank { metaName.ifBlank { "MCP Tool" } }
+
+                    val normName = if (sName.isNotBlank() && tName.isNotBlank()) "mcp_${sName}_$tName"
+                        else if (tName.isNotBlank()) "mcp_$tName"
+                        else if (metaName.startsWith("mcp_")) metaName
+                        else "mcp_tool"
+
+                    return ToolCall(
+                        id = makeToolId("tool_mcp_"),
+                        name = normName,
+                        command = cmd,
+                        output = if (isGenericWaiting) toolAction.ifBlank { "[Awaiting confirmation]" } else toolAction,
+                        status = resolveStatus(false, isGenericWaiting),
+                        interactionType = "mcp"
                     )
                 }
                 else -> {
@@ -1577,14 +2122,15 @@ data class AgyMediaItem(
                         "find" -> "tool_find_"
                         "grep_search" -> "tool_grep_"
                         "generate_image" -> "tool_genimg_"
-                        else -> "tool_gen_"
+                        else -> if (unifiedName.startsWith("mcp_")) "tool_mcp_" else "tool_gen_"
                     }
                     return ToolCall(
-                        id = "${idPrefix}${conversationId}_$stepIndex",
+                        id = makeToolId(idPrefix),
                         name = unifiedName,
                         command = fallbackTitle,
                         output = toolAction,
-                        status = resolveStatus(false)
+                        status = resolveStatus(false, isGenericWaiting),
+                        interactionType = if (unifiedName.startsWith("mcp_")) "mcp" else null
                     )
                 }
             }
@@ -1593,6 +2139,7 @@ data class AgyMediaItem(
         // 11. Final fallback when toolSummary is available
         if (toolSummary.isNotBlank()) {
             val name = when {
+                stepType.contains("MCP") -> "mcp_tool"
                 stepType.contains("VIEW") -> "view_file"
                 stepType.contains("LIST") -> "list_dir"
                 stepType.contains("FIND") -> "find"
@@ -1605,6 +2152,7 @@ data class AgyMediaItem(
                 else -> "tool"
             }
             val idPrefix = when (name) {
+                "mcp_tool" -> "tool_mcp_"
                 "view_file" -> "tool_view_"
                 "list_dir" -> "tool_list_"
                 "find" -> "tool_find_"
@@ -1617,11 +2165,12 @@ data class AgyMediaItem(
                 else -> "tool_step_"
             }
             return ToolCall(
-                id = "${idPrefix}${conversationId}_$stepIndex",
+                id = makeToolId(idPrefix),
                 name = name,
                 command = toolSummary,
                 output = toolAction.ifBlank { toolSummary },
-                status = resolveStatus(true)
+                status = resolveStatus(true),
+                interactionType = if (name == "mcp_tool") "mcp" else null
             )
         }
 
@@ -1697,7 +2246,11 @@ data class AgyMediaItem(
     /**
      * Parses steps array into chat messages with chronological tool ordering and live status
      */
-    fun parseStepsArrayToChatMessages(steps: JSONArray, conversationId: String): List<ChatMessage> {
+    fun parseStepsArrayToChatMessages(
+        steps: JSONArray,
+        conversationId: String,
+        cascadeStatus: String = ""
+    ): List<ChatMessage> {
         val messages = mutableListOf<ChatMessage>()
         try {
             val turnTools = linkedMapOf<String, ToolCall>()
@@ -1836,14 +2389,14 @@ data class AgyMediaItem(
                         }
                     }
 
-                    val tool = extractToolCallFromStep(step, stepIndex, conversationId)
+                    val tool = extractToolCallFromStep(step, stepIndex, conversationId, cascadeStatus)
                     if (tool != null) {
                         val normName = normalizeToolName(tool.name)
                         val existingKey = turnTools.entries.find { (k, v) ->
                             k == tool.id || (
                                 normalizeToolName(v.name) == normName &&
                                 (v.command == tool.command || tool.command.isBlank() || v.command.isBlank()) &&
-                                (v.status == "RUNNING" || v.status == "PENDING_APPROVAL")
+                                (v.status == "RUNNING" || v.status == "PENDING_APPROVAL" || k == tool.id)
                             )
                         }?.key
 
@@ -1855,7 +2408,7 @@ data class AgyMediaItem(
                         val alreadyHasMarker = turnStepTexts.values.any { it.contains(marker) }
                         if (!alreadyHasMarker) {
                             val existing = turnStepTexts[stepIndex]
-                            turnStepTexts[stepIndex] = if (existing != null) "$marker\n\n$existing" else marker
+                            turnStepTexts[stepIndex] = if (existing != null) "$existing\n\n$marker" else marker
                         }
                     } else {
                         val stepErr = extractStepError(step)
