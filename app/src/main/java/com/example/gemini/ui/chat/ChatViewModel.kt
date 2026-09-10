@@ -2461,6 +2461,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                         headersMap[k] = hObj.optString(k, "")
                                     }
                                 }
+                                val cwd = sObj.optString("cwd", "")
 
                                 val parsedSpec = com.example.gemini.domain.model.McpServerSpec(
                                     serverName = serverName,
@@ -2469,7 +2470,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                     env = envMap,
                                     serverUrl = serverUrl,
                                     headers = headersMap,
-                                    disabled = disabled
+                                    disabled = disabled,
+                                    cwd = cwd
                                 )
 
                                 if (existing == null) {
@@ -2589,6 +2591,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             val argsArr = org.json.JSONArray()
                             spec.args.forEach { argsArr.put(it) }
                             put("args", argsArr)
+                        }
+                        if (spec.cwd.isNotBlank()) {
+                            put("cwd", spec.cwd)
                         }
                         val envMap = spec.env.toMutableMap()
                         // Ensure Termux stdio binaries (npx, python3, etc.) have proper loader and PATH on Android

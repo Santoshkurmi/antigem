@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.example.gemini.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -1231,7 +1232,9 @@ private fun McpSubScreen(
         )
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             val termuxEnv = mapOf(
@@ -1239,32 +1242,51 @@ private fun McpSubScreen(
                 "PATH" to "/data/data/com.termux/files/usr/bin:/system/bin"
             )
             val presets = listOf(
-                Triple("Local Tools", "sh", listOf("-c", "python3 \"\$HOME/.gemini/local_tools.py\"")),
-                Triple("Thinking", "npx", listOf("-y", "@modelcontextprotocol/server-sequential-thinking")),
-                Triple("Memory", "npx", listOf("-y", "@modelcontextprotocol/server-memory")),
-                Triple("Filesystem", "npx", listOf("-y", "@modelcontextprotocol/server-filesystem", "."))
+                Triple("Local Tools", "Stdio", com.example.gemini.domain.model.McpServerSpec(
+                    serverName = "local_tools",
+                    command = "sh",
+                    args = listOf("-c", "python3 \"\$HOME/.gemini/local_tools.py\"")
+                )),
+                Triple("Stitch", "SSE", com.example.gemini.domain.model.McpServerSpec(
+                    serverName = "stitch",
+                    serverUrl = "https://stitch.googleapis.com/mcp",
+                    headers = mapOf("X-Goog-Api-Key" to "")
+                )),
+                Triple("Thinking", "Stdio", com.example.gemini.domain.model.McpServerSpec(
+                    serverName = "thinking",
+                    command = "npx",
+                    args = listOf("-y", "@modelcontextprotocol/server-sequential-thinking"),
+                    env = termuxEnv
+                )),
+                Triple("Memory", "Stdio", com.example.gemini.domain.model.McpServerSpec(
+                    serverName = "memory",
+                    command = "npx",
+                    args = listOf("-y", "@modelcontextprotocol/server-memory"),
+                    env = termuxEnv
+                )),
+                Triple("Filesystem", "Stdio", com.example.gemini.domain.model.McpServerSpec(
+                    serverName = "filesystem",
+                    command = "npx",
+                    args = listOf("-y", "@modelcontextprotocol/server-filesystem", "."),
+                    env = termuxEnv
+                ))
             )
-            presets.forEach { (pName, cmd, args) ->
+            presets.forEach { (pName, typeBadge, spec) ->
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
                     modifier = Modifier
-                        .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
-                            serverToEdit = com.example.gemini.domain.model.McpServerSpec(
-                                serverName = pName.lowercase().replace(" ", "_"),
-                                command = cmd,
-                                args = args,
-                                env = termuxEnv
-                            )
+                            serverToEdit = spec
                             showDialog = true
                         }
                 ) {
-                    Box(
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
                             text = "+ $pName",
@@ -1272,6 +1294,18 @@ private fun McpSubScreen(
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = if (typeBadge == "SSE") Color(0xFF1976D2).copy(alpha = 0.15f) else Color(0xFF7B1FA2).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = typeBadge,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (typeBadge == "SSE") Color(0xFF1976D2) else Color(0xFF7B1FA2),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -1461,6 +1495,58 @@ private fun McpSubScreen(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                             )
+                        }
+                    }
+
+                    if (isSse && !server.spec?.headers.isNullOrEmpty()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF1976D2).copy(alpha = 0.08f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Key,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = Color(0xFF1976D2)
+                                )
+                                Text(
+                                    text = "Headers: ${server.spec!!.headers.keys.joinToString(", ")}",
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color(0xFF1976D2)
+                                )
+                            }
+                        }
+                    } else if (!isSse && !server.spec?.cwd.isNullOrBlank()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Folder,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    text = "cwd: ${server.spec!!.cwd}",
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                                )
+                            }
                         }
                     }
 
@@ -1660,7 +1746,9 @@ private fun AddEditMcpServerDialog(
     var name by remember { mutableStateOf(initialSpec?.serverName ?: "") }
     var command by remember { mutableStateOf(initialSpec?.command ?: "") }
     var argsText by remember { mutableStateOf(initialSpec?.args?.joinToString(" ") ?: "") }
+    var cwdText by remember { mutableStateOf(initialSpec?.cwd ?: "") }
     var serverUrl by remember { mutableStateOf(initialSpec?.serverUrl ?: "") }
+    var headersText by remember { mutableStateOf(initialSpec?.headers?.map { "${it.key}: ${it.value}" }?.joinToString("\n") ?: "") }
     var envText by remember { mutableStateOf(initialSpec?.env?.map { "${it.key}=${it.value}" }?.joinToString("\n") ?: "") }
     var validationError by remember { mutableStateOf<String?>(null) }
 
@@ -1732,7 +1820,7 @@ private fun AddEditMcpServerDialog(
                         validationError = null
                     },
                     label = { Text("Server Name *") },
-                    placeholder = { Text("e.g. filesystem, sqlite, github") },
+                    placeholder = { Text("e.g. stitch, filesystem, github") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1762,6 +1850,16 @@ private fun AddEditMcpServerDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    // Working Directory
+                    OutlinedTextField(
+                        value = cwdText,
+                        onValueChange = { cwdText = it },
+                        label = { Text("Working Directory (optional)") },
+                        placeholder = { Text("e.g. ~/projects/my-app") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
                     // Environment Variables
                     OutlinedTextField(
                         value = envText,
@@ -1781,8 +1879,26 @@ private fun AddEditMcpServerDialog(
                             validationError = null
                         },
                         label = { Text("SSE Endpoint URL *") },
-                        placeholder = { Text("e.g. http://127.0.0.1:8000/sse") },
+                        placeholder = { Text("e.g. https://stitch.googleapis.com/mcp or http://127.0.0.1:8000/sse") },
                         singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // HTTP Headers
+                    OutlinedTextField(
+                        value = headersText,
+                        onValueChange = { headersText = it },
+                        label = { Text("HTTP Headers (Header: Value per line)") },
+                        placeholder = { Text("X-Goog-Api-Key: AQ.Ab8RN6...\nAuthorization: Bearer token") },
+                        minLines = 3,
+                        maxLines = 6,
+                        supportingText = {
+                            Text(
+                                text = "Set custom headers like API keys or tokens required by the remote endpoint.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1833,6 +1949,7 @@ private fun AddEditMcpServerDialog(
                             command = cleanCmd,
                             args = argsList,
                             env = envMap,
+                            cwd = cwdText.trim(),
                             disabled = initialSpec?.disabled ?: false
                         )
                     } else {
@@ -1841,9 +1958,27 @@ private fun AddEditMcpServerDialog(
                             validationError = "Server URL is required"
                             return@Button
                         }
+
+                        val headersMap = mutableMapOf<String, String>()
+                        headersText.lines().forEach { line ->
+                            val trimmed = line.trim()
+                            if (trimmed.isNotBlank()) {
+                                val delimiter = if (trimmed.contains(':')) ':' else if (trimmed.contains('=')) '=' else null
+                                if (delimiter != null) {
+                                    val parts = trimmed.split(delimiter, limit = 2)
+                                    val k = parts[0].trim()
+                                    val v = parts[1].trim()
+                                    if (k.isNotBlank()) {
+                                        headersMap[k] = v
+                                    }
+                                }
+                            }
+                        }
+
                         com.example.gemini.domain.model.McpServerSpec(
                             serverName = cleanName,
                             serverUrl = cleanUrl,
+                            headers = headersMap,
                             disabled = initialSpec?.disabled ?: false
                         )
                     }

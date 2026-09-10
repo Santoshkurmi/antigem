@@ -1918,6 +1918,7 @@ data class AgyMediaItem(
             }
         }
         val disabled = specObj?.optBoolean("disabled", false) ?: false
+        val cwd = specObj?.optString("cwd", "") ?: ""
 
         val spec = com.example.gemini.domain.model.McpServerSpec(
             serverName = name,
@@ -1926,7 +1927,8 @@ data class AgyMediaItem(
             env = envMap,
             serverUrl = serverUrl,
             headers = headersMap,
-            disabled = disabled
+            disabled = disabled,
+            cwd = cwd
         )
 
         val status = item.optString("status", "MCP_SERVER_STATUS_UNKNOWN")

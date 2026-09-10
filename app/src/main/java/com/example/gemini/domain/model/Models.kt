@@ -245,7 +245,8 @@ data class McpServerSpec(
     val serverUrl: String = "",
     val headers: Map<String, String> = emptyMap(),
     val disabled: Boolean = false,
-    val disabledTools: List<String> = emptyList()
+    val disabledTools: List<String> = emptyList(),
+    val cwd: String = ""
 )
 
 @Serializable
