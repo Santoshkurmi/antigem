@@ -311,6 +311,15 @@ object IdeApiClient {
         } catch (e: Exception) {
             Log.w(TAG, "getMcpConfig via /api/mcp/config failed: ${e.message}")
         }
+        // Fallback to relative file read via IDE daemon
+        try {
+            val content = readFile("~/.gemini/config/mcp_config.json")
+            if (!content.isNullOrBlank()) return@withContext content
+            val legacyContent = readFile("~/.gemini/antigravity/mcp_config.json")
+            if (!legacyContent.isNullOrBlank()) return@withContext legacyContent
+        } catch (e: Exception) {
+            Log.w(TAG, "getMcpConfig file fallback failed: ${e.message}")
+        }
         null
     }
 
@@ -324,11 +333,19 @@ object IdeApiClient {
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
             client.newCall(req).execute().use { resp ->
-                return@withContext resp.isSuccessful
+                if (resp.isSuccessful) return@withContext true
             }
         } catch (e: Exception) {
             Log.w(TAG, "saveMcpConfig via /api/mcp/config failed: ${e.message}")
-            false
         }
+        // Fallback to relative file save via IDE daemon
+        try {
+            val savedPrimary = saveFile("~/.gemini/config/mcp_config.json", content)
+            val savedLegacy = saveFile("~/.gemini/antigravity/mcp_config.json", content)
+            return@withContext savedPrimary || savedLegacy
+        } catch (e: Exception) {
+            Log.w(TAG, "saveMcpConfig file fallback failed: ${e.message}")
+        }
+        false
     }
 }

@@ -505,8 +505,21 @@ func buildRecursiveFileTree(dir string, currentDepth int, maxDepth int) ([]model
 	return nodes, nil
 }
 
+func expandHome(p string) string {
+	if strings.HasPrefix(p, "~/") || p == "~" {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			if p == "~" {
+				return home
+			}
+			return filepath.Join(home, p[2:])
+		}
+	}
+	return p
+}
+
 func (h *Handler) FileReadHandler(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Query().Get("path")
+	path := expandHome(r.URL.Query().Get("path"))
 	if path == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "path parameter required"})
 		return
@@ -547,6 +560,7 @@ func (h *Handler) FileSaveHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "valid path and content required"})
 		return
 	}
+	req.Path = expandHome(req.Path)
 
 	_ = os.MkdirAll(filepath.Dir(req.Path), 0755)
 	tmpPath := req.Path + ".tmp"
@@ -569,6 +583,7 @@ func (h *Handler) FilePatchHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "valid path and patch parameters required"})
 		return
 	}
+	req.Path = expandHome(req.Path)
 
 	raw, err := os.ReadFile(req.Path)
 	if err != nil {
@@ -615,6 +630,7 @@ func (h *Handler) FileCreateHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "path required"})
 		return
 	}
+	req.Path = expandHome(req.Path)
 
 	var err error
 	if req.IsDir {
@@ -638,6 +654,7 @@ func (h *Handler) FileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "path required"})
 		return
 	}
+	req.Path = expandHome(req.Path)
 
 	if err := os.RemoveAll(req.Path); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -653,6 +670,8 @@ func (h *Handler) FileRenameHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "path and newPath required"})
 		return
 	}
+	req.Path = expandHome(req.Path)
+	req.NewPath = expandHome(req.NewPath)
 
 	if err := os.Rename(req.Path, req.NewPath); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -778,6 +797,8 @@ func (h *Handler) McpConfigHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ensureLocalToolsScript(h.Cfg.HomeDir)
+
 	primaryConfigPath := filepath.Join(h.Cfg.HomeDir, ".gemini", "config", "mcp_config.json")
 	legacyConfigPath := filepath.Join(h.Cfg.HomeDir, ".gemini", "antigravity", "mcp_config.json")
 
@@ -808,12 +829,14 @@ func (h *Handler) McpConfigHandler(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
 			return
 		}
+		saveContent := injectTermuxEnvIfNeeded(req.Content)
+
 		// Write to both primary (~/.gemini/config/mcp_config.json) and legacy (~/.gemini/antigravity/mcp_config.json)
 		_ = os.MkdirAll(filepath.Dir(primaryConfigPath), 0755)
-		errPrimary := os.WriteFile(primaryConfigPath, []byte(req.Content), 0644)
+		errPrimary := os.WriteFile(primaryConfigPath, []byte(saveContent), 0644)
 
 		_ = os.MkdirAll(filepath.Dir(legacyConfigPath), 0755)
-		errLegacy := os.WriteFile(legacyConfigPath, []byte(req.Content), 0644)
+		errLegacy := os.WriteFile(legacyConfigPath, []byte(saveContent), 0644)
 
 		if errPrimary != nil && errLegacy != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": errPrimary.Error()})
@@ -827,4 +850,179 @@ func (h *Handler) McpConfigHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func injectTermuxEnvIfNeeded(rawContent string) string {
+	libTermuxExec := "/data/data/com.termux/files/usr/lib/libtermux-exec.so"
+	if _, err := os.Stat(libTermuxExec); err != nil {
+		return rawContent
+	}
+	var root map[string]interface{}
+	if err := json.Unmarshal([]byte(rawContent), &root); err != nil {
+		return rawContent
+	}
+	servers, ok := root["mcpServers"].(map[string]interface{})
+	if !ok {
+		return rawContent
+	}
+	for _, sVal := range servers {
+		sMap, ok := sVal.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if _, hasCmd := sMap["command"]; hasCmd {
+			envMap, ok := sMap["env"].(map[string]interface{})
+			if !ok || envMap == nil {
+				envMap = make(map[string]interface{})
+			}
+			if _, hasPreload := envMap["LD_PRELOAD"]; !hasPreload {
+				envMap["LD_PRELOAD"] = libTermuxExec
+			}
+			if _, hasPath := envMap["PATH"]; !hasPath {
+				envMap["PATH"] = "/data/data/com.termux/files/usr/bin:/system/bin"
+			}
+			sMap["env"] = envMap
+		}
+	}
+	out, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return rawContent
+	}
+	return string(out)
+}
+
+func ensureLocalToolsScript(homeDir string) {
+	scriptPath := filepath.Join(homeDir, ".gemini", "local_tools.py")
+	if _, err := os.Stat(scriptPath); err == nil {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(scriptPath), 0755)
+	scriptContent := `#!/usr/bin/env python3
+import sys
+import json
+import datetime
+import sqlite3
+import math
+
+def main():
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+        except Exception:
+            continue
+
+        method = req.get("method")
+        msg_id = req.get("id")
+
+        if method == "initialize":
+            res = {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "local_tools", "version": "1.0.0"}
+            }
+        elif method == "tools/list":
+            res = {
+                "tools": [
+                    {
+                        "name": "calc_math",
+                        "description": "Calculate mathematical expression (e.g. 15 * 4 + 2, 2**10, sqrt, sin, cos)",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "expression": {
+                                    "type": "string",
+                                    "description": "Math expression to evaluate"
+                                }
+                            },
+                            "required": ["expression"]
+                        }
+                    },
+                    {
+                        "name": "get_system_time",
+                        "description": "Get current local date, time, and timezone from the device",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {}
+                        }
+                    },
+                    {
+                        "name": "sqlite_query",
+                        "description": "Execute an SQL query against a SQLite database file (or in-memory if path is :memory:)",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "query": {
+                                    "type": "string",
+                                    "description": "SQL query to execute (e.g. SELECT, CREATE TABLE, INSERT)"
+                                },
+                                "db_path": {
+                                    "type": "string",
+                                    "description": "Path to sqlite db file or :memory: (default :memory:)"
+                                }
+                            },
+                            "required": ["query"]
+                        }
+                    }
+                ]
+            }
+        elif method == "tools/call":
+            name = req.get("params", {}).get("name")
+            args = req.get("params", {}).get("arguments", {})
+            if name == "calc_math":
+                expr = args.get("expression", "0")
+                try:
+                    safe_env = {
+                        "__builtins__": {},
+                        "math": math,
+                        "abs": abs,
+                        "round": round,
+                        "min": min,
+                        "max": max,
+                        "pow": pow
+                    }
+                    val = eval(expr, safe_env)
+                    res = {"content": [{"type": "text", "text": str(val)}]}
+                except Exception as e:
+                    res = {"content": [{"type": "text", "text": f"Error: {e}"}], "isError": True}
+            elif name == "get_system_time":
+                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                res = {"content": [{"type": "text", "text": f"Device local time: {now_str}"}]}
+            elif name == "sqlite_query":
+                query = args.get("query", "")
+                db_path = args.get("db_path", ":memory:")
+                try:
+                    conn = sqlite3.connect(db_path)
+                    cur = conn.cursor()
+                    cur.execute(query)
+                    if query.strip().upper().startswith("SELECT") or query.strip().upper().startswith("PRAGMA"):
+                        rows = cur.fetchall()
+                        cols = [d[0] for d in cur.description] if cur.description else []
+                        conn.close()
+                        res = {"content": [{"type": "text", "text": json.dumps({"columns": cols, "rows": rows}, indent=2)}]}
+                    else:
+                        conn.commit()
+                        affected = cur.rowcount
+                        conn.close()
+                        res = {"content": [{"type": "text", "text": f"Query executed successfully. Rows affected: {affected}"}]}
+                except Exception as e:
+                    res = {"content": [{"type": "text", "text": f"SQLite error: {e}"}], "isError": True}
+            else:
+                res = {"content": [{"type": "text", "text": f"Unknown tool: {name}"}], "isError": True}
+        elif msg_id is not None:
+            res = {}
+        else:
+            continue
+
+        if msg_id is not None:
+            out = {"jsonrpc": "2.0", "id": msg_id, "result": res}
+            sys.stdout.write(json.dumps(out) + "\n")
+            sys.stdout.flush()
+
+if __name__ == "__main__":
+    main()
+`
+	_ = os.WriteFile(scriptPath, []byte(scriptContent), 0755)
 }

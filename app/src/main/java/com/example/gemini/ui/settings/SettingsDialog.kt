@@ -1020,6 +1020,10 @@ private fun McpSubScreen(
     var expandedTools by remember { mutableStateOf(setOf<String>()) }
     var expandedErrors by remember { mutableStateOf(setOf<String>()) }
 
+    LaunchedEffect(Unit) {
+        onRefresh()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1230,11 +1234,15 @@ private fun McpSubScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            val termuxEnv = mapOf(
+                "LD_PRELOAD" to "/data/data/com.termux/files/usr/lib/libtermux-exec.so",
+                "PATH" to "/data/data/com.termux/files/usr/bin:/system/bin"
+            )
             val presets = listOf(
-                Triple("SQLite", "npx", listOf("-y", "@modelcontextprotocol/server-sqlite", "--db", "./data.db")),
+                Triple("Local Tools", "sh", listOf("-c", "python3 \"\$HOME/.gemini/local_tools.py\"")),
+                Triple("Thinking", "npx", listOf("-y", "@modelcontextprotocol/server-sequential-thinking")),
                 Triple("Memory", "npx", listOf("-y", "@modelcontextprotocol/server-memory")),
-                Triple("Fetch", "npx", listOf("-y", "@modelcontextprotocol/server-fetch")),
-                Triple("Time", "npx", listOf("-y", "@modelcontextprotocol/server-time"))
+                Triple("Filesystem", "npx", listOf("-y", "@modelcontextprotocol/server-filesystem", "."))
             )
             presets.forEach { (pName, cmd, args) ->
                 Surface(
@@ -1246,9 +1254,10 @@ private fun McpSubScreen(
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
                             serverToEdit = com.example.gemini.domain.model.McpServerSpec(
-                                serverName = pName.lowercase(),
+                                serverName = pName.lowercase().replace(" ", "_"),
                                 command = cmd,
-                                args = args
+                                args = args,
+                                env = termuxEnv
                             )
                             showDialog = true
                         }

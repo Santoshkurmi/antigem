@@ -2590,9 +2590,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             spec.args.forEach { argsArr.put(it) }
                             put("args", argsArr)
                         }
-                        if (spec.env.isNotEmpty()) {
+                        val envMap = spec.env.toMutableMap()
+                        // Ensure Termux stdio binaries (npx, python3, etc.) have proper loader and PATH on Android
+                        if (!envMap.containsKey("LD_PRELOAD")) {
+                            envMap["LD_PRELOAD"] = "/data/data/com.termux/files/usr/lib/libtermux-exec.so"
+                        }
+                        if (!envMap.containsKey("PATH")) {
+                            envMap["PATH"] = "/data/data/com.termux/files/usr/bin:/system/bin"
+                        }
+                        if (envMap.isNotEmpty()) {
                             val envObj = org.json.JSONObject()
-                            spec.env.forEach { (k, v) -> envObj.put(k, v) }
+                            envMap.forEach { (k, v) -> envObj.put(k, v) }
                             put("env", envObj)
                         }
                     }
@@ -2610,7 +2618,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
                 agyHubClient.refreshMcpServers(hubUrl)
 
-                delay(500)
+                delay(1200)
                 loadMcpServers()
                 _mcpStatusMessage.value = "Saved '${spec.serverName}' and refreshed."
             } catch (e: Exception) {

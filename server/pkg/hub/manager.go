@@ -132,6 +132,15 @@ func (m *HubManager) Start() error {
 		"DEBIAN_FRONTEND=noninteractive",
 	)
 
+	// Inject Termux environment if running on Android/Termux so child MCP servers inherit libtermux-exec
+	termuxLib := "/data/data/com.termux/files/usr/lib/libtermux-exec.so"
+	if _, err := os.Stat(termuxLib); err == nil {
+		cmd.Env = append(cmd.Env,
+			"LD_PRELOAD="+termuxLib,
+			"PATH=/data/data/com.termux/files/usr/bin:/system/bin:"+os.Getenv("PATH"),
+		)
+	}
+
 	// Automatic 'n' feed to stdin: answers any potential agy update prompt with 'no' immediately
 	cmd.Stdin = strings.NewReader("n\n")
 
