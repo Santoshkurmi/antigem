@@ -526,26 +526,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         stepIndex: Int
     ) {
         val normName = com.example.gemini.data.remote.AgyHubClient.normalizeToolName(tool.name)
-
-        val existingEntry = currentActiveToolsMap.entries.find { (k, v) ->
-            k == tool.id || (
-                com.example.gemini.data.remote.AgyHubClient.normalizeToolName(v.name) == normName &&
-                (v.command == tool.command || tool.command.isBlank() || v.command.isBlank() || tool.name == v.name) &&
-                (v.status == "RUNNING" || v.status == "PENDING_APPROVAL" || tool.id == k)
-            )
-        }
-
-        val targetId = existingEntry?.key ?: tool.id
+        val targetId = tool.id
         val actualStepIdx = tool.stepIndex ?: stepIndex
-        toolStepIndices[tool.id] = actualStepIdx
         toolStepIndices[targetId] = actualStepIdx
 
         if (tool.status == "PENDING_APPROVAL") {
             currentWaitingStepIndex = actualStepIdx
         }
 
-        val isUserResponded = userRespondedToolIds.contains(tool.id) ||
-                userRespondedToolIds.contains(targetId) ||
+        val isUserResponded = userRespondedToolIds.contains(targetId) ||
                 userRespondedToolIds.contains("step_$actualStepIdx")
 
         if (isUserResponded && tool.status == "PENDING_APPROVAL") {
@@ -559,25 +548,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             trajectoryId = tool.trajectoryId ?: currentTrajectoryId
         )
 
-        if (existingEntry != null && existingEntry.key != tool.id) {
-            currentActiveToolsMap.remove(tool.id)
-            val oldIdx = toolStepIndices.remove(tool.id)
-            if (oldIdx != null && !toolStepIndices.containsKey(targetId)) {
-                toolStepIndices[targetId] = oldIdx
-            }
-        }
         currentActiveToolsMap[targetId] = unifiedTool
 
-        val initialStepIndex = toolStepIndices.getOrPut(targetId) { actualStepIdx }
-
-        val oldMarker = if (existingEntry != null && existingEntry.key != tool.id) "<!-- tool_call:${tool.id} -->" else null
-        if (oldMarker != null) {
-            currentTurnToolMarkers.values.forEach { it.remove(oldMarker) }
-        }
-        val targetMarker = "<!-- tool_call:$targetId -->"
-        val alreadyPresent = currentTurnToolMarkers.values.any { it.contains(targetMarker) }
-        if (!alreadyPresent) {
-            currentTurnToolMarkers.getOrPut(initialStepIndex) { java.util.concurrent.CopyOnWriteArrayList() }.add(targetMarker)
+        val marker = "<!-- tool_call:$targetId -->"
+        val existingList = currentTurnToolMarkers.getOrPut(actualStepIdx) { java.util.concurrent.CopyOnWriteArrayList() }
+        if (!existingList.contains(marker)) {
+            existingList.add(marker)
         }
 
         if (normName == "generate_image" && unifiedTool.output.isNotBlank()) {

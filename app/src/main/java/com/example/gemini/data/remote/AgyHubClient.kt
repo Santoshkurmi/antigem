@@ -1143,7 +1143,7 @@ data class AgyMediaItem(
             else -> if (scope.startsWith("PERMISSION_SCOPE_")) scope else "PERMISSION_SCOPE_ONCE"
         }
 
-        fun makePayload(type: String): String {
+        fun makeNestedPayload(type: String): String {
             return JSONObject().apply {
                 put("cascadeId", cascadeId)
                 put("interaction", JSONObject().apply {
@@ -1187,30 +1187,38 @@ data class AgyMediaItem(
             }.toString()
         }
 
-        val primaryPayload = makePayload(interactionType)
-        var res = executeGrpcWebCall("HandleCascadeUserInteraction", primaryPayload, hubUrl).map { }
-        if (res.isSuccess) return res
+        val primaryTypes = listOf("permission", interactionType, "mcp", "approvalInteraction").distinct()
+        var lastErr: Throwable? = null
 
-        // Fallback sequence: try alternative interaction types
-        val fallbackTypes = when (interactionType) {
-            "mcp" -> listOf("approvalInteraction", "permission")
-            "approvalInteraction" -> listOf("permission", "mcp")
-            else -> listOf("approvalInteraction", "mcp")
+        for (pType in primaryTypes) {
+            val payload = makeNestedPayload(pType)
+            
+            // Strategy A: Connect-RPC application/json unary call
+            val unaryRes = callUnary("HandleCascadeUserInteraction", payload, hubUrl)
+            if (unaryRes.isSuccess) {
+                Log.d(TAG, "handleCascadeUserInteraction succeeded via Connect-RPC (type=$pType)")
+                return Result.success(Unit)
+            } else {
+                lastErr = unaryRes.exceptionOrNull()
+            }
+
+            // Strategy B: gRPC-Web application/grpc-web+json framed call
+            val grpcRes = executeGrpcWebCall("HandleCascadeUserInteraction", payload, hubUrl)
+            if (grpcRes.isSuccess) {
+                Log.d(TAG, "handleCascadeUserInteraction succeeded via gRPC-Web (type=$pType)")
+                return Result.success(Unit)
+            } else {
+                lastErr = grpcRes.exceptionOrNull()
+            }
         }
 
-        for (fbType in fallbackTypes) {
-            val fallbackPayload = makePayload(fbType)
-            res = executeGrpcWebCall("HandleCascadeUserInteraction", fallbackPayload, hubUrl).map { }
-            if (res.isSuccess) return res
-        }
-
-        // If allow was requested and all failed, try resolveOutstandingSteps as final recovery
+        // Recovery Strategy: ResolveOutstandingSteps if allow is true
         if (allow) {
             val resolveRes = resolveOutstandingSteps(cascadeId, hubUrl)
             if (resolveRes.isSuccess) return resolveRes
         }
 
-        return res
+        return Result.failure(lastErr ?: Exception("HandleCascadeUserInteraction failed across all payload formats"))
     }
 
     /**
@@ -1377,10 +1385,13 @@ data class AgyMediaItem(
         }
         val tcArgs = parseArgsJson(firstTc) ?: parseArgsJson(metaTc) ?: genericArgs
 
-        val isStepRunning = stepStatus.contains("RUN", ignoreCase = true)
-        val isStepDone = stepStatus.contains("SUCCESS", ignoreCase = true) ||
-                         stepStatus.contains("DONE", ignoreCase = true) ||
-                         stepStatus.contains("COMPLET", ignoreCase = true)
+        val isStepRunning = stepStatus == "CORTEX_STEP_STATUS_RUNNING" ||
+                stepStatus == "CORTEX_STEP_STATUS_PENDING" ||
+                stepStatus == "CORTEX_STEP_STATUS_GENERATING" ||
+                stepStatus == "RUNNING"
+        val isStepDone = stepStatus == "CORTEX_STEP_STATUS_DONE" ||
+                stepStatus == "DONE" ||
+                stepStatus == "SUCCESS"
 
         val isProposedRunCommand = rc != null && rc.has("proposedCommandLine") &&
                 rc.optString("commandLine", "").isBlank() &&
@@ -1389,32 +1400,24 @@ data class AgyMediaItem(
 
         val isProposedGenericCommand = genericArgs?.has("CommandLine") == true && !step.has("runCommand")
 
-        val isCascadeWaiting = cascadeStatus.contains("WAIT", ignoreCase = true)
         val isWaitingPermission = !isStepRunning && !isStepDone && (
             perm != null ||
-            (reqInteraction != null && (
-                reqInteraction.has("permission") ||
-                reqInteraction.has("confirmation") ||
-                reqInteraction.has("mcp") ||
-                reqInteraction.has("action") ||
-                reqInteraction.optString("type").contains("CONFIRM", ignoreCase = true) ||
-                reqInteraction.optString("type").contains("MCP", ignoreCase = true)
-            )) ||
-            stepType.contains("CONFIRM", ignoreCase = true) ||
-            stepStatus.contains("WAIT", ignoreCase = true) ||
+            (reqInteraction != null && reqInteraction.length() > 0) ||
+            stepType == "CORTEX_STEP_TYPE_CONFIRM" ||
+            stepStatus == "CORTEX_STEP_STATUS_WAITING" ||
+            stepStatus == "WAITING" ||
             isProposedRunCommand ||
-            isProposedGenericCommand ||
-            (isCascadeWaiting && !step.has("userInput") && (step.has("runCommand") || step.has("generic") || step.has("mcpTool") || step.has("callMcpTool") || stepType.contains("MCP")))
+            isProposedGenericCommand
         )
 
         fun resolveStatus(hasOutput: Boolean, isPending: Boolean = false): String {
             return when {
-                isPending || stepStatus.contains("WAIT", ignoreCase = true) || (isCascadeWaiting && !hasOutput) -> "PENDING_APPROVAL"
-                stepStatus.contains("RUN", ignoreCase = true) || (cascadeStatus.contains("RUN", ignoreCase = true) && !hasOutput) -> "RUNNING"
-                stepStatus.contains("ERROR", ignoreCase = true) || stepStatus.contains("FAIL", ignoreCase = true) -> "FAILED"
-                stepStatus.contains("CANCEL", ignoreCase = true) || stepStatus.contains("REJECT", ignoreCase = true) -> "REJECTED"
-                !hasOutput && !stepStatus.contains("SUCCESS", ignoreCase = true) && !stepStatus.contains("DONE", ignoreCase = true) -> "RUNNING"
-                else -> "SUCCESS"
+                stepStatus == "CORTEX_STEP_STATUS_DONE" || stepStatus == "DONE" || stepStatus == "SUCCESS" -> "SUCCESS"
+                stepStatus == "CORTEX_STEP_STATUS_ERROR" || stepStatus == "ERROR" || stepStatus == "FAILED" -> "FAILED"
+                stepStatus == "CORTEX_STEP_STATUS_CANCELLED" || stepStatus == "CANCELLED" || stepStatus == "REJECTED" -> "REJECTED"
+                stepStatus == "CORTEX_STEP_STATUS_WAITING" || stepStatus == "WAITING" || isPending -> "PENDING_APPROVAL"
+                stepStatus == "CORTEX_STEP_STATUS_RUNNING" || stepStatus == "CORTEX_STEP_STATUS_PENDING" || stepStatus == "CORTEX_STEP_STATUS_GENERATING" || stepStatus == "RUNNING" -> "RUNNING"
+                else -> if (isPending) "PENDING_APPROVAL" else if (hasOutput) "SUCCESS" else "RUNNING"
             }
         }
 
@@ -1503,7 +1506,7 @@ data class AgyMediaItem(
                 ?: ""
             val out = rc?.optJSONObject("combinedOutput")?.optString("full") ?: rc?.optString("output", "") ?: ""
             val exitCode = if (rc != null && rc.has("exitCode")) rc.optInt("exitCode", 0) else null
-            val isWaiting = isProposedRunCommand || isWaitingPermission || stepStatus.contains("WAIT", ignoreCase = true) || (isCascadeWaiting && out.isBlank() && exitCode == null)
+            val isWaiting = isProposedRunCommand || isWaitingPermission || stepStatus == "CORTEX_STEP_STATUS_WAITING"
             val toolStatus = resolveStatus(out.isNotBlank() || exitCode != null, isWaiting)
             return ToolCall(
                 id = makeToolId("tool_"),
@@ -1601,7 +1604,7 @@ data class AgyMediaItem(
             }
 
             val hasOutput = outStr.isNotBlank() || resError != null
-            val isWaiting = isWaitingPermission || (isCascadeWaiting && !hasOutput && !isStepRunning && !isStepDone)
+            val isWaiting = isWaitingPermission
             val toolStatus = when {
                 resError != null -> "FAILED"
                 isWaiting -> "PENDING_APPROVAL"
@@ -1732,7 +1735,7 @@ data class AgyMediaItem(
                 }
 
                 val out = tc.optString("output", tc.optString("result", tcAction.ifBlank { tcSummary }))
-                val isWaiting = isWaitingPermission || isCascadeWaiting
+                val isWaiting = isWaitingPermission
                 val toolStatus = resolveStatus(out.isNotBlank() && out != tcAction, isWaiting)
 
                 val idPrefix = when {
@@ -1766,7 +1769,7 @@ data class AgyMediaItem(
             (stepStatus.contains("RUN", ignoreCase = true) && rawContentStr.contains("Task Description:", ignoreCase = true))) {
             val taskDesc = Regex("""Task Description:\s*(.*)""").find(rawContentStr)?.groupValues?.get(1)?.trim() ?: ""
             val taskId = Regex("""task id:\s*([^\s\n]+)""").find(rawContentStr)?.groupValues?.get(1)?.trim() ?: ""
-            val isWait = isWaitingPermission || isCascadeWaiting
+            val isWait = isWaitingPermission
             return ToolCall(
                 id = makeToolId("tool_"),
                 name = "bash",
@@ -1974,7 +1977,7 @@ data class AgyMediaItem(
             val fullOutputUri = resultObj?.optString("fullOutputUri", "")?.takeIf { it.isNotBlank() }
             val toolCallMeta = meta?.optJSONObject("toolCall")
             val metaName = toolCallMeta?.optString("name", "")?.lowercase() ?: ""
-            val isGenericWaiting = isWaitingPermission || isCascadeWaiting
+            val isGenericWaiting = isWaitingPermission
 
             when {
                 args?.has("CommandLine") == true || metaName == "run_command" -> {

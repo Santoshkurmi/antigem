@@ -346,73 +346,7 @@ fun AgentToolCallCard(
                 )
             }
 
-            // Pending Approval Action Bar
-            if (isPendingApproval) {
-                val pendingTitle = when {
-                    isMcp -> "AI wants to execute this MCP tool:"
-                    isEditFile -> "AI wants to modify this file:"
-                    isViewFile -> "AI wants to view this file:"
-                    isListDir -> "AI wants to inspect this directory:"
-                    isBash -> "AI wants to execute this shell command in Termux:"
-                    else -> "AI wants to run this tool:"
-                }
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF0D0E15).copy(alpha = 0.4f))
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                ) {
-                    Text(
-                        text = pendingTitle,
-                        fontSize = 11.5.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFF0D0E15),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = if (isBash) "$ ${toolCall.command}" else toolCall.command,
-                            fontFamily = if (isBash || isMcp) FontFamily.Monospace else FontFamily.Default,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            color = ClaudeTerracotta,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedButton(
-                            onClick = { onReject?.invoke(toolCall) },
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = null, modifier = Modifier.size(13.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "Reject", fontSize = 11.5.sp)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = { onApprove?.invoke(toolCall) },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = if (isBash) "Run Command" else if (isMcp) "Approve MCP" else "Allow", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
+
 
             // Always-visible Image Preview for Generate Image tool
             if (isGenImg) {
