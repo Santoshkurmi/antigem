@@ -348,6 +348,7 @@ fun AgentToolCallCard(
 
 
 
+
             // Always-visible Image Preview for Generate Image tool
             if (isGenImg) {
                 if (isRunning) {

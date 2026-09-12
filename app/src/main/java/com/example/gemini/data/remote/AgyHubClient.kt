@@ -1369,7 +1369,7 @@ data class AgyMediaItem(
             ?: step.optString("toolCallId", "").takeIf { it.isNotBlank() }
 
         fun makeToolId(prefix: String): String {
-            return realToolId ?: "${prefix}${conversationId}_$stepIndex"
+            return stepIndex.toString()
         }
 
         fun parseArgsJson(obj: JSONObject?): JSONObject? {
@@ -1494,6 +1494,58 @@ data class AgyMediaItem(
                 output = toolAction.ifBlank { "[Awaiting confirmation]" },
                 status = "PENDING_APPROVAL"
             )
+        }
+
+        val parsedArgs = parseArgsJson(genericArgs ?: tcArgs)
+        val genericResultPayload = generic?.optJSONObject("result")?.optJSONObject("payload")
+
+        // 0.5. Modern Generic Step Pattern
+        if (stepType == "CORTEX_STEP_TYPE_GENERIC" || genericArgs != null || parsedArgs != null || (stepType.isBlank() && metaTc != null)) {
+            val name = generic?.optString("name", "")?.takeIf { it.isNotBlank() }
+                ?: metaTc?.optString("name", "")?.takeIf { it.isNotBlank() }
+                ?: parsedArgs?.optString("ToolName", parsedArgs.optString("toolName", ""))?.takeIf { it.isNotBlank() }
+                ?: ""
+
+            if (name.isNotBlank() || (parsedArgs != null && parsedArgs.length() > 0)) {
+                val mName = if (name.isBlank() && parsedArgs?.has("CommandLine") == true) "run_command" else name
+
+                val cmd = when {
+                    parsedArgs?.has("CommandLine") == true -> parsedArgs.optString("CommandLine", "")
+                    parsedArgs?.has("commandLine") == true -> parsedArgs.optString("commandLine", "")
+                    parsedArgs?.has("query") == true -> parsedArgs.optString("query", "")
+                    parsedArgs?.has("AbsolutePath") == true -> parsedArgs.optString("AbsolutePath", "")
+                    parsedArgs?.has("TargetFile") == true -> parsedArgs.optString("TargetFile", "")
+                    parsedArgs?.has("DirectoryPath") == true -> parsedArgs.optString("DirectoryPath", "")
+                    parsedArgs?.has("Prompt") == true -> parsedArgs.optString("Prompt", "")
+                    parsedArgs?.has("ServerName") == true -> {
+                        val s = parsedArgs.optString("ServerName")
+                        val t = parsedArgs.optString("ToolName")
+                        if (s.isNotBlank() && t.isNotBlank()) "$s / $t" else t
+                    }
+                    else -> toolSummary.ifBlank { toolAction }
+                }
+
+                val out = when {
+                    genericResultPayload?.has("runCommand") == true -> genericResultPayload.getJSONObject("runCommand").optJSONObject("combinedOutput")?.optString("full", "") ?: ""
+                    genericResultPayload?.has("searchWeb") == true -> genericResultPayload.getJSONObject("searchWeb").optString("summary", "")
+                    genericResultPayload?.has("viewFile") == true -> genericResultPayload.getJSONObject("viewFile").optString("content", "")
+                    genericResultPayload?.has("codeAction") == true -> genericResultPayload.getJSONObject("codeAction").optString("diff", "")
+                    genericResultPayload?.has("mcpTool") == true -> genericResultPayload.getJSONObject("mcpTool").optString("result", "")
+                    else -> generic?.optJSONObject("result")?.optString("payload", "") ?: ""
+                }
+
+                val exitCode = if (genericResultPayload?.has("runCommand") == true) genericResultPayload.getJSONObject("runCommand").optInt("exitCode", 0) else null
+
+                val toolStatus = resolveStatus(out.isNotBlank() || exitCode != null, isWaitingPermission)
+                return ToolCall(
+                    id = makeToolId("tool_"),
+                    name = normalizeToolName(mName.ifBlank { "unknown" }),
+                    command = cmd,
+                    output = out,
+                    status = toolStatus,
+                    exitCode = exitCode
+                )
+            }
         }
 
         // 1. Terminal / Shell command
