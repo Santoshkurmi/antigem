@@ -1135,13 +1135,12 @@ data class AgyMediaItem(
         interactionType: String = "permission",
         hubUrl: String = DEFAULT_HUB_URL
     ): Result<Unit> {
-        val scopeInt = when (scope.uppercase()) {
-            "PERMISSION_SCOPE_ONCE", "ONCE" -> 1
-            "PERMISSION_SCOPE_CONVERSATION", "CONVERSATION" -> 2
-            "PERMISSION_SCOPE_WORKSPACE", "WORKSPACE" -> 3
-            "PERMISSION_SCOPE_GLOBAL", "GLOBAL" -> 4
-            "PERMISSION_SCOPE_PROJECT", "PROJECT" -> 5
-            else -> 1
+        val scopeStr = when (scope.uppercase()) {
+            "PERMISSION_SCOPE_ONCE", "ONCE" -> "PERMISSION_SCOPE_ONCE"
+            "PERMISSION_SCOPE_CONVERSATION", "CONVERSATION" -> "PERMISSION_SCOPE_CONVERSATION"
+            "PERMISSION_SCOPE_WORKSPACE", "WORKSPACE", "PERMISSION_SCOPE_PROJECT", "PROJECT" -> "PERMISSION_SCOPE_PROJECT"
+            "PERMISSION_SCOPE_GLOBAL", "GLOBAL", "PERMISSION_SCOPE_PERMANENT" -> "PERMISSION_SCOPE_PERMANENT"
+            else -> if (scope.startsWith("PERMISSION_SCOPE_")) scope else "PERMISSION_SCOPE_ONCE"
         }
 
         fun makePayload(type: String): String {
@@ -1177,7 +1176,7 @@ data class AgyMediaItem(
                             put("permission", JSONObject().apply {
                                 put("allow", allow)
                                 if (allow) {
-                                    put("scope", scopeInt)
+                                    put("scope", scopeStr)
                                 } else {
                                     put("userDenyInstruction", userDenyInstruction.ifBlank { "User rejected this command." })
                                 }
@@ -1970,112 +1969,200 @@ data class AgyMediaItem(
         if (step.has("generic")) {
             val generic = step.getJSONObject("generic")
             val args = generic.optJSONObject("args")
+            val resultObj = generic.optJSONObject("result")
+            val payload = resultObj?.optJSONObject("payload")
+            val fullOutputUri = resultObj?.optString("fullOutputUri", "")?.takeIf { it.isNotBlank() }
             val toolCallMeta = meta?.optJSONObject("toolCall")
             val metaName = toolCallMeta?.optString("name", "")?.lowercase() ?: ""
             val isGenericWaiting = isWaitingPermission || isCascadeWaiting
 
             when {
                 args?.has("CommandLine") == true || metaName == "run_command" -> {
-                    val cmd = args?.optString("CommandLine", "") ?: ""
+                    val payloadRc = payload?.optJSONObject("runCommand") ?: rc
+                    val cmd = payloadRc?.optString("commandLine")?.takeIf { it.isNotBlank() }
+                        ?: args?.optString("CommandLine", "") ?: ""
+                    val out = payloadRc?.optJSONObject("combinedOutput")?.optString("full")
+                        ?: payloadRc?.optString("output")
+                        ?: rc?.optJSONObject("combinedOutput")?.optString("full")
+                        ?: rc?.optString("output")
+                        ?: fullOutputUri?.let { "[Output stored at $it]" }
+                        ?: if (isGenericWaiting) toolAction.ifBlank { "[Awaiting confirmation]" } else toolAction
+                    val exitCode = if (payloadRc?.has("exitCode") == true) payloadRc.optInt("exitCode", 0) else if (rc?.has("exitCode") == true) rc.optInt("exitCode", 0) else null
+
                     return ToolCall(
                         id = makeToolId("tool_"),
                         name = "bash",
                         command = cmd.ifBlank { toolSummary },
-                        output = if (isGenericWaiting) toolAction.ifBlank { "[Awaiting confirmation]" } else toolAction,
-                        status = resolveStatus(false, isGenericWaiting)
+                        output = out,
+                        status = resolveStatus(out.isNotBlank() && out != toolAction, isGenericWaiting),
+                        exitCode = exitCode
                     )
                 }
                 args?.has("AbsolutePath") == true || metaName == "view_file" -> {
-                    val path = (args?.optString("AbsolutePath", "") ?: "").removePrefix("file://")
-                    val fileName = path.substringAfterLast('/').ifBlank { path }
+                    val payloadVf = payload?.optJSONObject("viewFile") ?: step.optJSONObject("viewFile")
+                    val rawPath = (args?.optString("AbsolutePath", "") ?: payloadVf?.optString("absolutePathUri", payloadVf?.optString("absolutePath", "")) ?: "").removePrefix("file://")
+                    val fileName = rawPath.substringAfterLast('/').ifBlank { rawPath }
+                    val content = payloadVf?.optString("content")?.takeIf { it.isNotBlank() }
+                        ?: fullOutputUri?.let { "[File content at $it]" }
+                        ?: rawPath.ifBlank { toolAction }
+
                     return ToolCall(
                         id = makeToolId("tool_view_"),
                         name = "view_file",
                         command = if (fileName.isNotBlank()) fileName else toolSummary.ifBlank { "View File" },
-                        output = path.ifBlank { toolAction },
-                        status = resolveStatus(false, isGenericWaiting)
+                        output = content,
+                        status = resolveStatus(content.isNotBlank(), isGenericWaiting)
                     )
                 }
                 args?.has("TargetFile") == true || metaName == "edit_file" || metaName == "write_to_file" || metaName == "replace_file_content" -> {
-                    val path = (args?.optString("TargetFile", "") ?: "").removePrefix("file://")
+                    val payloadCa = payload?.optJSONObject("codeAction")
+                        ?: payload?.optJSONObject("modifyFile")
+                        ?: step.optJSONObject("codeAction")
+                        ?: step.optJSONObject("modifyFile")
+                    val path = (args?.optString("TargetFile", "") ?: payloadCa?.optString("uri", payloadCa?.optString("path", "")) ?: "").removePrefix("file://")
                     val fileName = path.substringAfterLast('/').ifBlank { path }
+                    val diff = payloadCa?.optString("diff")?.takeIf { it.isNotBlank() }
+                        ?: payloadCa?.optString("patch")?.takeIf { it.isNotBlank() }
+                    val diffStats = payloadCa?.optJSONObject("diffStats")
+                    val diffStatsStr = if (diffStats != null) "+${diffStats.optInt("additions", 0)}, -${diffStats.optInt("deletions", 0)}" else ""
+
                     val desc = args?.optString("Instruction", args.optString("Description", "")) ?: ""
+                    val out = when {
+                        !diff.isNullOrBlank() -> diff
+                        diffStatsStr.isNotBlank() -> "$path ($diffStatsStr)"
+                        desc.isNotBlank() -> "$path\n$desc"
+                        else -> path.ifBlank { toolAction }
+                    }
+
                     return ToolCall(
                         id = makeToolId("tool_edit_"),
                         name = "edit_file",
                         command = if (fileName.isNotBlank()) fileName else toolSummary.ifBlank { "Edit File" },
-                        output = if (desc.isNotBlank()) "$path\n$desc" else path.ifBlank { toolAction },
-                        status = resolveStatus(false, isGenericWaiting)
+                        output = out,
+                        status = resolveStatus(out.isNotBlank(), isGenericWaiting)
                     )
                 }
                 args?.has("DirectoryPath") == true || metaName == "list_dir" -> {
-                    val dir = (args?.optString("DirectoryPath", "") ?: "").removePrefix("file://")
+                    val payloadLd = payload?.optJSONObject("listDirectory") ?: step.optJSONObject("listDirectory")
+                    val dir = (args?.optString("DirectoryPath", "") ?: payloadLd?.optString("directoryPath", "") ?: "").removePrefix("file://")
                     val dirName = dir.substringAfterLast('/').ifBlank { dir }
+                    val resultsArr = payloadLd?.optJSONArray("results")
+                    val out = if (resultsArr != null && resultsArr.length() > 0) {
+                        val items = mutableListOf<String>()
+                        for (idx in 0 until resultsArr.length()) {
+                            val item = resultsArr.optJSONObject(idx) ?: continue
+                            val name = item.optString("name", "")
+                            val isDir = item.optBoolean("isDir", false)
+                            val size = item.optString("sizeBytes", "")
+                            val prefix = if (isDir) "📁" else "📄"
+                            val suffix = if (size.isNotBlank()) " ($size bytes)" else ""
+                            items.add("$prefix $name$suffix")
+                        }
+                        items.joinToString("\n")
+                    } else {
+                        payloadLd?.optString("output") ?: dir.ifBlank { toolAction }
+                    }
+
                     return ToolCall(
                         id = makeToolId("tool_list_"),
                         name = "list_dir",
                         command = if (dirName.isNotBlank()) dirName else toolSummary.ifBlank { "Directory" },
-                        output = dir.ifBlank { toolAction },
-                        status = resolveStatus(false, isGenericWaiting)
+                        output = out,
+                        status = resolveStatus(out.isNotBlank(), isGenericWaiting)
                     )
                 }
                 args?.has("Query") == true && args.has("SearchPath") -> {
-                    val q = args.optString("Query", "")
-                    val sp = args.optString("SearchPath", "").removePrefix("file://")
+                    val payloadGs = payload?.optJSONObject("grepSearch") ?: step.optJSONObject("grepSearch")
+                    val q = args?.optString("Query", "") ?: payloadGs?.optString("query", "") ?: ""
+                    val sp = (args?.optString("SearchPath", "") ?: payloadGs?.optString("searchPath", "") ?: "").removePrefix("file://")
+                    val resultsArr = payloadGs?.optJSONArray("results")
+                    val out = if (resultsArr != null && resultsArr.length() > 0) {
+                        val items = mutableListOf<String>()
+                        for (idx in 0 until resultsArr.length().coerceAtMost(50)) {
+                            val item = resultsArr.optJSONObject(idx) ?: continue
+                            val file = item.optString("fileName", "").substringAfterLast('/')
+                            val line = item.optInt("lineNumber", 0)
+                            val content = item.optString("lineContent", "")
+                            items.add("$file:$line: $content")
+                        }
+                        items.joinToString("\n")
+                    } else {
+                        payloadGs?.optString("commandRun") ?: toolAction
+                    }
+
                     return ToolCall(
                         id = makeToolId("tool_grep_"),
                         name = "grep_search",
                         command = "\"$q\" in ${sp.substringAfterLast('/')}",
-                        output = toolAction,
-                        status = resolveStatus(false, isGenericWaiting)
+                        output = out,
+                        status = resolveStatus(out.isNotBlank(), isGenericWaiting)
                     )
                 }
                 args?.has("Url") == true || metaName == "read_url_content" -> {
-                    val url = args?.optString("Url", "") ?: ""
+                    val payloadRu = payload?.optJSONObject("readUrlContent") ?: step.optJSONObject("readUrlContent")
+                    val url = args?.optString("Url", "") ?: payloadRu?.optString("url", "") ?: ""
+                    val content = payloadRu?.optString("content", payloadRu?.optString("markdown", "")) ?: toolAction
+
                     return ToolCall(
                         id = makeToolId("tool_read_"),
                         name = "read_url",
                         command = url.ifBlank { toolSummary },
-                        output = toolAction,
-                        status = resolveStatus(false, isGenericWaiting)
+                        output = content,
+                        status = resolveStatus(content.isNotBlank(), isGenericWaiting)
                     )
                 }
                 args?.has("query") == true || args?.has("Query") == true || metaName == "search_web" -> {
-                    val query = (args?.optString("query", args.optString("Query", "")) ?: "").trim().removeSurrounding("\"")
+                    val payloadSw = payload?.optJSONObject("searchWeb") ?: step.optJSONObject("searchWeb")
+                    val query = (args?.optString("query", args.optString("Query", "")) ?: payloadSw?.optString("query", "") ?: "").trim().removeSurrounding("\"")
                     val title = query.ifBlank { toolSummary.ifBlank { "Web Search" } }
+                    val summary = payloadSw?.optString("summary")?.takeIf { it.isNotBlank() }
+                        ?: payloadSw?.optJSONArray("results")?.let { resArr ->
+                            (0 until resArr.length()).mapNotNull { resArr.optJSONObject(it)?.optString("title") }.joinToString("\n")
+                        }
+                        ?: toolAction.ifBlank { title }
+
                     return ToolCall(
                         id = makeToolId("tool_web_"),
                         name = "web_search",
                         command = title,
-                        output = toolAction.ifBlank { title },
-                        status = resolveStatus(false, isGenericWaiting)
+                        output = summary,
+                        status = resolveStatus(summary.isNotBlank(), isGenericWaiting)
                     )
                 }
                 args?.has("Pattern") == true || metaName == "find_by_name" -> {
-                    val pattern = args?.optString("Pattern", "") ?: ""
+                    val payloadFind = payload?.optJSONObject("find") ?: step.optJSONObject("find")
+                    val pattern = args?.optString("Pattern", "") ?: payloadFind?.optString("pattern", "") ?: ""
+                    val out = payloadFind?.optString("truncatedOutput", payloadFind?.optString("output", toolAction)) ?: toolAction
+
                     return ToolCall(
                         id = makeToolId("tool_find_"),
                         name = "find",
                         command = pattern.ifBlank { toolSummary.ifBlank { "Find Files" } },
-                        output = toolAction,
-                        status = resolveStatus(false, isGenericWaiting)
+                        output = out,
+                        status = resolveStatus(out.isNotBlank(), isGenericWaiting)
                     )
                 }
                 args?.has("Prompt") == true || metaName == "generate_image" -> {
-                    val prompt = args?.optString("Prompt", "") ?: ""
-                    val content = step.optString("content", step.optJSONObject("generic")?.optString("content", "") ?: "")
-                    val rawOutput = if (content.isNotBlank()) content else toolAction
+                    val payloadGi = payload?.optJSONObject("generateImage") ?: step.optJSONObject("generateImage")
+                    val prompt = args?.optString("Prompt", "") ?: payloadGi?.optString("prompt", "") ?: ""
+                    val gm = payloadGi?.optJSONObject("generatedMedia")
+                    val rawUri = gm?.optString("uri", "") ?: payloadGi?.optString("uri", "") ?: ""
+                    val inlineData = gm?.optString("inlineData", "") ?: ""
+                    val mimeType = gm?.optString("mimeType", "image/jpeg") ?: "image/jpeg"
+                    val output = if (inlineData.isNotBlank()) "data:$mimeType;base64,$inlineData" else if (rawUri.isNotBlank()) rawUri else toolAction
+
                     return ToolCall(
                         id = makeToolId("tool_genimg_"),
                         name = "generate_image",
                         command = prompt.ifBlank { toolSummary.ifBlank { "Generate Image" } },
-                        output = rawOutput,
-                        status = resolveStatus(content.isNotBlank(), isGenericWaiting)
+                        output = output,
+                        status = resolveStatus(output.isNotBlank(), isGenericWaiting)
                     )
                 }
                 args?.has("ServerName") == true || args?.has("ToolName") == true || metaName == "call_mcp_tool" || metaName.startsWith("mcp_") -> {
-                    val sName = args?.optString("ServerName", args.optString("serverName", "")) ?: ""
-                    val tName = args?.optString("ToolName", args.optString("toolName", "")) ?: ""
+                    val payloadMcp = payload?.optJSONObject("mcpTool") ?: step.optJSONObject("mcpTool")
+                    val sName = args?.optString("ServerName", args.optString("serverName", payloadMcp?.optString("serverName", ""))) ?: ""
+                    val tName = args?.optString("ToolName", args.optString("toolName", payloadMcp?.optString("toolName", ""))) ?: ""
                     val mcpArgs = args?.opt("Arguments") ?: args?.opt("arguments") ?: args?.opt("args")
                     val mcpArgsSummary = when (mcpArgs) {
                         is JSONObject -> {
@@ -2100,12 +2187,34 @@ data class AgyMediaItem(
                         else if (metaName.startsWith("mcp_")) metaName
                         else "mcp_tool"
 
+                    val mcpRes = payloadMcp?.opt("result") ?: payloadMcp?.opt("response") ?: payloadMcp?.opt("output")
+                    val out = when {
+                        mcpRes is JSONObject -> {
+                            val contentArr = mcpRes.optJSONArray("content")
+                            if (contentArr != null && contentArr.length() > 0) {
+                                val sb = StringBuilder()
+                                for (ci in 0 until contentArr.length()) {
+                                    val cObj = contentArr.optJSONObject(ci)
+                                    val text = cObj?.optString("text", "") ?: ""
+                                    if (text.isNotBlank()) {
+                                        if (sb.isNotEmpty()) sb.append("\n")
+                                        sb.append(text)
+                                    }
+                                }
+                                if (sb.isNotEmpty()) sb.toString() else mcpRes.toString(2)
+                            } else mcpRes.optString("value", mcpRes.toString(2))
+                        }
+                        mcpRes is JSONArray -> mcpRes.toString(2)
+                        mcpRes != null && mcpRes.toString().isNotBlank() -> mcpRes.toString()
+                        else -> if (isGenericWaiting) toolAction.ifBlank { "[Awaiting confirmation]" } else toolAction
+                    }
+
                     return ToolCall(
                         id = makeToolId("tool_mcp_"),
                         name = normName,
                         command = cmd,
-                        output = if (isGenericWaiting) toolAction.ifBlank { "[Awaiting confirmation]" } else toolAction,
-                        status = resolveStatus(false, isGenericWaiting),
+                        output = out,
+                        status = resolveStatus(out.isNotBlank() && out != toolAction, isGenericWaiting),
                         interactionType = "mcp"
                     )
                 }
@@ -2392,15 +2501,7 @@ data class AgyMediaItem(
                     val tool = extractToolCallFromStep(step, stepIndex, conversationId, cascadeStatus)
                     if (tool != null) {
                         val normName = normalizeToolName(tool.name)
-                        val existingKey = turnTools.entries.find { (k, v) ->
-                            k == tool.id || (
-                                normalizeToolName(v.name) == normName &&
-                                (v.command == tool.command || tool.command.isBlank() || v.command.isBlank()) &&
-                                (v.status == "RUNNING" || v.status == "PENDING_APPROVAL" || k == tool.id)
-                            )
-                        }?.key
-
-                        val targetId = existingKey ?: tool.id
+                        val targetId = tool.id
                         val unifiedTool = tool.copy(id = targetId, name = normName)
                         turnTools[targetId] = unifiedTool
 

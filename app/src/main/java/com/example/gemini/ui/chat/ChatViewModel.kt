@@ -1457,14 +1457,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                         mergedTools[t.id] = t
                                     }
                                     for ((id, t) in currentActiveToolsMap) {
-                                        val normTName = com.example.gemini.data.remote.AgyHubClient.normalizeToolName(t.name)
-                                        if (t.status != "RUNNING" && t.status != "PENDING_APPROVAL") {
-                                            mergedTools.entries.removeIf { (oldId, oldT) ->
-                                                oldId != id && com.example.gemini.data.remote.AgyHubClient.normalizeToolName(oldT.name) == normTName &&
-                                                    oldT.status == "RUNNING" &&
-                                                    (oldT.command == t.command || oldT.command.isBlank() || t.command.isBlank())
-                                            }
-                                        }
                                         val sIdx = t.stepIndex ?: toolStepIndices[id] ?: currentWaitingStepIndex ?: id.substringAfterLast("_").toIntOrNull() ?: -1
                                         val isResponded = userRespondedToolIds.contains(id) || userRespondedToolIds.contains("step_$sIdx")
                                         if (isResponded && t.status == "PENDING_APPROVAL") {
