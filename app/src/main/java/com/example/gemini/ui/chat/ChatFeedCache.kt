@@ -5,6 +5,8 @@ import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.ui.components.MarkdownBlock
 import com.example.gemini.ui.components.parseMarkdownBlocks
+import com.example.gemini.ui.components.CodeBlockCache
+import com.example.gemini.ui.components.MarkdownTextCache
 import java.util.concurrent.ConcurrentHashMap
 
 @Immutable
@@ -16,7 +18,7 @@ sealed class ChatFeedItem(val key: String, val contentType: String) {
     @Immutable
     data class AssistantThinking(val messageId: String, val thoughtText: String, val durationMs: Long?, val isStreaming: Boolean) : ChatFeedItem("thought_$messageId", "THOUGHT")
     @Immutable
-    data class AssistantBlock(val messageId: String, val blockIndex: Int, val block: MarkdownBlock) : ChatFeedItem("${messageId}_b$blockIndex", "ASSISTANT_BLOCK")
+    data class AssistantBlock(val messageId: String, val blockIndex: Int, val block: MarkdownBlock) : ChatFeedItem("${messageId}_b$blockIndex", "BLOCK_${block::class.java.simpleName}")
     @Immutable
     data class AssistantTyping(val messageId: String, val modelId: String) : ChatFeedItem("typing_$messageId", "TYPING")
     @Immutable
@@ -74,7 +76,35 @@ object ChatFeedCache {
     fun prewarm(messages: List<ChatMessage>) {
         for (msg in messages) {
             if (!msg.isStreaming) {
-                getOrParse(msg)
+                val items = getOrParse(msg)
+                for (item in items) {
+                    if (item is ChatFeedItem.AssistantBlock) {
+                        when (val b = item.block) {
+                            is MarkdownBlock.Code -> {
+                                CodeBlockCache.prewarm(b.code, b.language)
+                            }
+                            is MarkdownBlock.Paragraph -> {
+                                MarkdownTextCache.prewarm(b.text)
+                            }
+                            is MarkdownBlock.Header -> {
+                                MarkdownTextCache.prewarm(b.text)
+                            }
+                            is MarkdownBlock.Bullet -> {
+                                MarkdownTextCache.prewarm(b.text)
+                            }
+                            is MarkdownBlock.Numbered -> {
+                                MarkdownTextCache.prewarm(b.text)
+                            }
+                            is MarkdownBlock.Blockquote -> {
+                                MarkdownTextCache.prewarm(b.text)
+                            }
+                            is MarkdownBlock.Task -> {
+                                MarkdownTextCache.prewarm(b.text)
+                            }
+                            else -> {}
+                        }
+                    }
+                }
             }
         }
     }

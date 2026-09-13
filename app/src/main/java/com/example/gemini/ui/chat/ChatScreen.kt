@@ -365,6 +365,8 @@ fun ChatScreen(
         }
     }
 
+
+
     // Hide scroll button after scroll stops
     LaunchedEffect(listState.isScrollInProgress) {
         if (!listState.isScrollInProgress && showScrollButton) {
@@ -374,6 +376,13 @@ fun ChatScreen(
     }
 
     var userSentMessageTrigger by remember { mutableStateOf(0) }
+
+    // Background prewarm to ensure zero UI-thread lag during scroll
+    LaunchedEffect(messages.size) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            ChatFeedCache.prewarm(messages)
+        }
+    }
 
     // Always scroll to very bottom when a conversation is opened or loaded
     LaunchedEffect(currentConv?.id, messages.size, feedItems.size) {
@@ -808,7 +817,7 @@ fun ChatScreen(
                                     key = { it.key },
                                     contentType = { it.contentType }
                                 ) { feedItem ->
-                                when (feedItem) {
+                                    when (feedItem) {
                                     is ChatFeedItem.Summary -> {
                                         Box(
                                             modifier = Modifier

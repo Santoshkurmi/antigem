@@ -337,6 +337,8 @@ fun MarkdownContent(
     }
 }
 
+private val mathDrawableCache = android.util.LruCache<Int, JLatexMathDrawable>(150)
+
 /**
  * 100% Native Android Canvas JLaTeXMath Renderer:
  * Renders limits, integrals, fractions, matrices, square roots, and complex LaTeX formulas
@@ -361,26 +363,33 @@ fun NativeMathView(
             .trim()
     }
 
+    val cacheKey = cleanLatex.hashCode() * 31 + textColor * 7 + textSizePx.toInt()
     val jLatexDrawable = remember(cleanLatex, textColor, textSizePx, isDark) {
-        try {
-            // First attempt: Colorized LaTeX formula with syntax highlighting
-            val colorizedLatex = colorizeLatexEquation(cleanLatex, isDark)
-            JLatexMathDrawable.builder(colorizedLatex)
-                .textSize(textSizePx)
-                .color(textColor)
-                .background(android.graphics.Color.TRANSPARENT)
-                .build()
-        } catch (_: Exception) {
-            try {
-                // Fallback: Standard monochrome native LaTeX
-                JLatexMathDrawable.builder(cleanLatex)
+        mathDrawableCache.get(cacheKey) ?: run {
+            val built = try {
+                // First attempt: Colorized LaTeX formula with syntax highlighting
+                val colorizedLatex = colorizeLatexEquation(cleanLatex, isDark)
+                JLatexMathDrawable.builder(colorizedLatex)
                     .textSize(textSizePx)
                     .color(textColor)
                     .background(android.graphics.Color.TRANSPARENT)
                     .build()
             } catch (_: Exception) {
-                null
+                try {
+                    // Fallback: Standard monochrome native LaTeX
+                    JLatexMathDrawable.builder(cleanLatex)
+                        .textSize(textSizePx)
+                        .color(textColor)
+                        .background(android.graphics.Color.TRANSPARENT)
+                        .build()
+                } catch (_: Exception) {
+                    null
+                }
             }
+            if (built != null) {
+                mathDrawableCache.put(cacheKey, built)
+            }
+            built
         }
     }
 
@@ -1188,6 +1197,71 @@ data class FormattedInlineResult(
  * Formats rich inline Markdown text with native JLatexMath inline rendering for symbols & equations,
  * and full support for Bold, Italic, Inline Code, Links, and Strikethrough.
  */
+private val BR_REGEX = Regex("<br\\s*/?>", RegexOption.IGNORE_CASE)
+
+private val INLINE_MARKDOWN_PATTERN: Pattern = Pattern.compile(
+    "(\\[(.*?)\\]\\(((?:https?|file)://[^\\s)]+)\\))|" +                              // 1: Markdown Link [text](url)
+    "(<a\\s+href=[\"']((?:https?|file)://[^\"']+)[\"']\\s*>(.*?)</a>)|" +             // 4: HTML Link <a href="url">text</a>
+    "(file:///[a-zA-Z0-9_./\\-#]+)|" +                                                 // 7: Bare file link file:///...
+    "(`([^`\\n]+)`)|" +                                                                // 8: Inline code `code`
+    "(<code>(.*?)</code>)|" +                                                          // 10: HTML code <code>code</code>
+    "([$]{1,2}([^$\\n]+)[$]{1,2})|" +                                                  // 12: Inline Math $formula$ or $$formula$$
+    "(\\\\\\((.*?)\\\\\\))|" +                                                         // 14: Inline Math \(formula\)
+    "(\\*{3}(.+?)\\*{3})|" +                                                           // 16: Bold-Italic ***text***
+    "(___([^_\\n]+)___)|" +                                                            // 18: Bold-Italic ___text___
+    "(\\*{2}(.+?)\\*{2})|" +                                                           // 20: Bold **text**
+    "(__([^_\\n]+)__)|" +                                                              // 22: Bold __text__
+    "(<b>(.*?)</b>)|" +                                                                // 24: HTML bold <b>text</b>
+    "(<strong>(.*?)</strong>)|" +                                                      // 26: HTML strong <strong>text</strong>
+    "(~~(.+?)~~)|" +                                                                   // 28: Strikethrough ~~text~~
+    "(<s>(.*?)</s>)|" +                                                                // 30: HTML strike <s>text</s>
+    "(<del>(.*?)</del>)|" +                                                            // 32: HTML del <del>text</del>
+    "(<strike>(.*?)</strike>)|" +                                                      // 34: HTML strike <strike>text</strike>
+    "(<u>(.*?)</u>)|" +                                                                // 36: HTML underline <u>text</u>
+    "(\\*(?!\\s)(.+?)(?<!\\s)\\*)|" +                                                  // 38: Italic *text*
+    "(_(?!\\s)([^_\\n]+?)(?<!\\s)_)|" +                                                // 40: Italic _text_
+    "(<i>(.*?)</i>)|" +                                                                // 42: HTML italic <i>text</i>
+    "(<em>(.*?)</em>)",                                                                // 44: HTML em <em>text</em>
+    Pattern.DOTALL or Pattern.CASE_INSENSITIVE
+)
+
+object MarkdownTextCache {
+    private val cache = android.util.LruCache<Int, FormattedInlineResult>(600)
+
+    fun prewarm(text: String, isDark: Boolean = true) {
+        getOrCompute(text, isStrikethrough = false, isDark = isDark, density = null, fileLinkHandler = null)
+    }
+
+    fun getOrCompute(
+        text: String,
+        isStrikethrough: Boolean = false,
+        isDark: Boolean = false,
+        density: Density? = null,
+        fileLinkHandler: FileLinkHandler? = null
+    ): FormattedInlineResult {
+        // Fast path for plain text without markdown tokens
+        if (!text.contains('*') && !text.contains('_') && !text.contains('`') &&
+            !text.contains('[') && !text.contains('<') && !text.contains('$') &&
+            !text.contains('\\') && !text.contains('~')
+        ) {
+            val clean = if (text.contains("<br", ignoreCase = true)) text.replace(BR_REGEX, "\n") else text
+            val str = if (isStrikethrough) {
+                AnnotatedString(clean, spanStyles = listOf(AnnotatedString.Range(SpanStyle(textDecoration = TextDecoration.LineThrough, color = Color.Gray), 0, clean.length)))
+            } else {
+                AnnotatedString(clean)
+            }
+            return FormattedInlineResult(str, emptyMap())
+        }
+
+        val cacheKey = text.hashCode() * 31 + (if (isDark) 1 else 0) * 7 + (if (isStrikethrough) 2 else 0)
+        return cache.get(cacheKey) ?: run {
+            val res = buildRichAnnotatedString(text, isStrikethrough, isDark, density, fileLinkHandler)
+            cache.put(cacheKey, res)
+            res
+        }
+    }
+}
+
 @Composable
 fun FormattedInlineText(
     text: String,
@@ -1209,7 +1283,7 @@ fun FormattedInlineText(
     val fileLinkHandler = LocalFileLinkHandler.current
 
     val result = remember(text, isStrikethrough, isDark, density, fileLinkHandler) {
-        buildRichAnnotatedString(text, isStrikethrough, isDark, density, fileLinkHandler)
+        MarkdownTextCache.getOrCompute(text, isStrikethrough, isDark, density, fileLinkHandler)
     }
 
     Text(
@@ -1236,35 +1310,9 @@ private fun buildRichAnnotatedString(
     }
 
     // Pre-process <br> tags to newlines
-    val cleanText = text.replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+    val cleanText = if (text.contains("<br", ignoreCase = true)) text.replace(BR_REGEX, "\n") else text
 
-    // Comprehensive regex for Markdown and HTML inline formatting tokens + Inline Math ($...$) + file:// links
-    val pattern = Pattern.compile(
-        "(\\[(.*?)\\]\\(((?:https?|file)://[^\\s)]+)\\))|" +                              // 1: Markdown Link [text](url)
-        "(<a\\s+href=[\"']((?:https?|file)://[^\"']+)[\"']\\s*>(.*?)</a>)|" +             // 4: HTML Link <a href="url">text</a>
-        "(file:///[a-zA-Z0-9_./\\-#]+)|" +                                                 // 7: Bare file link file:///...
-        "(`([^`\\n]+)`)|" +                                                                // 8: Inline code `code`
-        "(<code>(.*?)</code>)|" +                                                          // 10: HTML code <code>code</code>
-        "([$]{1,2}([^$\\n]+)[$]{1,2})|" +                                                  // 12: Inline Math $formula$ or $$formula$$
-        "(\\\\\\((.*?)\\\\\\))|" +                                                         // 14: Inline Math \(formula\)
-        "(\\*{3}(.+?)\\*{3})|" +                                                           // 16: Bold-Italic ***text***
-        "(___([^_\\n]+)___)|" +                                                            // 18: Bold-Italic ___text___
-        "(\\*{2}(.+?)\\*{2})|" +                                                           // 20: Bold **text**
-        "(__([^_\\n]+)__)|" +                                                              // 22: Bold __text__
-        "(<b>(.*?)</b>)|" +                                                                // 24: HTML bold <b>text</b>
-        "(<strong>(.*?)</strong>)|" +                                                      // 26: HTML strong <strong>text</strong>
-        "(~~(.+?)~~)|" +                                                                   // 28: Strikethrough ~~text~~
-        "(<s>(.*?)</s>)|" +                                                                // 30: HTML strike <s>text</s>
-        "(<del>(.*?)</del>)|" +                                                            // 32: HTML del <del>text</del>
-        "(<strike>(.*?)</strike>)|" +                                                      // 34: HTML strike <strike>text</strike>
-        "(<u>(.*?)</u>)|" +                                                                // 36: HTML underline <u>text</u>
-        "(\\*(?!\\s)(.+?)(?<!\\s)\\*)|" +                                                  // 38: Italic *text*
-        "(_(?!\\s)([^_\\n]+?)(?<!\\s)_)|" +                                                // 40: Italic _text_
-        "(<i>(.*?)</i>)|" +                                                                // 42: HTML italic <i>text</i>
-        "(<em>(.*?)</em>)",                                                                // 44: HTML em <em>text</em>
-        Pattern.DOTALL or Pattern.CASE_INSENSITIVE
-    )
-    val matcher = pattern.matcher(cleanText)
+    val matcher = INLINE_MARKDOWN_PATTERN.matcher(cleanText)
     var lastEnd = 0
 
     while (matcher.find()) {
@@ -1550,11 +1598,6 @@ private fun buildRichAnnotatedString(
 
     if (globalStrikethrough) {
         builder.pop()
-    }
-
-    val dt = (System.nanoTime() - t0) / 1_000_000.0
-    if (inlineContentMap.isNotEmpty() || dt > 1.0) {
-        Log.d("PERF_TRACE", "  📐 [Inline Math/Text Build] len=${text.length}, mathItems=${inlineContentMap.size}, took=${"%.2f".format(dt)}ms, text='${text.take(30)}'")
     }
 
     return FormattedInlineResult(builder.toAnnotatedString(), inlineContentMap)

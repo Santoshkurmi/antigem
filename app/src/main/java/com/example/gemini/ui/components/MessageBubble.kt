@@ -371,16 +371,18 @@ fun UserMessageBubble(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // 1. Audio attachments player
-                val audioAtts = message.attachments.filter { it.isAudio }
+                val audioAtts = remember(message.attachments) { message.attachments.filter { it.isAudio } }
                 for (att in audioAtts) {
                     ChatAudioPlayer(attachment = att)
                 }
 
                 // 2. Image attachments preview
-                val imageAtts = message.attachments.filter {
-                    it.isImage || it.name.endsWith(".jpg", true) || it.name.endsWith(".png", true) ||
-                            it.name.endsWith(".jpeg", true) || it.name.endsWith(".webp", true) ||
-                            it.name.endsWith(".gif", true) || it.mimeType?.startsWith("image/") == true
+                val imageAtts = remember(message.attachments) {
+                    message.attachments.filter {
+                        it.isImage || it.name.endsWith(".jpg", true) || it.name.endsWith(".png", true) ||
+                                it.name.endsWith(".jpeg", true) || it.name.endsWith(".webp", true) ||
+                                it.name.endsWith(".gif", true) || it.mimeType?.startsWith("image/") == true
+                    }
                 }
                 if (imageAtts.isNotEmpty()) {
                     UserMessageImagesGrid(
@@ -390,7 +392,9 @@ fun UserMessageBubble(
                 }
 
                 // 3. Document / other attachments
-                val docAtts = message.attachments.filter { !it.isAudio && !imageAtts.contains(it) }
+                val docAtts = remember(message.attachments, imageAtts) {
+                    message.attachments.filter { !it.isAudio && !imageAtts.contains(it) }
+                }
                 if (docAtts.isNotEmpty()) {
                     for (doc in docAtts) {
                         UserMessageDocumentItem(attachment = doc)
@@ -398,23 +402,21 @@ fun UserMessageBubble(
                 }
 
                 // 4. Text content (if not just placeholder "Voice note")
-                val displayContent = formatUserDisplayContent(message.content)
+                val displayContent = remember(message.content) { formatUserDisplayContent(message.content) }
                 val lineCount = remember(displayContent) { displayContent.lines().size }
                 val isLongText = remember(displayContent, lineCount) { lineCount > 6 || displayContent.length > 350 }
                 var isTextExpanded by remember { mutableStateOf(false) }
 
                 if (displayContent.isNotBlank() && !(audioAtts.isNotEmpty() && (displayContent == "Voice note" || displayContent == "Voice message"))) {
                     Column {
-                        SelectionContainer {
-                            Text(
-                                text = displayContent,
-                                fontSize = 15.sp,
-                                lineHeight = 22.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = if (isLongText && !isTextExpanded) 6 else Int.MAX_VALUE,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                        Text(
+                            text = displayContent,
+                            fontSize = 15.sp,
+                            lineHeight = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = if (isLongText && !isTextExpanded) 6 else Int.MAX_VALUE,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         if (isLongText) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(

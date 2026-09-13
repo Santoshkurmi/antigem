@@ -42,6 +42,8 @@ import com.example.gemini.domain.model.ToolCall
 import com.example.gemini.domain.model.ToolType
 import com.example.gemini.theme.*
 
+private val IMAGE_FILE_REGEX = Regex(".*\\.(png|jpe?g|webp|gif)(\\?.*)?$", RegexOption.IGNORE_CASE)
+
 /**
  * Interactive inline tool call card rendered inside assistant messages.
  * Shows status (Executing, Success, Failed), command preview, duration, and expandable terminal stdout.
@@ -82,8 +84,10 @@ fun AgentToolCallCard(
     val isMcp = toolCall.toolType == ToolType.MCP
     val isBash = toolCall.toolType == ToolType.BASH
 
-    val isImageOutput = isGenImg || toolCall.output.startsWith("data:image/") ||
-        (toolCall.output.startsWith("file://") && toolCall.output.matches(Regex(".*\\.(png|jpe?g|webp|gif)(\\?.*)?$", RegexOption.IGNORE_CASE)))
+    val isImageOutput = remember(toolCall.output, isGenImg) {
+        isGenImg || toolCall.output.startsWith("data:image/") ||
+        (toolCall.output.startsWith("file://") && toolCall.output.matches(IMAGE_FILE_REGEX))
+    }
 
     var resolvedImageUri by remember(toolCall.output) {
         mutableStateOf(if (isImageOutput && toolCall.output.isNotBlank()) HubMediaResolver.getResolvedUriSync(context, toolCall.output) else "")
