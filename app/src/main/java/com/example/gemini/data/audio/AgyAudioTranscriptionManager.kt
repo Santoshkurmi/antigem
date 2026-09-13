@@ -39,10 +39,14 @@ class AgyAudioTranscriptionManager(
     private var recordingJob: Job? = null
     private var streamJob: Job? = null
     private val isRecording = AtomicBoolean(false)
+    private val isPaused = AtomicBoolean(false)
     private val currentSessionId = MutableStateFlow<String?>(null)
 
     private val _isLiveStreaming = MutableStateFlow(false)
     val isLiveStreaming = _isLiveStreaming.asStateFlow()
+
+    private val _isLivePaused = MutableStateFlow(false)
+    val isLivePaused = _isLivePaused.asStateFlow()
 
     private val _latestAmplitude = MutableStateFlow(0.08f)
     val latestAmplitude = _latestAmplitude.asStateFlow()
@@ -92,6 +96,8 @@ class AgyAudioTranscriptionManager(
 
         audioRecord = record
         isRecording.set(true)
+        isPaused.set(false)
+        _isLivePaused.value = false
         _isLiveStreaming.value = true
         currentSessionId.value = null
         lastTranscribedText = ""
@@ -108,6 +114,10 @@ class AgyAudioTranscriptionManager(
                 while (isRecording.get() && isActive) {
                     val read = record.read(buffer, 0, buffer.size)
                     if (read > 0) {
+                        if (isPaused.get()) {
+                            _latestAmplitude.value = 0.08f
+                            continue
+                        }
                         val chunk = buffer.copyOf(read)
 
                         // Calculate RMS amplitude for live waveform animation
@@ -251,6 +261,29 @@ class AgyAudioTranscriptionManager(
             }
         } else {
             streamJob?.cancel()
+        }
+    }
+
+    fun pauseTranscriptionSession() {
+        if (isRecording.get()) {
+            isPaused.set(true)
+            _isLivePaused.value = true
+            _latestAmplitude.value = 0.08f
+        }
+    }
+
+    fun resumeTranscriptionSession() {
+        if (isRecording.get()) {
+            isPaused.set(false)
+            _isLivePaused.value = false
+        }
+    }
+
+    fun togglePause() {
+        if (isPaused.get()) {
+            resumeTranscriptionSession()
+        } else {
+            pauseTranscriptionSession()
         }
     }
 }

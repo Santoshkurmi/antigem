@@ -178,6 +178,7 @@ fun ChatInputBar(
     // Audio recording & Speech-to-Text state
     var recordMode by remember { mutableStateOf(AudioRecordMode.VOICE_NOTE) }
     var isLiveDictating by remember { mutableStateOf(false) }
+    var isDictationPaused by remember { mutableStateOf(false) }
     var baseTextBeforeDictation by remember { mutableStateOf("") }
     var pendingActionAfterPermission by remember { mutableStateOf<String?>(null) }
 
@@ -378,6 +379,7 @@ fun ChatInputBar(
 
         baseTextBeforeDictation = textFieldValue.text
         isLiveDictating = true
+        isDictationPaused = false
         recordMode = AudioRecordMode.LIVE_DICTATION
 
         val selStart = textFieldValue.selection.start.coerceIn(0, textFieldValue.text.length)
@@ -404,6 +406,7 @@ fun ChatInputBar(
             onError = { err ->
                 Toast.makeText(context, "Dictation: $err", Toast.LENGTH_SHORT).show()
                 isLiveDictating = false
+                isDictationPaused = false
                 recordMode = AudioRecordMode.VOICE_NOTE
             }
         )
@@ -419,6 +422,7 @@ fun ChatInputBar(
             }
         }
         isLiveDictating = false
+        isDictationPaused = false
         recordMode = AudioRecordMode.VOICE_NOTE
     }
 
@@ -738,16 +742,18 @@ fun ChatInputBar(
                             .fillMaxWidth()
                             .padding(horizontal = 6.dp, vertical = 6.dp)
                     ) {
-                        // Live Dictation Listening Banner
+                        // Live Dictation Listening Banner with Pause / Resume and Stop
                         if (isLiveDictating) {
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = GeminiBlue.copy(alpha = 0.12f),
-                                border = BorderStroke(1.dp, GeminiBlue.copy(alpha = 0.4f)),
+                                color = if (isDictationPaused) Color(0xFFFFA000).copy(alpha = 0.12f) else GeminiBlue.copy(alpha = 0.12f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isDictationPaused) Color(0xFFFFA000).copy(alpha = 0.4f) else GeminiBlue.copy(alpha = 0.4f)
+                                ),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 4.dp, vertical = 4.dp)
-                                    .clickable { stopLiveDictation() }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -757,22 +763,60 @@ fun ChatInputBar(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFFE53935))
+                                            .background(if (isDictationPaused) Color(0xFFFFA000) else Color(0xFFE53935))
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Listening... Speak now (tap to stop)",
+                                        text = if (isDictationPaused) "Dictation paused (tap resume to speak)" else "Listening... Speak now",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    Icon(
-                                        imageVector = Icons.Default.Stop,
-                                        contentDescription = "Stop",
-                                        tint = Color(0xFFE53935),
-                                        modifier = Modifier.size(16.dp)
-                                    )
+
+                                    // Pause / Resume button
+                                    Surface(
+                                        onClick = {
+                                            if (isDictationPaused) {
+                                                speechManager?.resumeTranscriptionSession()
+                                                isDictationPaused = false
+                                            } else {
+                                                speechManager?.pauseTranscriptionSession()
+                                                isDictationPaused = true
+                                            }
+                                        },
+                                        shape = CircleShape,
+                                        color = if (isDictationPaused) Color(0xFFFFA000).copy(alpha = 0.18f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                        modifier = Modifier.size(26.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = if (isDictationPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                                contentDescription = if (isDictationPaused) "Resume" else "Pause",
+                                                tint = if (isDictationPaused) Color(0xFFFFA000) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(6.dp))
+
+                                    // Stop button
+                                    Surface(
+                                        onClick = { stopLiveDictation() },
+                                        shape = CircleShape,
+                                        color = Color(0xFFE53935).copy(alpha = 0.12f),
+                                        modifier = Modifier.size(26.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Stop,
+                                                contentDescription = "Stop",
+                                                tint = Color(0xFFE53935),
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
