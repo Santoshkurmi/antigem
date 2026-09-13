@@ -110,12 +110,15 @@ fun SettingsDialog(
     onResetLocalTools: () -> Unit = {},
     mcpServers: List<com.example.gemini.domain.model.McpServerState> = emptyList(),
     isMcpLoading: Boolean = false,
+    isMcpRefreshing: Boolean = false,
+    refreshingMcpServer: String? = null,
     mcpErrorMessage: String? = null,
     mcpStatusMessage: String? = null,
     onClearMcpStatus: () -> Unit = {},
     onRefreshMcpServers: () -> Unit = {},
+    onRefreshMcpServer: (String) -> Unit = {},
     onToggleMcpServer: (String, Boolean) -> Unit = { _, _ -> },
-    onSaveMcpServer: (com.example.gemini.domain.model.McpServerSpec) -> Unit = {},
+    onSaveMcpServer: (com.example.gemini.domain.model.McpServerSpec, String?) -> Unit = { _, _ -> },
     onDeleteMcpServer: (String) -> Unit = {},
     commandAutoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
     commandSandboxEnabled: Boolean = false,
@@ -278,12 +281,15 @@ fun SettingsDialog(
                     SettingsSection.MCP -> McpSubScreen(
                         mcpServers = mcpServers,
                         isLoading = isMcpLoading,
+                        isRefreshing = isMcpRefreshing,
+                        refreshingServerName = refreshingMcpServer,
                         errorMessage = mcpErrorMessage,
                         statusMessage = mcpStatusMessage,
                         onClearStatus = onClearMcpStatus,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
-                        onRefresh = onRefreshMcpServers,
+                        onRefreshAll = onRefreshMcpServers,
+                        onRefreshServer = onRefreshMcpServer,
                         onToggleServer = onToggleMcpServer,
                         onSaveServer = onSaveMcpServer,
                         onDeleteServer = onDeleteMcpServer
@@ -1074,14 +1080,17 @@ private fun ServersSubScreen(
 private fun McpSubScreen(
     mcpServers: List<com.example.gemini.domain.model.McpServerState>,
     isLoading: Boolean,
+    isRefreshing: Boolean = false,
+    refreshingServerName: String? = null,
     errorMessage: String? = null,
     statusMessage: String? = null,
     onClearStatus: () -> Unit = {},
     cardBg: Color,
     cardBorder: BorderStroke,
-    onRefresh: () -> Unit,
+    onRefreshAll: () -> Unit,
+    onRefreshServer: (String) -> Unit,
     onToggleServer: (String, Boolean) -> Unit,
-    onSaveServer: (com.example.gemini.domain.model.McpServerSpec) -> Unit,
+    onSaveServer: (com.example.gemini.domain.model.McpServerSpec, String?) -> Unit,
     onDeleteServer: (String) -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
@@ -1089,10 +1098,6 @@ private fun McpSubScreen(
     var serverToDelete by remember { mutableStateOf<String?>(null) }
     var expandedTools by remember { mutableStateOf(setOf<String>()) }
     var expandedErrors by remember { mutableStateOf(setOf<String>()) }
-
-    LaunchedEffect(Unit) {
-        onRefresh()
-    }
 
     Column(
         modifier = Modifier
@@ -1246,14 +1251,15 @@ private fun McpSubScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    val isRefreshingAll = isRefreshing && refreshingServerName == null
                     OutlinedButton(
-                        onClick = onRefresh,
+                        onClick = onRefreshAll,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
-                        enabled = !isLoading,
+                        enabled = !isRefreshing && !isLoading,
                         contentPadding = PaddingValues(vertical = 10.dp, horizontal = 12.dp)
                     ) {
-                        if (isLoading) {
+                        if (isRefreshingAll) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp,
@@ -1267,7 +1273,7 @@ private fun McpSubScreen(
                             )
                         }
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(if (isLoading) "Testing..." else "Test & Refresh", fontSize = 13.sp)
+                        Text(if (isRefreshingAll) "Testing All..." else "Test & Refresh", fontSize = 13.sp)
                     }
 
                     Button(
@@ -1731,6 +1737,27 @@ private fun McpSubScreen(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val isThisRefreshing = isRefreshing && (refreshingServerName == server.name)
+                        TextButton(
+                            onClick = { onRefreshServer(server.name) },
+                            enabled = !isRefreshing && !isLoading,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            if (isThisRefreshing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 1.5.dp,
+                                    color = ClaudeTerracotta
+                                )
+                            } else {
+                                Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(if (isThisRefreshing) "Testing..." else "Refresh", fontSize = 12.sp)
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
                         TextButton(
                             onClick = {
                                 serverToEdit = server.spec ?: com.example.gemini.domain.model.McpServerSpec(serverName = server.name)
@@ -1796,8 +1823,8 @@ private fun McpSubScreen(
                 showDialog = false
                 serverToEdit = null
             },
-            onSave = { spec ->
-                onSaveServer(spec)
+            onSave = { spec, rawJson ->
+                onSaveServer(spec, rawJson)
                 showDialog = false
                 serverToEdit = null
             }
@@ -1805,13 +1832,24 @@ private fun McpSubScreen(
     }
 }
 
+private enum class McpEditMode {
+    STDIO,
+    SSE,
+    RAW
+}
+
 @Composable
 private fun AddEditMcpServerDialog(
     initialSpec: com.example.gemini.domain.model.McpServerSpec?,
     onDismiss: () -> Unit,
-    onSave: (com.example.gemini.domain.model.McpServerSpec) -> Unit
+    onSave: (com.example.gemini.domain.model.McpServerSpec, String?) -> Unit
 ) {
-    var isSse by remember { mutableStateOf(initialSpec?.serverUrl?.isNotBlank() == true) }
+    var mode by remember {
+        mutableStateOf(
+            if (initialSpec?.serverUrl?.isNotBlank() == true) McpEditMode.SSE
+            else McpEditMode.STDIO
+        )
+    }
     var name by remember { mutableStateOf(initialSpec?.serverName ?: "") }
     var command by remember { mutableStateOf(initialSpec?.command ?: "") }
     var argsText by remember { mutableStateOf(initialSpec?.args?.joinToString(" ") ?: "") }
@@ -1820,6 +1858,161 @@ private fun AddEditMcpServerDialog(
     var headersText by remember { mutableStateOf(initialSpec?.headers?.map { "${it.key}: ${it.value}" }?.joinToString("\n") ?: "") }
     var envText by remember { mutableStateOf(initialSpec?.env?.map { "${it.key}=${it.value}" }?.joinToString("\n") ?: "") }
     var validationError by remember { mutableStateOf<String?>(null) }
+
+    fun buildJsonFromFields(): String {
+        val obj = org.json.JSONObject()
+        if (mode == McpEditMode.SSE || serverUrl.isNotBlank()) {
+            obj.put("serverUrl", serverUrl.trim())
+            val headersMap = mutableMapOf<String, String>()
+            headersText.lines().forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.isNotBlank()) {
+                    val delimiter = if (trimmed.contains(':')) ':' else if (trimmed.contains('=')) '=' else null
+                    if (delimiter != null) {
+                        val parts = trimmed.split(delimiter, limit = 2)
+                        val k = parts[0].trim()
+                        val v = parts[1].trim()
+                        if (k.isNotBlank()) headersMap[k] = v
+                    }
+                }
+            }
+            if (headersMap.isNotEmpty()) {
+                val hObj = org.json.JSONObject()
+                headersMap.forEach { (k, v) -> hObj.put(k, v) }
+                obj.put("headers", hObj)
+            }
+        } else {
+            obj.put("command", command.trim())
+            val argsList = mutableListOf<String>()
+            val regex = """[^\s"']+|"([^"]*)"|'([^']*)'""".toRegex()
+            regex.findAll(argsText.trim()).forEach { m ->
+                val arg = m.groups[1]?.value ?: m.groups[2]?.value ?: m.value
+                if (arg.isNotBlank()) argsList.add(arg)
+            }
+            if (argsList.isNotEmpty()) {
+                val arr = org.json.JSONArray()
+                argsList.forEach { arr.put(it) }
+                obj.put("args", arr)
+            }
+            if (cwdText.trim().isNotBlank()) {
+                obj.put("cwd", cwdText.trim())
+            }
+            val envMap = mutableMapOf<String, String>()
+            envText.lines().forEach { line ->
+                val parts = line.split("=", limit = 2)
+                if (parts.size == 2 && parts[0].trim().isNotBlank()) {
+                    envMap[parts[0].trim()] = parts[1].trim()
+                }
+            }
+            if (envMap.isNotEmpty()) {
+                val envObj = org.json.JSONObject()
+                envMap.forEach { (k, v) -> envObj.put(k, v) }
+                obj.put("env", envObj)
+            }
+        }
+        if (initialSpec?.disabled == true) {
+            obj.put("disabled", true)
+        }
+        return obj.toString(2)
+    }
+
+    fun parseFieldsFromJson(rawJson: String) {
+        try {
+            val obj = org.json.JSONObject(rawJson)
+            val sUrl = obj.optString("serverUrl", "")
+            if (sUrl.isNotBlank()) {
+                serverUrl = sUrl
+                val hObj = obj.optJSONObject("headers")
+                if (hObj != null) {
+                    val lines = mutableListOf<String>()
+                    val keys = hObj.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        lines.add("$k: ${hObj.optString(k)}")
+                    }
+                    headersText = lines.joinToString("\n")
+                }
+            } else {
+                val cmd = obj.optString("command", "")
+                if (cmd.isNotBlank()) command = cmd
+                val argsArr = obj.optJSONArray("args")
+                if (argsArr != null) {
+                    val list = mutableListOf<String>()
+                    for (i in 0 until argsArr.length()) {
+                        list.add(argsArr.optString(i))
+                    }
+                    argsText = list.joinToString(" ")
+                }
+                val cwd = obj.optString("cwd", "")
+                if (cwd.isNotBlank()) cwdText = cwd
+                val envObj = obj.optJSONObject("env")
+                if (envObj != null) {
+                    val lines = mutableListOf<String>()
+                    val keys = envObj.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        lines.add("$k=${envObj.optString(k)}")
+                    }
+                    envText = lines.joinToString("\n")
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    var rawJsonText by remember {
+        mutableStateOf(
+            if (initialSpec != null) {
+                val obj = org.json.JSONObject()
+                if (initialSpec.serverUrl.isNotBlank()) {
+                    obj.put("serverUrl", initialSpec.serverUrl)
+                    if (initialSpec.headers.isNotEmpty()) {
+                        val h = org.json.JSONObject()
+                        initialSpec.headers.forEach { (k, v) -> h.put(k, v) }
+                        obj.put("headers", h)
+                    }
+                } else {
+                    obj.put("command", initialSpec.command)
+                    if (initialSpec.args.isNotEmpty()) {
+                        val arr = org.json.JSONArray()
+                        initialSpec.args.forEach { arr.put(it) }
+                        obj.put("args", arr)
+                    }
+                    if (initialSpec.cwd.isNotBlank()) obj.put("cwd", initialSpec.cwd)
+                    if (initialSpec.env.isNotEmpty()) {
+                        val envObj = org.json.JSONObject()
+                        initialSpec.env.forEach { (k, v) -> envObj.put(k, v) }
+                        obj.put("env", envObj)
+                    }
+                }
+                if (initialSpec.disabled) obj.put("disabled", true)
+                obj.toString(2)
+            } else {
+                """{
+  "command": "npx",
+  "args": [
+    "-y",
+    "@modelcontextprotocol/server-filesystem",
+    "."
+  ]
+}"""
+            }
+        )
+    }
+
+    LaunchedEffect(initialSpec) {
+        if (initialSpec != null && initialSpec.serverName.isNotBlank()) {
+            try {
+                val configRaw = com.example.gemini.data.daemon.IdeApiClient.getMcpConfig()
+                if (!configRaw.isNullOrBlank()) {
+                    val cfgJson = org.json.JSONObject(configRaw)
+                    val sObj = cfgJson.optJSONObject("mcpServers")?.optJSONObject(initialSpec.serverName)
+                    if (sObj != null) {
+                        rawJsonText = sObj.toString(2)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1837,46 +2030,44 @@ private fun AddEditMcpServerDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Transport Mode Selector
+                // Mode Selector: Stdio | SSE | Raw
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { isSse = false },
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (!isSse) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant,
-                        border = BorderStroke(1.dp, if (!isSse) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                    ) {
-                        Box(modifier = Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "Stdio (Command)",
-                                fontSize = 12.sp,
-                                fontWeight = if (!isSse) FontWeight.Bold else FontWeight.Normal,
-                                color = if (!isSse) Color.White else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { isSse = true },
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isSse) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant,
-                        border = BorderStroke(1.dp, if (isSse) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                    ) {
-                        Box(modifier = Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "SSE (Remote URL)",
-                                fontSize = 12.sp,
-                                fontWeight = if (isSse) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSse) Color.White else MaterialTheme.colorScheme.onSurface
-                            )
+                    listOf(
+                        McpEditMode.STDIO to "Stdio",
+                        McpEditMode.SSE to "SSE",
+                        McpEditMode.RAW to "Raw"
+                    ).forEach { (m, label) ->
+                        val isSelected = mode == m
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    if (mode != m) {
+                                        if (m == McpEditMode.RAW) {
+                                            rawJsonText = buildJsonFromFields()
+                                        } else if (mode == McpEditMode.RAW) {
+                                            parseFieldsFromJson(rawJsonText)
+                                        }
+                                        mode = m
+                                        validationError = null
+                                    }
+                                },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        ) {
+                            Box(modifier = Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
                 }
@@ -1894,7 +2085,55 @@ private fun AddEditMcpServerDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                if (!isSse) {
+                if (mode == McpEditMode.RAW) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Server Configuration JSON",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            TextButton(
+                                onClick = {
+                                    try {
+                                        val parsed = org.json.JSONObject(rawJsonText)
+                                        rawJsonText = parsed.toString(2)
+                                        validationError = null
+                                    } catch (e: Exception) {
+                                        validationError = "Invalid JSON: ${e.message}"
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text("Format", fontSize = 11.sp, color = ClaudeTerracotta)
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = rawJsonText,
+                            onValueChange = {
+                                rawJsonText = it
+                                validationError = null
+                            },
+                            placeholder = {
+                                Text("{\n  \"command\": \"npx\",\n  \"args\": [...]\n}")
+                            },
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            ),
+                            minLines = 8,
+                            maxLines = 14,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else if (mode == McpEditMode.STDIO) {
                     // Command
                     OutlinedTextField(
                         value = command,
@@ -1991,7 +2230,28 @@ private fun AddEditMcpServerDialog(
                         return@Button
                     }
 
-                    val spec = if (!isSse) {
+                    if (mode == McpEditMode.RAW) {
+                        try {
+                            val sObj = org.json.JSONObject(rawJsonText)
+                            val sUrl = sObj.optString("serverUrl", "").trim()
+                            val sCmd = sObj.optString("command", "").trim()
+                            if (sUrl.isBlank() && sCmd.isBlank()) {
+                                validationError = "JSON must specify either 'command' or 'serverUrl'"
+                                return@Button
+                            }
+                            val isDis = sObj.optBoolean("disabled", initialSpec?.disabled ?: false)
+                            val spec = com.example.gemini.domain.model.McpServerSpec(
+                                serverName = cleanName,
+                                command = sCmd,
+                                serverUrl = sUrl,
+                                disabled = isDis
+                            )
+                            onSave(spec, rawJsonText.trim())
+                        } catch (e: Exception) {
+                            validationError = "Invalid JSON: ${e.message}"
+                            return@Button
+                        }
+                    } else if (mode == McpEditMode.STDIO) {
                         val cleanCmd = command.trim()
                         if (cleanCmd.isBlank()) {
                             validationError = "Command is required"
@@ -2013,7 +2273,7 @@ private fun AddEditMcpServerDialog(
                             }
                         }
 
-                        com.example.gemini.domain.model.McpServerSpec(
+                        val spec = com.example.gemini.domain.model.McpServerSpec(
                             serverName = cleanName,
                             command = cleanCmd,
                             args = argsList,
@@ -2021,6 +2281,7 @@ private fun AddEditMcpServerDialog(
                             cwd = cwdText.trim(),
                             disabled = initialSpec?.disabled ?: false
                         )
+                        onSave(spec, null)
                     } else {
                         val cleanUrl = serverUrl.trim()
                         if (cleanUrl.isBlank()) {
@@ -2044,19 +2305,18 @@ private fun AddEditMcpServerDialog(
                             }
                         }
 
-                        com.example.gemini.domain.model.McpServerSpec(
+                        val spec = com.example.gemini.domain.model.McpServerSpec(
                             serverName = cleanName,
                             serverUrl = cleanUrl,
                             headers = headersMap,
                             disabled = initialSpec?.disabled ?: false
                         )
+                        onSave(spec, null)
                     }
-
-                    onSave(spec)
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
             ) {
-                Text("Save & Connect", fontWeight = FontWeight.Bold)
+                Text("Save", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

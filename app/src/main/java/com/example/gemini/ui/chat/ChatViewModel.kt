@@ -143,6 +143,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _isMcpLoading = MutableStateFlow(false)
     val isMcpLoading: StateFlow<Boolean> = _isMcpLoading.asStateFlow()
 
+    private val _isMcpRefreshing = MutableStateFlow(false)
+    val isMcpRefreshing: StateFlow<Boolean> = _isMcpRefreshing.asStateFlow()
+
+    private val _refreshingMcpServer = MutableStateFlow<String?>(null)
+    val refreshingMcpServer: StateFlow<String?> = _refreshingMcpServer.asStateFlow()
+
     private val _mcpErrorMessage = MutableStateFlow<String?>(null)
     val mcpErrorMessage: StateFlow<String?> = _mcpErrorMessage.asStateFlow()
 
@@ -2369,9 +2375,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun refreshMcpServers() {
+    fun refreshMcpServers(targetServer: String? = null) {
         viewModelScope.launch {
-            _isMcpLoading.value = true
+            _isMcpRefreshing.value = true
+            _refreshingMcpServer.value = targetServer
             _mcpErrorMessage.value = null
             _mcpStatusMessage.value = null
             try {
@@ -2380,14 +2387,27 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (res.isFailure) {
                     _mcpErrorMessage.value = res.exceptionOrNull()?.message ?: "Refresh failed"
                 }
-                delay(400)
+                delay(600)
                 loadMcpServers()
-                val count = _mcpServers.value.size
-                val toolsCount = _mcpServers.value.sumOf { it.tools.size }
-                _mcpStatusMessage.value = "Refreshed: $count server(s) configured, $toolsCount tool(s) discovered"
+                if (targetServer != null) {
+                    val s = _mcpServers.value.find { it.name.equals(targetServer, ignoreCase = true) }
+                    if (s != null && !s.error.isNullOrBlank()) {
+                        _mcpErrorMessage.value = "'$targetServer': ${s.error}"
+                    } else if (s != null && s.tools.isNotEmpty()) {
+                        _mcpStatusMessage.value = "Refreshed '$targetServer': ${s.tools.size} tool(s) available"
+                    } else {
+                        _mcpStatusMessage.value = "Refreshed '$targetServer'"
+                    }
+                } else {
+                    val count = _mcpServers.value.size
+                    val toolsCount = _mcpServers.value.sumOf { it.tools.size }
+                    _mcpStatusMessage.value = "Refreshed: $count server(s) configured, $toolsCount tool(s) discovered"
+                }
             } catch (e: Exception) {
                 _mcpErrorMessage.value = e.message
-                _isMcpLoading.value = false
+            } finally {
+                _isMcpRefreshing.value = false
+                _refreshingMcpServer.value = null
             }
         }
     }
@@ -2428,7 +2448,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveMcpServer(spec: com.example.gemini.domain.model.McpServerSpec) {
+    fun saveMcpServer(spec: com.example.gemini.domain.model.McpServerSpec, rawJsonString: String? = null) {
         viewModelScope.launch {
             _isMcpLoading.value = true
             _mcpErrorMessage.value = null
@@ -2438,40 +2458,44 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val json = if (rawConfig.trim().startsWith("{")) org.json.JSONObject(rawConfig) else org.json.JSONObject()
                 val serversObj = json.optJSONObject("mcpServers") ?: org.json.JSONObject().also { json.put("mcpServers", it) }
 
-                val serverObj = org.json.JSONObject().apply {
-                    if (spec.serverUrl.isNotBlank()) {
-                        put("serverUrl", spec.serverUrl)
-                        if (spec.headers.isNotEmpty()) {
-                            val hObj = org.json.JSONObject()
-                            spec.headers.forEach { (k, v) -> hObj.put(k, v) }
-                            put("headers", hObj)
+                val serverObj: org.json.JSONObject = if (!rawJsonString.isNullOrBlank()) {
+                    org.json.JSONObject(rawJsonString)
+                } else {
+                    org.json.JSONObject().apply {
+                        if (spec.serverUrl.isNotBlank()) {
+                            put("serverUrl", spec.serverUrl)
+                            if (spec.headers.isNotEmpty()) {
+                                val hObj = org.json.JSONObject()
+                                spec.headers.forEach { (k, v) -> hObj.put(k, v) }
+                                put("headers", hObj)
+                            }
+                        } else {
+                            put("command", spec.command)
+                            if (spec.args.isNotEmpty()) {
+                                val argsArr = org.json.JSONArray()
+                                spec.args.forEach { argsArr.put(it) }
+                                put("args", argsArr)
+                            }
+                            if (spec.cwd.isNotBlank()) {
+                                put("cwd", spec.cwd)
+                            }
+                            val envMap = spec.env.toMutableMap()
+                            // Ensure Termux stdio binaries (npx, python3, etc.) have proper loader and PATH on Android
+                            if (!envMap.containsKey("LD_PRELOAD")) {
+                                envMap["LD_PRELOAD"] = "/data/data/com.termux/files/usr/lib/libtermux-exec.so"
+                            }
+                            if (!envMap.containsKey("PATH")) {
+                                envMap["PATH"] = "/data/data/com.termux/files/usr/bin:/system/bin"
+                            }
+                            if (envMap.isNotEmpty()) {
+                                val envObj = org.json.JSONObject()
+                                envMap.forEach { (k, v) -> envObj.put(k, v) }
+                                put("env", envObj)
+                            }
                         }
-                    } else {
-                        put("command", spec.command)
-                        if (spec.args.isNotEmpty()) {
-                            val argsArr = org.json.JSONArray()
-                            spec.args.forEach { argsArr.put(it) }
-                            put("args", argsArr)
+                        if (spec.disabled) {
+                            put("disabled", true)
                         }
-                        if (spec.cwd.isNotBlank()) {
-                            put("cwd", spec.cwd)
-                        }
-                        val envMap = spec.env.toMutableMap()
-                        // Ensure Termux stdio binaries (npx, python3, etc.) have proper loader and PATH on Android
-                        if (!envMap.containsKey("LD_PRELOAD")) {
-                            envMap["LD_PRELOAD"] = "/data/data/com.termux/files/usr/lib/libtermux-exec.so"
-                        }
-                        if (!envMap.containsKey("PATH")) {
-                            envMap["PATH"] = "/data/data/com.termux/files/usr/bin:/system/bin"
-                        }
-                        if (envMap.isNotEmpty()) {
-                            val envObj = org.json.JSONObject()
-                            envMap.forEach { (k, v) -> envObj.put(k, v) }
-                            put("env", envObj)
-                        }
-                    }
-                    if (spec.disabled) {
-                        put("disabled", true)
                     }
                 }
                 serversObj.put(spec.serverName, serverObj)
@@ -2479,17 +2503,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val success = com.example.gemini.data.daemon.IdeApiClient.saveMcpConfig(json.toString(2))
                 if (!success) {
                     _mcpErrorMessage.value = "Failed to save configuration to mcp_config.json"
+                } else {
+                    loadMcpServers()
+                    _mcpStatusMessage.value = "Saved '${spec.serverName}'. Tap Refresh on the server to connect."
                 }
-
-                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-                agyHubClient.refreshMcpServers(hubUrl)
-
-                delay(1200)
-                loadMcpServers()
-                _mcpStatusMessage.value = "Saved '${spec.serverName}' and refreshed."
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "saveMcpServer error: ${e.message}", e)
                 _mcpErrorMessage.value = e.message
+            } finally {
                 _isMcpLoading.value = false
             }
         }
@@ -2509,15 +2530,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     com.example.gemini.data.daemon.IdeApiClient.saveMcpConfig(json.toString(2))
                 }
 
-                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-                agyHubClient.refreshMcpServers(hubUrl)
-
-                delay(500)
                 loadMcpServers()
                 _mcpStatusMessage.value = "Removed '$serverName'."
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "deleteMcpServer error: ${e.message}", e)
                 _mcpErrorMessage.value = e.message
+            } finally {
                 _isMcpLoading.value = false
             }
         }

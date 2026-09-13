@@ -261,6 +261,8 @@ fun ChatScreen(
     val isLoadingConversation by viewModel.isLoadingConversation.collectAsState()
     val mcpServers by viewModel.mcpServers.collectAsState()
     val isMcpLoading by viewModel.isMcpLoading.collectAsState()
+    val isMcpRefreshing by viewModel.isMcpRefreshing.collectAsState()
+    val refreshingMcpServer by viewModel.refreshingMcpServer.collectAsState()
     val mcpErrorMessage by viewModel.mcpErrorMessage.collectAsState()
     val mcpStatusMessage by viewModel.mcpStatusMessage.collectAsState()
 
@@ -1262,12 +1264,15 @@ fun ChatScreen(
             },
             mcpServers = mcpServers,
             isMcpLoading = isMcpLoading,
+            isMcpRefreshing = isMcpRefreshing,
+            refreshingMcpServer = refreshingMcpServer,
             mcpErrorMessage = mcpErrorMessage,
             mcpStatusMessage = mcpStatusMessage,
             onClearMcpStatus = { viewModel.clearMcpStatus() },
             onRefreshMcpServers = { viewModel.refreshMcpServers() },
+            onRefreshMcpServer = { name -> viewModel.refreshMcpServers(name) },
             onToggleMcpServer = { name, enabled -> viewModel.toggleMcpServer(name, enabled) },
-            onSaveMcpServer = { spec -> viewModel.saveMcpServer(spec) },
+            onSaveMcpServer = { spec, rawJson -> viewModel.saveMcpServer(spec, rawJson) },
             onDeleteMcpServer = { name -> viewModel.deleteMcpServer(name) },
             commandAutoExecutionPolicy = commandAutoExecutionPolicy,
             commandSandboxEnabled = commandSandboxEnabled,
