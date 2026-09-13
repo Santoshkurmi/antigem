@@ -136,6 +136,8 @@ func main() {
 	mux.HandleFunc("/api/system-prompt", h.SystemPromptHandler)
 	mux.HandleFunc("/api/projects", h.ProjectsHandler)
 	mux.HandleFunc("/api/projects/create", h.CreateProjectHandler)
+	mux.HandleFunc("/api/fs/browse", h.FsBrowseHandler)
+	mux.HandleFunc("/api/fs/mkdir", h.FsMkdirHandler)
 	mux.HandleFunc("/api/tree", h.FileTreeHandler)
 	mux.HandleFunc("/api/file/read", h.FileReadHandler)
 	mux.HandleFunc("/api/file/save", h.FileSaveHandler)

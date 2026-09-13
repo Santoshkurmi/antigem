@@ -151,6 +151,19 @@ type ProjectSummary struct {
 	Path string `json:"path"`
 }
 
+// FsBrowseResult represents directory navigation contents.
+type FsBrowseResult struct {
+	CurrentPath string           `json:"currentPath"`
+	ParentPath  string           `json:"parentPath"`
+	HomePath    string           `json:"homePath"`
+	Directories []ProjectSummary `json:"directories"`
+}
+
+// MkdirReq represents a request to create a directory.
+type MkdirReq struct {
+	Path string `json:"path"`
+}
+
 // SkillInfo holds parsed skill frontmatter.
 type SkillInfo struct {
 	Name        string `json:"name"`

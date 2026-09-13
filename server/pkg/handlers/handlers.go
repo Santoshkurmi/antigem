@@ -437,6 +437,93 @@ func (h *Handler) CreateProjectHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, models.ProjectSummary{Name: projectName, Path: targetDir})
 }
 
+// FsBrowseHandler handles directory browsing starting from user home.
+func (h *Handler) FsBrowseHandler(w http.ResponseWriter, r *http.Request) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = h.Cfg.ProjectsBaseDir
+	}
+
+	dir := strings.TrimSpace(r.URL.Query().Get("dir"))
+	if dir == "" || dir == "~" {
+		dir = homeDir
+	} else if strings.HasPrefix(dir, "~/") {
+		dir = filepath.Join(homeDir, strings.TrimPrefix(dir, "~/"))
+	}
+	dir = filepath.Clean(dir)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	var subdirs []models.ProjectSummary
+	for _, e := range entries {
+		if e.IsDir() {
+			name := e.Name()
+			if strings.HasPrefix(name, ".") {
+				continue // skip hidden folders
+			}
+			subdirs = append(subdirs, models.ProjectSummary{
+				Name: name,
+				Path: filepath.Join(dir, name),
+			})
+		}
+	}
+
+	sort.Slice(subdirs, func(i, j int) bool {
+		return strings.ToLower(subdirs[i].Name) < strings.ToLower(subdirs[j].Name)
+	})
+
+	parent := filepath.Dir(dir)
+	if parent == dir {
+		parent = ""
+	}
+
+	writeJSON(w, http.StatusOK, models.FsBrowseResult{
+		CurrentPath: dir,
+		ParentPath:  parent,
+		HomePath:    homeDir,
+		Directories: subdirs,
+	})
+}
+
+// FsMkdirHandler creates a directory on the filesystem.
+func (h *Handler) FsMkdirHandler(w http.ResponseWriter, r *http.Request) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = h.Cfg.ProjectsBaseDir
+	}
+
+	var req models.MkdirReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	targetPath := strings.TrimSpace(req.Path)
+	if targetPath == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Path is required"})
+		return
+	}
+	if strings.HasPrefix(targetPath, "~/") {
+		targetPath = filepath.Join(homeDir, strings.TrimPrefix(targetPath, "~/"))
+	}
+	targetPath = filepath.Clean(targetPath)
+
+	if err := os.MkdirAll(targetPath, 0755); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"path":    targetPath,
+		"name":    filepath.Base(targetPath),
+	})
+}
+
 // FileTreeHandler recursively lists all files and folders without arbitrary depth limits.
 func (h *Handler) FileTreeHandler(w http.ResponseWriter, r *http.Request) {
 	dir := r.URL.Query().Get("dir")

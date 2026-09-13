@@ -98,7 +98,8 @@ data class Conversation(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val isRunning: Boolean = false,
-    val stepCount: Int = 0
+    val stepCount: Int = 0,
+    val workspaceUri: String = ""
 )
 
 enum class ModelFamily {

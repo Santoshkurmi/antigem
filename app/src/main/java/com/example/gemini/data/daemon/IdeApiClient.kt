@@ -30,6 +30,13 @@ data class SearchMatch(
     val lineText: String
 )
 
+data class FsBrowseResult(
+    val currentPath: String = "",
+    val parentPath: String = "",
+    val homePath: String = "",
+    val directories: List<ProjectItem> = emptyList()
+)
+
 object IdeApiClient {
     private const val TAG = "IdeApiClient"
     var baseUrl: String = "http://127.0.0.1:8080"
@@ -120,6 +127,53 @@ object IdeApiClient {
         } catch (e: Exception) {
             Log.e(TAG, "Error creating project", e)
             null
+        }
+    }
+
+    suspend fun browseDirectory(dir: String? = null): FsBrowseResult? = withContext(Dispatchers.IO) {
+        try {
+            val url = if (!dir.isNullOrBlank()) {
+                "$baseUrl/api/fs/browse?dir=${java.net.URLEncoder.encode(dir, "UTF-8")}"
+            } else {
+                "$baseUrl/api/fs/browse"
+            }
+            val request = Request.Builder().url(url).get().build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                val bodyStr = response.body?.string() ?: return@withContext null
+                val obj = JSONObject(bodyStr)
+                val current = obj.optString("currentPath", "")
+                val parent = obj.optString("parentPath", "")
+                val home = obj.optString("homePath", "")
+                val dirsArr = obj.optJSONArray("directories") ?: JSONArray()
+                val dirs = mutableListOf<ProjectItem>()
+                for (i in 0 until dirsArr.length()) {
+                    val d = dirsArr.getJSONObject(i)
+                    dirs.add(ProjectItem(d.optString("name"), d.optString("path")))
+                }
+                FsBrowseResult(current, parent, home, dirs)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "browseDirectory failed: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun createDirectory(path: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("path", path)
+            }.toString()
+            val request = Request.Builder()
+                .url("$baseUrl/api/fs/mkdir")
+                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "createDirectory failed: ${e.message}")
+            false
         }
     }
 

@@ -587,6 +587,13 @@ class AgyHubClient(
                             }
                         }
 
+                        val wsUri = obj.optJSONObject("trajectoryMetadata")?.optJSONArray("workspaceUris")?.optString(0)
+                            ?.takeIf { it.isNotBlank() }
+                            ?: obj.optJSONArray("workspaces")?.optJSONObject(0)?.optString("workspaceFolderAbsoluteUri")
+                            ?.takeIf { it.isNotBlank() }
+                            ?: obj.optString("workspaceUri").takeIf { it.isNotBlank() }
+                            ?: ""
+
                         frameList.add(
                             Conversation(
                                 id = cid,
@@ -597,7 +604,8 @@ class AgyHubClient(
                                 createdAt = lastModEpoch,
                                 updatedAt = lastModEpoch,
                                 isRunning = isRunning,
-                                stepCount = stepCount
+                                stepCount = stepCount,
+                                workspaceUri = wsUri
                             )
                         )
                     }
@@ -1510,6 +1518,7 @@ data class AgyMediaItem(
     suspend fun updateProjectSettings(
         projectId: String,
         projectName: String = "",
+        folderUris: List<String> = emptyList(),
         autoExecutionPolicy: String? = null,
         fileAccessPolicy: String? = null,
         artifactReviewMode: String? = null,
@@ -1523,7 +1532,18 @@ data class AgyMediaItem(
                 if (projectName.isNotBlank()) {
                     put("name", projectName)
                 }
-                put("projectResources", JSONObject())
+                if (folderUris.isNotEmpty()) {
+                    put("projectResources", JSONObject().apply {
+                        val resArr = JSONArray()
+                        for (f in folderUris) {
+                            val norm = if (f.startsWith("file://")) f else "file://$f"
+                            resArr.put(JSONObject().put("folderUri", norm))
+                        }
+                        put("resources", resArr)
+                    })
+                } else {
+                    put("projectResources", JSONObject())
+                }
                 put("permissionGrants", JSONObject().apply {
                     put("permissionGrants", JSONObject().apply {
                         put("allow", JSONArray().put("read_url(example.com)"))

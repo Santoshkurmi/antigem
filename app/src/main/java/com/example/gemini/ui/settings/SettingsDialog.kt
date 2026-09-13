@@ -124,6 +124,8 @@ fun SettingsDialog(
     commandSandboxEnabled: Boolean = false,
     requireApprovalForFileEdits: Boolean = false,
     defaultApprovalScope: String = "PERMISSION_SCOPE_ONCE",
+    groupChatsByWorkspace: Boolean = false,
+    onToggleGroupChatsByWorkspace: (Boolean) -> Unit = {},
     globalSecuritySettings: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings? = null,
     isGlobalSettingsLoading: Boolean = false,
     projectsList: List<com.example.gemini.data.remote.AgyHubClient.ProjectItem> = emptyList(),
@@ -262,10 +264,12 @@ fun SettingsDialog(
                     SettingsSection.APPEARANCE -> AppearanceSubScreen(
                         themeMode = themeMode,
                         chatFontScale = chatFontScale,
+                        groupChatsByWorkspace = groupChatsByWorkspace,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onSetThemeMode = onSetThemeMode,
-                        onSetChatFontScale = onSetChatFontScale
+                        onSetChatFontScale = onSetChatFontScale,
+                        onToggleGroupChatsByWorkspace = onToggleGroupChatsByWorkspace
                     )
 
                     SettingsSection.SERVERS -> ServersSubScreen(
@@ -557,10 +561,12 @@ private fun SettingsCategoryCard(
 private fun AppearanceSubScreen(
     themeMode: String,
     chatFontScale: Float,
+    groupChatsByWorkspace: Boolean,
     cardBg: Color,
     cardBorder: BorderStroke,
     onSetThemeMode: (String) -> Unit,
-    onSetChatFontScale: (Float) -> Unit
+    onSetChatFontScale: (Float) -> Unit,
+    onToggleGroupChatsByWorkspace: (Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -716,6 +722,45 @@ private fun AppearanceSubScreen(
                         }
                     }
                 }
+            }
+        }
+
+        // Workspace Grouping Toggle Card
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = cardBg,
+            border = cardBorder,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        text = "Group Chats by Workspace",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Organize sidebar chat history by project folder (shows 5 chats per folder with expand/collapse)",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                Switch(
+                    checked = groupChatsByWorkspace,
+                    onCheckedChange = onToggleGroupChatsByWorkspace,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = ClaudeTerracotta
+                    )
+                )
             }
         }
 

@@ -308,6 +308,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val commandSandboxEnabled = authPrefs.commandSandboxEnabled
     val requireApprovalForFileEdits = authPrefs.requireApprovalForFileEdits
     val defaultApprovalScope = authPrefs.defaultApprovalScope
+    val groupChatsByWorkspace: StateFlow<Boolean> = authPrefs.groupChatsByWorkspace
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setGroupChatsByWorkspace(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.saveGroupChatsByWorkspace(enabled)
+        }
+    }
 
     private val _globalSecuritySettings = MutableStateFlow<AgyHubClient.GlobalUserSettings?>(null)
     val globalSecuritySettings: StateFlow<AgyHubClient.GlobalUserSettings?> = _globalSecuritySettings.asStateFlow()
@@ -1606,6 +1614,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         return@launch
                     }
                     knownDaemonCascadeIds.add(conv.id)
+                    if (workspaceUri.isNotBlank()) {
+                        val projName = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.name
+                            ?: java.io.File(workspaceUri.removePrefix("file://")).name
+                        agyHubClient.updateProjectSettings(
+                            projectId = "default-cli-project",
+                            projectName = projName,
+                            folderUris = listOf(workspaceUri),
+                            hubUrl = hubUrl
+                        )
+                    }
+                    val updatedWithWs = conv.copy(workspaceUri = workspaceUri)
+                    withContext(Dispatchers.Main) {
+                        _currentConversation.value = updatedWithWs
+                        _conversations.value = _conversations.value.map { if (it.id == updatedWithWs.id) updatedWithWs else it }
+                    }
                 }
 
                 // Ensure persistent stream is active for this conversation

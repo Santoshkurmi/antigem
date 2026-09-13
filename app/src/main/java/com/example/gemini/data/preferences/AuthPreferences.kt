@@ -56,7 +56,10 @@ class AuthPreferences(private val context: Context) {
         val COMMAND_SANDBOX_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("command_sandbox_enabled")
         val REQUIRE_APPROVAL_FOR_FILE_EDITS = androidx.datastore.preferences.core.booleanPreferencesKey("require_approval_for_file_edits")
         val DEFAULT_APPROVAL_SCOPE = stringPreferencesKey("default_approval_scope")
+        val GROUP_CHATS_BY_WORKSPACE = androidx.datastore.preferences.core.booleanPreferencesKey("group_chats_by_workspace")
     }
+
+    val groupChatsByWorkspace: Flow<Boolean> = context.dataStore.data.map { it[GROUP_CHATS_BY_WORKSPACE] ?: false }
 
     val preferredModelId: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_ID] }
     val preferredModelKey: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_KEY] }
@@ -319,6 +322,12 @@ class AuthPreferences(private val context: Context) {
         syncPrefs.edit().putString("app_theme_mode", mode).commit()
         context.dataStore.edit { prefs ->
             prefs[APP_THEME_MODE] = mode
+        }
+    }
+
+    suspend fun saveGroupChatsByWorkspace(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[GROUP_CHATS_BY_WORKSPACE] = enabled
         }
     }
 

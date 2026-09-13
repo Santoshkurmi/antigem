@@ -53,6 +53,17 @@ type SearchMatch struct {
 	LineText   string `json:"lineText"`
 }
 
+type FsBrowseResult struct {
+	CurrentPath string        `json:"currentPath"`
+	ParentPath  string        `json:"parentPath"`
+	HomePath    string        `json:"homePath"`
+	Directories []ProjectItem `json:"directories"`
+}
+
+type MkdirReq struct {
+	Path string `json:"path"`
+}
+
 func main() {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -99,6 +110,85 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(projects)
+	}))
+
+	// 2.1 Filesystem Directory Browser (starting from ~)
+	http.HandleFunc("/api/fs/browse", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		dir := strings.TrimSpace(r.URL.Query().Get("dir"))
+		if dir == "" || dir == "~" {
+			dir = homeDir
+		} else if strings.HasPrefix(dir, "~/") {
+			dir = filepath.Join(homeDir, strings.TrimPrefix(dir, "~/"))
+		}
+		dir = filepath.Clean(dir)
+
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), 500)
+			return
+		}
+
+		var subdirs []ProjectItem
+		for _, e := range entries {
+			if e.IsDir() {
+				name := e.Name()
+				if strings.HasPrefix(name, ".") {
+					continue // hide hidden folders by default
+				}
+				subdirs = append(subdirs, ProjectItem{
+					Name: name,
+					Path: filepath.Join(dir, name),
+				})
+			}
+		}
+
+		sort.Slice(subdirs, func(i, j int) bool {
+			return strings.ToLower(subdirs[i].Name) < strings.ToLower(subdirs[j].Name)
+		})
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			parent = ""
+		}
+
+		resp := FsBrowseResult{
+			CurrentPath: dir,
+			ParentPath:  parent,
+			HomePath:    homeDir,
+			Directories: subdirs,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+
+	// 2.2 Create Directory
+	http.HandleFunc("/api/fs/mkdir", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		var req MkdirReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		targetPath := strings.TrimSpace(req.Path)
+		if targetPath == "" {
+			http.Error(w, "Path is required", 400)
+			return
+		}
+		if strings.HasPrefix(targetPath, "~/") {
+			targetPath = filepath.Join(homeDir, strings.TrimPrefix(targetPath, "~/"))
+		}
+		targetPath = filepath.Clean(targetPath)
+
+		if err := os.MkdirAll(targetPath, 0755); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create directory: %v", err), 500)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"path":    targetPath,
+			"name":    filepath.Base(targetPath),
+		})
 	}))
 
 	// 3. Create Project from Template
