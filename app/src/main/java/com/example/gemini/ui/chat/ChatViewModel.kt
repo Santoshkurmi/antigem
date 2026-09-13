@@ -7,6 +7,7 @@ import android.net.NetworkCapabilities
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gemini.data.preferences.AuthPreferences
+import com.example.gemini.data.remote.AgyHubClient
 import com.example.gemini.data.remote.AntigravityApiService
 import com.example.gemini.data.remote.GoogleOAuthManager
 import com.example.gemini.data.remote.StreamEvent
@@ -301,30 +302,159 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val requireApprovalForFileEdits = authPrefs.requireApprovalForFileEdits
     val defaultApprovalScope = authPrefs.defaultApprovalScope
 
-    fun setCommandAutoExecutionPolicy(policy: String) {
+    private val _globalSecuritySettings = MutableStateFlow<AgyHubClient.GlobalUserSettings?>(null)
+    val globalSecuritySettings: StateFlow<AgyHubClient.GlobalUserSettings?> = _globalSecuritySettings.asStateFlow()
+
+    private val _isGlobalSettingsLoading = MutableStateFlow(false)
+    val isGlobalSettingsLoading: StateFlow<Boolean> = _isGlobalSettingsLoading.asStateFlow()
+
+    private val _projectsList = MutableStateFlow<List<AgyHubClient.ProjectItem>>(emptyList())
+    val projectsList: StateFlow<List<AgyHubClient.ProjectItem>> = _projectsList.asStateFlow()
+
+    private val _isProjectsLoading = MutableStateFlow(false)
+    val isProjectsLoading: StateFlow<Boolean> = _isProjectsLoading.asStateFlow()
+
+    fun loadSecurityAndProjectSettings() {
         viewModelScope.launch {
-            authPrefs.setCommandAutoExecutionPolicy(policy)
+            _isGlobalSettingsLoading.value = true
+            _isProjectsLoading.value = true
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-            val sandbox = authPrefs.commandSandboxEnabled.firstOrNull() ?: false
-            agyHubClient.setUserSettings(
-                autoExecutionPolicy = policy,
-                enableTerminalSandbox = sandbox,
+
+            val globalRes = agyHubClient.fetchGlobalUserSettings(hubUrl)
+            if (globalRes.isSuccess) {
+                _globalSecuritySettings.value = globalRes.getOrNull()
+            }
+            _isGlobalSettingsLoading.value = false
+
+            val projRes = agyHubClient.fetchAllProjects(hubUrl)
+            if (projRes.isSuccess) {
+                _projectsList.value = projRes.getOrNull() ?: emptyList()
+            }
+            _isProjectsLoading.value = false
+        }
+    }
+
+    fun updateGlobalArtifactReviewMode(mode: String) {
+        viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
+            _globalSecuritySettings.value = cur.copy(artifactReviewMode = mode)
+            agyHubClient.writeGlobalUserSettings(
+                artifactReviewMode = mode,
                 hubUrl = hubUrl
             )
         }
     }
 
-    fun setCommandSandboxEnabled(enabled: Boolean) {
+    fun updateGlobalSecurityPreset(
+        autoExec: String,
+        fileAccess: String
+    ) {
         viewModelScope.launch {
-            authPrefs.setCommandSandboxEnabled(enabled)
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-            val policy = authPrefs.commandAutoExecutionPolicy.firstOrNull() ?: "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER"
-            agyHubClient.setUserSettings(
+            val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
+            _globalSecuritySettings.value = cur.copy(
+                autoExecutionPolicy = autoExec,
+                nonWorkspaceFileAccessPolicy = fileAccess
+            )
+            authPrefs.setCommandAutoExecutionPolicy(autoExec)
+            agyHubClient.writeGlobalUserSettings(
+                autoExecutionPolicy = autoExec,
+                nonWorkspaceFileAccessPolicy = fileAccess,
+                hubUrl = hubUrl
+            )
+        }
+    }
+
+    fun updateGlobalCustomTerminalPolicy(policy: String) {
+        viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
+            _globalSecuritySettings.value = cur.copy(autoExecutionPolicy = policy)
+            authPrefs.setCommandAutoExecutionPolicy(policy)
+            agyHubClient.writeGlobalUserSettings(
                 autoExecutionPolicy = policy,
+                hubUrl = hubUrl
+            )
+        }
+    }
+
+    fun updateGlobalCustomFileAccessPolicy(policy: String) {
+        viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
+            _globalSecuritySettings.value = cur.copy(nonWorkspaceFileAccessPolicy = policy)
+            agyHubClient.writeGlobalUserSettings(
+                nonWorkspaceFileAccessPolicy = policy,
+                hubUrl = hubUrl
+            )
+        }
+    }
+
+    fun updateGlobalTerminalSandbox(enabled: Boolean) {
+        viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
+            _globalSecuritySettings.value = cur.copy(enableTerminalSandbox = enabled)
+            authPrefs.setCommandSandboxEnabled(enabled)
+            agyHubClient.writeGlobalUserSettings(
                 enableTerminalSandbox = enabled,
                 hubUrl = hubUrl
             )
         }
+    }
+
+    fun setProjectInheritGlobal(project: com.example.gemini.data.remote.AgyHubClient.ProjectItem) {
+        viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val res = agyHubClient.updateProjectSettings(
+                projectId = project.id,
+                projectName = project.name,
+                inheritGlobal = true,
+                hubUrl = hubUrl
+            )
+            if (res.isSuccess) {
+                val refreshed = agyHubClient.fetchAllProjects(hubUrl)
+                if (refreshed.isSuccess) {
+                    _projectsList.value = refreshed.getOrNull() ?: emptyList()
+                }
+            }
+        }
+    }
+
+    fun updateProjectPreset(
+        project: com.example.gemini.data.remote.AgyHubClient.ProjectItem,
+        autoExec: String,
+        fileAccess: String,
+        artifactReview: String? = null
+    ) {
+        viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val res = agyHubClient.updateProjectSettings(
+                projectId = project.id,
+                projectName = project.name,
+                autoExecutionPolicy = autoExec,
+                fileAccessPolicy = fileAccess,
+                artifactReviewMode = artifactReview ?: project.artifactReviewMode ?: "ARTIFACT_REVIEW_MODE_ALWAYS",
+                sandboxMode = project.sandboxMode ?: false,
+                inheritGlobal = false,
+                hubUrl = hubUrl
+            )
+            if (res.isSuccess) {
+                val refreshed = agyHubClient.fetchAllProjects(hubUrl)
+                if (refreshed.isSuccess) {
+                    _projectsList.value = refreshed.getOrNull() ?: emptyList()
+                }
+            }
+        }
+    }
+
+    fun setCommandAutoExecutionPolicy(policy: String) {
+        updateGlobalCustomTerminalPolicy(policy)
+    }
+
+    fun setCommandSandboxEnabled(enabled: Boolean) {
+        updateGlobalTerminalSandbox(enabled)
     }
 
     fun setRequireApprovalForFileEdits(enabled: Boolean) {

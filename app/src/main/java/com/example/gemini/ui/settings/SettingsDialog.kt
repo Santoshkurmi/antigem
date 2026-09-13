@@ -121,6 +121,18 @@ fun SettingsDialog(
     commandSandboxEnabled: Boolean = false,
     requireApprovalForFileEdits: Boolean = false,
     defaultApprovalScope: String = "PERMISSION_SCOPE_ONCE",
+    globalSecuritySettings: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings? = null,
+    isGlobalSettingsLoading: Boolean = false,
+    projectsList: List<com.example.gemini.data.remote.AgyHubClient.ProjectItem> = emptyList(),
+    isProjectsLoading: Boolean = false,
+    onSetGlobalArtifactReviewMode: (String) -> Unit = {},
+    onSetGlobalSecurityPreset: (autoExec: String, fileAccess: String) -> Unit = { _, _ -> },
+    onSetGlobalCustomTerminalPolicy: (String) -> Unit = {},
+    onSetGlobalCustomFileAccessPolicy: (String) -> Unit = {},
+    onSetGlobalTerminalSandbox: (Boolean) -> Unit = {},
+    onSetProjectInheritGlobal: (com.example.gemini.data.remote.AgyHubClient.ProjectItem) -> Unit = {},
+    onSetProjectPreset: (com.example.gemini.data.remote.AgyHubClient.ProjectItem, autoExec: String, fileAccess: String) -> Unit = { _, _, _ -> },
+    onRefreshSecurityAndProjects: () -> Unit = {},
     onSetCommandAutoExecutionPolicy: (String) -> Unit = {},
     onSetCommandSandboxEnabled: (Boolean) -> Unit = {},
     onSetRequireApprovalForFileEdits: (Boolean) -> Unit = {},
@@ -305,8 +317,20 @@ fun SettingsDialog(
                         commandSandboxEnabled = commandSandboxEnabled,
                         requireApprovalForFileEdits = requireApprovalForFileEdits,
                         defaultApprovalScope = defaultApprovalScope,
+                        globalSecuritySettings = globalSecuritySettings,
+                        isGlobalSettingsLoading = isGlobalSettingsLoading,
+                        projectsList = projectsList,
+                        isProjectsLoading = isProjectsLoading,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
+                        onSetGlobalArtifactReviewMode = onSetGlobalArtifactReviewMode,
+                        onSetGlobalSecurityPreset = onSetGlobalSecurityPreset,
+                        onSetGlobalCustomTerminalPolicy = onSetGlobalCustomTerminalPolicy,
+                        onSetGlobalCustomFileAccessPolicy = onSetGlobalCustomFileAccessPolicy,
+                        onSetGlobalTerminalSandbox = onSetGlobalTerminalSandbox,
+                        onSetProjectInheritGlobal = onSetProjectInheritGlobal,
+                        onSetProjectPreset = onSetProjectPreset,
+                        onRefreshSecurityAndProjects = onRefreshSecurityAndProjects,
                         onSetCommandAutoExecutionPolicy = onSetCommandAutoExecutionPolicy,
                         onSetCommandSandboxEnabled = onSetCommandSandboxEnabled,
                         onSetRequireApprovalForFileEdits = onSetRequireApprovalForFileEdits,
@@ -2401,13 +2425,35 @@ private fun CommandsSubScreen(
     commandSandboxEnabled: Boolean,
     requireApprovalForFileEdits: Boolean,
     defaultApprovalScope: String,
+    globalSecuritySettings: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings?,
+    isGlobalSettingsLoading: Boolean,
+    projectsList: List<com.example.gemini.data.remote.AgyHubClient.ProjectItem>,
+    isProjectsLoading: Boolean,
     cardBg: Color,
     cardBorder: BorderStroke,
+    onSetGlobalArtifactReviewMode: (String) -> Unit,
+    onSetGlobalSecurityPreset: (autoExec: String, fileAccess: String) -> Unit,
+    onSetGlobalCustomTerminalPolicy: (String) -> Unit,
+    onSetGlobalCustomFileAccessPolicy: (String) -> Unit,
+    onSetGlobalTerminalSandbox: (Boolean) -> Unit,
+    onSetProjectInheritGlobal: (com.example.gemini.data.remote.AgyHubClient.ProjectItem) -> Unit,
+    onSetProjectPreset: (com.example.gemini.data.remote.AgyHubClient.ProjectItem, autoExec: String, fileAccess: String) -> Unit,
+    onRefreshSecurityAndProjects: () -> Unit,
     onSetCommandAutoExecutionPolicy: (String) -> Unit,
     onSetCommandSandboxEnabled: (Boolean) -> Unit,
     onSetRequireApprovalForFileEdits: (Boolean) -> Unit,
     onSetDefaultApprovalScope: (String) -> Unit
 ) {
+    val activeAutoExec = globalSecuritySettings?.autoExecutionPolicy ?: commandAutoExecutionPolicy
+    val activeFileAccess = globalSecuritySettings?.nonWorkspaceFileAccessPolicy ?: "AGENT_SETTING_POLICY_ASK"
+    val activeArtifactReview = globalSecuritySettings?.artifactReviewMode ?: "ARTIFACT_REVIEW_MODE_ALWAYS"
+    val activeSandbox = globalSecuritySettings?.enableTerminalSandbox ?: commandSandboxEnabled
+
+    val isDefaultMode = activeAutoExec.contains("OFF", ignoreCase = true) && activeFileAccess.contains("ASK", ignoreCase = true)
+    val isMachineMode = activeAutoExec.contains("OFF", ignoreCase = true) && activeFileAccess.contains("ALLOW", ignoreCase = true)
+    val isTurboMode = activeAutoExec.contains("EAGER", ignoreCase = true) && activeFileAccess.contains("ALLOW", ignoreCase = true)
+    var customExpanded by remember { mutableStateOf(!isDefaultMode && !isMachineMode && !isTurboMode) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -2415,54 +2461,238 @@ private fun CommandsSubScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Section 1: Execution Policy Header
+        // Top Header with Sync Info & Refresh Button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Global Security & Policies",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Live daemon settings applied across all workspaces via Jetbox",
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(
+                onClick = onRefreshSecurityAndProjects,
+                modifier = Modifier.size(36.dp)
+            ) {
+                if (isGlobalSettingsLoading || isProjectsLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = ClaudeTerracotta
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Refresh",
+                        tint = ClaudeTerracotta,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        // ==========================================
+        // 1. ARTIFACT REVIEW POLICY
+        // ==========================================
         Column {
             Text(
-                text = "Command Auto-Execution Policy",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
+                text = "Artifact Review Policy",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "Choose whether the AI runs shell commands immediately or halts to ask for user approval.",
-                fontSize = 12.sp,
+                text = "Controls whether the assistant asks you to review and approve documents it creates.",
+                fontSize = 11.5.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        // Policy Options List
-        val policyOptions = listOf(
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            val isAutoReview = activeArtifactReview.contains("TURBO", ignoreCase = true)
+            val isAlwaysReview = activeArtifactReview.contains("ALWAYS", ignoreCase = true) || !isAutoReview
+
+            // Auto Option
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onSetGlobalArtifactReviewMode("ARTIFACT_REVIEW_MODE_TURBO") },
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isAutoReview) ClaudeTerracotta.copy(alpha = 0.08f) else cardBg
+                ),
+                border = BorderStroke(
+                    if (isAutoReview) 1.5.dp else 1.dp,
+                    if (isAutoReview) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "⚡ Auto (Turbo)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isAutoReview) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
+                        )
+                        RadioButton(
+                            selected = isAutoReview,
+                            onClick = { onSetGlobalArtifactReviewMode("ARTIFACT_REVIEW_MODE_TURBO") },
+                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Edits and creates documents immediately without asking.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+
+            // Always Ask Option
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onSetGlobalArtifactReviewMode("ARTIFACT_REVIEW_MODE_ALWAYS") },
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isAlwaysReview) ClaudeTerracotta.copy(alpha = 0.08f) else cardBg
+                ),
+                border = BorderStroke(
+                    if (isAlwaysReview) 1.5.dp else 1.dp,
+                    if (isAlwaysReview) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "✋ Always Ask",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isAlwaysReview) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
+                        )
+                        RadioButton(
+                            selected = isAlwaysReview,
+                            onClick = { onSetGlobalArtifactReviewMode("ARTIFACT_REVIEW_MODE_ALWAYS") },
+                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Suspends and requests your approval before saving document edits.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // ==========================================
+        // 2. SECURITY PRESETS
+        // ==========================================
+        Column {
+            Text(
+                text = "Security Presets",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Controls terminal command execution and file access outside working directory.",
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        val presets = listOf(
             Triple(
-                "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
-                "⚡ Auto-Run (Eager)",
-                "All commands execute automatically without asking. Maximum speed for hands-off coding workflows."
-            ) to ("Web UI Default" to QuotaGreen),
-            Triple(
-                "CASCADE_COMMANDS_AUTO_EXECUTION_AUTO",
-                "🛡️ Smart Safety (Auto)",
-                "Runs safe commands automatically. Prompts for approval before running potentially destructive operations (e.g. push, delete, outside workspace)."
+                "DEFAULT",
+                "🛡️ Default Mode",
+                "Terminal commands require confirmation. Files outside workspace require confirmation."
             ) to ("Recommended" to Color(0xFF00ACC1)),
             Triple(
-                "CASCADE_COMMANDS_AUTO_EXECUTION_OFF",
-                "✋ Ask User Every Time (Off)",
-                "Suspends and asks for your explicit confirmation before executing every single terminal command."
-            ) to ("Full Control" to Color(0xFFF59E0B))
+                "FULL_MACHINE",
+                "💻 Full Machine Mode",
+                "Terminal commands require confirmation. Full read/write access to all files on device."
+            ) to ("Open Files" to Color(0xFFF59E0B)),
+            Triple(
+                "TURBO",
+                "⚡ Turbo Mode",
+                "Full auto-run: terminal commands execute immediately and all files can be accessed."
+            ) to ("Full Auto" to QuotaGreen),
+            Triple(
+                "CUSTOM",
+                "⚙️ Custom Granular Mode",
+                "Configure terminal command execution and external filesystem permissions separately."
+            ) to ("Custom" to Color(0xFF8B5CF6))
         )
 
-        policyOptions.forEach { (option, badgeInfo) ->
-            val (policyKey, label, description) = option
+        presets.forEach { (presetInfo, badgeInfo) ->
+            val (presetKey, title, desc) = presetInfo
             val (badgeText, badgeColor) = badgeInfo
-            val isSelected = commandAutoExecutionPolicy.equals(policyKey, ignoreCase = true) ||
-                    (policyKey.endsWith("EAGER") && commandAutoExecutionPolicy.equals("EAGER", ignoreCase = true)) ||
-                    (policyKey.endsWith("AUTO") && commandAutoExecutionPolicy.equals("AUTO", ignoreCase = true)) ||
-                    (policyKey.endsWith("OFF") && commandAutoExecutionPolicy.equals("OFF", ignoreCase = true))
+            val isSelected = when (presetKey) {
+                "DEFAULT" -> isDefaultMode
+                "FULL_MACHINE" -> isMachineMode
+                "TURBO" -> isTurboMode
+                "CUSTOM" -> customExpanded || (!isDefaultMode && !isMachineMode && !isTurboMode)
+                else -> false
+            }
 
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .clickable { onSetCommandAutoExecutionPolicy(policyKey) },
+                    .clickable {
+                        when (presetKey) {
+                            "DEFAULT" -> {
+                                customExpanded = false
+                                onSetGlobalSecurityPreset("CASCADE_COMMANDS_AUTO_EXECUTION_OFF", "AGENT_SETTING_POLICY_ASK")
+                            }
+                            "FULL_MACHINE" -> {
+                                customExpanded = false
+                                onSetGlobalSecurityPreset("CASCADE_COMMANDS_AUTO_EXECUTION_OFF", "AGENT_SETTING_POLICY_ALLOW")
+                            }
+                            "TURBO" -> {
+                                customExpanded = false
+                                onSetGlobalSecurityPreset("CASCADE_COMMANDS_AUTO_EXECUTION_EAGER", "AGENT_SETTING_POLICY_ALLOW")
+                            }
+                            "CUSTOM" -> {
+                                customExpanded = true
+                            }
+                        }
+                    },
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (isSelected) ClaudeTerracotta.copy(alpha = 0.08f) else cardBg
@@ -2472,57 +2702,138 @@ private fun CommandsSubScreen(
                     if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                 )
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    RadioButton(
-                        selected = isSelected,
-                        onClick = { onSetCommandAutoExecutionPolicy(policyKey) },
-                        colors = RadioButtonDefaults.colors(
-                            selectedColor = ClaudeTerracotta
-                        ),
-                        modifier = Modifier.size(20.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = {
+                                when (presetKey) {
+                                    "DEFAULT" -> {
+                                        customExpanded = false
+                                        onSetGlobalSecurityPreset("CASCADE_COMMANDS_AUTO_EXECUTION_OFF", "AGENT_SETTING_POLICY_ASK")
+                                    }
+                                    "FULL_MACHINE" -> {
+                                        customExpanded = false
+                                        onSetGlobalSecurityPreset("CASCADE_COMMANDS_AUTO_EXECUTION_OFF", "AGENT_SETTING_POLICY_ALLOW")
+                                    }
+                                    "TURBO" -> {
+                                        customExpanded = false
+                                        onSetGlobalSecurityPreset("CASCADE_COMMANDS_AUTO_EXECUTION_EAGER", "AGENT_SETTING_POLICY_ALLOW")
+                                    }
+                                    "CUSTOM" -> {
+                                        customExpanded = true
+                                    }
+                                }
+                            },
+                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = title,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = badgeColor.copy(alpha = 0.15f)
                         ) {
                             Text(
-                                text = label,
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
+                                text = badgeText,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = badgeColor,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = badgeColor.copy(alpha = 0.15f)
-                            ) {
-                                Text(
-                                    text = badgeText,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = badgeColor,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = desc,
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(start = 32.dp)
+                    )
+
+                    // Granular Controls inside Custom Mode
+                    if (presetKey == "CUSTOM" && isSelected) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Granular: Terminal Execution
+                        Text(
+                            text = "Terminal Command Execution:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val isTermOff = activeAutoExec.contains("OFF", ignoreCase = true)
+                            val isTermEager = activeAutoExec.contains("EAGER", ignoreCase = true)
+
+                            FilterChip(
+                                selected = isTermOff,
+                                onClick = { onSetGlobalCustomTerminalPolicy("CASCADE_COMMANDS_AUTO_EXECUTION_OFF") },
+                                label = { Text("✋ Ask Every Time", fontSize = 11.sp) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = isTermEager,
+                                onClick = { onSetGlobalCustomTerminalPolicy("CASCADE_COMMANDS_AUTO_EXECUTION_EAGER") },
+                                label = { Text("⚡ Auto-Run (Eager)", fontSize = 11.sp) },
+                                modifier = Modifier.weight(1f)
+                            )
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
+                        // Granular: Files Outside Workspace
                         Text(
-                            text = description,
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = 16.sp
+                            text = "Files Outside Workspace:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val isFileAsk = activeFileAccess.contains("ASK", ignoreCase = true)
+                            val isFileAllow = activeFileAccess.contains("ALLOW", ignoreCase = true)
+                            val isFileDeny = activeFileAccess.contains("DENY", ignoreCase = true)
+
+                            FilterChip(
+                                selected = isFileAsk,
+                                onClick = { onSetGlobalCustomFileAccessPolicy("AGENT_SETTING_POLICY_ASK") },
+                                label = { Text("✋ Ask", fontSize = 11.sp) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = isFileAllow,
+                                onClick = { onSetGlobalCustomFileAccessPolicy("AGENT_SETTING_POLICY_ALLOW") },
+                                label = { Text("✅ Allow", fontSize = 11.sp) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = isFileDeny,
+                                onClick = { onSetGlobalCustomFileAccessPolicy("AGENT_SETTING_POLICY_DENY") },
+                                label = { Text("🚫 Deny", fontSize = 11.sp) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
             }
@@ -2530,22 +2841,9 @@ private fun CommandsSubScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Section 2: Security & Isolation
-        Column {
-            Text(
-                text = "Security & Sandbox",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "Environment isolation and filesystem guardrails",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
+        // ==========================================
+        // 3. SECURITY & SANDBOX TOGGLE
+        // ==========================================
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -2558,7 +2856,6 @@ private fun CommandsSubScreen(
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Toggle 1: Sandbox
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -2573,16 +2870,16 @@ private fun CommandsSubScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (commandSandboxEnabled) "Enabled: isolates commands in sandbox without host network access"
-                            else "Disabled (Recommended for Hub): commands execute directly in your Termux / Linux environment",
+                            text = if (activeSandbox) "Enabled: Isolates commands in sandbox without host network access."
+                            else "Disabled (Recommended for Hub): Commands execute directly in your Termux / Linux environment.",
                             fontSize = 11.5.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 15.sp
                         )
                     }
                     Switch(
-                        checked = commandSandboxEnabled,
-                        onCheckedChange = onSetCommandSandboxEnabled,
+                        checked = activeSandbox,
+                        onCheckedChange = { onSetGlobalTerminalSandbox(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = ClaudeTerracotta
@@ -2590,12 +2887,8 @@ private fun CommandsSubScreen(
                     )
                 }
 
-                HorizontalDivider(
-                    thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                )
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
-                // Toggle 2: File Edit Approval
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -2628,20 +2921,200 @@ private fun CommandsSubScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // ==========================================
+        // 4. PROJECT OVERRIDES & INHERITANCE (NEW!)
+        // ==========================================
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Project Overrides & Inheritance",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (projectsList.isNotEmpty()) {
+                    Text(
+                        text = "${projectsList.count { it.isInheritingGlobal }}/${projectsList.size} Inheriting",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Projects can inherit the global policy above or maintain specific overrides.",
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        if (isProjectsLoading && projectsList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = ClaudeTerracotta, modifier = Modifier.size(24.dp))
+            }
+        } else if (projectsList.isEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "No workspace projects registered yet on AGY Hub.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(14.dp)
+                )
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                projectsList.forEach { project ->
+                    var projectExpanded by remember { mutableStateOf(false) }
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { projectExpanded = !projectExpanded },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
+                        border = cardBorder
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text(
+                                        text = project.name.ifBlank { project.id },
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = project.id,
+                                        fontSize = 10.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (project.isInheritingGlobal) QuotaGreen.copy(alpha = 0.15f) else Color(0xFFF59E0B).copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = if (project.isInheritingGlobal) "🌐 Inherits Global" else "⚠️ Custom Override",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (project.isInheritingGlobal) QuotaGreen else Color(0xFFF59E0B),
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+
+                            if (projectExpanded) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Quick button to Inherit Global
+                                if (!project.isInheritingGlobal) {
+                                    Button(
+                                        onClick = {
+                                            onSetProjectInheritGlobal(project)
+                                            projectExpanded = false
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = QuotaGreen)
+                                    ) {
+                                        Text("🌐 Set to Inherit Global Settings", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+
+                                Text(
+                                    text = "Set Project Override:",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            onSetProjectPreset(project, "CASCADE_COMMANDS_AUTO_EXECUTION_OFF", "AGENT_SETTING_POLICY_ASK")
+                                            projectExpanded = false
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                                    ) {
+                                        Text("🛡️ Default", fontSize = 10.5.sp)
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            onSetProjectPreset(project, "CASCADE_COMMANDS_AUTO_EXECUTION_OFF", "AGENT_SETTING_POLICY_ALLOW")
+                                            projectExpanded = false
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                                    ) {
+                                        Text("💻 Machine", fontSize = 10.5.sp)
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            onSetProjectPreset(project, "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER", "AGENT_SETTING_POLICY_ALLOW")
+                                            projectExpanded = false
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                                    ) {
+                                        Text("⚡ Turbo", fontSize = 10.5.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Section 3: Default Approval Scope
+        // ==========================================
+        // 5. APPROVAL SCOPE & PERSISTENCE BANNER
+        // ==========================================
         Column {
             Text(
                 text = "Default Approval Scope",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "When you click approve, how long should permission remain granted?",
-                fontSize = 12.sp,
+                text = "When you click approve on a tool prompt, how long should permission remain granted?",
+                fontSize = 11.5.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -2691,7 +3164,6 @@ private fun CommandsSubScreen(
             }
         }
 
-        // Section 4: Hub Sync Info Banner
         Surface(
             shape = RoundedCornerShape(10.dp),
             color = QuotaGreen.copy(alpha = 0.08f),
@@ -2710,7 +3182,7 @@ private fun CommandsSubScreen(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Settings automatically sync with Antigravity Hub via Jetbox RPC and persist across app sessions.",
+                    text = "Live synced with AGY Hub via Jetbox & Project APIs with zero local-storage desync.",
                     fontSize = 11.5.sp,
                     color = MaterialTheme.colorScheme.onSurface,
                     lineHeight = 16.sp

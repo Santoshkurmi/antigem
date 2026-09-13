@@ -1283,23 +1283,280 @@ data class AgyMediaItem(
         return executeGrpcWebCall("ResolveOutstandingSteps", payload, hubUrl).map { }
     }
 
+    data class GlobalUserSettings(
+        val autoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_OFF",
+        val nonWorkspaceFileAccessPolicy: String = "AGENT_SETTING_POLICY_ASK",
+        val artifactReviewMode: String = "ARTIFACT_REVIEW_MODE_ALWAYS",
+        val enableTerminalSandbox: Boolean = false
+    )
+
     /**
-     * Updates daemon user settings (auto execution policy & sandbox) via JetboxWriteState
+     * Fetches live daemon user settings snapshot by subscribing to JetboxSubscribeToState
+     * and reading the very first frame pushed by the daemon.
+     */
+    suspend fun fetchGlobalUserSettings(hubUrl: String = DEFAULT_HUB_URL): Result<GlobalUserSettings> = withContext(Dispatchers.IO) {
+        try {
+            val token = getOrFetchCsrfToken(hubUrl)
+            val base = hubUrl.trimEnd('/')
+            val url = "$base/exa.language_server_pb.LanguageServerService/JetboxSubscribeToState"
+            val frameBytes = encodeFrame("{}")
+            val req = Request.Builder()
+                .url(url)
+                .post(frameBytes.toRequestBody(GRPC_WEB_MEDIA_TYPE))
+                .header("Content-Type", "application/grpc-web+json")
+                .header("X-Grpc-Web", "1")
+                .apply {
+                    if (token.isNotBlank()) {
+                        header("x-codeium-csrf-token", token)
+                    }
+                }
+                .build()
+
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    return@withContext Result.failure(Exception("JetboxSubscribeToState failed: HTTP ${resp.code}"))
+                }
+                val stream = resp.body?.byteStream() ?: return@withContext Result.failure(Exception("Empty response body"))
+                val header = ByteArray(5)
+                var read = 0
+                while (read < 5) {
+                    val r = stream.read(header, read, 5 - read)
+                    if (r == -1) break
+                    read += r
+                }
+                if (read < 5) return@withContext Result.failure(Exception("Incomplete gRPC header"))
+                val len = ((header[1].toInt() and 0xFF) shl 24) or
+                        ((header[2].toInt() and 0xFF) shl 16) or
+                        ((header[3].toInt() and 0xFF) shl 8) or
+                        (header[4].toInt() and 0xFF)
+                if (len <= 0) return@withContext Result.failure(Exception("Invalid payload length: $len"))
+                val payloadBytes = ByteArray(len)
+                var payloadRead = 0
+                while (payloadRead < len) {
+                    val r = stream.read(payloadBytes, payloadRead, len - payloadRead)
+                    if (r == -1) break
+                    payloadRead += r
+                }
+                val jsonStr = String(payloadBytes, Charsets.UTF_8)
+                val json = JSONObject(jsonStr)
+                val userSettings = json.optJSONObject("userConfig")?.optJSONObject("userSettings")
+                val autoExec = userSettings?.optString("autoExecutionPolicy", "CASCADE_COMMANDS_AUTO_EXECUTION_OFF") ?: "CASCADE_COMMANDS_AUTO_EXECUTION_OFF"
+                val fileAccess = userSettings?.optString("nonWorkspaceFileAccessPolicy", "AGENT_SETTING_POLICY_ASK") ?: "AGENT_SETTING_POLICY_ASK"
+                val artifactReview = userSettings?.optString("artifactReviewMode", "ARTIFACT_REVIEW_MODE_ALWAYS") ?: "ARTIFACT_REVIEW_MODE_ALWAYS"
+                val sandbox = userSettings?.optBoolean("enableTerminalSandbox", false) ?: false
+
+                Result.success(GlobalUserSettings(
+                    autoExecutionPolicy = autoExec,
+                    nonWorkspaceFileAccessPolicy = fileAccess,
+                    artifactReviewMode = artifactReview,
+                    enableTerminalSandbox = sandbox
+                ))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchGlobalUserSettings failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Updates daemon user settings via JetboxWriteState
+     */
+    suspend fun writeGlobalUserSettings(
+        autoExecutionPolicy: String? = null,
+        nonWorkspaceFileAccessPolicy: String? = null,
+        artifactReviewMode: String? = null,
+        enableTerminalSandbox: Boolean? = null,
+        hubUrl: String = DEFAULT_HUB_URL
+    ): Result<Unit> {
+        val payload = JSONObject().apply {
+            put("userConfig", JSONObject().apply {
+                put("userSettings", JSONObject().apply {
+                    autoExecutionPolicy?.let { put("autoExecutionPolicy", it) }
+                    nonWorkspaceFileAccessPolicy?.let { put("nonWorkspaceFileAccessPolicy", it) }
+                    artifactReviewMode?.let { put("artifactReviewMode", it) }
+                    enableTerminalSandbox?.let { put("enableTerminalSandbox", it) }
+                })
+            })
+        }.toString()
+        return executeGrpcWebCall("JetboxWriteState", payload, hubUrl).map { }
+    }
+
+    data class ProjectItem(
+        val id: String,
+        val name: String,
+        val autoExecutionPolicy: String? = null,
+        val fileAccessPolicy: String? = null,
+        val artifactReviewMode: String? = null,
+        val sandboxMode: Boolean? = null,
+        val isInheritingGlobal: Boolean = true
+    )
+
+    /**
+     * Fetches all projects and their settings by reading ProjectUpdatesStream and ReadProjects
+     */
+    suspend fun fetchAllProjects(hubUrl: String = DEFAULT_HUB_URL): Result<List<ProjectItem>> = withContext(Dispatchers.IO) {
+        try {
+            val token = getOrFetchCsrfToken(hubUrl)
+            val base = hubUrl.trimEnd('/')
+            val streamUrl = "$base/exa.language_server_pb.LanguageServerService/ProjectUpdatesStream"
+            val frameBytes = encodeFrame("{}")
+            val req = Request.Builder()
+                .url(streamUrl)
+                .post(frameBytes.toRequestBody(GRPC_WEB_MEDIA_TYPE))
+                .header("Content-Type", "application/grpc-web+json")
+                .header("X-Grpc-Web", "1")
+                .apply {
+                    if (token.isNotBlank()) {
+                        header("x-codeium-csrf-token", token)
+                    }
+                }
+                .build()
+
+            val projectIds = mutableListOf<String>()
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val stream = resp.body?.byteStream()
+                    if (stream != null) {
+                        val header = ByteArray(5)
+                        var read = 0
+                        while (read < 5) {
+                            val r = stream.read(header, read, 5 - read)
+                            if (r == -1) break
+                            read += r
+                        }
+                        if (read == 5) {
+                            val len = ((header[1].toInt() and 0xFF) shl 24) or
+                                    ((header[2].toInt() and 0xFF) shl 16) or
+                                    ((header[3].toInt() and 0xFF) shl 8) or
+                                    (header[4].toInt() and 0xFF)
+                            if (len > 0) {
+                                val payloadBytes = ByteArray(len)
+                                var payloadRead = 0
+                                while (payloadRead < len) {
+                                    val r = stream.read(payloadBytes, payloadRead, len - payloadRead)
+                                    if (r == -1) break
+                                    payloadRead += r
+                                }
+                                val jsonStr = String(payloadBytes, Charsets.UTF_8)
+                                val obj = JSONObject(jsonStr)
+                                val list = obj.optJSONObject("projectList")?.optJSONArray("projectIds")
+                                if (list != null) {
+                                    for (i in 0 until list.length()) {
+                                        projectIds.add(list.getString(i))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (projectIds.isEmpty()) {
+                projectIds.addAll(listOf("default-cli-project", "outside-of-project"))
+            }
+
+            val readPayload = JSONObject().apply {
+                put("ids", JSONArray(projectIds))
+            }.toString()
+
+            val readRes = executeGrpcWebCall("ReadProjects", readPayload, hubUrl)
+            if (readRes.isFailure) {
+                return@withContext Result.failure(readRes.exceptionOrNull() ?: Exception("ReadProjects failed"))
+            }
+
+            val resObj = readRes.getOrNull()?.frames?.firstOrNull()?.let { JSONObject(it) } ?: JSONObject()
+            val projectsArr = resObj.optJSONArray("projects") ?: JSONArray()
+            val items = mutableListOf<ProjectItem>()
+
+            for (i in 0 until projectsArr.length()) {
+                val p = projectsArr.getJSONObject(i)
+                val pid = p.optString("id", "")
+                val name = p.optString("name", pid)
+                val settings = p.optJSONObject("settings")
+                val autoExec = settings?.optString("autoExecutionPolicy", null)
+                val fileAccess = settings?.optString("fileAccessPolicy", null)
+                val artifactReview = settings?.optString("artifactReviewMode", null)
+                val sandbox = if (settings?.has("sandboxMode") == true) settings.optBoolean("sandboxMode") else null
+
+                val isInheriting = settings == null || (
+                    (autoExec == null || autoExec == "CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED" || autoExec.isBlank()) &&
+                    (fileAccess == null || fileAccess == "AGENT_SETTING_POLICY_UNSPECIFIED" || fileAccess.isBlank()) &&
+                    (artifactReview == null || artifactReview == "ARTIFACT_REVIEW_MODE_UNSPECIFIED" || artifactReview.isBlank()) &&
+                    sandbox == null
+                )
+
+                items.add(ProjectItem(
+                    id = pid,
+                    name = name,
+                    autoExecutionPolicy = autoExec,
+                    fileAccessPolicy = fileAccess,
+                    artifactReviewMode = artifactReview,
+                    sandboxMode = sandbox,
+                    isInheritingGlobal = isInheriting
+                ))
+            }
+
+            Result.success(items)
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchAllProjects error: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Updates a specific project's settings via UpdateProject RPC.
+     * Passing inheritGlobal = true sets settings to empty object {} so the project inherits global settings.
+     */
+    suspend fun updateProjectSettings(
+        projectId: String,
+        projectName: String = "",
+        autoExecutionPolicy: String? = null,
+        fileAccessPolicy: String? = null,
+        artifactReviewMode: String? = null,
+        sandboxMode: Boolean? = null,
+        inheritGlobal: Boolean = false,
+        hubUrl: String = DEFAULT_HUB_URL
+    ): Result<Unit> {
+        val payload = JSONObject().apply {
+            put("project", JSONObject().apply {
+                put("id", projectId)
+                if (projectName.isNotBlank()) {
+                    put("name", projectName)
+                }
+                put("projectResources", JSONObject())
+                put("permissionGrants", JSONObject().apply {
+                    put("permissionGrants", JSONObject().apply {
+                        put("allow", JSONArray().put("read_url(example.com)"))
+                    })
+                })
+                if (inheritGlobal) {
+                    put("settings", JSONObject())
+                } else {
+                    put("settings", JSONObject().apply {
+                        autoExecutionPolicy?.let { put("autoExecutionPolicy", it) }
+                        fileAccessPolicy?.let { put("fileAccessPolicy", it) }
+                        artifactReviewMode?.let { put("artifactReviewMode", it) }
+                        sandboxMode?.let { put("sandboxMode", it) }
+                    })
+                }
+            })
+        }.toString()
+        return executeGrpcWebCall("UpdateProject", payload, hubUrl).map { }
+    }
+
+    /**
+     * Legacy helper updating daemon user settings
      */
     suspend fun setUserSettings(
         autoExecutionPolicy: String,
         enableTerminalSandbox: Boolean = false,
         hubUrl: String = DEFAULT_HUB_URL
     ): Result<Unit> {
-        val payload = JSONObject().apply {
-            put("userConfig", JSONObject().apply {
-                put("userSettings", JSONObject().apply {
-                    put("enableTerminalSandbox", enableTerminalSandbox)
-                    put("autoExecutionPolicy", autoExecutionPolicy)
-                })
-            })
-        }.toString()
-        return executeGrpcWebCall("JetboxWriteState", payload, hubUrl).map { }
+        return writeGlobalUserSettings(
+            autoExecutionPolicy = autoExecutionPolicy,
+            enableTerminalSandbox = enableTerminalSandbox,
+            hubUrl = hubUrl
+        )
     }
 
     /**

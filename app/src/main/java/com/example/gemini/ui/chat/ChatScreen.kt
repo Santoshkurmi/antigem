@@ -172,6 +172,10 @@ fun ChatScreen(
     val commandSandboxEnabled by viewModel.commandSandboxEnabled.collectAsState(initial = false)
     val requireApprovalForFileEdits by viewModel.requireApprovalForFileEdits.collectAsState(initial = false)
     val defaultApprovalScope by viewModel.defaultApprovalScope.collectAsState(initial = "PERMISSION_SCOPE_ONCE")
+    val globalSecuritySettings by viewModel.globalSecuritySettings.collectAsState()
+    val isGlobalSettingsLoading by viewModel.isGlobalSettingsLoading.collectAsState()
+    val projectsList by viewModel.projectsList.collectAsState()
+    val isProjectsLoading by viewModel.isProjectsLoading.collectAsState()
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -182,6 +186,12 @@ fun ChatScreen(
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showAttachmentSelector by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showSettingsDialog) {
+        if (showSettingsDialog) {
+            viewModel.loadSecurityAndProjectSettings()
+        }
+    }
 
     val pendingApprovals by viewModel.pendingApprovals.collectAsState()
 
@@ -1263,6 +1273,18 @@ fun ChatScreen(
             commandSandboxEnabled = commandSandboxEnabled,
             requireApprovalForFileEdits = requireApprovalForFileEdits,
             defaultApprovalScope = defaultApprovalScope,
+            globalSecuritySettings = globalSecuritySettings,
+            isGlobalSettingsLoading = isGlobalSettingsLoading,
+            projectsList = projectsList,
+            isProjectsLoading = isProjectsLoading,
+            onSetGlobalArtifactReviewMode = { viewModel.updateGlobalArtifactReviewMode(it) },
+            onSetGlobalSecurityPreset = { autoExec, fileAccess -> viewModel.updateGlobalSecurityPreset(autoExec, fileAccess) },
+            onSetGlobalCustomTerminalPolicy = { viewModel.updateGlobalCustomTerminalPolicy(it) },
+            onSetGlobalCustomFileAccessPolicy = { viewModel.updateGlobalCustomFileAccessPolicy(it) },
+            onSetGlobalTerminalSandbox = { viewModel.updateGlobalTerminalSandbox(it) },
+            onSetProjectInheritGlobal = { viewModel.setProjectInheritGlobal(it) },
+            onSetProjectPreset = { proj, autoExec, fileAccess -> viewModel.updateProjectPreset(proj, autoExec, fileAccess) },
+            onRefreshSecurityAndProjects = { viewModel.loadSecurityAndProjectSettings() },
             onSetCommandAutoExecutionPolicy = { viewModel.setCommandAutoExecutionPolicy(it) },
             onSetCommandSandboxEnabled = { viewModel.setCommandSandboxEnabled(it) },
             onSetRequireApprovalForFileEdits = { viewModel.setRequireApprovalForFileEdits(it) },
