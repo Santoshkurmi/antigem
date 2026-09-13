@@ -62,6 +62,12 @@
 -keep class io.noties.markwon.** { *; }
 -keep class ru.noties.jlatexmath.** { *; }
 
+# JLaTeXMath core engine (org.scilab.forge.jlatexmath) —
+# MacroInfo dispatches *_macro methods via java.lang.reflect.Method;
+# R8 renaming these breaks \begin{aligned}, \begin{matrix}, etc.
+-keep class org.scilab.forge.jlatexmath.** { *; }
+-dontwarn org.scilab.forge.jlatexmath.**
+
 # Guava ListenableFuture
 -keep class com.google.common.util.concurrent.ListenableFuture { *; }
 -dontwarn com.google.common.util.concurrent.**
