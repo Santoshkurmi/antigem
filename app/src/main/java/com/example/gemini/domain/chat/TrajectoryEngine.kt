@@ -230,7 +230,9 @@ class TrajectoryEngine {
         }
 
         // If the conversation is currently running or waiting, the trailing assistant steps belong in activeStepsMap
-        val hasActiveWork = cascadeRunning || currentTurnBlocks.any { it is TurnBlock.Permission }
+        val hasActiveWork = cascadeRunning || currentTurnBlocks.any {
+            it is TurnBlock.Permission || (it is TurnBlock.Tool && it.toolCall.status == "PENDING_APPROVAL")
+        }
         if (hasActiveWork && currentTurnBlocks.isNotEmpty()) {
             // Keep trailing blocks in activeStepsMap for live updates
             for (i in (currentTurnUserIndex + 1) until steps.size) {
@@ -410,8 +412,10 @@ class TrajectoryEngine {
                                 }
                             }
                             is TurnBlock.Tool -> {
-                                toolCalls.add(block.toolCall)
-                                contentParts.add("<!-- tool_call:${block.toolCall.id} -->")
+                                if (toolCalls.none { it.stepIndex == block.stepIndex }) {
+                                    toolCalls.add(block.toolCall)
+                                    contentParts.add("<!-- tool_call:${block.toolCall.id} -->")
+                                }
                             }
                             is TurnBlock.Permission -> {
                                 if (toolCalls.none { it.stepIndex == block.stepIndex }) {
@@ -514,8 +518,12 @@ class TrajectoryEngine {
             return
         }
 
-        // 4. Permission / User Approval banner
-        if (step.status == CortexStepStatuses.WAITING || step.requestedInteraction != null) {
+        // 4. Tool / Step execution (including those waiting for permission approval)
+        val toolCall = extractToolCallFromStep(step, stepIndex)
+        if (toolCall != null) {
+            blocks.add(TurnBlock.Tool(stepIndex = stepIndex, toolCall = toolCall))
+        } else if (step.status == CortexStepStatuses.WAITING || step.requestedInteraction != null) {
+            // Standalone permission request without an associated tool call
             step.requestedInteraction?.let { req ->
                 blocks.add(TurnBlock.Permission(stepIndex = stepIndex, trajectoryId = trajectoryId, interaction = req))
             }
@@ -527,12 +535,6 @@ class TrajectoryEngine {
             if (errMsg.isNotBlank()) {
                 blocks.add(TurnBlock.ErrorNotice(stepIndex = stepIndex, message = errMsg))
             }
-        }
-
-        // 6. Every other step in an assistant trajectory is a Tool / Step execution!
-        val toolCall = extractToolCallFromStep(step, stepIndex)
-        if (toolCall != null) {
-            blocks.add(TurnBlock.Tool(stepIndex = stepIndex, toolCall = toolCall))
         }
     }
 

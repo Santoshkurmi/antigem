@@ -60,6 +60,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         msgs.filter { it.role == com.example.gemini.domain.model.MessageRole.ASSISTANT }
             .flatMap { msg ->
                 msg.toolCalls.filter { it.status == "PENDING_APPROVAL" }
+                    .distinctBy { it.stepIndex }
                     .map { PendingToolApproval(it, msg.id) }
             }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
