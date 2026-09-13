@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import com.example.gemini.data.remote.dto.*
+import kotlinx.serialization.json.Json
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -46,6 +48,11 @@ class AgyHubClient(
     companion object {
         const val TAG = "AgyHubClient"
         const val DEFAULT_HUB_URL = "http://127.0.0.1:8090"
+        val agyJson = Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+            coerceInputValues = true
+        }
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private val GRPC_WEB_MEDIA_TYPE = "application/grpc-web+json".toMediaType()
         private val CSRF_PATTERN = Pattern.compile(""""csrfToken":\s*"([^"]+)"""")
@@ -1109,6 +1116,31 @@ data class AgyMediaItem(
     }.flowOn(Dispatchers.IO)
 
     /**
+     * Streams real-time updates for an active conversation via StreamAgentStateUpdates,
+     * decoded directly into typed [AgyStreamFrameDto] models.
+     */
+    fun streamAgentStateFrames(
+        cascadeId: String,
+        hubUrl: String = DEFAULT_HUB_URL
+    ): Flow<AgyStreamFrameDto> = flow {
+        val payload = JSONObject().apply {
+            put("conversationId", cascadeId)
+            put("subscriberId", "antigem-${System.currentTimeMillis()}")
+            put("trajectoryVerbosity", 2)
+            put("initialStepsPageBounds", JSONObject().put("startIndex", 0))
+        }.toString()
+
+        callStream("StreamAgentStateUpdates", payload, hubUrl).collect { frameJson ->
+            try {
+                val frame = agyJson.decodeFromString<AgyStreamFrameDto>(frameJson)
+                emit(frame)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to decode AgyStreamFrameDto: ${e.message}", e)
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /**
      * Cancels / aborts running generation or commands
      */
     suspend fun cancelCascadeInvocation(
@@ -1120,6 +1152,23 @@ data class AgyMediaItem(
             put("killBackgroundTasks", true)
         }.toString()
         return executeGrpcWebCall("CancelCascadeInvocation", payload, hubUrl).map { }
+    }
+
+    /**
+     * Selectively cancels specific step indices (e.g. aborting an individual long-running
+     * shell command or background task) without aborting the entire cascade session.
+     */
+    suspend fun cancelCascadeSteps(
+        cascadeId: String,
+        stepIndices: List<Int>,
+        hubUrl: String = DEFAULT_HUB_URL
+    ): Result<Unit> {
+        val reqDto = com.example.gemini.data.remote.dto.CancelCascadeStepsRequestDto(
+            cascadeId = cascadeId,
+            stepIndices = stepIndices
+        )
+        val payload = agyJson.encodeToString(com.example.gemini.data.remote.dto.CancelCascadeStepsRequestDto.serializer(), reqDto)
+        return executeGrpcWebCall("CancelCascadeSteps", payload, hubUrl).map { }
     }
 
     /**

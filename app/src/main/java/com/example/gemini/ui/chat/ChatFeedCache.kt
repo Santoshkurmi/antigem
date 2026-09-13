@@ -84,9 +84,20 @@ object ChatFeedCache {
         selectedModelId: String
     ): List<ChatFeedItem> {
         val result = ArrayList<ChatFeedItem>(messages.size * 2)
+        val seenKeys = HashSet<String>()
+
+        fun addItem(item: ChatFeedItem) {
+            if (seenKeys.add(item.key)) {
+                result.add(item)
+            }
+        }
+
         for (msg in messages) {
             if (!msg.isStreaming) {
-                result.addAll(getOrParse(msg))
+                val parsed = getOrParse(msg)
+                for (item in parsed) {
+                    addItem(item)
+                }
             } else {
                 val hasActiveRunningTool = msg.toolCalls.any {
                     it.status == "RUNNING" || it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE"
@@ -103,7 +114,7 @@ object ChatFeedCache {
                 if (contentToParse.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
                     val blocks = parseMarkdownBlocks(contentToParse, msg.toolCalls)
                     blocks.forEachIndexed { idx, block ->
-                        result.add(ChatFeedItem.AssistantBlock(
+                        addItem(ChatFeedItem.AssistantBlock(
                             messageId = msg.id,
                             blockIndex = idx,
                             block = block
@@ -111,7 +122,7 @@ object ChatFeedCache {
                     }
                 } else if (!hasActiveRunningTool) {
                     // Only show waiting indicator before ANY output or tool call has appeared
-                    result.add(ChatFeedItem.AssistantTyping(msg.id, selectedModelId))
+                    addItem(ChatFeedItem.AssistantTyping(msg.id, selectedModelId))
                 }
             }
         }

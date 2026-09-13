@@ -39,6 +39,7 @@ import coil.request.ImageRequest
 import com.example.gemini.data.remote.HubMediaResolver
 import java.io.File
 import com.example.gemini.domain.model.ToolCall
+import com.example.gemini.domain.model.ToolType
 import com.example.gemini.theme.*
 
 /**
@@ -55,7 +56,7 @@ fun AgentToolCallCard(
     onSubmitChoices: ((ToolCall, String) -> Unit)? = null,
     onSkipChoices: ((ToolCall) -> Unit)? = null
 ) {
-    val isChoice = toolCall.name == "ask_choices" || toolCall.name == "user_choice"
+    val isChoice = toolCall.toolType == ToolType.ASK_CHOICE
     if (isChoice) {
         ChoiceQuestionnaireCard(
             toolCall = toolCall,
@@ -69,19 +70,17 @@ fun AgentToolCallCard(
     val context = LocalContext.current
     var isExpanded by remember { mutableStateOf(false) }
 
-    val isSearch = toolCall.name == "web_search" || toolCall.name == "search"
-    val isReader = toolCall.name == "read_url" || toolCall.name == "read_url_content" || toolCall.name == "web_reader"
-    val isMath = toolCall.name == "math" || toolCall.name == "cas" || toolCall.name == "math_eval"
-    val isViewFile = toolCall.name == "view_file" || toolCall.name == "viewFile"
-    val isEditFile = toolCall.name == "edit_file" || toolCall.name == "modifyFile" || toolCall.name == "write_to_file" || toolCall.name == "replace_file_content" || toolCall.name == "codeAction" || toolCall.name == "fileChange"
-    val isListDir = toolCall.name == "list_dir" || toolCall.name == "listDirectory"
-    val isFind = toolCall.name == "find" || toolCall.name == "find_by_name"
-    val isGrep = toolCall.name == "grep_search" || toolCall.name == "code_search"
-    val isGenImg = toolCall.name == "generate_image" || toolCall.name == "generateImage"
-    val isMcp = toolCall.name.startsWith("mcp_") || toolCall.name == "call_mcp_tool" ||
-        toolCall.interactionType == "mcp" || toolCall.name.contains("mcp", ignoreCase = true) ||
-        toolCall.name == "read_resource" || toolCall.name == "list_resources"
-    val isBash = toolCall.name == "bash" || toolCall.name == "run_command" || toolCall.name == "terminal" || (!isSearch && !isReader && !isMath && !isViewFile && !isEditFile && !isListDir && !isFind && !isGrep && !isGenImg && !isMcp)
+    val isSearch = toolCall.toolType == ToolType.SEARCH_WEB
+    val isReader = toolCall.toolType == ToolType.READ_URL
+    val isMath = toolCall.toolType == ToolType.MATH
+    val isViewFile = toolCall.toolType == ToolType.VIEW_FILE
+    val isEditFile = toolCall.toolType == ToolType.EDIT_FILE
+    val isListDir = toolCall.toolType == ToolType.LIST_DIR
+    val isFind = toolCall.toolType == ToolType.FIND
+    val isGrep = toolCall.toolType == ToolType.GREP_SEARCH
+    val isGenImg = toolCall.toolType == ToolType.GENERATE_IMAGE
+    val isMcp = toolCall.toolType == ToolType.MCP
+    val isBash = toolCall.toolType == ToolType.BASH
 
     val isImageOutput = isGenImg || toolCall.output.startsWith("data:image/") ||
         (toolCall.output.startsWith("file://") && toolCall.output.matches(Regex(".*\\.(png|jpe?g|webp|gif)(\\?.*)?$", RegexOption.IGNORE_CASE)))

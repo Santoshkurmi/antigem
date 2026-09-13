@@ -11,10 +11,27 @@ enum class MessageRole {
     SUMMARY
 }
 
+enum class ToolType {
+    BASH,
+    VIEW_FILE,
+    EDIT_FILE,
+    LIST_DIR,
+    GREP_SEARCH,
+    FIND,
+    SEARCH_WEB,
+    READ_URL,
+    GENERATE_IMAGE,
+    MCP,
+    ASK_CHOICE,
+    MATH,
+    UNKNOWN
+}
+
 @Serializable
 data class ToolCall(
     val id: String = UUID.randomUUID().toString(),
     val name: String = "bash",
+    val toolType: ToolType = ToolType.BASH,
     val command: String,
     val status: String = "RUNNING", // RUNNING, SUCCESS, FAILED, TERMINATED
     val output: String = "",
