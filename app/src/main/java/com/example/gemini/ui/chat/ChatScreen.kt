@@ -179,6 +179,7 @@ fun ChatScreen(
     val projectsList by viewModel.projectsList.collectAsState()
     val isProjectsLoading by viewModel.isProjectsLoading.collectAsState()
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
+    val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -1327,7 +1328,13 @@ fun ChatScreen(
                     isUploadingAttachment = isUploadingAttachment,
                     onRemoveAttachment = { viewModel.removeAttachment(it) },
                     onAddAttachment = { viewModel.addAttachment(it) },
-                    onAttachClick = { showAttachmentSelector = true }
+                    onAttachClick = { showAttachmentSelector = true },
+                    onTranscribeAudioFile = { file, onDone, onError ->
+                        viewModel.transcribeAudioFile(file, onDone, onError)
+                    },
+                    isTranscribingAudio = isTranscribingAudio,
+                    speechManager = viewModel.speechManager,
+                    cascadeId = activeConversationKey ?: ""
                 )
             }
         }

@@ -45,6 +45,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val agyBridgeService = com.example.gemini.data.remote.AgyBridgeService()
     private val agyHubClient = com.example.gemini.data.remote.AgyHubClient()
     val trajectoryEngine = com.example.gemini.domain.chat.TrajectoryEngine()
+    val speechManager = com.example.gemini.data.audio.AgyAudioTranscriptionManager(agyHubClient) {
+        authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+    }
     private val oauthManager = GoogleOAuthManager()
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
@@ -1366,6 +1369,44 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
             _conversations.value = newConversations.sortedByDescending { it.updatedAt }
             executeStream(updatedConv, updatedList, mediaItems = mediaList)
+        }
+    }
+
+    val isTranscribingAudio = MutableStateFlow(false)
+
+    fun transcribeAudioFile(
+        file: java.io.File,
+        onDone: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        if (!file.exists() || file.length() == 0L) {
+            onError("Audio file empty or not found")
+            return
+        }
+        viewModelScope.launch {
+            isTranscribingAudio.value = true
+            try {
+                val bytes = file.readBytes()
+                val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                val hub = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                val res = agyHubClient.getTranscription(audioBase64 = b64, hubUrl = hub)
+                if (res.isSuccess) {
+                    val text = res.getOrThrow().trim()
+                    if (text.isNotBlank()) {
+                        onDone(text)
+                    } else {
+                        onError("No speech recognized in recording")
+                    }
+                } else {
+                    val msg = res.exceptionOrNull()?.message ?: "Transcription failed"
+                    onError(msg)
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "transcribeAudioFile error: ${e.message}", e)
+                onError(e.message ?: "Transcription error")
+            } finally {
+                isTranscribingAudio.value = false
+            }
         }
     }
 

@@ -4,6 +4,10 @@ import android.Manifest
 import android.content.Intent
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -159,6 +163,10 @@ fun ChatInputBar(
     onRemoveAttachment: (String) -> Unit = {},
     onAddAttachment: (ChatAttachment) -> Unit = {},
     onAttachClick: () -> Unit = {},
+    onTranscribeAudioFile: ((File, onDone: (String) -> Unit, onError: (String) -> Unit) -> Unit)? = null,
+    isTranscribingAudio: Boolean = false,
+    speechManager: com.example.gemini.data.audio.AgyAudioTranscriptionManager? = null,
+    cascadeId: String = "",
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -167,7 +175,12 @@ fun ChatInputBar(
     val coroutineScope = rememberCoroutineScope()
     val isDark = isAppInDarkTheme()
 
-    // Audio recording state
+    // Audio recording & Speech-to-Text state
+    var recordMode by remember { mutableStateOf(AudioRecordMode.VOICE_NOTE) }
+    var isLiveDictating by remember { mutableStateOf(false) }
+    var baseTextBeforeDictation by remember { mutableStateOf("") }
+    var pendingActionAfterPermission by remember { mutableStateOf<String?>(null) }
+
     var isRecordingAudio by remember { mutableStateOf(false) }
     var isRecordingPaused by remember { mutableStateOf(false) }
     var recordingDurationSeconds by remember { mutableIntStateOf(0) }
@@ -176,12 +189,25 @@ fun ChatInputBar(
     var recordingJob by remember { mutableStateOf<Job?>(null) }
     val waveformAmplitudes = remember { mutableStateListOf<Float>() }
 
+    // Stream live waveform amplitudes from AGY speech manager when active
+    LaunchedEffect(isRecordingAudio, isLiveDictating, recordMode, speechManager) {
+        if ((isRecordingAudio || isLiveDictating) && speechManager != null) {
+            speechManager.latestAmplitude.collect { amp ->
+                if (waveformAmplitudes.size >= 24) {
+                    waveformAmplitudes.removeAt(0)
+                }
+                waveformAmplitudes.add(amp)
+            }
+        }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             try {
                 mediaRecorder?.stop()
                 mediaRecorder?.release()
             } catch (_: Exception) {}
+            speechManager?.cancelTranscriptionSession()
         }
     }
 
@@ -278,14 +304,22 @@ fun ChatInputBar(
         }
     }
 
+    var startLiveDictationAction by remember { mutableStateOf<() -> Unit>({}) }
+    var startAutoTranscribeAction by remember { mutableStateOf<() -> Unit>({}) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            startAudioRecording()
+            when (pendingActionAfterPermission) {
+                "LIVE_DICTATION" -> startLiveDictationAction()
+                "AUTO_TRANSCRIBE" -> startAutoTranscribeAction()
+                else -> startAudioRecording()
+            }
         } else {
-            Toast.makeText(context, "Microphone permission required for voice recording", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Microphone permission required for speech recognition", Toast.LENGTH_SHORT).show()
         }
+        pendingActionAfterPermission = null
     }
 
     fun triggerMicClick() {
@@ -297,15 +331,185 @@ fun ChatInputBar(
         if (hasPermission) {
             startAudioRecording()
         } else {
+            pendingActionAfterPermission = "AUDIO_RECORDING"
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
-    fun stopAudioRecording(andSend: Boolean) {
+    fun cancelAudioRecording() {
+        if (recordMode == AudioRecordMode.TRANSCRIBE) {
+            speechManager?.cancelTranscriptionSession()
+        }
         val file = currentRecordingFile
+        recordingJob?.cancel()
+        try {
+            mediaRecorder?.stop()
+            mediaRecorder?.release()
+        } catch (_: Exception) {}
+        finally {
+            mediaRecorder = null
+            isRecordingAudio = false
+            isRecordingPaused = false
+            currentRecordingFile = null
+            recordingDurationSeconds = 0
+            waveformAmplitudes.clear()
+            recordMode = AudioRecordMode.VOICE_NOTE
+        }
+        file?.delete()
+    }
+
+    fun startLiveDictation() {
+        val hasPerm = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasPerm) {
+            pendingActionAfterPermission = "LIVE_DICTATION"
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+
+        val sm = speechManager
+        if (sm == null) {
+            Toast.makeText(context, "Speech service unavailable", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        baseTextBeforeDictation = textFieldValue.text
+        isLiveDictating = true
+        recordMode = AudioRecordMode.LIVE_DICTATION
+
+        val selStart = textFieldValue.selection.start.coerceIn(0, textFieldValue.text.length)
+        val selEnd = textFieldValue.selection.end.coerceIn(0, textFieldValue.text.length)
+        val pre = textFieldValue.text.substring(0, selStart)
+        val post = textFieldValue.text.substring(selEnd)
+
+        sm.startTranscriptionSession(
+            scope = coroutineScope,
+            cascadeId = cascadeId,
+            preCursorText = pre,
+            postCursorText = post,
+            onPartialText = { partial ->
+                val sep = if (baseTextBeforeDictation.isNotBlank() && !baseTextBeforeDictation.endsWith(" ")) " " else ""
+                val combined = baseTextBeforeDictation + sep + partial
+                onTextFieldValueChange(TextFieldValue(combined, selection = TextRange(combined.length)))
+            },
+            onFinalText = { finalText ->
+                val sep = if (baseTextBeforeDictation.isNotBlank() && !baseTextBeforeDictation.endsWith(" ")) " " else ""
+                val combined = baseTextBeforeDictation + sep + finalText
+                onTextFieldValueChange(TextFieldValue(combined, selection = TextRange(combined.length)))
+                baseTextBeforeDictation = combined
+            },
+            onError = { err ->
+                Toast.makeText(context, "Dictation: $err", Toast.LENGTH_SHORT).show()
+                isLiveDictating = false
+                recordMode = AudioRecordMode.VOICE_NOTE
+            }
+        )
+    }
+    startLiveDictationAction = { startLiveDictation() }
+
+    fun stopLiveDictation() {
+        speechManager?.stopTranscriptionSession { finalText ->
+            if (finalText.isNotBlank()) {
+                val sep = if (baseTextBeforeDictation.isNotBlank() && !baseTextBeforeDictation.endsWith(" ")) " " else ""
+                val combined = baseTextBeforeDictation + sep + finalText
+                onTextFieldValueChange(TextFieldValue(combined, selection = TextRange(combined.length)))
+            }
+        }
+        isLiveDictating = false
+        recordMode = AudioRecordMode.VOICE_NOTE
+    }
+
+    fun startAutoTranscribe() {
+        val hasPerm = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasPerm) {
+            pendingActionAfterPermission = "AUTO_TRANSCRIBE"
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+
+        val sm = speechManager
+        if (sm == null) {
+            Toast.makeText(context, "Speech service unavailable", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        baseTextBeforeDictation = textFieldValue.text
+        recordMode = AudioRecordMode.TRANSCRIBE
+        isRecordingAudio = true
+        isRecordingPaused = false
+        recordingDurationSeconds = 0
+        waveformAmplitudes.clear()
+        repeat(24) { waveformAmplitudes.add(0.08f) }
+
+        recordingJob = coroutineScope.launch {
+            while (isRecordingAudio && isActive) {
+                delay(1000)
+                if (!isRecordingPaused) {
+                    recordingDurationSeconds++
+                }
+            }
+        }
+
+        val selStart = textFieldValue.selection.start.coerceIn(0, textFieldValue.text.length)
+        val selEnd = textFieldValue.selection.end.coerceIn(0, textFieldValue.text.length)
+        val pre = textFieldValue.text.substring(0, selStart)
+        val post = textFieldValue.text.substring(selEnd)
+
+        sm.startTranscriptionSession(
+            scope = coroutineScope,
+            cascadeId = cascadeId,
+            preCursorText = pre,
+            postCursorText = post,
+            onPartialText = { /* In auto transcribe mode, we finalize upon tapping stop */ },
+            onFinalText = { finalText ->
+                val sep = if (baseTextBeforeDictation.isNotBlank() && !baseTextBeforeDictation.endsWith(" ")) " " else ""
+                val combined = baseTextBeforeDictation + sep + finalText
+                onTextFieldValueChange(TextFieldValue(combined, selection = TextRange(combined.length)))
+            },
+            onError = { err ->
+                Toast.makeText(context, "Transcribe: $err", Toast.LENGTH_SHORT).show()
+                cancelAudioRecording()
+            }
+        )
+    }
+    startAutoTranscribeAction = { startAutoTranscribe() }
+
+    fun stopAudioRecording(andSend: Boolean) {
+        val currentMode = recordMode
         val dur = recordingDurationSeconds
         recordingJob?.cancel()
 
+        if (currentMode == AudioRecordMode.TRANSCRIBE) {
+            speechManager?.stopTranscriptionSession { finalText ->
+                if (finalText.isNotBlank()) {
+                    val cur = baseTextBeforeDictation
+                    val sep = if (cur.isNotBlank() && !cur.endsWith(" ")) " " else ""
+                    val combined = cur + sep + finalText
+                    onTextFieldValueChange(TextFieldValue(combined, selection = TextRange(combined.length)))
+                    if (andSend) {
+                        onSendMessage(combined.trim())
+                        onTextFieldValueChange(TextFieldValue(""))
+                    }
+                } else {
+                    Toast.makeText(context, "No speech recognized", Toast.LENGTH_SHORT).show()
+                }
+            }
+            isRecordingAudio = false
+            isRecordingPaused = false
+            recordingDurationSeconds = 0
+            waveformAmplitudes.clear()
+            recordMode = AudioRecordMode.VOICE_NOTE
+            return
+        }
+
+        val file = currentRecordingFile
         try {
             mediaRecorder?.stop()
             mediaRecorder?.release()
@@ -318,6 +522,7 @@ fun ChatInputBar(
             currentRecordingFile = null
             recordingDurationSeconds = 0
             waveformAmplitudes.clear()
+            recordMode = AudioRecordMode.VOICE_NOTE
         }
 
         if (file != null && file.exists() && file.length() > 0) {
@@ -340,24 +545,6 @@ fun ChatInputBar(
                 onAddAttachment(att)
             }
         }
-    }
-
-    fun cancelAudioRecording() {
-        val file = currentRecordingFile
-        recordingJob?.cancel()
-        try {
-            mediaRecorder?.stop()
-            mediaRecorder?.release()
-        } catch (_: Exception) {}
-        finally {
-            mediaRecorder = null
-            isRecordingAudio = false
-            isRecordingPaused = false
-            currentRecordingFile = null
-            recordingDurationSeconds = 0
-            waveformAmplitudes.clear()
-        }
-        file?.delete()
     }
 
     val canSend = textFieldValue.text.trim().isNotEmpty() || attachments.isNotEmpty()
@@ -430,6 +617,33 @@ fun ChatInputBar(
                             fontFamily = FontFamily.Monospace,
                             color = if (isRecordingPaused) Color(0xFFFFA000) else MaterialTheme.colorScheme.onSurface
                         )
+
+                        if (recordMode == AudioRecordMode.TRANSCRIBE) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = ClaudeTerracotta.copy(alpha = 0.15f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.GraphicEq,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(10.dp),
+                                        tint = ClaudeTerracotta
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text(
+                                        text = "Transcribe",
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = ClaudeTerracotta
+                                    )
+                                }
+                            }
+                        }
 
                         Spacer(modifier = Modifier.width(6.dp))
 
@@ -524,6 +738,75 @@ fun ChatInputBar(
                             .fillMaxWidth()
                             .padding(horizontal = 6.dp, vertical = 6.dp)
                     ) {
+                        // Live Dictation Listening Banner
+                        if (isLiveDictating) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = GeminiBlue.copy(alpha = 0.12f),
+                                border = BorderStroke(1.dp, GeminiBlue.copy(alpha = 0.4f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                                    .clickable { stopLiveDictation() }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFE53935))
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Listening... Speak now (tap to stop)",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.Stop,
+                                        contentDescription = "Stop",
+                                        tint = Color(0xFFE53935),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Audio Transcribing Banner
+                        if (isTranscribingAudio) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = ClaudeTerracotta.copy(alpha = 0.12f),
+                                border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.4f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(13.dp),
+                                        strokeWidth = 2.dp,
+                                        color = ClaudeTerracotta
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Transcribing audio via AGY Hub...",
+                                        fontSize = 12.sp,
+                                        color = ClaudeTerracotta,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+
                         // 1. Text Field Area on Top
                         TextField(
                         value = textFieldValue,
@@ -802,6 +1085,36 @@ fun ChatInputBar(
 
                         Spacer(modifier = Modifier.weight(1f))
 
+                        // Dedicated Speech-to-Text Live Dictation Button (AGY Hub)
+                        if (!isStreaming && !isRecordingAudio) {
+                            Surface(
+                                onClick = {
+                                    if (isLiveDictating) {
+                                        stopLiveDictation()
+                                    } else {
+                                        startLiveDictation()
+                                    }
+                                },
+                                shape = CircleShape,
+                                color = if (isLiveDictating) GeminiBlue.copy(alpha = 0.15f) else MaterialTheme.colorScheme.background,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isLiveDictating) GeminiBlue.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                                ),
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.GraphicEq,
+                                        contentDescription = if (isLiveDictating) "Stop Dictation" else "Live Dictation",
+                                        tint = if (isLiveDictating) GeminiBlue else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+
                         // Action Button (Send / Stop / Voice Recorder)
                         if (isStreaming) {
                             Surface(
@@ -824,6 +1137,9 @@ fun ChatInputBar(
                                 onClick = {
                                     val trimmed = textFieldValue.text.trim()
                                     if (canSend) {
+                                        if (isLiveDictating) {
+                                            stopLiveDictation()
+                                        }
                                         onSendMessage(trimmed)
                                         onTextFieldValueChange(TextFieldValue(""))
                                     }
@@ -847,7 +1163,10 @@ fun ChatInputBar(
                             val voiceIconColor = if (isDark) Color(0xFF1B1B1B) else Color.White
 
                             Surface(
-                                onClick = { triggerMicClick() },
+                                onClick = {
+                                    recordMode = AudioRecordMode.VOICE_NOTE
+                                    triggerMicClick()
+                                },
                                 shape = CircleShape,
                                 color = voiceBgColor,
                                 shadowElevation = 1.dp,
@@ -870,3 +1189,6 @@ fun ChatInputBar(
     }
 }
 }
+
+enum class AudioRecordMode { VOICE_NOTE, TRANSCRIBE, LIVE_DICTATION }
+
