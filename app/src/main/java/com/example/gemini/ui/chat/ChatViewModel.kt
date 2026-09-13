@@ -287,7 +287,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     val chatFontScale = authPrefs.chatFontScale
-    val themeMode = authPrefs.themeMode
+    val themeMode: StateFlow<String> = authPrefs.themeMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, authPreferences.getThemeModeSync())
     val agyHubUrl = authPrefs.agyHubUrl
     val agyBridgeHttpUrl = authPrefs.agyBridgeHttpUrl
     val terminalFontSize = authPrefs.terminalFontSize

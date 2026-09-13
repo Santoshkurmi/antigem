@@ -77,10 +77,45 @@ class AuthPreferences(private val context: Context) {
     val projectId: Flow<String?> = context.dataStore.data.map { it[PROJECT_ID] ?: "rising-fact-p41fc" }
     val subscriptionTier: Flow<String?> = context.dataStore.data.map { it[SUBSCRIPTION_TIER] ?: "pro" }
     val userEmail: Flow<String?> = context.dataStore.data.map { it[USER_EMAIL] }
+    private val syncPrefs = context.getSharedPreferences("anti_gem_sync_prefs", Context.MODE_PRIVATE)
+
+    fun getThemeModeSync(): String {
+        val cached = syncPrefs.getString("app_theme_mode", null)
+        if (cached != null) return cached
+
+        // Fast fallback: parse datastore pb file directly if syncPrefs not yet populated
+        try {
+            val pbFile = java.io.File(context.filesDir, "datastore/auth_prefs.preferences_pb")
+            if (pbFile.exists()) {
+                val content = pbFile.readBytes().toString(Charsets.ISO_8859_1)
+                val key = "app_theme_mode"
+                val idx = content.indexOf(key)
+                if (idx != -1) {
+                    val sub = content.substring(idx + key.length, minOf(content.length, idx + key.length + 30))
+                    val mode = when {
+                        sub.contains("LIGHT") -> "LIGHT"
+                        sub.contains("DARK") -> "DARK"
+                        else -> "SYSTEM"
+                    }
+                    syncPrefs.edit().putString("app_theme_mode", mode).apply()
+                    return mode
+                }
+            }
+        } catch (_: Exception) {}
+
+        return "SYSTEM"
+    }
+
     val enabledModelIds: Flow<Set<String>?> = context.dataStore.data.map { it[ENABLED_MODELS] }
     val isDevModeEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_DEV_MODE_ENABLED] ?: false }
     val chatFontScale: Flow<Float> = context.dataStore.data.map { it[CHAT_FONT_SCALE] ?: 1.0f }
-    val themeMode: Flow<String> = context.dataStore.data.map { it[APP_THEME_MODE] ?: "SYSTEM" }
+    val themeMode: Flow<String> = context.dataStore.data.map { prefs ->
+        val mode = prefs[APP_THEME_MODE] ?: "SYSTEM"
+        if (syncPrefs.getString("app_theme_mode", null) != mode) {
+            syncPrefs.edit().putString("app_theme_mode", mode).apply()
+        }
+        mode
+    }
     val terminalFontSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_FONT_SIZE] ?: 13 }
     val terminalCursorStyle: Flow<String> = context.dataStore.data.map { it[TERMINAL_CURSOR_STYLE] ?: "BLOCK" }
     val terminalBufferSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_BUFFER_SIZE] ?: 2000 }
@@ -281,6 +316,7 @@ class AuthPreferences(private val context: Context) {
     }
 
     suspend fun saveThemeMode(mode: String) {
+        syncPrefs.edit().putString("app_theme_mode", mode).commit()
         context.dataStore.edit { prefs ->
             prefs[APP_THEME_MODE] = mode
         }

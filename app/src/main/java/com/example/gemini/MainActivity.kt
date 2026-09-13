@@ -39,7 +39,8 @@ class MainActivity : ComponentActivity() {
         handleOAuthIntent(intent)
 
         setContent {
-            val themeMode by chatViewModel.themeMode.collectAsState(initial = "SYSTEM")
+            val initialThemeMode = remember { chatViewModel.authPreferences.getThemeModeSync() }
+            val themeMode by chatViewModel.themeMode.collectAsState(initial = initialThemeMode)
             val isSystemDark = com.example.gemini.theme.isSystemInDarkThemeRobust()
             val useDarkTheme = when (themeMode) {
                 "DARK" -> true

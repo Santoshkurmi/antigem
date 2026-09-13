@@ -161,7 +161,7 @@ fun ChatScreen(
     val sshPort by viewModel.termuxSshPort.collectAsState(initial = 8022)
     val sshUser by viewModel.termuxSshUser.collectAsState(initial = "root")
     val sshPass by viewModel.termuxSshPass.collectAsState(initial = "root")
-    val themeMode by viewModel.themeMode.collectAsState(initial = "SYSTEM")
+    val themeMode by viewModel.themeMode.collectAsState(initial = viewModel.authPreferences.getThemeModeSync())
     val agyHubUrl by viewModel.agyHubUrl.collectAsState(initial = "http://127.0.0.1:8090")
     val agyBridgeHttpUrl by viewModel.agyBridgeHttpUrl.collectAsState(initial = "http://127.0.0.1:8080")
     val terminalFontSize by viewModel.terminalFontSize.collectAsState(initial = 13)
