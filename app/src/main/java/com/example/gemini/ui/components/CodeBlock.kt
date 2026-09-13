@@ -18,9 +18,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -156,6 +159,10 @@ fun CodeBlock(
     var selectedTab by remember { mutableStateOf(0) } // 0 = Code, 1 = Preview
     var reloadKey by remember { mutableStateOf(0) }
     var isFullscreen by remember { mutableStateOf(false) }
+    var isExpanded by remember { mutableStateOf(false) }
+
+    val lineCount = remember(code) { code.lines().size }
+    val isLongCode = lineCount > 12
 
     val isPreviewable = remember(code, language) {
         isPreviewableCode(code, language)
@@ -188,14 +195,26 @@ fun CodeBlock(
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Language Badge
-            Text(
-                text = language.ifEmpty { "code" }.uppercase(),
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = ClaudeTerracotta,
-                letterSpacing = 0.5.sp
-            )
+            // Language Badge + Line count
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = language.ifEmpty { "code" }.uppercase(),
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ClaudeTerracotta,
+                    letterSpacing = 0.5.sp
+                )
+                if (lineCount > 1) {
+                    Text(
+                        text = "•  $lineCount lines",
+                        fontSize = 10.5.sp,
+                        color = TextPrimaryDark.copy(alpha = 0.5f)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.weight(1f))
 
@@ -289,6 +308,21 @@ fun CodeBlock(
                 }
             }
 
+            // Expand / Collapse toggle for long code
+            if (isLongCode && selectedTab == 0) {
+                IconButton(
+                    onClick = { isExpanded = !isExpanded },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (isExpanded) "Collapse code block" else "Expand full height",
+                        tint = if (isExpanded) ClaudeTerracotta else TextPrimaryDark.copy(alpha = 0.7f),
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+            }
+
             // Copy Button
             IconButton(
                 onClick = {
@@ -354,17 +388,64 @@ fun CodeBlock(
                 }
             }
         } else {
-            // Syntax Highlighted Code
-            Text(
-                text = highlightedText,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.5.sp,
-                lineHeight = 19.sp,
-                modifier = Modifier
+            // Syntax Highlighted Code with capped max height & vertical scrolling
+            val verticalScroll = rememberScrollState()
+            val horizontalScroll = rememberScrollState()
+
+            val scrollModifier = if (isExpanded) {
+                Modifier.fillMaxWidth()
+            } else {
+                Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
-            )
+                    .heightIn(max = 280.dp)
+                    .verticalScroll(verticalScroll)
+            }
+
+            Box(modifier = scrollModifier) {
+                Text(
+                    text = highlightedText,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.5.sp,
+                    lineHeight = 19.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(horizontalScroll)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                )
+            }
+
+            // Subtle Expand/Collapse footer for long code blocks
+            if (isLongCode) {
+                HorizontalDivider(thickness = 0.5.dp, color = Color.White.copy(alpha = 0.05f))
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isExpanded = !isExpanded },
+                    color = CodeBlockBgDark.copy(alpha = 0.7f)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 5.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isExpanded) "Collapse code block" else "Show all $lineCount lines",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = ClaudeTerracotta
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            tint = ClaudeTerracotta,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 
