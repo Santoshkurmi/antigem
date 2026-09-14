@@ -13,6 +13,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Psychology
@@ -459,15 +461,9 @@ fun ChatScreen(
     var showProjectDropdown by remember { mutableStateOf(false) }
     var chatProjectFiles by remember { mutableStateOf<List<com.example.gemini.data.daemon.FileNode>>(emptyList()) }
 
-    val usedProjects = remember(conversations, activeChatProject, chatProjectsList) {
+    val usedProjects = remember(conversations, chatProjectsList, activeChatProject) {
         val list = mutableListOf<ProjectItem>()
         val seenPaths = mutableSetOf<String>()
-
-        activeChatProject?.let {
-            if (it.path.isNotBlank() && seenPaths.add(it.path)) {
-                list.add(it)
-            }
-        }
 
         conversations.forEach { conv ->
             if (conv.workspaceUri.isNotBlank()) {
@@ -482,6 +478,12 @@ fun ChatScreen(
         chatProjectsList.forEach { proj ->
             if (proj.path.isNotBlank() && seenPaths.add(proj.path)) {
                 list.add(proj)
+            }
+        }
+
+        activeChatProject?.let {
+            if (it.path.isNotBlank() && seenPaths.add(it.path)) {
+                list.add(it)
             }
         }
         list
@@ -880,9 +882,9 @@ fun ChatScreen(
                             // Target Workspace / Project Card
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                                 ),
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                             ) {
@@ -895,13 +897,13 @@ fun ChatScreen(
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(ClaudeTerracotta.copy(alpha = 0.12f)),
+                                                .size(42.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(ClaudeTerracotta.copy(alpha = 0.14f)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Folder,
+                                                imageVector = if (activeChatProject != null) Icons.Default.Folder else Icons.Outlined.Public,
                                                 contentDescription = null,
                                                 tint = ClaudeTerracotta,
                                                 modifier = Modifier.size(22.dp)
@@ -909,18 +911,28 @@ fun ChatScreen(
                                         }
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "TARGET WORKSPACE / PROJECT",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                                letterSpacing = 0.8.sp
-                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(CircleShape)
+                                                        .background(if (activeChatProject != null) Color(0xFF34D399) else ClaudeTerracotta)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = if (activeChatProject != null) "ACTIVE WORKSPACE" else "GENERAL CHAT",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                                    letterSpacing = 0.8.sp
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(2.dp))
                                             Text(
                                                 text = activeChatProject?.name ?: "General (No Project)",
                                                 fontSize = 15.sp,
-                                                fontWeight = FontWeight.SemiBold,
+                                                fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
@@ -928,8 +940,9 @@ fun ChatScreen(
                                             if (!activeChatProject?.path.isNullOrBlank()) {
                                                 Text(
                                                     text = activeChatProject?.path ?: "",
-                                                    fontSize = 11.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                    fontSize = 11.5.sp,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
@@ -942,13 +955,13 @@ fun ChatScreen(
                                     // Action buttons row: Switch & Add/Browse
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         OutlinedButton(
                                             onClick = { showProjectPickerDialog = true },
                                             modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                            shape = RoundedCornerShape(12.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                         ) {
                                             Icon(
@@ -961,6 +974,7 @@ fun ChatScreen(
                                             Text(
                                                 text = "Switch",
                                                 fontSize = 12.5.sp,
+                                                fontWeight = FontWeight.Medium,
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
                                         }
@@ -968,10 +982,10 @@ fun ChatScreen(
                                         FilledTonalButton(
                                             onClick = { showWorkspaceFolderBrowserDialog = true },
                                             modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                            shape = RoundedCornerShape(12.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                             colors = ButtonDefaults.filledTonalButtonColors(
-                                                containerColor = ClaudeTerracotta.copy(alpha = 0.12f),
+                                                containerColor = ClaudeTerracotta.copy(alpha = 0.14f),
                                                 contentColor = ClaudeTerracotta
                                             )
                                         ) {
@@ -984,33 +998,34 @@ fun ChatScreen(
                                             Text(
                                                 text = "Add / Browse",
                                                 fontSize = 12.5.sp,
-                                                fontWeight = FontWeight.Medium
+                                                fontWeight = FontWeight.SemiBold
                                             )
                                         }
                                     }
 
-                                    // Quick recent workspaces chips (if any available)
+                                    // Quick recent workspaces chips (horizontal scrollable)
                                     if (usedProjects.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Spacer(modifier = Modifier.height(14.dp))
                                         Text(
                                             text = "Recent Workspaces",
                                             style = MaterialTheme.typography.labelSmall,
-                                            fontSize = 10.5.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                                         )
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Row(
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        LazyRow(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            usedProjects.take(3).forEach { proj ->
+                                            items(usedProjects, key = { it.path }) { proj ->
                                                 val isSelected = proj.path == activeChatProject?.path
                                                 Surface(
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                                     border = BorderStroke(
                                                         1.dp,
-                                                        if (isSelected) ClaudeTerracotta.copy(alpha = 0.4f) else Color.Transparent
+                                                        if (isSelected) ClaudeTerracotta.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
                                                     ),
                                                     modifier = Modifier.clickable {
                                                         TermuxDaemonManager.setActiveProject(proj)
@@ -1018,14 +1033,21 @@ fun ChatScreen(
                                                     }
                                                 ) {
                                                     Row(
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Folder,
+                                                            contentDescription = null,
+                                                            tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                            modifier = Modifier.size(14.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(6.dp))
                                                         Text(
                                                             text = proj.name,
-                                                            fontSize = 11.sp,
-                                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                                            color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            fontSize = 12.sp,
+                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                            color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface,
                                                             maxLines = 1,
                                                             overflow = TextOverflow.Ellipsis
                                                         )
@@ -1816,7 +1838,7 @@ fun ChatScreen(
 
     if (showWorkspaceFolderBrowserDialog) {
         WorkspaceFolderBrowserDialog(
-            initialPath = activeChatProject?.path,
+            initialPath = "~",
             onSelectFolder = { selectedProj ->
                 showWorkspaceFolderBrowserDialog = false
                 TermuxDaemonManager.setActiveProject(selectedProj)
