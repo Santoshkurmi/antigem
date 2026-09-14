@@ -20,9 +20,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Analytics
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Compress
 import androidx.compose.material.icons.outlined.DataObject
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Handyman
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Psychology
@@ -32,6 +36,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -202,17 +208,39 @@ fun ChatScreen(
 
     val pendingApprovals by viewModel.pendingApprovals.collectAsState()
 
-    val snackbarHostState = remember { SnackbarHostState() }
+    var currentToast by remember { mutableStateOf<ChatToast?>(null) }
+
+    fun showToast(message: String, type: ChatToastType? = null) {
+        val trimmed = message.trim()
+        if (trimmed.isBlank()) return
+        val resolvedType = type ?: run {
+            val lower = trimmed.lowercase()
+            when {
+                lower.contains("success") || lower.contains("signed in") || lower.contains("logged in") ||
+                lower.contains("saved") || lower.contains("switched") || lower.contains("copied") ||
+                lower.contains("connected") || lower.contains("ready") -> ChatToastType.SUCCESS
+
+                lower.contains("error") || lower.contains("fail") || lower.contains("cannot") ||
+                lower.contains("can't") || lower.contains("invalid") || lower.contains("refused") ||
+                lower.contains("timeout") || lower.contains("exception") || lower.contains("denied") -> ChatToastType.ERROR
+
+                else -> ChatToastType.INFO
+            }
+        }
+        currentToast = ChatToast(message = trimmed, type = resolvedType)
+    }
+
+    LaunchedEffect(currentToast) {
+        if (currentToast != null) {
+            delay(3500)
+            currentToast = null
+        }
+    }
 
     LaunchedEffect(conversationError) {
         val err = conversationError
         if (!err.isNullOrBlank()) {
-            snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(
-                message = err,
-                duration = SnackbarDuration.Long,
-                withDismissAction = true
-            )
+            showToast(err, ChatToastType.ERROR)
         }
     }
 
@@ -221,10 +249,7 @@ fun ChatScreen(
 
     LaunchedEffect(Unit) {
         viewModel.authFeedbackMessage.collect { msg ->
-            snackbarHostState.showSnackbar(
-                message = msg,
-                duration = SnackbarDuration.Short
-            )
+            showToast(msg)
         }
     }
 
@@ -547,8 +572,9 @@ fun ChatScreen(
     }
 
     CompositionLocalProvider(LocalFileLinkHandler provides fileLinkHandler) {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
+        Box(modifier = Modifier.fillMaxSize()) {
+            ModalNavigationDrawer(
+                drawerState = drawerState,
         drawerContent = {
             ChatHistoryDrawer(
                 conversations = conversations,
@@ -652,16 +678,6 @@ fun ChatScreen(
             )
         }
         Scaffold(
-            snackbarHost = {
-                SnackbarHost(hostState = snackbarHostState) { data ->
-                    Snackbar(
-                        snackbarData = data,
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-            },
             topBar = {
                 TopAppBar(
                     title = {
@@ -1809,7 +1825,115 @@ fun ChatScreen(
             onDismiss = { showWorkspaceFolderBrowserDialog = false }
         )
     }
+
+    // Top-Level Floating Toast Banner (Renders above all drawers, dialogs, and scaffolds)
+    AnimatedVisibility(
+        visible = currentToast != null,
+        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .zIndex(99999f)
+    ) {
+        currentToast?.let { toast ->
+            ChatToastBanner(
+                toast = toast,
+                onDismiss = { currentToast = null },
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            )
+        }
+    }
+    } // End of Box
     } // End of CompositionLocalProvider
+}
+
+enum class ChatToastType {
+    SUCCESS,
+    ERROR,
+    INFO
+}
+
+data class ChatToast(
+    val id: Long = System.currentTimeMillis(),
+    val message: String,
+    val type: ChatToastType = ChatToastType.INFO
+)
+
+@Composable
+fun ChatToastBanner(
+    toast: ChatToast,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bgColor = when (toast.type) {
+        ChatToastType.SUCCESS -> Color(0xFF143324)
+        ChatToastType.ERROR -> Color(0xFF381919)
+        ChatToastType.INFO -> Color(0xFF1F222A)
+    }
+    val borderColor = when (toast.type) {
+        ChatToastType.SUCCESS -> Color(0xFF34D399).copy(alpha = 0.7f)
+        ChatToastType.ERROR -> Color(0xFFF87171).copy(alpha = 0.7f)
+        ChatToastType.INFO -> ClaudeTerracotta.copy(alpha = 0.7f)
+    }
+    val iconColor = when (toast.type) {
+        ChatToastType.SUCCESS -> Color(0xFF34D399)
+        ChatToastType.ERROR -> Color(0xFFF87171)
+        ChatToastType.INFO -> ClaudeTerracotta
+    }
+    val icon = when (toast.type) {
+        ChatToastType.SUCCESS -> Icons.Outlined.CheckCircle
+        ChatToastType.ERROR -> Icons.Outlined.ErrorOutline
+        ChatToastType.INFO -> Icons.Outlined.Info
+    }
+    val textColor = Color(0xFFF9FAFB)
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(elevation = 12.dp, shape = RoundedCornerShape(14.dp)),
+        shape = RoundedCornerShape(14.dp),
+        color = bgColor,
+        border = BorderStroke(1.dp, borderColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = toast.message,
+                color = textColor,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Medium,
+                lineHeight = 18.sp,
+                modifier = Modifier.weight(1f),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = "Dismiss",
+                    tint = textColor.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
 }
 
 enum class MessageActionType { EDIT, RETRY }

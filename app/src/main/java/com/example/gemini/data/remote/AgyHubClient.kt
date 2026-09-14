@@ -579,8 +579,8 @@ class AgyHubClient(
                         val pJson = JSONObject(pResp.body?.string() ?: "{}")
                         fullName = pJson.optString("fullName", "")
                         email = pJson.optString("email", "")
-                        val pPic = pJson.optString("profilePictureUrl", "")
-                        if (!pPic.isNullOrBlank() && profilePic == null) {
+                        val pPic = pJson.optString("profilePictureUrl", "").takeIf { it.isNotBlank() && it != "null" }
+                        if (!pPic.isNullOrBlank()) {
                             profilePic = pPic
                         }
                     }
