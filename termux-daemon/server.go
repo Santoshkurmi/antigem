@@ -94,22 +94,12 @@ func main() {
 		w.Write([]byte(`{"status":"ok","version":"1.0.0"}`))
 	}))
 
-	// 1.1 User Profile Endpoint (Fetches real name & email from agy-cli token ONLY if AGY is logged in)
+	// 1.1 User Profile Endpoint (Fetches real name & email from agy OAuth token)
 	http.HandleFunc("/api/user/profile", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if !isAgyLoggedIn("8090") {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"isLoggedIn":        false,
-				"fullName":          "",
-				"email":             "",
-				"profilePictureUrl": "",
-			})
-			return
-		}
-
 		fullName, email, picture := fetchAgyUserProfile(homeDir)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"isLoggedIn":        true,
+			"isLoggedIn":        fullName != "" || email != "",
 			"fullName":          fullName,
 			"email":             email,
 			"profilePictureUrl": picture,
@@ -521,45 +511,8 @@ func buildFileTree(dir string, currentDepth int, maxDepth int) ([]FileNode, erro
 	return nodes, nil
 }
 
-func isAgyLoggedIn(hubPort string) bool {
-	if hubPort == "" {
-		hubPort = "8090"
-	}
-	hubURL := fmt.Sprintf("http://127.0.0.1:%s/exa.language_server_pb.LanguageServerService/GetAuthStatus", hubPort)
-	req, err := http.NewRequest("POST", hubURL, strings.NewReader("{}"))
-	if err != nil {
-		return false
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		return false
-	}
-	defer resp.Body.Close()
-	var res struct {
-		AuthResult struct {
-			HasValidAuth bool `json:"hasValidAuth"`
-		} `json:"authResult"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return false
-	}
-	return res.AuthResult.HasValidAuth
-}
-
 func fetchAgyUserProfile(homeDir string) (name, email, picture string) {
-	// Specific, fixed token path for agy-cli: ~/.gemini/antigravity-cli/antigravity-oauth-token
 	tokenPath := filepath.Join(homeDir, ".gemini", "antigravity-cli", "antigravity-oauth-token")
-	if _, err := os.Stat(tokenPath); err != nil {
-		termuxPath := "/data/data/com.termux/files/home/.gemini/antigravity-cli/antigravity-oauth-token"
-		if _, err := os.Stat(termuxPath); err == nil {
-			tokenPath = termuxPath
-		} else {
-			return "", "", ""
-		}
-	}
-
 	data, err := os.ReadFile(tokenPath)
 	if err != nil || len(data) == 0 {
 		return "", "", ""

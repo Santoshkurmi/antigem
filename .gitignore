@@ -21,7 +21,11 @@ release.jks
 server/bin/
 server/server
 server/daemon
+server/gemini-server
+gemini-server
 *.exe
 *.test
+termux-daemon/daemon
+termux-daemon/server
 
 

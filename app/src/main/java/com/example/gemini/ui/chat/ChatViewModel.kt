@@ -769,20 +769,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
             _authFeedbackMessage.tryEmit("Initiating sign-in with Antigravity...")
 
-            // 1. Kick off login on hub & bridge
-            try {
-                agyHubClient.startBridgeLogin(bridgeUrl)
-                agyHubClient.login(hubUrl)
-            } catch (e: Exception) {
-                android.util.Log.d("ChatViewModel", "Login request initiated: ${e.message}")
-            }
-
-            // 2. Poll for login URL and poll for successful auth completion every 2s for up to 3 minutes
+            // 1. Poll for login URL and poll for successful auth completion concurrently every 800ms
             loginPollJob = launch {
                 val startTime = System.currentTimeMillis()
                 var urlFound = false
                 while (isActive && System.currentTimeMillis() - startTime < 180_000) {
-                    delay(2000)
+                    delay(800)
 
                     // Check if bridge detected a login URL
                     if (!urlFound) {
@@ -806,6 +798,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 _isAuthBusy.value = false
+            }
+
+            // 2. Kick off login on hub & bridge in parallel (Login RPC is blocking on daemon)
+            launch {
+                try {
+                    agyHubClient.startBridgeLogin(bridgeUrl)
+                } catch (e: Exception) {
+                    android.util.Log.d("ChatViewModel", "Bridge start-login: ${e.message}")
+                }
+                try {
+                    agyHubClient.login(hubUrl)
+                } catch (e: Exception) {
+                    android.util.Log.d("ChatViewModel", "Hub login RPC finished/interrupted: ${e.message}")
+                }
             }
         }
     }
