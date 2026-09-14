@@ -9,10 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 )
+
+var loginURLRegex = regexp.MustCompile(`https?://[^\s"'<>]+`)
 
 // HubManager supervises the background `agy --hub` process on port 8090.
 type HubManager struct {
@@ -20,6 +23,7 @@ type HubManager struct {
 	WorkspaceDir string
 	AppDataDir   string
 	AgyBinPath   string
+	OnLoginURL   func(url string)
 
 	cmd         *exec.Cmd
 	stdinPipe   io.WriteCloser
@@ -158,15 +162,12 @@ func (m *HubManager) Start() error {
 	m.processDone = make(chan struct{})
 	processExited := make(chan error, 1)
 
-	// Stream stdout & stderr cleanly with [agy-hub] prefix
+	// Stream stdout & stderr cleanly with [agy-hub] prefix and extract auth URLs
 	if errOut == nil {
 		go func() {
 			scanner := bufio.NewScanner(stdoutPipe)
 			for scanner.Scan() {
-				line := scanner.Text()
-				if strings.TrimSpace(line) != "" {
-					fmt.Printf("\033[90m[agy-hub]\033[0m %s\n", line)
-				}
+				m.handleHubLine(scanner.Text())
 			}
 		}()
 	}
@@ -174,10 +175,7 @@ func (m *HubManager) Start() error {
 		go func() {
 			scanner := bufio.NewScanner(stderrPipe)
 			for scanner.Scan() {
-				line := scanner.Text()
-				if strings.TrimSpace(line) != "" {
-					fmt.Printf("\033[90m[agy-hub]\033[0m %s\n", line)
-				}
+				m.handleHubLine(scanner.Text())
 			}
 		}()
 	}
@@ -258,3 +256,28 @@ func (m *HubManager) Stop() {
 	m.isRunning = false
 }
 
+func (m *HubManager) handleHubLine(line string) {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return
+	}
+	fmt.Printf("\033[90m[agy-hub]\033[0m %s\n", line)
+
+	if m.OnLoginURL != nil {
+		lower := strings.ToLower(trimmed)
+		if strings.Contains(lower, "accounts.google.com") ||
+			strings.Contains(lower, "auth") ||
+			strings.Contains(lower, "login") ||
+			strings.Contains(lower, "visit") ||
+			strings.Contains(lower, "browser") ||
+			strings.Contains(lower, "authenticate") {
+			matches := loginURLRegex.FindAllString(trimmed, -1)
+			for _, u := range matches {
+				if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+					fmt.Printf(" \033[1;32m[auth-url detected]\033[0m %s\n", u)
+					m.OnLoginURL(u)
+				}
+			}
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 type ProjectItem struct {
@@ -90,6 +92,34 @@ func main() {
 	http.HandleFunc("/api/health", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok","version":"1.0.0"}`))
+	}))
+
+	// 1.1 User Profile Endpoint (Fetches real name & email from agy-cli token ONLY if AGY is logged in)
+	http.HandleFunc("/api/user/profile", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if !isAgyLoggedIn("8090") {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"isLoggedIn":        false,
+				"fullName":          "",
+				"email":             "",
+				"profilePictureUrl": "",
+			})
+			return
+		}
+
+		fullName, email, picture := fetchAgyUserProfile(homeDir)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"isLoggedIn":        true,
+			"fullName":          fullName,
+			"email":             email,
+			"profilePictureUrl": picture,
+		})
+	}))
+
+	// 1.2 Auth Login URL placeholder
+	http.HandleFunc("/api/auth/login-url", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"loginUrl":"","active":false}`))
 	}))
 
 	// 2. List Projects
@@ -489,4 +519,104 @@ func buildFileTree(dir string, currentDepth int, maxDepth int) ([]FileNode, erro
 	})
 
 	return nodes, nil
+}
+
+func isAgyLoggedIn(hubPort string) bool {
+	if hubPort == "" {
+		hubPort = "8090"
+	}
+	hubURL := fmt.Sprintf("http://127.0.0.1:%s/exa.language_server_pb.LanguageServerService/GetAuthStatus", hubPort)
+	req, err := http.NewRequest("POST", hubURL, strings.NewReader("{}"))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return false
+	}
+	defer resp.Body.Close()
+	var res struct {
+		AuthResult struct {
+			HasValidAuth bool `json:"hasValidAuth"`
+		} `json:"authResult"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return false
+	}
+	return res.AuthResult.HasValidAuth
+}
+
+func fetchAgyUserProfile(homeDir string) (name, email, picture string) {
+	// Specific, fixed token path for agy-cli: ~/.gemini/antigravity-cli/antigravity-oauth-token
+	tokenPath := filepath.Join(homeDir, ".gemini", "antigravity-cli", "antigravity-oauth-token")
+	if _, err := os.Stat(tokenPath); err != nil {
+		termuxPath := "/data/data/com.termux/files/home/.gemini/antigravity-cli/antigravity-oauth-token"
+		if _, err := os.Stat(termuxPath); err == nil {
+			tokenPath = termuxPath
+		} else {
+			return "", "", ""
+		}
+	}
+
+	data, err := os.ReadFile(tokenPath)
+	if err != nil || len(data) == 0 {
+		return "", "", ""
+	}
+
+	var parsed struct {
+		Token struct {
+			AccessToken string `json:"access_token"`
+		} `json:"token"`
+		IDToken string `json:"id_token"`
+	}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return "", "", ""
+	}
+
+	// 1. Extract directly from id_token JWT (instant, offline, exact user profile)
+	if parsed.IDToken != "" {
+		parts := strings.Split(parsed.IDToken, ".")
+		if len(parts) >= 2 {
+			payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+			if err != nil {
+				payloadBytes, err = base64.URLEncoding.DecodeString(parts[1])
+			}
+			if err == nil {
+				var claims struct {
+					Name    string `json:"name"`
+					Email   string `json:"email"`
+					Picture string `json:"picture"`
+				}
+				if json.Unmarshal(payloadBytes, &claims) == nil && (claims.Name != "" || claims.Email != "") {
+					return claims.Name, claims.Email, claims.Picture
+				}
+			}
+		}
+	}
+
+	// 2. Fallback: query Google UserInfo with existing access token as-is (DO NOT REFRESH)
+	if parsed.Token.AccessToken != "" {
+		req, err := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v1/userinfo", nil)
+		if err == nil {
+			req.Header.Set("Authorization", "Bearer "+parsed.Token.AccessToken)
+			client := &http.Client{Timeout: 4 * time.Second}
+			if resp, err := client.Do(req); err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					var info struct {
+						Name    string `json:"name"`
+						Email   string `json:"email"`
+						Picture string `json:"picture"`
+					}
+					if json.NewDecoder(resp.Body).Decode(&info) == nil {
+						return info.Name, info.Email, info.Picture
+					}
+				}
+			}
+		}
+	}
+
+	return "", "", ""
 }

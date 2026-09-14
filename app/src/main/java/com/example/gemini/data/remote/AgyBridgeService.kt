@@ -10,8 +10,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
@@ -79,6 +82,7 @@ sealed class AgyStreamEvent {
         val fullResponse: String? = null,
         val seq: Long? = null
     ) : AgyStreamEvent()
+    data class LoginUrl(val url: String) : AgyStreamEvent()
     data class Error(val message: String) : AgyStreamEvent()
 }
 
@@ -99,6 +103,9 @@ class AgyBridgeService(
 
     private val _connectionState = MutableStateFlow(BridgeConnectionState.CONNECTING)
     val connectionState: StateFlow<BridgeConnectionState> = _connectionState.asStateFlow()
+
+    private val _loginUrlEvents = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 5)
+    val loginUrlEvents: SharedFlow<String> = _loginUrlEvents.asSharedFlow()
 
     fun updateConnectionState(newState: BridgeConnectionState) {
         _connectionState.value = newState
@@ -678,6 +685,14 @@ class AgyBridgeService(
                             }
                         }
 
+                        "auth_login_url" -> {
+                            val url = root.optString("url")
+                            if (url.isNotBlank()) {
+                                _loginUrlEvents.tryEmit(url)
+                                trySend(AgyStreamEvent.LoginUrl(url))
+                            }
+                        }
+
                         "stream_snapshot" -> {
                             val convId = root.optString("conversationId")
                             val isRunning = root.optBoolean("isRunning", false)
@@ -852,6 +867,13 @@ class AgyBridgeService(
                                     activeTools = tools
                                 )
                             )
+                        }
+                        "auth_login_url" -> {
+                            val url = root.optString("url")
+                            if (url.isNotBlank()) {
+                                _loginUrlEvents.tryEmit(url)
+                                trySend(AgyStreamEvent.LoginUrl(url))
+                            }
                         }
                         "session_attached" -> {
                             val convId = root.optString("conversationId")

@@ -41,6 +41,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.automirrored.outlined.Login
 import coil.compose.AsyncImage
 import com.example.gemini.data.remote.AgyHubClient
+import kotlinx.coroutines.launch
 
 @Composable
 fun ChatHistoryDrawer(
@@ -63,6 +64,7 @@ fun ChatHistoryDrawer(
     onOpenSettings: () -> Unit,
     onLogin: () -> Unit = {},
     onLogout: () -> Unit = {},
+    onCheckAuth: () -> Unit = {},
     isOpen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -76,24 +78,16 @@ fun ChatHistoryDrawer(
     }
 
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var prevFirstConvId by remember { mutableStateOf<String?>(conversations.firstOrNull()?.id) }
 
-    // Scroll to active conversation whenever the drawer opens or active chat changes
-    LaunchedEffect(isOpen, currentConversationId, filtered.size) {
-        if (isOpen && filtered.isNotEmpty()) {
-            val targetIndex = if (!currentConversationId.isNullOrBlank()) {
-                filtered.indexOfFirst { it.id == currentConversationId }
-            } else 0
-            val scrollIndex = if (targetIndex >= 0) targetIndex else 0
-
-            if (scrollIndex == 0) {
-                listState.scrollToItem(0)
-            } else {
-                val visible = listState.layoutInfo.visibleItemsInfo.map { it.index }
-                if (scrollIndex !in visible) {
-                    listState.scrollToItem((scrollIndex - 1).coerceAtLeast(0))
-                }
-            }
+    // Only scroll to top when a brand new conversation is created
+    LaunchedEffect(conversations.firstOrNull()?.id) {
+        val currentFirst = conversations.firstOrNull()?.id
+        if (currentFirst != null && prevFirstConvId != null && currentFirst != prevFirstConvId) {
+            listState.scrollToItem(0)
         }
+        prevFirstConvId = currentFirst
     }
 
     if (instanceToTerminate != null) {
@@ -162,7 +156,10 @@ fun ChatHistoryDrawer(
         ) {
             // New Chat Button
             Button(
-                onClick = onNewChat,
+                onClick = {
+                    scope.launch { listState.scrollToItem(0) }
+                    onNewChat()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp),
@@ -436,15 +433,82 @@ fun ChatHistoryDrawer(
 
                 // Profile / Login on right
                 if (isAuthBusy) {
-                    CircularProgressIndicator(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .padding(2.dp),
-                        strokeWidth = 2.dp,
-                        color = ClaudeTerracotta
-                    )
-                } else if (authInfo.isLoggedIn) {
-                    // Profile avatar button
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = ClaudeTerracotta.copy(alpha = 0.12f),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(ClaudeTerracotta, CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Signing In...",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = ClaudeTerracotta
+                            )
+                        }
+                    }
+                } else if (authInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING) {
+                    // Non-animated checking / connecting indicator
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Checking...",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                } else if (authInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.OFFLINE) {
+                    // Offline indicator (clickable to retry checking)
+                    Surface(
+                        onClick = onCheckAuth,
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(Color(0xFFE57373), CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Offline",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                } else if (authInfo.isLoggedIn || authInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.AUTHENTICATED) {
+                    // Profile avatar button with real display name
                     Surface(
                         onClick = { showProfileDialog = true },
                         shape = RoundedCornerShape(20.dp),
@@ -475,7 +539,7 @@ fun ChatHistoryDrawer(
                                         .background(ClaudeTerracotta),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    val initial = authInfo.username.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+                                    val initial = authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
                                     Text(
                                         text = initial,
                                         fontSize = 11.sp,
@@ -484,22 +548,23 @@ fun ChatHistoryDrawer(
                                     )
                                 }
                             }
-                            if (authInfo.username.isNotBlank()) {
+                            val nameToShow = authInfo.displayName
+                            if (nameToShow.isNotBlank()) {
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = authInfo.username,
+                                    text = nameToShow,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.widthIn(max = 76.dp),
+                                    modifier = Modifier.widthIn(max = 90.dp),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
                     }
                 } else {
-                    // Not logged in -> Sign In button
+                    // Not logged in (UNAUTHENTICATED) -> Sign In button
                     FilledTonalButton(
                         onClick = onLogin,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),

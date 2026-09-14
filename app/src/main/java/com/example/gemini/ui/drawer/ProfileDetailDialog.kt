@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -85,7 +85,7 @@ fun ProfileDetailDialog(
                             .background(ClaudeTerracotta),
                         contentAlignment = Alignment.Center
                     ) {
-                        val initial = authInfo.username.firstOrNull()?.uppercaseChar()?.toString() ?: "A"
+                        val initial = authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "A"
                         Text(
                             text = initial,
                             fontSize = 32.sp,
@@ -97,15 +97,26 @@ fun ProfileDetailDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Username
+                // Display Name
                 Text(
-                    text = authInfo.username.ifBlank { "Antigravity User" },
+                    text = authInfo.displayName,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                if (authInfo.email.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = authInfo.email,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 // User Tier badge
                 if (authInfo.userTier.isNotBlank()) {
@@ -128,8 +139,8 @@ fun ProfileDetailDialog(
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Details: Home Dir
-                if (authInfo.homeDir.isNotBlank()) {
+                // Details: Email
+                if (authInfo.email.isNotBlank()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -137,20 +148,20 @@ fun ProfileDetailDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Folder,
-                            contentDescription = "Home Directory",
+                            imageVector = Icons.Outlined.Email,
+                            contentDescription = "Email",
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Home Directory",
+                                text = "Account Email",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
                             Text(
-                                text = authInfo.homeDir,
+                                text = authInfo.email,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Normal,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -160,6 +171,7 @@ fun ProfileDetailDialog(
                         }
                     }
                 }
+
 
                 // Details: Auth Status / Scopes
                 Row(

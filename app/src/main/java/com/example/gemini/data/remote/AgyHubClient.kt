@@ -442,21 +442,66 @@ class AgyHubClient(
 
     // ==================== AUTHENTICATION METHODS ====================
 
+    enum class AgyAuthStatus {
+        CHECKING,
+        AUTHENTICATED,
+        UNAUTHENTICATED,
+        OFFLINE
+    }
+
     data class AgyAuthInfo(
+        val status: AgyAuthStatus = AgyAuthStatus.CHECKING,
         val isLoggedIn: Boolean = false,
+        val fullName: String = "",
+        val email: String = "",
         val username: String = "",
         val homeDir: String = "",
         val userTier: String = "",
         val profilePictureUrl: String? = null,
         val grantedScopes: List<String> = emptyList(),
         val isOffline: Boolean = false
-    )
+    ) {
+        val displayName: String
+            get() = fullName.ifBlank { "Antigravity User" }
+    }
 
     suspend fun login(hubUrl: String = DEFAULT_HUB_URL): Result<Unit> =
         callUnary("Login", JSONObject().apply { put("isGcpTos", false) }.toString(), hubUrl).map { }
 
     suspend fun authLogout(hubUrl: String = DEFAULT_HUB_URL): Result<Unit> =
         callUnary("AuthLogout", "{}", hubUrl).map { }
+
+    suspend fun fetchLoginUrl(bridgeHttpUrl: String = DEFAULT_HUB_URL.replace("8090", "8080")): String? = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url("${bridgeHttpUrl.trimEnd('/')}/api/auth/login-url")
+                .get()
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val json = JSONObject(resp.body?.string() ?: "{}")
+                    val url = json.optString("loginUrl", "")
+                    if (url.isNotBlank()) url else null
+                } else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    suspend fun startBridgeLogin(bridgeHttpUrl: String = DEFAULT_HUB_URL.replace("8090", "8080")): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url("${bridgeHttpUrl.trimEnd('/')}/api/auth/start-login")
+                .post("{}".toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+            client.newCall(req).execute().use { resp ->
+                resp.isSuccessful
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     suspend fun getAuthStatus(hubUrl: String = DEFAULT_HUB_URL): Result<Boolean> = withContext(Dispatchers.IO) {
         callUnary("GetAuthStatus", "{}", hubUrl).map { body ->
@@ -479,7 +524,10 @@ class AgyHubClient(
         }
     }
 
-    suspend fun fetchDetailedAuthInfo(hubUrl: String = DEFAULT_HUB_URL): Result<AgyAuthInfo> = withContext(Dispatchers.IO) {
+    suspend fun fetchDetailedAuthInfo(
+        hubUrl: String = DEFAULT_HUB_URL,
+        bridgeHttpUrl: String = DEFAULT_HUB_URL.replace("8090", "8080")
+    ): Result<AgyAuthInfo> = withContext(Dispatchers.IO) {
         try {
             val authResultCall = callUnary("GetAuthStatus", "{}", hubUrl)
             if (authResultCall.isFailure) {
@@ -491,7 +539,12 @@ class AgyHubClient(
             val hasValidAuth = authResult?.optBoolean("hasValidAuth", false) ?: false
 
             if (!hasValidAuth) {
-                return@withContext Result.success(AgyAuthInfo(isLoggedIn = false))
+                return@withContext Result.success(
+                    AgyAuthInfo(
+                        status = AgyAuthStatus.UNAUTHENTICATED,
+                        isLoggedIn = false
+                    )
+                )
             }
 
             val scopesList = mutableListOf<String>()
@@ -501,15 +554,6 @@ class AgyHubClient(
                     scopesList.add(scopesArr.getString(i))
                 }
             }
-
-            var username = ""
-            var homeDir = ""
-            try {
-                val userBody = callUnary("GetLocalUserInfo", "{}", hubUrl).getOrNull() ?: "{}"
-                val userJson = JSONObject(userBody)
-                username = userJson.optString("username", "")
-                homeDir = userJson.optString("homeDirUri", "")
-            } catch (_: Exception) {}
 
             var userTier = ""
             var profilePic: String? = null
@@ -522,14 +566,37 @@ class AgyHubClient(
                 profilePic = userStatus?.optString("profilePictureUrl", "")?.takeIf { it.isNotBlank() }
             } catch (_: Exception) {}
 
+            // Retrieve real user profile (full name, email, profile pic) from Go IDE bridge
+            var fullName = ""
+            var email = ""
+            try {
+                val pReq = Request.Builder()
+                    .url("${bridgeHttpUrl.trimEnd('/')}/api/user/profile")
+                    .get()
+                    .build()
+                client.newCall(pReq).execute().use { pResp ->
+                    if (pResp.isSuccessful) {
+                        val pJson = JSONObject(pResp.body?.string() ?: "{}")
+                        fullName = pJson.optString("fullName", "")
+                        email = pJson.optString("email", "")
+                        val pPic = pJson.optString("profilePictureUrl", "")
+                        if (!pPic.isNullOrBlank() && profilePic == null) {
+                            profilePic = pPic
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+
             Result.success(
                 AgyAuthInfo(
+                    status = AgyAuthStatus.AUTHENTICATED,
                     isLoggedIn = true,
-                    username = username,
-                    homeDir = homeDir,
+                    fullName = fullName,
+                    email = email,
                     userTier = userTier,
                     profilePictureUrl = profilePic,
-                    grantedScopes = scopesList
+                    grantedScopes = scopesList,
+                    isOffline = false
                 )
             )
         } catch (e: Exception) {

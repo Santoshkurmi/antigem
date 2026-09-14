@@ -709,7 +709,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private val _agyAuthInfo = MutableStateFlow(com.example.gemini.data.remote.AgyHubClient.AgyAuthInfo())
+    private val _agyAuthInfo = MutableStateFlow(com.example.gemini.data.remote.AgyHubClient.AgyAuthInfo(status = com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING))
     val agyAuthInfo: StateFlow<com.example.gemini.data.remote.AgyHubClient.AgyAuthInfo> = _agyAuthInfo.asStateFlow()
 
     private val _isAuthBusy = MutableStateFlow(false)
@@ -718,23 +718,39 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _authFeedbackMessage = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 1)
     val authFeedbackMessage: SharedFlow<String> = _authFeedbackMessage.asSharedFlow()
 
+    private val _pendingLoginUrl = MutableStateFlow<String?>(null)
+    val pendingLoginUrl: StateFlow<String?> = _pendingLoginUrl.asStateFlow()
+
+    fun clearPendingLoginUrl() {
+        _pendingLoginUrl.value = null
+    }
+
     private var loginPollJob: Job? = null
 
     fun checkAgyAuthStatus() {
         viewModelScope.launch {
             if (!isNetworkConnected()) {
                 android.util.Log.d("ChatViewModel", "Skipping auth status check: device is offline.")
-                _agyAuthInfo.value = _agyAuthInfo.value.copy(isOffline = true)
+                _agyAuthInfo.value = _agyAuthInfo.value.copy(
+                    status = com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.OFFLINE,
+                    isOffline = true
+                )
                 return@launch
             }
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-            val res = agyHubClient.fetchDetailedAuthInfo(hubUrl)
+            val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+            val res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
             if (res.isSuccess) {
                 val info = res.getOrThrow()
                 _agyAuthInfo.value = info
                 if (info.isLoggedIn) {
                     refreshQuotas(force = false)
                 }
+            } else {
+                _agyAuthInfo.value = _agyAuthInfo.value.copy(
+                    status = com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.OFFLINE,
+                    isOffline = true
+                )
             }
         }
     }
@@ -750,18 +766,39 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-            _authFeedbackMessage.tryEmit("Opening browser for Antigravity sign-in...")
+            val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+            _authFeedbackMessage.tryEmit("Initiating sign-in with Antigravity...")
 
-            // Poll every 2s for completion, up to 3 minutes
+            // 1. Kick off login on hub & bridge
+            try {
+                agyHubClient.startBridgeLogin(bridgeUrl)
+                agyHubClient.login(hubUrl)
+            } catch (e: Exception) {
+                android.util.Log.d("ChatViewModel", "Login request initiated: ${e.message}")
+            }
+
+            // 2. Poll for login URL and poll for successful auth completion every 2s for up to 3 minutes
             loginPollJob = launch {
                 val startTime = System.currentTimeMillis()
+                var urlFound = false
                 while (isActive && System.currentTimeMillis() - startTime < 180_000) {
                     delay(2000)
+
+                    // Check if bridge detected a login URL
+                    if (!urlFound) {
+                        val detectedUrl = agyHubClient.fetchLoginUrl(bridgeUrl)
+                        if (!detectedUrl.isNullOrBlank()) {
+                            urlFound = true
+                            _pendingLoginUrl.value = detectedUrl
+                        }
+                    }
+
                     if (isNetworkConnected()) {
-                        val res = agyHubClient.fetchDetailedAuthInfo(hubUrl)
+                        val res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
                         if (res.isSuccess && res.getOrThrow().isLoggedIn) {
                             _agyAuthInfo.value = res.getOrThrow()
                             _isAuthBusy.value = false
+                            _pendingLoginUrl.value = null
                             _authFeedbackMessage.tryEmit("Signed in successfully!")
                             refreshQuotas(force = true)
                             break
@@ -769,12 +806,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 _isAuthBusy.value = false
-            }
-
-            try {
-                agyHubClient.login(hubUrl)
-            } catch (e: Exception) {
-                android.util.Log.d("ChatViewModel", "Login request initiated: ${e.message}")
             }
         }
     }
@@ -788,7 +819,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
             try {
                 agyHubClient.authLogout(hubUrl)
-                _agyAuthInfo.value = com.example.gemini.data.remote.AgyHubClient.AgyAuthInfo(isLoggedIn = false)
+                _agyAuthInfo.value = com.example.gemini.data.remote.AgyHubClient.AgyAuthInfo(
+                    status = com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED,
+                    isLoggedIn = false
+                )
                 _authFeedbackMessage.tryEmit("Logged out successfully.")
                 refreshQuotas(force = true)
             } catch (e: Exception) {
@@ -840,6 +874,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     var pendingPkceVerifier: String? = null
 
     init {
+        viewModelScope.launch {
+            agyBridgeService.loginUrlEvents.collect { url ->
+                if (url.isNotBlank()) {
+                    _pendingLoginUrl.value = url
+                }
+            }
+        }
+
         viewModelScope.launch {
             authPrefs.userEmail.collect { _userEmail.value = it }
         }
@@ -2012,34 +2054,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun login() {
-        viewModelScope.launch {
-            try {
-                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-                agyHubClient.login(hubUrl)
-                delay(1500)
-                refreshQuotas(force = true)
-            } catch (e: Exception) {
-                android.util.Log.e("ChatViewModel", "login failed: ${e.message}")
-            }
-        }
+        loginToAgyHub()
     }
 
     fun logout() {
         stopOAuthServer()
         pendingPkceVerifier = null
+        logoutFromAgyHub()
         viewModelScope.launch {
-            try {
-                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-                agyHubClient.authLogout(hubUrl)
-            } catch (_: Exception) {}
             authPrefs.clearAuth()
-            _userEmail.value = null
-            _projectId.value = "rising-fact-p41fc"
-            _tier.value = "pro"
-            _quotas.value = emptyList()
-            _quotaSummary.value = null
-            android.util.Log.d("GeminiApp", "[OAuth] Logged out successfully")
         }
+        _userEmail.value = null
+        _projectId.value = "rising-fact-p41fc"
+        _tier.value = "pro"
+        _quotas.value = emptyList()
+        _quotaSummary.value = null
     }
 
     fun getGoogleOAuthUrl(): String {

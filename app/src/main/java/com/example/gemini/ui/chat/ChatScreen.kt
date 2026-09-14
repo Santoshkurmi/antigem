@@ -180,6 +180,7 @@ fun ChatScreen(
     val isProjectsLoading by viewModel.isProjectsLoading.collectAsState()
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
     val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
+    val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -588,6 +589,9 @@ fun ChatScreen(
                 onLogout = {
                     viewModel.logoutFromAgyHub()
                 },
+                onCheckAuth = {
+                    viewModel.checkAgyAuthStatus()
+                },
                 onOpenSettings = {
                     showSettingsDialog = true
                     scope.launch { drawerState.close() }
@@ -595,6 +599,58 @@ fun ChatScreen(
             )
         }
     ) {
+        if (pendingLoginUrl != null) {
+            val targetUrl = pendingLoginUrl!!
+            AlertDialog(
+                onDismissRequest = { viewModel.clearPendingLoginUrl() },
+                title = {
+                    Text(
+                        text = "Sign In with Browser",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+                },
+                text = {
+                    Column {
+                        Text(
+                            text = "Antigravity requires Google authentication to access Gemini models.",
+                            fontSize = 13.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Do you want to open your browser to log in now?",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                android.util.Log.e("ChatScreen", "Failed to open browser: ${e.message}")
+                            }
+                            viewModel.clearPendingLoginUrl()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                    ) {
+                        Text("Open Browser", fontWeight = FontWeight.SemiBold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.clearPendingLoginUrl() }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
         Scaffold(
             snackbarHost = {
                 SnackbarHost(hostState = snackbarHostState) { data ->

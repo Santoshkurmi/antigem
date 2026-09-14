@@ -120,12 +120,18 @@ func main() {
 	wsHub := ws.NewHub(cfg)
 	h := handlers.NewHandler(cfg, hubMgr)
 	h.SetHub(wsHub)
+	if hubMgr != nil {
+		hubMgr.OnLoginURL = h.HandleLoginURL
+	}
 
 	mux := http.NewServeMux()
 
 	// REST Endpoints
 	mux.HandleFunc("/api/health", h.HealthHandler)
 	mux.HandleFunc("/api/status", h.StatusHandler)
+	mux.HandleFunc("/api/auth/login-url", h.GetLoginURLHandler)
+	mux.HandleFunc("/api/auth/start-login", h.StartLoginHandler)
+	mux.HandleFunc("/api/user/profile", h.UserProfileHandler)
 	mux.HandleFunc("/api/models", h.ModelsHandler)
 	mux.HandleFunc("/api/models/refresh", h.ModelsHandler)
 	mux.HandleFunc("/api/quotas", h.QuotasHandler)
