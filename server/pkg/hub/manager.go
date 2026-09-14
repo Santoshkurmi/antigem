@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var loginURLRegex = regexp.MustCompile(`https?://[^\s"'<>]+`)
+var loginURLRegex = regexp.MustCompile(`https://accounts\.google\.com/[^\s"'<>]+`)
 
 // HubManager supervises the background `agy --hub` process on port 8090.
 type HubManager struct {
@@ -263,20 +263,12 @@ func (m *HubManager) handleHubLine(line string) {
 	}
 	fmt.Printf("\033[90m[agy-hub]\033[0m %s\n", line)
 
-	if m.OnLoginURL != nil {
-		lower := strings.ToLower(trimmed)
-		if strings.Contains(lower, "accounts.google.com") ||
-			strings.Contains(lower, "auth") ||
-			strings.Contains(lower, "login") ||
-			strings.Contains(lower, "visit") ||
-			strings.Contains(lower, "browser") ||
-			strings.Contains(lower, "authenticate") {
-			matches := loginURLRegex.FindAllString(trimmed, -1)
-			for _, u := range matches {
-				if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
-					fmt.Printf(" \033[1;32m[auth-url detected]\033[0m %s\n", u)
-					m.OnLoginURL(u)
-				}
+	if m.OnLoginURL != nil && strings.Contains(trimmed, "accounts.google.com") {
+		matches := loginURLRegex.FindAllString(trimmed, -1)
+		for _, u := range matches {
+			if strings.HasPrefix(u, "https://accounts.google.com") {
+				fmt.Printf(" \033[1;32m[auth-url detected]\033[0m %s\n", u)
+				m.OnLoginURL(u)
 			}
 		}
 	}

@@ -1257,4 +1257,3 @@ func fetchAgyUserProfile(homeDir string) (name, email, picture string) {
 
 	return "", "", ""
 }
-

@@ -512,10 +512,14 @@ func buildFileTree(dir string, currentDepth int, maxDepth int) ([]FileNode, erro
 }
 
 func fetchAgyUserProfile(homeDir string) (name, email, picture string) {
-	tokenPath := filepath.Join(homeDir, ".gemini", "antigravity-cli", "antigravity-oauth-token")
+	tokenPath := filepath.Join(homeDir, ".gemini", "jetski-standalone-oauth-token")
 	data, err := os.ReadFile(tokenPath)
 	if err != nil || len(data) == 0 {
-		return "", "", ""
+		tokenPath = filepath.Join(homeDir, ".gemini", "antigravity-cli", "antigravity-oauth-token")
+		data, err = os.ReadFile(tokenPath)
+		if err != nil || len(data) == 0 {
+			return "", "", ""
+		}
 	}
 
 	var parsed struct {
