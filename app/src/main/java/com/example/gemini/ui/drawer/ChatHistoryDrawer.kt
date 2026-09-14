@@ -39,7 +39,9 @@ import java.util.*
 
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.automirrored.outlined.Login
-import coil.compose.AsyncImage
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.example.gemini.data.remote.AgyHubClient
 import kotlinx.coroutines.launch
 
@@ -522,32 +524,49 @@ fun ChatHistoryDrawer(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (!authInfo.profilePictureUrl.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = authInfo.profilePictureUrl,
-                                    contentDescription = "Profile Picture",
-                                    modifier = Modifier
-                                        .size(22.dp)
-                                        .clip(CircleShape),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(22.dp)
-                                        .clip(CircleShape)
-                                        .background(ClaudeTerracotta),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    val initial = authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
-                                    Text(
-                                        text = initial,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
+                            SubcomposeAsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(authInfo.profilePictureUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Profile Picture",
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .clip(CircleShape),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                loading = {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(ClaudeTerracotta),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        val initial = authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+                                        Text(
+                                            text = initial,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                },
+                                error = {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(ClaudeTerracotta),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        val initial = authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+                                        Text(
+                                            text = initial,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
                                 }
-                            }
+                            )
                             val nameToShow = authInfo.displayName
                             if (nameToShow.isNotBlank()) {
                                 Spacer(modifier = Modifier.width(6.dp))
