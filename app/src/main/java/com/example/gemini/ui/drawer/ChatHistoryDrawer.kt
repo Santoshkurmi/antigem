@@ -686,7 +686,7 @@ fun ChatHistoryDrawer(
                         }
                     }
                 } else if (authInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.OFFLINE) {
-                    // Offline indicator (clickable to retry checking)
+                    // Connecting indicator (clickable to retry checking)
                     Surface(
                         onClick = onCheckAuth,
                         shape = RoundedCornerShape(14.dp),
@@ -704,7 +704,7 @@ fun ChatHistoryDrawer(
                             )
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = "Offline",
+                                text = "Connecting...",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Normal,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
