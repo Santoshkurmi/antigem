@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Public
+import android.widget.Toast
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,7 +42,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1025,6 +1029,8 @@ private fun ChatHistoryItemRow(
         }
 
         var menuExpanded by remember { mutableStateOf(false) }
+        val clipboardManager = LocalClipboardManager.current
+        val context = LocalContext.current
 
         Box {
             IconButton(
@@ -1043,6 +1049,21 @@ private fun ChatHistoryItemRow(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false }
             ) {
+                DropdownMenuItem(
+                    text = { Text("Copy Conversation ID", fontSize = 13.5.sp) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.ContentCopy,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        clipboardManager.setText(AnnotatedString(conv.id))
+                        Toast.makeText(context, "Conversation ID copied", Toast.LENGTH_SHORT).show()
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text("Fork Conversation", fontSize = 13.5.sp) },
                     leadingIcon = {
