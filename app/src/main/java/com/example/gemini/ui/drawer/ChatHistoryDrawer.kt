@@ -95,17 +95,79 @@ fun ChatHistoryDrawer(
         else conversations.filter { it.title.contains(searchQuery, ignoreCase = true) }
     }
 
+    val grouped = remember(filtered) {
+        filtered.groupBy { conv ->
+            if (conv.workspaceUri.isNotBlank()) {
+                val clean = conv.workspaceUri.removePrefix("file://").trimEnd('/')
+                java.io.File(clean).name.ifBlank { "Workspace" }
+            } else {
+                "General"
+            }
+        }
+    }
+    var expandedGroups by remember { mutableStateOf(setOf<String>()) }
+
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    var prevFirstConvId by remember { mutableStateOf<String?>(conversations.firstOrNull()?.id) }
 
-    // Only scroll to top when a brand new conversation is created
-    LaunchedEffect(conversations.firstOrNull()?.id) {
-        val currentFirst = conversations.firstOrNull()?.id
-        if (currentFirst != null && prevFirstConvId != null && currentFirst != prevFirstConvId) {
+    // Ensure selected conversation is visible, or scroll to very top if on a new chat
+    LaunchedEffect(isOpen, currentConversationId, filtered.isEmpty()) {
+        if (!isOpen) return@LaunchedEffect
+
+        val isExistingChat = !currentConversationId.isNullOrBlank() && filtered.any { it.id == currentConversationId }
+        if (!isExistingChat) {
+            // Brand new chat or conversation not in list -> always start at the very top!
+            listState.scrollToItem(0)
+            return@LaunchedEffect
+        }
+
+        val targetIndex = if (!groupByWorkspace) {
+            filtered.indexOfFirst { it.id == currentConversationId }
+        } else {
+            val targetGroup = grouped.entries.firstOrNull { (_, chats) -> chats.any { it.id == currentConversationId } }
+            val currentExpanded = if (targetGroup != null && !expandedGroups.contains(targetGroup.key)) {
+                expandedGroups = expandedGroups + targetGroup.key
+                kotlinx.coroutines.yield()
+                expandedGroups + targetGroup.key
+            } else {
+                expandedGroups
+            }
+
+            var index = 0
+            var foundIndex = -1
+            for ((groupName, chats) in grouped) {
+                index++ // item(key = "hdr_$groupName")
+                val isExp = currentExpanded.contains(groupName)
+                val displayChats = if (isExp) chats else chats.take(5)
+                for (conv in displayChats) {
+                    if (conv.id == currentConversationId) {
+                        foundIndex = index
+                        break
+                    }
+                    index++
+                }
+                if (foundIndex != -1) break
+                if (chats.size > 5) {
+                    index++ // item(key = "more_$groupName")
+                }
+            }
+            foundIndex
+        }
+
+        if (targetIndex >= 0) {
+            val visibleInfo = listState.layoutInfo.visibleItemsInfo
+            val visibleItem = visibleInfo.firstOrNull { it.index == targetIndex }
+            val isFullyVisible = visibleItem != null &&
+                visibleItem.offset >= listState.layoutInfo.viewportStartOffset &&
+                (visibleItem.offset + visibleItem.size) <= listState.layoutInfo.viewportEndOffset
+
+            if (!isFullyVisible) {
+                val scrollPos = (targetIndex - 1).coerceAtLeast(0)
+                listState.scrollToItem(scrollPos)
+            }
+        } else {
             listState.scrollToItem(0)
         }
-        prevFirstConvId = currentFirst
     }
 
     if (instanceToTerminate != null) {
@@ -181,7 +243,11 @@ fun ChatHistoryDrawer(
                 // New Chat Button
                 Button(
                     onClick = {
-                        scope.launch { listState.scrollToItem(0) }
+                        searchQuery = ""
+                        isSearchActive = false
+                        scope.launch {
+                            try { listState.scrollToItem(0) } catch (_: Exception) {}
+                        }
                         onNewChat()
                     },
                     modifier = Modifier
@@ -421,18 +487,6 @@ fun ChatHistoryDrawer(
                         }
                     }
                     else -> {
-                        val grouped = remember(filtered) {
-                            filtered.groupBy { conv ->
-                                if (conv.workspaceUri.isNotBlank()) {
-                                    val clean = conv.workspaceUri.removePrefix("file://").trimEnd('/')
-                                    java.io.File(clean).name.ifBlank { "Workspace" }
-                                } else {
-                                    "General"
-                                }
-                            }
-                        }
-                        var expandedGroups by remember { mutableStateOf(setOf<String>()) }
-
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize()
