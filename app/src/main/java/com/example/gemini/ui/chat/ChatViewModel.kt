@@ -2501,6 +2501,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                 // 1. Fetch live states from AGY daemon
                 val liveResult = agyHubClient.getMcpServerStates(hubUrl)
+                var fetchError: String? = null
+                if (liveResult.isFailure) {
+                    val err = liveResult.exceptionOrNull()?.message ?: "Failed to connect to Antigravity Hub"
+                    Log.w("ChatViewModel", "loadMcpServers liveResult failed: $err")
+                    fetchError = err
+                }
                 val liveList = liveResult.getOrDefault(emptyList()).toMutableList()
 
                 // 2. Read persistent config from mcp_config.json to ensure any unstarted / disabled servers are also represented
@@ -2576,7 +2582,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                _mcpServers.value = liveList
+                if (fetchError != null) {
+                    _mcpErrorMessage.value = "Cannot reach Antigravity daemon ($hubUrl): $fetchError"
+                }
+
+                // If daemon RPC failed and no servers found, preserve existing cached servers if available
+                if (liveList.isEmpty() && fetchError != null && _mcpServers.value.isNotEmpty()) {
+                    Log.w("ChatViewModel", "Retaining ${_mcpServers.value.size} cached MCP servers due to fetch failure")
+                } else {
+                    // Stable alphabetical sorting by name (case-insensitive) to prevent jumping
+                    _mcpServers.value = liveList.sortedBy { it.name.lowercase() }
+                }
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "loadMcpServers error: ${e.message}", e)
                 _mcpErrorMessage.value = e.message
@@ -2596,7 +2612,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
                 val res = agyHubClient.refreshMcpServers(hubUrl)
                 if (res.isFailure) {
-                    _mcpErrorMessage.value = res.exceptionOrNull()?.message ?: "Refresh failed"
+                    val err = res.exceptionOrNull()?.message ?: "Refresh failed"
+                    _mcpErrorMessage.value = "Daemon refresh error ($hubUrl): $err"
                 }
                 delay(600)
                 loadMcpServers()
@@ -2644,7 +2661,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 Log.w("ChatViewModel", "Failed to update disabled flag in mcp_config.json: ${e.message}")
             }
 
-            // 3. Update local state
+            // 3. Update local state with stable sort
             _mcpServers.value = _mcpServers.value.map {
                 if (it.name.equals(serverName, ignoreCase = true)) {
                     val updatedSpec = it.spec?.copy(disabled = !enabled)
@@ -2654,7 +2671,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         status = if (!enabled) "DISABLED" else it.status
                     )
                 } else it
-            }
+            }.sortedBy { it.name.lowercase() }
             _mcpStatusMessage.value = if (enabled) "Enabled '$serverName'" else "Disabled '$serverName'"
         }
     }
@@ -2715,6 +2732,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (!success) {
                     _mcpErrorMessage.value = "Failed to save configuration to mcp_config.json"
                 } else {
+                    val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                    agyHubClient.refreshMcpServers(hubUrl)
                     loadMcpServers()
                     _mcpStatusMessage.value = "Saved '${spec.serverName}'. Tap Refresh on the server to connect."
                 }
@@ -2733,6 +2752,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _mcpErrorMessage.value = null
             _mcpStatusMessage.value = null
             try {
+                // Instantly remove from local list for snappy UI
+                _mcpServers.value = _mcpServers.value.filterNot { it.name.equals(serverName, ignoreCase = true) }
+
                 val rawConfig = com.example.gemini.data.daemon.IdeApiClient.getMcpConfig() ?: "{}"
                 val json = if (rawConfig.trim().startsWith("{")) org.json.JSONObject(rawConfig) else org.json.JSONObject()
                 val serversObj = json.optJSONObject("mcpServers")
@@ -2741,6 +2763,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     com.example.gemini.data.daemon.IdeApiClient.saveMcpConfig(json.toString(2))
                 }
 
+                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                agyHubClient.refreshMcpServers(hubUrl)
                 loadMcpServers()
                 _mcpStatusMessage.value = "Removed '$serverName'."
             } catch (e: Exception) {
