@@ -457,12 +457,22 @@ class AgyHubClient(
         val username: String = "",
         val homeDir: String = "",
         val userTier: String = "",
+        val userTierId: String = "",
+        val userTierDescription: String = "",
+        val planName: String = "",
+        val teamsTier: String = "",
+        val availablePromptCredits: Long? = null,
+        val availableFlowCredits: Long? = null,
+        val monthlyPromptCredits: Long? = null,
+        val monthlyFlowCredits: Long? = null,
+        val upgradeSubscriptionUri: String = "",
+        val upgradeSubscriptionText: String = "",
         val profilePictureUrl: String? = null,
         val grantedScopes: List<String> = emptyList(),
         val isOffline: Boolean = false
     ) {
         val displayName: String
-            get() = fullName.ifBlank { "Antigravity User" }
+            get() = fullName.ifBlank { username.ifBlank { "Antigravity User" } }
     }
 
     suspend fun login(hubUrl: String = DEFAULT_HUB_URL): Result<Unit> =
@@ -529,7 +539,7 @@ class AgyHubClient(
         bridgeHttpUrl: String = DEFAULT_HUB_URL.replace("8090", "8080")
     ): Result<AgyAuthInfo> = withContext(Dispatchers.IO) {
         try {
-            val authResultCall = callUnary("GetAuthStatus", "{}", hubUrl)
+            val authResultCall = callUnary("GetAuthStatus", "{\"metadata\":{}}", hubUrl)
             if (authResultCall.isFailure) {
                 return@withContext Result.failure(authResultCall.exceptionOrNull() ?: Exception("Failed to query GetAuthStatus"))
             }
@@ -555,35 +565,77 @@ class AgyHubClient(
                 }
             }
 
-            var userTier = ""
-            var profilePic: String? = null
-            try {
-                val statusBody = callUnary("GetUserStatus", "{}", hubUrl).getOrNull() ?: "{}"
-                val statusJson = JSONObject(statusBody)
-                val userStatus = statusJson.optJSONObject("userStatus")
-                val tierObj = userStatus?.optJSONObject("userTier")
-                userTier = tierObj?.optString("name", "") ?: ""
-                profilePic = userStatus?.optString("profilePictureUrl", "")?.takeIf { it.isNotBlank() }
-            } catch (_: Exception) {}
-
-            // Retrieve real user profile (full name, email, profile pic) from Go IDE bridge
             var fullName = ""
             var email = ""
+            var userTier = ""
+            var userTierId = ""
+            var userTierDesc = ""
+            var planName = ""
+            var teamsTier = ""
+            var availablePromptCredits: Long? = null
+            var availableFlowCredits: Long? = null
+            var monthlyPromptCredits: Long? = null
+            var monthlyFlowCredits: Long? = null
+            var upgradeUri = ""
+            var upgradeText = ""
+            var profilePic: String? = null
+
+            // Directly query AGY LanguageServerService/GetUserStatus with {"metadata":{}}
             try {
-                val pReq = Request.Builder()
-                    .url("${bridgeHttpUrl.trimEnd('/')}/api/user/profile")
-                    .get()
-                    .build()
-                client.newCall(pReq).execute().use { pResp ->
-                    if (pResp.isSuccessful) {
-                        val pJson = JSONObject(pResp.body?.string() ?: "{}")
-                        fullName = pJson.optString("fullName", "")
-                        email = pJson.optString("email", "")
-                        val pPic = pJson.optString("profilePictureUrl", "").takeIf { it.isNotBlank() && it != "null" }
-                        if (!pPic.isNullOrBlank()) {
-                            profilePic = pPic
+                val statusBody = callUnary("GetUserStatus", "{\"metadata\":{}}", hubUrl).getOrNull() ?: "{}"
+                val statusJson = JSONObject(statusBody)
+                val userStatus = statusJson.optJSONObject("userStatus")
+                if (userStatus != null) {
+                    val nameFromStatus = userStatus.optString("name", "").takeIf { it.isNotBlank() && it != "null" }
+                    val emailFromStatus = userStatus.optString("email", "").takeIf { it.isNotBlank() && it != "null" }
+                    val picFromStatus = userStatus.optString("profilePictureUrl", "").takeIf { it.isNotBlank() && it != "null" }
+                    if (!nameFromStatus.isNullOrBlank()) fullName = nameFromStatus
+                    if (!emailFromStatus.isNullOrBlank()) email = emailFromStatus
+                    if (!picFromStatus.isNullOrBlank()) profilePic = picFromStatus
+
+                    val tierObj = userStatus.optJSONObject("userTier")
+                    if (tierObj != null) {
+                        userTier = tierObj.optString("name", tierObj.optString("description", ""))
+                        userTierId = tierObj.optString("id", "")
+                        userTierDesc = tierObj.optString("description", "")
+                        upgradeUri = tierObj.optString("upgradeSubscriptionUri", "")
+                        upgradeText = tierObj.optString("upgradeSubscriptionText", "")
+                    }
+
+                    val planStatus = userStatus.optJSONObject("planStatus")
+                    if (planStatus != null) {
+                        if (planStatus.has("availablePromptCredits")) {
+                            availablePromptCredits = planStatus.optLong("availablePromptCredits")
+                        }
+                        if (planStatus.has("availableFlowCredits")) {
+                            availableFlowCredits = planStatus.optLong("availableFlowCredits")
+                        }
+
+                        val planInfo = planStatus.optJSONObject("planInfo")
+                        if (planInfo != null) {
+                            planName = planInfo.optString("planName", "")
+                            teamsTier = planInfo.optString("teamsTier", "")
+                            if (planInfo.has("monthlyPromptCredits")) {
+                                monthlyPromptCredits = planInfo.optLong("monthlyPromptCredits")
+                            }
+                            if (planInfo.has("monthlyFlowCredits")) {
+                                monthlyFlowCredits = planInfo.optLong("monthlyFlowCredits")
+                            }
                         }
                     }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "GetUserStatus parse error: ${e.message}")
+            }
+
+            // Local user info fallback for username and homeDir
+            var localUsername = ""
+            var localHomeDir = ""
+            try {
+                val localInfo = getLocalUserInfo(hubUrl).getOrNull()
+                if (localInfo != null) {
+                    localUsername = localInfo.first
+                    localHomeDir = localInfo.second
                 }
             } catch (_: Exception) {}
 
@@ -593,7 +645,19 @@ class AgyHubClient(
                     isLoggedIn = true,
                     fullName = fullName,
                     email = email,
+                    username = localUsername,
+                    homeDir = localHomeDir,
                     userTier = userTier,
+                    userTierId = userTierId,
+                    userTierDescription = userTierDesc,
+                    planName = planName,
+                    teamsTier = teamsTier,
+                    availablePromptCredits = availablePromptCredits,
+                    availableFlowCredits = availableFlowCredits,
+                    monthlyPromptCredits = monthlyPromptCredits,
+                    monthlyFlowCredits = monthlyFlowCredits,
+                    upgradeSubscriptionUri = upgradeUri,
+                    upgradeSubscriptionText = upgradeText,
                     profilePictureUrl = profilePic,
                     grantedScopes = scopesList,
                     isOffline = false

@@ -728,12 +728,12 @@ fun ChatHistoryDrawer(
                         ) {
                             SubcomposeAsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
-                                    .data(authInfo.profilePictureUrl)
+                                    .data(parseProfileAvatarModel(authInfo.profilePictureUrl))
                                     .crossfade(true)
                                     .build(),
                                 contentDescription = "Profile Picture",
                                 modifier = Modifier
-                                    .size(22.dp)
+                                    .size(24.dp)
                                     .clip(CircleShape),
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                 loading = {
@@ -775,10 +775,10 @@ fun ChatHistoryDrawer(
                                 Text(
                                     text = nameToShow,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.widthIn(max = 90.dp),
+                                    modifier = Modifier.widthIn(max = 110.dp),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
