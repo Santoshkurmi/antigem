@@ -196,23 +196,25 @@ class TmuxControlParser(
         }
 
         /**
-         * Strips screen/tmux proprietary title escape sequences (e.g. ESC k <title> ESC \ or ESC k <title> BEL)
-         * so they don't get printed as literal text into standard terminal emulators.
+         * Strips screen/tmux proprietary title escape sequences (ESC k ... ESC \) and
+         * ZSH PROMPT_EOL_MARK (e.g. bold/standout '%' followed by line-width padding spaces and \r)
+         * so they don't produce phantom '%' characters or literal text in terminal emulators.
          */
         fun sanitizePaneOutput(data: ByteArray): ByteArray {
             if (data.isEmpty()) return data
-            var hasEscK = false
-            for (idx in 0 until data.size - 1) {
-                if (data[idx] == 0x1B.toByte() && data[idx + 1] == 'k'.code.toByte()) {
-                    hasEscK = true
+            var hasEsc = false
+            for (idx in 0 until data.size) {
+                if (data[idx] == 0x1B.toByte()) {
+                    hasEsc = true
                     break
                 }
             }
-            if (!hasEscK) return data
+            if (!hasEsc) return data
 
             val out = ByteArrayOutputStream(data.size)
             var i = 0
             while (i < data.size) {
+                // 1. Strip screen/tmux title sequence: ESC k ... (ESC \ | BEL)
                 if (i < data.size - 1 && data[i] == 0x1B.toByte() && data[i + 1] == 'k'.code.toByte()) {
                     i += 2
                     while (i < data.size) {
@@ -226,6 +228,47 @@ class TmuxControlParser(
                                 break
                             }
                         }
+                        i++
+                    }
+                }
+                // 2. Strip ZSH PROMPT_EOL_MARK (% symbol padded with line-width spaces and \r)
+                else if (i < data.size - 10 && data[i] == 0x1B.toByte() && data[i + 1] == '['.code.toByte()) {
+                    var matchEnd = -1
+                    var j = i
+                    var foundPercent = false
+                    while (j < minOf(data.size, i + 40)) {
+                        if (data[j] == '%'.code.toByte() || data[j] == '#'.code.toByte()) {
+                            foundPercent = true
+                            j++
+                            break
+                        }
+                        j++
+                    }
+                    if (foundPercent) {
+                        while (j < minOf(data.size, i + 60)) {
+                            if (data[j] == 'm'.code.toByte()) {
+                                j++
+                                break
+                            }
+                            j++
+                        }
+                        var spaceCount = 0
+                        while (j < data.size && data[j] == ' '.code.toByte()) {
+                            spaceCount++
+                            j++
+                        }
+                        if (spaceCount >= 5) {
+                            while (j < data.size && (data[j] == '\r'.code.toByte() || data[j] == ' '.code.toByte())) {
+                                j++
+                            }
+                            matchEnd = j
+                        }
+                    }
+
+                    if (matchEnd != -1) {
+                        i = matchEnd
+                    } else {
+                        out.write(data[i].toInt())
                         i++
                     }
                 } else {
