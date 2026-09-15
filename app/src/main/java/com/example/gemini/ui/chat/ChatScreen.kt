@@ -101,6 +101,8 @@ import com.example.gemini.ui.components.FileDetailsDialog
 import com.example.gemini.ui.components.MarkdownDocViewerModal
 import com.example.gemini.ui.components.ProjectPickerDialog
 import com.example.gemini.ui.components.WorkspaceFolderBrowserDialog
+import com.example.gemini.ui.components.ToolCallExpansionCache
+import com.example.gemini.ui.components.CodeBlockExpansionCache
 import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
@@ -287,6 +289,8 @@ fun ChatScreen(
             viewModel.setDraft(activeConversationKey, textFieldValue)
             activeConversationKey = newKey
             textFieldValue = viewModel.getDraft(newKey)
+            ToolCallExpansionCache.setChat(newKey)
+            CodeBlockExpansionCache.setChat(newKey)
         }
     }
     val inputText = textFieldValue.text

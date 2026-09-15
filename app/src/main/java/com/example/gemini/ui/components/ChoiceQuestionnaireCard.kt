@@ -59,7 +59,7 @@ fun ChoiceQuestionnaireCard(
     // State for user selections: Map of QuestionId -> Set of selected OptionIds
     val selectedOptions = remember { mutableStateMapOf<String, Set<String>>() }
     var customNote by remember { mutableStateOf("") }
-    var isExpanded by remember { mutableStateOf(true) }
+    val isExpanded = ToolCallExpansionCache.isExpanded(toolCall, default = !isCompleted)
 
     val hasSelections = selectedOptions.values.any { it.isNotEmpty() } || customNote.isNotBlank()
 
@@ -80,7 +80,7 @@ fun ChoiceQuestionnaireCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
-                    .clickable { isExpanded = !isExpanded }
+                    .clickable { ToolCallExpansionCache.setExpanded(toolCall, !isExpanded) }
                     .background(if (isCompleted) QuotaGreen.copy(alpha = 0.12f) else ClaudeTerracotta.copy(alpha = 0.12f))
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically

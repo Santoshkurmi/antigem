@@ -47,6 +47,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -150,6 +152,7 @@ fun prepareHtmlForPreview(rawCode: String, isDark: Boolean): String {
     """.trimIndent()
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun CodeBlock(
@@ -162,7 +165,11 @@ fun CodeBlock(
     var selectedTab by remember { mutableStateOf(0) } // 0 = Code, 1 = Preview
     var reloadKey by remember { mutableStateOf(0) }
     var isFullscreen by remember { mutableStateOf(false) }
-    var isExpanded by remember { mutableStateOf(false) }
+
+    val codeKey = remember(code, language) {
+        "${code.hashCode()}_${language}"
+    }
+    val isExpanded = CodeBlockExpansionCache.isExpanded(codeKey, default = false)
 
     val cachedCode = remember(code, language) {
         CodeBlockCache.getOrCompute(code, language)
@@ -284,7 +291,7 @@ fun CodeBlock(
 
                 Spacer(modifier = Modifier.width(6.dp))
 
-                // In Preview Mode: Reload & Fullscreen buttons
+                // In Preview Mode: Reload button
                 if (selectedTab == 1) {
                     IconButton(
                         onClick = { reloadKey++ },
@@ -297,25 +304,26 @@ fun CodeBlock(
                             modifier = Modifier.size(15.dp)
                         )
                     }
-
-                    IconButton(
-                        onClick = { isFullscreen = true },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.OpenInFull,
-                            contentDescription = "Fullscreen",
-                            tint = TextPrimaryDark.copy(alpha = 0.7f),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
                 }
+            }
+
+            // Fullscreen Button (always present for all code blocks and preview modes)
+            IconButton(
+                onClick = { isFullscreen = true },
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.OpenInFull,
+                    contentDescription = "Fullscreen",
+                    tint = TextPrimaryDark.copy(alpha = 0.7f),
+                    modifier = Modifier.size(14.dp)
+                )
             }
 
             // Expand / Collapse toggle for long code
             if (isLongCode && selectedTab == 0) {
                 IconButton(
-                    onClick = { isExpanded = !isExpanded },
+                    onClick = { CodeBlockExpansionCache.toggle(codeKey) },
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
@@ -398,10 +406,7 @@ fun CodeBlock(
             val horizontalScroll = rememberScrollState()
 
             val scrollModifier = if (isExpanded) {
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 520.dp)
-                    .verticalScroll(verticalScroll)
+                Modifier.fillMaxWidth()
             } else {
                 Modifier
                     .fillMaxWidth()
@@ -429,7 +434,7 @@ fun CodeBlock(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { isExpanded = !isExpanded },
+                        .clickable { CodeBlockExpansionCache.toggle(codeKey) },
                     color = CodeBlockBgDark.copy(alpha = 0.7f)
                 ) {
                     Row(
@@ -458,91 +463,202 @@ fun CodeBlock(
         }
     }
 
-    // Fullscreen Interactive Artifact Modal
+    // Fullscreen Code & Interactive Artifact Modal
     if (isFullscreen) {
         Dialog(
             onDismissRequest = { isFullscreen = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding(),
                 color = MaterialTheme.colorScheme.background
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Modal Header
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
-                            .statusBarsPadding()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.PlayArrow,
-                            contentDescription = null,
-                            tint = ClaudeTerracotta,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Interactive Artifact (${language.uppercase()})",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        Spacer(modifier = Modifier.weight(1f))
-
-                        IconButton(
-                            onClick = { reloadKey++ },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Reload",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { isFullscreen = false },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Close",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-
-                    HorizontalDivider(thickness = 0.5.dp)
-
-                    // Fullscreen WebView
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        key(reloadKey) {
-                            val previewHtml = remember(code) {
-                                prepareHtmlForPreview(code, isDark = false)
+                    TopAppBar(
+                        title = {
+                            Column {
+                                Text(
+                                    text = if (selectedTab == 1 && isPreviewable) "Preview: ${language.uppercase()}" else language.ifEmpty { "Code" }.uppercase(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = if (selectedTab == 1 && isPreviewable) "Interactive Artifact" else "$lineCount lines",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
-                            AndroidView(
-                                factory = { ctx ->
-                                    WebView(ctx).apply {
-                                        layoutParams = ViewGroup.LayoutParams(
-                                            ViewGroup.LayoutParams.MATCH_PARENT,
-                                            ViewGroup.LayoutParams.MATCH_PARENT
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { isFullscreen = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "Close")
+                            }
+                        },
+                        actions = {
+                            if (isPreviewable) {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .padding(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(if (selectedTab == 0) ClaudeTerracotta else Color.Transparent)
+                                            .clickable { selectedTab = 0 }
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    ) {
+                                        Text(
+                                            text = "Code",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (selectedTab == 0) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                        settings.javaScriptEnabled = true
-                                        settings.domStorageEnabled = true
-                                        settings.loadWithOverviewMode = true
-                                        settings.useWideViewPort = true
-                                        settings.builtInZoomControls = true
-                                        settings.displayZoomControls = false
-                                        loadDataWithBaseURL("https://localhost", previewHtml, "text/html", "UTF-8", null)
                                     }
-                                },
-                                modifier = Modifier.fillMaxSize()
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(if (selectedTab == 1) ClaudeTerracotta else Color.Transparent)
+                                            .clickable { selectedTab = 1 }
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    ) {
+                                        Text(
+                                            text = "Preview",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (selectedTab == 1) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                if (selectedTab == 1) {
+                                    IconButton(onClick = { reloadKey++ }) {
+                                        Icon(Icons.Default.Refresh, contentDescription = "Reload")
+                                    }
+                                }
+                            }
+
+                            var modalCopied by remember { mutableStateOf(false) }
+                            LaunchedEffect(modalCopied) {
+                                if (modalCopied) {
+                                    delay(2000)
+                                    modalCopied = false
+                                }
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("Copied Code", code)
+                                    clipboard.setPrimaryClip(clip)
+                                    modalCopied = true
+                                    Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (modalCopied) Icons.Default.Check else Icons.Outlined.ContentCopy,
+                                    contentDescription = "Copy code",
+                                    tint = if (modalCopied) QuotaGreen else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    if (selectedTab == 1 && isPreviewable) {
+                        // Fullscreen WebView preview
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.White)
+                        ) {
+                            key(reloadKey) {
+                                val previewHtml = remember(code) {
+                                    prepareHtmlForPreview(code, isDark = false)
+                                }
+                                AndroidView(
+                                    factory = { ctx ->
+                                        WebView(ctx).apply {
+                                            layoutParams = ViewGroup.LayoutParams(
+                                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                                ViewGroup.LayoutParams.MATCH_PARENT
+                                            )
+                                            settings.javaScriptEnabled = true
+                                            settings.domStorageEnabled = true
+                                            settings.loadWithOverviewMode = true
+                                            settings.useWideViewPort = true
+                                            settings.builtInZoomControls = true
+                                            settings.displayZoomControls = false
+                                            loadDataWithBaseURL("https://localhost", previewHtml, "text/html", "UTF-8", null)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    } else {
+                        // Fullscreen Code view with line numbers gutter
+                        val modalVerticalScroll = rememberScrollState()
+                        val modalHorizontalScroll = rememberScrollState()
+                        val lineNumbersText = remember(lineCount) {
+                            (1..lineCount).joinToString("\n")
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(CodeBlockBgDark)
+                                .verticalScroll(modalVerticalScroll)
+                        ) {
+                            // Line numbers gutter
+                            Text(
+                                text = lineNumbersText,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.5.sp,
+                                lineHeight = 20.sp,
+                                color = Color(0xFF636D83),
+                                textAlign = TextAlign.End,
+                                modifier = Modifier
+                                    .padding(start = 12.dp, end = 10.dp, top = 14.dp, bottom = 14.dp)
+                                    .widthIn(min = 28.dp)
                             )
+
+                            // Vertical divider line
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .fillMaxHeight()
+                                    .background(Color.White.copy(alpha = 0.08f))
+                            )
+
+                            // Syntax-highlighted code
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .horizontalScroll(modalHorizontalScroll)
+                                    .padding(horizontal = 14.dp, vertical = 14.dp)
+                            ) {
+                                Text(
+                                    text = cachedCode.fullText,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.5.sp,
+                                    lineHeight = 20.sp,
+                                    softWrap = false
+                                )
+                            }
                         }
                     }
                 }

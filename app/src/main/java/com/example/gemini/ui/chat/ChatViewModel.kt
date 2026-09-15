@@ -1305,6 +1305,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         )
         _currentConversation.value = newConv
         trajectoryEngine.reset(newConv.id, force = true)
+        com.example.gemini.ui.components.ToolCallExpansionCache.setChat(newConv.id)
+        com.example.gemini.ui.components.CodeBlockExpansionCache.setChat(newConv.id)
         _messages.value = emptyList()
         _isLoadingConversation.value = false
         if (_isServerOnline.value == true) {
@@ -1325,6 +1327,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         hasStartedRunning = false
         hasSeenTurnActivity = false
         trajectoryEngine.reset(id, force = true)
+        com.example.gemini.ui.components.ToolCallExpansionCache.setChat(id)
+        com.example.gemini.ui.components.CodeBlockExpansionCache.setChat(id)
         currentTrajectoryId = ""
         _isStreaming.value = false
         _bridgeStatusMessage.value = null

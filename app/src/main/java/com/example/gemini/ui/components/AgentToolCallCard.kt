@@ -70,7 +70,7 @@ fun AgentToolCallCard(
     }
 
     val context = LocalContext.current
-    var isExpanded by remember { mutableStateOf(false) }
+    val isExpanded = ToolCallExpansionCache.isExpanded(toolCall, default = false)
 
     val isSearch = toolCall.toolType == ToolType.SEARCH_WEB
     val isReader = toolCall.toolType == ToolType.READ_URL
@@ -149,7 +149,7 @@ fun AgentToolCallCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .clickable { isExpanded = !isExpanded }
+                    .clickable { ToolCallExpansionCache.setExpanded(toolCall, !isExpanded) }
                     .background(headerBg)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
