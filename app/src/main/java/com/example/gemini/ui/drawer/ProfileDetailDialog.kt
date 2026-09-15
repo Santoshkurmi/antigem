@@ -240,6 +240,7 @@ fun ProfileDetailDialog(
                                     Text(
                                         text = "${authInfo.availablePromptCredits}" +
                                                 if (authInfo.monthlyPromptCredits != null && authInfo.monthlyPromptCredits > 0) " / ${authInfo.monthlyPromptCredits}" else "",
+                                        text = "${authInfo.availablePromptCredits} Available",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -276,6 +277,7 @@ fun ProfileDetailDialog(
                                     Text(
                                         text = "${authInfo.availableFlowCredits}" +
                                                 if (authInfo.monthlyFlowCredits != null && authInfo.monthlyFlowCredits > 0) " / ${authInfo.monthlyFlowCredits}" else "",
+                                        text = "${authInfo.availableFlowCredits} Available",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
