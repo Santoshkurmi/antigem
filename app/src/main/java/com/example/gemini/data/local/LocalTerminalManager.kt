@@ -178,8 +178,13 @@ class LocalPtySession(
                     }
                 } else if (!isInitialHistoryRestored) {
                     isInitialHistoryRestored = true
+                    val payload = if (data.isNotEmpty() && data.last() != '\n'.code.toByte() && data.last() != '\r'.code.toByte()) {
+                        data + ' '.code.toByte()
+                    } else {
+                        data
+                    }
                     sessionScope.launch(Dispatchers.Main) {
-                        terminalSession.emulator?.append(data, data.size)
+                        terminalSession.emulator?.append(payload, payload.size)
                         onTextChangedListener?.invoke()
                     }
                 }
@@ -312,7 +317,7 @@ class LocalPtySession(
                     try {
                         val target = assignedPaneId
                         val targetArg = if (!target.isNullOrEmpty()) "-t $target " else ""
-                        val cmd = "capture-pane ${targetArg}-p -e -N -S -500\n"
+                        val cmd = "capture-pane ${targetArg}-p -e -S -500\n"
                         sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
                         sshOut?.flush()
                     } catch (_: Exception) {}
