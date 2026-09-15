@@ -210,12 +210,13 @@ class LocalPtySession(
             session.connect(10000)
             jschSession = session
 
-            // Universal Tmux Multi-Window command with standard PATH injection
+            // Universal Tmux Multi-Window command with standard PATH injection & mouse support
             val tmuxCmd = UNIVERSAL_SSH_PATH +
                     "if command -v tmux >/dev/null 2>&1; then " +
                     "tmux new-session -d -s $tmuxSessionName -n \"$winIdx\" 2>/dev/null; " +
+                    "tmux set-option -g -t $tmuxSessionName mouse on 2>/dev/null; " +
                     "tmux new-window -d -t $tmuxSessionName:$winIdx -n \"$winIdx\" 2>/dev/null; " +
-                    "tmux new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_$winIdx \\; select-window -t $winIdx; " +
+                    "tmux new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_$winIdx \\; set-option -g mouse on \\; select-window -t $winIdx; " +
                     "else \${SHELL:-sh}; fi"
 
             Log.d(TAG, "Connecting SSH shell channel with command: $tmuxCmd")
