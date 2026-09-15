@@ -605,6 +605,7 @@ fun ChatScreen(
                 errorMessage = conversationError,
                 isStreaming = isStreaming,
                 groupByWorkspace = groupChatsByWorkspace,
+                onToggleGroupByWorkspace = { viewModel.setGroupChatsByWorkspace(it) },
                 onRetry = { viewModel.retryConnections() },
                 isOpen = drawerState.isOpen || drawerState.targetValue == DrawerValue.Open,
                 onSelectConversation = { id ->

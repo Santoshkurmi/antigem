@@ -70,6 +70,7 @@ fun ChatHistoryDrawer(
     authInfo: AgyHubClient.AgyAuthInfo = AgyHubClient.AgyAuthInfo(),
     isAuthBusy: Boolean = false,
     groupByWorkspace: Boolean = false,
+    onToggleGroupByWorkspace: (Boolean) -> Unit = {},
     onRetry: () -> Unit = {},
     onSelectConversation: (String) -> Unit,
     onNewChat: () -> Unit,
@@ -125,10 +126,15 @@ fun ChatHistoryDrawer(
             filtered.indexOfFirst { it.id == currentConversationId }
         } else {
             val targetGroup = grouped.entries.firstOrNull { (_, chats) -> chats.any { it.id == currentConversationId } }
-            val currentExpanded = if (targetGroup != null && !expandedGroups.contains(targetGroup.key)) {
-                expandedGroups = expandedGroups + targetGroup.key
-                kotlinx.coroutines.yield()
-                expandedGroups + targetGroup.key
+            val currentExpanded = if (targetGroup != null) {
+                val chatIndexInGroup = targetGroup.value.indexOfFirst { it.id == currentConversationId }
+                if (chatIndexInGroup >= 5 && !expandedGroups.contains(targetGroup.key)) {
+                    expandedGroups = expandedGroups + targetGroup.key
+                    kotlinx.coroutines.yield()
+                    expandedGroups + targetGroup.key
+                } else {
+                    expandedGroups
+                }
             } else {
                 expandedGroups
             }
@@ -234,7 +240,7 @@ fun ChatHistoryDrawer(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Top Action Row: New Chat + Search Toggle
+            // Top Action Row: New Chat + Workspace Folders Toggle + Search Toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -252,27 +258,50 @@ fun ChatHistoryDrawer(
                     },
                     modifier = Modifier
                         .weight(1f)
-                        .height(44.dp),
-                    shape = RoundedCornerShape(12.dp),
+                        .height(36.dp),
+                    shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ClaudeTerracotta,
                         contentColor = Color.White
                     ),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "New Chat",
                         tint = Color.White,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
                     Text(
                         text = "New Chat",
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
-                        fontSize = 14.5.sp
+                        fontSize = 13.5.sp
                     )
+                }
+
+                // Workspace Folder Grouping Toggle Button
+                Surface(
+                    onClick = { onToggleGroupByWorkspace(!groupByWorkspace) },
+                    modifier = Modifier.size(36.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (groupByWorkspace) ClaudeTerracotta.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (groupByWorkspace) ClaudeTerracotta.copy(alpha = 0.45f)
+                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                    )
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = if (groupByWorkspace) "Disable Workspace Grouping" else "Group by Workspace",
+                            tint = if (groupByWorkspace) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
                 }
 
                 // Search Toggle Button
@@ -284,8 +313,8 @@ fun ChatHistoryDrawer(
                             onSearchQueryChange("")
                         }
                     },
-                    modifier = Modifier.size(44.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(36.dp),
+                    shape = RoundedCornerShape(10.dp),
                     color = if (isSearchActive || searchQuery.isNotBlank()) ClaudeTerracotta.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     border = BorderStroke(
                         1.dp,
@@ -297,8 +326,8 @@ fun ChatHistoryDrawer(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
-                            tint = if (isSearchActive || searchQuery.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(19.dp)
+                            tint = if (isSearchActive || searchQuery.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            modifier = Modifier.size(17.dp)
                         )
                     }
                 }
@@ -519,6 +548,15 @@ fun ChatHistoryDrawer(
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
+                                                .then(
+                                                    if (chats.size > 5) {
+                                                        Modifier
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                            .clickable {
+                                                                expandedGroups = if (isExpanded) expandedGroups - groupName else expandedGroups + groupName
+                                                            }
+                                                    } else Modifier
+                                                )
                                                 .padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 4.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
@@ -536,8 +574,31 @@ fun ChatHistoryDrawer(
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                                                 letterSpacing = 0.2.sp,
                                                 maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
                                             )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                            ) {
+                                                Text(
+                                                    text = "${chats.size}",
+                                                    fontSize = 10.5.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                            if (chats.size > 5) {
+                                                Spacer(modifier = Modifier.weight(1f))
+                                                Icon(
+                                                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
                                         }
                                     }
 
@@ -573,7 +634,7 @@ fun ChatHistoryDrawer(
                                                     .padding(horizontal = 4.dp, vertical = 2.dp)
                                             ) {
                                                 Text(
-                                                    text = if (isExpanded) "Show less" else "Show all",
+                                                    text = if (isExpanded) "Show less" else "Show ${chats.size - 5} more",
                                                     fontSize = 11.5.sp,
                                                     fontWeight = FontWeight.Medium,
                                                     color = ClaudeTerracotta
