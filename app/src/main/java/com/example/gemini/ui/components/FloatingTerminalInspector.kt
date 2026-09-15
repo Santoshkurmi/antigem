@@ -297,7 +297,7 @@ private fun TerminalInspectorDialogContent(
                                 color = if (isSelected) Color.White else Color.Gray
                             )
 
-                            if (tabs.size > 1 && !tab.isPrimary) {
+                            if (isSelected && tabs.size > 1 && !tab.isPrimary) {
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Icon(
                                     imageVector = Icons.Default.Close,

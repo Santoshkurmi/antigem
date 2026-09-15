@@ -192,7 +192,7 @@ fun LocalTerminalContent(
                                     color = if (isSelected) Color.White else Color.Gray
                                 )
 
-                                if (sessions.size > 1) {
+                                if (isSelected && sessions.size > 1) {
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Icon(
                                         imageVector = Icons.Default.Close,
