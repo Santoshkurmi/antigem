@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -346,26 +348,45 @@ fun ChatScreen(
     val imeInsets = WindowInsets.ime
     var isKeyboardAnimating by remember { mutableStateOf(false) }
 
+    val emptyScrollState = rememberScrollState()
+
     // Synchronized Chat & Keyboard movement:
-    // When keyboard rises, scroll list up in lockstep with the rising input bar so messages above it stay visible.
+    // When keyboard rises, scroll list / empty state up in lockstep with the rising input bar so messages and recent workspaces stay visible.
     // When keyboard hides, Compose & Android handle layout expansion natively.
-    LaunchedEffect(imeInsets, density, listState) {
+    LaunchedEffect(imeInsets, density, listState, emptyScrollState) {
         var previousIme = imeInsets.getBottom(density)
 
         snapshotFlow { imeInsets.getBottom(density) }
             .collect { currentIme ->
                 val delta = currentIme - previousIme
-                if (delta > 0 && feedItems.isNotEmpty()) {
+                if (delta > 0) {
                     isKeyboardAnimating = true
-                    // Keyboard is rising / opening
-                    listState.scrollBy(delta.toFloat())
+                    if (feedItems.isNotEmpty()) {
+                        // Messages list: scroll up
+                        listState.scrollBy(delta.toFloat())
+                    } else {
+                        // Empty state in new chat: scroll up so recent workspaces remain visible
+                        emptyScrollState.scrollBy(delta.toFloat())
+                    }
                 }
                 if (currentIme == 0) {
                     isKeyboardAnimating = false
+                    if (feedItems.isEmpty()) {
+                        emptyScrollState.scrollTo(0)
+                    }
                 }
                 previousIme = currentIme
             }
     }
+
+    // Secondary auto-alignment: when keyboard is open and empty state has overflow, scroll to show workspace card & recent chips
+    LaunchedEffect(imeInsets.getBottom(density) > 0, emptyScrollState.maxValue) {
+        val isKeyboardOpen = imeInsets.getBottom(density) > 0
+        if (isKeyboardOpen && feedItems.isEmpty() && emptyScrollState.maxValue > 0) {
+            emptyScrollState.animateScrollTo(emptyScrollState.maxValue)
+        }
+    }
+
 
     // Decoupled asynchronous scroll observer - zero recomposition during pixel scroll
     LaunchedEffect(listState) {
@@ -868,14 +889,24 @@ fun ChatScreen(
                             }
                         }
                     } else if (messages.isEmpty()) {
-                        // Empty state with centered project selection
-                        Column(
+                        // Empty state with scrollable container and centered project selection
+                        BoxWithConstraints(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 24.dp, vertical = 16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                                .verticalScroll(emptyScrollState)
+                            modifier = Modifier.fillMaxSize()
                         ) {
+                            val minHeight = maxHeight
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .defaultMinSize(minHeight = maxHeight)
+                                    .verticalScroll(emptyScrollState)
+                                    .heightIn(min = minHeight)
+                                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
                             Text(
                                 text = "How can I help you today?",
                                 fontSize = 21.sp,
@@ -1071,6 +1102,7 @@ fun ChatScreen(
                                 }
                             }
                         }
+                    }
                     } else {
                         val currentDensity = androidx.compose.ui.platform.LocalDensity.current
                         val customDensity = remember(currentDensity, chatFontScale) {
