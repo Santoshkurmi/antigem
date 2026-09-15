@@ -307,10 +307,12 @@ class LocalPtySession(
 
             // Request existing buffer and screen state from tmux
             sessionScope.launch(Dispatchers.IO) {
-                delay(150)
+                delay(200)
                 synchronized(sshWriteLock) {
                     try {
-                        val cmd = "capture-pane -p -e -C -S -500\n"
+                        val target = assignedPaneId
+                        val targetArg = if (!target.isNullOrEmpty()) "-t $target " else ""
+                        val cmd = "capture-pane ${targetArg}-p -e -N -S -500\n"
                         sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
                         sshOut?.flush()
                     } catch (_: Exception) {}

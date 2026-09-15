@@ -168,7 +168,12 @@ class TmuxControlParser(
                     out.write(b)
                     i += 4
                 } else {
-                    out.write(c.code)
+                    if (c.code < 128) {
+                        out.write(c.code)
+                    } else {
+                        val charBytes = c.toString().toByteArray(Charsets.UTF_8)
+                        out.write(charBytes, 0, charBytes.size)
+                    }
                     i++
                 }
             }
