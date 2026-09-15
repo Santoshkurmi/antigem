@@ -61,23 +61,55 @@ fun LocalTerminalContent(
     val sessions by LocalTerminalManager.sessions.collectAsState()
     val activeSessionId by LocalTerminalManager.activeSessionId.collectAsState()
 
-    // Ensure at least one active primary session
+    val isSyncingTmux by LocalTerminalManager.isSyncingTmux.collectAsState()
+
+    var hasEverHadSessions by remember { mutableStateOf(false) }
+
+    // Ensure sessions are restored from remote tmux or created
     LaunchedEffect(Unit) {
         if (sessions.isEmpty()) {
-            LocalTerminalManager.getOrCreatePrimarySession(context)
+            LocalTerminalManager.getOrCreateOrRestoreSessions(context)
         }
     }
 
-    // Auto close terminal dialog when all sessions are closed
+    // Auto close terminal dialog ONLY when all sessions are closed by the user
     LaunchedEffect(sessions) {
-        if (sessions.isEmpty()) {
+        if (sessions.isNotEmpty()) {
+            hasEverHadSessions = true
+        } else if (hasEverHadSessions && !isSyncingTmux) {
             onClose()
         }
     }
 
     val activeSession = sessions.find { it.id == activeSessionId }
         ?: sessions.firstOrNull()
-        ?: remember { LocalTerminalManager.getOrCreatePrimarySession(context) }
+
+    if (activeSession == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF000000))
+                .statusBarsPadding(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                CircularProgressIndicator(
+                    color = ClaudeTerracotta,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(28.dp)
+                )
+                Text(
+                    text = "Restoring active terminal sessions...",
+                    color = Color.LightGray,
+                    fontSize = 13.sp
+                )
+            }
+        }
+        return
+    }
 
     val isExited by activeSession.isExited.collectAsState()
     val title by activeSession.title.collectAsState()
@@ -173,6 +205,16 @@ fun LocalTerminalContent(
                                 }
                             }
                         }
+                    }
+
+                    if (isSyncingTmux) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .padding(horizontal = 6.dp)
+                                .size(12.dp),
+                            color = ClaudeTerracotta,
+                            strokeWidth = 1.5.dp
+                        )
                     }
 
                     // Add session '+'

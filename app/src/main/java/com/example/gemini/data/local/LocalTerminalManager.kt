@@ -3,7 +3,7 @@ package com.example.gemini.data.local
 import android.content.Context
 import android.util.Log
 import com.example.gemini.data.preferences.AuthPreferences
-import com.jcraft.jsch.ChannelShell
+import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import com.termux.terminal.TerminalSession
@@ -18,6 +18,14 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.Properties
 
+const val UNIVERSAL_SSH_PATH = "export PATH=\"\$HOME/.local/bin:\$HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/data/data/com.termux/files/usr/bin:\$PATH\"; "
+
+data class TmuxWindowInfo(
+    val index: Int,
+    val name: String,
+    val path: String? = null
+)
+
 class LocalPtySession(
     val id: String,
     var name: String,
@@ -27,6 +35,8 @@ class LocalPtySession(
     val sshPort: Int = 8022,
     val sshUser: String = "root",
     val sshPass: String = "root",
+    val tmuxWindowIndex: Int? = null,
+    val tmuxSessionName: String = "antigem",
     initialWorkingDir: String? = null
 ) : TerminalSessionClient {
     private val TAG = "LocalPtySession-$id"
@@ -39,13 +49,13 @@ class LocalPtySession(
     private val _isExited = MutableStateFlow(false)
     val isExited: StateFlow<Boolean> = _isExited.asStateFlow()
 
-    private val _title = MutableStateFlow(if (isSsh) "ssh: $sshHost" else "gemini")
+    private val _title = MutableStateFlow(if (isSsh) "ssh: $sshHost [win ${tmuxWindowIndex ?: 1}]" else "gemini")
     val title: StateFlow<String> = _title.asStateFlow()
 
     private val sessionScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var jschSession: Session? = null
-    private var sshChannel: ChannelShell? = null
+    private var sshChannel: ChannelExec? = null
     private var sshIn: InputStream? = null
     private var sshOut: OutputStream? = null
 
@@ -185,7 +195,8 @@ class LocalPtySession(
 
     private suspend fun connectSsh() = withContext(Dispatchers.IO) {
         try {
-            writeToEmulator("[Connecting to SSH $sshUser@$sshHost:$sshPort...]\r\n")
+            val winIdx = tmuxWindowIndex ?: 1
+            writeToEmulator("[Connecting to SSH $sshUser@$sshHost:$sshPort (Window $winIdx)...]\r\n")
             val jsch = JSch()
             val session = jsch.getSession(sshUser, sshHost, sshPort)
             session.setPassword(sshPass)
@@ -199,7 +210,18 @@ class LocalPtySession(
             session.connect(10000)
             jschSession = session
 
-            val channel = session.openChannel("shell") as ChannelShell
+            // Universal Tmux Multi-Window command with standard PATH injection
+            val tmuxCmd = UNIVERSAL_SSH_PATH +
+                    "if command -v tmux >/dev/null 2>&1; then " +
+                    "tmux new-session -d -s $tmuxSessionName -n \"$winIdx\" 2>/dev/null; " +
+                    "tmux new-window -d -t $tmuxSessionName:$winIdx -n \"$winIdx\" 2>/dev/null; " +
+                    "tmux new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_$winIdx \\; select-window -t $winIdx; " +
+                    "else \${SHELL:-sh}; fi"
+
+            Log.d(TAG, "Connecting SSH shell channel with command: $tmuxCmd")
+
+            val channel = session.openChannel("exec") as ChannelExec
+            channel.setCommand(tmuxCmd)
             channel.setPty(true)
             channel.setPtyType("xterm-256color", ptyCols, ptyRows, ptyWidthPx, ptyHeightPx)
             channel.connect(10000)
@@ -213,7 +235,7 @@ class LocalPtySession(
             sshIn = channel.inputStream
             sshOut = channel.outputStream
 
-            writeToEmulator("\r[Connected to Termux SSH server!]\r\n\n")
+            writeToEmulator("\r[Connected to session '$tmuxSessionName' (win $winIdx)]\r\n\n")
 
             val buffer = ByteArray(4096)
             val inputStream = channel.inputStream
@@ -348,11 +370,96 @@ class LocalPtySession(
 }
 
 object LocalTerminalManager {
+    private const val TAG = "LocalTerminalManager"
+    private const val TMUX_SESSION_NAME = "antigem"
+
     private val _sessions = MutableStateFlow<List<LocalPtySession>>(emptyList())
     val sessions: StateFlow<List<LocalPtySession>> = _sessions.asStateFlow()
 
     private val _activeSessionId = MutableStateFlow<String?>(null)
     val activeSessionId: StateFlow<String?> = _activeSessionId.asStateFlow()
+
+    private val _isSyncingTmux = MutableStateFlow(false)
+    val isSyncingTmux: StateFlow<Boolean> = _isSyncingTmux.asStateFlow()
+
+    private val managerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    suspend fun getOrCreateOrRestoreSessions(context: Context): List<LocalPtySession> {
+        if (_sessions.value.isNotEmpty()) {
+            return _sessions.value
+        }
+
+        val authPrefs = AuthPreferences(context)
+        val useSsh = authPrefs.useSshTerminal.firstOrNull() ?: false
+        val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
+        val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
+        val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"
+        val pass = authPrefs.termuxSshPass.firstOrNull() ?: "root"
+
+        if (!useSsh) {
+            return withContext(Dispatchers.Main) {
+                val primary = LocalPtySession(
+                    id = "session-1",
+                    name = "Session 1",
+                    context = context.applicationContext,
+                    isSsh = false
+                )
+                _sessions.value = listOf(primary)
+                _activeSessionId.value = primary.id
+                listOf(primary)
+            }
+        }
+
+        _isSyncingTmux.value = true
+        val discoveredWindows = withContext(Dispatchers.IO) {
+            probeRemoteTmuxWindows(host, port, user, pass)
+        }
+        _isSyncingTmux.value = false
+
+        return withContext(Dispatchers.Main) {
+            if (discoveredWindows.isNotEmpty()) {
+                val restoredList = discoveredWindows.map { win ->
+                    val winTitle = if (win.name.isNotBlank() && win.name != win.index.toString()) {
+                        "SSH ${win.index}: ${win.name}"
+                    } else {
+                        "SSH ${win.index}"
+                    }
+                    LocalPtySession(
+                        id = "session-tmux-${win.index}",
+                        name = winTitle,
+                        context = context.applicationContext,
+                        isSsh = true,
+                        sshHost = host,
+                        sshPort = port,
+                        sshUser = user,
+                        sshPass = pass,
+                        tmuxWindowIndex = win.index,
+                        tmuxSessionName = TMUX_SESSION_NAME,
+                        initialWorkingDir = win.path
+                    )
+                }
+                _sessions.value = restoredList
+                _activeSessionId.value = restoredList.firstOrNull()?.id
+                restoredList
+            } else {
+                val initialSsh = LocalPtySession(
+                    id = "session-1",
+                    name = "SSH 1",
+                    context = context.applicationContext,
+                    isSsh = true,
+                    sshHost = host,
+                    sshPort = port,
+                    sshUser = user,
+                    sshPass = pass,
+                    tmuxWindowIndex = 1,
+                    tmuxSessionName = TMUX_SESSION_NAME
+                )
+                _sessions.value = listOf(initialSsh)
+                _activeSessionId.value = initialSsh.id
+                listOf(initialSsh)
+            }
+        }
+    }
 
     fun getOrCreatePrimarySession(context: Context): LocalPtySession {
         val existing = _sessions.value.find { it.id == _activeSessionId.value }
@@ -360,6 +467,11 @@ object LocalTerminalManager {
 
         if (existing != null) {
             return existing
+        }
+
+        // Trigger asynchronous full restore in background
+        managerScope.launch {
+            getOrCreateOrRestoreSessions(context)
         }
 
         val authPrefs = AuthPreferences(context)
@@ -387,15 +499,64 @@ object LocalTerminalManager {
             sshHost = host,
             sshPort = port,
             sshUser = user,
-            sshPass = pass
+            sshPass = pass,
+            tmuxWindowIndex = if (useSsh) 1 else null,
+            tmuxSessionName = TMUX_SESSION_NAME
         )
         _sessions.value = listOf(newSession)
         _activeSessionId.value = newSession.id
         return newSession
     }
 
+    private suspend fun probeRemoteTmuxWindows(host: String, port: Int, user: String, pass: String): List<TmuxWindowInfo> = withContext(Dispatchers.IO) {
+        try {
+            val jsch = JSch()
+            val session = jsch.getSession(user, host, port)
+            session.setPassword(pass)
+            val config = Properties().apply {
+                put("StrictHostKeyChecking", "no")
+                put("PreferredAuthentications", "password,keyboard-interactive,publickey")
+                put("ConnectTimeout", "4000")
+            }
+            session.setConfig(config)
+            session.connect(4000)
+
+            try {
+                val probeCmd = UNIVERSAL_SSH_PATH + "tmux list-windows -t $TMUX_SESSION_NAME -F \"#{window_index}|#{window_name}|#{pane_current_path}\" 2>/dev/null || echo \"\""
+                Log.d(TAG, "Probing remote tmux windows with: $probeCmd")
+                val channel = session.openChannel("exec") as ChannelExec
+                channel.setCommand(probeCmd)
+                val input = channel.inputStream
+                channel.connect(4000)
+                val output = input.bufferedReader().readText()
+                channel.disconnect()
+                Log.d(TAG, "Probe raw output:\n$output")
+
+                val list = mutableListOf<TmuxWindowInfo>()
+                output.lines().forEach { line ->
+                    val trimmed = line.trim()
+                    if (trimmed.isNotEmpty()) {
+                        val parts = trimmed.split("|")
+                        val idx = parts.getOrNull(0)?.toIntOrNull()
+                        if (idx != null) {
+                            val name = parts.getOrNull(1) ?: idx.toString()
+                            val path = parts.getOrNull(2)
+                            list.add(TmuxWindowInfo(index = idx, name = name, path = path))
+                        }
+                    }
+                }
+                Log.d(TAG, "Discovered active tmux windows: $list")
+                return@withContext list
+            } finally {
+                session.disconnect()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Probe tmux windows error (may not exist yet)", e)
+            return@withContext emptyList()
+        }
+    }
+
     fun createNewSession(context: Context, workingDir: String? = null): LocalPtySession {
-        val newIndex = _sessions.value.size + 1
         val authPrefs = AuthPreferences(context)
         var useSsh = false
         var host = "127.0.0.1"
@@ -413,15 +574,23 @@ object LocalTerminalManager {
             }
         } catch (_: Exception) {}
 
+        val nextWinIndex = if (useSsh) {
+            (_sessions.value.mapNotNull { it.tmuxWindowIndex }.maxOrNull() ?: _sessions.value.size) + 1
+        } else {
+            _sessions.value.size + 1
+        }
+
         val newSession = LocalPtySession(
-            id = "session-$newIndex-${System.currentTimeMillis() % 10000}",
-            name = if (useSsh) "SSH $newIndex" else "Session $newIndex",
+            id = "session-$nextWinIndex-${System.currentTimeMillis() % 10000}",
+            name = if (useSsh) "SSH $nextWinIndex" else "Session $nextWinIndex",
             context = context.applicationContext,
             isSsh = useSsh,
             sshHost = host,
             sshPort = port,
             sshUser = user,
             sshPass = pass,
+            tmuxWindowIndex = if (useSsh) nextWinIndex else null,
+            tmuxSessionName = TMUX_SESSION_NAME,
             initialWorkingDir = workingDir
         )
         _sessions.value = _sessions.value + newSession
@@ -436,18 +605,90 @@ object LocalTerminalManager {
     fun closeSession(id: String) {
         val current = _sessions.value
         val toClose = current.find { it.id == id }
-        toClose?.close()
+        val remaining = current.filterNot { it.id == id }
 
-        val updated = current.filterNot { it.id == id }
-        _sessions.value = updated
+        if (toClose != null && toClose.isSsh && toClose.tmuxWindowIndex != null) {
+            val winIdx = toClose.tmuxWindowIndex
+            val host = toClose.sshHost
+            val port = toClose.sshPort
+            val user = toClose.sshUser
+            val pass = toClose.sshPass
+
+            // Asynchronously kill remote tmux window and client session
+            managerScope.launch(Dispatchers.IO) {
+                try {
+                    val jsch = JSch()
+                    val session = jsch.getSession(user, host, port)
+                    session.setPassword(pass)
+                    session.setConfig(Properties().apply {
+                        put("StrictHostKeyChecking", "no")
+                        put("PreferredAuthentications", "password,keyboard-interactive,publickey")
+                        put("ConnectTimeout", "3000")
+                    })
+                    session.connect(3000)
+                    try {
+                        val channel = session.openChannel("exec") as ChannelExec
+                        val cmd = UNIVERSAL_SSH_PATH +
+                            if (remaining.isEmpty()) {
+                                "tmux kill-session -t $TMUX_SESSION_NAME 2>/dev/null"
+                            } else {
+                                "tmux kill-window -t $TMUX_SESSION_NAME:$winIdx 2>/dev/null; tmux kill-session -t ${TMUX_SESSION_NAME}_$winIdx 2>/dev/null"
+                            }
+                        Log.d(TAG, "Closing remote session with: $cmd")
+                        channel.setCommand(cmd)
+                        channel.connect(3000)
+                        channel.disconnect()
+                    } finally {
+                        session.disconnect()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error killing remote tmux window $winIdx", e)
+                }
+            }
+        }
+
+        toClose?.close()
+        _sessions.value = remaining
 
         if (_activeSessionId.value == id) {
-            _activeSessionId.value = updated.firstOrNull()?.id
+            _activeSessionId.value = remaining.firstOrNull()?.id
         }
     }
 
     fun closeAll() {
-        _sessions.value.forEach { it.close() }
+        val current = _sessions.value
+        val firstSsh = current.firstOrNull { it.isSsh }
+        if (firstSsh != null) {
+            val host = firstSsh.sshHost
+            val port = firstSsh.sshPort
+            val user = firstSsh.sshUser
+            val pass = firstSsh.sshPass
+            managerScope.launch(Dispatchers.IO) {
+                try {
+                    val jsch = JSch()
+                    val session = jsch.getSession(user, host, port)
+                    session.setPassword(pass)
+                    session.setConfig(Properties().apply {
+                        put("StrictHostKeyChecking", "no")
+                        put("PreferredAuthentications", "password,keyboard-interactive,publickey")
+                        put("ConnectTimeout", "3000")
+                    })
+                    session.connect(3000)
+                    try {
+                        val channel = session.openChannel("exec") as ChannelExec
+                        val cmd = UNIVERSAL_SSH_PATH + "tmux kill-session -t $TMUX_SESSION_NAME 2>/dev/null"
+                        Log.d(TAG, "Closing all remote sessions with: $cmd")
+                        channel.setCommand(cmd)
+                        channel.connect(3000)
+                        channel.disconnect()
+                    } finally {
+                        session.disconnect()
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        current.forEach { it.close() }
         _sessions.value = emptyList()
         _activeSessionId.value = null
     }
