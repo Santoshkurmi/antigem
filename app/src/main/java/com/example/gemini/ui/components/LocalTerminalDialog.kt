@@ -4,8 +4,15 @@ import android.content.Context
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -32,9 +40,20 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.data.local.LocalPtySession
 import com.example.gemini.data.local.LocalTerminalManager
 import com.example.gemini.theme.*
+import com.termux.terminal.KeyHandler
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
+
+enum class ModifierState {
+    OFF,
+    ONE_SHOT,
+    LOCKED
+}
 
 @Composable
 fun LocalTerminalDialog(
@@ -115,21 +134,31 @@ fun LocalTerminalContent(
     val title by activeSession.title.collectAsState()
 
     var terminalTextSize by remember { mutableIntStateOf(34) }
-    var isCtrlActive by remember { mutableStateOf(false) }
-    var isAltActive by remember { mutableStateOf(false) }
+    var ctrlState by remember { mutableStateOf(ModifierState.OFF) }
+    var altState by remember { mutableStateOf(ModifierState.OFF) }
 
     var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
 
     val sendKeyToTerminal: (Int, String) -> Unit = { keyCode, fallbackString ->
         val view = currentTerminalView
-        val consumed = if (keyCode != 0 && view != null) {
-            val down = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
-            val up = KeyEvent(KeyEvent.ACTION_UP, keyCode)
-            view.dispatchKeyEvent(down) && view.dispatchKeyEvent(up)
-        } else false
+        var handled = false
+        val ctrl = ctrlState != ModifierState.OFF
+        val alt = altState != ModifierState.OFF
+        if (view != null && keyCode != 0) {
+            var keyMod = 0
+            if (ctrl) keyMod = keyMod or KeyHandler.KEYMOD_CTRL
+            if (alt) keyMod = keyMod or KeyHandler.KEYMOD_ALT
+            handled = view.handleKeyCode(keyCode, keyMod)
+        }
 
-        if (!consumed) {
+        if (!handled) {
             activeSession.write(fallbackString)
+        }
+        if (ctrlState == ModifierState.ONE_SHOT) {
+            ctrlState = ModifierState.OFF
+        }
+        if (altState == ModifierState.ONE_SHOT) {
+            altState = ModifierState.OFF
         }
         view?.requestFocus()
     }
@@ -150,8 +179,9 @@ fun LocalTerminalContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF0F0F11))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .height(38.dp)
+                    .background(Color(0xFF141416))
+                    .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Status dot (Green when active, Red when exited)
@@ -234,7 +264,7 @@ fun LocalTerminalContent(
                 // Close / Hide Button
                 IconButton(
                     onClick = onClose,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
@@ -293,8 +323,20 @@ fun LocalTerminalContent(
                                     override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
                                     override fun onLongPress(event: MotionEvent): Boolean = false
                                     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean = false
-                                    override fun readControlKey(): Boolean = isCtrlActive
-                                    override fun readAltKey(): Boolean = isAltActive
+                                    override fun readControlKey(): Boolean {
+                                        val active = ctrlState != ModifierState.OFF
+                                        if (ctrlState == ModifierState.ONE_SHOT) {
+                                            ctrlState = ModifierState.OFF
+                                        }
+                                        return active
+                                    }
+                                    override fun readAltKey(): Boolean {
+                                        val active = altState != ModifierState.OFF
+                                        if (altState == ModifierState.ONE_SHOT) {
+                                            altState = ModifierState.OFF
+                                        }
+                                        return active
+                                    }
                                     override fun readShiftKey(): Boolean = false
                                     override fun readFnKey(): Boolean = false
                                     override fun onEmulatorSet() {}
@@ -361,12 +403,11 @@ fun LocalTerminalContent(
                 }
             }
 
-            // EXTRA-KEYS TOOLBAR (Seamless integrated buttons, bold text, transparent bg)
+            // EXTRA-KEYS TOOLBAR (Physical visual click feedback, auto-repeat for arrows, one-shot/lock modifiers)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.Transparent)
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                    .padding(horizontal = 4.dp, vertical = 3.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 // ROW 1: ESC | / | - | HOME | ↑ | END | PGUP
@@ -377,22 +418,22 @@ fun LocalTerminalContent(
                     TermuxKey(label = "ESC", modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_ESCAPE, "\u001B")
                     }
-                    TermuxKey(label = "/", modifier = Modifier.weight(1f)) {
+                    TermuxKey(label = "/", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_SLASH, "/")
                     }
-                    TermuxKey(label = "-", modifier = Modifier.weight(1f)) {
+                    TermuxKey(label = "-", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_MINUS, "-")
                     }
                     TermuxKey(label = "HOME", modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_HOME, "\u001B[H")
                     }
-                    TermuxKey(label = "↑", modifier = Modifier.weight(1f)) {
+                    TermuxKey(label = "↑", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_UP, "\u001B[A")
                     }
                     TermuxKey(label = "END", modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_END, "\u001B[F")
                     }
-                    TermuxKey(label = "PGUP", modifier = Modifier.weight(1f)) {
+                    TermuxKey(label = "PGUP", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_UP, "\u001B[5~")
                     }
                 }
@@ -402,33 +443,43 @@ fun LocalTerminalContent(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    TermuxKey(label = "↹", modifier = Modifier.weight(1f)) {
+                    TermuxKey(label = "↹", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_TAB, "\t")
                     }
                     TermuxKey(
                         label = "CTRL",
-                        isActive = isCtrlActive,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        isCtrlActive = !isCtrlActive
-                    }
+                        isActive = ctrlState != ModifierState.OFF,
+                        isLocked = ctrlState == ModifierState.LOCKED,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            ctrlState = if (ctrlState == ModifierState.OFF) ModifierState.ONE_SHOT else ModifierState.OFF
+                        },
+                        onLongClick = {
+                            ctrlState = if (ctrlState == ModifierState.LOCKED) ModifierState.OFF else ModifierState.LOCKED
+                        }
+                    )
                     TermuxKey(
                         label = "ALT",
-                        isActive = isAltActive,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        isAltActive = !isAltActive
-                    }
-                    TermuxKey(label = "←", modifier = Modifier.weight(1f)) {
+                        isActive = altState != ModifierState.OFF,
+                        isLocked = altState == ModifierState.LOCKED,
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            altState = if (altState == ModifierState.OFF) ModifierState.ONE_SHOT else ModifierState.OFF
+                        },
+                        onLongClick = {
+                            altState = if (altState == ModifierState.LOCKED) ModifierState.OFF else ModifierState.LOCKED
+                        }
+                    )
+                    TermuxKey(label = "←", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_LEFT, "\u001B[D")
                     }
-                    TermuxKey(label = "↓", modifier = Modifier.weight(1f)) {
+                    TermuxKey(label = "↓", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_DOWN, "\u001B[B")
                     }
-                    TermuxKey(label = "→", modifier = Modifier.weight(1f)) {
+                    TermuxKey(label = "→", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_RIGHT, "\u001B[C")
                     }
-                    TermuxKey(label = "PGDN", modifier = Modifier.weight(1f)) {
+                    TermuxKey(label = "PGDN", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_DOWN, "\u001B[6~")
                     }
                 }
@@ -441,29 +492,111 @@ fun LocalTerminalContent(
 private fun TermuxKey(
     label: String,
     isActive: Boolean = false,
+    isLocked: Boolean = false,
     modifier: Modifier = Modifier,
+    enableRepeat: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val scope = rememberCoroutineScope()
+    var isPressed by remember { mutableStateOf(false) }
+
+    val keyModifier = if (enableRepeat) {
+        modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                down.consume()
+                isPressed = true
+                currentOnClick()
+
+                val repeatJob = scope.launch {
+                    delay(350)
+                    while (true) {
+                        currentOnClick()
+                        delay(55)
+                    }
+                }
+
+                try {
+                    waitForUpOrCancellation()
+                } finally {
+                    repeatJob.cancel()
+                    isPressed = false
+                }
+            }
+        }
+    } else {
+        modifier.pointerInput(Unit) {
+            detectTapGestures(
+                onPress = {
+                    isPressed = true
+                    tryAwaitRelease()
+                    isPressed = false
+                },
+                onTap = {
+                    currentOnClick()
+                },
+                onLongPress = {
+                    currentOnLongClick?.invoke()
+                }
+            )
+        }
+    }
+
+    val backgroundColor = when {
+        isPressed -> Color(0xFF383844)
+        isLocked -> ClaudeTerracotta.copy(alpha = 0.5f)
+        isActive -> ClaudeTerracotta.copy(alpha = 0.25f)
+        else -> Color.Transparent
+    }
+
+    val textColor = when {
+        isPressed -> Color.White
+        isLocked -> Color.White
+        isActive -> ClaudeTerracotta
+        else -> Color(0xFFE2E2E6)
+    }
+
+    val border = when {
+        isLocked -> BorderStroke(1.dp, ClaudeTerracotta)
+        isActive -> BorderStroke(0.5.dp, ClaudeTerracotta.copy(alpha = 0.5f))
+        else -> null
+    }
+
     Surface(
-        modifier = modifier
+        modifier = keyModifier
             .height(34.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .clickable { onClick() },
-        color = if (isActive) ClaudeTerracotta.copy(alpha = 0.35f) else Color.Transparent,
-        shape = RoundedCornerShape(4.dp)
+            .clip(RoundedCornerShape(5.dp)),
+        color = backgroundColor,
+        border = border,
+        shape = RoundedCornerShape(5.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = label,
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                color = if (isActive) ClaudeTerracotta else Color(0xFFEEEEEE)
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = if (isActive || isLocked || isPressed) FontWeight.Bold else FontWeight.SemiBold,
+                    color = textColor
+                )
+                if (isLocked) {
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(4.dp)
+                            .background(Color.White, CircleShape)
+                    )
+                }
+            }
         }
     }
 }
-

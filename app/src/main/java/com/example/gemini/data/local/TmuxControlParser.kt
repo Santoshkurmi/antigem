@@ -181,12 +181,13 @@ class TmuxControlParser(
         }
 
         /**
-         * Encodes a ByteArray into hex format for `send-keys -H`.
+         * Encodes a ByteArray into space-separated hex bytes format for `send-keys -H` (e.g. "1b 5b 41").
          */
         fun encodeToHex(bytes: ByteArray, offset: Int = 0, count: Int = bytes.size): String {
             if (count <= 0) return ""
-            val sb = StringBuilder(count * 2)
+            val sb = StringBuilder(count * 3)
             for (i in offset until (offset + count)) {
+                if (sb.isNotEmpty()) sb.append(' ')
                 val b = bytes[i].toInt() and 0xFF
                 val hex = Integer.toHexString(b)
                 if (hex.length == 1) sb.append('0')
