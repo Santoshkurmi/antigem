@@ -323,6 +323,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _globalSecuritySettings = MutableStateFlow<AgyHubClient.GlobalUserSettings?>(null)
     val globalSecuritySettings: StateFlow<AgyHubClient.GlobalUserSettings?> = _globalSecuritySettings.asStateFlow()
 
+    private val _globalSettingsError = MutableStateFlow<String?>(null)
+    val globalSettingsError: StateFlow<String?> = _globalSettingsError.asStateFlow()
+
     private val _isGlobalSettingsLoading = MutableStateFlow(false)
     val isGlobalSettingsLoading: StateFlow<Boolean> = _isGlobalSettingsLoading.asStateFlow()
 
@@ -336,11 +339,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isGlobalSettingsLoading.value = true
             _isProjectsLoading.value = true
+            _globalSettingsError.value = null
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
 
             val globalRes = agyHubClient.fetchGlobalUserSettings(hubUrl)
             if (globalRes.isSuccess) {
                 _globalSecuritySettings.value = globalRes.getOrNull()
+                _globalSettingsError.value = null
+            } else {
+                val err = globalRes.exceptionOrNull()?.message ?: "Failed to connect to AGY Hub"
+                _globalSettingsError.value = err
+                _globalSecuritySettings.value = null
             }
             _isGlobalSettingsLoading.value = false
 
@@ -349,6 +358,108 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _projectsList.value = projRes.getOrNull() ?: emptyList()
             }
             _isProjectsLoading.value = false
+        }
+    }
+
+    fun addGlobalPermissionGrant(action: String, pattern: String, decision: String) {
+        viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
+            val curGrants = cur.globalPermissionGrants
+
+            val cleanAction = action.trim().lowercase()
+            val cleanPattern = pattern.trim()
+            if (cleanPattern.isBlank()) return@launch
+            val ruleStr = "${cleanAction}($cleanPattern)"
+
+            val newAllow = curGrants.allow.filterNot { it.equals(ruleStr, ignoreCase = true) }.toMutableList()
+            val newDeny = curGrants.deny.filterNot { it.equals(ruleStr, ignoreCase = true) }.toMutableList()
+            val newAsk = curGrants.ask.filterNot { it.equals(ruleStr, ignoreCase = true) }.toMutableList()
+
+            when (decision.uppercase()) {
+                "ALLOW" -> newAllow.add(ruleStr)
+                "DENY" -> newDeny.add(ruleStr)
+                "ASK" -> newAsk.add(ruleStr)
+                else -> newAllow.add(ruleStr)
+            }
+
+            val updatedGrants = com.example.gemini.data.remote.AgyHubClient.GlobalPermissionGrants(
+                allow = newAllow,
+                deny = newDeny,
+                ask = newAsk
+            )
+            _globalSecuritySettings.value = cur.copy(globalPermissionGrants = updatedGrants)
+
+            val res = agyHubClient.writeGlobalUserSettings(
+                globalPermissionGrants = updatedGrants,
+                hubUrl = hubUrl
+            )
+            if (res.isFailure) {
+                _conversationError.value = "Failed to save permission grant: ${res.exceptionOrNull()?.message}"
+                loadSecurityAndProjectSettings()
+            }
+        }
+    }
+
+    fun removeGlobalPermissionGrant(rawRule: String) {
+        viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val cur = _globalSecuritySettings.value ?: return@launch
+            val curGrants = cur.globalPermissionGrants
+
+            val newAllow = curGrants.allow.filterNot { it.equals(rawRule, ignoreCase = true) }
+            val newDeny = curGrants.deny.filterNot { it.equals(rawRule, ignoreCase = true) }
+            val newAsk = curGrants.ask.filterNot { it.equals(rawRule, ignoreCase = true) }
+
+            val updatedGrants = com.example.gemini.data.remote.AgyHubClient.GlobalPermissionGrants(
+                allow = newAllow,
+                deny = newDeny,
+                ask = newAsk
+            )
+            _globalSecuritySettings.value = cur.copy(globalPermissionGrants = updatedGrants)
+
+            val res = agyHubClient.writeGlobalUserSettings(
+                globalPermissionGrants = updatedGrants,
+                hubUrl = hubUrl
+            )
+            if (res.isFailure) {
+                _conversationError.value = "Failed to remove permission grant: ${res.exceptionOrNull()?.message}"
+                loadSecurityAndProjectSettings()
+            }
+        }
+    }
+
+    fun changeGlobalPermissionGrantDecision(rawRule: String, newDecision: String) {
+        viewModelScope.launch {
+            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val cur = _globalSecuritySettings.value ?: return@launch
+            val curGrants = cur.globalPermissionGrants
+
+            val newAllow = curGrants.allow.filterNot { it.equals(rawRule, ignoreCase = true) }.toMutableList()
+            val newDeny = curGrants.deny.filterNot { it.equals(rawRule, ignoreCase = true) }.toMutableList()
+            val newAsk = curGrants.ask.filterNot { it.equals(rawRule, ignoreCase = true) }.toMutableList()
+
+            when (newDecision.uppercase()) {
+                "ALLOW" -> newAllow.add(rawRule)
+                "DENY" -> newDeny.add(rawRule)
+                "ASK" -> newAsk.add(rawRule)
+            }
+
+            val updatedGrants = com.example.gemini.data.remote.AgyHubClient.GlobalPermissionGrants(
+                allow = newAllow,
+                deny = newDeny,
+                ask = newAsk
+            )
+            _globalSecuritySettings.value = cur.copy(globalPermissionGrants = updatedGrants)
+
+            val res = agyHubClient.writeGlobalUserSettings(
+                globalPermissionGrants = updatedGrants,
+                hubUrl = hubUrl
+            )
+            if (res.isFailure) {
+                _conversationError.value = "Failed to update permission grant: ${res.exceptionOrNull()?.message}"
+                loadSecurityAndProjectSettings()
+            }
         }
     }
 

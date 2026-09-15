@@ -127,6 +127,7 @@ fun SettingsDialog(
     groupChatsByWorkspace: Boolean = false,
     onToggleGroupChatsByWorkspace: (Boolean) -> Unit = {},
     globalSecuritySettings: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings? = null,
+    globalSettingsError: String? = null,
     isGlobalSettingsLoading: Boolean = false,
     projectsList: List<com.example.gemini.data.remote.AgyHubClient.ProjectItem> = emptyList(),
     isProjectsLoading: Boolean = false,
@@ -142,6 +143,9 @@ fun SettingsDialog(
     onSetCommandSandboxEnabled: (Boolean) -> Unit = {},
     onSetRequireApprovalForFileEdits: (Boolean) -> Unit = {},
     onSetDefaultApprovalScope: (String) -> Unit = {},
+    onAddPermissionRule: (action: String, pattern: String, decision: String) -> Unit = { _, _, _ -> },
+    onRemovePermissionRule: (rawRule: String) -> Unit = {},
+    onChangePermissionRuleDecision: (rawRule: String, newDecision: String) -> Unit = { _, _ -> },
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -328,6 +332,7 @@ fun SettingsDialog(
                         requireApprovalForFileEdits = requireApprovalForFileEdits,
                         defaultApprovalScope = defaultApprovalScope,
                         globalSecuritySettings = globalSecuritySettings,
+                        globalSettingsError = globalSettingsError,
                         isGlobalSettingsLoading = isGlobalSettingsLoading,
                         projectsList = projectsList,
                         isProjectsLoading = isProjectsLoading,
@@ -344,7 +349,10 @@ fun SettingsDialog(
                         onSetCommandAutoExecutionPolicy = onSetCommandAutoExecutionPolicy,
                         onSetCommandSandboxEnabled = onSetCommandSandboxEnabled,
                         onSetRequireApprovalForFileEdits = onSetRequireApprovalForFileEdits,
-                        onSetDefaultApprovalScope = onSetDefaultApprovalScope
+                        onSetDefaultApprovalScope = onSetDefaultApprovalScope,
+                        onAddPermissionRule = onAddPermissionRule,
+                        onRemovePermissionRule = onRemovePermissionRule,
+                        onChangePermissionRuleDecision = onChangePermissionRuleDecision
                     )
                 }
             }
@@ -2731,6 +2739,7 @@ private fun CommandsSubScreen(
     requireApprovalForFileEdits: Boolean,
     defaultApprovalScope: String,
     globalSecuritySettings: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings?,
+    globalSettingsError: String? = null,
     isGlobalSettingsLoading: Boolean,
     projectsList: List<com.example.gemini.data.remote.AgyHubClient.ProjectItem>,
     isProjectsLoading: Boolean,
@@ -2747,9 +2756,131 @@ private fun CommandsSubScreen(
     onSetCommandAutoExecutionPolicy: (String) -> Unit,
     onSetCommandSandboxEnabled: (Boolean) -> Unit,
     onSetRequireApprovalForFileEdits: (Boolean) -> Unit,
-    onSetDefaultApprovalScope: (String) -> Unit
+    onSetDefaultApprovalScope: (String) -> Unit,
+    onAddPermissionRule: (action: String, pattern: String, decision: String) -> Unit,
+    onRemovePermissionRule: (rawRule: String) -> Unit,
+    onChangePermissionRuleDecision: (rawRule: String, newDecision: String) -> Unit
 ) {
-    val activeAutoExec = globalSecuritySettings?.autoExecutionPolicy ?: commandAutoExecutionPolicy
+    if (globalSecuritySettings == null) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Global Security & Policies",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Live daemon settings applied across all workspaces via Jetbox",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(
+                    onClick = onRefreshSecurityAndProjects,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    if (isGlobalSettingsLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = ClaudeTerracotta
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh",
+                            tint = ClaudeTerracotta,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            if (isGlobalSettingsLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 56.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(32.dp),
+                            strokeWidth = 2.5.dp,
+                            color = ClaudeTerracotta
+                        )
+                        Text(
+                            text = "Connecting to AGY Hub & loading permissions...",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudOff,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Text(
+                            text = "Unable to Load Permissions from AGY Hub",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Text(
+                            text = "Could not retrieve daemon permissions and security state:\n${globalSettingsError ?: "RPC connection failed"}\n\nMake sure AGY is running (e.g. agy --hub) and check your Server settings.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            lineHeight = 17.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = onRefreshSecurityAndProjects,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Retry Connection", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    val activeAutoExec = globalSecuritySettings.autoExecutionPolicy
     val activeFileAccess = globalSecuritySettings?.nonWorkspaceFileAccessPolicy ?: "AGENT_SETTING_POLICY_ASK"
     val activeArtifactReview = globalSecuritySettings?.artifactReviewMode ?: "ARTIFACT_REVIEW_MODE_ALWAYS"
     val activeSandbox = globalSecuritySettings?.enableTerminalSandbox ?: commandSandboxEnabled
@@ -3229,7 +3360,235 @@ private fun CommandsSubScreen(
         Spacer(modifier = Modifier.height(6.dp))
 
         // ==========================================
-        // 4. PROJECT OVERRIDES & INHERITANCE (NEW!)
+        // 4. GRANULAR PERMISSION GRANTS (globalPermissionGrants)
+        // ==========================================
+        val grants = globalSecuritySettings.globalPermissionGrants
+        val allRules = remember(grants) {
+            val list = mutableListOf<PermissionGrantRule>()
+            grants.allow.forEach { list.add(PermissionGrantRule.parse(it, "ALLOW")) }
+            grants.deny.forEach { list.add(PermissionGrantRule.parse(it, "DENY")) }
+            grants.ask.forEach { list.add(PermissionGrantRule.parse(it, "ASK")) }
+            list
+        }
+
+        var selectedFilter by remember { mutableStateOf("ALL") }
+        var showAddRuleDialog by remember { mutableStateOf(false) }
+
+        val filteredRules = remember(allRules, selectedFilter) {
+            if (selectedFilter == "ALL") allRules
+            else allRules.filter { it.action.equals(selectedFilter, ignoreCase = true) }
+        }
+
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Granular Permission Grants",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Explicit Allow, Deny, and Ask rules for commands, MCP tools, and file paths (globalPermissionGrants).",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = { showAddRuleDialog = true },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Add Rule", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Action Filter Chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val filters = listOf(
+                    "ALL" to "All (${allRules.size})",
+                    "command" to "⌨️ Command (${allRules.count { it.action.equals("command", ignoreCase = true) }})",
+                    "mcp" to "🔌 MCP (${allRules.count { it.action.equals("mcp", ignoreCase = true) }})",
+                    "read_file" to "📖 Read (${allRules.count { it.action.equals("read_file", ignoreCase = true) }})",
+                    "write_file" to "✏️ Write (${allRules.count { it.action.equals("write_file", ignoreCase = true) }})"
+                )
+
+                filters.forEach { (key, label) ->
+                    val isSel = selectedFilter == key
+                    FilterChip(
+                        selected = isSel,
+                        onClick = { selectedFilter = key },
+                        label = { Text(label, fontSize = 11.sp, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal) }
+                    )
+                }
+            }
+        }
+
+        if (filteredRules.isEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = if (allRules.isEmpty()) "No custom permission rules configured." else "No rules match the selected filter.",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Tools and file accesses will use your global presets above. Click \"Add Rule\" to whitelist, blacklist, or prompt for specific commands, MCP tools, or file paths.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                filteredRules.forEach { rule ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
+                        border = cardBorder
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                    ) {
+                                        Text(
+                                            text = "${rule.actionIcon} ${rule.actionLabel}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = rule.pattern,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { onRemovePermissionRule(rule.rawString) },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DeleteOutline,
+                                        contentDescription = "Delete Rule",
+                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Decision segmented selector: Allow | Deny | Ask
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                val decisions = listOf(
+                                    Triple("ALLOW", "✅ Allow", QuotaGreen),
+                                    Triple("DENY", "🚫 Deny", MaterialTheme.colorScheme.error),
+                                    Triple("ASK", "❓ Ask", Color(0xFFF59E0B))
+                                )
+
+                                decisions.forEach { (decKey, decLabel, decColor) ->
+                                    val isSelected = rule.decision.equals(decKey, ignoreCase = true)
+                                    Surface(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                if (!isSelected) {
+                                                    onChangePermissionRuleDecision(rule.rawString, decKey)
+                                                }
+                                            },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) decColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                        border = BorderStroke(
+                                            if (isSelected) 1.5.dp else 0.5.dp,
+                                            if (isSelected) decColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                                        )
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.padding(vertical = 6.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = decLabel,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) decColor else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showAddRuleDialog) {
+            AddPermissionRuleDialog(
+                onDismiss = { showAddRuleDialog = false },
+                onAdd = { act, pat, dec ->
+                    onAddPermissionRule(act, pat, dec)
+                    showAddRuleDialog = false
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // ==========================================
+        // 5. PROJECT OVERRIDES & INHERITANCE (NEW!)
         // ==========================================
         Column {
             Row(
@@ -3495,6 +3854,231 @@ private fun CommandsSubScreen(
             }
         }
     }
+}
+
+private data class PermissionGrantRule(
+    val action: String,
+    val pattern: String,
+    val decision: String,
+    val rawString: String
+) {
+    val actionLabel: String
+        get() = when (action.lowercase()) {
+            "command" -> "Command"
+            "mcp" -> "MCP Tool"
+            "read_file" -> "Read File"
+            "write_file" -> "Write File"
+            else -> action
+        }
+
+    val actionIcon: String
+        get() = when (action.lowercase()) {
+            "command" -> "⌨️"
+            "mcp" -> "🔌"
+            "read_file" -> "📖"
+            "write_file" -> "✏️"
+            else -> "⚙️"
+        }
+
+    companion object {
+        fun parse(raw: String, decision: String): PermissionGrantRule {
+            val parenStart = raw.indexOf('(')
+            val parenEnd = raw.lastIndexOf(')')
+            if (parenStart != -1 && parenEnd > parenStart) {
+                val action = raw.substring(0, parenStart).trim()
+                val pattern = raw.substring(parenStart + 1, parenEnd).trim()
+                return PermissionGrantRule(action, pattern, decision.uppercase(), raw)
+            }
+            return PermissionGrantRule("command", raw, decision.uppercase(), raw)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddPermissionRuleDialog(
+    onDismiss: () -> Unit,
+    onAdd: (action: String, pattern: String, decision: String) -> Unit
+) {
+    var selectedAction by remember { mutableStateOf("command") }
+    var patternText by remember { mutableStateOf("") }
+    var selectedDecision by remember { mutableStateOf("ALLOW") }
+
+    val quickTemplates = remember(selectedAction) {
+        when (selectedAction) {
+            "command" -> listOf("*", "npm*", "git*", "python3*", "cargo*", "rm*")
+            "mcp" -> listOf("*", "local_tools/*", "filesystem/*", "test_memory/*")
+            "read_file" -> listOf("*", "/home/cat/.gemini", "/opt/*", "/tmp/*")
+            "write_file" -> listOf("*", "/home/cat/extra/*", "/tmp/*")
+            else -> listOf("*")
+        }
+    }
+
+    val actionOptions = listOf(
+        Triple("command", "⌨️ Command", "Terminal bash command pattern"),
+        Triple("mcp", "🔌 MCP Tool", "MCP server or tool pattern"),
+        Triple("read_file", "📖 Read File", "Filesystem directory or file read path"),
+        Triple("write_file", "✏️ Write File", "Filesystem directory or file write path")
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = "Add Permission Grant Rule", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Step 1: Select Action
+                Text("1. Operation Type", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    actionOptions.forEach { (key, label, desc) ->
+                        val isSel = selectedAction == key
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    selectedAction = key
+                                    if (patternText.isBlank() || patternText == "*") {
+                                        patternText = if (key == "mcp" || key == "command") "*" else ""
+                                    }
+                                },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSel) ClaudeTerracotta.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            border = BorderStroke(
+                                if (isSel) 1.5.dp else 1.dp,
+                                if (isSel) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSel,
+                                    onClick = { selectedAction = key },
+                                    colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(label, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                                    Text(desc, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Step 2: Target Pattern
+                Text("2. Target Pattern", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                OutlinedTextField(
+                    value = patternText,
+                    onValueChange = { patternText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text(
+                            when (selectedAction) {
+                                "command" -> "e.g. npm*, git*, *"
+                                "mcp" -> "e.g. *, local_tools/*"
+                                "read_file" -> "e.g. /home/cat/.gemini, *"
+                                "write_file" -> "e.g. /home/cat/extra/*, *"
+                                else -> "e.g. *"
+                            },
+                            fontSize = 12.sp
+                        )
+                    },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                // Quick Templates
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    quickTemplates.forEach { tpl ->
+                        SuggestionChip(
+                            onClick = { patternText = tpl },
+                            label = { Text(tpl, fontSize = 10.5.sp, fontFamily = FontFamily.Monospace) }
+                        )
+                    }
+                }
+
+                // Step 3: Decision
+                Text("3. Policy Decision", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val decs = listOf(
+                        Triple("ALLOW", "✅ Allow", QuotaGreen),
+                        Triple("DENY", "🚫 Deny", MaterialTheme.colorScheme.error),
+                        Triple("ASK", "❓ Ask", Color(0xFFF59E0B))
+                    )
+                    decs.forEach { (key, label, col) ->
+                        val isSel = selectedDecision == key
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { selectedDecision = key },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSel) col.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            border = BorderStroke(
+                                if (isSel) 1.5.dp else 0.5.dp,
+                                if (isSel) col else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                            )
+                        ) {
+                            Box(modifier = Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                Text(label, fontSize = 11.5.sp, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium, color = if (isSel) col else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+                }
+
+                // Preview
+                if (patternText.isNotBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Rule: ${selectedAction}(${patternText.trim()}) → $selectedDecision",
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onAdd(selectedAction, patternText.trim(), selectedDecision) },
+                enabled = patternText.isNotBlank(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+            ) {
+                Text("Save Rule", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 

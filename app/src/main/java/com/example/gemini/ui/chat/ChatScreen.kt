@@ -183,6 +183,7 @@ fun ChatScreen(
     val requireApprovalForFileEdits by viewModel.requireApprovalForFileEdits.collectAsState(initial = false)
     val defaultApprovalScope by viewModel.defaultApprovalScope.collectAsState(initial = "PERMISSION_SCOPE_ONCE")
     val globalSecuritySettings by viewModel.globalSecuritySettings.collectAsState()
+    val globalSettingsError by viewModel.globalSettingsError.collectAsState()
     val isGlobalSettingsLoading by viewModel.isGlobalSettingsLoading.collectAsState()
     val projectsList by viewModel.projectsList.collectAsState()
     val isProjectsLoading by viewModel.isProjectsLoading.collectAsState()
@@ -1556,6 +1557,7 @@ fun ChatScreen(
             requireApprovalForFileEdits = requireApprovalForFileEdits,
             defaultApprovalScope = defaultApprovalScope,
             globalSecuritySettings = globalSecuritySettings,
+            globalSettingsError = globalSettingsError,
             isGlobalSettingsLoading = isGlobalSettingsLoading,
             projectsList = projectsList,
             isProjectsLoading = isProjectsLoading,
@@ -1571,6 +1573,9 @@ fun ChatScreen(
             onSetCommandSandboxEnabled = { viewModel.setCommandSandboxEnabled(it) },
             onSetRequireApprovalForFileEdits = { viewModel.setRequireApprovalForFileEdits(it) },
             onSetDefaultApprovalScope = { viewModel.setDefaultApprovalScope(it) },
+            onAddPermissionRule = { action, pattern, decision -> viewModel.addGlobalPermissionGrant(action, pattern, decision) },
+            onRemovePermissionRule = { rawRule -> viewModel.removeGlobalPermissionGrant(rawRule) },
+            onChangePermissionRuleDecision = { rawRule, newDecision -> viewModel.changeGlobalPermissionGrantDecision(rawRule, newDecision) },
             groupChatsByWorkspace = groupChatsByWorkspace,
             onToggleGroupChatsByWorkspace = { viewModel.setGroupChatsByWorkspace(it) },
             onDismiss = { showSettingsDialog = false }

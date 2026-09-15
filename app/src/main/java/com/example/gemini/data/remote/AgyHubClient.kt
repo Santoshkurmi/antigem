@@ -1358,11 +1358,18 @@ data class AgyMediaItem(
         return executeGrpcWebCall("ResolveOutstandingSteps", payload, hubUrl).map { }
     }
 
+    data class GlobalPermissionGrants(
+        val allow: List<String> = emptyList(),
+        val deny: List<String> = emptyList(),
+        val ask: List<String> = emptyList()
+    )
+
     data class GlobalUserSettings(
         val autoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_OFF",
         val nonWorkspaceFileAccessPolicy: String = "AGENT_SETTING_POLICY_ASK",
         val artifactReviewMode: String = "ARTIFACT_REVIEW_MODE_ALWAYS",
-        val enableTerminalSandbox: Boolean = false
+        val enableTerminalSandbox: Boolean = false,
+        val globalPermissionGrants: GlobalPermissionGrants = GlobalPermissionGrants()
     )
 
     /**
@@ -1420,11 +1427,30 @@ data class AgyMediaItem(
                 val artifactReview = userSettings?.optString("artifactReviewMode", "ARTIFACT_REVIEW_MODE_ALWAYS") ?: "ARTIFACT_REVIEW_MODE_ALWAYS"
                 val sandbox = userSettings?.optBoolean("enableTerminalSandbox", false) ?: false
 
+                val grantsObj = userSettings?.optJSONObject("globalPermissionGrants")
+                val allowList = mutableListOf<String>()
+                grantsObj?.optJSONArray("allow")?.let { arr ->
+                    for (i in 0 until arr.length()) allowList.add(arr.getString(i))
+                }
+                val denyList = mutableListOf<String>()
+                grantsObj?.optJSONArray("deny")?.let { arr ->
+                    for (i in 0 until arr.length()) denyList.add(arr.getString(i))
+                }
+                val askList = mutableListOf<String>()
+                grantsObj?.optJSONArray("ask")?.let { arr ->
+                    for (i in 0 until arr.length()) askList.add(arr.getString(i))
+                }
+
                 Result.success(GlobalUserSettings(
                     autoExecutionPolicy = autoExec,
                     nonWorkspaceFileAccessPolicy = fileAccess,
                     artifactReviewMode = artifactReview,
-                    enableTerminalSandbox = sandbox
+                    enableTerminalSandbox = sandbox,
+                    globalPermissionGrants = GlobalPermissionGrants(
+                        allow = allowList,
+                        deny = denyList,
+                        ask = askList
+                    )
                 ))
             }
         } catch (e: Exception) {
@@ -1441,6 +1467,7 @@ data class AgyMediaItem(
         nonWorkspaceFileAccessPolicy: String? = null,
         artifactReviewMode: String? = null,
         enableTerminalSandbox: Boolean? = null,
+        globalPermissionGrants: GlobalPermissionGrants? = null,
         hubUrl: String = DEFAULT_HUB_URL
     ): Result<Unit> {
         val payload = JSONObject().apply {
@@ -1450,6 +1477,13 @@ data class AgyMediaItem(
                     nonWorkspaceFileAccessPolicy?.let { put("nonWorkspaceFileAccessPolicy", it) }
                     artifactReviewMode?.let { put("artifactReviewMode", it) }
                     enableTerminalSandbox?.let { put("enableTerminalSandbox", it) }
+                    globalPermissionGrants?.let { grants ->
+                        put("globalPermissionGrants", JSONObject().apply {
+                            put("allow", org.json.JSONArray(grants.allow))
+                            put("deny", org.json.JSONArray(grants.deny))
+                            put("ask", org.json.JSONArray(grants.ask))
+                        })
+                    }
                 })
             })
         }.toString()
