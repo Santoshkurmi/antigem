@@ -23,7 +23,8 @@ const val UNIVERSAL_SSH_PATH = "export PATH=\"\$HOME/.local/bin:\$HOME/bin:/usr/
 data class TmuxWindowInfo(
     val index: Int,
     val name: String,
-    val path: String? = null
+    val path: String? = null,
+    val paneId: String? = null
 )
 
 class LocalPtySession(
@@ -37,9 +38,12 @@ class LocalPtySession(
     val sshPass: String = "root",
     val tmuxWindowIndex: Int? = null,
     val tmuxSessionName: String = "antigem",
-    initialWorkingDir: String? = null
+    initialWorkingDir: String? = null,
+    initialPaneId: String? = null
 ) : TerminalSessionClient {
     private val TAG = "LocalPtySession-$id"
+
+    var assignedPaneId: String? = initialPaneId
 
     var workingDirectory: String = initialWorkingDir ?: LocalEnvironmentManager.getHomeDir(context).absolutePath
         private set
@@ -138,13 +142,77 @@ class LocalPtySession(
         }
     }
 
+    private var isInitialHistoryRestored = false
+
+    private val tmuxParser = TmuxControlParser(
+        onPaneOutput = { paneId, data ->
+            if (assignedPaneId == null) {
+                assignedPaneId = paneId
+            }
+            if (paneId == assignedPaneId && data.isNotEmpty()) {
+                val str = String(data, Charsets.UTF_8).replace("\n", "\\n").replace("\r", "\\r")
+                Log.d("TerminalIO", "PANE -> EMULATOR ($id / $paneId): \"$str\"")
+                sessionScope.launch(Dispatchers.Main) {
+                    terminalSession.emulator?.append(data, data.size)
+                    onTextChangedListener?.invoke()
+                }
+            }
+        },
+        onRawFallbackOutput = { data, offset, length ->
+            val chunk = data.copyOfRange(offset, offset + length)
+            Log.d("TerminalIO", "FALLBACK -> EMULATOR: len=${chunk.size}")
+            sessionScope.launch(Dispatchers.Main) {
+                terminalSession.emulator?.append(chunk, chunk.size)
+                onTextChangedListener?.invoke()
+            }
+        },
+        onCommandResponse = { cmdNum, data, isError ->
+            Log.d("TerminalIO", "CMD_RESP: num=$cmdNum, err=$isError, len=${data.size}, initialRestored=$isInitialHistoryRestored")
+            if (!isError && data.isNotEmpty()) {
+                val str = String(data, Charsets.UTF_8)
+                if (str.contains("ANTIGEM_PANE_ID:")) {
+                    val extracted = str.lines().find { it.contains("ANTIGEM_PANE_ID:") }?.substringAfter("ANTIGEM_PANE_ID:")?.trim()
+                    if (!extracted.isNullOrEmpty()) {
+                        assignedPaneId = extracted
+                        Log.d(TAG, "Bound session $id to pane $assignedPaneId")
+                    }
+                } else if (!isInitialHistoryRestored) {
+                    isInitialHistoryRestored = true
+                    sessionScope.launch(Dispatchers.Main) {
+                        terminalSession.emulator?.append(data, data.size)
+                        onTextChangedListener?.invoke()
+                    }
+                }
+            }
+        },
+        onUnhandledEvent = { event ->
+            if (event.contains("ANTIGEM_PANE_ID:")) {
+                val extracted = event.substringAfter("ANTIGEM_PANE_ID:").trim()
+                if (extracted.isNotEmpty()) {
+                    assignedPaneId = extracted
+                    Log.d(TAG, "Bound session $id to pane $assignedPaneId from unhandled event")
+                }
+            }
+            Log.d(TAG, "Tmux -CC event [$id]: $event")
+        }
+    )
+
     fun sendRawToSsh(bytes: ByteArray, offset: Int = 0, count: Int = bytes.size) {
         if (count <= 0) return
         val copy = bytes.copyOfRange(offset, offset + count)
+        val repr = String(copy, Charsets.UTF_8).replace("\n", "\\n").replace("\r", "\\r")
+        Log.d("TerminalIO", "APP -> SSH ($id): \"$repr\" (hex=${TmuxControlParser.encodeToHex(copy)})")
         sessionScope.launch(Dispatchers.IO) {
             synchronized(sshWriteLock) {
                 try {
-                    sshOut?.write(copy)
+                    if (tmuxParser.isControlModeActive) {
+                        val hex = TmuxControlParser.encodeToHex(copy)
+                        val target = assignedPaneId ?: (tmuxWindowIndex?.let { "$tmuxSessionName:$it" } ?: "")
+                        val cmd = if (target.isNotEmpty()) "send-keys -t $target -H $hex\n" else "send-keys -H $hex\n"
+                        sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
+                    } else {
+                        sshOut?.write(copy)
+                    }
                     sshOut?.flush()
                 } catch (e: Exception) {
                     Log.e(TAG, "SSH write error", e)
@@ -196,7 +264,6 @@ class LocalPtySession(
     private suspend fun connectSsh() = withContext(Dispatchers.IO) {
         try {
             val winIdx = tmuxWindowIndex ?: 1
-            writeToEmulator("[Connecting to SSH $sshUser@$sshHost:$sshPort (Window $winIdx)...]\r\n")
             val jsch = JSch()
             val session = jsch.getSession(sshUser, sshHost, sshPort)
             session.setPassword(sshPass)
@@ -210,13 +277,15 @@ class LocalPtySession(
             session.connect(10000)
             jschSession = session
 
-            // Universal Tmux Multi-Window command with standard PATH injection & mouse support
+            // Universal Tmux -CC (Control Mode) multi-window command
             val tmuxCmd = UNIVERSAL_SSH_PATH +
+                    "stty -echo 2>/dev/null; " +
                     "if command -v tmux >/dev/null 2>&1; then " +
+                    "tmux set-option -g allow-rename off 2>/dev/null; " +
+                    "tmux set-option -g set-titles off 2>/dev/null; " +
                     "tmux new-session -d -s $tmuxSessionName -n \"$winIdx\" 2>/dev/null; " +
-                    "tmux set-option -g -t $tmuxSessionName mouse on 2>/dev/null; " +
                     "tmux new-window -d -t $tmuxSessionName:$winIdx -n \"$winIdx\" 2>/dev/null; " +
-                    "tmux new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_$winIdx \\; set-option -g mouse on \\; select-window -t $winIdx; " +
+                    "tmux -CC new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_$winIdx \\; select-window -t $winIdx \\; display-message -p \"ANTIGEM_PANE_ID:#{pane_id}\"; " +
                     "else \${SHELL:-sh}; fi"
 
             Log.d(TAG, "Connecting SSH shell channel with command: $tmuxCmd")
@@ -236,7 +305,17 @@ class LocalPtySession(
             sshIn = channel.inputStream
             sshOut = channel.outputStream
 
-            writeToEmulator("\r[Connected to session '$tmuxSessionName' (win $winIdx)]\r\n\n")
+            // Request existing buffer and screen state from tmux
+            sessionScope.launch(Dispatchers.IO) {
+                delay(150)
+                synchronized(sshWriteLock) {
+                    try {
+                        val cmd = "capture-pane -p -e -C -S -500\n"
+                        sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
+                        sshOut?.flush()
+                    } catch (_: Exception) {}
+                }
+            }
 
             val buffer = ByteArray(4096)
             val inputStream = channel.inputStream
@@ -244,11 +323,7 @@ class LocalPtySession(
                 val count = inputStream.read(buffer)
                 if (count == -1) break
                 if (count > 0) {
-                    val chunk = buffer.copyOf(count)
-                    withContext(Dispatchers.Main) {
-                        terminalSession.emulator?.append(chunk, chunk.size)
-                        onTextChangedListener?.invoke()
-                    }
+                    tmuxParser.feedData(buffer, 0, count)
                 }
             }
         } catch (e: Exception) {
@@ -350,8 +425,15 @@ class LocalPtySession(
         ptyWidthPx = widthPx
         ptyHeightPx = heightPx
         if (isSsh) {
-            sessionScope.launch {
+            sessionScope.launch(Dispatchers.IO) {
                 try {
+                    if (tmuxParser.isControlModeActive) {
+                        val cmd = "refresh-client -C ${cols},${rows}\n"
+                        synchronized(sshWriteLock) {
+                            sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
+                            sshOut?.flush()
+                        }
+                    }
                     sshChannel?.setPtySize(cols, rows, widthPx, heightPx)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to update SSH PTY size", e)
@@ -436,7 +518,8 @@ object LocalTerminalManager {
                         sshPass = pass,
                         tmuxWindowIndex = win.index,
                         tmuxSessionName = TMUX_SESSION_NAME,
-                        initialWorkingDir = win.path
+                        initialWorkingDir = win.path,
+                        initialPaneId = win.paneId
                     )
                 }
                 _sessions.value = restoredList
@@ -523,7 +606,7 @@ object LocalTerminalManager {
             session.connect(4000)
 
             try {
-                val probeCmd = UNIVERSAL_SSH_PATH + "tmux list-windows -t $TMUX_SESSION_NAME -F \"#{window_index}|#{window_name}|#{pane_current_path}\" 2>/dev/null || echo \"\""
+                val probeCmd = UNIVERSAL_SSH_PATH + "tmux list-windows -t $TMUX_SESSION_NAME -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\" 2>/dev/null || echo \"\""
                 Log.d(TAG, "Probing remote tmux windows with: $probeCmd")
                 val channel = session.openChannel("exec") as ChannelExec
                 channel.setCommand(probeCmd)
@@ -542,7 +625,8 @@ object LocalTerminalManager {
                         if (idx != null) {
                             val name = parts.getOrNull(1) ?: idx.toString()
                             val path = parts.getOrNull(2)
-                            list.add(TmuxWindowInfo(index = idx, name = name, path = path))
+                            val paneId = parts.getOrNull(3)
+                            list.add(TmuxWindowInfo(index = idx, name = name, path = path, paneId = paneId))
                         }
                     }
                 }

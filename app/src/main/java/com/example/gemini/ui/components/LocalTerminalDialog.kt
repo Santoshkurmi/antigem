@@ -298,13 +298,13 @@ fun LocalTerminalContent(
                                     override fun readShiftKey(): Boolean = false
                                     override fun readFnKey(): Boolean = false
                                     override fun onEmulatorSet() {}
-                                    override fun logError(tag: String, message: String) {}
-                                    override fun logWarn(tag: String, message: String) {}
-                                    override fun logInfo(tag: String, message: String) {}
-                                    override fun logDebug(tag: String, message: String) {}
-                                    override fun logVerbose(tag: String, message: String) {}
-                                    override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) {}
-                                    override fun logStackTrace(tag: String, e: Exception) {}
+                                    override fun logError(tag: String, message: String) { android.util.Log.e("TerminalViewKey", message) }
+                                    override fun logWarn(tag: String, message: String) { android.util.Log.w("TerminalViewKey", message) }
+                                    override fun logInfo(tag: String, message: String) { android.util.Log.i("TerminalViewKey", message) }
+                                    override fun logDebug(tag: String, message: String) { android.util.Log.d("TerminalViewKey", message) }
+                                    override fun logVerbose(tag: String, message: String) { android.util.Log.v("TerminalViewKey", message) }
+                                    override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) { android.util.Log.e("TerminalViewKey", message, e) }
+                                    override fun logStackTrace(tag: String, e: Exception) { android.util.Log.e("TerminalViewKey", "stacktrace", e) }
                                 })
                                 setTerminalInputListener(object : TerminalView.TerminalInputListener {
                                     override fun onTerminalInput(text: String) {
