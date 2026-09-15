@@ -264,6 +264,17 @@ fun LocalTerminalContent(
                                     override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) {}
                                     override fun logStackTrace(tag: String, e: Exception) {}
                                 })
+                                setTerminalInputListener(object : TerminalView.TerminalInputListener {
+                                    override fun onTerminalInput(text: String) {
+                                        activeSession.write(text)
+                                    }
+                                    override fun onTerminalInputCodePoint(prependEscape: Boolean, codePoint: Int) {
+                                        activeSession.writeCodePoint(prependEscape, codePoint)
+                                    }
+                                })
+                                setTerminalSizeListener { cols, rows, widthPx, heightPx ->
+                                    activeSession.updateSize(cols, rows, widthPx, heightPx)
+                                }
                                 attachSession(activeSession.terminalSession)
                                 activeSession.onTextChangedListener = {
                                     post {
@@ -292,6 +303,9 @@ fun LocalTerminalContent(
                                     activeSession.writeCodePoint(prependEscape, codePoint)
                                 }
                             })
+                            tv.setTerminalSizeListener { cols, rows, widthPx, heightPx ->
+                                activeSession.updateSize(cols, rows, widthPx, heightPx)
+                            }
                             activeSession.onTextChangedListener = {
                                 tv.post {
                                     tv.onScreenUpdated()

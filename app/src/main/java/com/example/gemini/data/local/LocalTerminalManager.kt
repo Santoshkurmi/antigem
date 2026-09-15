@@ -49,16 +49,37 @@ class LocalPtySession(
     private var sshIn: InputStream? = null
     private var sshOut: OutputStream? = null
 
+    var ptyCols: Int = 80
+        private set
+    var ptyRows: Int = 24
+        private set
+    var ptyWidthPx: Int = 800
+        private set
+    var ptyHeightPx: Int = 480
+        private set
+
+    private val sshWriteLock = Any()
+
     init {
         if (isSsh) {
+            val dummyBinary = when {
+                File("/system/bin/sleep").exists() -> "/system/bin/sleep"
+                File("/system/bin/cat").exists() -> "/system/bin/cat"
+                else -> "/system/bin/sh"
+            }
+            val dummyArgs = if (dummyBinary == "/system/bin/sleep") arrayOf("8640000") else emptyArray()
+            val safeCwd = context.filesDir.absolutePath
+
             terminalSession = TerminalSession(
-                "/system/bin/sh",
-                "/sdcard",
-                emptyArray(),
+                dummyBinary,
+                safeCwd,
+                dummyArgs,
                 arrayOf("TERM=xterm-256color"),
                 3000,
                 this
             )
+
+            hookEmulatorForSsh(terminalSession)
 
             sessionScope.launch {
                 connectSsh()
@@ -107,6 +128,61 @@ class LocalPtySession(
         }
     }
 
+    fun sendRawToSsh(bytes: ByteArray, offset: Int = 0, count: Int = bytes.size) {
+        if (count <= 0) return
+        val copy = bytes.copyOfRange(offset, offset + count)
+        sessionScope.launch(Dispatchers.IO) {
+            synchronized(sshWriteLock) {
+                try {
+                    sshOut?.write(copy)
+                    sshOut?.flush()
+                } catch (e: Exception) {
+                    Log.e(TAG, "SSH write error", e)
+                }
+            }
+        }
+    }
+
+    private fun hookEmulatorForSsh(session: TerminalSession) {
+        try {
+            if (session.emulator == null) {
+                session.initializeEmulator(ptyCols, ptyRows)
+            }
+            val emulator = session.emulator ?: return
+            val sessionField = emulator.javaClass.getDeclaredField("mSession")
+            sessionField.isAccessible = true
+            val sshOutput = object : com.termux.terminal.TerminalOutput() {
+                override fun write(data: ByteArray, offset: Int, count: Int) {
+                    sendRawToSsh(data, offset, count)
+                }
+
+                override fun titleChanged(p0: String?, p1: String?) {
+                    session.titleChanged(p0, p1)
+                }
+
+                override fun onCopyTextToClipboard(p0: String?) {
+                    session.onCopyTextToClipboard(p0)
+                }
+
+                override fun onPasteTextFromClipboard() {
+                    session.onPasteTextFromClipboard()
+                }
+
+                override fun onBell() {
+                    session.onBell()
+                }
+
+                override fun onColorsChanged() {
+                    session.onColorsChanged()
+                }
+            }
+            sessionField.set(emulator, sshOutput)
+            Log.d(TAG, "Successfully hooked emulator mSession for SSH output redirection")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to hook emulator for SSH output redirection", e)
+        }
+    }
+
     private suspend fun connectSsh() = withContext(Dispatchers.IO) {
         try {
             writeToEmulator("[Connecting to SSH $sshUser@$sshHost:$sshPort...]\r\n")
@@ -125,9 +201,14 @@ class LocalPtySession(
 
             val channel = session.openChannel("shell") as ChannelShell
             channel.setPty(true)
-            channel.setPtyType("xterm-256color", 80, 24, 800, 480)
+            channel.setPtyType("xterm-256color", ptyCols, ptyRows, ptyWidthPx, ptyHeightPx)
             channel.connect(10000)
             sshChannel = channel
+
+            // Ensure PTY dimensions are accurately applied post connect
+            try {
+                channel.setPtySize(ptyCols, ptyRows, ptyWidthPx, ptyHeightPx)
+            } catch (_: Exception) {}
 
             sshIn = channel.inputStream
             sshOut = channel.outputStream
@@ -140,8 +221,11 @@ class LocalPtySession(
                 val count = inputStream.read(buffer)
                 if (count == -1) break
                 if (count > 0) {
-                    terminalSession.emulator.append(buffer, count)
-                    onTextChangedListener?.invoke()
+                    val chunk = buffer.copyOf(count)
+                    withContext(Dispatchers.Main) {
+                        terminalSession.emulator?.append(chunk, chunk.size)
+                        onTextChangedListener?.invoke()
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -155,8 +239,10 @@ class LocalPtySession(
     private fun writeToEmulator(text: String) {
         try {
             val bytes = text.toByteArray(Charsets.UTF_8)
-            terminalSession.emulator.append(bytes, bytes.size)
-            onTextChangedListener?.invoke()
+            sessionScope.launch(Dispatchers.Main) {
+                terminalSession.emulator?.append(bytes, bytes.size)
+                onTextChangedListener?.invoke()
+            }
         } catch (_: Exception) {}
     }
 
@@ -196,14 +282,8 @@ class LocalPtySession(
 
     fun write(text: String) {
         if (isSsh) {
-            sessionScope.launch {
-                try {
-                    sshOut?.write(text.toByteArray(Charsets.UTF_8))
-                    sshOut?.flush()
-                } catch (e: Exception) {
-                    Log.e(TAG, "SSH write error", e)
-                }
-            }
+            val bytes = text.toByteArray(Charsets.UTF_8)
+            sendRawToSsh(bytes, 0, bytes.size)
         } else {
             terminalSession.write(text)
         }
@@ -211,33 +291,49 @@ class LocalPtySession(
 
     fun writeCodePoint(prependEscape: Boolean, codePoint: Int) {
         if (isSsh) {
-            sessionScope.launch {
-                try {
-                    val out = sshOut ?: return@launch
-                    if (prependEscape) {
-                        out.write(27)
-                    }
-                    if (codePoint <= 127) {
-                        out.write(codePoint)
-                    } else {
-                        val chars = Character.toChars(codePoint)
-                        out.write(String(chars).toByteArray(Charsets.UTF_8))
-                    }
-                    out.flush()
-                } catch (e: Exception) {
-                    Log.e(TAG, "SSH code point error", e)
+            val bytes = if (prependEscape) {
+                if (codePoint <= 127) {
+                    byteArrayOf(27, codePoint.toByte())
+                } else {
+                    val chars = Character.toChars(codePoint)
+                    val charBytes = String(chars).toByteArray(Charsets.UTF_8)
+                    byteArrayOf(27) + charBytes
+                }
+            } else {
+                if (codePoint <= 127) {
+                    byteArrayOf(codePoint.toByte())
+                } else {
+                    val chars = Character.toChars(codePoint)
+                    String(chars).toByteArray(Charsets.UTF_8)
                 }
             }
+            sendRawToSsh(bytes, 0, bytes.size)
         } else {
             terminalSession.writeCodePoint(prependEscape, codePoint)
         }
     }
 
-    fun updateSize(cols: Int, rows: Int) {
+    fun writeBytes(bytes: ByteArray, offset: Int = 0, count: Int = bytes.size) {
         if (isSsh) {
-            try {
-                sshChannel?.setPtySize(cols, rows, cols * 10, rows * 20)
-            } catch (_: Exception) {}
+            sendRawToSsh(bytes, offset, count)
+        } else {
+            terminalSession.write(bytes, offset, count)
+        }
+    }
+
+    fun updateSize(cols: Int, rows: Int, widthPx: Int = cols * 10, heightPx: Int = rows * 20) {
+        ptyCols = cols
+        ptyRows = rows
+        ptyWidthPx = widthPx
+        ptyHeightPx = heightPx
+        if (isSsh) {
+            sessionScope.launch {
+                try {
+                    sshChannel?.setPtySize(cols, rows, widthPx, heightPx)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to update SSH PTY size", e)
+                }
+            }
         }
     }
 

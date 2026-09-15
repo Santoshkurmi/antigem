@@ -305,6 +305,18 @@ public final class TerminalView extends View {
         this.mInputListener = listener;
     }
 
+    public interface TerminalSizeListener {
+        void onTerminalSizeChanged(int cols, int rows, int widthPx, int heightPx);
+    }
+    private TerminalSizeListener mSizeListener;
+
+    public void setTerminalSizeListener(TerminalSizeListener listener) {
+        this.mSizeListener = listener;
+        if (mEmulator != null && listener != null) {
+            listener.onTerminalSizeChanged(mEmulator.mColumns, mEmulator.mRows, getWidth(), getHeight());
+        }
+    }
+
     public void sendInputToSession(String text) {
         if (mInputListener != null) {
             mInputListener.onTerminalInput(text);
@@ -341,6 +353,10 @@ public final class TerminalView extends View {
         mCombiningAccent = 0;
 
         updateSize();
+
+        if (mSizeListener != null && mEmulator != null) {
+            mSizeListener.onTerminalSizeChanged(mEmulator.mColumns, mEmulator.mRows, getWidth(), getHeight());
+        }
 
         // Wait with enabling the scrollbar until we have a terminal to get scroll position from.
         setVerticalScrollBarEnabled(true);
@@ -1059,6 +1075,10 @@ public final class TerminalView extends View {
             mTermSession.updateSize(newColumns, newRows);
             mEmulator = mTermSession.getEmulator();
             mClient.onEmulatorSet();
+
+            if (mSizeListener != null) {
+                mSizeListener.onTerminalSizeChanged(newColumns, newRows, viewWidth, viewHeight);
+            }
 
             // Update mTerminalCursorBlinkerRunnable inner class mEmulator on session change
             if (mTerminalCursorBlinkerRunnable != null)
