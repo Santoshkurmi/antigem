@@ -379,13 +379,6 @@ fun ChatScreen(
             }
     }
 
-    // Secondary auto-alignment: when keyboard is open and empty state has overflow, scroll to show workspace card & recent chips
-    LaunchedEffect(imeInsets.getBottom(density) > 0, emptyScrollState.maxValue) {
-        val isKeyboardOpen = imeInsets.getBottom(density) > 0
-        if (isKeyboardOpen && feedItems.isEmpty() && emptyScrollState.maxValue > 0) {
-            emptyScrollState.animateScrollTo(emptyScrollState.maxValue)
-        }
-    }
 
 
     // Decoupled asynchronous scroll observer - zero recomposition during pixel scroll
@@ -891,16 +884,12 @@ fun ChatScreen(
                     } else if (messages.isEmpty()) {
                         // Empty state with scrollable container and centered project selection
                         BoxWithConstraints(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(emptyScrollState)
                             modifier = Modifier.fillMaxSize()
                         ) {
                             val minHeight = maxHeight
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .defaultMinSize(minHeight = maxHeight)
                                     .verticalScroll(emptyScrollState)
                                     .heightIn(min = minHeight)
                                     .padding(horizontal = 24.dp, vertical = 16.dp),
