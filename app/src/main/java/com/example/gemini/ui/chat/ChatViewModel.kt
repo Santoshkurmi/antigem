@@ -1041,6 +1041,28 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             authPrefs.isDevModeEnabled.collect { _isDevModeEnabled.value = it }
         }
 
+        // Keep active conversation title and summary live-synced when conversation list updates
+        viewModelScope.launch {
+            _conversations.collect { convList ->
+                val activeId = _currentConversation.value?.id ?: return@collect
+                val activeInList = convList.find { it.id == activeId } ?: return@collect
+                val curr = _currentConversation.value ?: return@collect
+                val newTitle = if (activeInList.title.isNotBlank() &&
+                    activeInList.title != "Conversation" &&
+                    activeInList.title != "New Chat") {
+                    activeInList.title
+                } else {
+                    curr.title
+                }
+                if (newTitle != curr.title) {
+                    _currentConversation.value = curr.copy(
+                        title = newTitle,
+                        summary = activeInList.summary ?: curr.summary
+                    )
+                }
+            }
+        }
+
         viewModelScope.launch {
             refreshQuotas()
             loadMcpServers()
@@ -1139,6 +1161,34 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         }
 
                         _conversations.value = currentMap.values.sortedByDescending { it.updatedAt }
+
+                        // Automatically synchronize active conversation title and metadata from daemon
+                        if (activeId != null) {
+                            val activeInMap = currentMap[activeId]
+                            val curr = _currentConversation.value
+                            if (activeInMap != null && curr != null && curr.id == activeId) {
+                                val newTitle = if (activeInMap.title.isNotBlank() &&
+                                    activeInMap.title != "Conversation" &&
+                                    activeInMap.title != "New Chat") {
+                                    activeInMap.title
+                                } else {
+                                    curr.title
+                                }
+                                val newWorkspaceUri = curr.workspaceUri.ifBlank { activeInMap.workspaceUri }
+                                if (newTitle != curr.title ||
+                                    newWorkspaceUri != curr.workspaceUri ||
+                                    curr.isRunning != activeInMap.isRunning ||
+                                    (activeInMap.stepCount > curr.stepCount)) {
+                                    _currentConversation.value = curr.copy(
+                                        title = newTitle,
+                                        summary = activeInMap.summary ?: curr.summary,
+                                        workspaceUri = newWorkspaceUri,
+                                        stepCount = if (activeInMap.stepCount > 0) activeInMap.stepCount else curr.stepCount,
+                                        isRunning = activeInMap.isRunning
+                                    )
+                                }
+                            }
+                        }
                         _isServerOnline.value = true
                         _conversationError.value = null
                         _isLoadingConversation.value = false

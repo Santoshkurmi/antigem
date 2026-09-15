@@ -684,9 +684,20 @@ fun ChatScreen(
             topBar = {
                 TopAppBar(
                     title = {
+                        val displayedChatTitle = remember(currentConv?.title, conversations, currentConv?.id) {
+                            val fromList = conversations.firstOrNull { it.id == currentConv?.id }
+                            val listTitle = fromList?.title?.takeIf {
+                                it.isNotBlank() && it != "New Chat" && it != "Conversation"
+                            }
+                            val activeTitle = currentConv?.title?.takeIf {
+                                it.isNotBlank() && it != "New Chat" && it != "Conversation"
+                            }
+                            listTitle ?: activeTitle ?: currentConv?.title?.takeIf { it.isNotBlank() } ?: "Antigravity Chat"
+                        }
+
                         Column {
                             Text(
-                                text = currentConv?.title?.takeIf { it.isNotBlank() } ?: "Antigravity Chat",
+                                text = displayedChatTitle,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface,
