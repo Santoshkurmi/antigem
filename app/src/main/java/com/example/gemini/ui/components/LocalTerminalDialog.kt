@@ -416,35 +416,15 @@ fun LocalTerminalContent(
                         dragOffsetY += dragAmount.y
                     }
                 },
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(20.dp),
             color = Color(0xF2181824),
             border = BorderStroke(1.dp, Color(0x38FFFFFF)),
             shadowElevation = 8.dp
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                modifier = Modifier.padding(start = 8.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Drag Handle Grip
-                Icon(
-                    imageVector = Icons.Default.DragHandle,
-                    contentDescription = "Drag to move",
-                    tint = Color(0x66FFFFFF),
-                    modifier = Modifier.size(16.dp)
-                )
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                // Status dot (Green when active, Red when exited)
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(if (isExited) Color(0xFFEF5350) else QuotaGreen)
-                )
-
-                Spacer(modifier = Modifier.width(6.dp))
-
                 // Active Tab Name & Switcher Dropdown Anchor
                 Box {
                     Row(
