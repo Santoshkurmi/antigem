@@ -3,8 +3,10 @@ package com.example.gemini.data.local
 import java.io.ByteArrayOutputStream
 
 /**
- * High-performance parser and decoder for tmux Control Mode (-CC).
- * Decodes octal-escaped pane output streams and processes tmux control events.
+ * Robust, high-performance binary parser and decoder for tmux Control Mode (-CC).
+ * Operates at the raw byte stream level to avoid UTF-8 boundary corruption,
+ * decodes octal-escaped pane output streams into exact binary byte arrays,
+ * and processes tmux control events without lossy heuristics.
  */
 class TmuxControlParser(
     private val onPaneOutput: (paneId: String, data: ByteArray) -> Unit,
@@ -16,20 +18,26 @@ class TmuxControlParser(
 ) {
     private var inCommandBlock = false
     private var currentCmdNumber: Long = -1
-    private val commandOutputBuffer = StringBuilder()
-    private val lineBuffer = StringBuilder()
+    private val commandOutputBytes = ByteArrayOutputStream()
+    private val rawLineBuffer = ByteArrayOutputStream(4096)
 
     var isControlModeActive: Boolean = false
         private set
 
     /**
      * Feeds incoming raw stream data from SSH channel into the parser.
+     * Operates strictly on bytes so multi-byte UTF-8 sequences and octal escapes
+     * crossing chunk boundaries are never truncated or corrupted into \uFFFD.
      */
     fun feedData(data: ByteArray, offset: Int = 0, length: Int = data.size) {
         if (!isControlModeActive) {
-            // Check for tmux -CC startup signature
-            val preview = String(data, offset, minOf(length, 128), Charsets.UTF_8)
-            if (preview.contains("\u001bP1000p") || preview.startsWith("%begin") || preview.startsWith("%output") || preview.startsWith("%window-add")) {
+            // Check for tmux -CC startup signature in initial preview bytes
+            val previewLen = minOf(length, 128)
+            val preview = String(data, offset, previewLen, Charsets.ISO_8859_1)
+            if (preview.contains("\u001bP1000p") || preview.startsWith("%begin") ||
+                preview.startsWith("%output") || preview.startsWith("%window-add") ||
+                preview.startsWith("%layout-change")
+            ) {
                 isControlModeActive = true
             } else if (!preview.contains("%") && !preview.contains("\u001bP1000p")) {
                 // Raw non-tmux shell stream fallback
@@ -38,146 +46,193 @@ class TmuxControlParser(
             }
         }
 
-        val text = String(data, offset, length, Charsets.UTF_8)
-        for (i in text.indices) {
-            val c = text[i]
-            if (c == '\n') {
-                val line = lineBuffer.toString().trimEnd('\r')
-                lineBuffer.setLength(0)
-                processLine(line)
+        val end = offset + length
+        for (i in offset until end) {
+            val b = data[i]
+            if (b == 0x0A.toByte()) { // '\n'
+                var lineBytes = rawLineBuffer.toByteArray()
+                rawLineBuffer.reset()
+                // Strip trailing '\r' (0x0D) if present
+                if (lineBytes.isNotEmpty() && lineBytes[lineBytes.size - 1] == 0x0D.toByte()) {
+                    lineBytes = lineBytes.copyOf(lineBytes.size - 1)
+                }
+                processRawLine(lineBytes)
             } else {
-                lineBuffer.append(c)
+                rawLineBuffer.write(b.toInt() and 0xFF)
             }
         }
     }
 
     /**
-     * Process a single line received from tmux -CC.
+     * Processes a single raw binary line received from tmux -CC.
      */
-    fun processLine(line: String) {
+    private fun processRawLine(line: ByteArray) {
         if (line.isEmpty()) return
 
+        var startIndex = 0
+        var len = line.size
+
         // Strip initial \033P1000p DCS preamble if present on the first line
-        val cleanLine = if (line.startsWith("\u001bP1000p")) {
+        if (len >= 7 &&
+            line[0] == 0x1B.toByte() &&
+            line[1] == 'P'.code.toByte() &&
+            line[2] == '1'.code.toByte() &&
+            line[3] == '0'.code.toByte() &&
+            line[4] == '0'.code.toByte() &&
+            line[5] == '0'.code.toByte() &&
+            line[6] == 'p'.code.toByte()
+        ) {
             isControlModeActive = true
-            line.substring(7).trim()
-        } else {
-            line
+            startIndex = 7
+            len -= 7
         }
-        if (cleanLine.isEmpty()) return
 
-        android.util.Log.d("TmuxParserDebug", "RAW_LINE: $cleanLine")
+        if (len <= 0) return
 
-        if (cleanLine.startsWith("%")) {
+        val firstByte = line[startIndex]
+
+        if (firstByte == '%'.code.toByte()) {
             isControlModeActive = true
-            val firstSpace = cleanLine.indexOf(' ')
-            val tag = if (firstSpace != -1) cleanLine.substring(0, firstSpace) else cleanLine
-            val rest = if (firstSpace != -1) cleanLine.substring(firstSpace + 1).trim() else ""
+
+            // Find first space (tag boundary)
+            var firstSpace = -1
+            for (i in startIndex until (startIndex + len)) {
+                if (line[i] == ' '.code.toByte()) {
+                    firstSpace = i
+                    break
+                }
+            }
+
+            val tag = if (firstSpace != -1) {
+                String(line, startIndex, firstSpace - startIndex, Charsets.US_ASCII)
+            } else {
+                String(line, startIndex, len, Charsets.US_ASCII)
+            }
+
+            val restOffset = if (firstSpace != -1) firstSpace + 1 else startIndex + len
+            val restLen = if (firstSpace != -1) (startIndex + len) - (firstSpace + 1) else 0
 
             when (tag) {
                 "%output" -> {
-                    val secondSpace = rest.indexOf(' ')
+                    // Syntax: %output %<pane_id> <octal_data>
+                    var secondSpace = -1
+                    for (i in restOffset until (restOffset + restLen)) {
+                        if (line[i] == ' '.code.toByte()) {
+                            secondSpace = i
+                            break
+                        }
+                    }
+
                     if (secondSpace != -1) {
-                        val paneId = rest.substring(0, secondSpace)
-                        val escapedData = rest.substring(secondSpace + 1)
-                        val decodedBytes = decodeOctal(escapedData)
-                        val cleanBytes = sanitizePaneOutput(decodedBytes)
-                        android.util.Log.d("TmuxParserDebug", "PANE_OUTPUT ($paneId): ${String(cleanBytes, Charsets.UTF_8).replace("\n", "\\n").replace("\r", "\\r")}")
+                        val paneId = String(line, restOffset, secondSpace - restOffset, Charsets.US_ASCII)
+                        val dataOffset = secondSpace + 1
+                        val dataLen = (restOffset + restLen) - dataOffset
+                        val decodedBytes = decodeOctalBytes(line, dataOffset, dataLen)
+                        val cleanBytes = stripScreenTitle(decodedBytes)
                         onPaneOutput(paneId, cleanBytes)
-                    } else if (rest.isNotEmpty()) {
-                        val paneId = rest
+                    } else if (restLen > 0) {
+                        val paneId = String(line, restOffset, restLen, Charsets.US_ASCII)
                         onPaneOutput(paneId, ByteArray(0))
                     }
                     return
                 }
                 "%begin" -> {
                     inCommandBlock = true
-                    val parts = rest.split(" ")
+                    val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.US_ASCII) else ""
+                    val parts = restStr.split(" ")
                     currentCmdNumber = parts.getOrNull(1)?.toLongOrNull() ?: -1
-                    commandOutputBuffer.setLength(0)
-                    android.util.Log.d("TmuxParserDebug", "BEGIN_CMD: $currentCmdNumber")
+                    commandOutputBytes.reset()
                     return
                 }
                 "%end" -> {
                     inCommandBlock = false
-                    val parts = rest.split(" ")
+                    val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.US_ASCII) else ""
+                    val parts = restStr.split(" ")
                     val cmdNum = parts.getOrNull(1)?.toLongOrNull() ?: currentCmdNumber
-                    val rawText = commandOutputBuffer.toString().trimEnd('\n')
-                    val decoded = if (rawText.isNotEmpty()) decodeOctal(rawText.replace("\n", "\r\n")) else ByteArray(0)
-                    android.util.Log.d("TmuxParserDebug", "END_CMD: $cmdNum, len=${decoded.size}, text=${rawText.take(100)}")
-                    onCommandResponse?.invoke(cmdNum, decoded, false)
-                    commandOutputBuffer.setLength(0)
+                    val rawBytes = commandOutputBytes.toByteArray()
+                    val output = decodeOctalBytes(rawBytes, 0, rawBytes.size)
+                    commandOutputBytes.reset()
                     currentCmdNumber = -1
+                    onCommandResponse?.invoke(cmdNum, output, false)
                     return
                 }
                 "%error" -> {
                     inCommandBlock = false
-                    val parts = rest.split(" ")
+                    val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.US_ASCII) else ""
+                    val parts = restStr.split(" ")
                     val cmdNum = parts.getOrNull(1)?.toLongOrNull() ?: currentCmdNumber
-                    val rawText = commandOutputBuffer.toString().trimEnd('\n')
-                    val decoded = if (rawText.isNotEmpty()) decodeOctal(rawText.replace("\n", "\r\n")) else ByteArray(0)
-                    android.util.Log.d("TmuxParserDebug", "ERROR_CMD: $cmdNum, text=${rawText.take(100)}")
-                    onCommandResponse?.invoke(cmdNum, decoded, true)
-                    commandOutputBuffer.setLength(0)
+                    val rawBytes = commandOutputBytes.toByteArray()
+                    val output = decodeOctalBytes(rawBytes, 0, rawBytes.size)
+                    commandOutputBytes.reset()
                     currentCmdNumber = -1
+                    onCommandResponse?.invoke(cmdNum, output, true)
                     return
                 }
                 "%window-add" -> {
-                    onWindowAdd?.invoke(rest)
+                    val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.UTF_8) else ""
+                    onWindowAdd?.invoke(restStr)
                     return
                 }
                 "%window-close" -> {
-                    onWindowClose?.invoke(rest)
+                    val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.UTF_8) else ""
+                    onWindowClose?.invoke(restStr)
                     return
                 }
                 else -> {
-                    onUnhandledEvent?.invoke(cleanLine)
+                    val eventStr = String(line, startIndex, len, Charsets.UTF_8)
+                    onUnhandledEvent?.invoke(eventStr)
                     return
                 }
             }
         }
 
         if (inCommandBlock) {
-            if (commandOutputBuffer.isNotEmpty()) {
-                commandOutputBuffer.append("\n")
+            if (commandOutputBytes.size() > 0) {
+                commandOutputBytes.write('\n'.code)
             }
-            commandOutputBuffer.append(cleanLine)
+            commandOutputBytes.write(line, startIndex, len)
         } else {
-            onUnhandledEvent?.invoke(cleanLine)
+            val eventStr = String(line, startIndex, len, Charsets.UTF_8)
+            onUnhandledEvent?.invoke(eventStr)
         }
     }
 
     companion object {
         /**
-         * Decodes tmux -CC octal escapes (\nnn and \134) into raw binary bytes.
+         * Decodes tmux -CC octal escapes (\nnn and \134) into exact binary bytes.
+         * Pure byte manipulation prevents any UTF-8 decoding corruption.
          */
-        fun decodeOctal(input: String): ByteArray {
-            val out = ByteArrayOutputStream(input.length)
-            var i = 0
-            val len = input.length
-            while (i < len) {
-                val c = input[i]
-                if (c == '\\' && i + 3 < len &&
+        fun decodeOctalBytes(input: ByteArray, offset: Int = 0, length: Int = input.size): ByteArray {
+            val out = ByteArrayOutputStream(length)
+            var i = offset
+            val end = offset + length
+            while (i < end) {
+                val b = input[i]
+                if (b == '\\'.code.toByte() && i + 3 < end &&
                     isOctalDigit(input[i + 1]) &&
                     isOctalDigit(input[i + 2]) &&
                     isOctalDigit(input[i + 3])
                 ) {
-                    val b = ((input[i + 1] - '0') shl 6) or
-                            ((input[i + 2] - '0') shl 3) or
-                            (input[i + 3] - '0')
-                    out.write(b)
+                    val b1 = (input[i + 1].toInt() - '0'.code) and 0x07
+                    val b2 = (input[i + 2].toInt() - '0'.code) and 0x07
+                    val b3 = (input[i + 3].toInt() - '0'.code) and 0x07
+                    val octVal = (b1 shl 6) or (b2 shl 3) or b3
+                    out.write(octVal)
                     i += 4
                 } else {
-                    if (c.code < 128) {
-                        out.write(c.code)
-                    } else {
-                        val charBytes = c.toString().toByteArray(Charsets.UTF_8)
-                        out.write(charBytes, 0, charBytes.size)
-                    }
+                    out.write(b.toInt() and 0xFF)
                     i++
                 }
             }
             return out.toByteArray()
+        }
+
+        /**
+         * Decodes tmux -CC octal escapes from a String into raw binary bytes.
+         */
+        fun decodeOctal(input: String): ByteArray {
+            val bytes = input.toByteArray(Charsets.ISO_8859_1)
+            return decodeOctalBytes(bytes, 0, bytes.size)
         }
 
         /**
@@ -197,89 +252,48 @@ class TmuxControlParser(
         }
 
         /**
-         * Strips screen/tmux proprietary title escape sequences (ESC k ... ESC \) and
-         * ZSH PROMPT_EOL_MARK (e.g. bold/standout '%' followed by line-width padding spaces and \r)
-         * so they don't produce phantom '%' characters or literal text in terminal emulators.
+         * Strips GNU Screen / Tmux window title escape sequence: ESC k <title> (ESC \ | BEL)
+         * which Zsh / Oh-My-Zsh / Bash preexec outputs to update window titles, but standard
+         * xterm / Termux emulators do not implement, causing <title> to be printed as literal text.
          */
-        fun sanitizePaneOutput(data: ByteArray): ByteArray {
+        fun stripScreenTitle(data: ByteArray): ByteArray {
             if (data.isEmpty()) return data
-            var hasEsc = false
-            for (idx in 0 until data.size) {
-                if (data[idx] == 0x1B.toByte()) {
-                    hasEsc = true
+            var hasEscK = false
+            for (idx in 0 until data.size - 1) {
+                if (data[idx] == 0x1B.toByte() && data[idx + 1] == 'k'.code.toByte()) {
+                    hasEscK = true
                     break
                 }
             }
-            if (!hasEsc) return data
+            if (!hasEscK) return data
 
             val out = ByteArrayOutputStream(data.size)
             var i = 0
-            while (i < data.size) {
-                // 1. Strip screen/tmux title sequence: ESC k ... (ESC \ | BEL)
-                if (i < data.size - 1 && data[i] == 0x1B.toByte() && data[i + 1] == 'k'.code.toByte()) {
+            val n = data.size
+            while (i < n) {
+                if (i + 1 < n && data[i] == 0x1B.toByte() && data[i + 1] == 'k'.code.toByte()) {
                     i += 2
-                    while (i < data.size) {
-                        if (data[i] == 0x07.toByte()) {
+                    while (i < n) {
+                        if (data[i] == 0x07.toByte()) { // BEL
                             i++
                             break
                         }
                         if (data[i] == 0x1B.toByte()) {
-                            if (i + 1 < data.size && data[i + 1] == '\\'.code.toByte()) {
+                            if (i + 1 < n && data[i + 1] == '\\'.code.toByte()) {
                                 i += 2
                                 break
                             }
                         }
                         i++
                     }
-                }
-                // 2. Strip ZSH PROMPT_EOL_MARK (% symbol padded with line-width spaces and \r)
-                else if (i < data.size - 10 && data[i] == 0x1B.toByte() && data[i + 1] == '['.code.toByte()) {
-                    var matchEnd = -1
-                    var j = i
-                    var foundPercent = false
-                    while (j < minOf(data.size, i + 40)) {
-                        if (data[j] == '%'.code.toByte() || data[j] == '#'.code.toByte()) {
-                            foundPercent = true
-                            j++
-                            break
-                        }
-                        j++
-                    }
-                    if (foundPercent) {
-                        while (j < minOf(data.size, i + 60)) {
-                            if (data[j] == 'm'.code.toByte()) {
-                                j++
-                                break
-                            }
-                            j++
-                        }
-                        var spaceCount = 0
-                        while (j < data.size && data[j] == ' '.code.toByte()) {
-                            spaceCount++
-                            j++
-                        }
-                        if (spaceCount >= 5) {
-                            while (j < data.size && (data[j] == '\r'.code.toByte() || data[j] == ' '.code.toByte())) {
-                                j++
-                            }
-                            matchEnd = j
-                        }
-                    }
-
-                    if (matchEnd != -1) {
-                        i = matchEnd
-                    } else {
-                        out.write(data[i].toInt())
-                        i++
-                    }
                 } else {
-                    out.write(data[i].toInt())
+                    out.write(data[i].toInt() and 0xFF)
                     i++
                 }
             }
             return out.toByteArray()
         }
 
-        private fun isOctalDigit(c: Char): Boolean = c in '0'..'7'
+        private fun isOctalDigit(b: Byte): Boolean = b in '0'.code.toByte()..'7'.code.toByte()
     }
 }

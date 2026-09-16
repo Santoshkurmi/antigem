@@ -144,17 +144,106 @@ class LocalPtySession(
 
     private var isInitialHistoryRestored = false
 
+    private fun requestInitialHistory() {
+        if (isInitialHistoryRestored) return
+        sessionScope.launch(Dispatchers.IO) {
+            delay(150)
+            synchronized(sshWriteLock) {
+                try {
+                    val target = assignedPaneId ?: (tmuxWindowIndex?.let { "$tmuxSessionName:$it" } ?: "")
+                    val targetArg = if (target.isNotEmpty()) "-t $target " else ""
+                    val cmd = "capture-pane ${targetArg}-e -p -J -S -1000\n"
+                    Log.d(TAG, "Requesting initial history for $id ($target): $cmd")
+                    sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
+                    sshOut?.flush()
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    private fun normalizeHistoryNewlines(data: ByteArray): ByteArray {
+        val cleaned = TmuxControlParser.stripScreenTitle(data)
+        if (cleaned.isEmpty()) return cleaned
+        var end = cleaned.size
+        while (end > 0 && (cleaned[end - 1] == '\n'.code.toByte() || cleaned[end - 1] == '\r'.code.toByte() || cleaned[end - 1] == ' '.code.toByte())) {
+            end--
+        }
+        if (end <= 0) return ByteArray(0)
+
+        val out = java.io.ByteArrayOutputStream(end + end / 4)
+        var i = 0
+        while (i < end) {
+            val b = cleaned[i]
+            if (b == '\n'.code.toByte()) {
+                if (i == 0 || cleaned[i - 1] != '\r'.code.toByte()) {
+                    out.write('\r'.code)
+                }
+                out.write('\n'.code)
+            } else {
+                out.write(b.toInt() and 0xFF)
+            }
+            i++
+        }
+        out.write('\r'.code)
+        out.write('\n'.code)
+        return out.toByteArray()
+    }
+
+    private fun containsClearScreenSequence(data: ByteArray): Boolean {
+        if (data.size < 2) return false
+        val n = data.size
+        for (i in 0 until n - 1) {
+            if (data[i] == 0x1B.toByte()) {
+                // \033c (Full Reset)
+                if (data[i + 1] == 'c'.code.toByte()) return true
+                // \033[...
+                if (data[i + 1] == '['.code.toByte() && i + 2 < n) {
+                    // \033[2J or \033[3J
+                    if (data[i + 2] == '2'.code.toByte() || data[i + 2] == '3'.code.toByte()) {
+                        if (i + 3 < n && (data[i + 3] == 'J'.code.toByte() || data[i + 3] == 'j'.code.toByte())) {
+                            return true
+                        }
+                    }
+                    // \033[H\033[J or \033[H\033[2J
+                    if (data[i + 2] == 'H'.code.toByte() || data[i + 2] == 'f'.code.toByte()) {
+                        if (i + 4 < n && data[i + 3] == 0x1B.toByte() && data[i + 4] == '['.code.toByte()) {
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
     private val tmuxParser = TmuxControlParser(
         onPaneOutput = { paneId, data ->
             if (assignedPaneId == null) {
                 assignedPaneId = paneId
             }
             if (paneId == assignedPaneId && data.isNotEmpty()) {
-                val str = String(data, Charsets.UTF_8).replace("\n", "\\n").replace("\r", "\\r")
-                Log.d("TerminalIO", "PANE -> EMULATOR ($id / $paneId): \"$str\"")
+                val hasClear = containsClearScreenSequence(data)
                 sessionScope.launch(Dispatchers.Main) {
+                    if (hasClear) {
+                        try {
+                            terminalSession.emulator?.screen?.clearTranscript()
+                        } catch (_: Exception) {}
+                    }
                     terminalSession.emulator?.append(data, data.size)
                     onTextChangedListener?.invoke()
+                }
+                if (hasClear && isSsh) {
+                    sessionScope.launch(Dispatchers.IO) {
+                        synchronized(sshWriteLock) {
+                            try {
+                                val target = assignedPaneId ?: (tmuxWindowIndex?.let { "$tmuxSessionName:$it" } ?: "")
+                                val targetArg = if (target.isNotEmpty()) "-t $target " else ""
+                                val cmd = "clear-history ${targetArg}\n"
+                                sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
+                                sshOut?.flush()
+                            } catch (_: Exception) {}
+                        }
+                    }
                 }
             }
         },
@@ -167,7 +256,7 @@ class LocalPtySession(
             }
         },
         onCommandResponse = { cmdNum, data, isError ->
-            Log.d("TerminalIO", "CMD_RESP: num=$cmdNum, err=$isError, len=${data.size}, initialRestored=$isInitialHistoryRestored")
+            Log.d("TerminalIO", "CMD_RESP: num=$cmdNum, err=$isError, len=${data.size}, restored=$isInitialHistoryRestored")
             if (!isError && data.isNotEmpty()) {
                 val str = String(data, Charsets.UTF_8)
                 if (str.contains("ANTIGEM_PANE_ID:")) {
@@ -175,17 +264,18 @@ class LocalPtySession(
                     if (!extracted.isNullOrEmpty()) {
                         assignedPaneId = extracted
                         Log.d(TAG, "Bound session $id to pane $assignedPaneId")
+                        if (!isInitialHistoryRestored) {
+                            requestInitialHistory()
+                        }
                     }
                 } else if (!isInitialHistoryRestored) {
                     isInitialHistoryRestored = true
-                    val payload = if (data.isNotEmpty() && data.last() != '\n'.code.toByte() && data.last() != '\r'.code.toByte()) {
-                        data + ' '.code.toByte()
-                    } else {
-                        data
-                    }
-                    sessionScope.launch(Dispatchers.Main) {
-                        terminalSession.emulator?.append(payload, payload.size)
-                        onTextChangedListener?.invoke()
+                    val formatted = normalizeHistoryNewlines(data)
+                    if (formatted.isNotEmpty()) {
+                        sessionScope.launch(Dispatchers.Main) {
+                            terminalSession.emulator?.append(formatted, formatted.size)
+                            onTextChangedListener?.invoke()
+                        }
                     }
                 }
             }
@@ -196,6 +286,9 @@ class LocalPtySession(
                 if (extracted.isNotEmpty()) {
                     assignedPaneId = extracted
                     Log.d(TAG, "Bound session $id to pane $assignedPaneId from unhandled event")
+                    if (!isInitialHistoryRestored) {
+                        requestInitialHistory()
+                    }
                 }
             }
             Log.d(TAG, "Tmux -CC event [$id]: $event")
@@ -236,7 +329,12 @@ class LocalPtySession(
             sessionField.isAccessible = true
             val sshOutput = object : com.termux.terminal.TerminalOutput() {
                 override fun write(data: ByteArray, offset: Int, count: Int) {
-                    sendRawToSsh(data, offset, count)
+                    // In tmux -CC mode, the remote tmux server handles pane DA/CPR/DSR queries directly.
+                    // The client emulator must NOT feed auto-replies back into send-keys,
+                    // which causes "64;1;2;6;9;15;128;21;22c" (Device Attributes) to be typed as literal text.
+                    if (!tmuxParser.isControlModeActive) {
+                        sendRawToSsh(data, offset, count)
+                    }
                 }
 
                 override fun titleChanged(p0: String?, p1: String?) {
@@ -310,17 +408,18 @@ class LocalPtySession(
             sshIn = channel.inputStream
             sshOut = channel.outputStream
 
-            // Request existing buffer and screen state from tmux
+            // Request initial layout and history from tmux control mode
             sessionScope.launch(Dispatchers.IO) {
-                delay(200)
+                delay(100)
                 synchronized(sshWriteLock) {
                     try {
-                        val target = assignedPaneId
-                        val targetArg = if (!target.isNullOrEmpty()) "-t $target " else ""
-                        val cmd = "capture-pane ${targetArg}-p -e -S -500\n"
+                        val cmd = "refresh-client -C ${ptyCols},${ptyRows}\n"
                         sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
                         sshOut?.flush()
                     } catch (_: Exception) {}
+                }
+                if (!isInitialHistoryRestored) {
+                    requestInitialHistory()
                 }
             }
 
@@ -431,15 +530,16 @@ class LocalPtySession(
         ptyRows = rows
         ptyWidthPx = widthPx
         ptyHeightPx = heightPx
+        try {
+            terminalSession.updateSize(cols, rows)
+        } catch (_: Exception) {}
         if (isSsh) {
             sessionScope.launch(Dispatchers.IO) {
                 try {
-                    if (tmuxParser.isControlModeActive) {
+                    synchronized(sshWriteLock) {
                         val cmd = "refresh-client -C ${cols},${rows}\n"
-                        synchronized(sshWriteLock) {
-                            sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
-                            sshOut?.flush()
-                        }
+                        sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
+                        sshOut?.flush()
                     }
                     sshChannel?.setPtySize(cols, rows, widthPx, heightPx)
                 } catch (e: Exception) {
