@@ -11,8 +11,11 @@ import java.io.ByteArrayOutputStream
 class TmuxControlParser(
     private val onPaneOutput: (paneId: String, data: ByteArray) -> Unit,
     private val onRawFallbackOutput: ((data: ByteArray, offset: Int, length: Int) -> Unit)? = null,
+    private val onControlModeStarted: (() -> Unit)? = null,
     private val onWindowAdd: ((windowId: String) -> Unit)? = null,
     private val onWindowClose: ((windowId: String) -> Unit)? = null,
+    private val onPaneExited: ((paneId: String) -> Unit)? = null,
+    private val onExit: ((reason: String?) -> Unit)? = null,
     private val onCommandResponse: ((cmdNumber: Long, output: ByteArray, isError: Boolean) -> Unit)? = null,
     private val onUnhandledEvent: ((eventLine: String) -> Unit)? = null
 ) {
@@ -23,6 +26,13 @@ class TmuxControlParser(
 
     var isControlModeActive: Boolean = false
         private set
+
+    private fun activateControlMode() {
+        if (!isControlModeActive) {
+            isControlModeActive = true
+            onControlModeStarted?.invoke()
+        }
+    }
 
     /**
      * Feeds incoming raw stream data from SSH channel into the parser.
@@ -36,9 +46,9 @@ class TmuxControlParser(
             val preview = String(data, offset, previewLen, Charsets.ISO_8859_1)
             if (preview.contains("\u001bP1000p") || preview.startsWith("%begin") ||
                 preview.startsWith("%output") || preview.startsWith("%window-add") ||
-                preview.startsWith("%layout-change")
+                preview.startsWith("%layout-change") || preview.startsWith("%session-changed")
             ) {
-                isControlModeActive = true
+                activateControlMode()
             } else if (!preview.contains("%") && !preview.contains("\u001bP1000p")) {
                 // Raw non-tmux shell stream fallback
                 onRawFallbackOutput?.invoke(data, offset, length)
@@ -82,7 +92,7 @@ class TmuxControlParser(
             line[5] == '0'.code.toByte() &&
             line[6] == 'p'.code.toByte()
         ) {
-            isControlModeActive = true
+            activateControlMode()
             startIndex = 7
             len -= 7
         }
@@ -92,7 +102,7 @@ class TmuxControlParser(
         val firstByte = line[startIndex]
 
         if (firstByte == '%'.code.toByte()) {
-            isControlModeActive = true
+            activateControlMode()
 
             // Find first space (tag boundary)
             var firstSpace = -1
