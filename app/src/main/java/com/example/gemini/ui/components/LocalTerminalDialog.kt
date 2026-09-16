@@ -530,16 +530,17 @@ fun LocalTerminalContent(
                         HorizontalDivider(thickness = 0.5.dp, color = Color(0x33FFFFFF))
 
                         DropdownMenuItem(
+                            enabled = !isSyncingTmux,
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Default.Add,
                                         contentDescription = "New Tab",
-                                        tint = ClaudeTerracotta,
+                                        tint = if (!isSyncingTmux) ClaudeTerracotta else Color.Gray,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("New Session", color = ClaudeTerracotta, fontSize = 13.sp)
+                                    Text("New Session", color = if (!isSyncingTmux) ClaudeTerracotta else Color.Gray, fontSize = 13.sp)
                                 }
                             },
                             onClick = {
@@ -564,13 +565,14 @@ fun LocalTerminalContent(
 
                 // Add session '+'
                 IconButton(
+                    enabled = !isSyncingTmux,
                     onClick = { LocalTerminalManager.createNewSession(context) },
                     modifier = Modifier.size(24.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "New Session",
-                        tint = ClaudeTerracotta,
+                        tint = if (!isSyncingTmux) ClaudeTerracotta else Color.Gray,
                         modifier = Modifier.size(14.dp)
                     )
                 }
