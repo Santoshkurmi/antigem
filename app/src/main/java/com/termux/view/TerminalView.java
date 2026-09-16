@@ -1033,14 +1033,25 @@ public final class TerminalView extends View {
         updateSizeInternal();
     }
 
+    public int mTopPadding = 0;
+
+    public void setTopPadding(int topPadding) {
+        if (mTopPadding != topPadding) {
+            mTopPadding = topPadding;
+            updateSizeInternal();
+            invalidate();
+        }
+    }
+
     private void updateSizeInternal() {
         int viewWidth = getWidth();
         int viewHeight = getHeight();
         if (viewWidth == 0 || viewHeight == 0 || mTermSession == null) return;
 
+        int usableHeight = Math.max(0, viewHeight - mTopPadding);
         // Set to 80 and 24 if you want to enable vttest.
         int newColumns = Math.max(4, (int) (viewWidth / mRenderer.mFontWidth));
-        int newRows = Math.max(4, (viewHeight - mRenderer.mFontLineSpacingAndAscent) / mRenderer.mFontLineSpacing);
+        int newRows = Math.max(4, (usableHeight - mRenderer.mFontLineSpacingAndAscent) / mRenderer.mFontLineSpacing);
 
         if (mEmulator == null || (newColumns != mEmulator.mColumns || newRows != mEmulator.mRows)) {
             mTermSession.updateSize(newColumns, newRows);
@@ -1077,7 +1088,7 @@ public final class TerminalView extends View {
                 mTextSelectionCursorController.getSelectors(sel);
             }
 
-            mRenderer.render(mEmulator, canvas, mTopRow, mSubRowOffset, sel[0], sel[1], sel[2], sel[3]);
+            mRenderer.render(mEmulator, canvas, mTopRow, mSubRowOffset, sel[0], sel[1], sel[2], sel[3], mTopPadding, mScrollPixelY);
 
             // render the text selection handles
             renderTextSelection();
@@ -1099,12 +1110,8 @@ public final class TerminalView extends View {
     }
 
     public int getCursorY(float y) {
-        int excessHeight = 0;
-        if (mRenderer != null && mEmulator != null) {
-            int contentHeight = mRenderer.mFontLineSpacingAndAscent + mEmulator.mRows * mRenderer.mFontLineSpacing;
-            excessHeight = Math.max(0, getHeight() - contentHeight);
-        }
-        return (int) (((y - excessHeight - 40) / mRenderer.mFontLineSpacing) + mTopRow);
+        if (mRenderer == null || mRenderer.mFontLineSpacing <= 0) return mTopRow;
+        return (int) Math.floor((y - mTopPadding - mScrollPixelY) / (double) mRenderer.mFontLineSpacing);
     }
 
     public int getPointX(int cx) {
@@ -1115,12 +1122,8 @@ public final class TerminalView extends View {
     }
 
     public int getPointY(int cy) {
-        int excessHeight = 0;
-        if (mRenderer != null && mEmulator != null) {
-            int contentHeight = mRenderer.mFontLineSpacingAndAscent + mEmulator.mRows * mRenderer.mFontLineSpacing;
-            excessHeight = Math.max(0, getHeight() - contentHeight);
-        }
-        return Math.round((cy - mTopRow) * mRenderer.mFontLineSpacing) + excessHeight;
+        if (mRenderer == null) return mTopPadding;
+        return Math.round(mTopPadding + cy * mRenderer.mFontLineSpacing + mScrollPixelY);
     }
 
     public int getTopRow() {

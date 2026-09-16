@@ -53,15 +53,23 @@ public final class TerminalRenderer {
         }
     }
 
-    /** Render the terminal to a canvas with at a specified row scroll, sub-row pixel offset, and an optional rectangular selection. */
+    /** Render the terminal to a canvas with top padding and smooth sub-row pixel scrolling. */
     public final void render(TerminalEmulator mEmulator, Canvas canvas, int topRow, float subRowOffset,
-                             int selectionY1, int selectionY2, int selectionX1, int selectionX2) {
+                             int selectionY1, int selectionY2, int selectionX1, int selectionX2,
+                             int topPadding, float scrollPixelY) {
         final boolean reverseVideo = mEmulator.isReverseVideo();
-        final boolean hasSubRow = subRowOffset > 0.001f;
         final int minTranscriptRow = -mEmulator.getScreen().getActiveTranscriptRows();
-        final boolean hasTopBufferRow = hasSubRow && (topRow - 1 >= minTranscriptRow);
-        final int startRow = hasTopBufferRow ? (topRow - 1) : topRow;
-        final int endRow = Math.min(mEmulator.mRows, topRow + mEmulator.mRows + (hasSubRow ? 1 : 0));
+        final int lineSpacing = mFontLineSpacing;
+        final int viewHeight = canvas.getHeight();
+
+        int startRow = (int) Math.floor((-topPadding - scrollPixelY) / (double) lineSpacing);
+        startRow = Math.max(minTranscriptRow, startRow);
+
+        int endRow = (int) Math.ceil((viewHeight - topPadding - scrollPixelY) / (double) lineSpacing) + 1;
+        endRow = Math.min(mEmulator.mRows, endRow);
+
+        if (startRow > endRow) startRow = endRow;
+
         final int columns = mEmulator.mColumns;
         final int cursorCol = mEmulator.getCursorCol();
         final int cursorRow = mEmulator.getCursorRow();
@@ -73,12 +81,8 @@ public final class TerminalRenderer {
         if (reverseVideo)
             canvas.drawColor(palette[TextStyle.COLOR_INDEX_FOREGROUND], PorterDuff.Mode.SRC);
 
-        int contentHeight = mFontLineSpacingAndAscent + mEmulator.mRows * mFontLineSpacing;
-        int excessHeight = Math.max(0, canvas.getHeight() - contentHeight);
-
-        float heightOffset = excessHeight + mFontLineSpacingAndAscent + (hasTopBufferRow ? (subRowOffset - 1.0f) * mFontLineSpacing : subRowOffset * mFontLineSpacing);
         for (int row = startRow; row < endRow; row++) {
-            heightOffset += mFontLineSpacing;
+            float heightOffset = topPadding + ((row + 1) * lineSpacing) + scrollPixelY;
 
             final int cursorX = (row == cursorRow && cursorVisible) ? cursorCol : -1;
             int selx1 = -1, selx2 = -1;

@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -181,6 +182,10 @@ fun LocalTerminalContent(
         termView?.requestFocus()
     }
 
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val statusBarHeightPx = WindowInsets.statusBars.getTop(density)
+    val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -190,7 +195,6 @@ fun LocalTerminalContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
                 .background(Color(0xFF000000))
         ) {
             // NATIVE TERMUX TERMINAL VIEW (Full Screen, spans from the very top pixel)
@@ -210,6 +214,7 @@ fun LocalTerminalContent(
                 AndroidView(
                     factory = { ctx ->
                             TerminalView(ctx, null).apply {
+                                setTopPadding(statusBarHeightPx)
                                 setTextSize(terminalTextSize)
                                 isFocusable = true
                                 isFocusableInTouchMode = true
@@ -292,6 +297,7 @@ fun LocalTerminalContent(
                             }
                         },
                         update = { tv ->
+                            tv.setTopPadding(statusBarHeightPx)
                             tv.setTextSize(terminalTextSize)
                             if (tv.currentSession != activeSession.terminalSession) {
                                 tv.attachSession(activeSession.terminalSession)
@@ -400,6 +406,23 @@ fun LocalTerminalContent(
                     }
                 }
             }
+        }
+
+        // FROSTED GLASS BLUR STATUS BAR OVERLAY
+        if (statusBarHeightDp > 0.dp) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(statusBarHeightDp + 6.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color(0xD90A0A10),
+                            0.7f to Color(0x880A0A10),
+                            1.0f to Color(0x000A0A10)
+                        )
+                    )
+            )
         }
 
         // DRAGGABLE FLOATING TAB PILL (Move anywhere on screen)
