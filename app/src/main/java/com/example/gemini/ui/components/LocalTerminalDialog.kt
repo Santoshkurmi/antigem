@@ -279,8 +279,10 @@ fun LocalTerminalContent(
                                     }
                                 })
                                 setTerminalSizeListener { cols, rows, widthPx, heightPx ->
+                                    android.util.Log.d("AntiGemTerminal", "[TerminalView-factory] setTerminalSizeListener: cols=$cols, rows=$rows, widthPx=$widthPx, heightPx=$heightPx for session ${activeSession.id}")
                                     activeSession.updateSize(cols, rows, widthPx, heightPx)
                                 }
+                                android.util.Log.d("AntiGemTerminal", "[TerminalView-factory] Attaching session ${activeSession.id} (${activeSession.name})")
                                 attachSession(activeSession.terminalSession)
                                 activeSession.onTextChangedListener = {
                                     post {
@@ -300,6 +302,7 @@ fun LocalTerminalContent(
                             tv.setTopPadding(statusBarHeightPx)
                             tv.setTextSize(terminalTextSize)
                             if (tv.currentSession != activeSession.terminalSession) {
+                                android.util.Log.d("AntiGemTerminal", "[TerminalView-update] Switching attached session to ${activeSession.id} (${activeSession.name})")
                                 tv.attachSession(activeSession.terminalSession)
                             }
                             tv.setTerminalInputListener(object : TerminalView.TerminalInputListener {
@@ -311,6 +314,7 @@ fun LocalTerminalContent(
                                 }
                             })
                             tv.setTerminalSizeListener { cols, rows, widthPx, heightPx ->
+                                android.util.Log.d("AntiGemTerminal", "[TerminalView-update] setTerminalSizeListener: cols=$cols, rows=$rows, widthPx=$widthPx, heightPx=$heightPx for session ${activeSession.id}")
                                 activeSession.updateSize(cols, rows, widthPx, heightPx)
                             }
                             activeSession.onTextChangedListener = {
