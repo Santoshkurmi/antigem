@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
@@ -32,11 +33,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.PopupProperties
 import com.example.gemini.data.local.LocalPtySession
 import com.example.gemini.data.local.LocalTerminalManager
 import com.example.gemini.theme.*
@@ -107,8 +111,7 @@ fun LocalTerminalContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF000000))
-                .statusBarsPadding(),
+                .background(Color(0xFF000000)),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -130,25 +133,40 @@ fun LocalTerminalContent(
         return
     }
 
+    val view = androidx.compose.ui.platform.LocalView.current
+
+    SideEffect {
+        val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+            ?: (view.context as? android.app.Activity)?.window
+        if (window != null) {
+            androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
+        }
+    }
+
     val isExited by activeSession.isExited.collectAsState()
     val title by activeSession.title.collectAsState()
 
     var terminalTextSize by remember { mutableIntStateOf(34) }
     var ctrlState by remember { mutableStateOf(ModifierState.OFF) }
     var altState by remember { mutableStateOf(ModifierState.OFF) }
+    var isTabsMenuExpanded by remember { mutableStateOf(false) }
+
+    var dragOffsetX by remember { mutableFloatStateOf(0f) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
 
     var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
 
     val sendKeyToTerminal: (Int, String) -> Unit = { keyCode, fallbackString ->
-        val view = currentTerminalView
+        val termView = currentTerminalView
         var handled = false
         val ctrl = ctrlState != ModifierState.OFF
         val alt = altState != ModifierState.OFF
-        if (view != null && keyCode != 0) {
+        if (termView != null && keyCode != 0) {
             var keyMod = 0
             if (ctrl) keyMod = keyMod or KeyHandler.KEYMOD_CTRL
             if (alt) keyMod = keyMod or KeyHandler.KEYMOD_ALT
-            handled = view.handleKeyCode(keyCode, keyMod)
+            handled = termView.handleKeyCode(keyCode, keyMod)
         }
 
         if (!handled) {
@@ -160,122 +178,22 @@ fun LocalTerminalContent(
         if (altState == ModifierState.ONE_SHOT) {
             altState = ModifierState.OFF
         }
-        view?.requestFocus()
+        termView?.requestFocus()
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF000000))
-            .statusBarsPadding()
             .imePadding()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .background(Color(0xFF000000))
         ) {
-            // TOP HEADER BAR: Terminal session tabs, path, and controls
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(38.dp)
-                    .background(Color(0xFF141416))
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Status dot (Green when active, Red when exited)
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(if (isExited) Color.Red else QuotaGreen)
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Sessions Tabs
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .horizontalScroll(rememberScrollState()),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    sessions.forEach { sess ->
-                        val isSelected = sess.id == activeSession.id
-                        Surface(
-                            modifier = Modifier
-                                .padding(end = 4.dp)
-                                .clip(RoundedCornerShape(5.dp))
-                                .clickable { LocalTerminalManager.selectSession(sess.id) },
-                            color = if (isSelected) Color(0xFF222226) else Color.Transparent,
-                            shape = RoundedCornerShape(5.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = sess.name,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) Color.White else Color.Gray
-                                )
-
-                                if (isSelected && sessions.size > 1) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Close",
-                                        tint = Color.Gray,
-                                        modifier = Modifier
-                                            .size(11.dp)
-                                            .clickable { LocalTerminalManager.closeSession(sess.id) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (isSyncingTmux) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .padding(horizontal = 6.dp)
-                                .size(12.dp),
-                            color = ClaudeTerracotta,
-                            strokeWidth = 1.5.dp
-                        )
-                    }
-
-                    // Add session '+'
-                    IconButton(
-                        onClick = { LocalTerminalManager.createNewSession(context) },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "New Session",
-                            tint = ClaudeTerracotta,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-
-                // Close / Hide Button
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-
-            // NATIVE TERMUX TERMINAL VIEW (Full PTY, TUI support for nano, vim, htop, etc.)
+            // NATIVE TERMUX TERMINAL VIEW (Full Screen, spans from the very top pixel)
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -289,9 +207,8 @@ fun LocalTerminalContent(
                     }
                     .padding(horizontal = 4.dp)
             ) {
-                key(activeSession.id) {
-                    AndroidView(
-                        factory = { ctx ->
+                AndroidView(
+                    factory = { ctx ->
                             TerminalView(ctx, null).apply {
                                 setTextSize(terminalTextSize)
                                 isFocusable = true
@@ -400,7 +317,6 @@ fun LocalTerminalContent(
                         },
                         modifier = Modifier.fillMaxSize()
                     )
-                }
             }
 
             // EXTRA-KEYS TOOLBAR (Physical visual click feedback, auto-repeat for arrows, one-shot/lock modifiers)
@@ -482,6 +398,193 @@ fun LocalTerminalContent(
                     TermuxKey(label = "PGDN", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_DOWN, "\u001B[6~")
                     }
+                }
+            }
+        }
+
+        // DRAGGABLE FLOATING TAB PILL (Move anywhere on screen)
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(top = 8.dp, end = 10.dp)
+                .offset { IntOffset(dragOffsetX.roundToInt(), dragOffsetY.roundToInt()) }
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        dragOffsetX += dragAmount.x
+                        dragOffsetY += dragAmount.y
+                    }
+                },
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xF2181824),
+            border = BorderStroke(1.dp, Color(0x38FFFFFF)),
+            shadowElevation = 8.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Drag Handle Grip
+                Icon(
+                    imageVector = Icons.Default.DragHandle,
+                    contentDescription = "Drag to move",
+                    tint = Color(0x66FFFFFF),
+                    modifier = Modifier.size(16.dp)
+                )
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // Status dot (Green when active, Red when exited)
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(if (isExited) Color(0xFFEF5350) else QuotaGreen)
+                )
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Active Tab Name & Switcher Dropdown Anchor
+                Box {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { isTabsMenuExpanded = true }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = activeSession.name,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Switch Tab",
+                            tint = Color.LightGray,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    // Floating Sessions Dropdown Menu
+                    DropdownMenu(
+                        expanded = isTabsMenuExpanded,
+                        onDismissRequest = { isTabsMenuExpanded = false },
+                        properties = PopupProperties(
+                            focusable = false,
+                            dismissOnClickOutside = true,
+                            dismissOnBackPress = true
+                        ),
+                        modifier = Modifier.background(Color(0xFF1E1E26))
+                    ) {
+                        sessions.forEach { sess ->
+                            val isSelected = sess.id == activeSession.id
+                            val sessExited by sess.isExited.collectAsState()
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(if (sessExited) Color(0xFFEF5350) else QuotaGreen)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = sess.name,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) ClaudeTerracotta else Color.White,
+                                            fontSize = 13.sp,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        IconButton(
+                                            onClick = {
+                                                LocalTerminalManager.closeSession(sess.id)
+                                            },
+                                            modifier = Modifier.size(20.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Close Tab",
+                                                tint = Color.Gray,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    LocalTerminalManager.selectSession(sess.id)
+                                    isTabsMenuExpanded = false
+                                }
+                            )
+                        }
+
+                        HorizontalDivider(thickness = 0.5.dp, color = Color(0x33FFFFFF))
+
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "New Tab",
+                                        tint = ClaudeTerracotta,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("New Session", color = ClaudeTerracotta, fontSize = 13.sp)
+                                }
+                            },
+                            onClick = {
+                                LocalTerminalManager.createNewSession(context)
+                                isTabsMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+
+                if (isSyncingTmux) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .size(12.dp),
+                        color = ClaudeTerracotta,
+                        strokeWidth = 1.5.dp
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(2.dp))
+
+                // Add session '+'
+                IconButton(
+                    onClick = { LocalTerminalManager.createNewSession(context) },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "New Session",
+                        tint = ClaudeTerracotta,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(2.dp))
+
+                // Close / Hide Button
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
                 }
             }
         }
