@@ -73,7 +73,10 @@ public final class TerminalRenderer {
         if (reverseVideo)
             canvas.drawColor(palette[TextStyle.COLOR_INDEX_FOREGROUND], PorterDuff.Mode.SRC);
 
-        float heightOffset = mFontLineSpacingAndAscent + (hasTopBufferRow ? (subRowOffset - 1.0f) * mFontLineSpacing : subRowOffset * mFontLineSpacing);
+        int contentHeight = mFontLineSpacingAndAscent + mEmulator.mRows * mFontLineSpacing;
+        int excessHeight = Math.max(0, canvas.getHeight() - contentHeight);
+
+        float heightOffset = excessHeight + mFontLineSpacingAndAscent + (hasTopBufferRow ? (subRowOffset - 1.0f) * mFontLineSpacing : subRowOffset * mFontLineSpacing);
         for (int row = startRow; row < endRow; row++) {
             heightOffset += mFontLineSpacing;
 

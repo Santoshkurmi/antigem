@@ -1019,27 +1019,13 @@ public final class TerminalView extends View {
         return true;
     }
 
-    private final Runnable mDebouncedUpdateSizeRunnable = new Runnable() {
-        @Override
-        public void run() {
-            updateSizeInternal();
-        }
-    };
-
     /**
      * This is called during layout when the size of this view has changed. If you were just added to the view
      * hierarchy, you're called with the old values of 0.
      */
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        if (oldh > 0 && h > 0 && Math.abs(h - oldh) > 0) {
-            // Smooth keyboard transition: debounce PTY SIGWINCH reflow so animation is fluid and continuous
-            removeCallbacks(mDebouncedUpdateSizeRunnable);
-            postDelayed(mDebouncedUpdateSizeRunnable, 80);
-            invalidate();
-        } else {
-            updateSizeInternal();
-        }
+        updateSizeInternal();
     }
 
     /** Check if the terminal size in rows and columns should be updated. */
@@ -1113,7 +1099,12 @@ public final class TerminalView extends View {
     }
 
     public int getCursorY(float y) {
-        return (int) (((y - 40) / mRenderer.mFontLineSpacing) + mTopRow);
+        int excessHeight = 0;
+        if (mRenderer != null && mEmulator != null) {
+            int contentHeight = mRenderer.mFontLineSpacingAndAscent + mEmulator.mRows * mRenderer.mFontLineSpacing;
+            excessHeight = Math.max(0, getHeight() - contentHeight);
+        }
+        return (int) (((y - excessHeight - 40) / mRenderer.mFontLineSpacing) + mTopRow);
     }
 
     public int getPointX(int cx) {
@@ -1124,7 +1115,12 @@ public final class TerminalView extends View {
     }
 
     public int getPointY(int cy) {
-        return Math.round((cy - mTopRow) * mRenderer.mFontLineSpacing);
+        int excessHeight = 0;
+        if (mRenderer != null && mEmulator != null) {
+            int contentHeight = mRenderer.mFontLineSpacingAndAscent + mEmulator.mRows * mRenderer.mFontLineSpacing;
+            excessHeight = Math.max(0, getHeight() - contentHeight);
+        }
+        return Math.round((cy - mTopRow) * mRenderer.mFontLineSpacing) + excessHeight;
     }
 
     public int getTopRow() {
