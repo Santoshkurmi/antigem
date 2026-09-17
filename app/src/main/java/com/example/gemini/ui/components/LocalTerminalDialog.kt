@@ -142,6 +142,7 @@ fun LocalTerminalContent(
         if (window != null) {
             androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
             androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
+            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
     }
 

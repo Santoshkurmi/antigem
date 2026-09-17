@@ -870,7 +870,7 @@ class LocalPtySession(
         if (isSsh) {
             resizeJob?.cancel()
             resizeJob = sessionScope.launch(Dispatchers.IO) {
-                delay(100) // Debounce rapid keyboard animation frames
+                delay(30) // Swift resize dispatch
                 try {
                     synchronized(sshWriteLock) {
                         if (tmuxParser.isControlModeActive) {
