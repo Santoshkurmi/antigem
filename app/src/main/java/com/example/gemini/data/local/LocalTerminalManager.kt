@@ -1340,6 +1340,24 @@ object LocalTerminalManager {
         }
     }
 
+    fun selectPreviousSession(context: Context? = null) {
+        val current = _sessions.value
+        if (current.size <= 1) return
+        val currentIndex = current.indexOfFirst { it.id == _activeSessionId.value }
+        if (currentIndex == -1) return
+        val prevIndex = if (currentIndex - 1 >= 0) currentIndex - 1 else current.size - 1
+        selectSession(current[prevIndex].id, context)
+    }
+
+    fun selectNextSession(context: Context? = null) {
+        val current = _sessions.value
+        if (current.size <= 1) return
+        val currentIndex = current.indexOfFirst { it.id == _activeSessionId.value }
+        if (currentIndex == -1) return
+        val nextIndex = (currentIndex + 1) % current.size
+        selectSession(current[nextIndex].id, context)
+    }
+
     fun closeSession(id: String) {
         Log.d(TAG, "[Manager] closeSession requested for $id")
         val current = _sessions.value

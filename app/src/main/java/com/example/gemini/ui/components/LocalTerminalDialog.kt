@@ -237,10 +237,53 @@ fun LocalTerminalContent(
                                     override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
                                     override fun isTerminalViewSelected(): Boolean = true
                                     override fun copyModeChanged(copyMode: Boolean) {}
-                                    override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean = false
-                                    override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
-                                    override fun onLongPress(event: MotionEvent): Boolean = false
-                                    override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean = false
+                                     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
+                                         val isCtrl = e.isCtrlPressed || ctrlState != ModifierState.OFF
+                                         if (isCtrl) {
+                                             when (keyCode) {
+                                                 KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_NUMPAD_1 -> {
+                                                     LocalTerminalManager.selectPreviousSession(ctx)
+                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                     return true
+                                                 }
+                                                 KeyEvent.KEYCODE_2, KeyEvent.KEYCODE_NUMPAD_2 -> {
+                                                     LocalTerminalManager.selectNextSession(ctx)
+                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                     return true
+                                                 }
+                                                 KeyEvent.KEYCODE_T -> {
+                                                     LocalTerminalManager.createNewSession(ctx)
+                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                     return true
+                                                 }
+                                             }
+                                         }
+                                         return false
+                                     }
+                                     override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
+                                     override fun onLongPress(event: MotionEvent): Boolean = false
+                                     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
+                                         if (ctrlDown) {
+                                             when (codePoint.toChar()) {
+                                                 '1' -> {
+                                                     LocalTerminalManager.selectPreviousSession(ctx)
+                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                     return true
+                                                 }
+                                                 '2' -> {
+                                                     LocalTerminalManager.selectNextSession(ctx)
+                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                     return true
+                                                 }
+                                                 't', 'T' -> {
+                                                     LocalTerminalManager.createNewSession(ctx)
+                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                     return true
+                                                 }
+                                             }
+                                         }
+                                         return false
+                                     }
                                     override fun readControlKey(): Boolean {
                                         val active = ctrlState != ModifierState.OFF
                                         if (ctrlState == ModifierState.ONE_SHOT) {
