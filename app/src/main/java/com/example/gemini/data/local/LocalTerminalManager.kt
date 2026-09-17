@@ -29,16 +29,18 @@ data class TmuxWindowInfo(
 )
 
 fun formatTmuxTitle(winIndex: Int, winName: String): String {
+    val displayIndex = winIndex + 1
     val cleanName = winName.trim()
     val isGeneric = cleanName.isBlank() ||
             cleanName.toIntOrNull() != null ||
             cleanName == winIndex.toString() ||
+            cleanName == displayIndex.toString() ||
             cleanName.lowercase() in listOf("bash", "zsh", "sh", "dash", "tmux", "screen")
 
     return if (!isGeneric) {
-        "T $winIndex: $cleanName"
+        "T $displayIndex: $cleanName"
     } else {
-        "T $winIndex"
+        "T $displayIndex"
     }
 }
 
