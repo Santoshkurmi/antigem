@@ -591,7 +591,7 @@ public final class TerminalView extends View {
      */
     public int[] getColumnAndRow(MotionEvent event, boolean relativeToScroll) {
         int column = (int) (event.getX() / mRenderer.mFontWidth);
-        int row = (int) ((event.getY() - mRenderer.mFontLineSpacingAndAscent) / mRenderer.mFontLineSpacing);
+        int row = (int) Math.floor((event.getY() - mTopPadding - mScrollPixelY) / (double) mRenderer.mFontLineSpacing);
         if (relativeToScroll) {
             row += mTopRow;
         }

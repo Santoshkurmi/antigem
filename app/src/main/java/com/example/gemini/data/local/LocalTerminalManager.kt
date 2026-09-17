@@ -603,8 +603,38 @@ class LocalPtySession(
         }
     }
 
-    override fun onCopyTextToClipboard(session: TerminalSession, text: String) {}
-    override fun onPasteTextFromClipboard(session: TerminalSession) {}
+    override fun onCopyTextToClipboard(session: TerminalSession, text: String) {
+        if (text.isEmpty()) return
+        try {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("Terminal Text", text)
+            clipboard?.setPrimaryClip(clip)
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                android.widget.Toast.makeText(context, "Copied text", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            Log.d(TAG, "Copied ${text.length} chars to clipboard")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to copy text to clipboard", e)
+        }
+    }
+
+    override fun onPasteTextFromClipboard(session: TerminalSession) {
+        try {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            val clip = clipboard?.primaryClip
+            if (clip != null && clip.itemCount > 0) {
+                val text = clip.getItemAt(0).coerceToText(context)?.toString()
+                if (!text.isNullOrEmpty()) {
+                    write(text)
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        android.widget.Toast.makeText(context, "Pasted text", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to paste text from clipboard", e)
+        }
+    }
     override fun onBell(session: TerminalSession) {}
     override fun onColorsChanged(session: TerminalSession) {}
     override fun onTerminalCursorStateChange(state: Boolean) {}
