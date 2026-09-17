@@ -622,22 +622,6 @@ fun LocalTerminalContent(
 
                 Spacer(modifier = Modifier.width(2.dp))
 
-                // Add session '+'
-                IconButton(
-                    enabled = !isSyncingTmux,
-                    onClick = { LocalTerminalManager.createNewSession(context) },
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "New Session",
-                        tint = if (!isSyncingTmux) ClaudeTerracotta else Color.Gray,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(2.dp))
-
                 // Close / Hide Button
                 IconButton(
                     onClick = onClose,
