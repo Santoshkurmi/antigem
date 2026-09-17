@@ -153,6 +153,7 @@ fun LocalTerminalContent(
     var ctrlState by remember { mutableStateOf(ModifierState.OFF) }
     var altState by remember { mutableStateOf(ModifierState.OFF) }
     var isTabsMenuExpanded by remember { mutableStateOf(false) }
+    var sessionToClose by remember { mutableStateOf<LocalPtySession?>(null) }
 
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
@@ -566,7 +567,8 @@ fun LocalTerminalContent(
                                         )
                                         IconButton(
                                             onClick = {
-                                                LocalTerminalManager.closeSession(sess.id)
+                                                sessionToClose = sess
+                                                isTabsMenuExpanded = false
                                             },
                                             modifier = Modifier.size(20.dp)
                                         ) {
@@ -635,6 +637,71 @@ fun LocalTerminalContent(
                     )
                 }
             }
+        }
+
+        if (sessionToClose != null) {
+            val targetSession = sessionToClose!!
+            val sessTitle by targetSession.title.collectAsState()
+            AlertDialog(
+                onDismissRequest = { sessionToClose = null },
+                shape = RoundedCornerShape(18.dp),
+                containerColor = Color(0xFF1E1E1E),
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x22EF5350)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                tint = Color(0xFFEF5350),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Close Tab?",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                    }
+                },
+                text = {
+                    Text(
+                        text = "Are you sure you want to close \"$sessTitle\"?\nAny process running in this session will be terminated.",
+                        fontSize = 13.sp,
+                        color = Color(0xFFCCCCCC),
+                        lineHeight = 18.sp
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val idToClose = targetSession.id
+                            sessionToClose = null
+                            LocalTerminalManager.closeSession(idToClose)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text("Close Tab", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { sessionToClose = null },
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Cancel", color = Color.Gray, fontSize = 13.sp)
+                    }
+                }
+            )
         }
     }
 }
