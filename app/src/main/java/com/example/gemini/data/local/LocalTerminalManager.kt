@@ -575,6 +575,14 @@ class LocalPtySession(
                     Log.d(TAG, "[$id] Emulator Output: count=$count -> \"$preview\"")
                     if (!tmuxParser.isControlModeActive) {
                         sendRawToSsh(data, offset, count)
+                    } else {
+                        val isMouseSequence = count >= 3 && data[offset] == 0x1B.toByte() && data[offset + 1] == '['.code.toByte() &&
+                                (data[offset + 2] == '<'.code.toByte() || data[offset + 2] == 'M'.code.toByte())
+                        val isDaReply = (data.any { it == 'c'.code.toByte() } && preview.contains("64;1;2")) ||
+                                (preview.startsWith("\u001b[?") || preview.startsWith("\u001b[>"))
+                        if (isMouseSequence || (!isDaReply && !preview.endsWith("c") && !preview.endsWith("R"))) {
+                            sendRawToSsh(data, offset, count)
+                        }
                     }
                 }
 
@@ -634,12 +642,14 @@ class LocalPtySession(
                     "tmux set-option -g set-titles off 2>/dev/null; " +
                     "tmux set-option -g window-size latest 2>/dev/null; " +
                     "tmux set-window-option -g window-size latest 2>/dev/null; " +
+                    "tmux set-option -g mouse on 2>/dev/null; " +
                     "if ! tmux has-session -t $tmuxSessionName 2>/dev/null; then " +
                     "tmux new-session -d -s $tmuxSessionName 2>/dev/null; " +
                     "tmux set-option -t $tmuxSessionName base-index 1 2>/dev/null; " +
                     "tmux set-option -t $tmuxSessionName renumber-windows off 2>/dev/null; " +
                     "tmux set-option -t $tmuxSessionName window-size latest 2>/dev/null; " +
                     "tmux set-window-option -t $tmuxSessionName window-size latest 2>/dev/null; " +
+                    "tmux set-option -t $tmuxSessionName mouse on 2>/dev/null; " +
                     "fi; " +
                     "targetWin=\$(if [ -n \"$winIdx\" ] && tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | grep -qx \"$winIdx\"; then echo \"$winIdx\"; else tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | head -n 1; fi); " +
                     "tmux -CC new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_\${targetWin} \\; select-window -t $tmuxSessionName:\$targetWin \\; display-message -p -t $tmuxSessionName:\$targetWin \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
@@ -1046,10 +1056,12 @@ object LocalTerminalManager {
                         "tmux set-option -g renumber-windows off 2>/dev/null; " +
                         "tmux set-option -g allow-rename on 2>/dev/null; " +
                         "tmux set-option -g set-titles off 2>/dev/null; " +
+                        "tmux set-option -g mouse on 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME base-index 1 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME renumber-windows off 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME allow-rename on 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME set-titles off 2>/dev/null; " +
+                        "tmux set-option -t $TMUX_SESSION_NAME mouse on 2>/dev/null; " +
                         "tmux list-windows -t $TMUX_SESSION_NAME -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\" 2>/dev/null || echo \"\""
                 Log.d(TAG, "[Probe] Executing: $probeCmd")
                 val channel = session.openChannel("exec") as ChannelExec
@@ -1110,12 +1122,14 @@ object LocalTerminalManager {
                         "tmux set-option -g renumber-windows off 2>/dev/null; " +
                         "tmux set-option -g allow-rename on 2>/dev/null; " +
                         "tmux set-option -g set-titles off 2>/dev/null; " +
+                        "tmux set-option -g mouse on 2>/dev/null; " +
                         "if ! tmux has-session -t $TMUX_SESSION_NAME 2>/dev/null; then " +
                         "tmux new-session -d -s $TMUX_SESSION_NAME $dirArg-P -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
                         "tmux set-option -t $TMUX_SESSION_NAME base-index 1 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME renumber-windows off 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME allow-rename on 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME set-titles off 2>/dev/null; " +
+                        "tmux set-option -t $TMUX_SESSION_NAME mouse on 2>/dev/null; " +
                         "else " +
                         "tmux new-window -d -t $TMUX_SESSION_NAME $dirArg-P -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
                         "fi"

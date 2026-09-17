@@ -204,11 +204,6 @@ fun LocalTerminalContent(
                     .fillMaxWidth()
                     .clipToBounds()
                     .background(Color(0xFF000000))
-                    .clickable {
-                        currentTerminalView?.requestFocus()
-                        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                        currentTerminalView?.let { imm.showSoftInput(it, 0) }
-                    }
                     .padding(horizontal = 4.dp)
             ) {
                 AndroidView(

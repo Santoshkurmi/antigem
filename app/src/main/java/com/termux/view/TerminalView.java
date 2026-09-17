@@ -145,9 +145,10 @@ public final class TerminalView extends View {
             public boolean onUp(MotionEvent event) {
                 mScrollRemainder = 0.0f;
                 boolean handled = false;
-                if (mEmulator != null && mEmulator.isMouseTrackingActive() && !event.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText() && !scrolledWithFinger) {
-                    // Quick event processing when mouse tracking is active - do not wait for check of double tapping
-                    // for zooming.
+                boolean isAltScreen = mEmulator != null && mEmulator.isAlternateBufferActive();
+                boolean isMouseActive = mEmulator != null && mEmulator.isMouseTrackingActive();
+                if ((isMouseActive || isAltScreen) && !event.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText() && !scrolledWithFinger) {
+                    // Quick event processing when mouse tracking or alternate screen (nvim/vim/etc) is active
                     sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, true);
                     sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, false);
                     handled = true;
@@ -172,9 +173,11 @@ public final class TerminalView extends View {
             @Override
             public boolean onScroll(MotionEvent e, float distanceX, float distanceY) {
                 if (mEmulator == null) return true;
-                if (mEmulator.isMouseTrackingActive() && e.isFromSource(InputDevice.SOURCE_MOUSE)) {
+                boolean isAltScreen = mEmulator.isAlternateBufferActive();
+                boolean isMouseActive = mEmulator.isMouseTrackingActive();
+                if (isMouseActive && e.isFromSource(InputDevice.SOURCE_MOUSE)) {
                     sendMouseEventCode(e, TerminalEmulator.MOUSE_LEFT_BUTTON_MOVED, true);
-                } else if (mEmulator.isMouseTrackingActive()) {
+                } else if (isMouseActive || isAltScreen) {
                     scrolledWithFinger = true;
                     mScrollRemainder += distanceY;
                     int deltaRows = (int) (mScrollRemainder / mRenderer.mFontLineSpacing);
@@ -213,12 +216,10 @@ public final class TerminalView extends View {
                     mScroller.abortAnimation();
                 }
 
-                final boolean mouseTrackingAtStartOfFling = mEmulator.isMouseTrackingActive();
-                if (mouseTrackingAtStartOfFling) {
+                final boolean mouseOrAltAtStartOfFling = mEmulator.isMouseTrackingActive() || mEmulator.isAlternateBufferActive();
+                if (mouseOrAltAtStartOfFling) {
                     float SCALE = 0.25f;
                     mScroller.fling(0, 0, 0, -(int) (velocityY * SCALE), 0, 0, -mEmulator.mRows / 2, mEmulator.mRows / 2);
-                } else if (mEmulator.isAlternateBufferActive()) {
-                    return true;
                 } else {
                     int maxScrollPixels = mEmulator.getScreen().getActiveTranscriptRows() * mRenderer.mFontLineSpacing;
                     // velocityY > 0 (finger flicked DOWN, moving towards top of history) -> increase mScrollPixelY
@@ -231,13 +232,14 @@ public final class TerminalView extends View {
 
                     @Override
                     public void run() {
-                        if (mouseTrackingAtStartOfFling != mEmulator.isMouseTrackingActive()) {
+                        boolean currentMouseOrAlt = mEmulator != null && (mEmulator.isMouseTrackingActive() || mEmulator.isAlternateBufferActive());
+                        if (mouseOrAltAtStartOfFling != currentMouseOrAlt) {
                             mScroller.abortAnimation();
                             return;
                         }
                         if (mScroller.isFinished()) return;
                         boolean more = mScroller.computeScrollOffset();
-                        if (mouseTrackingAtStartOfFling) {
+                        if (mouseOrAltAtStartOfFling) {
                             int newY = mScroller.getCurrY();
                             int diff = (newY - mLastY);
                             doScroll(e2, diff);
@@ -255,7 +257,6 @@ public final class TerminalView extends View {
                         if (more) postOnAnimation(this);
                     }
                 });
-
                 return true;
             }
 
@@ -613,15 +614,34 @@ public final class TerminalView extends View {
                 mMouseScrollStartY = y;
             }
         }
-        mEmulator.sendMouseEvent(button, x, y, pressed);
+        if (mEmulator != null) {
+            mEmulator.sendMouseEvent(button, x, y, pressed);
+        }
+        if (mTermSession != null && (mEmulator == null || !mEmulator.isMouseTrackingActive())) {
+            String sgr;
+            if (button == TerminalEmulator.MOUSE_LEFT_BUTTON) {
+                sgr = String.format(java.util.Locale.US, "\033[<0;%d;%d%c", x, y, pressed ? 'M' : 'm');
+            } else if (button == TerminalEmulator.MOUSE_WHEELUP_BUTTON) {
+                sgr = String.format(java.util.Locale.US, "\033[<64;%d;%dM", x, y);
+            } else if (button == TerminalEmulator.MOUSE_WHEELDOWN_BUTTON) {
+                sgr = String.format(java.util.Locale.US, "\033[<65;%d;%dM", x, y);
+            } else {
+                sgr = null;
+            }
+            if (sgr != null) {
+                mTermSession.write(sgr);
+            }
+        }
     }
 
     /** Perform a scroll, either from dragging the screen or by scrolling a mouse wheel. */
     void doScroll(MotionEvent event, int rowsDown) {
         boolean up = rowsDown < 0;
         int amount = Math.abs(rowsDown);
+        boolean isAltScreen = mEmulator != null && mEmulator.isAlternateBufferActive();
+        boolean isMouseActive = mEmulator != null && mEmulator.isMouseTrackingActive();
         for (int i = 0; i < amount; i++) {
-            if (mEmulator.isMouseTrackingActive()) {
+            if (isMouseActive || isAltScreen) {
                 sendMouseEventCode(event, up ? TerminalEmulator.MOUSE_WHEELUP_BUTTON : TerminalEmulator.MOUSE_WHEELDOWN_BUTTON, true);
             } else {
                 mTopRow = Math.min(0, Math.max(-(mEmulator.getScreen().getActiveTranscriptRows()), mTopRow + (up ? -1 : 1)));
