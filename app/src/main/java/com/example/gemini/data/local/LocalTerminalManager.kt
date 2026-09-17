@@ -632,10 +632,14 @@ class LocalPtySession(
                     "tmux set-option -g renumber-windows off 2>/dev/null; " +
                     "tmux set-option -g allow-rename on 2>/dev/null; " +
                     "tmux set-option -g set-titles off 2>/dev/null; " +
+                    "tmux set-option -g window-size latest 2>/dev/null; " +
+                    "tmux set-window-option -g window-size latest 2>/dev/null; " +
                     "if ! tmux has-session -t $tmuxSessionName 2>/dev/null; then " +
                     "tmux new-session -d -s $tmuxSessionName 2>/dev/null; " +
                     "tmux set-option -t $tmuxSessionName base-index 1 2>/dev/null; " +
                     "tmux set-option -t $tmuxSessionName renumber-windows off 2>/dev/null; " +
+                    "tmux set-option -t $tmuxSessionName window-size latest 2>/dev/null; " +
+                    "tmux set-window-option -t $tmuxSessionName window-size latest 2>/dev/null; " +
                     "fi; " +
                     "targetWin=\$(if [ -n \"$winIdx\" ] && tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | grep -qx \"$winIdx\"; then echo \"$winIdx\"; else tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | head -n 1; fi); " +
                     "tmux -CC new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_\${targetWin} \\; select-window -t $tmuxSessionName:\$targetWin \\; display-message -p -t $tmuxSessionName:\$targetWin \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
@@ -856,12 +860,14 @@ class LocalPtySession(
         if (isSsh) {
             resizeJob?.cancel()
             resizeJob = sessionScope.launch(Dispatchers.IO) {
-                delay(250) // Debounce rapid keyboard animation frames
+                delay(100) // Debounce rapid keyboard animation frames
                 try {
                     synchronized(sshWriteLock) {
                         if (tmuxParser.isControlModeActive) {
-                            val cmd = "refresh-client -C ${cols},${rows}\n"
-                            Log.d(TAG, "[$id] Sending debounced refresh-client: $cmd")
+                            val target = tmuxWindowIndex?.let { "$tmuxSessionName:$it" } ?: ""
+                            val targetArg = if (target.isNotEmpty()) "-t $target " else ""
+                            val cmd = "refresh-client -C ${cols},${rows}\nresize-window ${targetArg}-x ${cols} -y ${rows}\n"
+                            Log.d(TAG, "[$id] Sending debounced resize: $cmd")
                             sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
                             sshOut?.flush()
                         }
