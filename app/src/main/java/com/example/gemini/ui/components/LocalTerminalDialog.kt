@@ -454,6 +454,7 @@ fun LocalTerminalContent(
             ) {
                 // Active Tab Name & Switcher Dropdown Anchor
                 Box {
+                    val activeTitle by activeSession.title.collectAsState()
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
@@ -462,7 +463,7 @@ fun LocalTerminalContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = activeSession.name,
+                            text = activeTitle,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White
@@ -489,6 +490,7 @@ fun LocalTerminalContent(
                         sessions.forEach { sess ->
                             val isSelected = sess.id == activeSession.id
                             val sessExited by sess.isExited.collectAsState()
+                            val sessTitle by sess.title.collectAsState()
                             DropdownMenuItem(
                                 text = {
                                     Row(
@@ -503,7 +505,7 @@ fun LocalTerminalContent(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = sess.name,
+                                            text = sessTitle,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                             color = if (isSelected) ClaudeTerracotta else Color.White,
                                             fontSize = 13.sp,

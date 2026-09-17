@@ -14,6 +14,7 @@ class TmuxControlParser(
     private val onControlModeStarted: (() -> Unit)? = null,
     private val onWindowAdd: ((windowId: String) -> Unit)? = null,
     private val onWindowClose: ((windowId: String) -> Unit)? = null,
+    private val onWindowRenamed: ((windowIdOrName: String) -> Unit)? = null,
     private val onPaneExited: ((paneId: String) -> Unit)? = null,
     private val onExit: ((reason: String?) -> Unit)? = null,
     private val onCommandResponse: ((cmdNumber: Long, output: ByteArray, isError: Boolean) -> Unit)? = null,
@@ -186,6 +187,11 @@ class TmuxControlParser(
                 "%window-close" -> {
                     val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.UTF_8) else ""
                     onWindowClose?.invoke(restStr)
+                    return
+                }
+                "%window-renamed" -> {
+                    val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.UTF_8) else ""
+                    onWindowRenamed?.invoke(restStr)
                     return
                 }
                 else -> {

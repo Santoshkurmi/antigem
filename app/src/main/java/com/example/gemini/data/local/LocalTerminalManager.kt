@@ -18,7 +18,8 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.Properties
 
-const val UNIVERSAL_SSH_PATH = "export PATH=\"\$HOME/.local/bin:\$HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/data/data/com.termux/files/usr/bin:\$PATH\"; "
+const val UNIVERSAL_SSH_PATH =
+    "export PATH=\"\$HOME/.local/bin:\$HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/data/data/com.termux/files/usr/bin:\$PATH\"; "
 
 data class TmuxWindowInfo(
     val index: Int,
@@ -27,16 +28,30 @@ data class TmuxWindowInfo(
     val paneId: String? = null
 )
 
+fun formatTmuxTitle(winIndex: Int, winName: String): String {
+    val cleanName = winName.trim()
+    val isGeneric = cleanName.isBlank() ||
+            cleanName.toIntOrNull() != null ||
+            cleanName == winIndex.toString() ||
+            cleanName.lowercase() in listOf("bash", "zsh", "sh", "dash", "tmux", "screen")
+
+    return if (!isGeneric) {
+        "T $winIndex: $cleanName"
+    } else {
+        "T $winIndex"
+    }
+}
+
 class LocalPtySession(
     val id: String,
-    var name: String,
+    initialTitle: String,
     val context: Context,
     val isSsh: Boolean = false,
     val sshHost: String = "127.0.0.1",
     val sshPort: Int = 8022,
     val sshUser: String = "root",
     val sshPass: String = "root",
-    val tmuxWindowIndex: Int? = null,
+    var tmuxWindowIndex: Int? = null,
     val tmuxSessionName: String = "antigem",
     initialWorkingDir: String? = null,
     initialPaneId: String? = null,
@@ -57,8 +72,14 @@ class LocalPtySession(
     private val _isExited = MutableStateFlow(false)
     val isExited: StateFlow<Boolean> = _isExited.asStateFlow()
 
-    private val _title = MutableStateFlow(if (isSsh) "ssh: $sshHost [win ${tmuxWindowIndex ?: 1}]" else "gemini")
+    private val _title = MutableStateFlow(initialTitle)
     val title: StateFlow<String> = _title.asStateFlow()
+
+    var name: String
+        get() = _title.value
+        set(value) {
+            _title.value = value
+        }
 
     private val sessionScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -77,9 +98,14 @@ class LocalPtySession(
         private set
 
     private val sshWriteLock = Any()
+    private var lastInfoRequestTime = 0L
+    private var debouncedInfoJob: Job? = null
 
     init {
-        Log.d(TAG, "[$id] Initializing session: name=$name, isSsh=$isSsh, winIdx=$tmuxWindowIndex, paneId=$initialPaneId, dir=$workingDirectory")
+        Log.d(
+            TAG,
+            "[$id] Initializing session: name=$name, isSsh=$isSsh, winIdx=$tmuxWindowIndex, paneId=$initialPaneId, dir=$workingDirectory"
+        )
         if (isSsh) {
             val safeCwd = context.filesDir.absolutePath
             val dummyBinary = when {
@@ -190,7 +216,8 @@ class LocalPtySession(
         }
     }
 
-    private val ANSI_ESCAPE_REGEX = Regex("\u001B\\[[0-9;]*[a-zA-Z]|\u001B\\([a-zA-Z]|\u001BP[0-9]*[a-zA-Z]?|\u001B\\\\")
+    private val ANSI_ESCAPE_REGEX =
+        Regex("\u001B\\[[0-9;]*[a-zA-Z]|\u001B\\([a-zA-Z]|\u001BP[0-9]*[a-zA-Z]?|\u001B\\\\")
 
     private fun normalizeHistoryNewlines(data: ByteArray): ByteArray {
         val cleaned = TmuxControlParser.stripScreenTitle(data)
@@ -272,9 +299,13 @@ class LocalPtySession(
 
     private val tmuxParser: TmuxControlParser = TmuxControlParser(
         onPaneOutput = { paneId, data ->
-            val preview = String(data.take(60).toByteArray(), Charsets.ISO_8859_1).replace("\n", "\\n").replace("\r", "\\r")
-            Log.d(TAG, "[$id] onPaneOutput: paneId=$paneId (assigned=$assignedPaneId, histRestored=$isInitialHistoryRestored, bytes=${data.size}) -> \"$preview\"")
-            
+            val preview =
+                String(data.take(60).toByteArray(), Charsets.ISO_8859_1).replace("\n", "\\n").replace("\r", "\\r")
+            Log.d(
+                TAG,
+                "[$id] onPaneOutput: paneId=$paneId (assigned=$assignedPaneId, histRestored=$isInitialHistoryRestored, bytes=${data.size}) -> \"$preview\""
+            )
+
             val targetPane = assignedPaneId
             if (targetPane != null && paneId.trim() != targetPane.trim()) {
                 // Strict Isolation: Ignore output belonging to other tmux tabs/windows
@@ -298,7 +329,8 @@ class LocalPtySession(
                         try {
                             Log.d(TAG, "[$id] Clear screen sequence detected, clearing transcript")
                             terminalSession.emulator?.screen?.clearTranscript()
-                        } catch (_: Exception) {}
+                        } catch (_: Exception) {
+                        }
                     }
                     terminalSession.emulator?.append(data, data.size)
                     onTextChangedListener?.invoke()
@@ -313,7 +345,8 @@ class LocalPtySession(
                                 Log.d(TAG, "[$id] Sending clear-history: $cmd")
                                 sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
                                 sshOut?.flush()
-                            } catch (_: Exception) {}
+                            } catch (_: Exception) {
+                            }
                         }
                     }
                 }
@@ -322,7 +355,8 @@ class LocalPtySession(
         onRawFallbackOutput = { data, offset, length ->
             if (!tmuxParser.isControlModeActive) {
                 val chunk = data.copyOfRange(offset, offset + length)
-                val preview = String(chunk.take(60).toByteArray(), Charsets.ISO_8859_1).replace("\n", "\\n").replace("\r", "\\r")
+                val preview =
+                    String(chunk.take(60).toByteArray(), Charsets.ISO_8859_1).replace("\n", "\\n").replace("\r", "\\r")
                 Log.d(TAG, "[$id] FALLBACK -> EMULATOR: len=${chunk.size} -> \"$preview\"")
                 sessionScope.launch(Dispatchers.Main) {
                     terminalSession.emulator?.append(chunk, chunk.size)
@@ -333,6 +367,7 @@ class LocalPtySession(
         onControlModeStarted = {
             Log.d(TAG, "[$id] Tmux Control Mode (-CC) activated!")
             requestInitialHistory()
+            requestInfoUpdate()
             sessionScope.launch(Dispatchers.IO) {
                 synchronized(sshWriteLock) {
                     try {
@@ -340,9 +375,14 @@ class LocalPtySession(
                         Log.d(TAG, "[$id] Sending initial refresh-client: $cmd")
                         sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
                         sshOut?.flush()
-                    } catch (_: Exception) {}
+                    } catch (_: Exception) {
+                    }
                 }
             }
+        },
+        onWindowRenamed = { event ->
+            Log.d(TAG, "[$id] Window renamed event from tmux: $event")
+            requestInfoUpdate()
         },
         onPaneExited = { paneId ->
             Log.d(TAG, "[$id] Tmux pane exited: $paneId (assigned: $assignedPaneId)")
@@ -355,12 +395,20 @@ class LocalPtySession(
             notifySessionClosed(reason)
         },
         onCommandResponse = { cmdNum, data, isError ->
-            val preview = String(data.take(80).toByteArray(), Charsets.ISO_8859_1).replace("\n", "\\n").replace("\r", "\\r")
+            val preview =
+                String(data.take(80).toByteArray(), Charsets.ISO_8859_1).replace("\n", "\\n").replace("\r", "\\r")
             Log.d(TAG, "[$id] CMD_RESP: num=$cmdNum, err=$isError, len=${data.size} -> \"$preview\"")
             if (!isError && data.isNotEmpty()) {
                 val str = String(data, Charsets.UTF_8)
-                if (str.contains("ANTIGEM_PANE_ID:")) {
-                    val extracted = str.lines().find { it.contains("ANTIGEM_PANE_ID:") }?.substringAfter("ANTIGEM_PANE_ID:")?.trim()
+                if (str.contains("ANTIGEM_INFO:")) {
+                    val line =
+                        str.lines().find { it.contains("ANTIGEM_INFO:") }?.substringAfter("ANTIGEM_INFO:")?.trim()
+                    if (!line.isNullOrEmpty()) {
+                        handleAntigemInfo(line)
+                    }
+                } else if (str.contains("ANTIGEM_PANE_ID:")) {
+                    val extracted =
+                        str.lines().find { it.contains("ANTIGEM_PANE_ID:") }?.substringAfter("ANTIGEM_PANE_ID:")?.trim()
                     if (!extracted.isNullOrEmpty()) {
                         assignedPaneId = extracted
                         Log.d(TAG, "[$id] Bound session to pane $assignedPaneId from command response")
@@ -368,7 +416,9 @@ class LocalPtySession(
                 } else if (!isInitialHistoryRestored) {
                     isInitialHistoryRestored = true
                     val formatted = normalizeHistoryNewlines(data)
-                    val formattedPreview = String(formatted.take(80).toByteArray(), Charsets.ISO_8859_1).replace("\n", "\\n").replace("\r", "\\r")
+                    val formattedPreview =
+                        String(formatted.take(80).toByteArray(), Charsets.ISO_8859_1).replace("\n", "\\n")
+                            .replace("\r", "\\r")
                     Log.d(TAG, "[$id] Restoring initial history (${formatted.size} bytes): \"$formattedPreview\"")
                     // capture-pane is the authoritative snapshot of the pane; discard earlyOutputBuffer
                     synchronized(earlyOutputBuffer) {
@@ -377,7 +427,8 @@ class LocalPtySession(
                     sessionScope.launch(Dispatchers.Main) {
                         try {
                             terminalSession.emulator?.screen?.clearTranscript()
-                        } catch (_: Exception) {}
+                        } catch (_: Exception) {
+                        }
                         if (formatted.isNotEmpty()) {
                             terminalSession.emulator?.append(formatted, formatted.size)
                         }
@@ -387,7 +438,12 @@ class LocalPtySession(
             }
         },
         onUnhandledEvent = { event ->
-            if (event.contains("ANTIGEM_PANE_ID:")) {
+            if (event.contains("ANTIGEM_INFO:")) {
+                val line = event.substringAfter("ANTIGEM_INFO:").trim()
+                if (line.isNotEmpty()) {
+                    handleAntigemInfo(line)
+                }
+            } else if (event.contains("ANTIGEM_PANE_ID:")) {
                 val extracted = event.substringAfter("ANTIGEM_PANE_ID:").trim()
                 if (extracted.isNotEmpty()) {
                     assignedPaneId = extracted
@@ -397,6 +453,62 @@ class LocalPtySession(
             Log.d(TAG, "[$id] Tmux -CC event: $event")
         }
     )
+
+    private fun handleAntigemInfo(infoStr: String) {
+        val parts = infoStr.split("|")
+        val winIdx = parts.getOrNull(0)?.toIntOrNull() ?: tmuxWindowIndex ?: 1
+        val winName = parts.getOrNull(1) ?: ""
+        val panePath = parts.getOrNull(2)
+        val pId = parts.getOrNull(3)?.trim()
+
+        if (tmuxWindowIndex == null || tmuxWindowIndex == winIdx) {
+            tmuxWindowIndex = winIdx
+        }
+        if (!pId.isNullOrBlank() && (assignedPaneId == null || assignedPaneId == pId)) {
+            assignedPaneId = pId
+        }
+        if (!panePath.isNullOrBlank()) {
+            workingDirectory = panePath
+        }
+        val formattedTitle = formatTmuxTitle(winIdx, winName)
+        if (_title.value != formattedTitle) {
+            _title.value = formattedTitle
+            Log.d(
+                TAG,
+                "[$id] Realtime title updated: $formattedTitle (win=$winIdx, name=$winName, path=$panePath, paneId=$pId)"
+            )
+        }
+    }
+
+    fun requestInfoUpdate() {
+        if (!isSsh || !tmuxParser.isControlModeActive || _isExited.value) return
+        val now = System.currentTimeMillis()
+        if (now - lastInfoRequestTime < 250) return
+        lastInfoRequestTime = now
+
+        sessionScope.launch(Dispatchers.IO) {
+            synchronized(sshWriteLock) {
+                try {
+                    val target = assignedPaneId ?: (tmuxWindowIndex?.let { "$tmuxSessionName:$it" } ?: "")
+                    val targetArg = if (target.isNotEmpty()) "-t $target " else ""
+                    val cmd =
+                        "display-message ${targetArg}-p \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"\n"
+                    sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
+                    sshOut?.flush()
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
+    private fun scheduleDebouncedInfoUpdate(delayMs: Long = 400) {
+        if (!isSsh || _isExited.value) return
+        debouncedInfoJob?.cancel()
+        debouncedInfoJob = sessionScope.launch(Dispatchers.IO) {
+            delay(delayMs)
+            requestInfoUpdate()
+        }
+    }
 
     fun sendRawToSsh(bytes: ByteArray, offset: Int = 0, count: Int = bytes.size) {
         if (count <= 0 || _isExited.value) return
@@ -422,6 +534,7 @@ class LocalPtySession(
                 }
             }
         }
+        scheduleDebouncedInfoUpdate(if (copy.any { it == 0x0A.toByte() || it == 0x0D.toByte() }) 200 else 800)
     }
 
     private fun hookEmulatorForSsh(session: TerminalSession) {
@@ -433,7 +546,8 @@ class LocalPtySession(
             try {
                 emulator.screen?.clearTranscript()
                 emulator.reset()
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
 
             try {
                 val handlerField = session.javaClass.getDeclaredField("mMainThreadHandler")
@@ -453,7 +567,9 @@ class LocalPtySession(
             sessionField.isAccessible = true
             val sshOutput = object : com.termux.terminal.TerminalOutput() {
                 override fun write(data: ByteArray, offset: Int, count: Int) {
-                    val preview = String(data.copyOfRange(offset, offset + count), Charsets.ISO_8859_1).replace("\n", "\\n").replace("\r", "\\r")
+                    val preview =
+                        String(data.copyOfRange(offset, offset + count), Charsets.ISO_8859_1).replace("\n", "\\n")
+                            .replace("\r", "\\r")
                     Log.d(TAG, "[$id] Emulator Output: count=$count -> \"$preview\"")
                     if (!tmuxParser.isControlModeActive) {
                         sendRawToSsh(data, offset, count)
@@ -511,18 +627,16 @@ class LocalPtySession(
                     "tmux start-server 2>/dev/null; " +
                     "tmux set-option -g base-index 1 2>/dev/null; " +
                     "tmux set-window-option -g pane-base-index 1 2>/dev/null; " +
-                    "tmux set-option -g renumber-windows on 2>/dev/null; " +
+                    "tmux set-option -g renumber-windows off 2>/dev/null; " +
                     "tmux set-option -g allow-rename on 2>/dev/null; " +
                     "tmux set-option -g set-titles off 2>/dev/null; " +
                     "if ! tmux has-session -t $tmuxSessionName 2>/dev/null; then " +
                     "tmux new-session -d -s $tmuxSessionName 2>/dev/null; " +
                     "tmux set-option -t $tmuxSessionName base-index 1 2>/dev/null; " +
-                    "tmux move-window -r -t $tmuxSessionName 2>/dev/null; " +
+                    "tmux set-option -t $tmuxSessionName renumber-windows off 2>/dev/null; " +
                     "fi; " +
-                    "if ! tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | grep -qx \"$winIdx\"; then " +
-                    "tmux new-window -d -t $tmuxSessionName:$winIdx 2>/dev/null || tmux new-window -d -t $tmuxSessionName 2>/dev/null; " +
-                    "fi; " +
-                    "tmux -CC new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_$winIdx \\; select-window -t $tmuxSessionName:$winIdx \\; display-message -p -t $tmuxSessionName:$winIdx \"ANTIGEM_PANE_ID:#{pane_id}\"; " +
+                    "targetWin=\$(if [ -n \"$winIdx\" ] && tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | grep -qx \"$winIdx\"; then echo \"$winIdx\"; else tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | head -n 1; fi); " +
+                    "tmux -CC new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_\${targetWin} \\; select-window -t $tmuxSessionName:\$targetWin \\; display-message -p -t $tmuxSessionName:\$targetWin \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
                     "else \${SHELL:-sh}; fi"
 
             Log.d(TAG, "[$id] Executing SSH command: $tmuxCmd")
@@ -537,7 +651,8 @@ class LocalPtySession(
 
             try {
                 channel.setPtySize(ptyCols, ptyRows, ptyWidthPx, ptyHeightPx)
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
 
             sshIn = channel.inputStream
             sshOut = channel.outputStream
@@ -582,7 +697,8 @@ class LocalPtySession(
                 terminalSession.emulator?.append(bytes, bytes.size)
                 onTextChangedListener?.invoke()
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
     var onTextChangedListener: (() -> Unit)? = null
@@ -635,18 +751,39 @@ class LocalPtySession(
             Log.e(TAG, "Failed to paste text from clipboard", e)
         }
     }
+
     override fun onBell(session: TerminalSession) {}
     override fun onColorsChanged(session: TerminalSession) {}
     override fun onTerminalCursorStateChange(state: Boolean) {}
     override fun getTerminalCursorStyle(): Int = 0
 
-    override fun logError(tag: String, message: String) { Log.e(TAG, "[$id][TermuxError] $message") }
-    override fun logWarn(tag: String, message: String) { Log.w(TAG, "[$id][TermuxWarn] $message") }
-    override fun logInfo(tag: String, message: String) { Log.i(TAG, "[$id][TermuxInfo] $message") }
-    override fun logDebug(tag: String, message: String) { Log.d(TAG, "[$id][TermuxDebug] $message") }
-    override fun logVerbose(tag: String, message: String) { Log.v(TAG, "[$id][TermuxVerbose] $message") }
-    override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) { Log.e(TAG, "[$id][TermuxStack] $message", e) }
-    override fun logStackTrace(tag: String, e: Exception) { Log.e(TAG, "[$id][TermuxStack]", e) }
+    override fun logError(tag: String, message: String) {
+        Log.e(TAG, "[$id][TermuxError] $message")
+    }
+
+    override fun logWarn(tag: String, message: String) {
+        Log.w(TAG, "[$id][TermuxWarn] $message")
+    }
+
+    override fun logInfo(tag: String, message: String) {
+        Log.i(TAG, "[$id][TermuxInfo] $message")
+    }
+
+    override fun logDebug(tag: String, message: String) {
+        Log.d(TAG, "[$id][TermuxDebug] $message")
+    }
+
+    override fun logVerbose(tag: String, message: String) {
+        Log.v(TAG, "[$id][TermuxVerbose] $message")
+    }
+
+    override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) {
+        Log.e(TAG, "[$id][TermuxStack] $message", e)
+    }
+
+    override fun logStackTrace(tag: String, e: Exception) {
+        Log.e(TAG, "[$id][TermuxStack]", e)
+    }
 
     fun write(text: String) {
         if (_isExited.value) return
@@ -698,7 +835,10 @@ class LocalPtySession(
     fun updateSize(cols: Int, rows: Int, widthPx: Int = cols * 10, heightPx: Int = rows * 20) {
         if (cols <= 0 || rows <= 0) return
         if (cols == ptyCols && rows == ptyRows) return
-        Log.d(TAG, "[$id] updateSize: cols=$cols, rows=$rows (prev: ${ptyCols}x${ptyRows}), widthPx=$widthPx, heightPx=$heightPx")
+        Log.d(
+            TAG,
+            "[$id] updateSize: cols=$cols, rows=$rows (prev: ${ptyCols}x${ptyRows}), widthPx=$widthPx, heightPx=$heightPx"
+        )
         ptyCols = cols
         ptyRows = rows
         ptyWidthPx = widthPx
@@ -709,7 +849,8 @@ class LocalPtySession(
         LocalTerminalManager.lastKnownHeightPx = heightPx
         try {
             terminalSession.updateSize(cols, rows)
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
         if (isSsh) {
             resizeJob?.cancel()
             resizeJob = sessionScope.launch(Dispatchers.IO) {
@@ -738,7 +879,8 @@ class LocalPtySession(
             sshChannel?.disconnect()
             jschSession?.disconnect()
             terminalSession.finishIfRunning()
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 }
 
@@ -780,7 +922,7 @@ object LocalTerminalManager {
             return withContext(Dispatchers.Main) {
                 val primary = LocalPtySession(
                     id = "session-1",
-                    name = "Session 1",
+                    initialTitle = "Session 1",
                     context = context.applicationContext,
                     isSsh = false,
                     initialCols = lastKnownCols,
@@ -807,19 +949,14 @@ object LocalTerminalManager {
             if (discoveredWindows.isNotEmpty()) {
                 val sortedWindows = discoveredWindows.sortedBy { it.index }
                 val restoredList = sortedWindows.map { win ->
-                    val isGenericOrNumeric = win.name.isBlank() ||
-                        win.name.toIntOrNull() != null ||
-                        win.name == win.index.toString() ||
-                        win.name.lowercase() in listOf("bash", "zsh", "sh", "dash", "tmux", "screen")
-                    val winTitle = if (!isGenericOrNumeric) {
-                        "SSH ${win.index}: ${win.name}"
-                    } else {
-                        "SSH ${win.index}"
-                    }
-                    Log.d(TAG, "[Manager] Restoring session for window ${win.index} (name=${win.name}, paneId=${win.paneId})")
+                    val winTitle = formatTmuxTitle(win.index, win.name)
+                    Log.d(
+                        TAG,
+                        "[Manager] Restoring session for window ${win.index} (name=${win.name}, title=$winTitle, paneId=${win.paneId})"
+                    )
                     LocalPtySession(
                         id = "session-tmux-${win.index}",
-                        name = winTitle,
+                        initialTitle = winTitle,
                         context = context.applicationContext,
                         isSsh = true,
                         sshHost = host,
@@ -844,7 +981,7 @@ object LocalTerminalManager {
                 Log.d(TAG, "[Manager] No remote windows found, creating initial SSH 1 session")
                 val initialSsh = LocalPtySession(
                     id = "session-tmux-1",
-                    name = "SSH 1",
+                    initialTitle = "T",
                     context = context.applicationContext,
                     isSsh = true,
                     sshHost = host,
@@ -865,7 +1002,12 @@ object LocalTerminalManager {
         }
     }
 
-    private suspend fun probeRemoteTmuxWindows(host: String, port: Int, user: String, pass: String): List<TmuxWindowInfo> = withContext(Dispatchers.IO) {
+    private suspend fun probeRemoteTmuxWindows(
+        host: String,
+        port: Int,
+        user: String,
+        pass: String
+    ): List<TmuxWindowInfo> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "[Probe] Connecting SSH to $user@$host:$port for window probe...")
             val jsch = JSch()
@@ -881,10 +1023,11 @@ object LocalTerminalManager {
 
             try {
                 val probeCmd = UNIVERSAL_SSH_PATH +
-                    "tmux set-option -g base-index 1 2>/dev/null; " +
-                    "tmux set-option -t $TMUX_SESSION_NAME base-index 1 2>/dev/null; " +
-                    "tmux move-window -r -t $TMUX_SESSION_NAME 2>/dev/null; " +
-                    "tmux list-windows -t $TMUX_SESSION_NAME -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\" 2>/dev/null || echo \"\""
+                        "tmux set-option -g base-index 1 2>/dev/null; " +
+                        "tmux set-option -g renumber-windows off 2>/dev/null; " +
+                        "tmux set-option -t $TMUX_SESSION_NAME base-index 1 2>/dev/null; " +
+                        "tmux set-option -t $TMUX_SESSION_NAME renumber-windows off 2>/dev/null; " +
+                        "tmux list-windows -t $TMUX_SESSION_NAME -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\" 2>/dev/null || echo \"\""
                 Log.d(TAG, "[Probe] Executing: $probeCmd")
                 val channel = session.openChannel("exec") as ChannelExec
                 channel.setCommand(probeCmd)
@@ -925,9 +1068,8 @@ object LocalTerminalManager {
         port: Int,
         user: String,
         pass: String,
-        winIdx: Int,
         workingDir: String?
-    ): String? = withContext(Dispatchers.IO) {
+    ): TmuxWindowInfo? = withContext(Dispatchers.IO) {
         try {
             val jsch = JSch()
             val session = jsch.getSession(user, host, port)
@@ -941,26 +1083,40 @@ object LocalTerminalManager {
             try {
                 val dirArg = if (!workingDir.isNullOrBlank()) "-c \"$workingDir\" " else ""
                 val cmd = UNIVERSAL_SSH_PATH +
-                    "tmux set-option -g base-index 1 2>/dev/null; " +
-                    "if ! tmux has-session -t $TMUX_SESSION_NAME 2>/dev/null; then " +
-                    "tmux new-session -d -s $TMUX_SESSION_NAME $dirArg 2>/dev/null; " +
-                    "fi; " +
-                    "tmux new-window -d -t $TMUX_SESSION_NAME:$winIdx $dirArg 2>/dev/null; " +
-                    "tmux display-message -p -t $TMUX_SESSION_NAME:$winIdx \"#{pane_id}\""
-                Log.d(TAG, "[Manager] Pre-creating window $winIdx: $cmd")
+                        "tmux set-option -g base-index 1 2>/dev/null; " +
+                        "tmux set-option -g renumber-windows off 2>/dev/null; " +
+                        "if ! tmux has-session -t $TMUX_SESSION_NAME 2>/dev/null; then " +
+                        "tmux new-session -d -s $TMUX_SESSION_NAME $dirArg-P -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
+                        "tmux set-option -t $TMUX_SESSION_NAME base-index 1 2>/dev/null; " +
+                        "tmux set-option -t $TMUX_SESSION_NAME renumber-windows off 2>/dev/null; " +
+                        "else " +
+                        "tmux new-window -d -t $TMUX_SESSION_NAME $dirArg-P -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
+                        "fi"
+                Log.d(TAG, "[Manager] Pre-creating window: $cmd")
                 val channel = session.openChannel("exec") as ChannelExec
                 channel.setCommand(cmd)
                 val input = channel.inputStream
                 channel.connect(4000)
-                val paneId = input.bufferedReader().readText().trim()
+                val output = input.bufferedReader().readText().trim()
                 channel.disconnect()
-                Log.d(TAG, "[Manager] Created window $winIdx with paneId=$paneId")
-                return@withContext if (paneId.startsWith("%")) paneId else null
+                Log.d(TAG, "[Manager] Created window output: $output")
+                val validLine = output.lines().lastOrNull { it.contains("|") }
+                if (validLine != null) {
+                    val parts = validLine.split("|")
+                    val idx = parts.getOrNull(0)?.toIntOrNull()
+                    if (idx != null) {
+                        val name = parts.getOrNull(1) ?: ""
+                        val path = parts.getOrNull(2)
+                        val paneId = parts.getOrNull(3)?.trim()?.takeIf { it.startsWith("%") }
+                        return@withContext TmuxWindowInfo(index = idx, name = name, path = path, paneId = paneId)
+                    }
+                }
+                return@withContext null
             } finally {
                 session.disconnect()
             }
         } catch (e: Exception) {
-            Log.w(TAG, "[Manager] Error pre-creating remote tmux window $winIdx", e)
+            Log.w(TAG, "[Manager] Error pre-creating remote tmux window", e)
             return@withContext null
         }
     }
@@ -975,12 +1131,14 @@ object LocalTerminalManager {
             val pass = authPrefs.termuxSshPass.firstOrNull() ?: "root"
 
             if (!useSsh) {
-                val existingIndices = _sessions.value.mapIndexed { idx, _ -> idx + 1 }
+                val existingIndices = _sessions.value.mapNotNull {
+                    it.id.removePrefix("session-").substringBefore("-").toIntOrNull()
+                }
                 val nextWinIndex = (existingIndices.maxOrNull() ?: _sessions.value.size) + 1
                 Log.d(TAG, "[Manager] Creating local session $nextWinIndex")
                 val newSession = LocalPtySession(
                     id = "session-$nextWinIndex-${System.currentTimeMillis() % 10000}",
-                    name = "Session $nextWinIndex",
+                    initialTitle = "Session $nextWinIndex",
                     context = context.applicationContext,
                     isSsh = false,
                     initialWorkingDir = workingDir,
@@ -995,31 +1153,40 @@ object LocalTerminalManager {
             }
 
             _isSyncingTmux.value = true
-            Log.d(TAG, "[Manager] Probing before creating new tab...")
-            val remoteWindows = withContext(Dispatchers.IO) {
-                probeRemoteTmuxWindows(host, port, user, pass)
+            Log.d(TAG, "[Manager] Creating new tmux window on server...")
+            val createdWin = withContext(Dispatchers.IO) {
+                createRemoteTmuxWindow(host, port, user, pass, workingDir)
             }
             _isSyncingTmux.value = false
 
-            val remoteIndices = remoteWindows.map { it.index }
-            val localIndices = _sessions.value.mapNotNull { it.tmuxWindowIndex }
-            val allExistingIndices = (remoteIndices + localIndices).toSet()
+            val nextWinIndex: Int
+            val initialWinName: String
+            val initialWinPath: String?
+            val initialPaneId: String?
 
-            val nextWinIndex = if (allExistingIndices.isEmpty()) {
-                1
+            if (createdWin != null) {
+                nextWinIndex = createdWin.index
+                initialWinName = createdWin.name
+                initialWinPath = createdWin.path ?: workingDir
+                initialPaneId = createdWin.paneId
             } else {
-                (allExistingIndices.maxOrNull() ?: 0) + 1
+                val localIndices = _sessions.value.mapNotNull { it.tmuxWindowIndex }
+                nextWinIndex = if (localIndices.isEmpty()) 1 else (localIndices.maxOrNull() ?: 0) + 1
+                initialWinName = ""
+                initialWinPath = workingDir
+                initialPaneId = null
             }
-            Log.d(TAG, "[Manager] Remote indices=$remoteIndices, local indices=$localIndices -> nextWinIndex=$nextWinIndex")
 
-            // Pre-create the window on the server to retrieve its exact pane ID
-            _isSyncingTmux.value = true
-            val createdPaneId = createRemoteTmuxWindow(host, port, user, pass, nextWinIndex, workingDir)
-            _isSyncingTmux.value = false
+            val winTitle = formatTmuxTitle(nextWinIndex, initialWinName)
+            val sessionId = "session-tmux-$nextWinIndex"
+
+            val existing = _sessions.value.find { it.id == sessionId }
+            existing?.close()
+            val filtered = _sessions.value.filterNot { it.id == sessionId }
 
             val newSession = LocalPtySession(
-                id = "session-tmux-$nextWinIndex",
-                name = "SSH $nextWinIndex",
+                id = sessionId,
+                initialTitle = winTitle,
                 context = context.applicationContext,
                 isSsh = true,
                 sshHost = host,
@@ -1028,16 +1195,19 @@ object LocalTerminalManager {
                 sshPass = pass,
                 tmuxWindowIndex = nextWinIndex,
                 tmuxSessionName = TMUX_SESSION_NAME,
-                initialWorkingDir = workingDir,
-                initialPaneId = createdPaneId,
+                initialWorkingDir = initialWinPath,
+                initialPaneId = initialPaneId,
                 initialCols = lastKnownCols,
                 initialRows = lastKnownRows,
                 initialWidthPx = lastKnownWidthPx,
                 initialHeightPx = lastKnownHeightPx
             )
-            _sessions.value = _sessions.value + newSession
+            _sessions.value = filtered + newSession
             _activeSessionId.value = newSession.id
-            Log.d(TAG, "[Manager] Created and activated new tab session ${newSession.id} (paneId=$createdPaneId)")
+            Log.d(
+                TAG,
+                "[Manager] Created and activated new tab session ${newSession.id} (winIdx=$nextWinIndex, paneId=$initialPaneId, title=$winTitle)"
+            )
         }
     }
 
@@ -1083,8 +1253,8 @@ object LocalTerminalManager {
                     try {
                         val channel = session.openChannel("exec") as ChannelExec
                         val cmd = UNIVERSAL_SSH_PATH +
-                            "tmux kill-window -t $TMUX_SESSION_NAME:$winIdx 2>/dev/null; " +
-                            "tmux kill-session -t ${TMUX_SESSION_NAME}_$winIdx 2>/dev/null"
+                                "tmux kill-window -t $TMUX_SESSION_NAME:$winIdx 2>/dev/null; " +
+                                "tmux kill-session -t ${TMUX_SESSION_NAME}_$winIdx 2>/dev/null"
                         Log.d(TAG, "[Manager] Executing remote kill: $cmd")
                         channel.setCommand(cmd)
                         val input = channel.inputStream
@@ -1125,7 +1295,8 @@ object LocalTerminalManager {
                     session.connect(4000)
                     try {
                         val channel = session.openChannel("exec") as ChannelExec
-                        val clientKills = windowIndices.joinToString("; ") { "tmux kill-session -t ${TMUX_SESSION_NAME}_$it 2>/dev/null" }
+                        val clientKills =
+                            windowIndices.joinToString("; ") { "tmux kill-session -t ${TMUX_SESSION_NAME}_$it 2>/dev/null" }
                         val cmd = UNIVERSAL_SSH_PATH + clientKills
                         Log.d(TAG, "[Manager] Disconnecting client attachments: $cmd")
                         channel.setCommand(cmd)
@@ -1136,7 +1307,8 @@ object LocalTerminalManager {
                     } finally {
                         session.disconnect()
                     }
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                }
             }
         }
 
