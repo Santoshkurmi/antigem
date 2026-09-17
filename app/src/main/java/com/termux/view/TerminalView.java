@@ -7,6 +7,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Handler;
@@ -83,6 +84,40 @@ public final class TerminalView extends View {
 
     final OverScroller mScroller;
     private Runnable mCurrentFlingRunnable = null;
+
+    private final Paint mScrollBarPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private float mScrollBarAlpha = 0f;
+    private long mScrollBarFadeStartTime = 0;
+    private static final long SCROLLBAR_FADE_DELAY = 800;
+    private static final long SCROLLBAR_FADE_DURATION = 300;
+    private final Runnable mScrollBarFadeRunnable = new Runnable() {
+        @Override
+        public void run() {
+            long now = SystemClock.uptimeMillis();
+            long elapsed = now - mScrollBarFadeStartTime;
+            if (elapsed < SCROLLBAR_FADE_DELAY) {
+                postDelayed(this, SCROLLBAR_FADE_DELAY - elapsed);
+            } else {
+                long fadeElapsed = elapsed - SCROLLBAR_FADE_DELAY;
+                if (fadeElapsed >= SCROLLBAR_FADE_DURATION) {
+                    mScrollBarAlpha = 0f;
+                    invalidate();
+                } else {
+                    mScrollBarAlpha = 1.0f - ((float) fadeElapsed / SCROLLBAR_FADE_DURATION);
+                    invalidate();
+                    postOnAnimation(this);
+                }
+            }
+        }
+    };
+
+    public void showScrollBar() {
+        mScrollBarAlpha = 1.0f;
+        mScrollBarFadeStartTime = SystemClock.uptimeMillis();
+        removeCallbacks(mScrollBarFadeRunnable);
+        postDelayed(mScrollBarFadeRunnable, SCROLLBAR_FADE_DELAY);
+        invalidate();
+    }
 
     /** What was left in from scrolling movement. */
     float mScrollRemainder;
@@ -196,6 +231,7 @@ public final class TerminalView extends View {
                     }
                 } else {
                     scrolledWithFinger = true;
+                    showScrollBar();
                     int lineSpacing = (mRenderer != null && mRenderer.mFontLineSpacing > 0) ? mRenderer.mFontLineSpacing : 40;
                     int maxScrollPixels = mEmulator.getScreen().getActiveTranscriptRows() * lineSpacing;
                     mScrollPixelY = Math.max(0f, Math.min(maxScrollPixels, mScrollPixelY - distanceY * 1.3f));
@@ -229,6 +265,7 @@ public final class TerminalView extends View {
                     mScroller.forceFinished(true);
                 }
 
+                showScrollBar();
                 final boolean mouseOrAltAtStartOfFling = mEmulator.isMouseTrackingActive() || mEmulator.isAlternateBufferActive();
                 if (mouseOrAltAtStartOfFling) {
                     float SCALE = 0.85f;
@@ -664,7 +701,8 @@ public final class TerminalView extends View {
                                        : (mEmulator != null && mEmulator.isCursorKeysApplicationMode() ? "\033OB" : "\033[B"));
             } else {
                 mTopRow = Math.min(0, Math.max(-(mEmulator.getScreen().getActiveTranscriptRows()), mTopRow + (up ? -1 : 1)));
-                if (!awakenScrollBars()) invalidate();
+                showScrollBar();
+                invalidate();
             }
         }
     }
@@ -756,6 +794,10 @@ public final class TerminalView extends View {
             /* ctrl+space does not work on some ROMs without this workaround.
                However, this breaks it on devices where it works out of the box. */
             return onKeyDown(keyCode, event);
+        } else if (mClient.shouldEnforceCharBasedInput()) {
+            // Avoid issues with some soft keyboards, such as the LG keyboard on the LG G6:
+            // https://github.com/termux/termux-app/issues/403
+            return true;
         }
         return super.onKeyPreIme(keyCode, event);
     }
@@ -1137,6 +1179,37 @@ public final class TerminalView extends View {
             renderTextSelection();
 
             canvas.restore();
+
+            // Draw ultra-thin sleek Termux-style scrollbar on top
+            if (mScrollBarAlpha > 0f) {
+                int totalRows = mEmulator.getScreen().getActiveRows();
+                int visibleRows = mEmulator.mRows;
+                if (totalRows > visibleRows) {
+                    float density = getResources().getDisplayMetrics().density;
+                    float barWidth = 2.0f * density; // very thin width
+                    float rightMargin = 2.0f * density;
+                    float trackTop = mTopPadding;
+                    float trackHeight = getHeight() - mTopPadding;
+                    if (trackHeight > 0) {
+                        float ratio = (float) visibleRows / (float) totalRows;
+                        float thumbHeight = Math.max(20f * density, trackHeight * ratio);
+
+                        int transcriptRows = mEmulator.getScreen().getActiveTranscriptRows();
+                        int lineSpacing = (mRenderer != null && mRenderer.mFontLineSpacing > 0) ? mRenderer.mFontLineSpacing : 40;
+                        float maxScrollPixels = transcriptRows * lineSpacing;
+                        float scrollFraction = (maxScrollPixels > 0) ? (1f - (mScrollPixelY / maxScrollPixels)) : 1f;
+                        scrollFraction = Math.max(0f, Math.min(1f, scrollFraction));
+
+                        float thumbTop = trackTop + (trackHeight - thumbHeight) * scrollFraction;
+                        float left = getWidth() - rightMargin - barWidth;
+                        float right = left + barWidth;
+
+                        mScrollBarPaint.setColor(0xFFFFFFFF);
+                        mScrollBarPaint.setAlpha((int) (mScrollBarAlpha * 125)); // sleek translucent white
+                        canvas.drawRoundRect(left, thumbTop, right, thumbTop + thumbHeight, barWidth / 2f, barWidth / 2f, mScrollBarPaint);
+                    }
+                }
+            }
         }
     }
 
