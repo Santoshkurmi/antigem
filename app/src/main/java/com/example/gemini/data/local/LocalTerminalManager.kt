@@ -25,7 +25,8 @@ data class TmuxWindowInfo(
     val index: Int,
     val name: String,
     val path: String? = null,
-    val paneId: String? = null
+    val paneId: String? = null,
+    val windowId: String? = null
 )
 
 fun formatTmuxTitle(winIndex: Int, winName: String): String {
@@ -57,6 +58,7 @@ class LocalPtySession(
     val tmuxSessionName: String = "antigem",
     initialWorkingDir: String? = null,
     initialPaneId: String? = null,
+    initialWindowId: String? = null,
     initialCols: Int = 80,
     initialRows: Int = 24,
     initialWidthPx: Int = 800,
@@ -65,6 +67,7 @@ class LocalPtySession(
     private val TAG = "AntiGemTerminal"
 
     var assignedPaneId: String? = initialPaneId
+    var assignedWindowId: String? = initialWindowId
 
     var workingDirectory: String = initialWorkingDir ?: LocalEnvironmentManager.getHomeDir(context).absolutePath
         private set
@@ -382,25 +385,45 @@ class LocalPtySession(
                 }
             }
         },
+        onWindowClose = { windowId ->
+            val closedWinId = windowId.trim().substringBefore(" ")
+            Log.d(TAG, "[$id] Tmux window closed event: $closedWinId (assignedWin=$assignedWindowId, assignedPane=$assignedPaneId)")
+            if (!assignedWindowId.isNullOrBlank() && (closedWinId == assignedWindowId || closedWinId.removePrefix("@") == assignedWindowId?.removePrefix("@"))) {
+                notifySessionClosed("Process exited")
+            } else {
+                scheduleDebouncedInfoUpdate(50)
+            }
+        },
         onWindowRenamed = { event ->
             Log.d(TAG, "[$id] Window renamed event from tmux: $event")
             requestInfoUpdate()
         },
         onPaneExited = { paneId ->
-            Log.d(TAG, "[$id] Tmux pane exited: $paneId (assigned: $assignedPaneId)")
-            if (assignedPaneId != null && paneId.trim() == assignedPaneId?.trim()) {
-                notifySessionClosed()
+            val cleanPane = paneId.trim().substringBefore(" ")
+            val myPane = assignedPaneId?.trim()
+            Log.d(TAG, "[$id] Tmux pane exited event: $cleanPane (assigned: $myPane)")
+            if (!myPane.isNullOrBlank() && (cleanPane == myPane || cleanPane.removePrefix("%") == myPane.removePrefix("%"))) {
+                notifySessionClosed("Process exited")
+            } else {
+                scheduleDebouncedInfoUpdate(50)
             }
         },
         onExit = { reason ->
             Log.d(TAG, "[$id] Tmux exited: $reason")
-            notifySessionClosed(reason)
+            notifySessionClosed(reason ?: "Process exited")
         },
         onCommandResponse = { cmdNum, data, isError ->
             val preview =
                 String(data.take(80).toByteArray(), Charsets.ISO_8859_1).replace("\n", "\\n").replace("\r", "\\r")
             Log.d(TAG, "[$id] CMD_RESP: num=$cmdNum, err=$isError, len=${data.size} -> \"$preview\"")
-            if (!isError && data.isNotEmpty()) {
+            if (isError) {
+                val str = String(data, Charsets.UTF_8).trim()
+                val target = assignedPaneId ?: assignedWindowId
+                if (target != null && (str.contains("can't find") || str.contains("no such")) && str.contains(target)) {
+                    Log.d(TAG, "[$id] Target $target no longer exists on remote ($str), notifying session closed")
+                    notifySessionClosed("Process exited")
+                }
+            } else if (data.isNotEmpty()) {
                 val str = String(data, Charsets.UTF_8)
                 if (str.contains("ANTIGEM_INFO:")) {
                     val line =
@@ -471,6 +494,19 @@ class LocalPtySession(
         val altVal = parts.getOrNull(4)?.trim()
         val mouseAny = parts.getOrNull(5)?.trim() == "1"
         val mouseSgr = parts.getOrNull(6)?.trim() == "1"
+        val winId = parts.getOrNull(7)?.trim()
+
+        if (assignedPaneId == null && !pId.isNullOrBlank()) {
+            assignedPaneId = pId
+        } else if (!assignedPaneId.isNullOrBlank() && !pId.isNullOrBlank() && pId != assignedPaneId) {
+            Log.d(TAG, "[$id] Current pane $assignedPaneId is dead (fallback to $pId), notifying session closed")
+            notifySessionClosed("Process exited")
+            return
+        }
+
+        if (assignedWindowId == null && !winId.isNullOrBlank()) {
+            assignedWindowId = winId
+        }
 
         val isAlt = altVal == "1"
 
@@ -538,7 +574,7 @@ class LocalPtySession(
                     val target = assignedPaneId ?: (tmuxWindowIndex?.let { "$tmuxSessionName:$it" } ?: "")
                     val targetArg = if (target.isNotEmpty()) "-t $target " else ""
                     val cmd =
-                        "display-message ${targetArg}-p \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{alternate_on}|#{mouse_any_flag}|#{mouse_sgr_flag}\"\n"
+                        "display-message ${targetArg}-p \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{alternate_on}|#{mouse_any_flag}|#{mouse_sgr_flag}|#{window_id}\"\n"
                     sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
                     sshOut?.flush()
                 } catch (_: Exception) {
@@ -696,7 +732,7 @@ class LocalPtySession(
                     "tmux set-option -t $tmuxSessionName mouse on 2>/dev/null; " +
                     "fi; " +
                     "targetWin=\$(if [ -n \"$winIdx\" ] && tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | grep -qx \"$winIdx\"; then echo \"$winIdx\"; else tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | head -n 1; fi); " +
-                    "tmux -CC new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_\${targetWin} \\; select-window -t $tmuxSessionName:\$targetWin \\; display-message -p -t $tmuxSessionName:\$targetWin \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{alternate_on}|#{mouse_any_flag}|#{mouse_sgr_flag}\"; " +
+                    "tmux -CC new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_\${targetWin} \\; select-window -t $tmuxSessionName:\$targetWin \\; display-message -p -t $tmuxSessionName:\$targetWin \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{alternate_on}|#{mouse_any_flag}|#{mouse_sgr_flag}|#{window_id}\"; " +
                     "else \${SHELL:-sh}; fi"
 
             Log.d(TAG, "[$id] Executing SSH command: $tmuxCmd")
@@ -742,11 +778,7 @@ class LocalPtySession(
         if (_isExited.value) return
         _isExited.value = true
         Log.d(TAG, "[$id] notifySessionClosed: reason=$reason")
-        val msg = if (reason != null && reason.isNotBlank()) {
-            "\r\n\r\n[Session is closed: $reason - you can close this tab]\r\n"
-        } else {
-            "\r\n\r\n[Session is closed, user can close the tab]\r\n"
-        }
+        val msg = "\r\n\r\n\u001b[1;33m[Process completed - Press Enter to close tab]\u001b[0m\r\n"
         writeToEmulator(msg)
     }
 
@@ -1054,6 +1086,7 @@ object LocalTerminalManager {
                         tmuxSessionName = TMUX_SESSION_NAME,
                         initialWorkingDir = win.path,
                         initialPaneId = win.paneId,
+                        initialWindowId = win.windowId,
                         initialCols = lastKnownCols,
                         initialRows = lastKnownRows,
                         initialWidthPx = lastKnownWidthPx,
@@ -1080,6 +1113,7 @@ object LocalTerminalManager {
                 val winName = createdWin?.name ?: ""
                 val winPath = createdWin?.path
                 val paneId = createdWin?.paneId
+                val winId = createdWin?.windowId
                 val winTitle = formatTmuxTitle(winIndex, winName)
 
                 val initialSsh = LocalPtySession(
@@ -1095,6 +1129,7 @@ object LocalTerminalManager {
                     tmuxSessionName = TMUX_SESSION_NAME,
                     initialWorkingDir = winPath,
                     initialPaneId = paneId,
+                    initialWindowId = winId,
                     initialCols = lastKnownCols,
                     initialRows = lastKnownRows,
                     initialWidthPx = lastKnownWidthPx,
@@ -1138,7 +1173,7 @@ object LocalTerminalManager {
                         "tmux set-option -t $TMUX_SESSION_NAME allow-rename on 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME set-titles off 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME mouse on 2>/dev/null; " +
-                        "tmux list-windows -t $TMUX_SESSION_NAME -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\" 2>/dev/null || echo \"\""
+                        "tmux list-windows -t $TMUX_SESSION_NAME -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{window_id}\" 2>/dev/null || echo \"\""
                 Log.d(TAG, "[Probe] Executing: $probeCmd")
                 val channel = session.openChannel("exec") as ChannelExec
                 channel.setCommand(probeCmd)
@@ -1157,8 +1192,9 @@ object LocalTerminalManager {
                         if (idx != null) {
                             val name = parts.getOrNull(1) ?: idx.toString()
                             val path = parts.getOrNull(2)
-                            val paneId = parts.getOrNull(3)
-                            list.add(TmuxWindowInfo(index = idx, name = name, path = path, paneId = paneId))
+                            val paneId = parts.getOrNull(3)?.trim()?.takeIf { it.startsWith("%") }
+                            val winId = parts.getOrNull(4)?.trim()?.takeIf { it.startsWith("@") }
+                            list.add(TmuxWindowInfo(index = idx, name = name, path = path, paneId = paneId, windowId = winId))
                         }
                     }
                 }
@@ -1200,14 +1236,14 @@ object LocalTerminalManager {
                         "tmux set-option -g set-titles off 2>/dev/null; " +
                         "tmux set-option -g mouse on 2>/dev/null; " +
                         "if ! tmux has-session -t $TMUX_SESSION_NAME 2>/dev/null; then " +
-                        "tmux new-session -d -s $TMUX_SESSION_NAME $dirArg-P -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
+                        "tmux new-session -d -s $TMUX_SESSION_NAME $dirArg-P -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{window_id}\"; " +
                         "tmux set-option -t $TMUX_SESSION_NAME base-index 1 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME renumber-windows off 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME allow-rename on 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME set-titles off 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME mouse on 2>/dev/null; " +
                         "else " +
-                        "tmux new-window -d -t $TMUX_SESSION_NAME $dirArg-P -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
+                        "tmux new-window -d -t $TMUX_SESSION_NAME $dirArg-P -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{window_id}\"; " +
                         "fi"
                 Log.d(TAG, "[Manager] Pre-creating window: $cmd")
                 val channel = session.openChannel("exec") as ChannelExec
@@ -1225,7 +1261,8 @@ object LocalTerminalManager {
                         val name = parts.getOrNull(1) ?: ""
                         val path = parts.getOrNull(2)
                         val paneId = parts.getOrNull(3)?.trim()?.takeIf { it.startsWith("%") }
-                        return@withContext TmuxWindowInfo(index = idx, name = name, path = path, paneId = paneId)
+                        val winId = parts.getOrNull(4)?.trim()?.takeIf { it.startsWith("@") }
+                        return@withContext TmuxWindowInfo(index = idx, name = name, path = path, paneId = paneId, windowId = winId)
                     }
                 }
                 return@withContext null
@@ -1314,6 +1351,7 @@ object LocalTerminalManager {
                 tmuxSessionName = TMUX_SESSION_NAME,
                 initialWorkingDir = initialWinPath,
                 initialPaneId = initialPaneId,
+                initialWindowId = createdWin?.windowId,
                 initialCols = lastKnownCols,
                 initialRows = lastKnownRows,
                 initialWidthPx = lastKnownWidthPx,
@@ -1378,17 +1416,18 @@ object LocalTerminalManager {
             }
         }
 
-        if (toClose != null && toClose.isSsh && toClose.tmuxWindowIndex != null) {
+        if (toClose != null && toClose.isSsh) {
+            val paneId = toClose.assignedPaneId
             val winIdx = toClose.tmuxWindowIndex
             val host = toClose.sshHost
             val port = toClose.sshPort
             val user = toClose.sshUser
             val pass = toClose.sshPass
 
-            // Asynchronously kill remote tmux window and client session without killing the master session
+            // Asynchronously kill remote tmux window/pane without killing grouped session (which unlinks other windows)
             managerScope.launch(Dispatchers.IO) {
                 try {
-                    Log.d(TAG, "[Manager] Connecting SSH to kill remote window $winIdx...")
+                    Log.d(TAG, "[Manager] Connecting SSH to kill remote target (pane=$paneId, winIdx=$winIdx)...")
                     val jsch = JSch()
                     val session = jsch.getSession(user, host, port)
                     session.setPassword(pass)
@@ -1400,21 +1439,21 @@ object LocalTerminalManager {
                     session.connect(4000)
                     try {
                         val channel = session.openChannel("exec") as ChannelExec
-                        val cmd = UNIVERSAL_SSH_PATH +
-                                "tmux kill-window -t $TMUX_SESSION_NAME:$winIdx 2>/dev/null; " +
-                                "tmux kill-session -t ${TMUX_SESSION_NAME}_$winIdx 2>/dev/null"
+                        val targetCmd = if (!paneId.isNullOrBlank()) "tmux kill-pane -t $paneId 2>/dev/null; " else ""
+                        val winCmd = if (winIdx != null) "tmux kill-window -t $TMUX_SESSION_NAME:$winIdx 2>/dev/null; " else ""
+                        val cmd = UNIVERSAL_SSH_PATH + targetCmd + winCmd
                         Log.d(TAG, "[Manager] Executing remote kill: $cmd")
                         channel.setCommand(cmd)
                         val input = channel.inputStream
                         channel.connect(4000)
                         input.bufferedReader().readText() // Wait for command execution to complete on remote server
                         channel.disconnect()
-                        Log.d(TAG, "[Manager] Remote window $winIdx killed successfully")
+                        Log.d(TAG, "[Manager] Remote target killed successfully")
                     } finally {
                         session.disconnect()
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "[Manager] Error killing remote tmux window $winIdx", e)
+                    Log.w(TAG, "[Manager] Error killing remote target", e)
                 }
             }
         }

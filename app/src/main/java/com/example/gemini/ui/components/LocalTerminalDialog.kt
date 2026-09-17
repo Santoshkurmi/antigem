@@ -160,7 +160,11 @@ fun LocalTerminalContent(
 
     var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
 
-    val sendKeyToTerminal: (Int, String) -> Unit = { keyCode, fallbackString ->
+    val sendKeyToTerminal: (Int, String) -> Unit = sendKey@{ keyCode, fallbackString ->
+        if (activeSession.isExited.value && (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER || fallbackString == "\r" || fallbackString == "\n")) {
+            LocalTerminalManager.closeSession(activeSession.id)
+            return@sendKey
+        }
         val termView = currentTerminalView
         var handled = false
         val ctrl = ctrlState != ModifierState.OFF
@@ -239,6 +243,12 @@ fun LocalTerminalContent(
                                     override fun isTerminalViewSelected(): Boolean = true
                                     override fun copyModeChanged(copyMode: Boolean) {}
                                      override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
+                                         if (activeSession.isExited.value) {
+                                             if (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+                                                 LocalTerminalManager.closeSession(activeSession.id)
+                                                 return true
+                                             }
+                                         }
                                          val isCtrl = e.isCtrlPressed || ctrlState != ModifierState.OFF
                                          if (isCtrl) {
                                              when (keyCode) {
@@ -264,6 +274,12 @@ fun LocalTerminalContent(
                                      override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
                                      override fun onLongPress(event: MotionEvent): Boolean = false
                                      override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
+                                         if (activeSession.isExited.value) {
+                                             if (codePoint == '\n'.code || codePoint == '\r'.code) {
+                                                 LocalTerminalManager.closeSession(activeSession.id)
+                                                 return true
+                                             }
+                                         }
                                          if (ctrlDown) {
                                              when (codePoint.toChar()) {
                                                  '1' -> {
@@ -312,9 +328,17 @@ fun LocalTerminalContent(
                                 })
                                 setTerminalInputListener(object : TerminalView.TerminalInputListener {
                                     override fun onTerminalInput(text: String) {
+                                        if (activeSession.isExited.value && (text.contains("\n") || text.contains("\r"))) {
+                                            LocalTerminalManager.closeSession(activeSession.id)
+                                            return
+                                        }
                                         activeSession.write(text)
                                     }
                                     override fun onTerminalInputCodePoint(prependEscape: Boolean, codePoint: Int) {
+                                        if (activeSession.isExited.value && (codePoint == '\n'.code || codePoint == '\r'.code)) {
+                                            LocalTerminalManager.closeSession(activeSession.id)
+                                            return
+                                        }
                                         activeSession.writeCodePoint(prependEscape, codePoint)
                                     }
                                 })
@@ -347,9 +371,17 @@ fun LocalTerminalContent(
                             }
                             tv.setTerminalInputListener(object : TerminalView.TerminalInputListener {
                                 override fun onTerminalInput(text: String) {
+                                    if (activeSession.isExited.value && (text.contains("\n") || text.contains("\r"))) {
+                                        LocalTerminalManager.closeSession(activeSession.id)
+                                        return
+                                    }
                                     activeSession.write(text)
                                 }
                                 override fun onTerminalInputCodePoint(prependEscape: Boolean, codePoint: Int) {
+                                    if (activeSession.isExited.value && (codePoint == '\n'.code || codePoint == '\r'.code)) {
+                                        LocalTerminalManager.closeSession(activeSession.id)
+                                        return
+                                    }
                                     activeSession.writeCodePoint(prependEscape, codePoint)
                                 }
                             })

@@ -179,12 +179,12 @@ class TmuxControlParser(
                     onCommandResponse?.invoke(cmdNum, output, true)
                     return
                 }
-                "%window-add" -> {
+                "%window-add", "%unlinked-window-add" -> {
                     val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.UTF_8) else ""
                     onWindowAdd?.invoke(restStr)
                     return
                 }
-                "%window-close" -> {
+                "%window-close", "%unlinked-window-close" -> {
                     val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.UTF_8) else ""
                     onWindowClose?.invoke(restStr)
                     return
@@ -192,6 +192,16 @@ class TmuxControlParser(
                 "%window-renamed" -> {
                     val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.UTF_8) else ""
                     onWindowRenamed?.invoke(restStr)
+                    return
+                }
+                "%pane-exited" -> {
+                    val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.UTF_8) else ""
+                    onPaneExited?.invoke(restStr)
+                    return
+                }
+                "%exit" -> {
+                    val restStr = if (restLen > 0) String(line, restOffset, restLen, Charsets.UTF_8) else ""
+                    onExit?.invoke(restStr)
                     return
                 }
                 else -> {
