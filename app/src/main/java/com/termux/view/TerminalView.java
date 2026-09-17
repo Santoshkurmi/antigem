@@ -1050,6 +1050,26 @@ public final class TerminalView extends View {
         if (handleKeyCodeAction(keyCode, keyMod))
             return true;
 
+        boolean isAltBuffer = mEmulator != null && mEmulator.isAlternateBufferActive();
+        boolean appMode = mEmulator != null && mEmulator.isCursorKeysApplicationMode();
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_MOVE_HOME:
+            case KeyEvent.KEYCODE_HOME:
+                if (isAltBuffer || appMode) {
+                    sendInputToSession("\033OH");
+                } else {
+                    sendInputCodePointToSession(false, 1); // Ctrl+A (beginning of line)
+                }
+                return true;
+            case KeyEvent.KEYCODE_MOVE_END:
+                if (isAltBuffer || appMode) {
+                    sendInputToSession("\033OF");
+                } else {
+                    sendInputCodePointToSession(false, 5); // Ctrl+E (end of line)
+                }
+                return true;
+        }
+
         TerminalEmulator term = mTermSession.getEmulator();
         String code = KeyHandler.getCode(keyCode, keyMod, term.isCursorKeysApplicationMode(), term.isKeypadApplicationMode());
         if (code == null) return false;

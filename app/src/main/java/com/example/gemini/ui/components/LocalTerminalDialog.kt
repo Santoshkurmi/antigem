@@ -390,13 +390,27 @@ fun LocalTerminalContent(
                         sendKeyToTerminal(KeyEvent.KEYCODE_MINUS, "-")
                     }
                     TermuxKey(label = "HOME", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_HOME, "\u001B[H")
+                        val termView = currentTerminalView
+                        val isAlt = termView?.currentSession?.emulator?.isAlternateBufferActive == true ||
+                                    termView?.currentSession?.emulator?.isCursorKeysApplicationMode == true
+                        if (isAlt) {
+                            sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_HOME, "\u001BOH")
+                        } else {
+                            activeSession.writeCodePoint(false, 1)
+                        }
                     }
                     TermuxKey(label = "↑", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_UP, "\u001B[A")
                     }
                     TermuxKey(label = "END", modifier = Modifier.weight(1f)) {
-                        sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_END, "\u001B[F")
+                        val termView = currentTerminalView
+                        val isAlt = termView?.currentSession?.emulator?.isAlternateBufferActive == true ||
+                                    termView?.currentSession?.emulator?.isCursorKeysApplicationMode == true
+                        if (isAlt) {
+                            sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_END, "\u001BOF")
+                        } else {
+                            activeSession.writeCodePoint(false, 5)
+                        }
                     }
                     TermuxKey(label = "PGUP", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_UP, "\u001B[5~")
