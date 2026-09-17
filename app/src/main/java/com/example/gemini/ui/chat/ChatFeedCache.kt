@@ -18,7 +18,7 @@ sealed class ChatFeedItem(val key: String, val contentType: String) {
     @Immutable
     data class AssistantThinking(val messageId: String, val thoughtText: String, val durationMs: Long?, val isStreaming: Boolean) : ChatFeedItem("thought_$messageId", "THOUGHT")
     @Immutable
-    data class AssistantBlock(val messageId: String, val blockIndex: Int, val block: MarkdownBlock) : ChatFeedItem("${messageId}_b$blockIndex", "BLOCK_${block::class.java.simpleName}")
+    data class AssistantMessage(val message: ChatMessage, val blocks: List<MarkdownBlock>) : ChatFeedItem("assistant_${message.id}", "ASSISTANT")
     @Immutable
     data class AssistantTyping(val messageId: String, val modelId: String) : ChatFeedItem("typing_$messageId", "TYPING")
     @Immutable
@@ -51,13 +51,10 @@ object ChatFeedCache {
                 }
                 if (contentToParse.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
                     val blocks = parseMarkdownBlocks(contentToParse, msg.toolCalls)
-                    blocks.forEachIndexed { idx, block ->
-                        msgItems.add(ChatFeedItem.AssistantBlock(
-                            messageId = msg.id,
-                            blockIndex = idx,
-                            block = block
-                        ))
-                    }
+                    msgItems.add(ChatFeedItem.AssistantMessage(
+                        message = msg,
+                        blocks = blocks
+                    ))
                 }
                 if (msg.content.isNotEmpty()) {
                     msgItems.add(ChatFeedItem.AssistantFooter(msg))
@@ -78,30 +75,32 @@ object ChatFeedCache {
             if (!msg.isStreaming) {
                 val items = getOrParse(msg)
                 for (item in items) {
-                    if (item is ChatFeedItem.AssistantBlock) {
-                        when (val b = item.block) {
-                            is MarkdownBlock.Code -> {
-                                CodeBlockCache.prewarm(b.code, b.language)
+                    if (item is ChatFeedItem.AssistantMessage) {
+                        for (block in item.blocks) {
+                            when (block) {
+                                is MarkdownBlock.Code -> {
+                                    CodeBlockCache.prewarm(block.code, block.language)
+                                }
+                                is MarkdownBlock.Paragraph -> {
+                                    MarkdownTextCache.prewarm(block.text)
+                                }
+                                is MarkdownBlock.Header -> {
+                                    MarkdownTextCache.prewarm(block.text)
+                                }
+                                is MarkdownBlock.Bullet -> {
+                                    MarkdownTextCache.prewarm(block.text)
+                                }
+                                is MarkdownBlock.Numbered -> {
+                                    MarkdownTextCache.prewarm(block.text)
+                                }
+                                is MarkdownBlock.Blockquote -> {
+                                    MarkdownTextCache.prewarm(block.text)
+                                }
+                                is MarkdownBlock.Task -> {
+                                    MarkdownTextCache.prewarm(block.text)
+                                }
+                                else -> {}
                             }
-                            is MarkdownBlock.Paragraph -> {
-                                MarkdownTextCache.prewarm(b.text)
-                            }
-                            is MarkdownBlock.Header -> {
-                                MarkdownTextCache.prewarm(b.text)
-                            }
-                            is MarkdownBlock.Bullet -> {
-                                MarkdownTextCache.prewarm(b.text)
-                            }
-                            is MarkdownBlock.Numbered -> {
-                                MarkdownTextCache.prewarm(b.text)
-                            }
-                            is MarkdownBlock.Blockquote -> {
-                                MarkdownTextCache.prewarm(b.text)
-                            }
-                            is MarkdownBlock.Task -> {
-                                MarkdownTextCache.prewarm(b.text)
-                            }
-                            else -> {}
                         }
                     }
                 }
@@ -143,13 +142,10 @@ object ChatFeedCache {
                 }
                 if (contentToParse.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
                     val blocks = parseMarkdownBlocks(contentToParse, msg.toolCalls)
-                    blocks.forEachIndexed { idx, block ->
-                        addItem(ChatFeedItem.AssistantBlock(
-                            messageId = msg.id,
-                            blockIndex = idx,
-                            block = block
-                        ))
-                    }
+                    addItem(ChatFeedItem.AssistantMessage(
+                        message = msg,
+                        blocks = blocks
+                    ))
                 } else if (!hasActiveRunningTool) {
                     // Only show waiting indicator before ANY output or tool call has appeared
                     addItem(ChatFeedItem.AssistantTyping(msg.id, selectedModelId))

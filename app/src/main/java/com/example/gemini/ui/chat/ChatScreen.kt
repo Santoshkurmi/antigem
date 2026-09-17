@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Analytics
@@ -1175,21 +1176,27 @@ fun ChatScreen(
                                             )
                                         }
                                     }
-                                    is ChatFeedItem.AssistantBlock -> {
+                                    is ChatFeedItem.AssistantMessage -> {
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 16.dp, vertical = 1.dp)
+                                                .padding(horizontal = 16.dp, vertical = 2.dp)
                                         ) {
-                                            val isTool = feedItem.block is MarkdownBlock.AgentTool
-                                            MarkdownBlockView(
-                                                block = feedItem.block,
-                                                onApproveTool = if (isTool) { { toolCall -> viewModel.approveAndExecuteTerminalTool(toolCall, feedItem.messageId) } } else null,
-                                                onRejectTool = if (isTool) { { toolCall -> viewModel.rejectTerminalTool(toolCall, feedItem.messageId) } } else null,
-                                                onTerminateTool = if (isTool) { { toolCall -> viewModel.terminateRunningTerminalTool(toolCall, feedItem.messageId) } } else null,
-                                                onSubmitChoices = if (isTool) { { toolCall, summaryPayload -> viewModel.submitUserChoices(toolCall, feedItem.messageId, summaryPayload) } } else null,
-                                                onSkipChoices = if (isTool) { { toolCall -> viewModel.skipUserChoices(toolCall, feedItem.messageId) } } else null
-                                            )
+                                            SelectionContainer {
+                                                Column(modifier = Modifier.fillMaxWidth()) {
+                                                    feedItem.blocks.forEach { block ->
+                                                        val isTool = block is MarkdownBlock.AgentTool
+                                                        MarkdownBlockView(
+                                                            block = block,
+                                                            onApproveTool = if (isTool) { { toolCall -> viewModel.approveAndExecuteTerminalTool(toolCall, feedItem.message.id) } } else null,
+                                                            onRejectTool = if (isTool) { { toolCall -> viewModel.rejectTerminalTool(toolCall, feedItem.message.id) } } else null,
+                                                            onTerminateTool = if (isTool) { { toolCall -> viewModel.terminateRunningTerminalTool(toolCall, feedItem.message.id) } } else null,
+                                                            onSubmitChoices = if (isTool) { { toolCall, summaryPayload -> viewModel.submitUserChoices(toolCall, feedItem.message.id, summaryPayload) } } else null,
+                                                            onSkipChoices = if (isTool) { { toolCall -> viewModel.skipUserChoices(toolCall, feedItem.message.id) } } else null
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                     is ChatFeedItem.AssistantTyping -> {
