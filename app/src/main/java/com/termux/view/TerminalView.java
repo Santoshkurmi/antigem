@@ -145,10 +145,8 @@ public final class TerminalView extends View {
             public boolean onUp(MotionEvent event) {
                 mScrollRemainder = 0.0f;
                 boolean handled = false;
-                boolean isAltScreen = mEmulator != null && mEmulator.isAlternateBufferActive();
                 boolean isMouseActive = mEmulator != null && mEmulator.isMouseTrackingActive();
-                if ((isMouseActive || isAltScreen) && !event.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText() && !scrolledWithFinger) {
-                    // Quick event processing when mouse tracking or alternate screen (nvim/vim/etc) is active
+                if (isMouseActive && !event.isFromSource(InputDevice.SOURCE_MOUSE) && !isSelectingText() && !scrolledWithFinger) {
                     sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, true);
                     sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, false);
                     handled = true;
@@ -614,23 +612,8 @@ public final class TerminalView extends View {
                 mMouseScrollStartY = y;
             }
         }
-        if (mEmulator != null) {
+        if (mEmulator != null && mEmulator.isMouseTrackingActive()) {
             mEmulator.sendMouseEvent(button, x, y, pressed);
-        }
-        if (mTermSession != null && (mEmulator == null || !mEmulator.isMouseTrackingActive())) {
-            String sgr;
-            if (button == TerminalEmulator.MOUSE_LEFT_BUTTON) {
-                sgr = String.format(java.util.Locale.US, "\033[<0;%d;%d%c", x, y, pressed ? 'M' : 'm');
-            } else if (button == TerminalEmulator.MOUSE_WHEELUP_BUTTON) {
-                sgr = String.format(java.util.Locale.US, "\033[<64;%d;%dM", x, y);
-            } else if (button == TerminalEmulator.MOUSE_WHEELDOWN_BUTTON) {
-                sgr = String.format(java.util.Locale.US, "\033[<65;%d;%dM", x, y);
-            } else {
-                sgr = null;
-            }
-            if (sgr != null) {
-                mTermSession.write(sgr);
-            }
         }
     }
 
@@ -641,8 +624,11 @@ public final class TerminalView extends View {
         boolean isAltScreen = mEmulator != null && mEmulator.isAlternateBufferActive();
         boolean isMouseActive = mEmulator != null && mEmulator.isMouseTrackingActive();
         for (int i = 0; i < amount; i++) {
-            if (isMouseActive || isAltScreen) {
+            if (isMouseActive) {
                 sendMouseEventCode(event, up ? TerminalEmulator.MOUSE_WHEELUP_BUTTON : TerminalEmulator.MOUSE_WHEELDOWN_BUTTON, true);
+            } else if (isAltScreen) {
+                sendInputToSession(up ? (mEmulator != null && mEmulator.isCursorKeysApplicationMode() ? "\033OA" : "\033[A")
+                                       : (mEmulator != null && mEmulator.isCursorKeysApplicationMode() ? "\033OB" : "\033[B"));
             } else {
                 mTopRow = Math.min(0, Math.max(-(mEmulator.getScreen().getActiveTranscriptRows()), mTopRow + (up ? -1 : 1)));
                 if (!awakenScrollBars()) invalidate();

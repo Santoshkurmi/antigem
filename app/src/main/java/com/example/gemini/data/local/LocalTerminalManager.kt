@@ -432,7 +432,7 @@ class LocalPtySession(
                         } catch (_: Exception) {
                         }
                         if (isAlternateScreenActive) {
-                            val enableAlt = "\u001b[?1049h\u001b[?1000h\u001b[?1002h\u001b[?1006h".toByteArray(Charsets.UTF_8)
+                            val enableAlt = "\u001b[?1049h".toByteArray(Charsets.UTF_8)
                             terminalSession.emulator?.append(enableAlt, enableAlt.size)
                         }
                         if (formatted.isNotEmpty()) {
@@ -469,30 +469,41 @@ class LocalPtySession(
         val panePath = parts.getOrNull(2)
         val pId = parts.getOrNull(3)?.trim()
         val altVal = parts.getOrNull(4)?.trim()
+        val mouseAny = parts.getOrNull(5)?.trim() == "1"
+        val mouseSgr = parts.getOrNull(6)?.trim() == "1"
 
         val isAlt = altVal == "1"
 
-        if (isAlt) {
-            isAlternateScreenActive = true
-            sessionScope.launch(Dispatchers.Main) {
-                val em = terminalSession.emulator
-                if (em != null && !em.isAlternateBufferActive) {
-                    val seq = "\u001b[?1049h\u001b[?1000h\u001b[?1002h\u001b[?1006h".toByteArray(Charsets.UTF_8)
-                    em.append(seq, seq.size)
-                    onTextChangedListener?.invoke()
-                    Log.d(TAG, "[$id] Activated alternate buffer & mouse tracking on reconnect (altVal=$altVal, winName=$winName)")
-                }
+        sessionScope.launch(Dispatchers.Main) {
+            val em = terminalSession.emulator ?: return@launch
+            var changed = false
+
+            if (isAlt && !em.isAlternateBufferActive) {
+                isAlternateScreenActive = true
+                val seq = "\u001b[?1049h".toByteArray(Charsets.UTF_8)
+                em.append(seq, seq.size)
+                changed = true
+            } else if (!isAlt && em.isAlternateBufferActive) {
+                isAlternateScreenActive = false
+                val seq = "\u001b[?1049l".toByteArray(Charsets.UTF_8)
+                em.append(seq, seq.size)
+                changed = true
             }
-        } else if (altVal == "0" && isAlternateScreenActive) {
-            isAlternateScreenActive = false
-            sessionScope.launch(Dispatchers.Main) {
-                val em = terminalSession.emulator
-                if (em != null && em.isAlternateBufferActive) {
-                    val seq = "\u001b[?1049l\u001b[?1002l\u001b[?1000l".toByteArray(Charsets.UTF_8)
-                    em.append(seq, seq.size)
-                    onTextChangedListener?.invoke()
-                    Log.d(TAG, "[$id] Deactivated alternate buffer (altVal=0)")
-                }
+
+            if (mouseAny && !em.isMouseTrackingActive) {
+                val seq = (if (mouseSgr) "\u001b[?1000h\u001b[?1002h\u001b[?1006h" else "\u001b[?1000h").toByteArray(Charsets.UTF_8)
+                em.append(seq, seq.size)
+                changed = true
+                Log.d(TAG, "[$id] Synchronized mouse tracking ON (sgr=$mouseSgr)")
+            } else if (!mouseAny && em.isMouseTrackingActive) {
+                val seq = "\u001b[?1000l\u001b[?1002l\u001b[?1006l".toByteArray(Charsets.UTF_8)
+                em.append(seq, seq.size)
+                changed = true
+                Log.d(TAG, "[$id] Synchronized mouse tracking OFF")
+            }
+
+            if (changed) {
+                onTextChangedListener?.invoke()
             }
         }
 
@@ -510,7 +521,7 @@ class LocalPtySession(
             _title.value = formattedTitle
             Log.d(
                 TAG,
-                "[$id] Realtime title updated: $formattedTitle (win=$winIdx, name=$winName, path=$panePath, paneId=$pId, alt=$isAlt)"
+                "[$id] Realtime title updated: $formattedTitle (win=$winIdx, name=$winName, path=$panePath, paneId=$pId, alt=$isAlt, mouse=$mouseAny)"
             )
         }
     }
@@ -527,7 +538,7 @@ class LocalPtySession(
                     val target = assignedPaneId ?: (tmuxWindowIndex?.let { "$tmuxSessionName:$it" } ?: "")
                     val targetArg = if (target.isNotEmpty()) "-t $target " else ""
                     val cmd =
-                        "display-message ${targetArg}-p \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{alternate_on}\"\n"
+                        "display-message ${targetArg}-p \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{alternate_on}|#{mouse_any_flag}|#{mouse_sgr_flag}\"\n"
                     sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
                     sshOut?.flush()
                 } catch (_: Exception) {
@@ -685,7 +696,7 @@ class LocalPtySession(
                     "tmux set-option -t $tmuxSessionName mouse on 2>/dev/null; " +
                     "fi; " +
                     "targetWin=\$(if [ -n \"$winIdx\" ] && tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | grep -qx \"$winIdx\"; then echo \"$winIdx\"; else tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | head -n 1; fi); " +
-                    "tmux -CC new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_\${targetWin} \\; select-window -t $tmuxSessionName:\$targetWin \\; display-message -p -t $tmuxSessionName:\$targetWin \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{alternate_on}\"; " +
+                    "tmux -CC new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_\${targetWin} \\; select-window -t $tmuxSessionName:\$targetWin \\; display-message -p -t $tmuxSessionName:\$targetWin \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{alternate_on}|#{mouse_any_flag}|#{mouse_sgr_flag}\"; " +
                     "else \${SHELL:-sh}; fi"
 
             Log.d(TAG, "[$id] Executing SSH command: $tmuxCmd")
