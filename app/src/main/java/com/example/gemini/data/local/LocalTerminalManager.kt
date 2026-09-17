@@ -431,6 +431,10 @@ class LocalPtySession(
                             terminalSession.emulator?.screen?.clearTranscript()
                         } catch (_: Exception) {
                         }
+                        if (isAlternateScreenActive) {
+                            val enableAlt = "\u001b[?1049h\u001b[?1000h\u001b[?1002h\u001b[?1006h".toByteArray(Charsets.UTF_8)
+                            terminalSession.emulator?.append(enableAlt, enableAlt.size)
+                        }
                         if (formatted.isNotEmpty()) {
                             terminalSession.emulator?.append(formatted, formatted.size)
                         }
@@ -456,12 +460,41 @@ class LocalPtySession(
         }
     )
 
+    private var isAlternateScreenActive: Boolean = false
+
     private fun handleAntigemInfo(infoStr: String) {
         val parts = infoStr.split("|")
         val winIdx = parts.getOrNull(0)?.toIntOrNull() ?: tmuxWindowIndex ?: 1
         val winName = parts.getOrNull(1) ?: ""
         val panePath = parts.getOrNull(2)
         val pId = parts.getOrNull(3)?.trim()
+        val altVal = parts.getOrNull(4)?.trim()
+
+        val isAlt = altVal == "1"
+
+        if (isAlt) {
+            isAlternateScreenActive = true
+            sessionScope.launch(Dispatchers.Main) {
+                val em = terminalSession.emulator
+                if (em != null && !em.isAlternateBufferActive) {
+                    val seq = "\u001b[?1049h\u001b[?1000h\u001b[?1002h\u001b[?1006h".toByteArray(Charsets.UTF_8)
+                    em.append(seq, seq.size)
+                    onTextChangedListener?.invoke()
+                    Log.d(TAG, "[$id] Activated alternate buffer & mouse tracking on reconnect (altVal=$altVal, winName=$winName)")
+                }
+            }
+        } else if (altVal == "0" && isAlternateScreenActive) {
+            isAlternateScreenActive = false
+            sessionScope.launch(Dispatchers.Main) {
+                val em = terminalSession.emulator
+                if (em != null && em.isAlternateBufferActive) {
+                    val seq = "\u001b[?1049l\u001b[?1002l\u001b[?1000l".toByteArray(Charsets.UTF_8)
+                    em.append(seq, seq.size)
+                    onTextChangedListener?.invoke()
+                    Log.d(TAG, "[$id] Deactivated alternate buffer (altVal=0)")
+                }
+            }
+        }
 
         if (tmuxWindowIndex == null || tmuxWindowIndex == winIdx) {
             tmuxWindowIndex = winIdx
@@ -477,7 +510,7 @@ class LocalPtySession(
             _title.value = formattedTitle
             Log.d(
                 TAG,
-                "[$id] Realtime title updated: $formattedTitle (win=$winIdx, name=$winName, path=$panePath, paneId=$pId)"
+                "[$id] Realtime title updated: $formattedTitle (win=$winIdx, name=$winName, path=$panePath, paneId=$pId, alt=$isAlt)"
             )
         }
     }
@@ -494,7 +527,7 @@ class LocalPtySession(
                     val target = assignedPaneId ?: (tmuxWindowIndex?.let { "$tmuxSessionName:$it" } ?: "")
                     val targetArg = if (target.isNotEmpty()) "-t $target " else ""
                     val cmd =
-                        "display-message ${targetArg}-p \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"\n"
+                        "display-message ${targetArg}-p \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{alternate_on}\"\n"
                     sshOut?.write(cmd.toByteArray(Charsets.UTF_8))
                     sshOut?.flush()
                 } catch (_: Exception) {
@@ -652,7 +685,7 @@ class LocalPtySession(
                     "tmux set-option -t $tmuxSessionName mouse on 2>/dev/null; " +
                     "fi; " +
                     "targetWin=\$(if [ -n \"$winIdx\" ] && tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | grep -qx \"$winIdx\"; then echo \"$winIdx\"; else tmux list-windows -t $tmuxSessionName -F \"#{window_index}\" 2>/dev/null | head -n 1; fi); " +
-                    "tmux -CC new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_\${targetWin} \\; select-window -t $tmuxSessionName:\$targetWin \\; display-message -p -t $tmuxSessionName:\$targetWin \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
+                    "tmux -CC new-session -A -t $tmuxSessionName -s ${tmuxSessionName}_\${targetWin} \\; select-window -t $tmuxSessionName:\$targetWin \\; display-message -p -t $tmuxSessionName:\$targetWin \"ANTIGEM_INFO:#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}|#{alternate_on}\"; " +
                     "else \${SHELL:-sh}; fi"
 
             Log.d(TAG, "[$id] Executing SSH command: $tmuxCmd")
