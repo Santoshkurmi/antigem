@@ -966,6 +966,31 @@ object LocalTerminalManager {
 
     private val managerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    private const val PREFS_NAME = "anti_gem_terminal_prefs"
+    private const val KEY_LAST_ACTIVE_TMUX_INDEX = "last_active_tmux_window_index"
+
+    private fun saveLastActiveTmuxIndex(context: Context, winIndex: Int) {
+        try {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putInt(KEY_LAST_ACTIVE_TMUX_INDEX, winIndex).apply()
+            Log.d(TAG, "[Manager] Persisted last active tmux index: $winIndex")
+        } catch (e: Exception) {
+            Log.w(TAG, "[Manager] Failed to persist last active tmux index", e)
+        }
+    }
+
+    private fun getLastActiveTmuxIndex(context: Context): Int? {
+        try {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            if (prefs.contains(KEY_LAST_ACTIVE_TMUX_INDEX)) {
+                val idx = prefs.getInt(KEY_LAST_ACTIVE_TMUX_INDEX, -1)
+                if (idx >= 0) return idx
+            }
+        } catch (_: Exception) {
+        }
+        return null
+    }
+
     suspend fun getOrCreateOrRestoreSessions(context: Context): List<LocalPtySession> {
         Log.d(TAG, "[Manager] getOrCreateOrRestoreSessions called, existing count=${_sessions.value.size}")
         if (_sessions.value.isNotEmpty()) {
@@ -1035,9 +1060,16 @@ object LocalTerminalManager {
                         initialHeightPx = lastKnownHeightPx
                     )
                 }
+                val savedIndex = getLastActiveTmuxIndex(context)
+                val matchingSession = if (savedIndex != null) restoredList.find { it.tmuxWindowIndex == savedIndex } else null
+                val targetSession = matchingSession ?: restoredList.firstOrNull()
+
                 _sessions.value = restoredList
-                _activeSessionId.value = restoredList.firstOrNull()?.id
-                Log.d(TAG, "[Manager] Restored ${restoredList.size} sessions, active=${_activeSessionId.value}")
+                _activeSessionId.value = targetSession?.id
+                Log.d(
+                    TAG,
+                    "[Manager] Restored ${restoredList.size} sessions, active=${_activeSessionId.value} (savedIndex=$savedIndex, matched=${matchingSession != null})"
+                )
                 restoredList
             } else {
                 Log.d(TAG, "[Manager] No remote windows found, creating initial tmux session & window")
@@ -1289,6 +1321,7 @@ object LocalTerminalManager {
             )
             _sessions.value = filtered + newSession
             _activeSessionId.value = newSession.id
+            saveLastActiveTmuxIndex(context, nextWinIndex)
             Log.d(
                 TAG,
                 "[Manager] Created and activated new tab session ${newSession.id} (winIdx=$nextWinIndex, paneId=$initialPaneId, title=$winTitle)"
@@ -1296,9 +1329,15 @@ object LocalTerminalManager {
         }
     }
 
-    fun selectSession(id: String) {
+    fun selectSession(id: String, context: Context? = null) {
         Log.d(TAG, "[Manager] Selecting session $id (previous=${_activeSessionId.value})")
         _activeSessionId.value = id
+        val session = _sessions.value.find { it.id == id }
+        val winIdx = session?.tmuxWindowIndex
+        val ctx = context ?: session?.context
+        if (winIdx != null && ctx != null) {
+            saveLastActiveTmuxIndex(ctx, winIdx)
+        }
     }
 
     fun closeSession(id: String) {
@@ -1311,8 +1350,14 @@ object LocalTerminalManager {
         _sessions.value = remaining
 
         if (_activeSessionId.value == id) {
-            _activeSessionId.value = remaining.firstOrNull()?.id
+            val newActive = remaining.firstOrNull()
+            _activeSessionId.value = newActive?.id
             Log.d(TAG, "[Manager] Active session switched to ${_activeSessionId.value}")
+            val winIdx = newActive?.tmuxWindowIndex
+            val ctx = newActive?.context
+            if (winIdx != null && ctx != null) {
+                saveLastActiveTmuxIndex(ctx, winIdx)
+            }
         }
 
         if (toClose != null && toClose.isSsh && toClose.tmuxWindowIndex != null) {
