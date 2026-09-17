@@ -980,18 +980,29 @@ object LocalTerminalManager {
                 Log.d(TAG, "[Manager] Restored ${restoredList.size} sessions, active=${_activeSessionId.value}")
                 restoredList
             } else {
-                Log.d(TAG, "[Manager] No remote windows found, creating initial SSH 1 session")
+                Log.d(TAG, "[Manager] No remote windows found, creating initial tmux session & window")
+                val createdWin = withContext(Dispatchers.IO) {
+                    createRemoteTmuxWindow(host, port, user, pass, null)
+                }
+                val winIndex = createdWin?.index ?: 0
+                val winName = createdWin?.name ?: ""
+                val winPath = createdWin?.path
+                val paneId = createdWin?.paneId
+                val winTitle = formatTmuxTitle(winIndex, winName)
+
                 val initialSsh = LocalPtySession(
-                    id = "session-tmux-1",
-                    initialTitle = "T",
+                    id = "session-tmux-$winIndex",
+                    initialTitle = winTitle,
                     context = context.applicationContext,
                     isSsh = true,
                     sshHost = host,
                     sshPort = port,
                     sshUser = user,
                     sshPass = pass,
-                    tmuxWindowIndex = 1,
+                    tmuxWindowIndex = winIndex,
                     tmuxSessionName = TMUX_SESSION_NAME,
+                    initialWorkingDir = winPath,
+                    initialPaneId = paneId,
                     initialCols = lastKnownCols,
                     initialRows = lastKnownRows,
                     initialWidthPx = lastKnownWidthPx,
@@ -1027,8 +1038,12 @@ object LocalTerminalManager {
                 val probeCmd = UNIVERSAL_SSH_PATH +
                         "tmux set-option -g base-index 1 2>/dev/null; " +
                         "tmux set-option -g renumber-windows off 2>/dev/null; " +
+                        "tmux set-option -g allow-rename on 2>/dev/null; " +
+                        "tmux set-option -g set-titles off 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME base-index 1 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME renumber-windows off 2>/dev/null; " +
+                        "tmux set-option -t $TMUX_SESSION_NAME allow-rename on 2>/dev/null; " +
+                        "tmux set-option -t $TMUX_SESSION_NAME set-titles off 2>/dev/null; " +
                         "tmux list-windows -t $TMUX_SESSION_NAME -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\" 2>/dev/null || echo \"\""
                 Log.d(TAG, "[Probe] Executing: $probeCmd")
                 val channel = session.openChannel("exec") as ChannelExec
@@ -1087,10 +1102,14 @@ object LocalTerminalManager {
                 val cmd = UNIVERSAL_SSH_PATH +
                         "tmux set-option -g base-index 1 2>/dev/null; " +
                         "tmux set-option -g renumber-windows off 2>/dev/null; " +
+                        "tmux set-option -g allow-rename on 2>/dev/null; " +
+                        "tmux set-option -g set-titles off 2>/dev/null; " +
                         "if ! tmux has-session -t $TMUX_SESSION_NAME 2>/dev/null; then " +
                         "tmux new-session -d -s $TMUX_SESSION_NAME $dirArg-P -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
                         "tmux set-option -t $TMUX_SESSION_NAME base-index 1 2>/dev/null; " +
                         "tmux set-option -t $TMUX_SESSION_NAME renumber-windows off 2>/dev/null; " +
+                        "tmux set-option -t $TMUX_SESSION_NAME allow-rename on 2>/dev/null; " +
+                        "tmux set-option -t $TMUX_SESSION_NAME set-titles off 2>/dev/null; " +
                         "else " +
                         "tmux new-window -d -t $TMUX_SESSION_NAME $dirArg-P -F \"#{window_index}|#{window_name}|#{pane_current_path}|#{pane_id}\"; " +
                         "fi"
