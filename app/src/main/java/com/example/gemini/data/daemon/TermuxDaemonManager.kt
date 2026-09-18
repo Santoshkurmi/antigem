@@ -2,6 +2,7 @@ package com.example.gemini.data.daemon
 
 import android.content.Context
 import android.util.Log
+import com.example.gemini.data.preferences.AuthPreferences
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -189,17 +190,19 @@ object TermuxDaemonManager {
         val isHealthy = IdeApiClient.checkHealth()
         if (isHealthy) {
             _status.value = DaemonStatus.RUNNING
-            _statusMessage.value = "Running on ${IdeApiClient.baseUrl.removePrefix("http://")}"
+            val ep = AuthPreferences.currentBridgeHttpUrl.removePrefix("http://").removePrefix("https://")
+            _statusMessage.value = "Running on $ep"
             if (previousStatus != DaemonStatus.RUNNING) {
-                log("✅ Unified Bridge & IDE Daemon is online on ${IdeApiClient.baseUrl}!")
+                log("✅ Unified Bridge & IDE Daemon is online on ${AuthPreferences.currentBridgeHttpUrl}!")
                 _serverReconnectedEvent.tryEmit(Unit)
             }
             true
         } else {
             _status.value = DaemonStatus.ERROR
-            _statusMessage.value = "Port 8080 Offline"
+            val ep = AuthPreferences.currentBridgeHttpUrl.removePrefix("http://").removePrefix("https://")
+            _statusMessage.value = "Server Offline ($ep)"
             if (!isSilent || previousStatus == DaemonStatus.RUNNING) {
-                log("❌ Server is offline on ${IdeApiClient.baseUrl}/api/health")
+                log("❌ Server is offline on ${AuthPreferences.currentBridgeHttpUrl}/api/health")
             }
             false
         }
@@ -213,8 +216,9 @@ object TermuxDaemonManager {
         pass: String = ""
     ): Boolean = withContext(Dispatchers.IO) {
         _status.value = DaemonStatus.STARTING
-        _statusMessage.value = "Checking port 8080..."
-        log("Checking HTTP healthcheck at ${IdeApiClient.baseUrl}/api/health...")
+        val ep = AuthPreferences.currentBridgeHttpUrl.removePrefix("http://").removePrefix("https://")
+        _statusMessage.value = "Checking $ep..."
+        log("Checking HTTP healthcheck at ${AuthPreferences.currentBridgeHttpUrl}/api/health...")
         val ok = checkHealthAndReconnect(isSilent = false)
         startAutoReconnectMonitor()
         ok

@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ModelQuota
+import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -53,7 +54,7 @@ import java.net.URL
 enum class SettingsSection(val title: String, val subtitle: String) {
     MAIN("Settings & Preferences", "Configure your AntiGem experience"),
     APPEARANCE("Appearance & Theme", "Theme, dark mode, and chat font scaling"),
-    SERVERS("Servers & Connectivity", "Configure AGY Hub (8090) and IDE Bridge (8080)"),
+    SERVERS("Servers & Connectivity", "Configure AGY Hub and IDE Bridge endpoints"),
     MCP("MCP Servers", "Model Context Protocol tools & integrations"),
     TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling"),
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals")
@@ -75,8 +76,8 @@ fun SettingsDialog(
     isDevModeEnabled: Boolean = false,
     chatFontScale: Float = 1.0f,
     themeMode: String = "SYSTEM",
-    agyHubUrl: String = "http://127.0.0.1:8090",
-    agyBridgeHttpUrl: String = "http://127.0.0.1:8080",
+    agyHubUrl: String = com.example.gemini.data.preferences.AuthPreferences.currentHubUrl,
+    agyBridgeHttpUrl: String = com.example.gemini.data.preferences.AuthPreferences.currentBridgeHttpUrl,
     isServerOnline: Boolean = true,
     isBridgeOnline: Boolean = false,
     useSshTerminal: Boolean = false,
@@ -410,7 +411,7 @@ private fun MainSettingsMenu(
             icon = Icons.Outlined.Dns,
             iconTint = serverColor,
             title = "Servers & Connectivity",
-            subtitle = "AGY Hub: 8090 • IDE Bridge: 8080",
+            subtitle = "AGY Hub & IDE Bridge endpoints",
             badgeText = serverBadge,
             badgeColor = serverColor,
             cardBg = cardBg,
@@ -824,7 +825,7 @@ private fun AppearanceSubScreen(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "AntiGem connects via gRPC-Web on port 8090 to stream live agent steps and tool executions.",
+                                text = "AntiGem connects via gRPC-Web to stream live agent steps and tool executions.",
                                 fontSize = (13 * chatFontScale).sp,
                                 lineHeight = (18 * chatFontScale).sp,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -852,17 +853,18 @@ private fun ServersSubScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    // Helper to split "http://127.0.0.1:8090" into host and port
-    fun parseHostPort(url: String, defaultPort: String): Pair<String, String> {
-        val clean = url.replace("http://", "").replace("https://", "").trimEnd('/')
+    // Helper to split "http://host:port" into host and port
+    fun parseHostPort(url: String, fallbackUrl: String): Pair<String, String> {
+        val target = url.ifBlank { fallbackUrl }
+        val clean = target.replace("http://", "").replace("https://", "").trimEnd('/')
         val parts = clean.split(":")
         val host = parts.getOrNull(0)?.ifBlank { "127.0.0.1" } ?: "127.0.0.1"
-        val port = parts.getOrNull(1)?.ifBlank { defaultPort } ?: defaultPort
+        val port = parts.getOrNull(1) ?: ""
         return host to port
     }
 
-    val (initHubHost, initHubPort) = remember { parseHostPort(currentHubUrl, "8090") }
-    val (initBridgeHost, initBridgePort) = remember { parseHostPort(currentBridgeUrl, "8080") }
+    val (initHubHost, initHubPort) = remember { parseHostPort(currentHubUrl, AuthPreferences.DEFAULT_HUB_URL) }
+    val (initBridgeHost, initBridgePort) = remember { parseHostPort(currentBridgeUrl, AuthPreferences.DEFAULT_BRIDGE_HTTP_URL) }
 
     var hubHost by remember { mutableStateOf(initHubHost) }
     var hubPort by remember { mutableStateOf(initHubPort) }
@@ -876,6 +878,66 @@ private fun ServersSubScreen(
     var isTestingBridge by remember { mutableStateOf(false) }
 
     var saveFeedback by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    var showRestartDialog by remember { mutableStateOf(false) }
+
+    if (showRestartDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestartDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Outlined.RestartAlt,
+                    contentDescription = null,
+                    tint = ClaudeTerracotta,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Reopen AntiGem?",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "Server URLs have been saved. Reopening the app ensures all daemon connections, gRPC streams, and file monitors cleanly initialize with the new address.",
+                    fontSize = 13.5.sp,
+                    lineHeight = 19.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestartDialog = false
+                        val pm = context.packageManager
+                        val intent = pm.getLaunchIntentForPackage(context.packageName)
+                        if (intent != null) {
+                            val restartIntent = Intent.makeRestartActivityTask(intent.component)
+                            context.startActivity(restartIntent)
+                            Runtime.getRuntime().exit(0)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Reopen Now", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showRestartDialog = false },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Later", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -997,7 +1059,7 @@ private fun ServersSubScreen(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(text = "IDE Bridge (HTTP / WebSocket)", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        Text(text = "Instance management & prewarm proxy (port 8080)", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        Text(text = "Instance management & prewarm proxy", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
                     Box(
                         modifier = Modifier
@@ -1115,7 +1177,8 @@ private fun ServersSubScreen(
                 val fullHub = "http://${hubHost.trim()}:${hubPort.trim()}"
                 val fullBridge = "http://${bridgeHost.trim()}:${bridgePort.trim()}"
                 onSaveServerUrls(fullHub, fullBridge)
-                saveFeedback = "✓ Server addresses updated! Reconnecting streams..."
+                saveFeedback = "✓ Server addresses saved in settings!"
+                showRestartDialog = true
             },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(10.dp),
@@ -1123,7 +1186,7 @@ private fun ServersSubScreen(
         ) {
             Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Save & Reconnect Servers", fontWeight = FontWeight.Bold)
+            Text("Save Server URLs", fontWeight = FontWeight.Bold)
         }
     }
 }

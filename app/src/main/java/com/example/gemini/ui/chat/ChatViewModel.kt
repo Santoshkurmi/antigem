@@ -46,7 +46,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val agyHubClient = com.example.gemini.data.remote.AgyHubClient()
     val trajectoryEngine = com.example.gemini.domain.chat.TrajectoryEngine()
     val speechManager = com.example.gemini.data.audio.AgyAudioTranscriptionManager(agyHubClient) {
-        authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+        AuthPreferences.currentHubUrl
     }
     private val oauthManager = GoogleOAuthManager()
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -209,7 +209,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             if (bytes != null) {
                 val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+                val httpUrl = AuthPreferences.currentBridgeHttpUrl
                 val currentProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
                 val res = agyBridgeService.uploadAttachment(
                     filename = fileName,
@@ -340,7 +340,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _isGlobalSettingsLoading.value = true
             _isProjectsLoading.value = true
             _globalSettingsError.value = null
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
 
             val globalRes = agyHubClient.fetchGlobalUserSettings(hubUrl)
             if (globalRes.isSuccess) {
@@ -363,7 +363,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addGlobalPermissionGrant(action: String, pattern: String, decision: String) {
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
             val curGrants = cur.globalPermissionGrants
 
@@ -403,7 +403,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removeGlobalPermissionGrant(rawRule: String) {
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val cur = _globalSecuritySettings.value ?: return@launch
             val curGrants = cur.globalPermissionGrants
 
@@ -431,7 +431,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun changeGlobalPermissionGrantDecision(rawRule: String, newDecision: String) {
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val cur = _globalSecuritySettings.value ?: return@launch
             val curGrants = cur.globalPermissionGrants
 
@@ -465,7 +465,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateGlobalArtifactReviewMode(mode: String) {
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
             _globalSecuritySettings.value = cur.copy(artifactReviewMode = mode)
             agyHubClient.writeGlobalUserSettings(
@@ -480,7 +480,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         fileAccess: String
     ) {
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
             _globalSecuritySettings.value = cur.copy(
                 autoExecutionPolicy = autoExec,
@@ -497,7 +497,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateGlobalCustomTerminalPolicy(policy: String) {
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
             _globalSecuritySettings.value = cur.copy(autoExecutionPolicy = policy)
             authPrefs.setCommandAutoExecutionPolicy(policy)
@@ -510,7 +510,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateGlobalCustomFileAccessPolicy(policy: String) {
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
             _globalSecuritySettings.value = cur.copy(nonWorkspaceFileAccessPolicy = policy)
             agyHubClient.writeGlobalUserSettings(
@@ -522,7 +522,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateGlobalTerminalSandbox(enabled: Boolean) {
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val cur = _globalSecuritySettings.value ?: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings()
             _globalSecuritySettings.value = cur.copy(enableTerminalSandbox = enabled)
             authPrefs.setCommandSandboxEnabled(enabled)
@@ -535,7 +535,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setProjectInheritGlobal(project: com.example.gemini.data.remote.AgyHubClient.ProjectItem) {
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val res = agyHubClient.updateProjectSettings(
                 projectId = project.id,
                 projectName = project.name,
@@ -558,7 +558,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         artifactReview: String? = null
     ) {
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val res = agyHubClient.updateProjectSettings(
                 projectId = project.id,
                 projectName = project.name,
@@ -608,11 +608,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (hubUrl.isNotBlank()) {
                 authPrefs.saveAgyHubUrl(hubUrl.trim())
+                agyHubClient.clearCsrfToken()
             }
             if (bridgeUrl.isNotBlank()) {
                 authPrefs.saveAgyBridgeHttpUrl(bridgeUrl.trim())
             }
-            retryConnections()
         }
     }
 
@@ -786,7 +786,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun checkBridgeHealth() {
         viewModelScope.launch(Dispatchers.IO) {
-            val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyBridgeService.DEFAULT_HTTP_URL
+            val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: AuthPreferences.currentBridgeHttpUrl
             val base = bridgeUrl.trimEnd('/')
             val endpoints = listOf("$base/api/health", "$base/health", base)
             var reachable = false
@@ -851,8 +851,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 return@launch
             }
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-            val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+            val hubUrl = AuthPreferences.currentHubUrl
+            val bridgeUrl = AuthPreferences.currentBridgeHttpUrl
             val res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
             if (res.isSuccess) {
                 val info = res.getOrThrow()
@@ -879,8 +879,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         loginPollJob?.cancel()
 
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-            val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+            val hubUrl = AuthPreferences.currentHubUrl
+            val bridgeUrl = AuthPreferences.currentBridgeHttpUrl
             _authFeedbackMessage.tryEmit("Initiating sign-in with Antigravity...")
 
             // 1. Poll for login URL and poll for successful auth completion concurrently every 800ms
@@ -936,7 +936,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         loginPollJob?.cancel()
 
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             try {
                 agyHubClient.authLogout(hubUrl)
                 _agyAuthInfo.value = com.example.gemini.data.remote.AgyHubClient.AgyAuthInfo(
@@ -994,6 +994,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     var pendingPkceVerifier: String? = null
 
     init {
+        viewModelScope.launch {
+            agyHubClient.csrfEvents.collect { msg ->
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(getApplication(), msg, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
         viewModelScope.launch {
             agyBridgeService.loginUrlEvents.collect { url ->
                 if (url.isNotBlank()) {
@@ -1110,7 +1118,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshActiveInstances() {
         viewModelScope.launch {
             try {
-                val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+                val httpUrl = AuthPreferences.currentBridgeHttpUrl
                 val res = agyBridgeService.fetchActiveInstances(httpUrl)
                 if (res.isSuccess) {
                     _activeInstances.value = res.getOrThrow()
@@ -1123,7 +1131,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun terminateInstance(conversationId: String) {
         viewModelScope.launch {
-            val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+            val httpUrl = AuthPreferences.currentBridgeHttpUrl
             val ok = agyBridgeService.terminateInstance(conversationId, httpUrl)
             if (ok) {
                 _activeInstances.value = _activeInstances.value.filter { it.conversationId != conversationId }
@@ -1144,7 +1152,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _isLoadingConversation.value = true
             while (currentCoroutineContext().isActive) {
                 try {
-                    val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                    val hubUrl = AuthPreferences.currentHubUrl
                     agyHubClient.subscribeToSummaries(hubUrl).collect { update ->
                         val currentMap = _conversations.value.associateBy { it.id }.toMutableMap()
                         val activeId = _currentConversation.value?.id
@@ -1203,8 +1211,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     android.util.Log.e("ChatViewModel", "subscribeToSummaries failed: ${e.message}")
                     _isServerOnline.value = false
                     val rawErr = e.message ?: "Connection failed"
-                    val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("8090") || rawErr.contains("Failed to connect", ignoreCase = true)) {
-                        "Cannot connect to Antigravity Hub on port 8090. Make sure 'agy --hub' is running."
+                    val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
+                        "Cannot connect to Antigravity Hub (${AuthPreferences.currentHubUrl}). Make sure 'agy --hub' is running."
                     } else {
                         "Antigravity Hub unreachable: $rawErr"
                     }
@@ -1265,7 +1273,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun onProjectChanged(projectPath: String) {
         _bridgeStatusMessage.value = null
         viewModelScope.launch {
-            val httpUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+            val httpUrl = AuthPreferences.currentBridgeHttpUrl
             val conv = _currentConversation.value
             val model = _selectedModelId.value.ifBlank { _availableModels.value.firstOrNull()?.id ?: "" }
             agyBridgeService.prewarm(
@@ -1368,10 +1376,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         totalStepsCount = 0
 
         persistentStreamJob = viewModelScope.launch(Dispatchers.IO) {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
-            val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyBridgeService.DEFAULT_HTTP_URL
-            com.example.gemini.data.remote.HubMediaResolver.activeHubUrl = hubUrl
-            com.example.gemini.data.remote.HubMediaResolver.activeBridgeUrl = bridgeUrl
+            val hubUrl = AuthPreferences.currentHubUrl
             var isFirstChunk = true
 
             if (trajectoryEngine.conversationId != conversationId || _messages.value.isEmpty()) {
@@ -1455,7 +1460,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         if (isFirstChunk) {
                             _isLoadingConversation.value = false
                             if (_messages.value.isEmpty()) {
-                                _conversationError.value = "Cannot connect to Antigravity Hub on port 8090. Make sure 'agy --hub' is running."
+                                _conversationError.value = "Cannot connect to Antigravity Hub (${AuthPreferences.currentHubUrl}). Make sure 'agy --hub' is running."
                             }
                         } else {
                             if (isPromptInFlight || _isStreaming.value) {
@@ -1497,7 +1502,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _conversations.value = _conversations.value.filter { it.id != id }
             knownDaemonCascadeIds.remove(id)
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             agyHubClient.deleteCascadeTrajectory(id, hubUrl)
             if (_currentConversation.value?.id == id) {
                 val remaining = _conversations.value
@@ -1515,7 +1520,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _isLoadingConversation.value = true
             _conversationError.value = null
             try {
-                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                val hubUrl = AuthPreferences.currentHubUrl
                 val res = agyHubClient.forkConversation(sourceCascadeId = id, forkAtStepIndex = null, hubUrl = hubUrl)
                 if (res.isSuccess) {
                     val newCascadeId = res.getOrThrow()
@@ -1613,7 +1618,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             // Prepare media payload for voice notes
             val mediaList = mutableListOf<com.example.gemini.data.remote.AgyHubClient.AgyMediaItem>()
-            val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+            val bridgeUrl = AuthPreferences.currentBridgeHttpUrl
             val currentProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
 
             for (aud in audioAtts) {
@@ -1677,7 +1682,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val bytes = file.readBytes()
                 val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                val hub = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                val hub = AuthPreferences.currentHubUrl
                 val res = agyHubClient.getTranscription(audioBase64 = b64, hubUrl = hub)
                 if (res.isSuccess) {
                     val text = res.getOrThrow().trim()
@@ -1800,7 +1805,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch(Dispatchers.IO) {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val modelEnum = com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
             val res = agyHubClient.revertLastUserMessage(conv.id, modelEnum, hubUrl)
             if (res.isSuccess) {
@@ -1901,7 +1906,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+        val hubUrl = AuthPreferences.currentHubUrl
         val userPrompt = currentHistory.lastOrNull { it.role == MessageRole.USER }?.content ?: ""
         val modelEnum = com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
         val selectedModel = _enabledModels.value.find { it.id == modelEnum }
@@ -2131,7 +2136,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         if (conv != null) {
             viewModelScope.launch {
-                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                val hubUrl = AuthPreferences.currentHubUrl
                 agyHubClient.cancelCascadeInvocation(conv.id, hubUrl)
             }
 
@@ -2173,7 +2178,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _isRefreshingModels.value = true
             var failureError: String? = null
             try {
-                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                val hubUrl = AuthPreferences.currentHubUrl
                 val modelsDeferred = async { agyHubClient.getAvailableModels(forceRefresh = force, hubUrl = hubUrl) }
                 val quotasDeferred = async { agyHubClient.retrieveUserQuotaSummary(hubUrl = hubUrl) }
 
@@ -2243,8 +2248,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (showToastFeedback) {
                     withContext(Dispatchers.Main) {
                         if (failureError != null) {
-                            val msg = if (failureError.contains("Connect", ignoreCase = true) || failureError.contains("8090") || failureError.contains("failed to connect", ignoreCase = true)) {
-                                "Failed to refresh: Antigravity Hub unreachable"
+                            val msg = if (failureError.contains("Connect", ignoreCase = true) || failureError.contains("failed to connect", ignoreCase = true)) {
+                                "Failed to refresh: Antigravity Hub (${AuthPreferences.currentHubUrl}) unreachable"
                             } else {
                                 "Failed to refresh: $failureError"
                             }
@@ -2438,7 +2443,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _isStreaming.value = true
 
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val resolvedScope = scope ?: authPrefs.defaultApprovalScope.firstOrNull() ?: "PERMISSION_SCOPE_ONCE"
             val resolvedInteractionType = toolCall.interactionType
                 ?: if (toolCall.name.startsWith("mcp_") || toolCall.name == "call_mcp_tool" || toolCall.name == "read_resource" || toolCall.name == "list_resources") "mcp" else "permission"
@@ -2478,7 +2483,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _isStreaming.value = false
 
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val resolvedInteractionType = toolCall.interactionType
                 ?: if (toolCall.name.startsWith("mcp_") || toolCall.name == "call_mcp_tool" || toolCall.name == "read_resource" || toolCall.name == "list_resources") "mcp" else "permission"
             val res = agyHubClient.handleCascadeUserInteraction(
@@ -2528,7 +2533,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value = trajectoryEngine.toChatMessages(conv.id)
 
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
             val res = agyHubClient.cancelCascadeSteps(
                 cascadeId = conv.id,
                 stepIndices = listOf(stepIndex),
@@ -2666,7 +2671,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _isMcpLoading.value = true
             _mcpErrorMessage.value = null
             try {
-                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                val hubUrl = AuthPreferences.currentHubUrl
 
                 // 1. Fetch live states from AGY daemon
                 val liveResult = agyHubClient.getMcpServerStates(hubUrl)
@@ -2778,7 +2783,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _mcpErrorMessage.value = null
             _mcpStatusMessage.value = null
             try {
-                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                val hubUrl = AuthPreferences.currentHubUrl
                 val res = agyHubClient.refreshMcpServers(hubUrl)
                 if (res.isFailure) {
                     val err = res.exceptionOrNull()?.message ?: "Refresh failed"
@@ -2811,7 +2816,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleMcpServer(serverName: String, enabled: Boolean) {
         viewModelScope.launch {
-            val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val hubUrl = AuthPreferences.currentHubUrl
 
             // 1. Call daemon ToggleMcpServer
             agyHubClient.toggleMcpServer(serverName, enabled, hubUrl)
@@ -2901,7 +2906,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (!success) {
                     _mcpErrorMessage.value = "Failed to save configuration to mcp_config.json"
                 } else {
-                    val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                    val hubUrl = AuthPreferences.currentHubUrl
                     agyHubClient.refreshMcpServers(hubUrl)
                     loadMcpServers()
                     _mcpStatusMessage.value = "Saved '${spec.serverName}'. Tap Refresh on the server to connect."
@@ -2932,7 +2937,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     com.example.gemini.data.daemon.IdeApiClient.saveMcpConfig(json.toString(2))
                 }
 
-                val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+                val hubUrl = AuthPreferences.currentHubUrl
                 agyHubClient.refreshMcpServers(hubUrl)
                 loadMcpServers()
                 _mcpStatusMessage.value = "Removed '$serverName'."

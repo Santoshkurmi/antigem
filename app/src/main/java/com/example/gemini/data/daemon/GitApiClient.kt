@@ -1,6 +1,7 @@
 package com.example.gemini.data.daemon
 
 import android.util.Log
+import com.example.gemini.data.preferences.AuthPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -61,7 +62,9 @@ data class GitDiffResponse(
 
 object GitApiClient {
     private const val TAG = "GitApiClient"
-    private const val BASE_URL = "http://127.0.0.1:8080"
+    var baseUrl: String
+        get() = AuthPreferences.currentBridgeHttpUrl
+        set(value) { AuthPreferences.currentBridgeHttpUrl = value }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
@@ -75,7 +78,7 @@ object GitApiClient {
         try {
             val enc = URLEncoder.encode(projectPath, "UTF-8")
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/status?project=$enc")
+                .url("$baseUrl/api/git/status?project=$enc")
                 .get()
                 .build()
 
@@ -127,7 +130,7 @@ object GitApiClient {
         try {
             val enc = URLEncoder.encode(projectPath, "UTF-8")
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/branches?project=$enc")
+                .url("$baseUrl/api/git/branches?project=$enc")
                 .get()
                 .build()
 
@@ -164,7 +167,7 @@ object GitApiClient {
             }.toString()
 
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/checkout")
+                .url("$baseUrl/api/git/checkout")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -185,7 +188,7 @@ object GitApiClient {
             }.toString()
 
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/stage")
+                .url("$baseUrl/api/git/stage")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -206,7 +209,7 @@ object GitApiClient {
             }.toString()
 
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/unstage")
+                .url("$baseUrl/api/git/unstage")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -227,7 +230,7 @@ object GitApiClient {
             }.toString()
 
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/discard")
+                .url("$baseUrl/api/git/discard")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -248,7 +251,7 @@ object GitApiClient {
             }.toString()
 
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/commit")
+                .url("$baseUrl/api/git/commit")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -268,7 +271,7 @@ object GitApiClient {
             }.toString()
 
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/push")
+                .url("$baseUrl/api/git/push")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -288,7 +291,7 @@ object GitApiClient {
             }.toString()
 
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/pull")
+                .url("$baseUrl/api/git/pull")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -309,7 +312,7 @@ object GitApiClient {
             }.toString()
 
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/stash")
+                .url("$baseUrl/api/git/stash")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -329,7 +332,7 @@ object GitApiClient {
             }.toString()
 
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/stash/pop")
+                .url("$baseUrl/api/git/stash/pop")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
@@ -346,7 +349,7 @@ object GitApiClient {
         try {
             val encProj = URLEncoder.encode(projectPath, "UTF-8")
             val encFile = URLEncoder.encode(filePath, "UTF-8")
-            val url = "$BASE_URL/api/git/diff?project=$encProj&file=$encFile&staged=$staged"
+            val url = "$baseUrl/api/git/diff?project=$encProj&file=$encFile&staged=$staged"
 
             val request = Request.Builder()
                 .url(url)
@@ -376,7 +379,7 @@ object GitApiClient {
         try {
             val enc = URLEncoder.encode(projectPath, "UTF-8")
             val request = Request.Builder()
-                .url("$BASE_URL/api/git/log?project=$enc&limit=$limit")
+                .url("$baseUrl/api/git/log?project=$enc&limit=$limit")
                 .get()
                 .build()
 

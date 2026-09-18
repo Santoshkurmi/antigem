@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.data.daemon.FileNode
 import com.example.gemini.data.daemon.ProjectItem
+import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.theme.ClaudeTerracotta
 
 enum class SidebarTab {
@@ -320,8 +321,9 @@ fun ProjectSidebar(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(4.dp))
+                            val ep = AuthPreferences.currentBridgeHttpUrl.removePrefix("http://").removePrefix("https://")
                             Text(
-                                text = "Checking port 8080 (auto-retrying)",
+                                text = "Checking $ep (auto-retrying)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.example.gemini.data.preferences.AuthPreferences
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -179,8 +180,8 @@ fun ChatScreen(
     val sshUser by viewModel.termuxSshUser.collectAsState(initial = "root")
     val sshPass by viewModel.termuxSshPass.collectAsState(initial = "root")
     val themeMode by viewModel.themeMode.collectAsState(initial = viewModel.authPreferences.getThemeModeSync())
-    val agyHubUrl by viewModel.agyHubUrl.collectAsState(initial = "http://127.0.0.1:8090")
-    val agyBridgeHttpUrl by viewModel.agyBridgeHttpUrl.collectAsState(initial = "http://127.0.0.1:8080")
+    val agyHubUrl by viewModel.agyHubUrl.collectAsState(initial = AuthPreferences.currentHubUrl)
+    val agyBridgeHttpUrl by viewModel.agyBridgeHttpUrl.collectAsState(initial = AuthPreferences.currentBridgeHttpUrl)
     val terminalFontSize by viewModel.terminalFontSize.collectAsState(initial = 13)
     val terminalCursorStyle by viewModel.terminalCursorStyle.collectAsState(initial = "BLOCK")
     val terminalBufferSize by viewModel.terminalBufferSize.collectAsState(initial = 2000)
@@ -511,7 +512,7 @@ fun ChatScreen(
         scope.launch {
             var list = IdeApiClient.getProjects()
             if (list.isEmpty()) {
-                val httpUrl = viewModel.authPreferences.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+                val httpUrl = AuthPreferences.currentBridgeHttpUrl
                 val res = com.example.gemini.data.remote.AgyBridgeService().fetchProjects(httpUrl)
                 if (res.isSuccess) {
                     list = res.getOrThrow().map { ProjectItem(it.name, it.path) }
@@ -528,7 +529,7 @@ fun ChatScreen(
         TermuxDaemonManager.serverReconnectedEvent.collect {
             var list = IdeApiClient.getProjects()
             if (list.isEmpty()) {
-                val httpUrl = viewModel.authPreferences.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+                val httpUrl = AuthPreferences.currentBridgeHttpUrl
                 val res = com.example.gemini.data.remote.AgyBridgeService().fetchProjects(httpUrl)
                 if (res.isSuccess) {
                     list = res.getOrThrow().map { ProjectItem(it.name, it.path) }

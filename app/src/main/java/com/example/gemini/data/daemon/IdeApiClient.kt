@@ -1,6 +1,7 @@
 package com.example.gemini.data.daemon
 
 import android.util.Log
+import com.example.gemini.data.preferences.AuthPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -39,7 +40,9 @@ data class FsBrowseResult(
 
 object IdeApiClient {
     private const val TAG = "IdeApiClient"
-    var baseUrl: String = "http://127.0.0.1:8080"
+    var baseUrl: String
+        get() = AuthPreferences.currentBridgeHttpUrl
+        set(value) { AuthPreferences.currentBridgeHttpUrl = value }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)

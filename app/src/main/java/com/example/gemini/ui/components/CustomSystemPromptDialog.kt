@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.theme.ClaudeTerracotta
 
 @Composable
@@ -47,7 +48,8 @@ fun CustomSystemPromptDialog(
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val wsParam = java.net.URLEncoder.encode(workspaceDir ?: "", "UTF-8")
-                val urlStr = "http://127.0.0.1:8080/api/system-prompt?conversationId=${conversationId ?: "active"}&workspaceDir=$wsParam"
+                val bridgeBase = AuthPreferences.currentBridgeHttpUrl.removeSuffix("/")
+                val urlStr = "$bridgeBase/api/system-prompt?conversationId=${conversationId ?: "active"}&workspaceDir=$wsParam"
                 val conn = java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection
                 conn.connectTimeout = 2000
                 conn.readTimeout = 2000

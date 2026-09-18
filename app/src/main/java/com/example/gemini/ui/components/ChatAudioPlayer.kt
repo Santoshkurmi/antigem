@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.domain.model.ChatAttachment
 import com.example.gemini.theme.ClaudeTerracotta
 import kotlinx.coroutines.delay
@@ -165,7 +166,7 @@ fun ChatAudioPlayer(
                                 attachment.path
                             }
                             attachment.path.isNotBlank() -> {
-                                val bridgeBase = com.example.gemini.data.remote.HubMediaResolver.activeBridgeUrl.removeSuffix("/")
+                                val bridgeBase = AuthPreferences.currentBridgeHttpUrl.removeSuffix("/")
                                 "$bridgeBase/api/file/read?path=" + java.net.URLEncoder.encode(attachment.path, "UTF-8")
                             }
                             else -> null

@@ -40,7 +40,6 @@ class AuthPreferences(private val context: Context) {
         val IS_LOCAL_TOOLS_INSTALLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_local_tools_installed")
         val LOCAL_TOOLS_INSTALL_DATE = androidx.datastore.preferences.core.longPreferencesKey("local_tools_install_date")
         val LOCAL_TOOLS_VERSION = stringPreferencesKey("local_tools_version")
-        val AGY_BRIDGE_WS_URL = stringPreferencesKey("agy_bridge_ws_url")
         val AGY_BRIDGE_HTTP_URL = stringPreferencesKey("agy_bridge_http_url")
         val AGY_HUB_URL = stringPreferencesKey("agy_hub_url")
         val USE_SSH_TERMINAL = androidx.datastore.preferences.core.booleanPreferencesKey("use_ssh_terminal")
@@ -57,6 +56,32 @@ class AuthPreferences(private val context: Context) {
         val REQUIRE_APPROVAL_FOR_FILE_EDITS = androidx.datastore.preferences.core.booleanPreferencesKey("require_approval_for_file_edits")
         val DEFAULT_APPROVAL_SCOPE = stringPreferencesKey("default_approval_scope")
         val GROUP_CHATS_BY_WORKSPACE = androidx.datastore.preferences.core.booleanPreferencesKey("group_chats_by_workspace")
+        const val DEFAULT_HUB_URL = "http://127.0.0.1:8090"
+        const val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:8080"
+
+        @Volatile
+        var currentHubUrl: String = DEFAULT_HUB_URL
+
+        @Volatile
+        var currentBridgeHttpUrl: String = DEFAULT_BRIDGE_HTTP_URL
+
+        val currentBridgeWsUrl: String
+            get() = toWsUrl(currentBridgeHttpUrl)
+
+        fun toWsUrl(httpUrl: String): String = when {
+            httpUrl.startsWith("https://") -> httpUrl.replaceFirst("https://", "wss://")
+            httpUrl.startsWith("http://") -> httpUrl.replaceFirst("http://", "ws://")
+            else -> "ws://$httpUrl"
+        }
+    }
+
+    private val syncPrefs = context.getSharedPreferences("anti_gem_sync_prefs", Context.MODE_PRIVATE)
+
+    init {
+        val savedHub = syncPrefs.getString("agy_hub_url", null)
+        val savedBridgeHttp = syncPrefs.getString("agy_bridge_http_url", null)
+        if (!savedHub.isNullOrBlank()) currentHubUrl = savedHub
+        if (!savedBridgeHttp.isNullOrBlank()) currentBridgeHttpUrl = savedBridgeHttp
     }
 
     val groupChatsByWorkspace: Flow<Boolean> = context.dataStore.data.map { it[GROUP_CHATS_BY_WORKSPACE] ?: false }
@@ -70,9 +95,17 @@ class AuthPreferences(private val context: Context) {
     val localToolsInstallDate: Flow<Long?> = context.dataStore.data.map { it[LOCAL_TOOLS_INSTALL_DATE] }
     val localToolsVersion: Flow<String?> = context.dataStore.data.map { it[LOCAL_TOOLS_VERSION] }
 
-    val agyBridgeWsUrl: Flow<String> = context.dataStore.data.map { it[AGY_BRIDGE_WS_URL] ?: "ws://127.0.0.1:8080" }
-    val agyBridgeHttpUrl: Flow<String> = context.dataStore.data.map { it[AGY_BRIDGE_HTTP_URL] ?: "http://127.0.0.1:8080" }
-    val agyHubUrl: Flow<String> = context.dataStore.data.map { it[AGY_HUB_URL] ?: "http://127.0.0.1:8090" }
+    val agyBridgeHttpUrl: Flow<String> = context.dataStore.data.map { 
+        val url = it[AGY_BRIDGE_HTTP_URL] ?: DEFAULT_BRIDGE_HTTP_URL
+        currentBridgeHttpUrl = url
+        url
+    }
+    val agyBridgeWsUrl: Flow<String> = agyBridgeHttpUrl.map { toWsUrl(it) }
+    val agyHubUrl: Flow<String> = context.dataStore.data.map { 
+        val url = it[AGY_HUB_URL] ?: DEFAULT_HUB_URL
+        currentHubUrl = url
+        url
+    }
 
     val accessToken: Flow<String?> = context.dataStore.data.map { it[ACCESS_TOKEN] }
     val refreshToken: Flow<String?> = context.dataStore.data.map { it[REFRESH_TOKEN] }
@@ -80,7 +113,6 @@ class AuthPreferences(private val context: Context) {
     val projectId: Flow<String?> = context.dataStore.data.map { it[PROJECT_ID] ?: "rising-fact-p41fc" }
     val subscriptionTier: Flow<String?> = context.dataStore.data.map { it[SUBSCRIPTION_TIER] ?: "pro" }
     val userEmail: Flow<String?> = context.dataStore.data.map { it[USER_EMAIL] }
-    private val syncPrefs = context.getSharedPreferences("anti_gem_sync_prefs", Context.MODE_PRIVATE)
 
     fun getThemeModeSync(): String {
         val cached = syncPrefs.getString("app_theme_mode", null)
@@ -305,16 +337,24 @@ class AuthPreferences(private val context: Context) {
     }
 
     suspend fun saveAgyHubUrl(url: String) {
-        context.dataStore.edit { prefs ->
-            prefs[AGY_HUB_URL] = url
+        val trimmed = url.trim()
+        if (trimmed.isNotBlank()) {
+            currentHubUrl = trimmed
+            syncPrefs.edit().putString("agy_hub_url", trimmed).apply()
+            context.dataStore.edit { prefs ->
+                prefs[AGY_HUB_URL] = trimmed
+            }
         }
     }
 
     suspend fun saveAgyBridgeHttpUrl(url: String) {
-        context.dataStore.edit { prefs ->
-            prefs[AGY_BRIDGE_HTTP_URL] = url
-            val ws = url.replaceFirst("http://", "ws://").replaceFirst("https://", "wss://")
-            prefs[AGY_BRIDGE_WS_URL] = ws
+        val trimmed = url.trim()
+        if (trimmed.isNotBlank()) {
+            currentBridgeHttpUrl = trimmed
+            syncPrefs.edit().putString("agy_bridge_http_url", trimmed).apply()
+            context.dataStore.edit { prefs ->
+                prefs[AGY_BRIDGE_HTTP_URL] = trimmed
+            }
         }
     }
 

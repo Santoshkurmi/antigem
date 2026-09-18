@@ -1,6 +1,7 @@
 package com.example.gemini.data.remote
 
 import android.util.Log
+import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.Conversation
@@ -34,7 +35,7 @@ import java.util.regex.Pattern
 
 /**
  * High-performance native Android client for the Antigravity (AGY) CLI Hub Daemon.
- * Communicates directly with http://127.0.0.1:8090 using Connect-RPC (JSON) and
+ * Communicates directly with language server via Connect-RPC (JSON) and
  * binary 5-byte framed gRPC-Web streaming.
  */
 class AgyHubClient(
@@ -47,7 +48,6 @@ class AgyHubClient(
 ) {
     companion object {
         const val TAG = "AgyHubClient"
-        const val DEFAULT_HUB_URL = "http://127.0.0.1:8090"
         val agyJson = Json {
             ignoreUnknownKeys = true
             isLenient = true
@@ -146,19 +146,25 @@ class AgyHubClient(
 
     @Volatile
     private var cachedCsrfToken: String? = null
+    @Volatile
+    private var cachedCsrfHost: String? = null
 
-    suspend fun getOrFetchCsrfToken(hubUrl: String = DEFAULT_HUB_URL): String = withContext(Dispatchers.IO) {
-        val existing = cachedCsrfToken
-        if (!existing.isNullOrBlank()) {
-            return@withContext existing
+    val csrfEvents = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 5)
+
+    suspend fun getOrFetchCsrfToken(hubUrl: String = AuthPreferences.currentHubUrl, forceRefresh: Boolean = false): String = withContext(Dispatchers.IO) {
+        val normHost = hubUrl.trim().removeSuffix("/")
+        if (!forceRefresh && cachedCsrfHost == normHost && !cachedCsrfToken.isNullOrBlank()) {
+            return@withContext cachedCsrfToken!!
         }
-        val fetched = fetchCsrfToken(hubUrl)
+        val fetched = fetchCsrfToken(normHost)
+        cachedCsrfHost = normHost
         cachedCsrfToken = fetched
         fetched
     }
 
     fun clearCsrfToken() {
         cachedCsrfToken = null
+        cachedCsrfHost = null
     }
 
     private fun fetchCsrfToken(hubUrl: String): String {
@@ -211,7 +217,7 @@ class AgyHubClient(
     suspend fun callUnary(
         endpoint: String,
         jsonBody: String = "{}",
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val token = getOrFetchCsrfToken(hubUrl)
@@ -231,10 +237,11 @@ class AgyHubClient(
             client.newCall(req).execute().use { resp ->
                 val body = resp.body?.string() ?: ""
                 if (!resp.isSuccessful) {
-                    // Retry once if token was invalid or expired
-                    if (resp.code == 403 || resp.code == 401) {
-                        clearCsrfToken()
-                        val newToken = getOrFetchCsrfToken(hubUrl)
+                    val isCsrfError = resp.code == 401 || resp.code == 403 || body.contains("csrf", ignoreCase = true)
+                    if (isCsrfError) {
+                        Log.w(TAG, "CSRF error detected ($endpoint on $hubUrl). Refetching fallback CSRF token...")
+                        csrfEvents.tryEmit("CSRF token expired on $hubUrl. Re-authenticating...")
+                        val newToken = getOrFetchCsrfToken(hubUrl, forceRefresh = true)
                         val retryReq = req.newBuilder()
                             .header("x-codeium-csrf-token", newToken)
                             .build()
@@ -263,7 +270,7 @@ class AgyHubClient(
     fun callStream(
         endpoint: String,
         jsonPayload: String = "{}",
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Flow<String> = flow {
         val token = getOrFetchCsrfToken(hubUrl)
         val base = hubUrl.trimEnd('/')
@@ -290,6 +297,11 @@ class AgyHubClient(
         if (!resp.isSuccessful) {
             val err = resp.body?.string() ?: "HTTP ${resp.code}"
             resp.close()
+            val isCsrfError = resp.code == 401 || resp.code == 403 || err.contains("csrf", ignoreCase = true)
+            if (isCsrfError) {
+                clearCsrfToken()
+                csrfEvents.tryEmit("CSRF token expired on stream ($endpoint). Re-authenticating...")
+            }
             throw Exception("gRPC stream failed (${resp.code}): $err")
         }
 
@@ -396,7 +408,7 @@ class AgyHubClient(
     suspend fun executeGrpcWebCall(
         endpoint: String,
         payloadJson: String,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<GrpcResult> = withContext(Dispatchers.IO) {
         val token = getOrFetchCsrfToken(hubUrl)
         val base = hubUrl.trimEnd('/')
@@ -475,13 +487,13 @@ class AgyHubClient(
             get() = fullName.ifBlank { username.ifBlank { "Antigravity User" } }
     }
 
-    suspend fun login(hubUrl: String = DEFAULT_HUB_URL): Result<Unit> =
+    suspend fun login(hubUrl: String = AuthPreferences.currentHubUrl): Result<Unit> =
         callUnary("Login", JSONObject().apply { put("isGcpTos", false) }.toString(), hubUrl).map { }
 
-    suspend fun authLogout(hubUrl: String = DEFAULT_HUB_URL): Result<Unit> =
+    suspend fun authLogout(hubUrl: String = AuthPreferences.currentHubUrl): Result<Unit> =
         callUnary("AuthLogout", "{}", hubUrl).map { }
 
-    suspend fun fetchLoginUrl(bridgeHttpUrl: String = DEFAULT_HUB_URL.replace("8090", "8080")): String? = withContext(Dispatchers.IO) {
+    suspend fun fetchLoginUrl(bridgeHttpUrl: String = AuthPreferences.currentBridgeHttpUrl): String? = withContext(Dispatchers.IO) {
         try {
             val req = Request.Builder()
                 .url("${bridgeHttpUrl.trimEnd('/')}/api/auth/login-url")
@@ -499,7 +511,7 @@ class AgyHubClient(
         }
     }
 
-    suspend fun startBridgeLogin(bridgeHttpUrl: String = DEFAULT_HUB_URL.replace("8090", "8080")): Boolean = withContext(Dispatchers.IO) {
+    suspend fun startBridgeLogin(bridgeHttpUrl: String = AuthPreferences.currentBridgeHttpUrl): Boolean = withContext(Dispatchers.IO) {
         try {
             val req = Request.Builder()
                 .url("${bridgeHttpUrl.trimEnd('/')}/api/auth/start-login")
@@ -513,7 +525,7 @@ class AgyHubClient(
         }
     }
 
-    suspend fun getAuthStatus(hubUrl: String = DEFAULT_HUB_URL): Result<Boolean> = withContext(Dispatchers.IO) {
+    suspend fun getAuthStatus(hubUrl: String = AuthPreferences.currentHubUrl): Result<Boolean> = withContext(Dispatchers.IO) {
         callUnary("GetAuthStatus", "{}", hubUrl).map { body ->
             try {
                 val json = JSONObject(body)
@@ -525,7 +537,7 @@ class AgyHubClient(
         }
     }
 
-    suspend fun getLocalUserInfo(hubUrl: String = DEFAULT_HUB_URL): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
+    suspend fun getLocalUserInfo(hubUrl: String = AuthPreferences.currentHubUrl): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
         callUnary("GetLocalUserInfo", "{}", hubUrl).map { body ->
             val json = JSONObject(body)
             val username = json.optString("username", "")
@@ -535,8 +547,8 @@ class AgyHubClient(
     }
 
     suspend fun fetchDetailedAuthInfo(
-        hubUrl: String = DEFAULT_HUB_URL,
-        bridgeHttpUrl: String = DEFAULT_HUB_URL.replace("8090", "8080")
+        hubUrl: String = AuthPreferences.currentHubUrl,
+        bridgeHttpUrl: String = AuthPreferences.currentBridgeHttpUrl
     ): Result<AgyAuthInfo> = withContext(Dispatchers.IO) {
         try {
             val authResultCall = callUnary("GetAuthStatus", "{\"metadata\":{}}", hubUrl)
@@ -679,7 +691,7 @@ class AgyHubClient(
      * Subscribes to live conversation summaries via JetboxSubscribeToSummaries.
      * Streams conversation updates directly from daemon without local caching.
      */
-    fun subscribeToSummaries(hubUrl: String = DEFAULT_HUB_URL): Flow<SummariesUpdate> = flow {
+    fun subscribeToSummaries(hubUrl: String = AuthPreferences.currentHubUrl): Flow<SummariesUpdate> = flow {
         callStream("JetboxSubscribeToSummaries", "{}", hubUrl).collect { frameJson ->
             try {
                 val root = JSONObject(frameJson)
@@ -753,7 +765,7 @@ class AgyHubClient(
     /**
      * Gets raw step count for a conversation
      */
-    suspend fun getRawStepCount(cascadeId: String, hubUrl: String = DEFAULT_HUB_URL): Int = withContext(Dispatchers.IO) {
+    suspend fun getRawStepCount(cascadeId: String, hubUrl: String = AuthPreferences.currentHubUrl): Int = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
                 put("cascade_id", cascadeId)
@@ -781,7 +793,7 @@ class AgyHubClient(
     suspend fun forkConversation(
         sourceCascadeId: String,
         forkAtStepIndex: Int? = null,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val rawCount = getRawStepCount(sourceCascadeId, hubUrl)
@@ -812,7 +824,7 @@ class AgyHubClient(
      */
     suspend fun deleteCascadeTrajectory(
         cascadeId: String,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         val payload = JSONObject().apply {
             put("cascadeId", cascadeId)
@@ -828,7 +840,7 @@ class AgyHubClient(
         cascadeId: String = UUID.randomUUID().toString(),
         modelEnum: String = "",
         workspaceUri: String = "",
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
         val cid = cascadeId
         val resolvedModel = resolveModelEnum(modelEnum)
@@ -858,7 +870,7 @@ class AgyHubClient(
      */
     suspend fun getCascadeTrajectorySteps(
         cascadeId: String,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
@@ -878,7 +890,7 @@ class AgyHubClient(
     suspend fun revertLastUserMessage(
         cascadeId: String,
         modelEnum: String = "MODEL_PLACEHOLDER_M319",
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
             val stepsRes = getCascadeTrajectorySteps(cascadeId, hubUrl)
@@ -944,7 +956,7 @@ class AgyHubClient(
      */
     suspend fun readFileAsBase64(
         uri: String,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val formattedUri = if (uri.startsWith("file://") || uri.startsWith("http://") || uri.startsWith("https://")) {
@@ -976,7 +988,7 @@ class AgyHubClient(
      */
     suspend fun getAvailableModels(
         forceRefresh: Boolean = false,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<List<AiModel>> = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
@@ -1074,7 +1086,7 @@ class AgyHubClient(
      * Fetches user quota summary (5-hour and weekly buckets) from RetrieveUserQuotaSummary
      */
     suspend fun retrieveUserQuotaSummary(
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<QuotaSummaryResponse> = withContext(Dispatchers.IO) {
         try {
             val res = callUnary("RetrieveUserQuotaSummary", "{}", hubUrl)
@@ -1169,7 +1181,7 @@ data class AgyMediaItem(
         thinkingBudget: Int = 8192,
         autoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
         media: List<AgyMediaItem> = emptyList(),
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val resolvedModel = resolveModelEnum(modelEnum)
         val promptText = if (text.isNotBlank()) text else if (media.isNotEmpty()) (media.firstOrNull()?.description ?: "Voice note") else ""
@@ -1236,7 +1248,7 @@ data class AgyMediaItem(
      */
     suspend fun sendUserCascadeMessage(
         payloadJson: String,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> = executeGrpcWebCall("SendUserCascadeMessage", payloadJson, hubUrl).map { }
 
     /**
@@ -1244,7 +1256,7 @@ data class AgyMediaItem(
      */
     fun streamAgentStateUpdates(
         cascadeId: String,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Flow<String> = flow {
         val payload = JSONObject().apply {
             put("conversationId", cascadeId)
@@ -1264,7 +1276,7 @@ data class AgyMediaItem(
      */
     fun streamAgentStateFrames(
         cascadeId: String,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Flow<AgyStreamFrameDto> = flow {
         val payload = JSONObject().apply {
             put("conversationId", cascadeId)
@@ -1288,7 +1300,7 @@ data class AgyMediaItem(
      */
     suspend fun cancelCascadeInvocation(
         cascadeId: String,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> {
         val payload = JSONObject().apply {
             put("cascadeId", cascadeId)
@@ -1304,7 +1316,7 @@ data class AgyMediaItem(
     suspend fun cancelCascadeSteps(
         cascadeId: String,
         stepIndices: List<Int>,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> {
         val reqDto = com.example.gemini.data.remote.dto.CancelCascadeStepsRequestDto(
             cascadeId = cascadeId,
@@ -1325,7 +1337,7 @@ data class AgyMediaItem(
         scope: String = "PERMISSION_SCOPE_ONCE",
         userDenyInstruction: String = "",
         interactionType: String = "permission",
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> {
         val scopeStr = when (scope.uppercase()) {
             "PERMISSION_SCOPE_ONCE", "ONCE" -> "PERMISSION_SCOPE_ONCE"
@@ -1418,7 +1430,7 @@ data class AgyMediaItem(
      */
     suspend fun resolveOutstandingSteps(
         cascadeId: String,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> {
         val payload = JSONObject().apply {
             put("cascadeId", cascadeId)
@@ -1444,7 +1456,7 @@ data class AgyMediaItem(
      * Fetches live daemon user settings snapshot by subscribing to JetboxSubscribeToState
      * and reading the very first frame pushed by the daemon.
      */
-    suspend fun fetchGlobalUserSettings(hubUrl: String = DEFAULT_HUB_URL): Result<GlobalUserSettings> = withContext(Dispatchers.IO) {
+    suspend fun fetchGlobalUserSettings(hubUrl: String = AuthPreferences.currentHubUrl): Result<GlobalUserSettings> = withContext(Dispatchers.IO) {
         try {
             val token = getOrFetchCsrfToken(hubUrl)
             val base = hubUrl.trimEnd('/')
@@ -1536,7 +1548,7 @@ data class AgyMediaItem(
         artifactReviewMode: String? = null,
         enableTerminalSandbox: Boolean? = null,
         globalPermissionGrants: GlobalPermissionGrants? = null,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> {
         val payload = JSONObject().apply {
             put("userConfig", JSONObject().apply {
@@ -1571,7 +1583,7 @@ data class AgyMediaItem(
     /**
      * Fetches all projects and their settings by reading ProjectUpdatesStream and ReadProjects
      */
-    suspend fun fetchAllProjects(hubUrl: String = DEFAULT_HUB_URL): Result<List<ProjectItem>> = withContext(Dispatchers.IO) {
+    suspend fun fetchAllProjects(hubUrl: String = AuthPreferences.currentHubUrl): Result<List<ProjectItem>> = withContext(Dispatchers.IO) {
         try {
             val token = getOrFetchCsrfToken(hubUrl)
             val base = hubUrl.trimEnd('/')
@@ -1693,7 +1705,7 @@ data class AgyMediaItem(
         artifactReviewMode: String? = null,
         sandboxMode: Boolean? = null,
         inheritGlobal: Boolean = false,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> {
         val payload = JSONObject().apply {
             put("project", JSONObject().apply {
@@ -1739,7 +1751,7 @@ data class AgyMediaItem(
     suspend fun getTranscription(
         audioBase64: String,
         prompt: String = "",
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
         val token = getOrFetchCsrfToken(hubUrl)
         val base = hubUrl.trimEnd('/')
@@ -1799,7 +1811,7 @@ data class AgyMediaItem(
         preCursorText: String = "",
         postCursorText: String = "",
         mimeType: String = "audio/pcm;rate=16000",
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Flow<String> {
         val payload = JSONObject().apply {
             put("mimeType", mimeType)
@@ -1818,7 +1830,7 @@ data class AgyMediaItem(
         sessionId: String,
         dataBase64: String,
         sequenceNumber: Long,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val payload = JSONObject().apply {
             put("sessionId", sessionId)
@@ -1834,7 +1846,7 @@ data class AgyMediaItem(
      */
     suspend fun endAudioSession(
         sessionId: String,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val payload = JSONObject().apply {
             put("sessionId", sessionId)
@@ -1848,7 +1860,7 @@ data class AgyMediaItem(
     suspend fun setUserSettings(
         autoExecutionPolicy: String,
         enableTerminalSandbox: Boolean = false,
-        hubUrl: String = DEFAULT_HUB_URL
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> {
         return writeGlobalUserSettings(
             autoExecutionPolicy = autoExecutionPolicy,
@@ -3191,7 +3203,7 @@ data class AgyMediaItem(
         return messages
     }
 
-    suspend fun getMcpServerStates(hubUrl: String = DEFAULT_HUB_URL): Result<List<com.example.gemini.domain.model.McpServerState>> = withContext(Dispatchers.IO) {
+    suspend fun getMcpServerStates(hubUrl: String = AuthPreferences.currentHubUrl): Result<List<com.example.gemini.domain.model.McpServerState>> = withContext(Dispatchers.IO) {
         try {
             val res = callUnary("GetMcpServerStates", "{}", hubUrl)
             if (res.isFailure) {
@@ -3298,13 +3310,13 @@ data class AgyMediaItem(
         )
     }
 
-    suspend fun refreshMcpServers(hubUrl: String = DEFAULT_HUB_URL): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun refreshMcpServers(hubUrl: String = AuthPreferences.currentHubUrl): Result<Unit> = withContext(Dispatchers.IO) {
         val res = callUnary("RefreshMcpServers", "{}", hubUrl)
         if (res.isSuccess) Result.success(Unit)
         else Result.failure(res.exceptionOrNull() ?: Exception("RefreshMcpServers failed"))
     }
 
-    suspend fun toggleMcpServer(serverName: String, enabled: Boolean, hubUrl: String = DEFAULT_HUB_URL): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun toggleMcpServer(serverName: String, enabled: Boolean, hubUrl: String = AuthPreferences.currentHubUrl): Result<Unit> = withContext(Dispatchers.IO) {
         val payload = JSONObject().apply {
             put("serverName", serverName)
             put("enabled", enabled)

@@ -20,12 +20,6 @@ object HubMediaResolver {
     private val documentRamCache = ConcurrentHashMap<String, String>()    // filePath -> content string
     private val downloadMutex = Mutex()
 
-    @Volatile
-    var activeHubUrl: String = AgyHubClient.DEFAULT_HUB_URL
-
-    @Volatile
-    var activeBridgeUrl: String = AgyBridgeService.DEFAULT_HTTP_URL
-
     fun getCachedDocument(path: String): String? = documentRamCache[path]
 
     fun putCachedDocument(path: String, content: String) {
@@ -96,7 +90,7 @@ object HubMediaResolver {
         context: Context,
         rawUri: String,
         agyHubClient: AgyHubClient = AgyHubClient(),
-        hubUrl: String = activeHubUrl
+        hubUrl: String = com.example.gemini.data.preferences.AuthPreferences.currentHubUrl
     ): String = withContext(Dispatchers.IO) {
         if (rawUri.isBlank()) return@withContext ""
         if (rawUri.startsWith("data:image/") || rawUri.startsWith("http://") || rawUri.startsWith("https://") || rawUri.startsWith("content://")) {

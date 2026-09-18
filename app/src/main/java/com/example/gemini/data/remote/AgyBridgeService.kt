@@ -1,6 +1,7 @@
 package com.example.gemini.data.remote
 
 import android.util.Log
+import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
@@ -63,8 +64,12 @@ sealed class AgyStreamEvent {
     data class TextChunk(val text: String, val seq: Long? = null) : AgyStreamEvent()
     data class ThoughtChunk(val thought: String, val durationMs: Long? = null, val seq: Long? = null) : AgyStreamEvent()
     data class ToolChunk(val tool: ToolCall, val seq: Long? = null) : AgyStreamEvent()
-    data class InstanceStatus(val status: String, val message: String? = null, val conversationId: String? = null) : AgyStreamEvent()
-    data class SessionAttached(val conversationId: String, val isRunning: Boolean, val prompt: String? = null) : AgyStreamEvent()
+    data class InstanceStatus(val status: String, val message: String? = null, val conversationId: String? = null) :
+        AgyStreamEvent()
+
+    data class SessionAttached(val conversationId: String, val isRunning: Boolean, val prompt: String? = null) :
+        AgyStreamEvent()
+
     data class StreamSnapshot(
         val conversationId: String,
         val isRunning: Boolean,
@@ -75,6 +80,7 @@ sealed class AgyStreamEvent {
         val content: String = "",
         val activeTools: List<ToolCall> = emptyList()
     ) : AgyStreamEvent()
+
     data class QuotaUpdate(val quotaSummary: com.example.gemini.domain.model.QuotaSummaryResponse) : AgyStreamEvent()
     data class Completed(
         val tokenUsage: TokenUsage?,
@@ -82,6 +88,7 @@ sealed class AgyStreamEvent {
         val fullResponse: String? = null,
         val seq: Long? = null
     ) : AgyStreamEvent()
+
     data class LoginUrl(val url: String) : AgyStreamEvent()
     data class Error(val message: String) : AgyStreamEvent()
 }
@@ -97,8 +104,6 @@ class AgyBridgeService(
 ) {
     companion object {
         const val TAG = "AgyBridgeService"
-        const val DEFAULT_WS_URL = "ws://127.0.0.1:8080"
-        const val DEFAULT_HTTP_URL = "http://127.0.0.1:8080"
     }
 
     private val _connectionState = MutableStateFlow(BridgeConnectionState.CONNECTING)
@@ -114,42 +119,43 @@ class AgyBridgeService(
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private var activeWebSocket: WebSocket? = null
 
-    suspend fun fetchModels(httpBaseUrl: String = DEFAULT_HTTP_URL): Result<List<AiModel>> = withContext(Dispatchers.IO) {
-        try {
-            val request = Request.Builder()
-                .url("$httpBaseUrl/api/models")
-                .get()
-                .build()
+    suspend fun fetchModels(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Result<List<AiModel>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url("$httpBaseUrl/api/models")
+                    .get()
+                    .build()
 
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
-                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                        return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                    }
+                    _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                    val body = response.body?.string() ?: "{}"
+                    val json = JSONObject(body)
+                    val arr = json.optJSONArray("models") ?: JSONArray()
+                    val models = mutableListOf<AiModel>()
+
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        val id = obj.getString("id")
+                        val name = obj.optString("name", id)
+                        models.add(AiModel.fromApi(id, name))
+                    }
+
+                    Result.success(models)
                 }
-                _connectionState.value = BridgeConnectionState.CONNECTED_READY
-                val body = response.body?.string() ?: "{}"
-                val json = JSONObject(body)
-                val arr = json.optJSONArray("models") ?: JSONArray()
-                val models = mutableListOf<AiModel>()
-
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val id = obj.getString("id")
-                    val name = obj.optString("name", id)
-                    models.add(AiModel.fromApi(id, name))
-                }
-
-                Result.success(models)
+            } catch (e: Exception) {
+                Log.e(TAG, "fetchModels failed: ${e.message}")
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "fetchModels failed: ${e.message}")
-            _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
-            Result.failure(e)
         }
-    }
 
     suspend fun fetchQuotas(
-        httpBaseUrl: String = DEFAULT_HTTP_URL,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl,
         force: Boolean = false
     ): Result<com.example.gemini.domain.model.QuotaSummaryResponse> = withContext(Dispatchers.IO) {
         try {
@@ -187,7 +193,11 @@ class AgyBridgeService(
             val gId = when {
                 rawGroupId.isNotBlank() -> rawGroupId
                 groupName.contains("gemini", ignoreCase = true) -> "gemini"
-                groupName.contains("claude", ignoreCase = true) || groupName.contains("gpt", ignoreCase = true) -> "claude_gpt"
+                groupName.contains("claude", ignoreCase = true) || groupName.contains(
+                    "gpt",
+                    ignoreCase = true
+                ) -> "claude_gpt"
+
                 else -> groupName.lowercase().replace(" ", "_")
             }
 
@@ -244,32 +254,35 @@ class AgyBridgeService(
         )
     }
 
-    suspend fun checkServerHealth(httpBaseUrl: String = DEFAULT_HTTP_URL): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val request = Request.Builder()
-                .url("$httpBaseUrl/api/health")
-                .get()
-                .build()
+    suspend fun checkServerHealth(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url("$httpBaseUrl/api/health")
+                    .get()
+                    .build()
 
-            client.newCall(request).execute().use { response ->
-                val online = response.isSuccessful
-                _connectionState.value = if (online) BridgeConnectionState.CONNECTED_READY else BridgeConnectionState.OFFLINE_ERROR
-                online
+                client.newCall(request).execute().use { response ->
+                    val online = response.isSuccessful
+                    _connectionState.value =
+                        if (online) BridgeConnectionState.CONNECTED_READY else BridgeConnectionState.OFFLINE_ERROR
+                    online
+                }
+            } catch (e: Exception) {
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                false
             }
-        } catch (e: Exception) {
-            _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
-            false
         }
-    }
 
     suspend fun fetchConversations(
         searchQuery: String? = null,
         page: Int = 1,
         limit: Int = 30,
-        httpBaseUrl: String = DEFAULT_HTTP_URL
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
     ): Result<List<AgyConversationSummary>> = withContext(Dispatchers.IO) {
         try {
-            val qParam = if (!searchQuery.isNullOrBlank()) "&q=${java.net.URLEncoder.encode(searchQuery, "UTF-8")}" else ""
+            val qParam =
+                if (!searchQuery.isNullOrBlank()) "&q=${java.net.URLEncoder.encode(searchQuery, "UTF-8")}" else ""
             val request = Request.Builder()
                 .url("$httpBaseUrl/api/conversations?page=$page&limit=$limit$qParam")
                 .get()
@@ -309,7 +322,7 @@ class AgyBridgeService(
         filename: String,
         base64Data: String,
         projectPath: String? = null,
-        httpBaseUrl: String = DEFAULT_HTTP_URL
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
     ): Result<com.example.gemini.domain.model.ChatAttachment> = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
@@ -349,7 +362,7 @@ class AgyBridgeService(
 
     suspend fun fetchConversationMessages(
         conversationId: String,
-        httpBaseUrl: String = DEFAULT_HTTP_URL
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
     ): Result<List<ChatMessage>> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
@@ -369,8 +382,9 @@ class AgyBridgeService(
                 for (i in 0 until arr.length()) {
                     val obj = arr.getJSONObject(i)
                     val roleStr = obj.optString("role", "user")
-                    val role = if (roleStr == "agent" || roleStr == "assistant") com.example.gemini.domain.model.MessageRole.ASSISTANT
-                               else com.example.gemini.domain.model.MessageRole.USER
+                    val role =
+                        if (roleStr == "agent" || roleStr == "assistant") com.example.gemini.domain.model.MessageRole.ASSISTANT
+                        else com.example.gemini.domain.model.MessageRole.USER
                     val content = obj.optString("content", "")
                     val thinking = obj.optString("thinking").takeIf { it.isNotBlank() }
 
@@ -382,7 +396,8 @@ class AgyBridgeService(
                             val toolId = toolObj.optString("id").ifBlank { "tool_${conversationId}_$t" }
                             val toolName = toolObj.optString("name").ifBlank { toolObj.optString("tool_name", "tool") }
                             val toolCmd = toolObj.optString("command").ifBlank {
-                                toolObj.optJSONObject("args")?.toString() ?: toolObj.optJSONObject("parameters")?.toString() ?: ""
+                                toolObj.optJSONObject("args")?.toString() ?: toolObj.optJSONObject("parameters")
+                                    ?.toString() ?: ""
                             }
                             val toolOut = toolObj.optString("output", "")
                             val toolStatus = toolObj.optString("status", "SUCCESS")
@@ -444,44 +459,45 @@ class AgyBridgeService(
         }
     }
 
-    suspend fun fetchProjects(httpBaseUrl: String = DEFAULT_HTTP_URL): Result<List<AgyProjectSummary>> = withContext(Dispatchers.IO) {
-        try {
-            val request = Request.Builder()
-                .url("$httpBaseUrl/api/projects")
-                .get()
-                .build()
+    suspend fun fetchProjects(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Result<List<AgyProjectSummary>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url("$httpBaseUrl/api/projects")
+                    .get()
+                    .build()
 
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
-                }
-                val body = response.body?.string() ?: "{}"
-                val json = JSONObject(body)
-                val arr = json.optJSONArray("projects") ?: JSONArray()
-                val list = mutableListOf<AgyProjectSummary>()
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                    }
+                    val body = response.body?.string() ?: "{}"
+                    val json = JSONObject(body)
+                    val arr = json.optJSONArray("projects") ?: JSONArray()
+                    val list = mutableListOf<AgyProjectSummary>()
 
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    list.add(
-                        AgyProjectSummary(
-                            name = obj.getString("name"),
-                            path = obj.getString("path")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        list.add(
+                            AgyProjectSummary(
+                                name = obj.getString("name"),
+                                path = obj.getString("path")
+                            )
                         )
-                    )
+                    }
+                    Result.success(list)
                 }
-                Result.success(list)
+            } catch (e: Exception) {
+                Log.w(TAG, "fetchProjects failed: ${e.message}")
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "fetchProjects failed: ${e.message}")
-            Result.failure(e)
         }
-    }
 
     suspend fun prewarm(
         conversationId: String?,
         model: String,
         workspaceDir: String? = null,
-        httpBaseUrl: String = DEFAULT_HTTP_URL
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
     ) = withContext(Dispatchers.IO) {
         try {
             val targetId = conversationId ?: "new"
@@ -503,44 +519,48 @@ class AgyBridgeService(
         }
     }
 
-    suspend fun fetchActiveInstances(httpBaseUrl: String = DEFAULT_HTTP_URL): Result<List<AgyActiveInstance>> = withContext(Dispatchers.IO) {
-        try {
-            val request = Request.Builder()
-                .url("$httpBaseUrl/api/instances")
-                .get()
-                .build()
+    suspend fun fetchActiveInstances(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Result<List<AgyActiveInstance>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url("$httpBaseUrl/api/instances")
+                    .get()
+                    .build()
 
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
-                }
-                val body = response.body?.string() ?: "{}"
-                val json = JSONObject(body)
-                val arr = json.optJSONArray("instances") ?: JSONArray()
-                val list = mutableListOf<AgyActiveInstance>()
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                    }
+                    val body = response.body?.string() ?: "{}"
+                    val json = JSONObject(body)
+                    val arr = json.optJSONArray("instances") ?: JSONArray()
+                    val list = mutableListOf<AgyActiveInstance>()
 
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    list.add(
-                        AgyActiveInstance(
-                            conversationId = obj.getString("conversationId"),
-                            model = obj.optString("model", ""),
-                            workspaceDir = obj.optString("workspaceDir", ""),
-                            pid = obj.optLong("pid", 0),
-                            uptimeSeconds = obj.optLong("uptimeSeconds", 0),
-                            isBusy = obj.optBoolean("isBusy", false)
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        list.add(
+                            AgyActiveInstance(
+                                conversationId = obj.getString("conversationId"),
+                                model = obj.optString("model", ""),
+                                workspaceDir = obj.optString("workspaceDir", ""),
+                                pid = obj.optLong("pid", 0),
+                                uptimeSeconds = obj.optLong("uptimeSeconds", 0),
+                                isBusy = obj.optBoolean("isBusy", false)
+                            )
                         )
-                    )
+                    }
+                    Result.success(list)
                 }
-                Result.success(list)
+            } catch (e: Exception) {
+                Log.w(TAG, "fetchActiveInstances failed: ${e.message}")
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "fetchActiveInstances failed: ${e.message}")
-            Result.failure(e)
         }
-    }
 
-    suspend fun terminateInstance(conversationId: String, httpBaseUrl: String = DEFAULT_HTTP_URL): Boolean = withContext(Dispatchers.IO) {
+    suspend fun terminateInstance(
+        conversationId: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Boolean = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
                 .url("$httpBaseUrl/api/instances/$conversationId/terminate")
@@ -561,7 +581,7 @@ class AgyBridgeService(
         model: String = "",
         conversationId: String? = null,
         workspaceDir: String? = null,
-        wsUrl: String = DEFAULT_WS_URL
+        wsUrl: String = AuthPreferences.currentBridgeWsUrl
     ): Flow<AgyStreamEvent> = callbackFlow {
         _connectionState.value = BridgeConnectionState.CONNECTING
         val request = Request.Builder().url(wsUrl).build()
@@ -718,7 +738,8 @@ class AgyBridgeService(
                                 }
                             }
                             if (convId.isNotBlank()) assignedConversationId = convId
-                            _connectionState.value = if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
+                            _connectionState.value =
+                                if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
                             trySend(
                                 AgyStreamEvent.StreamSnapshot(
                                     conversationId = convId,
@@ -738,8 +759,15 @@ class AgyBridgeService(
                             val isRunning = root.optBoolean("isRunning", false)
                             val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
                             if (convId.isNotBlank()) assignedConversationId = convId
-                            _connectionState.value = if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
-                            trySend(AgyStreamEvent.SessionAttached(conversationId = convId, isRunning = isRunning, prompt = prompt))
+                            _connectionState.value =
+                                if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.SessionAttached(
+                                    conversationId = convId,
+                                    isRunning = isRunning,
+                                    prompt = prompt
+                                )
+                            )
                         }
 
                         "instance_status" -> {
@@ -747,8 +775,15 @@ class AgyBridgeService(
                             val msg = root.optString("message").takeIf { it.isNotBlank() }
                             val convId = root.optString("conversationId").takeIf { it.isNotBlank() }
                             if (convId != null) assignedConversationId = convId
-                            _connectionState.value = if (status == "creating") BridgeConnectionState.SPAWNING_INSTANCE else BridgeConnectionState.CONNECTED_READY
-                            trySend(AgyStreamEvent.InstanceStatus(status = status, message = msg, conversationId = convId))
+                            _connectionState.value =
+                                if (status == "creating") BridgeConnectionState.SPAWNING_INSTANCE else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.InstanceStatus(
+                                    status = status,
+                                    message = msg,
+                                    conversationId = convId
+                                )
+                            )
                         }
 
                         "quota_update" -> {
@@ -807,7 +842,7 @@ class AgyBridgeService(
 
     fun attachToConversation(
         conversationId: String,
-        wsUrl: String = DEFAULT_WS_URL
+        wsUrl: String = AuthPreferences.currentBridgeWsUrl
     ): Flow<AgyStreamEvent> = callbackFlow {
         _connectionState.value = BridgeConnectionState.CONNECTING
         val request = Request.Builder().url(wsUrl).build()
@@ -854,7 +889,8 @@ class AgyBridgeService(
                                     )
                                 }
                             }
-                            _connectionState.value = if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
+                            _connectionState.value =
+                                if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
                             trySend(
                                 AgyStreamEvent.StreamSnapshot(
                                     conversationId = convId,
@@ -868,6 +904,7 @@ class AgyBridgeService(
                                 )
                             )
                         }
+
                         "auth_login_url" -> {
                             val url = root.optString("url")
                             if (url.isNotBlank()) {
@@ -875,13 +912,22 @@ class AgyBridgeService(
                                 trySend(AgyStreamEvent.LoginUrl(url))
                             }
                         }
+
                         "session_attached" -> {
                             val convId = root.optString("conversationId")
                             val isRunning = root.optBoolean("isRunning", false)
                             val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
-                            _connectionState.value = if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
-                            trySend(AgyStreamEvent.SessionAttached(conversationId = convId, isRunning = isRunning, prompt = prompt))
+                            _connectionState.value =
+                                if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.SessionAttached(
+                                    conversationId = convId,
+                                    isRunning = isRunning,
+                                    prompt = prompt
+                                )
+                            )
                         }
+
                         "agy_event" -> {
                             val data = root.optJSONObject("data") ?: return
                             val event = data.optString("event")
@@ -966,8 +1012,15 @@ class AgyBridgeService(
                             val status = root.optString("status")
                             val msg = root.optString("message").takeIf { it.isNotBlank() }
                             val convId = root.optString("conversationId").takeIf { it.isNotBlank() }
-                            _connectionState.value = if (status == "creating") BridgeConnectionState.SPAWNING_INSTANCE else BridgeConnectionState.CONNECTED_READY
-                            trySend(AgyStreamEvent.InstanceStatus(status = status, message = msg, conversationId = convId))
+                            _connectionState.value =
+                                if (status == "creating") BridgeConnectionState.SPAWNING_INSTANCE else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.InstanceStatus(
+                                    status = status,
+                                    message = msg,
+                                    conversationId = convId
+                                )
+                            )
                         }
 
                         "done" -> {
@@ -1007,7 +1060,11 @@ class AgyBridgeService(
         }
     }.flowOn(Dispatchers.IO)
 
-    suspend fun updateConversationTitle(conversationId: String, title: String, httpBaseUrl: String = DEFAULT_HTTP_URL): Boolean = withContext(Dispatchers.IO) {
+    suspend fun updateConversationTitle(
+        conversationId: String,
+        title: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Boolean = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply { put("title", title) }.toString()
             val request = Request.Builder()
@@ -1024,7 +1081,10 @@ class AgyBridgeService(
         }
     }
 
-    suspend fun deleteConversation(conversationId: String, httpBaseUrl: String = DEFAULT_HTTP_URL): Boolean = withContext(Dispatchers.IO) {
+    suspend fun deleteConversation(
+        conversationId: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Boolean = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
                 .url("$httpBaseUrl/api/conversations/$conversationId")
@@ -1040,7 +1100,7 @@ class AgyBridgeService(
         }
     }
 
-    fun abort(conversationId: String? = null, httpBaseUrl: String = DEFAULT_HTTP_URL) {
+    fun abort(conversationId: String? = null, httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl) {
         try {
             activeWebSocket?.let { ws ->
                 val payload = JSONObject().apply {

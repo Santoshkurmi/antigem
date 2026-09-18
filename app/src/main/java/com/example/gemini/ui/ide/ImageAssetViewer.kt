@@ -29,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.example.gemini.data.preferences.AuthPreferences
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,7 +76,10 @@ fun ImageAssetViewer(
 
     val fileObj = remember(filePath) { File(filePath) }
     val encodedPath = remember(filePath) { URLEncoder.encode(filePath, "UTF-8") }
-    val imageUrl = remember(encodedPath) { "http://127.0.0.1:8080/api/file/read?path=$encodedPath" }
+    val imageUrl = remember(encodedPath) {
+        val base = AuthPreferences.currentBridgeHttpUrl.removeSuffix("/")
+        "$base/api/file/read?path=$encodedPath"
+    }
 
     // Direct local file if readable, else HTTP daemon endpoint
     val imageSource = remember(fileObj, imageUrl) {
