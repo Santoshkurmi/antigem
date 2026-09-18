@@ -869,13 +869,64 @@ fun ChatScreen(
                                 text = conversationError ?: "",
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = {
-                                    viewModel.retryConnections()
+                                    val convId = currentConv?.id
+                                    if (!convId.isNullOrBlank() && conversations.any { it.id == convId }) {
+                                        viewModel.selectConversation(convId)
+                                    } else {
+                                        viewModel.retryConnections()
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Retry", fontSize = 13.5.sp)
+                            }
+                        }
+                    } else if (messages.isEmpty() && conversations.any { it.id == currentConv?.id }) {
+                        // Selected an existing conversation from sidebar, but no messages loaded and stream ended
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Unable to Load Chat",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Failed to load messages for \"${currentConv?.title ?: "this conversation"}\". Ensure Antigravity is running and tap Retry.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = {
+                                    currentConv?.id?.let { viewModel.selectConversation(it) } ?: viewModel.retryConnections()
                                 },
                                 shape = RoundedCornerShape(10.dp)
                             ) {
@@ -889,7 +940,7 @@ fun ChatScreen(
                             }
                         }
                     } else if (messages.isEmpty()) {
-                        // Clean minimal empty state
+                        // Clean minimal empty state for true New Chat
                         BoxWithConstraints(
                             modifier = Modifier.fillMaxSize()
                         ) {

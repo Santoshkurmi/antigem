@@ -1407,19 +1407,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     if (isFirstChunk) {
-                        // Stream closed immediately without emitting any frames (EOF).
-                        // This trajectory does not exist on the daemon (it was deleted or emptied).
+                        // Stream closed without emitting any frames (EOF or daemon not responding).
                         withContext(Dispatchers.Main) {
                             if (activeStreamConversationId == conversationId) {
                                 _isLoadingConversation.value = false
-                                _conversations.value = _conversations.value.filter { it.id != conversationId }
-                                knownDaemonCascadeIds.remove(conversationId)
-                                if (_currentConversation.value?.id == conversationId) {
-                                    startNewChat()
-                                }
+                                _conversationError.value = "Unable to load conversation messages from Antigravity Hub. Make sure 'agy' is running and tap Retry."
                             }
                         }
-                        break // Stop retrying non-existent conversation!
+                        break // Stop stream loop
                     } else {
                         // Normal disconnection after receiving data; pause briefly before reconnecting
                         delay(1000)
