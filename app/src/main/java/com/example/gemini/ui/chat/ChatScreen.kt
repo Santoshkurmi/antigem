@@ -891,7 +891,7 @@ fun ChatScreen(
                                 Text("Retry", fontSize = 13.5.sp)
                             }
                         }
-                    } else if (messages.isEmpty() && conversations.any { it.id == currentConv?.id }) {
+                    } else if (messages.isEmpty() && conversations.any { it.id == currentConv?.id && it.title != "New Chat" && it.title != "Conversation" }) {
                         // Selected an existing conversation from sidebar, but no messages loaded and stream ended
                         Column(
                             modifier = Modifier

@@ -455,7 +455,7 @@ fun ChatHistoryDrawer(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            val showSkeleton = (isLoading || conversations.isEmpty()) && conversations.isEmpty() && errorMessage.isNullOrBlank()
+            val showSkeleton = isLoading && conversations.isEmpty() && errorMessage.isNullOrBlank()
 
             Crossfade(
                 targetState = when {

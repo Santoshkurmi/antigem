@@ -1445,14 +1445,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     if (isFirstChunk) {
-                        // Stream closed without emitting any frames (EOF or daemon not responding).
+                        // Stream closed without emitting any frames (EOF or new empty chat without trajectory yet).
                         withContext(Dispatchers.Main) {
-                            _isServerOnline.value = false
+                            _isLoadingConversation.value = false
                             _isReconnecting.value = false
+                            val isKnownExisting = _conversations.value.any { it.id == conversationId && it.title != "New Chat" } && conversationId in knownDaemonCascadeIds
                             if (activeStreamConversationId == conversationId) {
-                                _isLoadingConversation.value = false
-                                if (_messages.value.isEmpty()) {
+                                if (isKnownExisting && _messages.value.isEmpty()) {
                                     _conversationError.value = "Unable to load conversation messages from Antigravity Hub. Make sure 'agy' is running and tap Retry."
+                                    _isServerOnline.value = false
+                                } else {
+                                    _conversationError.value = null
                                 }
                             }
                         }
@@ -1479,11 +1482,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     withContext(Dispatchers.Main) {
                         _isServerOnline.value = false
                         _isReconnecting.value = false
-                        if (isFirstChunk) {
-                            _isLoadingConversation.value = false
-                            if (_messages.value.isEmpty()) {
-                                _conversationError.value = "Cannot connect to Antigravity Hub (${AuthPreferences.currentHubUrl}). Make sure 'agy --hub' is running."
+                        _isLoadingConversation.value = false
+                        if (_messages.value.isEmpty()) {
+                            val rawErr = e.message ?: "Connection failed"
+                            val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
+                                "Cannot connect to Antigravity Hub (${AuthPreferences.currentHubUrl}). Make sure 'agy --hub' is running."
+                            } else {
+                                "Antigravity Hub unreachable: $rawErr"
                             }
+                            _conversationError.value = helpfulMsg
                         } else {
                             if (isPromptInFlight || _isStreaming.value) {
                                 isPromptInFlight = false
