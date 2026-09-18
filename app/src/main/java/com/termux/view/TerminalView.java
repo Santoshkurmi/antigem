@@ -1051,21 +1051,20 @@ public final class TerminalView extends View {
             return true;
 
         boolean isAltBuffer = mEmulator != null && mEmulator.isAlternateBufferActive();
-        boolean appMode = mEmulator != null && mEmulator.isCursorKeysApplicationMode();
         switch (keyCode) {
             case KeyEvent.KEYCODE_MOVE_HOME:
             case KeyEvent.KEYCODE_HOME:
-                if (isAltBuffer || appMode) {
+                if (isAltBuffer) {
                     sendInputToSession("\033OH");
                 } else {
-                    sendInputCodePointToSession(false, 1); // Ctrl+A (beginning of line)
+                    sendInputToSession("\001"); // Ctrl+A (beginning of line)
                 }
                 return true;
             case KeyEvent.KEYCODE_MOVE_END:
-                if (isAltBuffer || appMode) {
+                if (isAltBuffer) {
                     sendInputToSession("\033OF");
                 } else {
-                    sendInputCodePointToSession(false, 5); // Ctrl+E (end of line)
+                    sendInputToSession("\005"); // Ctrl+E (end of line)
                 }
                 return true;
         }

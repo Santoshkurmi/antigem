@@ -890,27 +890,12 @@ class LocalPtySession(
     fun writeCodePoint(prependEscape: Boolean, codePoint: Int) {
         if (_isExited.value) return
         Log.d(TAG, "[$id] writeCodePoint: prependEscape=$prependEscape, codePoint=$codePoint")
-        if (isSsh) {
-            val bytes = if (prependEscape) {
-                if (codePoint <= 127) {
-                    byteArrayOf(27, codePoint.toByte())
-                } else {
-                    val chars = Character.toChars(codePoint)
-                    val charBytes = String(chars).toByteArray(Charsets.UTF_8)
-                    byteArrayOf(27) + charBytes
-                }
-            } else {
-                if (codePoint <= 127) {
-                    byteArrayOf(codePoint.toByte())
-                } else {
-                    val chars = Character.toChars(codePoint)
-                    String(chars).toByteArray(Charsets.UTF_8)
-                }
-            }
-            sendRawToSsh(bytes, 0, bytes.size)
+        val str = if (prependEscape) {
+            "\u001B" + String(Character.toChars(codePoint))
         } else {
-            terminalSession.writeCodePoint(prependEscape, codePoint)
+            String(Character.toChars(codePoint))
         }
+        write(str)
     }
 
     fun writeBytes(bytes: ByteArray, offset: Int = 0, count: Int = bytes.size) {
