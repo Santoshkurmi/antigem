@@ -16,32 +16,34 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object HubMediaResolver {
     private const val TAG = "HubMediaResolver"
-    private val imageRamCache = ConcurrentHashMap<String, String>()       // rawUri -> data:image/xxx;base64,...
-    private val documentRamCache = ConcurrentHashMap<String, String>()    // filePath -> content string
+    private val imageRamCache = ConcurrentHashMap<String, String>()          // normalizedUri -> data:image/xxx;base64,...
+    private val imageBytesCache = ConcurrentHashMap<String, ByteArray>()     // normalizedUri -> ByteArray
+    private val documentRamCache = ConcurrentHashMap<String, String>()       // normalizedUri -> content string
     private val downloadMutex = Mutex()
 
-    fun getCachedDocument(path: String): String? = documentRamCache[path]
+    fun normalizeKey(uriOrPath: String): String {
+        return uriOrPath.trim().removePrefix("file://")
+    }
+
+    fun getCachedDocument(path: String): String? = documentRamCache[normalizeKey(path)]
 
     fun putCachedDocument(path: String, content: String) {
-        documentRamCache[path] = content
+        documentRamCache[normalizeKey(path)] = content
     }
 
     fun invalidateDocument(path: String) {
-        documentRamCache.remove(path)
+        documentRamCache.remove(normalizeKey(path))
+    }
+
+    fun getImageBytes(uriOrPath: String): ByteArray? {
+        val key = normalizeKey(uriOrPath)
+        return imageBytesCache[key]
     }
 
     fun clearRamCache() {
         imageRamCache.clear()
+        imageBytesCache.clear()
         documentRamCache.clear()
-    }
-
-    fun getLocalCacheFile(context: Context, rawUri: String): File {
-        val clean = rawUri.removePrefix("file://")
-        val baseName = clean.substringAfterLast('/').ifBlank { "img_${System.currentTimeMillis()}.jpg" }
-        val pathHash = clean.hashCode().let { if (it < 0) -it else it }.toString(16)
-        val safeName = "${pathHash}_${baseName.replace(Regex("[^a-zA-Z0-9._-]"), "_")}"
-        val dir = File(context.cacheDir, "hub_media").apply { if (!exists()) mkdirs() }
-        return File(dir, safeName)
     }
 
     /**
@@ -52,11 +54,11 @@ object HubMediaResolver {
         if (uriOrPath.startsWith("data:image/") || uriOrPath.startsWith("http://") || uriOrPath.startsWith("https://") || uriOrPath.startsWith("content://")) {
             return true
         }
-        if (imageRamCache.containsKey(uriOrPath) || documentRamCache.containsKey(uriOrPath)) {
+        val key = normalizeKey(uriOrPath)
+        if (imageBytesCache.containsKey(key) || imageRamCache.containsKey(key) || documentRamCache.containsKey(key)) {
             return true
         }
-        val clean = uriOrPath.removePrefix("file://")
-        val directFile = File(clean)
+        val directFile = File(key)
         return directFile.exists() && directFile.canRead()
     }
 
@@ -69,13 +71,13 @@ object HubMediaResolver {
         if (uriOrPath.startsWith("data:image/") || uriOrPath.startsWith("http://") || uriOrPath.startsWith("https://") || uriOrPath.startsWith("content://")) {
             return uriOrPath
         }
-        imageRamCache[uriOrPath]?.let { return it }
+        val key = normalizeKey(uriOrPath)
+        imageRamCache[key]?.let { return it }
 
-        val clean = uriOrPath.removePrefix("file://")
-        val directFile = File(clean)
+        val directFile = File(key)
         if (directFile.exists() && directFile.canRead()) {
             val res = "file://${directFile.absolutePath}"
-            imageRamCache[uriOrPath] = res
+            imageRamCache[key] = res
             return res
         }
 
@@ -97,42 +99,42 @@ object HubMediaResolver {
             return@withContext rawUri
         }
 
-        imageRamCache[rawUri]?.let { return@withContext it }
+        val key = normalizeKey(rawUri)
+        imageRamCache[key]?.let { return@withContext it }
 
-        val clean = rawUri.removePrefix("file://")
-        val directFile = File(clean)
+        val directFile = File(key)
         if (directFile.exists() && directFile.canRead()) {
             val localUri = "file://${directFile.absolutePath}"
-            imageRamCache[rawUri] = localUri
+            imageRamCache[key] = localUri
             return@withContext localUri
         }
 
         downloadMutex.withLock {
-            imageRamCache[rawUri]?.let { return@withContext it }
+            imageRamCache[key]?.let { return@withContext it }
 
             try {
-                val formattedUri = if (rawUri.startsWith("file://")) rawUri else "file://$clean"
+                val formattedUri = "file://$key"
+                Log.d("ANTI_MEDIA", "HubMediaResolver: Fetching $formattedUri from AGY Hub ($hubUrl)")
                 val res = agyHubClient.readFileAsBase64(formattedUri, hubUrl)
                 res.onSuccess { base64Data ->
                     if (base64Data.isNotBlank()) {
-                        val ext = clean.substringAfterLast('.', "jpg").lowercase()
-                        val mime = when (ext) {
-                            "png" -> "image/png"
-                            "webp" -> "image/webp"
-                            "gif" -> "image/gif"
-                            "svg" -> "image/svg+xml"
-                            else -> "image/jpeg"
-                        }
+                        val ext = key.substringAfterLast('.', "jpg").lowercase()
+                        val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "image/jpeg"
                         val dataUri = "data:$mime;base64,$base64Data"
-                        imageRamCache[rawUri] = dataUri
-                        Log.d(TAG, "Cached hub media in RAM: $rawUri")
+                        try {
+                            val bytes = Base64.decode(base64Data, Base64.DEFAULT)
+                            imageBytesCache[key] = bytes
+                        } catch (_: Exception) {}
+                        imageRamCache[key] = dataUri
+                        documentRamCache[key] = base64Data
+                        Log.d("ANTI_MEDIA", "HubMediaResolver: Cached in RAM for $rawUri (len=${dataUri.length})")
                         return@withContext dataUri
                     }
                 }.onFailure { err ->
-                    Log.w(TAG, "Failed to read file from hub: $rawUri: ${err.message}")
+                    Log.w("ANTI_MEDIA", "HubMediaResolver: Failed to read file from hub: $rawUri: ${err.message}")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error resolving media $rawUri: ${e.message}")
+                Log.e("ANTI_MEDIA", "HubMediaResolver: Error resolving media $rawUri: ${e.message}")
             }
         }
 

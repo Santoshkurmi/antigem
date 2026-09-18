@@ -1168,8 +1168,75 @@ data class AgyMediaItem(
     val base64: String,
     val durationSeconds: Int = 0,
     val description: String = "Voice note",
-    val uri: String? = null
+    val uri: String? = null,
+    val thumbnail: String? = null
 )
+
+    /**
+     * Saves a media file onto the daemon host as an artifact and returns its persistent uri.
+     */
+    suspend fun saveMediaAsArtifact(
+        mimeType: String,
+        base64Data: String,
+        description: String,
+        thumbnailBase64: String = "",
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("media", JSONObject().apply {
+                    put("mimeType", mimeType)
+                    put("inlineData", base64Data)
+                    put("description", description)
+                    if (thumbnailBase64.isNotBlank()) {
+                        put("thumbnail", thumbnailBase64)
+                    }
+                })
+            }.toString()
+
+            val res = callUnary("SaveMediaAsArtifact", payload, hubUrl)
+            if (!res.isSuccess) {
+                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("SaveMediaAsArtifact failed"))
+            }
+            val jsonStr = res.getOrThrow()
+            val obj = JSONObject(jsonStr)
+            val uri = obj.optString("uri", "").ifBlank {
+                obj.optString("artifactUri", "")
+            }
+            if (uri.isBlank()) {
+                return@withContext Result.failure(Exception("No uri returned in SaveMediaAsArtifact response: $jsonStr"))
+            }
+            Log.d("AgyHubClient", "SaveMediaAsArtifact saved to: $uri")
+            Result.success(uri)
+        } catch (e: Exception) {
+            Log.e("AgyHubClient", "saveMediaAsArtifact exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Deletes a temporary media artifact from the daemon host.
+     */
+    suspend fun deleteMediaArtifact(
+        uri: String,
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            if (uri.isBlank()) return@withContext Result.success(Unit)
+            val payload = JSONObject().apply {
+                put("uri", uri)
+            }.toString()
+
+            val res = callUnary("DeleteMediaArtifact", payload, hubUrl)
+            if (!res.isSuccess) {
+                Log.w("AgyHubClient", "DeleteMediaArtifact failed for $uri: ${res.exceptionOrNull()?.message}")
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.w("AgyHubClient", "deleteMediaArtifact exception: ${e.message}")
+            Result.failure(e)
+        }
+    }
 
     /**
      * Sends a user prompt to SendUserCascadeMessage with structured options matching agyClient.js
@@ -1191,15 +1258,19 @@ data class AgyMediaItem(
             if (media.isNotEmpty()) {
                 val mediaArr = JSONArray()
                 for (m in media) {
+                    val isImageOrAudio = m.mimeType.startsWith("image/") || m.mimeType.startsWith("audio/")
                     mediaArr.put(JSONObject().apply {
                         put("mimeType", m.mimeType)
-                        put("inlineData", m.base64)
+                        put("inlineData", if (isImageOrAudio) m.base64 else "")
                         if (m.durationSeconds > 0) {
                             put("durationSeconds", m.durationSeconds)
                         }
                         put("description", m.description)
                         if (!m.uri.isNullOrBlank()) {
                             put("uri", m.uri)
+                        }
+                        if (isImageOrAudio && !m.thumbnail.isNullOrBlank()) {
+                            put("thumbnail", m.thumbnail)
                         }
                     })
                 }

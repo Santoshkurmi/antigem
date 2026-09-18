@@ -553,6 +553,7 @@ fun ChatInputBar(
 
     val canSend = textFieldValue.text.trim().isNotEmpty() || attachments.isNotEmpty()
     val familyColor = if (selectedModel.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
+    val fileLinkHandler = LocalFileLinkHandler.current
     var previewImageUrl by remember { mutableStateOf<String?>(null) }
 
     if (previewImageUrl != null) {
@@ -944,8 +945,23 @@ fun ChatInputBar(
                                         Row(
                                             modifier = Modifier
                                                 .clickable {
+                                                    val ext = (att.name.ifBlank { att.path }).substringAfterLast('.', "").lowercase()
+                                                    val isText = att.mimeType?.startsWith("text/") == true ||
+                                                            att.mimeType?.contains("json") == true ||
+                                                            att.mimeType?.contains("javascript") == true ||
+                                                            att.mimeType?.contains("xml") == true ||
+                                                            att.mimeType?.contains("yaml") == true ||
+                                                            att.mimeType?.contains("toml") == true ||
+                                                            ext in listOf("txt", "md", "markdown", "kt", "kts", "java", "py", "js", "ts", "jsx", "tsx", "html", "css", "json", "xml", "yaml", "yml", "toml", "sh", "bash", "c", "cpp", "h", "hpp", "rs", "go", "sql", "gradle", "properties", "conf", "ini", "log", "env")
                                                     if (isImg && imgSource != null) {
                                                         previewImageUrl = imgSource
+                                                    } else if (isText) {
+                                                        val targetPath = when {
+                                                            att.path.isNotBlank() -> att.path
+                                                            !att.localUri.isNullOrBlank() -> att.localUri
+                                                            else -> att.name
+                                                        }
+                                                        fileLinkHandler.onOpenFile(targetPath)
                                                     } else {
                                                         try {
                                                             val uri = when {

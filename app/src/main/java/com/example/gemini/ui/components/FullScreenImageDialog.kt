@@ -81,6 +81,38 @@ fun FullScreenImageDialog(
         }
     }
 
+    val memKey = remember(imageUrl) { com.example.gemini.data.remote.HubMediaResolver.normalizeKey(imageUrl) }
+    var resolvedUri by remember(imageUrl) {
+        mutableStateOf(if (imageUrl.isNotBlank()) com.example.gemini.data.remote.HubMediaResolver.getResolvedUriSync(context, imageUrl) else "")
+    }
+
+    LaunchedEffect(imageUrl) {
+        if (imageUrl.isNotBlank() && !com.example.gemini.data.remote.HubMediaResolver.isLocalOrCached(context, imageUrl)) {
+            val res = com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(context, imageUrl)
+            if (res.isNotBlank()) {
+                resolvedUri = res
+            }
+        }
+    }
+
+    val finalUri = resolvedUri.ifBlank { imageUrl }
+    val coilData: Any? = remember(finalUri, memKey) {
+        val cachedBytes = com.example.gemini.data.remote.HubMediaResolver.getImageBytes(memKey)
+        when {
+            cachedBytes != null -> cachedBytes
+            finalUri.startsWith("data:image/") -> {
+                try {
+                    val b64 = finalUri.substringAfter("base64,")
+                    android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                } catch (_: Exception) {
+                    finalUri
+                }
+            }
+            finalUri.isNotBlank() -> finalUri
+            else -> null
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -125,23 +157,26 @@ fun FullScreenImageDialog(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(imageUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = title,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp)
-                        .graphicsLayer(
-                            scaleX = scale,
-                            scaleY = scale,
-                            translationX = offset.x,
-                            translationY = offset.y
-                        )
-                )
+                if (coilData != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(coilData)
+                            .memoryCacheKey(memKey.ifBlank { null })
+                            .crossfade(false)
+                            .build(),
+                        contentDescription = title,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            )
+                    )
+                }
             }
 
             // Top Overlay Bar (Title, Zoom Reset, Share, Close)

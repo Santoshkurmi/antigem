@@ -768,12 +768,7 @@ fun ContextSummaryCheckpointBanner(
 }
 
 private fun formatUserDisplayContent(content: String): String {
-    val imageRegex = Regex("""\[Attached Image:\s*([^\]]+)\]\([^\)]+\)""", RegexOption.IGNORE_CASE)
-    val fileRegex = Regex("""\[Attached File:\s*([^\]]+)\]\([^\)]+\)""", RegexOption.IGNORE_CASE)
-    return content
-        .replace(imageRegex) { "[${it.groupValues[1].trim()}]" }
-        .replace(fileRegex) { "[${it.groupValues[1].trim()}]" }
-        .trim()
+    return content.trim()
 }
 
 @Composable
@@ -784,14 +779,23 @@ private fun UserMessageImageItem(
 ) {
     val context = LocalContext.current
     val rawUri = remember(attachment) {
-        attachment.localUri ?: attachment.url ?: (if (attachment.path.startsWith("file://") || attachment.path.startsWith("http")) attachment.path else "file://${attachment.path}")
+        val path = attachment.path
+        when {
+            !attachment.localUri.isNullOrBlank() -> attachment.localUri
+            !attachment.url.isNullOrBlank() -> attachment.url
+            path.startsWith("data:image/") || path.startsWith("http://") || path.startsWith("https://") || path.startsWith("content://") -> path
+            path.startsWith("file://") -> path
+            path.isNotBlank() -> "file://$path"
+            else -> ""
+        }
     }
+    val memKey = remember(rawUri) { HubMediaResolver.normalizeKey(rawUri) }
     var resolvedUri by remember(rawUri) {
-        mutableStateOf(HubMediaResolver.getResolvedUriSync(context, rawUri))
+        mutableStateOf(if (rawUri.isNotBlank()) HubMediaResolver.getResolvedUriSync(context, rawUri) else "")
     }
 
     LaunchedEffect(rawUri) {
-        if (!HubMediaResolver.isLocalOrCached(context, rawUri)) {
+        if (rawUri.isNotBlank() && !HubMediaResolver.isLocalOrCached(context, rawUri)) {
             val res = HubMediaResolver.resolveMediaUri(context, rawUri)
             if (res.isNotBlank()) {
                 resolvedUri = res
@@ -800,17 +804,52 @@ private fun UserMessageImageItem(
     }
 
     val finalUri = resolvedUri.ifBlank { rawUri }
+    val coilData: Any? = remember(finalUri, attachment.base64, memKey) {
+        val cachedBytes = HubMediaResolver.getImageBytes(memKey)
+        when {
+            cachedBytes != null -> cachedBytes
+            finalUri.startsWith("data:image/") -> {
+                try {
+                    val b64 = finalUri.substringAfter("base64,")
+                    android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                } catch (e: Exception) {
+                    finalUri
+                }
+            }
+            !attachment.base64.isNullOrBlank() -> {
+                try {
+                    android.util.Base64.decode(attachment.base64, android.util.Base64.DEFAULT)
+                } catch (e: Exception) {
+                    finalUri
+                }
+            }
+            finalUri.isNotBlank() -> finalUri
+            else -> null
+        }
+    }
+
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .clickable { onImageClick(finalUri) }
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .clickable { if (finalUri.isNotBlank()) onImageClick(finalUri) }
     ) {
-        AsyncImage(
-            model = finalUri,
-            contentDescription = attachment.name,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
+        if (coilData != null) {
+            AsyncImage(
+                model = coil.request.ImageRequest.Builder(context)
+                    .data(coilData)
+                    .memoryCacheKey(memKey.ifBlank { null })
+                    .crossfade(false)
+                    .listener(
+                        onSuccess = { _, _ -> android.util.Log.d("ANTI_MEDIA", "AsyncImage: Loaded successfully for ${attachment.name}") },
+                        onError = { _, res -> android.util.Log.e("ANTI_MEDIA", "AsyncImage: Failed for ${attachment.name}: ${res.throwable.message}") }
+                    )
+                    .build(),
+                contentDescription = attachment.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 }
 
@@ -879,6 +918,19 @@ private fun UserMessageDocumentItem(
     attachment: com.example.gemini.domain.model.ChatAttachment
 ) {
     val context = LocalContext.current
+    val fileLinkHandler = LocalFileLinkHandler.current
+
+    val isText = remember(attachment) {
+        val mime = attachment.mimeType?.lowercase() ?: ""
+        val ext = (attachment.name.ifBlank { attachment.path }).substringAfterLast('.', "").lowercase()
+        mime.startsWith("text/") || mime.contains("json") || mime.contains("javascript") ||
+                mime.contains("xml") || mime.contains("yaml") || mime.contains("toml") ||
+                mime.contains("markdown") || ext in listOf(
+            "txt", "md", "markdown", "kt", "kts", "java", "py", "js", "ts", "jsx", "tsx",
+            "html", "css", "json", "xml", "yaml", "yml", "toml", "sh", "bash", "c", "cpp",
+            "h", "hpp", "rs", "go", "sql", "gradle", "properties", "conf", "ini", "log", "env"
+        )
+    }
 
     Surface(
         shape = RoundedCornerShape(10.dp),
@@ -887,42 +939,39 @@ private fun UserMessageDocumentItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .clickable {
-                try {
-                    val uri = when {
-                        !attachment.localUri.isNullOrBlank() -> Uri.parse(attachment.localUri)
-                        attachment.path.isNotBlank() && File(attachment.path).exists() -> {
-                            val file = File(attachment.path)
-                            androidx.core.content.FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.fileprovider",
-                                file
-                            )
-                        }
-                        attachment.path.isNotBlank() -> {
-                            val cached = HubMediaResolver.getLocalCacheFile(context, attachment.path)
-                            if (cached.exists() && cached.length() > 0) {
+                if (isText) {
+                    val targetPath = when {
+                        attachment.path.isNotBlank() -> attachment.path
+                        !attachment.localUri.isNullOrBlank() -> attachment.localUri
+                        else -> attachment.name
+                    }
+                    fileLinkHandler.onOpenFile(targetPath)
+                } else {
+                    try {
+                        val uri = when {
+                            !attachment.localUri.isNullOrBlank() -> Uri.parse(attachment.localUri)
+                            attachment.path.isNotBlank() && File(attachment.path).exists() -> {
+                                val file = File(attachment.path)
                                 androidx.core.content.FileProvider.getUriForFile(
                                     context,
                                     "${context.packageName}.fileprovider",
-                                    cached
+                                    file
                                 )
-                            } else {
-                                null
                             }
+                            else -> null
                         }
-                        else -> null
-                    }
-                    if (uri != null) {
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(uri, attachment.mimeType ?: "*/*")
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        if (uri != null) {
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(uri, attachment.mimeType ?: "*/*")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Open ${attachment.name}"))
+                        } else {
+                            Toast.makeText(context, attachment.name, Toast.LENGTH_SHORT).show()
                         }
-                        context.startActivity(Intent.createChooser(intent, "Open ${attachment.name}"))
-                    } else {
-                        Toast.makeText(context, attachment.name, Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Cannot open: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
-                } catch (e: Exception) {
-                    Toast.makeText(context, "Cannot open: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
     ) {

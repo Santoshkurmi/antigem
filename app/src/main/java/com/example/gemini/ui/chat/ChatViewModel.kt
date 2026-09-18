@@ -197,11 +197,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            val ext = fileName.substringAfterLast('.', "").lowercase()
             val mimeType = contentResolver.getType(uri)
-            val isImg = (mimeType != null && mimeType.startsWith("image/")) ||
-                    fileName.endsWith(".jpg", true) || fileName.endsWith(".png", true) ||
-                    fileName.endsWith(".webp", true) || fileName.endsWith(".jpeg", true) ||
-                    fileName.endsWith(".gif", true) || fileName.endsWith(".bmp", true)
+                ?: android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+                ?: "application/octet-stream"
+            val isImg = mimeType.startsWith("image/")
+            val isAud = mimeType.startsWith("audio/")
 
             val bytes = withContext(Dispatchers.IO) {
                 contentResolver.openInputStream(uri)?.use { it.readBytes() }
@@ -209,35 +210,28 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             if (bytes != null) {
                 val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                val httpUrl = AuthPreferences.currentBridgeHttpUrl
-                val currentProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
-                val res = agyBridgeService.uploadAttachment(
-                    filename = fileName,
+                val hubUrl = AuthPreferences.currentHubUrl
+                val res = agyHubClient.saveMediaAsArtifact(
+                    mimeType = mimeType,
                     base64Data = base64,
-                    projectPath = currentProjPath,
-                    httpBaseUrl = httpUrl
+                    description = fileName,
+                    thumbnailBase64 = if (isImg) base64 else "",
+                    hubUrl = hubUrl
                 )
-                if (res.isSuccess) {
-                    val att = res.getOrThrow().let {
-                        it.copy(
-                            localUri = uri.toString(),
-                            isImage = isImg || it.isImage,
-                            mimeType = mimeType ?: it.mimeType,
-                            size = if (it.size > 0) it.size else fileSize
-                        )
-                    }
-                    _attachments.value = _attachments.value + att
-                } else {
-                    val fallback = com.example.gemini.domain.model.ChatAttachment(
-                        name = fileName,
-                        path = uri.toString(),
-                        isImage = isImg,
-                        localUri = uri.toString(),
-                        size = fileSize,
-                        mimeType = mimeType
-                    )
-                    _attachments.value = _attachments.value + fallback
-                }
+                val savedHostUri = res.getOrNull() ?: uri.toString()
+
+                val att = com.example.gemini.domain.model.ChatAttachment(
+                    id = "att_${System.currentTimeMillis()}_${(0..999).random()}",
+                    name = fileName,
+                    path = savedHostUri,
+                    isImage = isImg,
+                    isAudio = isAud,
+                    localUri = uri.toString(),
+                    size = if (fileSize > 0) fileSize else bytes.size.toLong(),
+                    mimeType = mimeType,
+                    base64 = base64
+                )
+                _attachments.value = _attachments.value + att
             }
         } catch (e: Exception) {
             android.util.Log.e("ChatViewModel", "Failed to add attachment from uri $uri: ${e.message}")
@@ -245,21 +239,49 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addProjectFileAttachment(filePath: String, fileName: String) {
-        val isImg = fileName.endsWith(".jpg", true) || fileName.endsWith(".png", true) || fileName.endsWith(".webp", true) || fileName.endsWith(".jpeg", true)
-        val att = com.example.gemini.domain.model.ChatAttachment(
-            name = fileName,
-            path = filePath,
-            isImage = isImg,
-            size = java.io.File(filePath).length()
-        )
-        _attachments.value = _attachments.value + att
+        viewModelScope.launch {
+            val file = java.io.File(filePath)
+            val ext = fileName.substringAfterLast('.', "").lowercase()
+            val mimeType = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+            val isImg = mimeType.startsWith("image/")
+            val isAud = mimeType.startsWith("audio/")
+            val b64 = if (file.exists()) {
+                android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP)
+            } else ""
+
+            val att = com.example.gemini.domain.model.ChatAttachment(
+                id = "att_${System.currentTimeMillis()}_${(0..999).random()}",
+                name = fileName,
+                path = filePath,
+                isImage = isImg,
+                isAudio = isAud,
+                size = file.length(),
+                mimeType = mimeType,
+                base64 = b64.ifBlank { null }
+            )
+            _attachments.value = _attachments.value + att
+        }
     }
 
     fun removeAttachment(attachmentId: String) {
+        val target = _attachments.value.find { it.id == attachmentId }
+        if (target != null && target.path.isNotBlank() && !target.path.startsWith("content://") && !target.path.startsWith("/data/")) {
+            viewModelScope.launch(Dispatchers.IO) {
+                agyHubClient.deleteMediaArtifact(target.path)
+            }
+        }
         _attachments.value = _attachments.value.filter { it.id != attachmentId }
     }
 
     fun clearAttachments() {
+        val atts = _attachments.value
+        viewModelScope.launch(Dispatchers.IO) {
+            for (target in atts) {
+                if (target.path.isNotBlank() && !target.path.startsWith("content://") && !target.path.startsWith("/data/")) {
+                    agyHubClient.deleteMediaArtifact(target.path)
+                }
+            }
+        }
         _attachments.value = emptyList()
     }
 
@@ -1564,22 +1586,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if ((content.isBlank() && _attachments.value.isEmpty()) || _isStreaming.value) return
 
         val currentAtts = _attachments.value
-        val audioAtts = currentAtts.filter { it.isAudio }
-        val nonAudioAtts = currentAtts.filter { !it.isAudio }
-
-        val attText = if (nonAudioAtts.isNotEmpty()) {
-            val listStr = nonAudioAtts.joinToString("\n") { att ->
-                if (att.isImage) {
-                    "[Attached Image: ${att.name}](file://${att.path})"
-                } else {
-                    "[Attached File: ${att.name}](file://${att.path})"
-                }
-            }
-            if (content.isNotBlank()) "\n\n$listStr" else listStr
-        } else ""
-
-        val rawPrompt = (content.trim() + attText).trim()
-        val finalPrompt = if (rawPrompt.isNotBlank()) rawPrompt else if (audioAtts.isNotEmpty()) "Voice note" else ""
+        val finalPrompt = content.trim().ifBlank {
+            if (currentAtts.any { it.isAudio }) "Voice note" else if (currentAtts.any { it.isImage }) "Image" else "Attachment"
+        }
         _attachments.value = emptyList()
 
         val conv = _currentConversation.value ?: return
@@ -1616,47 +1625,58 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
             _conversations.value = newConversations.sortedByDescending { it.updatedAt }
 
-            // Prepare media payload for voice notes
+            // Prepare media payload for all attachments (images, audio, files)
             val mediaList = mutableListOf<com.example.gemini.data.remote.AgyHubClient.AgyMediaItem>()
-            val bridgeUrl = AuthPreferences.currentBridgeHttpUrl
-            val currentProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
+            val hubUrl = AuthPreferences.currentHubUrl
 
-            for (aud in audioAtts) {
-                var hostPath = if (aud.path.isNotBlank() && !aud.path.startsWith("/data/")) aud.path else ""
+            for (att in currentAtts) {
+                var hostPath = if (att.path.isNotBlank() && !att.path.startsWith("/data/") && !att.path.startsWith("content://")) att.path else ""
                 val b64 = when {
-                    !aud.base64.isNullOrBlank() -> aud.base64
-                    aud.path.isNotBlank() && java.io.File(aud.path).exists() -> {
-                        android.util.Base64.encodeToString(java.io.File(aud.path).readBytes(), android.util.Base64.NO_WRAP)
+                    !att.base64.isNullOrBlank() -> att.base64
+                    att.path.isNotBlank() && java.io.File(att.path).exists() -> {
+                        android.util.Base64.encodeToString(java.io.File(att.path).readBytes(), android.util.Base64.NO_WRAP)
+                    }
+                    !att.localUri.isNullOrBlank() && java.io.File(android.net.Uri.parse(att.localUri).path ?: "").exists() -> {
+                        android.util.Base64.encodeToString(java.io.File(android.net.Uri.parse(att.localUri).path ?: "").readBytes(), android.util.Base64.NO_WRAP)
                     }
                     else -> null
                 }
 
+                val ext = (att.name.ifBlank { hostPath }).substringAfterLast('.', "").lowercase()
+                val resolvedMime = when {
+                    !att.mimeType.isNullOrBlank() -> att.mimeType
+                    att.isAudio -> "audio/mp4"
+                    att.isImage -> android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "image/jpeg"
+                    else -> android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+                }
+
                 if (hostPath.isBlank() && !b64.isNullOrBlank()) {
                     try {
-                        val fileName = "voice_note_${System.currentTimeMillis()}.m4a"
-                        val uploadRes = agyBridgeService.uploadAttachment(
-                            filename = fileName,
+                        val saveRes = agyHubClient.saveMediaAsArtifact(
+                            mimeType = resolvedMime,
                             base64Data = b64,
-                            projectPath = currentProjPath,
-                            httpBaseUrl = bridgeUrl
+                            description = att.name,
+                            thumbnailBase64 = if (att.isImage) b64 else "",
+                            hubUrl = hubUrl
                         )
-                        if (uploadRes.isSuccess) {
-                            val uploaded = uploadRes.getOrThrow()
-                            hostPath = uploaded.path
+                        if (saveRes.isSuccess) {
+                            hostPath = saveRes.getOrThrow()
                         }
                     } catch (e: Exception) {
-                        Log.w("ChatViewModel", "Audio upload to bridge failed: ${e.message}")
+                        Log.w("ChatViewModel", "SaveMediaAsArtifact failed: ${e.message}")
                     }
                 }
 
-                if (!b64.isNullOrBlank()) {
+                val isImageOrAudio = resolvedMime.startsWith("image/") || resolvedMime.startsWith("audio/")
+                if (!b64.isNullOrBlank() || hostPath.isNotBlank()) {
                     mediaList.add(
                         com.example.gemini.data.remote.AgyHubClient.AgyMediaItem(
-                            mimeType = aud.mimeType ?: "audio/mp4",
-                            base64 = b64,
-                            durationSeconds = aud.durationSeconds,
-                            description = aud.name.ifBlank { "Voice note" },
-                            uri = if (hostPath.isNotBlank()) hostPath else null
+                            mimeType = resolvedMime,
+                            base64 = if (isImageOrAudio) (b64 ?: "") else "",
+                            durationSeconds = att.durationSeconds,
+                            description = att.name.ifBlank { if (att.isAudio) "Voice note" else if (att.isImage) "Image" else "Attachment" },
+                            uri = if (hostPath.isNotBlank()) hostPath else null,
+                            thumbnail = if (att.isImage) b64 else null
                         )
                     )
                 }
