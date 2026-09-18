@@ -639,6 +639,14 @@ func (h *Handler) FileReadHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	case ".html", ".htm":
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	case ".m4a", ".mp4":
+		w.Header().Set("Content-Type", "audio/mp4")
+	case ".mp3":
+		w.Header().Set("Content-Type", "audio/mpeg")
+	case ".wav":
+		w.Header().Set("Content-Type", "audio/wav")
+	case ".ogg":
+		w.Header().Set("Content-Type", "audio/ogg")
 	default:
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	}

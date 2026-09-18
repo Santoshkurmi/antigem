@@ -30,6 +30,7 @@ import com.example.gemini.domain.model.ChatAttachment
 import com.example.gemini.theme.ClaudeTerracotta
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 
@@ -49,11 +50,13 @@ fun ChatAudioPlayer(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var isPlaying by remember { mutableStateOf(false) }
     var currentPositionMs by remember { mutableStateOf(0) }
     var durationMs by remember { mutableStateOf((attachment.durationSeconds * 1000).coerceAtLeast(1000)) }
     var isPrepared by remember { mutableStateOf(false) }
     var hasError by remember { mutableStateOf(false) }
+    var isResolvingAudio by remember { mutableStateOf(false) }
 
     val mediaPlayer = remember {
         MediaPlayer().apply {
@@ -88,7 +91,12 @@ fun ChatAudioPlayer(
         try {
             mediaPlayer.reset()
 
+            val resolvedLocalPath = if (attachment.path.isNotBlank()) {
+                com.example.gemini.data.remote.HubMediaResolver.getResolvedUriSync(context, attachment.path).removePrefix("file://")
+            } else ""
+
             val fileToPlay: File? = when {
+                resolvedLocalPath.isNotBlank() && File(resolvedLocalPath).exists() -> File(resolvedLocalPath)
                 attachment.path.isNotBlank() && File(attachment.path).exists() -> File(attachment.path)
                 !attachment.localUri.isNullOrBlank() && File(Uri.parse(attachment.localUri).path ?: "").exists() -> {
                     File(Uri.parse(attachment.localUri).path ?: "")
@@ -124,6 +132,15 @@ fun ChatAudioPlayer(
             hasError = true
         }
         return false
+    }
+
+    LaunchedEffect(attachment.path, attachment.url, attachment.base64) {
+        if (attachment.path.isNotBlank() && !com.example.gemini.data.remote.HubMediaResolver.isLocalOrCached(context, attachment.path)) {
+            isResolvingAudio = true
+            com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(context, attachment.path)
+            isResolvingAudio = false
+            preparePlayer()
+        }
     }
 
     // Playback ticker
@@ -176,6 +193,20 @@ fun ChatAudioPlayer(
                             } catch (e: Exception) {
                                 Log.w("ChatAudioPlayer", "Start failed: ${e.message}")
                             }
+                        } else if (attachment.path.isNotBlank() && !isResolvingAudio) {
+                            coroutineScope.launch {
+                                isResolvingAudio = true
+                                com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(context, attachment.path)
+                                isResolvingAudio = false
+                                if (preparePlayer()) {
+                                    try {
+                                        mediaPlayer.start()
+                                        isPlaying = true
+                                    } catch (e: Exception) {
+                                        Log.w("ChatAudioPlayer", "Start failed after resolve: ${e.message}")
+                                    }
+                                }
+                            }
                         }
                     }
                 },
@@ -184,17 +215,25 @@ fun ChatAudioPlayer(
                 modifier = Modifier.size(36.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    AnimatedContent(
-                        targetState = isPlaying,
-                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "playPauseIcon"
-                    ) { playing ->
-                        Icon(
-                            imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playing) "Pause" else "Play",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                    if (isResolvingAudio) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
                         )
+                    } else {
+                        AnimatedContent(
+                            targetState = isPlaying,
+                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+                            label = "playPauseIcon"
+                        ) { playing ->
+                            Icon(
+                                imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (playing) "Pause" else "Play",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }

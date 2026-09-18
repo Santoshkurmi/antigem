@@ -1407,7 +1407,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 }.forEach { tc ->
                                     com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(getApplication(), tc.output, agyHubClient, hubUrl)
                                 }
-                                msgs.flatMap { it.attachments }.filter { it.isImage && it.path.isNotBlank() }.forEach { att ->
+                                msgs.flatMap { it.attachments }.filter { (it.isImage || it.isAudio) && it.path.isNotBlank() }.forEach { att ->
                                     val rawUri = if (att.path.startsWith("file://") || att.path.startsWith("http")) att.path else "file://${att.path}"
                                     com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(getApplication(), rawUri, agyHubClient, hubUrl)
                                 }
@@ -1600,28 +1600,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value = updatedList
         com.example.gemini.ui.chat.ChatFeedCache.prewarm(updatedList)
 
-        // Prepare media payload for voice notes
-        val mediaList = mutableListOf<com.example.gemini.data.remote.AgyHubClient.AgyMediaItem>()
-        for (aud in audioAtts) {
-            val b64 = when {
-                !aud.base64.isNullOrBlank() -> aud.base64
-                aud.path.isNotBlank() && java.io.File(aud.path).exists() -> {
-                    android.util.Base64.encodeToString(java.io.File(aud.path).readBytes(), android.util.Base64.NO_WRAP)
-                }
-                else -> null
-            }
-            if (!b64.isNullOrBlank()) {
-                mediaList.add(
-                    com.example.gemini.data.remote.AgyHubClient.AgyMediaItem(
-                        mimeType = aud.mimeType ?: "audio/mp4",
-                        base64 = b64,
-                        durationSeconds = aud.durationSeconds,
-                        description = aud.name.ifBlank { "Voice note" }
-                    )
-                )
-            }
-        }
-
         viewModelScope.launch {
             val exists = _conversations.value.any { it.id == updatedConv.id }
             val newConversations = if (exists) {
@@ -1630,6 +1608,53 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 listOf(updatedConv) + _conversations.value
             }
             _conversations.value = newConversations.sortedByDescending { it.updatedAt }
+
+            // Prepare media payload for voice notes
+            val mediaList = mutableListOf<com.example.gemini.data.remote.AgyHubClient.AgyMediaItem>()
+            val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: "http://127.0.0.1:8080"
+            val currentProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
+
+            for (aud in audioAtts) {
+                var hostPath = if (aud.path.isNotBlank() && !aud.path.startsWith("/data/")) aud.path else ""
+                val b64 = when {
+                    !aud.base64.isNullOrBlank() -> aud.base64
+                    aud.path.isNotBlank() && java.io.File(aud.path).exists() -> {
+                        android.util.Base64.encodeToString(java.io.File(aud.path).readBytes(), android.util.Base64.NO_WRAP)
+                    }
+                    else -> null
+                }
+
+                if (hostPath.isBlank() && !b64.isNullOrBlank()) {
+                    try {
+                        val fileName = "voice_note_${System.currentTimeMillis()}.m4a"
+                        val uploadRes = agyBridgeService.uploadAttachment(
+                            filename = fileName,
+                            base64Data = b64,
+                            projectPath = currentProjPath,
+                            httpBaseUrl = bridgeUrl
+                        )
+                        if (uploadRes.isSuccess) {
+                            val uploaded = uploadRes.getOrThrow()
+                            hostPath = uploaded.path
+                        }
+                    } catch (e: Exception) {
+                        Log.w("ChatViewModel", "Audio upload to bridge failed: ${e.message}")
+                    }
+                }
+
+                if (!b64.isNullOrBlank()) {
+                    mediaList.add(
+                        com.example.gemini.data.remote.AgyHubClient.AgyMediaItem(
+                            mimeType = aud.mimeType ?: "audio/mp4",
+                            base64 = b64,
+                            durationSeconds = aud.durationSeconds,
+                            description = aud.name.ifBlank { "Voice note" },
+                            uri = if (hostPath.isNotBlank()) hostPath else null
+                        )
+                    )
+                }
+            }
+
             executeStream(updatedConv, updatedList, mediaItems = mediaList)
         }
     }

@@ -1155,7 +1155,8 @@ data class AgyMediaItem(
     val mimeType: String,
     val base64: String,
     val durationSeconds: Int = 0,
-    val description: String = "Voice note"
+    val description: String = "Voice note",
+    val uri: String? = null
 )
 
     /**
@@ -1185,6 +1186,9 @@ data class AgyMediaItem(
                             put("durationSeconds", m.durationSeconds)
                         }
                         put("description", m.description)
+                        if (!m.uri.isNullOrBlank()) {
+                            put("uri", m.uri)
+                        }
                     })
                 }
                 put("media", mediaArr)
@@ -3067,17 +3071,19 @@ data class AgyMediaItem(
                         if (mediaArr != null) {
                             for (mIdx in 0 until mediaArr.length()) {
                                 val mObj = mediaArr.optJSONObject(mIdx) ?: continue
-                                val mime = mObj.optString("mimeType", "")
-                                val inline = mObj.optString("inlineData", "")
+                                val mime = mObj.optString("mimeType", mObj.optString("mime_type", ""))
+                                val uri = mObj.optString("uri", "")
+                                val inline = mObj.optString("inlineData", mObj.optString("inline_data", ""))
                                 val desc = mObj.optString("description", "Voice note")
-                                val dur = mObj.optInt("durationSeconds", 0)
+                                val dur = mObj.optInt("durationSeconds", mObj.optInt("duration_seconds", 0))
                                 val isAud = mime.startsWith("audio/")
                                 val isImg = mime.startsWith("image/")
+                                val cleanPath = if (uri.startsWith("file://")) uri.removePrefix("file://") else uri
                                 userAttachments.add(
                                     com.example.gemini.domain.model.ChatAttachment(
                                         id = "att_${conversationId}_${stepIndex}_$mIdx",
                                         name = desc,
-                                        path = "",
+                                        path = cleanPath,
                                         isImage = isImg,
                                         isAudio = isAud,
                                         durationSeconds = dur,
