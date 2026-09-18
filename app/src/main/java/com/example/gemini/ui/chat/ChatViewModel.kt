@@ -778,6 +778,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _isServerOnline = MutableStateFlow<Boolean?>(null)
     val isServerOnline: StateFlow<Boolean?> = _isServerOnline.asStateFlow()
 
+    private val _isReconnecting = MutableStateFlow(false)
+    val isReconnecting: StateFlow<Boolean> = _isReconnecting.asStateFlow()
+
     private val _isBridgeOnline = MutableStateFlow<Boolean?>(null)
     val isBridgeOnline: StateFlow<Boolean?> = _isBridgeOnline.asStateFlow()
 
@@ -1220,7 +1223,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun retryConnections() {
         _conversationError.value = null
-        _isLoadingConversation.value = true
+        if (_messages.value.isEmpty()) {
+            _isLoadingConversation.value = true
+        }
+        _isReconnecting.value = true
         syncAgyConversations(force = true)
         val convId = _currentConversation.value?.id
         if (!convId.isNullOrBlank()) {
@@ -1366,7 +1372,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             com.example.gemini.data.remote.HubMediaResolver.activeHubUrl = hubUrl
             var isFirstChunk = true
 
-            trajectoryEngine.reset(conversationId)
+            if (trajectoryEngine.conversationId != conversationId || _messages.value.isEmpty()) {
+                trajectoryEngine.reset(conversationId)
+            }
 
             while (activeStreamConversationId == conversationId) {
                 try {
@@ -1384,6 +1392,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             if (activeStreamConversationId != conversationId) return@withContext
                             _conversationError.value = null
                             _isLoadingConversation.value = false
+                            _isReconnecting.value = false
 
                             val isRunning = trajectoryEngine.isRunning || isPromptInFlight
                             val isWaiting = trajectoryEngine.isWaitingInteraction
@@ -1409,31 +1418,76 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     if (isFirstChunk) {
                         // Stream closed without emitting any frames (EOF or daemon not responding).
                         withContext(Dispatchers.Main) {
+                            _isServerOnline.value = false
+                            _isReconnecting.value = false
                             if (activeStreamConversationId == conversationId) {
                                 _isLoadingConversation.value = false
-                                _conversationError.value = "Unable to load conversation messages from Antigravity Hub. Make sure 'agy' is running and tap Retry."
+                                if (_messages.value.isEmpty()) {
+                                    _conversationError.value = "Unable to load conversation messages from Antigravity Hub. Make sure 'agy' is running and tap Retry."
+                                }
                             }
                         }
                         break // Stop stream loop
                     } else {
-                        // Normal disconnection after receiving data; pause briefly before reconnecting
-                        delay(1000)
+                        // Normal disconnection after receiving data; clean up in-flight states and pause briefly before reconnecting
+                        withContext(Dispatchers.Main) {
+                            _isServerOnline.value = false
+                            _isReconnecting.value = false
+                            if (isPromptInFlight || _isStreaming.value) {
+                                isPromptInFlight = false
+                                _isStreaming.value = false
+                                trajectoryEngine.cancelRunning()
+                                markLastAssistantMessageDisconnected()
+                            }
+                        }
+                        delay(2000)
                     }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) {
                         break
                     }
-                    Log.w("ChatViewModel", "Persistent stream disconnected ($conversationId): ${e.message}. Reconnecting in 1.5s...")
+                    Log.w("ChatViewModel", "Persistent stream disconnected ($conversationId): ${e.message}. Reconnecting in 2s...")
                     withContext(Dispatchers.Main) {
                         _isServerOnline.value = false
+                        _isReconnecting.value = false
                         if (isFirstChunk) {
                             _isLoadingConversation.value = false
-                            _conversationError.value = "Cannot connect to Antigravity Hub on port 8090. Make sure 'agy --hub' is running."
+                            if (_messages.value.isEmpty()) {
+                                _conversationError.value = "Cannot connect to Antigravity Hub on port 8090. Make sure 'agy --hub' is running."
+                            }
+                        } else {
+                            if (isPromptInFlight || _isStreaming.value) {
+                                isPromptInFlight = false
+                                _isStreaming.value = false
+                                trajectoryEngine.cancelRunning()
+                                markLastAssistantMessageDisconnected()
+                            }
                         }
                     }
-                    delay(1500)
+                    delay(2000)
                 }
             }
+        }
+    }
+
+    private fun markLastAssistantMessageDisconnected() {
+        val list = _messages.value.toMutableList()
+        var updated = false
+        for (i in list.indices.reversed()) {
+            val msg = list[i]
+            if (msg.role == MessageRole.ASSISTANT && msg.isStreaming) {
+                val newContent = if (msg.content.isBlank() && msg.toolCalls.isEmpty()) {
+                    "⚠️ Connection to Antigravity daemon was interrupted."
+                } else {
+                    msg.content
+                }
+                list[i] = msg.copy(content = newContent, isStreaming = false)
+                updated = true
+            }
+        }
+        if (updated) {
+            _messages.value = list
+            com.example.gemini.ui.chat.ChatFeedCache.prewarm(list)
         }
     }
 
@@ -1937,6 +1991,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     val err = sendRes.exceptionOrNull()?.message ?: "Failed to send message"
                     Log.e("ChatViewModel", "sendUserPrompt final error: $err")
                     withContext(Dispatchers.Main) {
+                        _isServerOnline.value = false
                         isPromptInFlight = false
                         _isStreaming.value = false
                         hasSeenTurnActivity = false
@@ -1952,6 +2007,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "sendUserPrompt exception: ${e.message}", e)
                 withContext(Dispatchers.Main) {
+                    _isServerOnline.value = false
                     isPromptInFlight = false
                     _isStreaming.value = false
                     hasSeenTurnActivity = false
@@ -2015,6 +2071,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             )
             _messages.value = list
             android.util.Log.d("PERF_TRACE", "🌊 [Streaming Emit] ID=${msgId.take(8)}, len=${content.length}, isStreaming=$isStreaming")
+        } else {
+            val conv = _currentConversation.value
+            if (conv != null) {
+                val newMsg = ChatMessage(
+                    id = msgId,
+                    conversationId = conv.id,
+                    role = MessageRole.ASSISTANT,
+                    content = content,
+                    toolCalls = toolCalls,
+                    isStreaming = isStreaming
+                )
+                list.add(newMsg)
+                _messages.value = list
+            }
+        }
+        if (!isStreaming) {
+            com.example.gemini.ui.chat.ChatFeedCache.prewarm(_messages.value)
         }
     }
 

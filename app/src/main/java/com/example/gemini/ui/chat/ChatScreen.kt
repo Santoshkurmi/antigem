@@ -164,6 +164,7 @@ fun ChatScreen(
     val chatFontScale by viewModel.chatFontScale.collectAsState(initial = 1.0f)
     val bridgeStatusMessage by viewModel.bridgeStatusMessage.collectAsState()
     val isServerOnline by viewModel.isServerOnline.collectAsState()
+    val isReconnecting by viewModel.isReconnecting.collectAsState()
     val isBridgeOnline by viewModel.isBridgeOnline.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val conversationError by viewModel.conversationError.collectAsState()
@@ -316,13 +317,9 @@ fun ChatScreen(
 
     // Fresh LazyListState per conversation — initialize directly at bottom so item 0 is NEVER composed
     val convKey = currentConv?.id ?: "empty"
-    val initialBottomIndex = remember(convKey, isLoadingConversation) {
-        if (!isLoadingConversation && feedItems.isNotEmpty()) {
-            feedItems.size - 1
-        } else 0
-    }
-    val listState = remember(convKey, isLoadingConversation) {
-        LazyListState(firstVisibleItemIndex = initialBottomIndex)
+    val listState = remember(convKey) {
+        val initialIdx = if (feedItems.isNotEmpty()) feedItems.size - 1 else 0
+        LazyListState(firstVisibleItemIndex = initialIdx)
     }
     var lastScrolledConvId by remember { mutableStateOf<String?>(null) }
     var lastScrolledMessageCount by remember { mutableStateOf(-1) }
@@ -841,7 +838,7 @@ fun ChatScreen(
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    if (isLoadingConversation) {
+                    if (isLoadingConversation && messages.isEmpty()) {
                         com.example.gemini.ui.components.ConversationLoadingSkeleton()
                     } else if (!conversationError.isNullOrBlank() && messages.isEmpty()) {
                         Column(
@@ -1274,6 +1271,78 @@ fun ChatScreen(
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Medium
                             )
+                        }
+                    }
+                }
+
+                // Disconnection / Reconnecting Inline Banner (Compact, non-intrusive with Reconnect action)
+                AnimatedVisibility(
+                    visible = (isServerOnline == false || isReconnecting) && messages.isNotEmpty(),
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 3.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isReconnecting) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.88f),
+                        border = BorderStroke(1.dp, if (isReconnecting) MaterialTheme.colorScheme.outline.copy(alpha = 0.2f) else MaterialTheme.colorScheme.error.copy(alpha = 0.25f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f, fill = false)
+                            ) {
+                                if (isReconnecting) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(12.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .background(MaterialTheme.colorScheme.error, CircleShape)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isReconnecting) "Connecting to Antigravity..." else "Antigravity Disconnected",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (isReconnecting) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onErrorContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            if (!isReconnecting) {
+                                TextButton(
+                                    onClick = { viewModel.retryConnections() },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(13.dp),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Reconnect",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
                         }
                     }
                 }

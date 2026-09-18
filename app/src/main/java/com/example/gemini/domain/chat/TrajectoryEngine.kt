@@ -95,6 +95,12 @@ class TrajectoryEngine {
 
     fun cancelRunning() {
         isRunning = false
+        pendingUserTurn?.let { pending ->
+            val alreadyPresent = completedTurns.any { it is ChatTurn.User && it.stepIndex == pending.stepIndex }
+            if (!alreadyPresent) {
+                completedTurns.add(pending)
+            }
+        }
         pendingUserTurn = null
         _turns.value = getTurns()
     }
@@ -156,7 +162,7 @@ class TrajectoryEngine {
             val totalLength = stepsUpdate.totalLength
 
             // Check if this is Chunk 0 (Initial Full Trajectory Sync)
-            val isInitialFullSync = completedTurns.isEmpty() && activeStepsMap.isEmpty() && steps.size > 1
+            val isInitialFullSync = (indices.firstOrNull() == 0) || (completedTurns.isEmpty() && activeStepsMap.isEmpty())
 
             if (isInitialFullSync) {
                 ingestInitialFullSync(indices, steps, daemonRunning)
@@ -198,18 +204,21 @@ class TrajectoryEngine {
      * Parses Chunk 0 (the complete historical trajectory) into completed turns.
      */
     private fun ingestInitialFullSync(indices: List<Int>, steps: List<CortexStepDto>, cascadeRunning: Boolean) {
+        val savedPending = pendingUserTurn
         completedTurns.clear()
         activeStepsMap.clear()
         pendingUserTurn = null
 
         var currentTurnBlocks = mutableListOf<TurnBlock>()
         var currentTurnUserIndex = -1
+        var hasUserInputStep = false
 
         for (i in steps.indices) {
             val stepIndex = indices.getOrNull(i) ?: i
             val step = steps[i]
 
             if (step.type == CortexStepTypes.USER_INPUT) {
+                hasUserInputStep = true
                 // If an assistant turn was building, flush it to completedTurns
                 if (currentTurnBlocks.isNotEmpty()) {
                     val turnId = "${conversationId}_${currentTurnUserIndex + 1}"
@@ -227,6 +236,10 @@ class TrajectoryEngine {
                 // Assistant step
                 extractStepBlocks(step, stepIndex, isStreaming = false, blocks = currentTurnBlocks)
             }
+        }
+
+        if (!hasUserInputStep && savedPending != null) {
+            pendingUserTurn = savedPending
         }
 
         // If the conversation is currently running or waiting, the trailing assistant steps belong in activeStepsMap
