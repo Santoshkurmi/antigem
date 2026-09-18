@@ -1428,7 +1428,7 @@ fun ChatScreen(
             quotas = quotas,
             quotaSummary = quotaSummary,
             isRefreshing = isRefreshingModels,
-            onRefresh = { viewModel.refreshQuotas(force = true) },
+            onRefresh = { viewModel.refreshQuotas(force = true, showToastFeedback = true) },
             onSelectModel = { modelId -> viewModel.selectModel(modelId) },
             onDismiss = { showModelSelector = false }
         )
@@ -1506,7 +1506,7 @@ fun ChatScreen(
                 viewModel.enableAllModels()
             },
             onRefreshQuotas = {
-                viewModel.refreshQuotas()
+                viewModel.refreshQuotas(force = true, showToastFeedback = true)
             },
             onSetContextWindowLimit = { viewModel.setContextWindowLimit(it) },
             onSetSummaryModelId = { viewModel.setSummaryModelId(it) },

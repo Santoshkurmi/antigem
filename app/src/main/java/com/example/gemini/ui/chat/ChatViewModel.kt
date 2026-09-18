@@ -2141,9 +2141,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _quotas.value = updatedQuotas
     }
 
-    fun refreshQuotas(force: Boolean = true) {
+    fun refreshQuotas(force: Boolean = true, showToastFeedback: Boolean = false) {
         viewModelScope.launch {
             _isRefreshingModels.value = true
+            var failureError: String? = null
             try {
                 val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
                 val modelsDeferred = async { agyHubClient.getAvailableModels(forceRefresh = force, hubUrl = hubUrl) }
@@ -2190,10 +2191,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                         recomputeEnabledModels()
                     }
+                } else {
+                    failureError = modelsRes.exceptionOrNull()?.message
                 }
 
                 if (quotasRes.isSuccess) {
                     applyQuotaSummary(quotasRes.getOrThrow())
+                } else if (failureError == null) {
+                    failureError = quotasRes.exceptionOrNull()?.message
                 }
 
                 val userRes = agyHubClient.getLocalUserInfo(hubUrl)
@@ -2205,8 +2210,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 android.util.Log.e("GeminiApp", "Error refreshing models & quotas from hub: ${e.message}")
+                failureError = e.message
             } finally {
                 _isRefreshingModels.value = false
+                if (showToastFeedback) {
+                    withContext(Dispatchers.Main) {
+                        if (failureError != null) {
+                            val msg = if (failureError.contains("Connect", ignoreCase = true) || failureError.contains("8090") || failureError.contains("failed to connect", ignoreCase = true)) {
+                                "Failed to refresh: Antigravity Hub unreachable"
+                            } else {
+                                "Failed to refresh: $failureError"
+                            }
+                            android.widget.Toast.makeText(getApplication(), msg, android.widget.Toast.LENGTH_LONG).show()
+                        } else {
+                            android.widget.Toast.makeText(getApplication(), "Quotas & models refreshed", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
             }
         }
     }
