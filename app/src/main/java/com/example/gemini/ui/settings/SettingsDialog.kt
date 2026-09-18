@@ -861,13 +861,13 @@ private fun ServersSubScreen(
         return host to port
     }
 
-    val (initHubHost, initHubPort) = remember(currentHubUrl) { parseHostPort(currentHubUrl, "8090") }
-    val (initBridgeHost, initBridgePort) = remember(currentBridgeUrl) { parseHostPort(currentBridgeUrl, "8080") }
+    val (initHubHost, initHubPort) = remember { parseHostPort(currentHubUrl, "8090") }
+    val (initBridgeHost, initBridgePort) = remember { parseHostPort(currentBridgeUrl, "8080") }
 
-    var hubHost by remember(initHubHost) { mutableStateOf(initHubHost) }
-    var hubPort by remember(initHubPort) { mutableStateOf(initHubPort) }
-    var bridgeHost by remember(initBridgeHost) { mutableStateOf(initBridgeHost) }
-    var bridgePort by remember(initBridgePort) { mutableStateOf(initBridgePort) }
+    var hubHost by remember { mutableStateOf(initHubHost) }
+    var hubPort by remember { mutableStateOf(initHubPort) }
+    var bridgeHost by remember { mutableStateOf(initBridgeHost) }
+    var bridgePort by remember { mutableStateOf(initBridgePort) }
 
     var hubTestStatus by remember { mutableStateOf<String?>(null) }
     var isTestingHub by remember { mutableStateOf(false) }
@@ -2520,17 +2520,18 @@ private fun TerminalSubScreen(
     onOpenLocalTerminal: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    var hostState by remember(sshHost) { mutableStateOf(sshHost) }
-    var portState by remember(sshPort) { mutableStateOf(sshPort.toString()) }
-    var userState by remember(sshUser) { mutableStateOf(sshUser) }
-    var passState by remember(sshPass) { mutableStateOf(sshPass) }
+    var hostState by remember { mutableStateOf(sshHost) }
+    var portState by remember { mutableStateOf(sshPort.toString()) }
+    var userState by remember { mutableStateOf(sshUser) }
+    var passState by remember { mutableStateOf(sshPass) }
     var isTestingSsh by remember { mutableStateOf(false) }
     var sshTestStatus by remember { mutableStateOf<String?>(null) }
+    var sshSaveFeedback by remember { mutableStateOf<String?>(null) }
 
-    var fontSizeState by remember(terminalFontSize) { mutableIntStateOf(terminalFontSize) }
-    var cursorStyleState by remember(terminalCursorStyle) { mutableStateOf(terminalCursorStyle) }
-    var bufferSizeState by remember(terminalBufferSize) { mutableIntStateOf(terminalBufferSize) }
-    var themeState by remember(terminalTheme) { mutableStateOf(terminalTheme) }
+    var fontSizeState by remember { mutableIntStateOf(terminalFontSize) }
+    var cursorStyleState by remember { mutableStateOf(terminalCursorStyle) }
+    var bufferSizeState by remember { mutableIntStateOf(terminalBufferSize) }
+    var themeState by remember { mutableStateOf(terminalTheme) }
 
     Column(
         modifier = Modifier
@@ -2601,7 +2602,8 @@ private fun TerminalSubScreen(
                             value = hostState,
                             onValueChange = {
                                 hostState = it
-                                onSaveSshSettings(it, portState.toIntOrNull() ?: 8022, userState, passState)
+                                sshTestStatus = null
+                                sshSaveFeedback = null
                             },
                             label = { Text("SSH Host") },
                             modifier = Modifier.weight(2f),
@@ -2612,7 +2614,8 @@ private fun TerminalSubScreen(
                             value = portState,
                             onValueChange = {
                                 portState = it
-                                onSaveSshSettings(hostState, it.toIntOrNull() ?: 8022, userState, passState)
+                                sshTestStatus = null
+                                sshSaveFeedback = null
                             },
                             label = { Text("Port") },
                             modifier = Modifier.weight(1f),
@@ -2628,7 +2631,8 @@ private fun TerminalSubScreen(
                             value = userState,
                             onValueChange = {
                                 userState = it
-                                onSaveSshSettings(hostState, portState.toIntOrNull() ?: 8022, it, passState)
+                                sshTestStatus = null
+                                sshSaveFeedback = null
                             },
                             label = { Text("User") },
                             modifier = Modifier.weight(1f),
@@ -2639,7 +2643,8 @@ private fun TerminalSubScreen(
                             value = passState,
                             onValueChange = {
                                 passState = it
-                                onSaveSshSettings(hostState, portState.toIntOrNull() ?: 8022, userState, it)
+                                sshTestStatus = null
+                                sshSaveFeedback = null
                             },
                             label = { Text("Password") },
                             modifier = Modifier.weight(1f),
@@ -2667,7 +2672,7 @@ private fun TerminalSubScreen(
                             coroutineScope.launch {
                                 val res = com.example.gemini.data.ssh.TermuxSshManager.testConnection(
                                     host = hostState.trim(),
-                                    port = portState.toIntOrNull() ?: 8022,
+                                    port = portState.toIntOrNull() ?: sshPort,
                                     user = userState.trim(),
                                     pass = passState
                                 )
@@ -2684,6 +2689,40 @@ private fun TerminalSubScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                         }
                         Text("Test SSH Connection", fontSize = 12.sp)
+                    }
+
+                    if (sshSaveFeedback != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = QuotaGreen.copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                text = sshSaveFeedback ?: "",
+                                fontSize = 12.sp,
+                                color = QuotaGreen,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = {
+                            val p = portState.toIntOrNull() ?: sshPort
+                            onSaveSshSettings(hostState.trim(), p, userState.trim(), passState)
+                            sshSaveFeedback = "✓ SSH settings saved successfully!"
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                    ) {
+                        Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Save SSH Settings", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 } else {
                     // Local tools mode details
