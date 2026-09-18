@@ -217,11 +217,19 @@ object IdeApiClient {
     }
 
     suspend fun readFile(path: String): String? = withContext(Dispatchers.IO) {
+        val cached = com.example.gemini.data.remote.HubMediaResolver.getCachedDocument(path)
+        if (cached != null) return@withContext cached
         try {
             val url = "$baseUrl/api/file/read?path=${java.net.URLEncoder.encode(path, "UTF-8")}"
             val request = Request.Builder().url(url).get().build()
             client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) response.body?.string() else null
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    if (body != null) {
+                        com.example.gemini.data.remote.HubMediaResolver.putCachedDocument(path, body)
+                    }
+                    body
+                } else null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error reading file: $path", e)
@@ -230,6 +238,7 @@ object IdeApiClient {
     }
 
     suspend fun saveFile(path: String, content: String): Boolean = withContext(Dispatchers.IO) {
+        com.example.gemini.data.remote.HubMediaResolver.putCachedDocument(path, content)
         try {
             val payload = JSONObject().apply {
                 put("path", path)
@@ -247,6 +256,7 @@ object IdeApiClient {
     }
 
     suspend fun patchFile(path: String, startLine: Int, endLine: Int, replacement: String): Boolean = withContext(Dispatchers.IO) {
+        com.example.gemini.data.remote.HubMediaResolver.invalidateDocument(path)
         try {
             val payload = JSONObject().apply {
                 put("path", path)
@@ -266,6 +276,7 @@ object IdeApiClient {
     }
 
     suspend fun createFileOrDir(path: String, isDir: Boolean): Boolean = withContext(Dispatchers.IO) {
+        com.example.gemini.data.remote.HubMediaResolver.invalidateDocument(path)
         try {
             val payload = JSONObject().apply {
                 put("path", path)
@@ -282,6 +293,7 @@ object IdeApiClient {
     }
 
     suspend fun deleteFileOrDir(path: String): Boolean = withContext(Dispatchers.IO) {
+        com.example.gemini.data.remote.HubMediaResolver.invalidateDocument(path)
         try {
             val payload = JSONObject().apply {
                 put("path", path)
@@ -297,6 +309,8 @@ object IdeApiClient {
     }
 
     suspend fun renameFileOrDir(path: String, newPath: String): Boolean = withContext(Dispatchers.IO) {
+        com.example.gemini.data.remote.HubMediaResolver.invalidateDocument(path)
+        com.example.gemini.data.remote.HubMediaResolver.invalidateDocument(newPath)
         try {
             val payload = JSONObject().apply {
                 put("path", path)

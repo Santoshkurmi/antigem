@@ -151,9 +151,14 @@ data class CascadeMessageItemDto(
 @Serializable
 data class MediaAttachmentDto(
     val mimeType: String = "",
+    val mime_type: String = "",
     val data: String = "",                      // Base64 or URI
+    val inlineData: String = "",
     val uri: String = "",
-    val name: String = ""
+    val name: String = "",
+    val description: String = "",
+    val durationSeconds: Int = 0,
+    val duration_seconds: Int = 0
 )
 
 @Serializable

@@ -11,20 +11,36 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Resolves media URIs produced by AGY Hub / Cortex (such as Termux host paths or remote paths)
- * into locally accessible files or data URIs for rendering with Coil.
+ * In-RAM caching and resolver for media & documents produced by AGY Hub / Cortex
+ * (such as Termux host paths, images, or remote files). Avoids disk writes.
  */
 object HubMediaResolver {
     private const val TAG = "HubMediaResolver"
-    private val memoryCache = ConcurrentHashMap<String, String>() // rawUri -> localUri
+    private val imageRamCache = ConcurrentHashMap<String, String>()       // rawUri -> data:image/xxx;base64,...
+    private val documentRamCache = ConcurrentHashMap<String, String>()    // filePath -> content string
     private val downloadMutex = Mutex()
 
     @Volatile
     var activeHubUrl: String = AgyHubClient.DEFAULT_HUB_URL
 
-    /**
-     * Obtains the target local cache file for a given raw URI.
-     */
+    @Volatile
+    var activeBridgeUrl: String = AgyBridgeService.DEFAULT_HTTP_URL
+
+    fun getCachedDocument(path: String): String? = documentRamCache[path]
+
+    fun putCachedDocument(path: String, content: String) {
+        documentRamCache[path] = content
+    }
+
+    fun invalidateDocument(path: String) {
+        documentRamCache.remove(path)
+    }
+
+    fun clearRamCache() {
+        imageRamCache.clear()
+        documentRamCache.clear()
+    }
+
     fun getLocalCacheFile(context: Context, rawUri: String): File {
         val clean = rawUri.removePrefix("file://")
         val baseName = clean.substringAfterLast('/').ifBlank { "img_${System.currentTimeMillis()}.jpg" }
@@ -35,23 +51,23 @@ object HubMediaResolver {
     }
 
     /**
-     * Checks if the URI is already local or already cached on disk.
+     * Checks if the URI is already local or already cached in RAM memory.
      */
     fun isLocalOrCached(context: Context, uriOrPath: String): Boolean {
         if (uriOrPath.isBlank()) return false
         if (uriOrPath.startsWith("data:image/") || uriOrPath.startsWith("http://") || uriOrPath.startsWith("https://") || uriOrPath.startsWith("content://")) {
             return true
         }
+        if (imageRamCache.containsKey(uriOrPath) || documentRamCache.containsKey(uriOrPath)) {
+            return true
+        }
         val clean = uriOrPath.removePrefix("file://")
         val directFile = File(clean)
-        if (directFile.exists() && directFile.canRead()) return true
-
-        val cached = getLocalCacheFile(context, uriOrPath)
-        return cached.exists() && cached.length() > 0
+        return directFile.exists() && directFile.canRead()
     }
 
     /**
-     * Synchronously returns the cached local URI if present in memory or disk,
+     * Synchronously returns the in-RAM cached data URI or local URI if present,
      * otherwise returns the original URI.
      */
     fun getResolvedUriSync(context: Context, uriOrPath: String): String {
@@ -59,20 +75,13 @@ object HubMediaResolver {
         if (uriOrPath.startsWith("data:image/") || uriOrPath.startsWith("http://") || uriOrPath.startsWith("https://") || uriOrPath.startsWith("content://")) {
             return uriOrPath
         }
-        memoryCache[uriOrPath]?.let { return it }
+        imageRamCache[uriOrPath]?.let { return it }
 
         val clean = uriOrPath.removePrefix("file://")
         val directFile = File(clean)
         if (directFile.exists() && directFile.canRead()) {
             val res = "file://${directFile.absolutePath}"
-            memoryCache[uriOrPath] = res
-            return res
-        }
-
-        val cached = getLocalCacheFile(context, uriOrPath)
-        if (cached.exists() && cached.length() > 0) {
-            val res = "file://${cached.absolutePath}"
-            memoryCache[uriOrPath] = res
+            imageRamCache[uriOrPath] = res
             return res
         }
 
@@ -80,8 +89,8 @@ object HubMediaResolver {
     }
 
     /**
-     * Asynchronously downloads file data from daemon LanguageServerService/ReadFile if not cached locally.
-     * Returns local file:/// URI or data URI.
+     * Asynchronously downloads file data into in-RAM cache from daemon LanguageServerService/ReadFile.
+     * Returns in-memory data:image/... URI with zero disk writes.
      */
     suspend fun resolveMediaUri(
         context: Context,
@@ -94,42 +103,36 @@ object HubMediaResolver {
             return@withContext rawUri
         }
 
-        memoryCache[rawUri]?.let { return@withContext it }
+        imageRamCache[rawUri]?.let { return@withContext it }
 
         val clean = rawUri.removePrefix("file://")
         val directFile = File(clean)
         if (directFile.exists() && directFile.canRead()) {
             val localUri = "file://${directFile.absolutePath}"
-            memoryCache[rawUri] = localUri
-            return@withContext localUri
-        }
-
-        val cachedFile = getLocalCacheFile(context, rawUri)
-        if (cachedFile.exists() && cachedFile.length() > 0) {
-            val localUri = "file://${cachedFile.absolutePath}"
-            memoryCache[rawUri] = localUri
+            imageRamCache[rawUri] = localUri
             return@withContext localUri
         }
 
         downloadMutex.withLock {
-            if (cachedFile.exists() && cachedFile.length() > 0) {
-                val localUri = "file://${cachedFile.absolutePath}"
-                memoryCache[rawUri] = localUri
-                return@withContext localUri
-            }
+            imageRamCache[rawUri]?.let { return@withContext it }
 
             try {
                 val formattedUri = if (rawUri.startsWith("file://")) rawUri else "file://$clean"
                 val res = agyHubClient.readFileAsBase64(formattedUri, hubUrl)
                 res.onSuccess { base64Data ->
                     if (base64Data.isNotBlank()) {
-                        val bytes = Base64.decode(base64Data, Base64.DEFAULT)
-                        cachedFile.parentFile?.mkdirs()
-                        cachedFile.writeBytes(bytes)
-                        val localUri = "file://${cachedFile.absolutePath}"
-                        memoryCache[rawUri] = localUri
-                        Log.d(TAG, "Downloaded hub media: $localUri (${bytes.size} bytes)")
-                        return@withContext localUri
+                        val ext = clean.substringAfterLast('.', "jpg").lowercase()
+                        val mime = when (ext) {
+                            "png" -> "image/png"
+                            "webp" -> "image/webp"
+                            "gif" -> "image/gif"
+                            "svg" -> "image/svg+xml"
+                            else -> "image/jpeg"
+                        }
+                        val dataUri = "data:$mime;base64,$base64Data"
+                        imageRamCache[rawUri] = dataUri
+                        Log.d(TAG, "Cached hub media in RAM: $rawUri")
+                        return@withContext dataUri
                     }
                 }.onFailure { err ->
                     Log.w(TAG, "Failed to read file from hub: $rawUri: ${err.message}")

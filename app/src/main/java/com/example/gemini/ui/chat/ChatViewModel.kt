@@ -1369,7 +1369,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         persistentStreamJob = viewModelScope.launch(Dispatchers.IO) {
             val hubUrl = authPrefs.agyHubUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyHubClient.DEFAULT_HUB_URL
+            val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: com.example.gemini.data.remote.AgyBridgeService.DEFAULT_HTTP_URL
             com.example.gemini.data.remote.HubMediaResolver.activeHubUrl = hubUrl
+            com.example.gemini.data.remote.HubMediaResolver.activeBridgeUrl = bridgeUrl
             var isFirstChunk = true
 
             if (trajectoryEngine.conversationId != conversationId || _messages.value.isEmpty()) {
@@ -1407,7 +1409,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 }.forEach { tc ->
                                     com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(getApplication(), tc.output, agyHubClient, hubUrl)
                                 }
-                                msgs.flatMap { it.attachments }.filter { (it.isImage || it.isAudio) && it.path.isNotBlank() }.forEach { att ->
+                                msgs.flatMap { it.attachments }.filter { it.isImage && it.path.isNotBlank() }.forEach { att ->
                                     val rawUri = if (att.path.startsWith("file://") || att.path.startsWith("http")) att.path else "file://${att.path}"
                                     com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(getApplication(), rawUri, agyHubClient, hubUrl)
                                 }

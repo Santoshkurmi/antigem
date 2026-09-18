@@ -828,13 +828,36 @@ class TrajectoryEngine {
         if (userInput == null) return emptyList()
         val list = mutableListOf<ChatAttachment>()
         userInput.media.forEachIndexed { idx, media ->
+            val resolvedMime = media.mimeType.ifBlank { media.mime_type }
+            val cleanUri = if (media.uri.startsWith("file://")) media.uri.removePrefix("file://") else media.uri
+            val base64Data = media.inlineData.ifBlank { media.data }
+            if (resolvedMime.isBlank() && cleanUri.isBlank() && base64Data.isBlank()) {
+                return@forEachIndexed
+            }
+            val isAud = resolvedMime.startsWith("audio/") || cleanUri.endsWith(".m4a", true) || cleanUri.endsWith(".mp3", true) || cleanUri.endsWith(".wav", true) || cleanUri.endsWith(".ogg", true)
+            val isImg = resolvedMime.startsWith("image/") || cleanUri.endsWith(".png", true) || cleanUri.endsWith(".jpg", true) || cleanUri.endsWith(".jpeg", true) || cleanUri.endsWith(".webp", true) || cleanUri.endsWith(".gif", true) || cleanUri.endsWith(".svg", true)
+            val dur = if (media.durationSeconds > 0) media.durationSeconds else media.duration_seconds
+            val resolvedName = when {
+                media.name.isNotBlank() && !media.name.startsWith("attachment_") -> media.name
+                media.description.isNotBlank() -> media.description
+                isAud -> if (dur > 0) {
+                    val mins = dur / 60
+                    val secs = dur % 60
+                    "Voice Note (${String.format("%d:%02d", mins, secs)})"
+                } else "Voice Note"
+                isImg -> "Image"
+                else -> "attachment_$idx"
+            }
             list.add(
                 ChatAttachment(
                     id = "att_${stepIndex}_$idx",
-                    name = media.name.ifBlank { "attachment_$idx" },
-                    path = media.uri,
-                    isImage = media.mimeType.startsWith("image/"),
-                    mimeType = media.mimeType
+                    name = resolvedName,
+                    path = cleanUri,
+                    isImage = isImg,
+                    isAudio = isAud,
+                    durationSeconds = dur,
+                    mimeType = resolvedMime.ifBlank { if (isAud) "audio/mp4" else if (isImg) "image/jpeg" else "" },
+                    base64 = if (base64Data.isNotBlank() && !base64Data.startsWith("http") && !base64Data.startsWith("file://")) base64Data else null
                 )
             )
         }

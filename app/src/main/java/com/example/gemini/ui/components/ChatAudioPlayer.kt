@@ -31,8 +31,26 @@ import com.example.gemini.theme.ClaudeTerracotta
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import android.os.Build
+import androidx.annotation.RequiresApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
+
+@RequiresApi(Build.VERSION_CODES.M)
+private class InMemoryMediaDataSource(private val data: ByteArray) : android.media.MediaDataSource() {
+    override fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int {
+        if (position >= data.size) return -1
+        val remaining = data.size - position
+        val bytesToRead = minOf(size.toLong(), remaining).toInt()
+        System.arraycopy(data, position.toInt(), buffer, offset, bytesToRead)
+        return bytesToRead
+    }
+
+    override fun getSize(): Long = data.size.toLong()
+
+    override fun close() {}
+}
 
 fun formatAudioDuration(seconds: Int): String {
     val mins = seconds / 60
@@ -52,11 +70,11 @@ fun ChatAudioPlayer(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var isPlaying by remember { mutableStateOf(false) }
+    var isBuffering by remember { mutableStateOf(false) }
     var currentPositionMs by remember { mutableStateOf(0) }
     var durationMs by remember { mutableStateOf((attachment.durationSeconds * 1000).coerceAtLeast(1000)) }
     var isPrepared by remember { mutableStateOf(false) }
     var hasError by remember { mutableStateOf(false) }
-    var isResolvingAudio by remember { mutableStateOf(false) }
 
     val mediaPlayer = remember {
         MediaPlayer().apply {
@@ -68,6 +86,7 @@ fun ChatAudioPlayer(
                 Log.e("ChatAudioPlayer", "MediaPlayer error: what=$what, extra=$extra")
                 hasError = true
                 isPlaying = false
+                isBuffering = false
                 true
             }
         }
@@ -86,60 +105,93 @@ fun ChatAudioPlayer(
         }
     }
 
-    fun preparePlayer(): Boolean {
-        if (isPrepared) return true
-        try {
-            mediaPlayer.reset()
-
-            val resolvedLocalPath = if (attachment.path.isNotBlank()) {
-                com.example.gemini.data.remote.HubMediaResolver.getResolvedUriSync(context, attachment.path).removePrefix("file://")
-            } else ""
-
-            val fileToPlay: File? = when {
-                resolvedLocalPath.isNotBlank() && File(resolvedLocalPath).exists() -> File(resolvedLocalPath)
-                attachment.path.isNotBlank() && File(attachment.path).exists() -> File(attachment.path)
-                !attachment.localUri.isNullOrBlank() && File(Uri.parse(attachment.localUri).path ?: "").exists() -> {
-                    File(Uri.parse(attachment.localUri).path ?: "")
-                }
-                !attachment.base64.isNullOrBlank() -> {
-                    val tempFile = File(context.cacheDir, "audio_note_${attachment.id.take(10)}.m4a")
-                    if (!tempFile.exists() || tempFile.length() == 0L) {
-                        val bytes = Base64.decode(attachment.base64, Base64.DEFAULT)
-                        FileOutputStream(tempFile).use { it.write(bytes) }
-                    }
-                    tempFile
-                }
-                else -> null
+    fun playOrPauseAudio() {
+        if (hasError) return
+        if (isPlaying) {
+            try {
+                mediaPlayer.pause()
+                isPlaying = false
+            } catch (e: Exception) {
+                Log.w("ChatAudioPlayer", "Pause failed: ${e.message}")
             }
-
-            if (fileToPlay != null && fileToPlay.exists()) {
-                mediaPlayer.setDataSource(fileToPlay.absolutePath)
-                mediaPlayer.prepare()
-                isPrepared = true
-                val d = mediaPlayer.duration
-                if (d > 0) durationMs = d
-                return true
-            } else if (!attachment.url.isNullOrBlank()) {
-                mediaPlayer.setDataSource(attachment.url)
-                mediaPlayer.prepare()
-                isPrepared = true
-                val d = mediaPlayer.duration
-                if (d > 0) durationMs = d
-                return true
-            }
-        } catch (e: Exception) {
-            Log.e("ChatAudioPlayer", "Failed to prepare audio player: ${e.message}")
-            hasError = true
+            return
         }
-        return false
-    }
 
-    LaunchedEffect(attachment.path, attachment.url, attachment.base64) {
-        if (attachment.path.isNotBlank() && !com.example.gemini.data.remote.HubMediaResolver.isLocalOrCached(context, attachment.path)) {
-            isResolvingAudio = true
-            com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(context, attachment.path)
-            isResolvingAudio = false
-            preparePlayer()
+        if (isPrepared) {
+            try {
+                mediaPlayer.start()
+                isPlaying = true
+            } catch (e: Exception) {
+                Log.w("ChatAudioPlayer", "Start failed: ${e.message}")
+            }
+            return
+        }
+
+        coroutineScope.launch {
+            isBuffering = true
+            hasError = false
+            try {
+                withContext(Dispatchers.IO) {
+                    mediaPlayer.reset()
+
+                    // 1. Direct local file if already available (e.g. freshly recorded)
+                    val directLocalFile = when {
+                        attachment.path.isNotBlank() && File(attachment.path).exists() -> File(attachment.path)
+                        !attachment.localUri.isNullOrBlank() && File(Uri.parse(attachment.localUri).path ?: "").exists() -> {
+                            File(Uri.parse(attachment.localUri).path ?: "")
+                        }
+                        else -> null
+                    }
+
+                    if (directLocalFile != null && directLocalFile.exists()) {
+                        mediaPlayer.setDataSource(directLocalFile.absolutePath)
+                        mediaPlayer.prepare()
+                    } else if (!attachment.base64.isNullOrBlank() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        // 2. In-memory playback for base64 without writing files to disk
+                        val bytes = Base64.decode(attachment.base64, Base64.DEFAULT)
+                        if (bytes.isNotEmpty()) {
+                            mediaPlayer.setDataSource(InMemoryMediaDataSource(bytes))
+                            mediaPlayer.prepare()
+                        } else {
+                            throw IllegalStateException("Empty base64 audio data")
+                        }
+                    } else {
+                        // 3. Direct HTTP streaming from host without caching to local disk
+                        val streamUrl = when {
+                            !attachment.url.isNullOrBlank() && (attachment.url.startsWith("http://") || attachment.url.startsWith("https://")) -> {
+                                attachment.url
+                            }
+                            attachment.path.isNotBlank() && (attachment.path.startsWith("http://") || attachment.path.startsWith("https://")) -> {
+                                attachment.path
+                            }
+                            attachment.path.isNotBlank() -> {
+                                val bridgeBase = com.example.gemini.data.remote.HubMediaResolver.activeBridgeUrl.removeSuffix("/")
+                                "$bridgeBase/api/file/read?path=" + java.net.URLEncoder.encode(attachment.path, "UTF-8")
+                            }
+                            else -> null
+                        }
+
+                        if (!streamUrl.isNullOrBlank()) {
+                            mediaPlayer.setDataSource(streamUrl)
+                            mediaPlayer.prepare()
+                        } else {
+                            throw IllegalStateException("No audio source available for ${attachment.name}")
+                        }
+                    }
+                }
+
+                isPrepared = true
+                isBuffering = false
+                val d = mediaPlayer.duration
+                if (d > 0) durationMs = d
+                mediaPlayer.start()
+                isPlaying = true
+            } catch (e: Exception) {
+                Log.e("ChatAudioPlayer", "Failed to prepare/play audio player: ${e.message}", e)
+                isBuffering = false
+                hasError = true
+                isPlaying = false
+            }
         }
     }
 
@@ -176,46 +228,13 @@ fun ChatAudioPlayer(
         ) {
             // Play / Pause Circle Button
             Surface(
-                onClick = {
-                    if (hasError) return@Surface
-                    if (isPlaying) {
-                        try {
-                            mediaPlayer.pause()
-                            isPlaying = false
-                        } catch (e: Exception) {
-                            Log.w("ChatAudioPlayer", "Pause failed: ${e.message}")
-                        }
-                    } else {
-                        if (preparePlayer()) {
-                            try {
-                                mediaPlayer.start()
-                                isPlaying = true
-                            } catch (e: Exception) {
-                                Log.w("ChatAudioPlayer", "Start failed: ${e.message}")
-                            }
-                        } else if (attachment.path.isNotBlank() && !isResolvingAudio) {
-                            coroutineScope.launch {
-                                isResolvingAudio = true
-                                com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(context, attachment.path)
-                                isResolvingAudio = false
-                                if (preparePlayer()) {
-                                    try {
-                                        mediaPlayer.start()
-                                        isPlaying = true
-                                    } catch (e: Exception) {
-                                        Log.w("ChatAudioPlayer", "Start failed after resolve: ${e.message}")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
+                onClick = { playOrPauseAudio() },
                 shape = CircleShape,
                 color = ClaudeTerracotta,
                 modifier = Modifier.size(36.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    if (isResolvingAudio) {
+                    if (isBuffering) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
                             color = Color.White,

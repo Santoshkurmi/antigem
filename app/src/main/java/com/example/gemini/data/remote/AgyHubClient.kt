@@ -3074,11 +3074,14 @@ data class AgyMediaItem(
                                 val mime = mObj.optString("mimeType", mObj.optString("mime_type", ""))
                                 val uri = mObj.optString("uri", "")
                                 val inline = mObj.optString("inlineData", mObj.optString("inline_data", ""))
-                                val desc = mObj.optString("description", "Voice note")
-                                val dur = mObj.optInt("durationSeconds", mObj.optInt("duration_seconds", 0))
-                                val isAud = mime.startsWith("audio/")
-                                val isImg = mime.startsWith("image/")
                                 val cleanPath = if (uri.startsWith("file://")) uri.removePrefix("file://") else uri
+                                if (mime.isBlank() && cleanPath.isBlank() && inline.isBlank()) {
+                                    continue
+                                }
+                                val dur = mObj.optInt("durationSeconds", mObj.optInt("duration_seconds", 0))
+                                val isAud = mime.startsWith("audio/") || cleanPath.endsWith(".m4a", true) || cleanPath.endsWith(".mp3", true) || cleanPath.endsWith(".wav", true) || cleanPath.endsWith(".ogg", true)
+                                val isImg = mime.startsWith("image/") || cleanPath.endsWith(".png", true) || cleanPath.endsWith(".jpg", true) || cleanPath.endsWith(".jpeg", true) || cleanPath.endsWith(".webp", true) || cleanPath.endsWith(".gif", true) || cleanPath.endsWith(".svg", true)
+                                val desc = mObj.optString("description", if (isAud) "Voice note" else if (isImg) "Image" else "Attachment")
                                 userAttachments.add(
                                     com.example.gemini.domain.model.ChatAttachment(
                                         id = "att_${conversationId}_${stepIndex}_$mIdx",
@@ -3087,8 +3090,8 @@ data class AgyMediaItem(
                                         isImage = isImg,
                                         isAudio = isAud,
                                         durationSeconds = dur,
-                                        mimeType = mime,
-                                        base64 = inline
+                                        mimeType = mime.ifBlank { if (isAud) "audio/mp4" else if (isImg) "image/jpeg" else "" },
+                                        base64 = inline.ifBlank { null }
                                     )
                                 )
                             }
