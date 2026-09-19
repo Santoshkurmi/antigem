@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
                         ) {
                             IdeScreen(
                                 viewModel = chatViewModel,
+                                isVisible = currentViewMode == AppViewMode.IDE,
                                 onNavigateToChat = { currentViewMode = AppViewMode.CHAT },
                                 onExecuteRunCommand = { cmd ->
                                     // Connect with terminal / chat execution

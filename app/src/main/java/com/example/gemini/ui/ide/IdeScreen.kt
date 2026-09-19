@@ -50,6 +50,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun IdeScreen(
     viewModel: ChatViewModel? = null,
+    isVisible: Boolean = true,
     onNavigateToChat: () -> Unit,
     onExecuteRunCommand: (command: String) -> Unit,
     modifier: Modifier = Modifier
@@ -81,10 +82,12 @@ fun IdeScreen(
         }
     }
 
-    // Initialize Go daemon & load projects
-    LaunchedEffect(Unit) {
-        TermuxDaemonManager.ensureDaemonStarted()
-        refreshProjectsAndTree()
+    // Auto-refresh file tree and projects whenever user switches to IDE screen
+    LaunchedEffect(isVisible) {
+        if (isVisible) {
+            TermuxDaemonManager.ensureDaemonStarted()
+            refreshProjectsAndTree()
+        }
     }
 
     // React immediately whenever daemon reconnects in the background
