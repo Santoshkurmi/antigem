@@ -129,6 +129,10 @@ fun SettingsDialog(
     defaultApprovalScope: String = "PERMISSION_SCOPE_ONCE",
     groupChatsByWorkspace: Boolean = false,
     onToggleGroupChatsByWorkspace: (Boolean) -> Unit = {},
+    isFloatingBubbleEnabled: Boolean = true,
+    autoShowFloatingBubbleOnMinimize: Boolean = false,
+    onToggleFloatingBubbleEnabled: (Boolean) -> Unit = {},
+    onToggleAutoShowFloatingBubbleOnMinimize: (Boolean) -> Unit = {},
     globalSecuritySettings: com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings? = null,
     globalSettingsError: String? = null,
     isGlobalSettingsLoading: Boolean = false,
@@ -272,11 +276,15 @@ fun SettingsDialog(
                         themeMode = themeMode,
                         chatFontScale = chatFontScale,
                         groupChatsByWorkspace = groupChatsByWorkspace,
+                        isFloatingBubbleEnabled = isFloatingBubbleEnabled,
+                        autoShowFloatingBubbleOnMinimize = autoShowFloatingBubbleOnMinimize,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onSetThemeMode = onSetThemeMode,
                         onSetChatFontScale = onSetChatFontScale,
-                        onToggleGroupChatsByWorkspace = onToggleGroupChatsByWorkspace
+                        onToggleGroupChatsByWorkspace = onToggleGroupChatsByWorkspace,
+                        onToggleFloatingBubbleEnabled = onToggleFloatingBubbleEnabled,
+                        onToggleAutoShowFloatingBubbleOnMinimize = onToggleAutoShowFloatingBubbleOnMinimize
                     )
 
                     SettingsSection.SERVERS -> ServersSubScreen(
@@ -573,11 +581,15 @@ private fun AppearanceSubScreen(
     themeMode: String,
     chatFontScale: Float,
     groupChatsByWorkspace: Boolean,
+    isFloatingBubbleEnabled: Boolean,
+    autoShowFloatingBubbleOnMinimize: Boolean,
     cardBg: Color,
     cardBorder: BorderStroke,
     onSetThemeMode: (String) -> Unit,
     onSetChatFontScale: (Float) -> Unit,
-    onToggleGroupChatsByWorkspace: (Boolean) -> Unit
+    onToggleGroupChatsByWorkspace: (Boolean) -> Unit,
+    onToggleFloatingBubbleEnabled: (Boolean) -> Unit,
+    onToggleAutoShowFloatingBubbleOnMinimize: (Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -772,6 +784,151 @@ private fun AppearanceSubScreen(
                         checkedTrackColor = ClaudeTerracotta
                     )
                 )
+            }
+        }
+
+        // Floating Multitasking Bubble Card
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var showOverlayPermissionDialog by remember { mutableStateOf(false) }
+
+        if (showOverlayPermissionDialog) {
+            AlertDialog(
+                onDismissRequest = { showOverlayPermissionDialog = false },
+                title = {
+                    Text(
+                        text = "Display Over Other Apps Permission",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                },
+                text = {
+                    Text(
+                        text = "To show the floating multitasking bubble and chat heads over other apps, Android requires the 'Display over other apps' permission.",
+                        fontSize = 13.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showOverlayPermissionDialog = false
+                            try {
+                                val intent = Intent(
+                                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    android.net.Uri.parse("package:${context.packageName}")
+                                ).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                val intent = Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                    ) {
+                        Text("Open Settings", fontWeight = FontWeight.SemiBold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showOverlayPermissionDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = cardBg,
+            border = cardBorder,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Enable Floating Bubble (Chat Heads)",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Show a floating multitasking launcher icon in full screen chat to open a floating overlay over any app",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = isFloatingBubbleEnabled,
+                        onCheckedChange = { enable ->
+                            if (enable) {
+                                if (!android.provider.Settings.canDrawOverlays(context)) {
+                                    showOverlayPermissionDialog = true
+                                }
+                                onToggleFloatingBubbleEnabled(true)
+                            } else {
+                                onToggleFloatingBubbleEnabled(false)
+                            }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
+                    )
+                }
+
+                if (isFloatingBubbleEnabled) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                text = "Auto-show Bubble on App Minimize",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Automatically pop up the floating bubble on screen whenever antiGem is minimized or put in background",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                            )
+                        }
+                        Switch(
+                            checked = autoShowFloatingBubbleOnMinimize,
+                            onCheckedChange = { enable ->
+                                if (enable && !android.provider.Settings.canDrawOverlays(context)) {
+                                    showOverlayPermissionDialog = true
+                                }
+                                onToggleAutoShowFloatingBubbleOnMinimize(enable)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = ClaudeTerracotta
+                            )
+                        )
+                    }
+                }
             }
         }
 

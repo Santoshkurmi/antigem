@@ -56,6 +56,8 @@ class AuthPreferences(private val context: Context) {
         val REQUIRE_APPROVAL_FOR_FILE_EDITS = androidx.datastore.preferences.core.booleanPreferencesKey("require_approval_for_file_edits")
         val DEFAULT_APPROVAL_SCOPE = stringPreferencesKey("default_approval_scope")
         val GROUP_CHATS_BY_WORKSPACE = androidx.datastore.preferences.core.booleanPreferencesKey("group_chats_by_workspace")
+        val IS_FLOATING_BUBBLE_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_bubble_enabled")
+        val AUTO_SHOW_FLOATING_BUBBLE_ON_MINIMIZE = androidx.datastore.preferences.core.booleanPreferencesKey("auto_show_floating_bubble_on_minimize")
         const val DEFAULT_HUB_URL = "http://127.0.0.1:8090"
         const val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:8080"
 
@@ -414,6 +416,26 @@ class AuthPreferences(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[DEFAULT_APPROVAL_SCOPE] = scope
         }
+    }
+
+    val isFloatingBubbleEnabled: Flow<Boolean> = context.dataStore.data
+        .map { it[IS_FLOATING_BUBBLE_ENABLED] ?: true }
+
+    fun getFloatingBubbleEnabledSync(): Boolean = syncPrefs.getBoolean("is_floating_bubble_enabled", true)
+
+    suspend fun saveFloatingBubbleEnabled(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("is_floating_bubble_enabled", enabled).apply()
+        context.dataStore.edit { it[IS_FLOATING_BUBBLE_ENABLED] = enabled }
+    }
+
+    val autoShowFloatingBubbleOnMinimize: Flow<Boolean> = context.dataStore.data
+        .map { it[AUTO_SHOW_FLOATING_BUBBLE_ON_MINIMIZE] ?: true }
+
+    fun getAutoShowFloatingBubbleOnMinimizeSync(): Boolean = syncPrefs.getBoolean("auto_show_floating_bubble_on_minimize", true)
+
+    suspend fun saveAutoShowFloatingBubbleOnMinimize(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("auto_show_floating_bubble_on_minimize", enabled).apply()
+        context.dataStore.edit { it[AUTO_SHOW_FLOATING_BUBBLE_ON_MINIMIZE] = enabled }
     }
 
     suspend fun clearAuth() {

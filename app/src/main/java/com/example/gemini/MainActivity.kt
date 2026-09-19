@@ -6,7 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -17,18 +16,21 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.example.gemini.theme.GeminiTheme
+import com.example.gemini.ui.bubble.FloatingBubbleService
 import com.example.gemini.ui.chat.ChatScreen
 import com.example.gemini.ui.chat.ChatViewModel
+import com.example.gemini.ui.chat.ChatViewModelHolder
 import com.example.gemini.ui.ide.IdeScreen
 
 enum class AppViewMode {
     CHAT,
-    IDE
+    IDE,
+    TERMINAL
 }
 
 class MainActivity : ComponentActivity() {
 
-    private val chatViewModel: ChatViewModel by viewModels()
+    private val chatViewModel: ChatViewModel by lazy { ChatViewModelHolder.get(application) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -98,6 +100,25 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        FloatingBubbleService.setMainAppForeground(true)
+        val autoShow = chatViewModel.authPreferences.getAutoShowFloatingBubbleOnMinimizeSync()
+        if (!autoShow) {
+            FloatingBubbleService.stop(this)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        FloatingBubbleService.setMainAppForeground(false)
+        val isEnabled = chatViewModel.authPreferences.getFloatingBubbleEnabledSync()
+        val autoShow = chatViewModel.authPreferences.getAutoShowFloatingBubbleOnMinimizeSync()
+        if (isEnabled && autoShow && android.provider.Settings.canDrawOverlays(this)) {
+            FloatingBubbleService.start(this)
         }
     }
 

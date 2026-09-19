@@ -49,6 +49,7 @@ class CodeEditorView @JvmOverloads constructor(
             setColor(EditorColorScheme.OPERATOR, Color.parseColor("#D4D4D4"))
         }
         isLineNumberEnabled = true
+        setPinLineNumber(true)
         isWordwrap = false
         isEditable = true
     }

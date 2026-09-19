@@ -237,7 +237,8 @@ fun ChatHistoryDrawer(
 
     ModalDrawerSheet(
         modifier = modifier.fillMaxWidth(0.82f),
-        drawerContainerColor = MaterialTheme.colorScheme.surface
+        drawerContainerColor = MaterialTheme.colorScheme.surface,
+        drawerTonalElevation = 0.dp
     ) {
         Column(
             modifier = Modifier

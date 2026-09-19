@@ -339,9 +339,27 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val groupChatsByWorkspace: StateFlow<Boolean> = authPrefs.groupChatsByWorkspace
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val isFloatingBubbleEnabled: StateFlow<Boolean> = authPrefs.isFloatingBubbleEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingBubbleEnabledSync())
+
+    val autoShowFloatingBubbleOnMinimize: StateFlow<Boolean> = authPrefs.autoShowFloatingBubbleOnMinimize
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getAutoShowFloatingBubbleOnMinimizeSync())
+
     fun setGroupChatsByWorkspace(enabled: Boolean) {
         viewModelScope.launch {
             authPrefs.saveGroupChatsByWorkspace(enabled)
+        }
+    }
+
+    fun setFloatingBubbleEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.saveFloatingBubbleEnabled(enabled)
+        }
+    }
+
+    fun setAutoShowFloatingBubbleOnMinimize(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.saveAutoShowFloatingBubbleOnMinimize(enabled)
         }
     }
 

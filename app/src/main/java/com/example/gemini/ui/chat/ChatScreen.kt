@@ -2,10 +2,12 @@ package com.example.gemini.ui.chat
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import com.example.gemini.ui.bubble.FloatingBubbleService
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,19 +24,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Analytics
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Compress
-import androidx.compose.material.icons.outlined.DataObject
-import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.Handyman
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Public
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import com.example.gemini.data.preferences.AuthPreferences
@@ -81,6 +73,7 @@ import com.example.gemini.ui.components.MessageBubble
 import com.example.gemini.ui.components.RawPayloadDialog
 import com.example.gemini.ui.components.TerminalInspectorDialog
 import com.example.gemini.ui.components.LocalTerminalDialog
+import com.example.gemini.ui.components.LocalTerminalContent
 import com.example.gemini.ui.settings.LocalToolsInstallDialog
 import com.example.gemini.data.local.LocalEnvironmentManager
 import com.example.gemini.ui.drawer.ChatHistoryDrawer
@@ -106,6 +99,8 @@ import com.example.gemini.ui.components.ProjectPickerDialog
 import com.example.gemini.ui.components.FileManagerDialog
 import com.example.gemini.ui.components.ToolCallExpansionCache
 import com.example.gemini.ui.components.CodeBlockExpansionCache
+import com.example.gemini.ui.bubble.FloatingChatActivity
+import android.app.Activity
 import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
@@ -119,7 +114,11 @@ enum class ScrollDirection { UP, DOWN }
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel = viewModel(),
-    onNavigateToIde: () -> Unit = {}
+    isInFloatingWindow: Boolean = false,
+    onOpenFullScreen: () -> Unit = {},
+    onMinimizeWindow: () -> Unit = {},
+    onNavigateToIde: () -> Unit = {},
+    onNavigateToTerminal: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -202,7 +201,7 @@ fun ChatScreen(
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
     var showTerminalInspector by remember { mutableStateOf(false) }
-    var showLocalTerminalDialog by remember { mutableStateOf(false) }
+    var showLocalTerminalDialog by rememberSaveable { mutableStateOf(false) }
     var showLocalToolsInstallDialog by remember { mutableStateOf(false) }
     var showRawPayloadDialog by remember { mutableStateOf<String?>(null) }
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
@@ -210,6 +209,11 @@ fun ChatScreen(
     var showAttachmentSelector by remember { mutableStateOf(false) }
     var showProjectPickerDialog by remember { mutableStateOf(false) }
     var showWorkspaceFolderBrowserDialog by remember { mutableStateOf(false) }
+    var showOverlayPermissionDialog by remember { mutableStateOf(false) }
+
+    val isFloatingBubbleEnabled by viewModel.isFloatingBubbleEnabled.collectAsState()
+    val autoShowFloatingBubbleOnMinimize by viewModel.autoShowFloatingBubbleOnMinimize.collectAsState()
+    val isBubbleServiceRunning by FloatingBubbleService.isServiceRunning.collectAsState()
 
     LaunchedEffect(showSettingsDialog) {
         if (showSettingsDialog) {
@@ -731,16 +735,52 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        if (!isInFloatingWindow && isFloatingBubbleEnabled) {
+                            IconButton(onClick = {
+                                if (Settings.canDrawOverlays(context)) {
+                                    FloatingBubbleService.start(context)
+                                    (context as? Activity)?.moveTaskToBack(true)
+                                } else {
+                                    showOverlayPermissionDialog = true
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.BubbleChart,
+                                    contentDescription = "Pop out to Floating Bubble",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                )
+                            }
+                        }
+                        if (isInFloatingWindow) {
+                            IconButton(onClick = onMinimizeWindow) {
+                                Icon(
+                                    imageVector = Icons.Default.Remove,
+                                    contentDescription = "Minimize to Bubble",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                )
+                            }
+                            IconButton(onClick = onOpenFullScreen) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                                    contentDescription = "Open Full Screen",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
                         IconButton(onClick = {
-                            if (useSshTerminal) {
-                                showLocalTerminalDialog = true
-                            } else if (isLocalToolsInstalled && isLocalToolsEnabled) {
-                                showLocalTerminalDialog = true
-                            } else if (isLocalToolsInstalled) {
-                                viewModel.setLocalToolsEnabled(true)
-                                showLocalTerminalDialog = true
+                            if (isInFloatingWindow) {
+                                onNavigateToTerminal()
                             } else {
-                                showLocalToolsInstallDialog = true
+                                if (useSshTerminal) {
+                                    showLocalTerminalDialog = true
+                                } else if (isLocalToolsInstalled && isLocalToolsEnabled) {
+                                    showLocalTerminalDialog = true
+                                } else if (isLocalToolsInstalled) {
+                                    viewModel.setLocalToolsEnabled(true)
+                                    showLocalTerminalDialog = true
+                                } else {
+                                    showLocalToolsInstallDialog = true
+                                }
                             }
                         }) {
                             Icon(
@@ -1512,6 +1552,10 @@ fun ChatScreen(
             onChangePermissionRuleDecision = { rawRule, newDecision -> viewModel.changeGlobalPermissionGrantDecision(rawRule, newDecision) },
             groupChatsByWorkspace = groupChatsByWorkspace,
             onToggleGroupChatsByWorkspace = { viewModel.setGroupChatsByWorkspace(it) },
+            isFloatingBubbleEnabled = isFloatingBubbleEnabled,
+            autoShowFloatingBubbleOnMinimize = autoShowFloatingBubbleOnMinimize,
+            onToggleFloatingBubbleEnabled = { viewModel.setFloatingBubbleEnabled(it) },
+            onToggleAutoShowFloatingBubbleOnMinimize = { viewModel.setAutoShowFloatingBubbleOnMinimize(it) },
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1671,11 +1715,70 @@ fun ChatScreen(
         )
     }
 
+    // Overlay Permission Request Dialog for Floating Bubble
+    if (showOverlayPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showOverlayPermissionDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Filled.BubbleChart,
+                    contentDescription = null,
+                    tint = ClaudeTerracotta,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text("Overlay Permission Required")
+            },
+            text = {
+                Text("To use the Facebook Messenger-style Floating Bubble (Chat Heads) across Termux and other apps, please grant 'Display over other apps' permission.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showOverlayPermissionDialog = false
+                        try {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                            context.startActivity(intent)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                ) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOverlayPermissionDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // Fully Working Local Terminal (Termux Shell with close button above)
     if (showLocalTerminalDialog) {
-        LocalTerminalDialog(
-            onDismiss = { showLocalTerminalDialog = false }
-        )
+        if (isInFloatingWindow) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(100f),
+                color = MaterialTheme.colorScheme.background
+            ) {
+                LocalTerminalContent(
+                    onClose = { showLocalTerminalDialog = false }
+                )
+            }
+        } else {
+            LocalTerminalDialog(
+                onDismiss = { showLocalTerminalDialog = false }
+            )
+        }
     }
 
     // Local Tools Setup & Progress Dialog
