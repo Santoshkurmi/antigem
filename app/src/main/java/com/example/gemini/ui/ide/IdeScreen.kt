@@ -545,11 +545,19 @@ fun IdeScreen(
                             commitHash = activeTab.commitHash,
                             onOpenCurrentFile = {
                                 coroutineScope.launch {
+                                    val projPath = activeProject?.path ?: ""
                                     val rawFilePath = activeTab.diffFile ?: activeTab.path
-                                    val content = IdeApiClient.readFile(rawFilePath) ?: ""
+                                    val fullFilePath = if (File(rawFilePath).isAbsolute) {
+                                        rawFilePath
+                                    } else if (projPath.isNotBlank()) {
+                                        File(projPath, rawFilePath).absolutePath
+                                    } else {
+                                        rawFilePath
+                                    }
+                                    val content = IdeApiClient.readFile(fullFilePath) ?: ""
                                     TermuxDaemonManager.openOrSelectTab(
-                                        path = rawFilePath,
-                                        name = File(rawFilePath).name,
+                                        path = fullFilePath,
+                                        name = File(fullFilePath).name,
                                         content = content,
                                         isReadOnly = false
                                     )
@@ -559,11 +567,21 @@ fun IdeScreen(
                                 coroutineScope.launch {
                                     val projPath = activeProject?.path ?: return@launch
                                     val rawFilePath = activeTab.diffFile ?: activeTab.path
+                                    val fullFilePath = if (File(rawFilePath).isAbsolute) {
+                                        rawFilePath
+                                    } else {
+                                        File(projPath, rawFilePath).absolutePath
+                                    }
+                                    val relPath = if (File(rawFilePath).isAbsolute && projPath.isNotBlank()) {
+                                        File(rawFilePath).relativeToOrSelf(File(projPath)).path
+                                    } else {
+                                        rawFilePath
+                                    }
                                     val commitHash = activeTab.commitHash
                                     if (commitHash != null) {
-                                        val content = GitApiClient.getCommitFileContent(projPath, commitHash, rawFilePath) ?: ""
-                                        val tabPath = "commit:$commitHash:$rawFilePath"
-                                        val tabName = "${File(rawFilePath).name} (${commitHash.take(7)})"
+                                        val content = GitApiClient.getCommitFileContent(projPath, commitHash, relPath) ?: ""
+                                        val tabPath = "commit:$commitHash:$fullFilePath"
+                                        val tabName = "${File(fullFilePath).name} (${commitHash.take(7)})"
                                         TermuxDaemonManager.openOrSelectTab(
                                             path = tabPath,
                                             name = tabName,
@@ -571,9 +589,9 @@ fun IdeScreen(
                                             isReadOnly = true
                                         )
                                     } else {
-                                        val content = GitApiClient.getCommitFileContent(projPath, "HEAD", rawFilePath) ?: (IdeApiClient.readFile(rawFilePath) ?: "")
-                                        val tabPath = "revision:HEAD:$rawFilePath"
-                                        val tabName = "${File(rawFilePath).name} (HEAD)"
+                                        val content = GitApiClient.getCommitFileContent(projPath, "HEAD", relPath) ?: (IdeApiClient.readFile(fullFilePath) ?: "")
+                                        val tabPath = "revision:HEAD:$fullFilePath"
+                                        val tabName = "${File(fullFilePath).name} (HEAD)"
                                         TermuxDaemonManager.openOrSelectTab(
                                             path = tabPath,
                                             name = tabName,

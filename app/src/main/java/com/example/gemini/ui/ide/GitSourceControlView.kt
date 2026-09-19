@@ -66,9 +66,13 @@ fun GitSourceControlView(
 
     var pendingDiscardFile by remember { mutableStateOf<String?>(null) }
     var showDiscardAllDialog by remember { mutableStateOf(false) }
+    var showDiscardAllUntrackedDialog by remember { mutableStateOf(false) }
+    var showUnstageAllDialog by remember { mutableStateOf(false) }
     var showPullDialog by remember { mutableStateOf(false) }
     var showPushDialog by remember { mutableStateOf(false) }
     var showCommitDialog by remember { mutableStateOf(false) }
+
+
 
     // Git Config Dialog State
     var showConfigDialog by remember { mutableStateOf(false) }
@@ -490,13 +494,7 @@ fun GitSourceControlView(
                             onToggle = { stagedExpanded = !stagedExpanded },
                             actions = {
                                 IconButton(
-                                    onClick = {
-                                        val projPath = activeProject?.path ?: return@IconButton
-                                        scope.launch {
-                                            GitApiClient.unstage(projPath, emptyList())
-                                            refreshGitData()
-                                        }
-                                    },
+                                    onClick = { showUnstageAllDialog = true },
                                     modifier = Modifier.size(24.dp)
                                 ) {
                                     Icon(imageVector = Icons.Default.Remove, contentDescription = "Unstage All", modifier = Modifier.size(14.dp))
@@ -590,17 +588,25 @@ fun GitSourceControlView(
                             isExpanded = untrackedExpanded,
                             onToggle = { untrackedExpanded = !untrackedExpanded },
                             actions = {
-                                IconButton(
-                                    onClick = {
-                                        val projPath = activeProject?.path ?: return@IconButton
-                                        scope.launch {
-                                            GitApiClient.stage(projPath, untracked.map { it.path })
-                                            refreshGitData()
-                                        }
-                                    },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.Add, contentDescription = "Stage All Untracked", modifier = Modifier.size(14.dp), tint = Color(0xFF81C784))
+                                Row {
+                                    IconButton(
+                                        onClick = { showDiscardAllUntrackedDialog = true },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Undo, contentDescription = "Discard All Untracked", modifier = Modifier.size(13.dp), tint = Color(0xFFE57373))
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            val projPath = activeProject?.path ?: return@IconButton
+                                            scope.launch {
+                                                GitApiClient.stage(projPath, untracked.map { it.path })
+                                                refreshGitData()
+                                            }
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Add, contentDescription = "Stage All Untracked", modifier = Modifier.size(14.dp), tint = Color(0xFF81C784))
+                                    }
                                 }
                             }
                         )
@@ -1117,6 +1123,73 @@ fun GitSourceControlView(
             },
             dismissButton = {
                 TextButton(onClick = { showDiscardAllDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Discard All Untracked Files Confirmation Dialog
+    if (showDiscardAllUntrackedDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardAllUntrackedDialog = false },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFE57373)) },
+            title = { Text("Discard Untracked Files", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete all untracked files? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDiscardAllUntrackedDialog = false
+                        val projPath = activeProject?.path ?: return@Button
+                        val untrackedPaths = status?.untrackedFiles?.map { it.path } ?: emptyList()
+                        scope.launch {
+                            isOperating = true
+                            GitApiClient.discard(projPath, untrackedPaths)
+                            refreshGitData()
+                            isOperating = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Discard Untracked")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardAllUntrackedDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Unstage All Confirmation Dialog
+
+    if (showUnstageAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnstageAllDialog = false },
+            icon = { Icon(Icons.Default.RemoveCircleOutline, contentDescription = null, tint = Color(0xFFE57373)) },
+            title = { Text("Unstage All Changes", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to unstage all files from the staging area?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showUnstageAllDialog = false
+                        val projPath = activeProject?.path ?: return@Button
+                        scope.launch {
+                            isOperating = true
+                            val stagedPaths = status?.stagedFiles?.map { it.path } ?: emptyList()
+                            GitApiClient.unstage(projPath, stagedPaths)
+                            refreshGitData()
+                            isOperating = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                ) {
+                    Text("Unstage All")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUnstageAllDialog = false }) {
                     Text("Cancel")
                 }
             }

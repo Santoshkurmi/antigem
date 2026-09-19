@@ -280,13 +280,26 @@ func CheckoutBranch(projectDir, branchName string, create bool) error {
 	return err
 }
 
+func cleanRelPath(projectDir, p string) string {
+	if filepath.IsAbs(p) {
+		if rel, err := filepath.Rel(projectDir, p); err == nil && !strings.HasPrefix(rel, "..") {
+			return filepath.ToSlash(rel)
+		}
+	}
+	return filepath.ToSlash(p)
+}
+
 // Stage adds paths to the git index.
 func Stage(projectDir string, paths []string) error {
 	if len(paths) == 0 {
 		_, err := runGitCmd(projectDir, "add", "-A")
 		return err
 	}
-	args := append([]string{"add", "--"}, paths...)
+	var cleanPaths []string
+	for _, p := range paths {
+		cleanPaths = append(cleanPaths, cleanRelPath(projectDir, p))
+	}
+	args := append([]string{"add", "--"}, cleanPaths...)
 	_, err := runGitCmd(projectDir, args...)
 	return err
 }
@@ -294,12 +307,32 @@ func Stage(projectDir string, paths []string) error {
 // Unstage resets paths from the git index.
 func Unstage(projectDir string, paths []string) error {
 	if len(paths) == 0 {
-		_, err := runGitCmd(projectDir, "reset", "HEAD")
+		// 1. Try modern git restore --staged .
+		_, err := runGitCmd(projectDir, "restore", "--staged", ".")
+		if err == nil {
+			return nil
+		}
+		// 2. Fallback to git reset
+		_, err = runGitCmd(projectDir, "reset")
+		if err == nil {
+			return nil
+		}
+		// 3. Fallback for initial commit / unborn branch (no HEAD ref yet)
+		_, err = runGitCmd(projectDir, "rm", "--cached", "-r", ".")
 		return err
 	}
-	args := append([]string{"reset", "HEAD", "--"}, paths...)
-	_, err := runGitCmd(projectDir, args...)
-	return err
+
+	for _, p := range paths {
+		rel := cleanRelPath(projectDir, p)
+		_, err := runGitCmd(projectDir, "restore", "--staged", "--", rel)
+		if err != nil {
+			_, err = runGitCmd(projectDir, "reset", "HEAD", "--", rel)
+			if err != nil {
+				_, _ = runGitCmd(projectDir, "rm", "--cached", "-r", "--", rel)
+			}
+		}
+	}
+	return nil
 }
 
 // Discard reverts modified files or cleans untracked files.
@@ -312,14 +345,16 @@ func Discard(projectDir string, paths []string) error {
 	}
 
 	for _, p := range paths {
-		_, err := runGitCmd(projectDir, "restore", "--", p)
+		rel := cleanRelPath(projectDir, p)
+		_, err := runGitCmd(projectDir, "restore", "--", rel)
 		if err != nil {
-			_, _ = runGitCmd(projectDir, "checkout", "--", p)
+			_, _ = runGitCmd(projectDir, "checkout", "--", rel)
 		}
-		_, _ = runGitCmd(projectDir, "clean", "-fd", "--", p)
+		_, _ = runGitCmd(projectDir, "clean", "-fd", "--", rel)
 	}
 	return nil
 }
+
 
 // Commit creates a new commit with the given message.
 func Commit(projectDir, message string) error {
