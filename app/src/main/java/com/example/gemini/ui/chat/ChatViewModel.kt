@@ -54,6 +54,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _conversations = MutableStateFlow<List<Conversation>>(emptyList())
     val conversations: StateFlow<List<Conversation>> = _conversations.asStateFlow()
 
+    private val _isConversationsLoading = MutableStateFlow(true)
+    val isConversationsLoading: StateFlow<Boolean> = _isConversationsLoading.asStateFlow()
+
     private val _currentConversation = MutableStateFlow<Conversation?>(null)
     val currentConversation: StateFlow<Conversation?> = _currentConversation.asStateFlow()
 
@@ -1171,7 +1174,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (!force && syncJob?.isActive == true) return
         syncJob?.cancel()
         syncJob = viewModelScope.launch {
-            _isLoadingConversation.value = true
+            _isConversationsLoading.value = true
             while (currentCoroutineContext().isActive) {
                 try {
                     val hubUrl = AuthPreferences.currentHubUrl
@@ -1224,7 +1227,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         _isServerOnline.value = true
                         _conversationError.value = null
-                        _isLoadingConversation.value = false
+                        _isConversationsLoading.value = false
                     }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) {
@@ -1232,6 +1235,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     android.util.Log.e("ChatViewModel", "subscribeToSummaries failed: ${e.message}")
                     _isServerOnline.value = false
+                    _isConversationsLoading.value = false
                     val rawErr = e.message ?: "Connection failed"
                     val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
                         "Cannot connect to Antigravity Hub (${AuthPreferences.currentHubUrl}). Make sure 'agy --hub' is running."
@@ -1241,7 +1245,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     if (_conversations.value.isEmpty()) {
                         _conversationError.value = helpfulMsg
                     }
-                    _isLoadingConversation.value = false
                     delay(20_000) // Auto-retry conversation sync every 20 seconds while offline
                 }
             }

@@ -303,6 +303,7 @@ fun ChatScreen(
     val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
     val isOAuthServerListening by viewModel.isOAuthServerListening.collectAsState()
     val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
+    val isConversationsLoading by viewModel.isConversationsLoading.collectAsState()
     val isLoadingConversation by viewModel.isLoadingConversation.collectAsState()
     val mcpServers by viewModel.mcpServers.collectAsState()
     val isMcpLoading by viewModel.isMcpLoading.collectAsState()
@@ -318,7 +319,8 @@ fun ChatScreen(
 
     // Fresh LazyListState per conversation — initialize directly at bottom so item 0 is NEVER composed
     val convKey = currentConv?.id ?: "empty"
-    val listState = remember(convKey) {
+    val hasInitialFeedItems = feedItems.isNotEmpty()
+    val listState = remember(convKey, hasInitialFeedItems) {
         val initialIdx = if (feedItems.isNotEmpty()) feedItems.size - 1 else 0
         LazyListState(firstVisibleItemIndex = initialIdx)
     }
@@ -601,7 +603,7 @@ fun ChatScreen(
                 conversations = conversations,
                 currentConversationId = currentConv?.id,
                 activeInstances = activeInstances,
-                isLoading = isLoadingConversation,
+                isLoading = isConversationsLoading,
                 errorMessage = conversationError,
                 isStreaming = isStreaming,
                 groupByWorkspace = groupChatsByWorkspace,

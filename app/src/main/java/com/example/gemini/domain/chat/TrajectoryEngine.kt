@@ -137,38 +137,36 @@ class TrajectoryEngine {
         }
     }
 
-    /**
-     * Ingests a streaming update frame from StreamAgentStateUpdates.
-     * Returns the projected list of [ChatTurn]s.
-     */
     fun ingestFrame(frame: AgyStreamFrameDto): List<ChatTurn> {
-        val update = frame.update ?: return getTurns()
+        val update = frame.update
+        val convId = update?.conversationId?.takeIf { it.isNotBlank() }
+            ?: frame.conversationId.takeIf { it.isNotBlank() }
+        val trajId = update?.trajectoryId?.takeIf { it.isNotBlank() }
+            ?: frame.trajectoryId.takeIf { it.isNotBlank() }
+        val status = update?.status?.takeIf { it.isNotBlank() }
+            ?: frame.status
 
-        if (update.conversationId.isNotBlank()) {
-            conversationId = update.conversationId
-        }
-        if (update.trajectoryId.isNotBlank()) {
-            trajectoryId = update.trajectoryId
-        }
+        if (!convId.isNullOrBlank()) conversationId = convId
+        if (!trajId.isNullOrBlank()) trajectoryId = trajId
 
-        val status = update.status
         val daemonRunning = status == CascadeRunStatuses.RUNNING
-        val daemonIdle = status == CascadeRunStatuses.IDLE || update.fullyIdle
+        val daemonIdle = status == CascadeRunStatuses.IDLE || update?.fullyIdle == true || frame.fullyIdle
 
-        val stepsUpdate = update.mainTrajectoryUpdate?.stepsUpdate ?: update.stepsUpdate
-        if (stepsUpdate != null) {
-            val indices = stepsUpdate.indices
-            val steps = stepsUpdate.steps
-            val totalLength = stepsUpdate.totalLength
+        val stepsUpdate = update?.mainTrajectoryUpdate?.stepsUpdate
+            ?: update?.stepsUpdate
+            ?: frame.mainTrajectoryUpdate?.stepsUpdate
+            ?: frame.stepsUpdate
 
-            // Check if this is Chunk 0 (Initial Full Trajectory Sync)
-            val isInitialFullSync = (indices.firstOrNull() == 0) || (completedTurns.isEmpty() && activeStepsMap.isEmpty())
+        val effectiveSteps = stepsUpdate?.steps ?: frame.steps
+        val effectiveIndices = stepsUpdate?.indices ?: effectiveSteps?.indices?.toList() ?: emptyList()
+        val totalLength = stepsUpdate?.totalLength ?: effectiveSteps?.size ?: 0
 
+        if (!effectiveSteps.isNullOrEmpty()) {
+            val isInitialFullSync = (effectiveIndices.firstOrNull() == 0) || (completedTurns.isEmpty() && activeStepsMap.isEmpty())
             if (isInitialFullSync) {
-                ingestInitialFullSync(indices, steps, daemonRunning)
+                ingestInitialFullSync(effectiveIndices, effectiveSteps, daemonRunning)
             } else {
-                // Live incremental delta frames
-                ingestIncrementalDeltas(indices, steps, totalLength)
+                ingestIncrementalDeltas(effectiveIndices, effectiveSteps, totalLength)
             }
         }
 
@@ -210,27 +208,28 @@ class TrajectoryEngine {
         pendingUserTurn = null
 
         var currentTurnBlocks = mutableListOf<TurnBlock>()
-        var currentTurnUserIndex = -1
+        var lastUserStepArrayIndex = -1
         var hasUserInputStep = false
 
         for (i in steps.indices) {
             val stepIndex = indices.getOrNull(i) ?: i
             val step = steps[i]
 
-            if (step.type == CortexStepTypes.USER_INPUT) {
+            if (step.type == CortexStepTypes.USER_INPUT || step.userInput != null) {
                 hasUserInputStep = true
                 // If an assistant turn was building, flush it to completedTurns
                 if (currentTurnBlocks.isNotEmpty()) {
-                    val turnId = "${conversationId}_${currentTurnUserIndex + 1}"
+                    val prevUserStepIdx = if (lastUserStepArrayIndex >= 0) (indices.getOrNull(lastUserStepArrayIndex) ?: lastUserStepArrayIndex) else -1
+                    val turnId = "${conversationId}_${prevUserStepIdx + 1}"
                     completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList()))
                     currentTurnBlocks = mutableListOf()
                 }
 
                 // Add User turn
-                val userText = step.userInput?.userResponse?.ifBlank { step.userInput.content } ?: ""
+                val userText = extractUserText(step.userInput)
                 val attachments = extractUserAttachments(step.userInput, stepIndex)
                 completedTurns.add(ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments))
-                currentTurnUserIndex = stepIndex
+                lastUserStepArrayIndex = i
                 activeTurnStartStep = stepIndex + 1
             } else {
                 // Assistant step
@@ -248,12 +247,14 @@ class TrajectoryEngine {
         }
         if (hasActiveWork && currentTurnBlocks.isNotEmpty()) {
             // Keep trailing blocks in activeStepsMap for live updates
-            for (i in (currentTurnUserIndex + 1) until steps.size) {
+            val startIdx = if (lastUserStepArrayIndex >= 0) lastUserStepArrayIndex + 1 else 0
+            for (i in startIdx until steps.size) {
                 val stepIndex = indices.getOrNull(i) ?: i
                 activeStepsMap[stepIndex] = steps[i]
             }
         } else if (currentTurnBlocks.isNotEmpty()) {
-            val turnId = "${conversationId}_${currentTurnUserIndex + 1}"
+            val lastUserStepIdx = if (lastUserStepArrayIndex >= 0) (indices.getOrNull(lastUserStepArrayIndex) ?: lastUserStepArrayIndex) else -1
+            val turnId = "${conversationId}_${lastUserStepIdx + 1}"
             completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), isStreaming = false))
         }
     }
@@ -272,12 +273,12 @@ class TrajectoryEngine {
             val stepIndex = indices.getOrNull(i) ?: (activeTurnStartStep + i)
             val step = steps[i]
 
-            if (step.type == CortexStepTypes.USER_INPUT) {
+            if (step.type == CortexStepTypes.USER_INPUT || step.userInput != null) {
                 // A new prompt was sent by the user!
                 finalizeActiveTurn()
                 pendingUserTurn = null
 
-                val userText = step.userInput?.userResponse?.ifBlank { step.userInput.content } ?: ""
+                val userText = extractUserText(step.userInput)
                 val attachments = extractUserAttachments(step.userInput, stepIndex)
                 val userTurn = ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments)
                 val existingIdx = completedTurns.indexOfFirst { it is ChatTurn.User && it.stepIndex == stepIndex }
@@ -824,10 +825,24 @@ class TrajectoryEngine {
         )
     }
 
+    private fun extractUserText(userInput: CortexUserInputDto?): String {
+        if (userInput == null) return ""
+        val direct = userInput.userResponse.ifBlank { userInput.content }
+        if (direct.isNotBlank()) return direct
+        val itemsText = userInput.items.mapNotNull { it.text.takeIf { t -> t.isNotBlank() } }.joinToString("\n")
+        return itemsText
+    }
+
     private fun extractUserAttachments(userInput: CortexUserInputDto?, stepIndex: Int): List<ChatAttachment> {
         if (userInput == null) return emptyList()
         val list = mutableListOf<ChatAttachment>()
-        userInput.media.forEachIndexed { idx, media ->
+        val allMedia = mutableListOf<MediaAttachmentDto>()
+        allMedia.addAll(userInput.media)
+        userInput.items.forEach { item ->
+            item.media?.let { allMedia.add(it) }
+        }
+
+        allMedia.forEachIndexed { idx, media ->
             val resolvedMime = media.mimeType.ifBlank { media.mime_type }
             val cleanUri = if (media.uri.startsWith("file://")) media.uri.removePrefix("file://") else media.uri
             val base64Data = media.inlineData.ifBlank { media.data }

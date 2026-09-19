@@ -270,7 +270,8 @@ class AgyHubClient(
     fun callStream(
         endpoint: String,
         jsonPayload: String = "{}",
-        hubUrl: String = AuthPreferences.currentHubUrl
+        hubUrl: String = AuthPreferences.currentHubUrl,
+        headers: Map<String, String> = emptyMap()
     ): Flow<String> = flow {
         val token = getOrFetchCsrfToken(hubUrl)
         val base = hubUrl.trimEnd('/')
@@ -283,6 +284,7 @@ class AgyHubClient(
             .header("Content-Type", "application/grpc-web+json")
             .header("X-Grpc-Web", "1")
             .apply {
+                headers.forEach { (k, v) -> header(k, v) }
                 if (token.isNotBlank()) {
                     header("x-codeium-csrf-token", token)
                 }
@@ -1350,13 +1352,22 @@ data class AgyMediaItem(
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Flow<AgyStreamFrameDto> = flow {
         val payload = JSONObject().apply {
+            put("cascadeId", cascadeId)
             put("conversationId", cascadeId)
             put("subscriberId", "antigem-${System.currentTimeMillis()}")
             put("trajectoryVerbosity", 2)
-            put("initialStepsPageBounds", JSONObject().put("startIndex", 0))
+            put("initialStepsPageBounds", JSONObject().apply {
+                put("startIndex", 0)
+            })
         }.toString()
 
-        callStream("StreamAgentStateUpdates", payload, hubUrl).collect { frameJson ->
+        val customHeaders = mapOf(
+            "x-conversation-id" to cascadeId,
+            "x-cascade-id" to cascadeId,
+            "Connect-Protocol-Version" to "1"
+        )
+
+        callStream("StreamAgentStateUpdates", payload, hubUrl, customHeaders).collect { frameJson ->
             try {
                 val frame = agyJson.decodeFromString<AgyStreamFrameDto>(frameJson)
                 emit(frame)

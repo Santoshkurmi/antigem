@@ -11,7 +11,16 @@ import kotlinx.serialization.json.JsonObject
  */
 @Serializable
 data class AgyStreamFrameDto(
-    val update: AgyMainUpdateDto? = null
+    val update: AgyMainUpdateDto? = null,
+    val mainTrajectoryUpdate: AgyMainTrajectoryUpdateDto? = null,
+    val stepsUpdate: AgyStepsUpdateDto? = null,
+    val steps: List<CortexStepDto>? = null,
+    val conversationId: String = "",
+    val trajectoryId: String = "",
+    val status: String = "",
+    val executableStatus: String = "",
+    val executorLoopStatus: String = "",
+    val fullyIdle: Boolean = false
 )
 
 @Serializable
