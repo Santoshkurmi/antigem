@@ -92,7 +92,9 @@ fun AgentToolCallCard(
     var resolvedImageUri by remember(toolCall.output) {
         mutableStateOf(if (isImageOutput && toolCall.output.isNotBlank()) HubMediaResolver.getResolvedUriSync(context, toolCall.output) else "")
     }
-    var isResolvingImage by remember(toolCall.output) { mutableStateOf(false) }
+    var isResolvingImage by remember(toolCall.output) {
+        mutableStateOf(isImageOutput && toolCall.output.isNotBlank() && !HubMediaResolver.isLocalOrCached(context, toolCall.output))
+    }
     var showFullScreenViewer by remember { mutableStateOf(false) }
 
     LaunchedEffect(toolCall.output, isImageOutput) {
@@ -104,6 +106,7 @@ fun AgentToolCallCard(
                 isResolvingImage = false
             } else {
                 resolvedImageUri = HubMediaResolver.getResolvedUriSync(context, toolCall.output)
+                isResolvingImage = false
             }
         }
     }
@@ -381,6 +384,20 @@ fun AgentToolCallCard(
                     }
                 } else if (toolCall.output.isNotBlank() || isSuccess) {
                     val displayUri = resolvedImageUri.ifBlank { toolCall.output }
+                    val coilData = remember(displayUri) {
+                        val memKey = HubMediaResolver.normalizeKey(toolCall.output)
+                        val cachedBytes = HubMediaResolver.getImageBytes(memKey)
+                        when {
+                            cachedBytes != null -> cachedBytes
+                            displayUri.startsWith("data:image/") -> {
+                                try {
+                                    val b64 = displayUri.substringAfter("base64,")
+                                    android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                                } catch (_: Exception) { displayUri }
+                            }
+                            else -> displayUri
+                        }
+                    }
                     Surface(
                         shape = if (isExpanded) RoundedCornerShape(0.dp) else RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp),
                         color = Color(0xFF090A10),
@@ -418,7 +435,7 @@ fun AgentToolCallCard(
                                 } else {
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
-                                            .data(displayUri)
+                                            .data(coilData)
                                             .crossfade(true)
                                             .build(),
                                         contentDescription = toolCall.command,
