@@ -49,6 +49,9 @@ object TermuxDaemonManager {
     private val _autoStartEnabled = MutableStateFlow(true)
     val autoStartEnabled: StateFlow<Boolean> = _autoStartEnabled.asStateFlow()
 
+    private val _projects = MutableStateFlow<List<ProjectItem>>(emptyList())
+    val projects: StateFlow<List<ProjectItem>> = _projects.asStateFlow()
+
     private val _activeProject = MutableStateFlow<ProjectItem?>(null)
     val activeProject: StateFlow<ProjectItem?> = _activeProject.asStateFlow()
 
@@ -57,6 +60,23 @@ object TermuxDaemonManager {
 
     private val _openTabs = MutableStateFlow<List<OpenTab>>(emptyList())
     val openTabs: StateFlow<List<OpenTab>> = _openTabs.asStateFlow()
+
+    suspend fun loadProjects(conversations: List<com.example.gemini.domain.model.Conversation> = emptyList()): List<ProjectItem> = withContext(Dispatchers.IO) {
+        var daemonList = IdeApiClient.getProjects()
+        if (daemonList.isEmpty()) {
+            val httpUrl = AuthPreferences.currentBridgeHttpUrl
+            val res = com.example.gemini.data.remote.AgyBridgeService().fetchProjects(httpUrl)
+            if (res.isSuccess) {
+                daemonList = res.getOrThrow().map { ProjectItem(it.name, it.path) }
+            }
+        }
+        val merged = mergeProjects(conversations, daemonList, _activeProject.value)
+        _projects.value = merged
+        if (_activeProject.value == null && merged.isNotEmpty()) {
+            _activeProject.value = merged.first()
+        }
+        merged
+    }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var autoReconnectJob: Job? = null
@@ -88,6 +108,9 @@ object TermuxDaemonManager {
                 ?.putString("active_proj_name", project.name)
                 ?.putString("active_proj_path", project.path)
                 ?.apply()
+            scope.launch {
+                IdeApiClient.addSavedProject(project.path, project.name)
+            }
         } else {
             prefs?.edit()
                 ?.remove("active_proj_name")

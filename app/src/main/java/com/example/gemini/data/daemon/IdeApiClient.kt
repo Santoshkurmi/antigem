@@ -14,7 +14,53 @@ import java.util.concurrent.TimeUnit
 
 data class ProjectItem(
     val name: String,
-    val path: String
+    val path: String,
+    val isCustom: Boolean = false
+)
+
+fun mergeProjects(
+    conversations: List<com.example.gemini.domain.model.Conversation> = emptyList(),
+    daemonProjects: List<ProjectItem> = emptyList(),
+    activeProject: ProjectItem? = null
+): List<ProjectItem> {
+    val list = mutableListOf<ProjectItem>()
+    val seenPaths = mutableSetOf<String>()
+
+    // 1. Add conversations workspace paths (from AGY)
+    conversations.forEach { conv ->
+        if (conv.workspaceUri.isNotBlank()) {
+            val path = conv.workspaceUri.removePrefix("file://").trimEnd('/')
+            if (path.isNotBlank() && seenPaths.add(path)) {
+                val name = java.io.File(path).name.ifBlank { "Workspace" }
+                list.add(ProjectItem(name = name, path = path, isCustom = false))
+            }
+        }
+    }
+
+    // 2. Add daemon & saved projects
+    daemonProjects.forEach { proj ->
+        if (proj.path.isNotBlank() && seenPaths.add(proj.path)) {
+            list.add(proj)
+        }
+    }
+
+    // 3. Add active project if not already present
+    activeProject?.let {
+        if (it.path.isNotBlank() && seenPaths.add(it.path)) {
+            list.add(it)
+        }
+    }
+
+    return list
+}
+
+data class FsItemNode(
+    val name: String,
+    val path: String,
+    val isDir: Boolean,
+    val size: Long = 0,
+    val modTime: Long = 0,
+    val ext: String = ""
 )
 
 data class FileNode(
@@ -35,7 +81,8 @@ data class FsBrowseResult(
     val currentPath: String = "",
     val parentPath: String = "",
     val homePath: String = "",
-    val directories: List<ProjectItem> = emptyList()
+    val directories: List<ProjectItem> = emptyList(),
+    val items: List<FsItemNode> = emptyList()
 )
 
 object IdeApiClient {
@@ -84,7 +131,8 @@ object IdeApiClient {
                         list.add(
                             ProjectItem(
                                 name = obj.getString("name"),
-                                path = obj.getString("path")
+                                path = obj.getString("path"),
+                                isCustom = obj.optBoolean("isCustom", false)
                             )
                         )
                     }
@@ -96,7 +144,8 @@ object IdeApiClient {
                         list.add(
                             ProjectItem(
                                 name = obj.getString("name"),
-                                path = obj.getString("path")
+                                path = obj.getString("path"),
+                                isCustom = obj.optBoolean("isCustom", false)
                             )
                         )
                     }
@@ -109,11 +158,47 @@ object IdeApiClient {
         }
     }
 
-    suspend fun createProject(name: String, template: String): ProjectItem? = withContext(Dispatchers.IO) {
+    suspend fun addSavedProject(path: String, name: String = ""): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("path", path)
+                put("name", name)
+            }.toString()
+            val request = Request.Builder()
+                .url("$baseUrl/api/projects/add")
+                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+            client.newCall(request).execute().use { it.isSuccessful }
+        } catch (e: Exception) {
+            Log.e(TAG, "addSavedProject failed: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun removeSavedProject(path: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("path", path)
+            }.toString()
+            val request = Request.Builder()
+                .url("$baseUrl/api/projects/remove")
+                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+            client.newCall(request).execute().use { it.isSuccessful }
+        } catch (e: Exception) {
+            Log.e(TAG, "removeSavedProject failed: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun createProject(name: String, template: String, path: String? = null): ProjectItem? = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
                 put("name", name)
                 put("template", template)
+                if (!path.isNullOrBlank()) {
+                    put("path", path)
+                }
             }.toString()
 
             val request = Request.Builder()
@@ -154,7 +239,22 @@ object IdeApiClient {
                     val d = dirsArr.getJSONObject(i)
                     dirs.add(ProjectItem(d.optString("name"), d.optString("path")))
                 }
-                FsBrowseResult(current, parent, home, dirs)
+                val itemsArr = obj.optJSONArray("items") ?: JSONArray()
+                val items = mutableListOf<FsItemNode>()
+                for (i in 0 until itemsArr.length()) {
+                    val itemObj = itemsArr.getJSONObject(i)
+                    items.add(
+                        FsItemNode(
+                            name = itemObj.optString("name"),
+                            path = itemObj.optString("path"),
+                            isDir = itemObj.optBoolean("isDir"),
+                            size = itemObj.optLong("size", 0),
+                            modTime = itemObj.optLong("modTime", 0),
+                            ext = itemObj.optString("ext", "")
+                        )
+                    )
+                }
+                FsBrowseResult(current, parent, home, dirs, items)
             }
         } catch (e: Exception) {
             Log.e(TAG, "browseDirectory failed: ${e.message}")
@@ -325,6 +425,23 @@ object IdeApiClient {
                 .build()
             client.newCall(request).execute().use { it.isSuccessful }
         } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun copyFileOrDir(sourcePath: String, targetPath: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("sourcePath", sourcePath)
+                put("targetPath", targetPath)
+            }.toString()
+            val request = Request.Builder()
+                .url("$baseUrl/api/file/copy")
+                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+            client.newCall(request).execute().use { it.isSuccessful }
+        } catch (e: Exception) {
+            Log.e(TAG, "copyFileOrDir failed: ${e.message}")
             false
         }
     }

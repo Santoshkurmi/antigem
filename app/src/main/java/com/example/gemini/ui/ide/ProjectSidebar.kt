@@ -38,6 +38,8 @@ fun ProjectSidebar(
     fileTree: List<FileNode>,
     activeFilePath: String?,
     onSelectProject: (ProjectItem) -> Unit,
+    onOpenFileManager: () -> Unit = {},
+    onRemoveProject: (ProjectItem) -> Unit = {},
     onCreateProjectRequested: () -> Unit,
     onOpenFile: (FileNode) -> Unit,
     onOpenFileDiff: (filePath: String, isStaged: Boolean) -> Unit = { _, _ -> },
@@ -122,13 +124,46 @@ fun ProjectSidebar(
                         )
                     } else {
                         projects.forEach { proj ->
+                            val isSelected = proj.path == activeProject?.path
                             DropdownMenuItem(
                                 text = {
-                                    Text(
-                                        text = proj.name,
-                                        fontWeight = if (proj.path == activeProject?.path) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (proj.path == activeProject?.path) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = proj.name,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = proj.path,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        if (proj.isCustom) {
+                                            IconButton(
+                                                onClick = {
+                                                    onRemoveProject(proj)
+                                                },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Close,
+                                                    contentDescription = "Remove project",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                 },
                                 onClick = {
                                     projectsDropdownExpanded = false
@@ -139,6 +174,16 @@ fun ProjectSidebar(
                     }
 
                     HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("Browse / File Manager...", color = MaterialTheme.colorScheme.primary) },
+                        leadingIcon = {
+                            Icon(Icons.Default.FolderOpen, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        },
+                        onClick = {
+                            projectsDropdownExpanded = false
+                            onOpenFileManager()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("+ New Project", color = MaterialTheme.colorScheme.primary) },
                         leadingIcon = {
@@ -273,6 +318,17 @@ fun ProjectSidebar(
                         Icon(
                             imageVector = Icons.Default.CreateNewFolder,
                             contentDescription = "New Folder",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = onOpenFileManager,
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FolderOpen,
+                            contentDescription = "File Manager",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(15.dp)
                         )

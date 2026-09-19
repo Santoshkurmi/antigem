@@ -103,7 +103,7 @@ import com.example.gemini.ui.components.LocalFileLinkHandler
 import com.example.gemini.ui.components.FileDetailsDialog
 import com.example.gemini.ui.components.MarkdownDocViewerModal
 import com.example.gemini.ui.components.ProjectPickerDialog
-import com.example.gemini.ui.components.WorkspaceFolderBrowserDialog
+import com.example.gemini.ui.components.FileManagerDialog
 import com.example.gemini.ui.components.ToolCallExpansionCache
 import com.example.gemini.ui.components.CodeBlockExpansionCache
 import java.io.File
@@ -478,71 +478,17 @@ fun ChatScreen(
     val currentQuota = quotas.find { it.modelId == selectedModelId }
 
     val activeChatProject by TermuxDaemonManager.activeProject.collectAsState()
-    var chatProjectsList by remember { mutableStateOf<List<ProjectItem>>(emptyList()) }
+    val usedProjects by TermuxDaemonManager.projects.collectAsState()
     var showProjectDropdown by remember { mutableStateOf(false) }
     var chatProjectFiles by remember { mutableStateOf<List<com.example.gemini.data.daemon.FileNode>>(emptyList()) }
 
-    val usedProjects = remember(conversations, chatProjectsList, activeChatProject) {
-        val list = mutableListOf<ProjectItem>()
-        val seenPaths = mutableSetOf<String>()
-
-        conversations.forEach { conv ->
-            if (conv.workspaceUri.isNotBlank()) {
-                val path = conv.workspaceUri.removePrefix("file://").trimEnd('/')
-                if (path.isNotBlank() && seenPaths.add(path)) {
-                    val name = java.io.File(path).name.ifBlank { "Workspace" }
-                    list.add(ProjectItem(name, path))
-                }
-            }
-        }
-
-        chatProjectsList.forEach { proj ->
-            if (proj.path.isNotBlank() && seenPaths.add(proj.path)) {
-                list.add(proj)
-            }
-        }
-
-        activeChatProject?.let {
-            if (it.path.isNotBlank() && seenPaths.add(it.path)) {
-                list.add(it)
-            }
-        }
-        list
-    }
-
     LaunchedEffect(Unit) {
-        scope.launch {
-            var list = IdeApiClient.getProjects()
-            if (list.isEmpty()) {
-                val httpUrl = AuthPreferences.currentBridgeHttpUrl
-                val res = com.example.gemini.data.remote.AgyBridgeService().fetchProjects(httpUrl)
-                if (res.isSuccess) {
-                    list = res.getOrThrow().map { ProjectItem(it.name, it.path) }
-                }
-            }
-            chatProjectsList = list
-            if (activeChatProject == null && list.isNotEmpty()) {
-                TermuxDaemonManager.setActiveProject(list.first())
-            }
-        }
+        TermuxDaemonManager.loadProjects(conversations)
     }
 
     LaunchedEffect(Unit) {
         TermuxDaemonManager.serverReconnectedEvent.collect {
-            var list = IdeApiClient.getProjects()
-            if (list.isEmpty()) {
-                val httpUrl = AuthPreferences.currentBridgeHttpUrl
-                val res = com.example.gemini.data.remote.AgyBridgeService().fetchProjects(httpUrl)
-                if (res.isSuccess) {
-                    list = res.getOrThrow().map { ProjectItem(it.name, it.path) }
-                }
-            }
-            if (list.isNotEmpty()) {
-                chatProjectsList = list
-                if (activeChatProject == null) {
-                    TermuxDaemonManager.setActiveProject(list.first())
-                }
-            }
+            TermuxDaemonManager.loadProjects(conversations)
         }
     }
 
@@ -1825,14 +1771,19 @@ fun ChatScreen(
                 showProjectPickerDialog = false
                 showWorkspaceFolderBrowserDialog = true
             },
+            onRefresh = {
+                scope.launch {
+                    TermuxDaemonManager.loadProjects(conversations)
+                }
+            },
             onDismiss = { showProjectPickerDialog = false }
         )
     }
 
     if (showWorkspaceFolderBrowserDialog) {
-        WorkspaceFolderBrowserDialog(
+        FileManagerDialog(
             initialPath = "~",
-            onSelectFolder = { selectedProj ->
+            onOpenAsProject = { selectedProj ->
                 showWorkspaceFolderBrowserDialog = false
                 TermuxDaemonManager.setActiveProject(selectedProj)
                 viewModel.onProjectChanged(selectedProj.path)

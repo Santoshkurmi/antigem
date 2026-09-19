@@ -36,21 +36,28 @@ import com.example.gemini.data.daemon.OpenTab
 import com.example.gemini.data.daemon.ProjectItem
 import com.example.gemini.data.daemon.TermuxDaemonManager
 import com.example.gemini.theme.ClaudeTerracotta
+import com.example.gemini.ui.components.FileManagerDialog
+import com.example.gemini.data.daemon.mergeProjects
+import com.example.gemini.data.preferences.AuthPreferences
+import com.example.gemini.ui.chat.ChatViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IdeScreen(
+    viewModel: ChatViewModel? = null,
     onNavigateToChat: () -> Unit,
     onExecuteRunCommand: (command: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    var projects by remember { mutableStateOf<List<ProjectItem>>(emptyList()) }
+    val conversations by (viewModel?.conversations ?: MutableStateFlow(emptyList())).collectAsState()
+    val allProjects by TermuxDaemonManager.projects.collectAsState()
     val activeProject by TermuxDaemonManager.activeProject.collectAsState()
     val openTabs by TermuxDaemonManager.openTabs.collectAsState()
     val activeTabPath by TermuxDaemonManager.activeTabPath.collectAsState()
@@ -58,12 +65,12 @@ fun IdeScreen(
     var fileTree by remember { mutableStateOf<List<FileNode>>(emptyList()) }
     var isWordWrap by remember { mutableStateOf(false) }
     var showNewProjectDialog by remember { mutableStateOf(false) }
+    var showFileManager by remember { mutableStateOf(false) }
 
     fun refreshProjectsAndTree() {
         coroutineScope.launch {
             TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
-            val projs = IdeApiClient.getProjects()
-            projects = projs
+            val projs = TermuxDaemonManager.loadProjects(conversations)
             val current = TermuxDaemonManager.activeProject.value
             if (current != null) {
                 fileTree = IdeApiClient.getFileTree(current.path)
@@ -126,15 +133,26 @@ fun IdeScreen(
                 modifier = Modifier.width(300.dp)
             ) {
                 ProjectSidebar(
-                    projects = projects,
+                    projects = allProjects,
                     activeProject = activeProject,
                     fileTree = fileTree,
                     activeFilePath = activeTabPath,
                     onSelectProject = { proj ->
                         TermuxDaemonManager.setActiveProject(proj)
+                        viewModel?.onProjectChanged(proj.path)
+                    },
+                    onOpenFileManager = {
+                        showFileManager = true
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    onRemoveProject = { proj ->
+                        coroutineScope.launch {
+                            IdeApiClient.removeSavedProject(proj.path)
+                            refreshProjectsAndTree()
+                        }
                     },
                     onCreateProjectRequested = {
-                        showNewProjectDialog = true
+                        showFileManager = true
                         coroutineScope.launch { drawerState.close() }
                     },
                     onOpenFile = { node ->
@@ -421,56 +439,35 @@ fun IdeScreen(
                 }
             }
 
-            // Create New Project Modal Dialog
-            if (showNewProjectDialog) {
-                var projectName by remember { mutableStateOf("") }
-                var projectPath by remember { mutableStateOf("/data/data/com.termux/files/home/") }
-
-                AlertDialog(
-                    onDismissRequest = { showNewProjectDialog = false },
-                    title = { Text("Create New Project") },
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = projectName,
-                                onValueChange = { projectName = it },
-                                label = { Text("Project Name") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            OutlinedTextField(
-                                value = projectPath,
-                                onValueChange = { projectPath = it },
-                                label = { Text("Folder Path") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+            // Full-Screen File Manager & Project Selector Dialog
+            if (showFileManager) {
+                val initialBrowsePath = remember(activeProject?.path) {
+                    val p = activeProject?.path
+                    if (!p.isNullOrBlank()) {
+                        val parent = java.io.File(p).parent
+                        if (!parent.isNullOrBlank() && parent != "/") parent else p
+                    } else "~"
+                }
+                FileManagerDialog(
+                    initialPath = initialBrowsePath,
+                    onOpenAsProject = { proj ->
+                        showFileManager = false
+                        TermuxDaemonManager.setActiveProject(proj)
+                        viewModel?.onProjectChanged(proj.path)
+                        refreshProjectsAndTree()
+                    },
+                    onOpenFileInEditor = { path, name ->
+                        coroutineScope.launch {
+                            val content = IdeApiClient.readFile(path) ?: ""
+                            TermuxDaemonManager.openOrSelectTab(path, name, content)
+                            showFileManager = false
                         }
                     },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                if (projectName.isNotBlank()) {
-                                    val fullPath = if (projectPath.endsWith("/")) "$projectPath$projectName" else "$projectPath/$projectName"
-                                    coroutineScope.launch {
-                                        IdeApiClient.createFileOrDir(fullPath, isDir = true)
-                                        showNewProjectDialog = false
-                                        refreshProjectsAndTree()
-                                    }
-                                }
-                            }
-                        ) {
-                            Text("Create")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showNewProjectDialog = false }) {
-                            Text("Cancel")
-                        }
-                    }
+                    onDismiss = { showFileManager = false }
                 )
             }
         }
     }
 }
 }
+

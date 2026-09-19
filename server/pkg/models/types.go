@@ -147,8 +147,19 @@ type UploadRequest struct {
 
 // ProjectSummary represents a discovered workspace project.
 type ProjectSummary struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	IsCustom bool   `json:"isCustom,omitempty"`
+}
+
+// FsItemNode represents an entry in the filesystem browser (file or directory).
+type FsItemNode struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	IsDir   bool   `json:"isDir"`
+	Size    int64  `json:"size"`
+	ModTime int64  `json:"modTime"` // unix millis
+	Ext     string `json:"ext,omitempty"`
 }
 
 // FsBrowseResult represents directory navigation contents.
@@ -157,11 +168,24 @@ type FsBrowseResult struct {
 	ParentPath  string           `json:"parentPath"`
 	HomePath    string           `json:"homePath"`
 	Directories []ProjectSummary `json:"directories"`
+	Items       []FsItemNode     `json:"items"`
 }
 
 // MkdirReq represents a request to create a directory.
 type MkdirReq struct {
 	Path string `json:"path"`
+}
+
+// FileCopyReq represents a file or folder copy request.
+type FileCopyReq struct {
+	SourcePath string `json:"sourcePath"`
+	TargetPath string `json:"targetPath"`
+}
+
+// ProjectOpReq represents add or remove saved project requests.
+type ProjectOpReq struct {
+	Path string `json:"path"`
+	Name string `json:"name,omitempty"`
 }
 
 // SkillInfo holds parsed skill frontmatter.
@@ -184,6 +208,7 @@ type FileNode struct {
 type CreateProjectReq struct {
 	Name     string `json:"name"`
 	Template string `json:"template"` // python, node, web, kotlin, cpp, blank
+	Path     string `json:"path,omitempty"` // custom parent or target directory
 }
 
 // FileSaveReq represents an atomic file save request.

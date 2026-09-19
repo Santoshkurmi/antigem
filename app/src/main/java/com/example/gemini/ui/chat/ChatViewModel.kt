@@ -1196,7 +1196,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             knownDaemonCascadeIds.add(conv.id)
                         }
 
-                        _conversations.value = currentMap.values.sortedByDescending { it.updatedAt }
+                        val sortedConvs = currentMap.values.sortedByDescending { it.updatedAt }
+                        _conversations.value = sortedConvs
+                        com.example.gemini.data.daemon.TermuxDaemonManager.loadProjects(sortedConvs)
 
                         // Automatically synchronize active conversation title and metadata from daemon
                         if (activeId != null) {

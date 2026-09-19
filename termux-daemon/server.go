@@ -12,13 +12,15 @@ import (
 )
 
 type ProjectItem struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	IsCustom bool   `json:"isCustom,omitempty"`
 }
 
 type CreateProjectReq struct {
 	Name     string `json:"name"`
 	Template string `json:"template"` // python, node, web, kotlin, cpp, blank
+	Path     string `json:"path,omitempty"`
 }
 
 type FileNode struct {
@@ -47,10 +49,29 @@ type FileOpReq struct {
 	IsDir   bool   `json:"isDir,omitempty"`
 }
 
+type FileCopyReq struct {
+	SourcePath string `json:"sourcePath"`
+	TargetPath string `json:"targetPath"`
+}
+
+type ProjectOpReq struct {
+	Path string `json:"path"`
+	Name string `json:"name,omitempty"`
+}
+
 type SearchMatch struct {
 	Path       string `json:"path"`
 	LineNumber int    `json:"lineNumber"`
 	LineText   string `json:"lineText"`
+}
+
+type FsItemNode struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	IsDir   bool   `json:"isDir"`
+	Size    int64  `json:"size"`
+	ModTime int64  `json:"modTime"`
+	Ext     string `json:"ext,omitempty"`
 }
 
 type FsBrowseResult struct {
@@ -58,6 +79,7 @@ type FsBrowseResult struct {
 	ParentPath  string        `json:"parentPath"`
 	HomePath    string        `json:"homePath"`
 	Directories []ProjectItem `json:"directories"`
+	Items       []FsItemNode  `json:"items"`
 }
 
 type MkdirReq struct {
@@ -71,6 +93,24 @@ func main() {
 	}
 	projectsDir := filepath.Join(homeDir, "projects")
 	_ = os.MkdirAll(projectsDir, 0755)
+
+	savedProjectsFile := filepath.Join(homeDir, ".antigem", "projects.json")
+
+	loadSavedProjects := func() []ProjectItem {
+		data, err := os.ReadFile(savedProjectsFile)
+		if err != nil {
+			return []ProjectItem{}
+		}
+		var list []ProjectItem
+		_ = json.Unmarshal(data, &list)
+		return list
+	}
+
+	saveProjects := func(list []ProjectItem) {
+		_ = os.MkdirAll(filepath.Dir(savedProjectsFile), 0755)
+		data, _ := json.MarshalIndent(list, "", "  ")
+		_ = os.WriteFile(savedProjectsFile, data, 0644)
+	}
 
 	// Enable CORS for webview/localhost connections
 	corsMiddleware := func(next http.HandlerFunc) http.HandlerFunc {
@@ -98,27 +138,103 @@ func main() {
 		w.Write([]byte(`{"loginUrl":"","active":false}`))
 	}))
 
-	// 2. List Projects
+	// 2. List Projects (Saved + ~/projects)
 	http.HandleFunc("/api/projects", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		entries, err := os.ReadDir(projectsDir)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
+		seen := make(map[string]bool)
 		var projects []ProjectItem
-		for _, entry := range entries {
-			if entry.IsDir() {
+
+		// 1. Saved projects
+		for _, p := range loadSavedProjects() {
+			clean := filepath.Clean(p.Path)
+			if !seen[clean] {
+				seen[clean] = true
+				name := p.Name
+				if name == "" {
+					name = filepath.Base(clean)
+				}
 				projects = append(projects, ProjectItem{
-					Name: entry.Name(),
-					Path: filepath.Join(projectsDir, entry.Name()),
+					Name:     name,
+					Path:     clean,
+					IsCustom: true,
 				})
 			}
 		}
+
+		// 2. ~/projects subdirectories
+		entries, err := os.ReadDir(projectsDir)
+		if err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+					p := filepath.Join(projectsDir, entry.Name())
+					clean := filepath.Clean(p)
+					if !seen[clean] {
+						seen[clean] = true
+						projects = append(projects, ProjectItem{
+							Name:     entry.Name(),
+							Path:     clean,
+							IsCustom: false,
+						})
+					}
+				}
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(projects)
 	}))
 
-	// 2.1 Filesystem Directory Browser (starting from ~)
+	// 2.1 Add Saved Project
+	http.HandleFunc("/api/projects/add", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		var req ProjectOpReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Path) == "" {
+			http.Error(w, "Valid path required", 400)
+			return
+		}
+		clean := filepath.Clean(req.Path)
+		name := strings.TrimSpace(req.Name)
+		if name == "" {
+			name = filepath.Base(clean)
+		}
+		list := loadSavedProjects()
+		var updated []ProjectItem
+		found := false
+		for _, p := range list {
+			if filepath.Clean(p.Path) == clean {
+				updated = append(updated, ProjectItem{Name: name, Path: clean})
+				found = true
+			} else {
+				updated = append(updated, p)
+			}
+		}
+		if !found {
+			updated = append([]ProjectItem{{Name: name, Path: clean}}, updated...)
+		}
+		saveProjects(updated)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "name": name, "path": clean})
+	}))
+
+	// 2.2 Remove Saved Project
+	http.HandleFunc("/api/projects/remove", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		var req ProjectOpReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Path) == "" {
+			http.Error(w, "Valid path required", 400)
+			return
+		}
+		clean := filepath.Clean(req.Path)
+		list := loadSavedProjects()
+		var updated []ProjectItem
+		for _, p := range list {
+			if filepath.Clean(p.Path) != clean {
+				updated = append(updated, p)
+			}
+		}
+		saveProjects(updated)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "path": clean})
+	}))
+
+	// 2.3 Filesystem Directory Browser (returning files and folders with metadata)
 	http.HandleFunc("/api/fs/browse", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		dir := strings.TrimSpace(r.URL.Query().Get("dir"))
 		if dir == "" || dir == "~" {
@@ -130,26 +246,62 @@ func main() {
 
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), 500)
+			if os.IsNotExist(err) {
+				http.Error(w, fmt.Sprintf("Directory does not exist: %s", dir), http.StatusNotFound)
+				return
+			}
+			http.Error(w, fmt.Sprintf("Failed to read directory: %v", err), http.StatusInternalServerError)
 			return
 		}
 
 		var subdirs []ProjectItem
+		var items []FsItemNode
+
 		for _, e := range entries {
-			if e.IsDir() {
-				name := e.Name()
-				if strings.HasPrefix(name, ".") {
-					continue // hide hidden folders by default
-				}
+			name := e.Name()
+			if strings.HasPrefix(name, ".") && name != ".gitignore" && name != ".env" {
+				continue // hide hidden folders by default except gitignore/env
+			}
+			fullPath := filepath.Join(dir, name)
+			info, _ := e.Info()
+			var size int64
+			var modTime int64
+			if info != nil {
+				size = info.Size()
+				modTime = info.ModTime().UnixMilli()
+			}
+			isDir := e.IsDir()
+			ext := ""
+			if !isDir {
+				ext = strings.ToLower(filepath.Ext(name))
+			}
+
+			if isDir {
 				subdirs = append(subdirs, ProjectItem{
 					Name: name,
-					Path: filepath.Join(dir, name),
+					Path: fullPath,
 				})
 			}
+
+			items = append(items, FsItemNode{
+				Name:    name,
+				Path:    fullPath,
+				IsDir:   isDir,
+				Size:    size,
+				ModTime: modTime,
+				Ext:     ext,
+			})
 		}
 
 		sort.Slice(subdirs, func(i, j int) bool {
 			return strings.ToLower(subdirs[i].Name) < strings.ToLower(subdirs[j].Name)
+		})
+
+		sort.Slice(items, func(i, j int) bool {
+			if items[i].IsDir != items[j].IsDir {
+				return items[i].IsDir
+			}
+			return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
 		})
 
 		parent := filepath.Dir(dir)
@@ -162,12 +314,13 @@ func main() {
 			ParentPath:  parent,
 			HomePath:    homeDir,
 			Directories: subdirs,
+			Items:       items,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
 	}))
 
-	// 2.2 Create Directory
+	// 2.4 Create Directory
 	http.HandleFunc("/api/fs/mkdir", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		var req MkdirReq
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -197,7 +350,7 @@ func main() {
 		})
 	}))
 
-	// 3. Create Project from Template
+	// 3. Create Project from Template (in projectsDir or custom target dir)
 	http.HandleFunc("/api/projects/create", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		var req CreateProjectReq
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -211,7 +364,18 @@ func main() {
 			return
 		}
 
-		targetDir := filepath.Join(projectsDir, projectName)
+		var targetDir string
+		if strings.TrimSpace(req.Path) != "" {
+			base := filepath.Clean(req.Path)
+			if filepath.Base(base) == projectName {
+				targetDir = base
+			} else {
+				targetDir = filepath.Join(base, projectName)
+			}
+		} else {
+			targetDir = filepath.Join(projectsDir, projectName)
+		}
+
 		if err := os.MkdirAll(targetDir, 0755); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -231,12 +395,26 @@ func main() {
 			_ = os.WriteFile(filepath.Join(targetDir, "app.js"), []byte("console.log('Web App Ready');\n"), 0644)
 		case "cpp":
 			_ = os.WriteFile(filepath.Join(targetDir, "main.cpp"), []byte("#include <iostream>\n\nint main() {\n    std::cout << \"Hello from C++ IDE!\" << std::endl;\n    return 0;\n}\n"), 0644)
+		case "kotlin":
+			_ = os.WriteFile(filepath.Join(targetDir, "Main.kt"), []byte("fun main() {\n    println(\"Hello from Kotlin IDE!\")\n}\n"), 0644)
 		default:
 			_ = os.WriteFile(filepath.Join(targetDir, "README.md"), []byte("# "+projectName+"\n"), 0644)
 		}
 
+		// Auto-save to saved projects
+		list := loadSavedProjects()
+		var updated []ProjectItem
+		cleanTarget := filepath.Clean(targetDir)
+		for _, p := range list {
+			if filepath.Clean(p.Path) != cleanTarget {
+				updated = append(updated, p)
+			}
+		}
+		updated = append([]ProjectItem{{Name: projectName, Path: cleanTarget}}, updated...)
+		saveProjects(updated)
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ProjectItem{Name: projectName, Path: targetDir})
+		json.NewEncoder(w).Encode(ProjectItem{Name: projectName, Path: cleanTarget})
 	}))
 
 	// 4. File Tree API
@@ -407,6 +585,21 @@ func main() {
 		w.Write([]byte(`{"success":true}`))
 	}))
 
+	// 10.1 Copy File / Folder
+	http.HandleFunc("/api/file/copy", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		var req FileCopyReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.SourcePath == "" || req.TargetPath == "" {
+			http.Error(w, "sourcePath and targetPath required", 400)
+			return
+		}
+		if err := copyRecursive(req.SourcePath, req.TargetPath); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true}`))
+	}))
+
 	// 11. Ripgrep Search Engine
 	http.HandleFunc("/api/search", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query().Get("q")
@@ -495,4 +688,35 @@ func buildFileTree(dir string, currentDepth int, maxDepth int) ([]FileNode, erro
 	})
 
 	return nodes, nil
+}
+
+func copyRecursive(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		if err := os.MkdirAll(dst, 0755); err != nil {
+			return err
+		}
+		entries, err := os.ReadDir(src)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			s := filepath.Join(src, e.Name())
+			d := filepath.Join(dst, e.Name())
+			if err := copyRecursive(s, d); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	_ = os.MkdirAll(filepath.Dir(dst), 0755)
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0644)
 }

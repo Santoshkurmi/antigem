@@ -379,26 +379,146 @@ func (h *Handler) SystemPromptHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) getSavedProjectsPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = h.Cfg.HomeDir
+	}
+	return filepath.Join(home, ".antigem", "projects.json")
+}
+
+func (h *Handler) loadSavedProjects() []models.ProjectSummary {
+	filePath := h.getSavedProjectsPath()
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return []models.ProjectSummary{}
+	}
+	var list []models.ProjectSummary
+	_ = json.Unmarshal(data, &list)
+	return list
+}
+
+func (h *Handler) saveProjectsToDisk(list []models.ProjectSummary) error {
+	filePath := h.getSavedProjectsPath()
+	_ = os.MkdirAll(filepath.Dir(filePath), 0755)
+	data, err := json.MarshalIndent(list, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, data, 0644)
+}
+
 func (h *Handler) ProjectsHandler(w http.ResponseWriter, r *http.Request) {
+	seenPaths := make(map[string]bool)
 	var projects []models.ProjectSummary
+
+	// 1. Saved projects from ~/.antigem/projects.json
+	saved := h.loadSavedProjects()
+	for _, p := range saved {
+		clean := filepath.Clean(p.Path)
+		if !seenPaths[clean] {
+			seenPaths[clean] = true
+			name := p.Name
+			if name == "" {
+				name = filepath.Base(clean)
+			}
+			projects = append(projects, models.ProjectSummary{
+				Name:     name,
+				Path:     clean,
+				IsCustom: true,
+			})
+		}
+	}
+
+	// 2. Discover ~/projects subdirectories
 	entries, err := os.ReadDir(h.Cfg.ProjectsBaseDir)
 	if err == nil {
 		for _, e := range entries {
-			if e.IsDir() {
-				projects = append(projects, models.ProjectSummary{
-					Name: e.Name(),
-					Path: filepath.Join(h.Cfg.ProjectsBaseDir, e.Name()),
-				})
+			if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+				p := filepath.Join(h.Cfg.ProjectsBaseDir, e.Name())
+				clean := filepath.Clean(p)
+				if !seenPaths[clean] {
+					seenPaths[clean] = true
+					projects = append(projects, models.ProjectSummary{
+						Name:     e.Name(),
+						Path:     clean,
+						IsCustom: false,
+					})
+				}
 			}
 		}
 	}
-	if len(projects) == 0 {
+
+	// 3. Fallback workspace
+	if len(projects) == 0 && h.Cfg.WorkspaceDir != "" {
+		clean := filepath.Clean(h.Cfg.WorkspaceDir)
 		projects = append(projects, models.ProjectSummary{
-			Name: "gemini",
-			Path: h.Cfg.WorkspaceDir,
+			Name:     filepath.Base(clean),
+			Path:     clean,
+			IsCustom: false,
 		})
 	}
+
 	writeJSON(w, http.StatusOK, projects)
+}
+
+func (h *Handler) ProjectsAddHandler(w http.ResponseWriter, r *http.Request) {
+	var req models.ProjectOpReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Path) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "valid path required"})
+		return
+	}
+	clean := filepath.Clean(expandHome(strings.TrimSpace(req.Path)))
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = filepath.Base(clean)
+	}
+
+	saved := h.loadSavedProjects()
+	var updated []models.ProjectSummary
+	found := false
+	for _, p := range saved {
+		if filepath.Clean(p.Path) == clean {
+			updated = append(updated, models.ProjectSummary{Name: name, Path: clean})
+			found = true
+		} else {
+			updated = append(updated, p)
+		}
+	}
+	if !found {
+		updated = append([]models.ProjectSummary{{Name: name, Path: clean}}, updated...)
+	}
+
+	if err := h.saveProjectsToDisk(updated); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "name": name, "path": clean})
+}
+
+func (h *Handler) ProjectsRemoveHandler(w http.ResponseWriter, r *http.Request) {
+	var req models.ProjectOpReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Path) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "valid path required"})
+		return
+	}
+	clean := filepath.Clean(expandHome(strings.TrimSpace(req.Path)))
+
+	saved := h.loadSavedProjects()
+	var updated []models.ProjectSummary
+	for _, p := range saved {
+		if filepath.Clean(p.Path) != clean {
+			updated = append(updated, p)
+		}
+	}
+
+	if err := h.saveProjectsToDisk(updated); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": clean})
 }
 
 func (h *Handler) CreateProjectHandler(w http.ResponseWriter, r *http.Request) {
@@ -414,7 +534,18 @@ func (h *Handler) CreateProjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetDir := filepath.Join(h.Cfg.ProjectsBaseDir, projectName)
+	var targetDir string
+	if strings.TrimSpace(req.Path) != "" {
+		base := filepath.Clean(expandHome(strings.TrimSpace(req.Path)))
+		if filepath.Base(base) == projectName {
+			targetDir = base
+		} else {
+			targetDir = filepath.Join(base, projectName)
+		}
+	} else {
+		targetDir = filepath.Join(h.Cfg.ProjectsBaseDir, projectName)
+	}
+
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -439,10 +570,22 @@ func (h *Handler) CreateProjectHandler(w http.ResponseWriter, r *http.Request) {
 		_ = os.WriteFile(filepath.Join(targetDir, "README.md"), []byte("# "+projectName+"\n"), 0644)
 	}
 
-	writeJSON(w, http.StatusOK, models.ProjectSummary{Name: projectName, Path: targetDir})
+	// Auto-save to saved projects list
+	saved := h.loadSavedProjects()
+	var updated []models.ProjectSummary
+	cleanTarget := filepath.Clean(targetDir)
+	for _, p := range saved {
+		if filepath.Clean(p.Path) != cleanTarget {
+			updated = append(updated, p)
+		}
+	}
+	updated = append([]models.ProjectSummary{{Name: projectName, Path: cleanTarget}}, updated...)
+	_ = h.saveProjectsToDisk(updated)
+
+	writeJSON(w, http.StatusOK, models.ProjectSummary{Name: projectName, Path: cleanTarget})
 }
 
-// FsBrowseHandler handles directory browsing starting from user home.
+// FsBrowseHandler handles directory browsing returning both folders and files.
 func (h *Handler) FsBrowseHandler(w http.ResponseWriter, r *http.Request) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -459,26 +602,69 @@ func (h *Handler) FsBrowseHandler(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusNotFound, map[string]string{
+				"error":    fmt.Sprintf("Directory does not exist: %s", dir),
+				"homePath": homeDir,
+			})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error":    err.Error(),
+			"homePath": homeDir,
+		})
 		return
 	}
 
 	var subdirs []models.ProjectSummary
+	var items []models.FsItemNode
+
 	for _, e := range entries {
-		if e.IsDir() {
-			name := e.Name()
-			if strings.HasPrefix(name, ".") {
-				continue // skip hidden folders
-			}
+		name := e.Name()
+		if strings.HasPrefix(name, ".") && name != ".gitignore" && name != ".env" {
+			continue // skip hidden files except important configs
+		}
+		fullPath := filepath.Join(dir, name)
+		info, _ := e.Info()
+		var size int64
+		var modTime int64
+		if info != nil {
+			size = info.Size()
+			modTime = info.ModTime().UnixMilli()
+		}
+
+		isDir := e.IsDir()
+		ext := ""
+		if !isDir {
+			ext = strings.ToLower(filepath.Ext(name))
+		}
+
+		if isDir {
 			subdirs = append(subdirs, models.ProjectSummary{
 				Name: name,
-				Path: filepath.Join(dir, name),
+				Path: fullPath,
 			})
 		}
+
+		items = append(items, models.FsItemNode{
+			Name:    name,
+			Path:    fullPath,
+			IsDir:   isDir,
+			Size:    size,
+			ModTime: modTime,
+			Ext:     ext,
+		})
 	}
 
 	sort.Slice(subdirs, func(i, j int) bool {
 		return strings.ToLower(subdirs[i].Name) < strings.ToLower(subdirs[j].Name)
+	})
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].IsDir != items[j].IsDir {
+			return items[i].IsDir // directories first
+		}
+		return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
 	})
 
 	parent := filepath.Dir(dir)
@@ -491,6 +677,7 @@ func (h *Handler) FsBrowseHandler(w http.ResponseWriter, r *http.Request) {
 		ParentPath:  parent,
 		HomePath:    homeDir,
 		Directories: subdirs,
+		Items:       items,
 	})
 }
 
@@ -779,6 +966,54 @@ func (h *Handler) FileRenameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	h.NotifyGitChanged(req.NewPath)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": req.NewPath})
+}
+
+func (h *Handler) FileCopyHandler(w http.ResponseWriter, r *http.Request) {
+	var req models.FileCopyReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.SourcePath == "" || req.TargetPath == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sourcePath and targetPath required"})
+		return
+	}
+	src := expandHome(req.SourcePath)
+	dst := expandHome(req.TargetPath)
+
+	if err := copyRecursive(src, dst); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	h.NotifyGitChanged(dst)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": dst})
+}
+
+func copyRecursive(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		if err := os.MkdirAll(dst, 0755); err != nil {
+			return err
+		}
+		entries, err := os.ReadDir(src)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			s := filepath.Join(src, e.Name())
+			d := filepath.Join(dst, e.Name())
+			if err := copyRecursive(s, d); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	_ = os.MkdirAll(filepath.Dir(dst), 0755)
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0644)
 }
 
 func (h *Handler) FileSearchHandler(w http.ResponseWriter, r *http.Request) {
