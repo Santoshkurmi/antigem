@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.theme.ClaudeTerracotta
@@ -48,6 +50,7 @@ fun UnifiedDiffViewer(
     modifier: Modifier = Modifier
 ) {
     val fileName = remember(filePath) { File(filePath).name }
+    var showDiscardConfirmDialog by remember { mutableStateOf(false) }
 
     val parsedLines = remember(rawDiff) {
         parseUnifiedDiff(rawDiff)
@@ -85,12 +88,18 @@ fun UnifiedDiffViewer(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Text(
                             text = fileName,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = Color(0xFFCCCCCC)
+                            fontSize = 13.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = Color(0xFFCCCCCC),
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(
@@ -99,19 +108,24 @@ fun UnifiedDiffViewer(
                         ) {
                             Text(
                                 text = if (isStaged) "STAGED" else "WORKING TREE",
-                                fontSize = 10.sp,
+                                fontSize = 9.5.sp,
                                 fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
                                 color = if (isStaged) Color(0xFF81C784) else Color(0xFFFFB74D),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                             )
                         }
                     }
                     Text(
                         text = filePath,
                         fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         color = Color(0xFF888888)
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 // Stats Badge
                 Row(
@@ -125,7 +139,7 @@ fun UnifiedDiffViewer(
                     Text(text = "-$deletionsCount", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF44336))
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 // Stage / Unstage Action
                 IconButton(
@@ -143,11 +157,11 @@ fun UnifiedDiffViewer(
                 // Discard Action (if unstaged)
                 if (!isStaged) {
                     IconButton(
-                        onClick = onDiscard,
+                        onClick = { showDiscardConfirmDialog = true },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Undo,
+                            imageVector = Icons.AutoMirrored.Filled.Undo,
                             contentDescription = "Discard Changes",
                             tint = Color(0xFFE57373),
                             modifier = Modifier.size(18.dp)
@@ -168,6 +182,37 @@ fun UnifiedDiffViewer(
                     )
                 }
             }
+        }
+
+        // Discard Confirmation Dialog
+        if (showDiscardConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showDiscardConfirmDialog = false },
+                title = { Text("Discard Changes?", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+                text = {
+                    Text(
+                        "Are you sure you want to discard all changes in $fileName? This cannot be undone.",
+                        fontSize = 13.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showDiscardConfirmDialog = false
+                            onDiscard()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Discard", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDiscardConfirmDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
 
         // --- 2. Unified Diff Content ---
