@@ -48,8 +48,6 @@ fun ProjectPickerDialog(
     onRefresh: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    
     val initialScrollIndex = remember {
         if (activeProject == null || activeProject.path.isBlank()) 0
         else {
@@ -58,16 +56,6 @@ fun ProjectPickerDialog(
         }
     }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIndex)
-
-    val filteredProjects = remember(projects, searchQuery) {
-        if (searchQuery.isBlank()) projects
-        else {
-            val q = searchQuery.trim().lowercase()
-            projects.filter {
-                it.name.lowercase().contains(q) || it.path.lowercase().contains(q)
-            }
-        }
-    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -171,46 +159,6 @@ fun ProjectPickerDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Search Filter (if more than 3 projects)
-                if (projects.size > 3) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search workspaces...", fontSize = 13.sp) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotBlank()) {
-                                IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(22.dp)) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Close,
-                                        contentDescription = "Clear",
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            unfocusedBorderColor = Color.Transparent,
-                            focusedBorderColor = ClaudeTerracotta.copy(alpha = 0.6f)
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                }
-
                 // List of Workspaces / Projects
                 LazyColumn(
                     state = listState,
@@ -307,7 +255,7 @@ fun ProjectPickerDialog(
                     }
 
                     // Existing Workspaces / Projects
-                    itemsIndexed(filteredProjects, key = { _, it -> it.path }) { _, proj ->
+                    itemsIndexed(projects, key = { _, it -> it.path }) { _, proj ->
                         val isSelected = activeProject?.path == proj.path
                         val folderName = proj.name.ifBlank { File(proj.path).name.ifBlank { "Workspace" } }
 

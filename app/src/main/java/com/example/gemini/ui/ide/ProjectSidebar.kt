@@ -518,14 +518,40 @@ fun ProjectSidebar(
             onDismissRequest = { showCreateFileDialog = null },
             title = { Text(if (isNewFolderMode) "Create Folder" else "Create File") },
             text = {
-                OutlinedTextField(
-                    value = newItemName,
-                    onValueChange = { newItemName = it },
-                    label = { Text("Name") },
-                    placeholder = { Text(if (isNewFolderMode) "e.g. components" else "e.g. utils.py") },
-                    singleLine = true,
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = newItemName,
+                        onValueChange = { newItemName = it },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 13.5.sp,
+                            lineHeight = 18.sp
+                        ),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(ClaudeTerracotta),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (newItemName.isEmpty()) {
+                                    Text(
+                                        text = if (isNewFolderMode) "e.g. components" else "e.g. utils.py",
+                                        fontSize = 13.5.sp,
+                                        lineHeight = 18.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                }
             },
             confirmButton = {
                 Button(

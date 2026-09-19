@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 data class ProjectTemplate(
     val id: String,
@@ -48,14 +49,44 @@ fun NewProjectDialog(
                     .padding(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedTextField(
-                    value = projectName,
-                    onValueChange = { projectName = it },
-                    label = { Text("Project Name") },
-                    placeholder = { Text("e.g. my-awesome-app") },
-                    singleLine = true,
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (projectName.isNotBlank()) com.example.gemini.theme.ClaudeTerracotta.copy(alpha = 0.6f)
+                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    ),
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = projectName,
+                        onValueChange = { projectName = it },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 13.5.sp,
+                            lineHeight = 18.sp
+                        ),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(com.example.gemini.theme.ClaudeTerracotta),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 11.dp),
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (projectName.isEmpty()) {
+                                    Text(
+                                        text = "Project Name (e.g. my-awesome-app)",
+                                        fontSize = 13.5.sp,
+                                        lineHeight = 18.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                }
 
                 Text(
                     "Choose Template",

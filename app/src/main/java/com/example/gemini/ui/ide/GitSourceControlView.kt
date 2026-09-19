@@ -285,20 +285,44 @@ fun GitSourceControlView(
         Spacer(modifier = Modifier.height(8.dp))
 
         // --- 2. Commit Message Box ---
-        OutlinedTextField(
-            value = commitMessage,
-            onValueChange = { commitMessage = it },
-            placeholder = { Text("Commit message (Cmd+Enter to commit)", fontSize = 12.sp) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 60.dp, max = 90.dp),
+        Surface(
             shape = RoundedCornerShape(8.dp),
-            textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = ClaudeTerracotta,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                if (commitMessage.isNotBlank()) ClaudeTerracotta.copy(alpha = 0.6f)
+                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            androidx.compose.foundation.text.BasicTextField(
+                value = commitMessage,
+                onValueChange = { commitMessage = it },
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                ),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(ClaudeTerracotta),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 54.dp, max = 90.dp)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                decorationBox = { innerTextField ->
+                    Box(contentAlignment = Alignment.TopStart) {
+                        if (commitMessage.isEmpty()) {
+                            Text(
+                                text = "Commit message...",
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
             )
-        )
+        }
 
         Spacer(modifier = Modifier.height(6.dp))
 
@@ -567,14 +591,40 @@ fun GitSourceControlView(
             onDismissRequest = { showNewBranchDialog = false },
             title = { Text("Create & Checkout Branch", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
             text = {
-                OutlinedTextField(
-                    value = newBranchName,
-                    onValueChange = { newBranchName = it },
-                    label = { Text("Branch Name") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(8.dp),
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = newBranchName,
+                        onValueChange = { newBranchName = it },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 13.5.sp,
+                            lineHeight = 18.sp
+                        ),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(ClaudeTerracotta),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (newBranchName.isEmpty()) {
+                                    Text(
+                                        text = "Branch name (e.g. feature/login)",
+                                        fontSize = 13.5.sp,
+                                        lineHeight = 18.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                }
             },
             confirmButton = {
                 TextButton(
@@ -614,14 +664,40 @@ fun GitSourceControlView(
             onDismissRequest = { showStashDialog = false },
             title = { Text("Stash Changes", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
             text = {
-                OutlinedTextField(
-                    value = stashMessage,
-                    onValueChange = { stashMessage = it },
-                    label = { Text("Stash Message (Optional)") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(8.dp),
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = stashMessage,
+                        onValueChange = { stashMessage = it },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 13.5.sp,
+                            lineHeight = 18.sp
+                        ),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(ClaudeTerracotta),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (stashMessage.isEmpty()) {
+                                    Text(
+                                        text = "Stash message (optional)",
+                                        fontSize = 13.5.sp,
+                                        lineHeight = 18.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                }
             },
             confirmButton = {
                 TextButton(
