@@ -38,6 +38,8 @@ import com.example.gemini.data.daemon.ProjectItem
 import com.example.gemini.data.daemon.TermuxDaemonManager
 import com.example.gemini.theme.ClaudeTerracotta
 import com.example.gemini.ui.components.FileManagerDialog
+import java.io.File
+
 import com.example.gemini.data.daemon.mergeProjects
 import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.ui.chat.ChatViewModel
@@ -288,7 +290,7 @@ fun IdeScreen(
                         }
 
                         // Save Button
-                        if (activeTab != null && (!isImageFile || (isSvgFile && showSvgSource))) {
+                        if (activeTab != null && !activeTab.isReadOnly && (!isImageFile || (isSvgFile && showSvgSource))) {
                             IconButton(
                                 onClick = {
                                     coroutineScope.launch {
@@ -403,11 +405,19 @@ fun IdeScreen(
                                         modifier = Modifier.size(13.dp)
                                     )
                                     Spacer(modifier = Modifier.width(5.dp))
+                                } else if (tab.isReadOnly) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Read-Only",
+                                        tint = Color(0xFFFBBF24).copy(alpha = 0.85f),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
                                 }
                                 Text(
                                     text = if (tab.isModified) "${tab.name} *" else tab.name,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (isSelected) (if (tab.isDiff) ClaudeTerracotta else Color.White) else Color.LightGray,
+                                    color = if (isSelected) (if (tab.isDiff) ClaudeTerracotta else if (tab.isReadOnly) Color(0xFFFDE68A) else Color.White) else (if (tab.isReadOnly) Color(0xFF9CA3AF) else Color.LightGray),
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -446,7 +456,7 @@ fun IdeScreen(
                             Icon(
                                 imageVector = Icons.Default.Sync,
                                 contentDescription = null,
-                                tint = Color(0xFF60A5FA),
+                                tint = Color(0xFF93C5FD),
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -454,6 +464,36 @@ fun IdeScreen(
                                 text = autoUpdateNotification!!,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFFDBEAFE),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                // Read-Only Warning Banner
+                if (activeTab != null && activeTab.isReadOnly && !activeTab.isDiff) {
+                    Surface(
+                        color = Color(0xFF1E293B),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = Color(0xFFFBBF24),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Historical Revision • Read-Only",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 11.5.sp,
+                                color = Color(0xFFCBD5E1),
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -502,26 +542,45 @@ fun IdeScreen(
                             filePath = activeTab.diffFile ?: activeTab.path,
                             rawDiff = activeTab.content,
                             isStaged = activeTab.isStagedDiff,
-                            onStageToggle = {
+                            commitHash = activeTab.commitHash,
+                            onOpenCurrentFile = {
                                 coroutineScope.launch {
-                                    val projPath = activeProject?.path ?: return@launch
-                                    val file = activeTab.diffFile ?: return@launch
-                                    if (activeTab.isStagedDiff) {
-                                        GitApiClient.unstage(projPath, listOf(file))
-                                    } else {
-                                        GitApiClient.stage(projPath, listOf(file))
-                                    }
-                                    // Refresh diff
-                                    val newDiff = GitApiClient.getDiff(projPath, file, !activeTab.isStagedDiff)
-                                    TermuxDaemonManager.openDiffTab(file, newDiff?.diff ?: "", !activeTab.isStagedDiff)
+                                    val rawFilePath = activeTab.diffFile ?: activeTab.path
+                                    val content = IdeApiClient.readFile(rawFilePath) ?: ""
+                                    TermuxDaemonManager.openOrSelectTab(
+                                        path = rawFilePath,
+                                        name = File(rawFilePath).name,
+                                        content = content,
+                                        isReadOnly = false
+                                    )
                                 }
                             },
-                            onDiscard = {
+                            onOpenHistoricalFile = {
                                 coroutineScope.launch {
                                     val projPath = activeProject?.path ?: return@launch
-                                    val file = activeTab.diffFile ?: return@launch
-                                    GitApiClient.discard(projPath, listOf(file))
-                                    TermuxDaemonManager.closeTab(activeTab.path)
+                                    val rawFilePath = activeTab.diffFile ?: activeTab.path
+                                    val commitHash = activeTab.commitHash
+                                    if (commitHash != null) {
+                                        val content = GitApiClient.getCommitFileContent(projPath, commitHash, rawFilePath) ?: ""
+                                        val tabPath = "commit:$commitHash:$rawFilePath"
+                                        val tabName = "${File(rawFilePath).name} (${commitHash.take(7)})"
+                                        TermuxDaemonManager.openOrSelectTab(
+                                            path = tabPath,
+                                            name = tabName,
+                                            content = content,
+                                            isReadOnly = true
+                                        )
+                                    } else {
+                                        val content = GitApiClient.getCommitFileContent(projPath, "HEAD", rawFilePath) ?: (IdeApiClient.readFile(rawFilePath) ?: "")
+                                        val tabPath = "revision:HEAD:$rawFilePath"
+                                        val tabName = "${File(rawFilePath).name} (HEAD)"
+                                        TermuxDaemonManager.openOrSelectTab(
+                                            path = tabPath,
+                                            name = tabName,
+                                            content = content,
+                                            isReadOnly = true
+                                        )
+                                    }
                                 }
                             },
                             onClose = {
@@ -546,17 +605,23 @@ fun IdeScreen(
                                 factory = { ctx ->
                                     CodeEditorView(ctx).apply {
                                         isWordWrapEnabled = isWordWrap
+                                        isReadOnly = activeTab.isReadOnly
                                         setFile(activeTab.name, activeTab.content)
                                         onContentChangeListener = { newText ->
-                                            TermuxDaemonManager.updateTabContent(activeTab.path, newText)
+                                            if (!activeTab.isReadOnly) {
+                                                TermuxDaemonManager.updateTabContent(activeTab.path, newText)
+                                            }
                                         }
                                     }
                                 },
                                 update = { view ->
                                     view.isWordWrapEnabled = isWordWrap
+                                    view.isReadOnly = activeTab.isReadOnly
                                     view.setFile(activeTab.name, activeTab.content)
                                     view.onContentChangeListener = { newText ->
-                                        TermuxDaemonManager.updateTabContent(activeTab.path, newText)
+                                        if (!activeTab.isReadOnly) {
+                                            TermuxDaemonManager.updateTabContent(activeTab.path, newText)
+                                        }
                                     }
                                 },
                                 modifier = Modifier
@@ -566,6 +631,7 @@ fun IdeScreen(
                         }
                     }
                 } else {
+
                     Box(
                         modifier = Modifier
                             .fillMaxSize()

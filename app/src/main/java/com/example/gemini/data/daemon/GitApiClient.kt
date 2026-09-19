@@ -21,6 +21,7 @@ data class GitFileStatus(
 )
 
 data class GitStatusResponse(
+    val isGitRepo: Boolean = true,
     val branch: String = "HEAD",
     val tracking: String? = null,
     val ahead: Int = 0,
@@ -52,6 +53,34 @@ data class GitCommitLog(
     val message: String
 )
 
+data class GitCommitFileChange(
+    val path: String,
+    val status: String
+)
+
+data class GitCommitDetails(
+    val hash: String,
+    val shortHash: String,
+    val author: String,
+    val date: String,
+    val subject: String,
+    val body: String,
+    val changedFiles: List<GitCommitFileChange> = emptyList()
+)
+
+data class GitConfig(
+    val userName: String = "",
+    val userEmail: String = "",
+    val pullRebase: String = "",
+    val remoteUrl: String = ""
+)
+
+data class GitActionResult(
+    val success: Boolean,
+    val output: String = "",
+    val error: String = ""
+)
+
 data class GitDiffResponse(
     val path: String,
     val staged: Boolean,
@@ -68,8 +97,8 @@ object GitApiClient {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
         .build()
 
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
@@ -87,11 +116,13 @@ object GitApiClient {
                 val bodyStr = response.body?.string() ?: return@withContext null
                 val json = JSONObject(bodyStr)
 
+                val isGitRepo = json.optBoolean("isGitRepo", true)
                 val staged = parseFileList(json.optJSONArray("stagedFiles"), staged = true)
                 val unstaged = parseFileList(json.optJSONArray("unstagedFiles"), staged = false)
                 val untracked = parseFileList(json.optJSONArray("untrackedFiles"), staged = false)
 
                 GitStatusResponse(
+                    isGitRepo = isGitRepo,
                     branch = json.optString("branch", "HEAD"),
                     tracking = json.optString("tracking").takeIf { it.isNotBlank() },
                     ahead = json.optInt("ahead", 0),
@@ -109,6 +140,95 @@ object GitApiClient {
         }
     }
 
+    suspend fun initRepo(projectPath: String): GitActionResult = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("project", projectPath)
+            }.toString()
+
+            val request = Request.Builder()
+                .url("$baseUrl/api/git/init")
+                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val bodyStr = response.body?.string() ?: ""
+                val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                GitActionResult(
+                    success = response.isSuccessful && json.optBoolean("success", true),
+                    output = json.optString("output", "Initialized Git repository"),
+                    error = json.optString("error", "")
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "initRepo failed: ${e.message}")
+            GitActionResult(success = false, error = e.message ?: "Init failed")
+        }
+    }
+
+    suspend fun getConfig(projectPath: String): GitConfig? = withContext(Dispatchers.IO) {
+        try {
+            val enc = URLEncoder.encode(projectPath, "UTF-8")
+            val request = Request.Builder()
+                .url("$baseUrl/api/git/config?project=$enc")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                val bodyStr = response.body?.string() ?: return@withContext null
+                val json = JSONObject(bodyStr)
+                GitConfig(
+                    userName = json.optString("userName", ""),
+                    userEmail = json.optString("userEmail", ""),
+                    pullRebase = json.optString("pullRebase", ""),
+                    remoteUrl = json.optString("remoteUrl", "")
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "getConfig failed: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun setConfig(
+        projectPath: String,
+        userName: String? = null,
+        userEmail: String? = null,
+        pullRebase: String? = null,
+        remoteUrl: String? = null,
+        isGlobal: Boolean = false
+    ): GitActionResult = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("project", projectPath)
+                if (userName != null) put("userName", userName)
+                if (userEmail != null) put("userEmail", userEmail)
+                if (pullRebase != null) put("pullRebase", pullRebase)
+                if (remoteUrl != null) put("remoteUrl", remoteUrl)
+                put("isGlobal", isGlobal)
+            }.toString()
+
+            val request = Request.Builder()
+                .url("$baseUrl/api/git/config")
+                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val bodyStr = response.body?.string() ?: ""
+                val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                GitActionResult(
+                    success = response.isSuccessful && json.optBoolean("success", true),
+                    output = json.optString("output", "Configuration updated"),
+                    error = json.optString("error", "")
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "setConfig failed: ${e.message}")
+            GitActionResult(success = false, error = e.message ?: "Failed to set config")
+        }
+    }
+
     private fun parseFileList(arr: JSONArray?, staged: Boolean): List<GitFileStatus> {
         if (arr == null) return emptyList()
         val list = mutableListOf<GitFileStatus>()
@@ -118,7 +238,7 @@ object GitApiClient {
                 GitFileStatus(
                     path = obj.getString("path"),
                     oldPath = obj.optString("oldPath").takeIf { it.isNotBlank() },
-                    status = obj.optString("status", "M"),
+                    status = obj.getString("status"),
                     staged = staged
                 )
             )
@@ -264,7 +384,11 @@ object GitApiClient {
         }
     }
 
-    suspend fun push(projectPath: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun push(projectPath: String): Boolean {
+        return pushDetailed(projectPath).success
+    }
+
+    suspend fun pushDetailed(projectPath: String): GitActionResult = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
                 put("project", projectPath)
@@ -276,15 +400,25 @@ object GitApiClient {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                response.isSuccessful
+                val bodyStr = response.body?.string().orEmpty()
+                val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                GitActionResult(
+                    success = response.isSuccessful && json.optBoolean("success", true),
+                    output = json.optString("output", ""),
+                    error = json.optString("error", if (!response.isSuccessful) "Push failed with code ${response.code}" else "")
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "push failed: ${e.message}")
-            false
+            GitActionResult(success = false, error = e.message ?: "Push network error")
         }
     }
 
-    suspend fun pull(projectPath: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun pull(projectPath: String): Boolean {
+        return pullDetailed(projectPath).success
+    }
+
+    suspend fun pullDetailed(projectPath: String): GitActionResult = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
                 put("project", projectPath)
@@ -296,11 +430,17 @@ object GitApiClient {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                response.isSuccessful
+                val bodyStr = response.body?.string().orEmpty()
+                val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                GitActionResult(
+                    success = response.isSuccessful && json.optBoolean("success", true),
+                    output = json.optString("output", ""),
+                    error = json.optString("error", if (!response.isSuccessful) "Pull failed with code ${response.code}" else "")
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "pull failed: ${e.message}")
-            false
+            GitActionResult(success = false, error = e.message ?: "Pull network error")
         }
     }
 
@@ -375,11 +515,11 @@ object GitApiClient {
         }
     }
 
-    suspend fun getLog(projectPath: String, limit: Int = 20): List<GitCommitLog> = withContext(Dispatchers.IO) {
+    suspend fun getLog(projectPath: String, limit: Int = 20, skip: Int = 0): List<GitCommitLog> = withContext(Dispatchers.IO) {
         try {
             val enc = URLEncoder.encode(projectPath, "UTF-8")
             val request = Request.Builder()
-                .url("$baseUrl/api/git/log?project=$enc&limit=$limit")
+                .url("$baseUrl/api/git/log?project=$enc&limit=$limit&skip=$skip")
                 .get()
                 .build()
 
@@ -408,4 +548,89 @@ object GitApiClient {
             emptyList()
         }
     }
+
+    suspend fun getCommitDetails(projectPath: String, hash: String): GitCommitDetails? = withContext(Dispatchers.IO) {
+        try {
+            val encProj = URLEncoder.encode(projectPath, "UTF-8")
+            val encHash = URLEncoder.encode(hash, "UTF-8")
+            val request = Request.Builder()
+                .url("$baseUrl/api/git/commit/details?project=$encProj&hash=$encHash")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                val bodyStr = response.body?.string() ?: return@withContext null
+                val json = JSONObject(bodyStr)
+                val filesArr = json.optJSONArray("changedFiles") ?: JSONArray()
+                val changedFiles = mutableListOf<GitCommitFileChange>()
+                for (i in 0 until filesArr.length()) {
+                    val fo = filesArr.getJSONObject(i)
+                    changedFiles.add(
+                        GitCommitFileChange(
+                            path = fo.getString("path"),
+                            status = fo.optString("status", "M")
+                        )
+                    )
+                }
+                GitCommitDetails(
+                    hash = json.getString("hash"),
+                    shortHash = json.optString("shortHash", hash.take(7)),
+                    author = json.optString("author", ""),
+                    date = json.optString("date", ""),
+                    subject = json.optString("subject", ""),
+                    body = json.optString("body", ""),
+                    changedFiles = changedFiles
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "getCommitDetails failed: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun getCommitFileDiff(projectPath: String, hash: String, filePath: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val encProj = URLEncoder.encode(projectPath, "UTF-8")
+            val encHash = URLEncoder.encode(hash, "UTF-8")
+            val encFile = URLEncoder.encode(filePath, "UTF-8")
+            val request = Request.Builder()
+                .url("$baseUrl/api/git/commit/diff?project=$encProj&hash=$encHash&file=$encFile")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                val bodyStr = response.body?.string() ?: return@withContext null
+                val json = JSONObject(bodyStr)
+                json.optString("diff", "")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "getCommitFileDiff failed: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun getCommitFileContent(projectPath: String, hash: String, filePath: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val encProj = URLEncoder.encode(projectPath, "UTF-8")
+            val encHash = URLEncoder.encode(hash, "UTF-8")
+            val encFile = URLEncoder.encode(filePath, "UTF-8")
+            val request = Request.Builder()
+                .url("$baseUrl/api/git/commit/content?project=$encProj&hash=$encHash&file=$encFile")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                val bodyStr = response.body?.string() ?: return@withContext null
+                val json = JSONObject(bodyStr)
+                json.optString("content", "")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "getCommitFileContent failed: ${e.message}")
+            null
+        }
+    }
 }
+

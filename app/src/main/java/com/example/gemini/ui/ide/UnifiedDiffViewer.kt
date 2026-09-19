@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -44,13 +43,13 @@ fun UnifiedDiffViewer(
     filePath: String,
     rawDiff: String,
     isStaged: Boolean,
-    onStageToggle: () -> Unit,
-    onDiscard: () -> Unit,
+    commitHash: String? = null,
+    onOpenCurrentFile: () -> Unit,
+    onOpenHistoricalFile: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val fileName = remember(filePath) { File(filePath).name }
-    var showDiscardConfirmDialog by remember { mutableStateOf(false) }
 
     val parsedLines = remember(rawDiff) {
         parseUnifiedDiff(rawDiff)
@@ -104,14 +103,26 @@ fun UnifiedDiffViewer(
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = if (isStaged) Color(0xFF2E7D32).copy(alpha = 0.25f) else Color(0xFFE65100).copy(alpha = 0.25f)
+                            color = when {
+                                commitHash != null -> ClaudeTerracotta.copy(alpha = 0.25f)
+                                isStaged -> Color(0xFF2E7D32).copy(alpha = 0.25f)
+                                else -> Color(0xFFE65100).copy(alpha = 0.25f)
+                            }
                         ) {
                             Text(
-                                text = if (isStaged) "STAGED" else "WORKING TREE",
+                                text = when {
+                                    commitHash != null -> "COMMIT ${commitHash.take(7)}"
+                                    isStaged -> "STAGED"
+                                    else -> "WORKING TREE"
+                                },
                                 fontSize = 9.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
-                                color = if (isStaged) Color(0xFF81C784) else Color(0xFFFFB74D),
+                                color = when {
+                                    commitHash != null -> ClaudeTerracotta
+                                    isStaged -> Color(0xFF81C784)
+                                    else -> Color(0xFFFFB74D)
+                                },
                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                             )
                         }
@@ -141,38 +152,36 @@ fun UnifiedDiffViewer(
 
                 Spacer(modifier = Modifier.width(6.dp))
 
-                // Stage / Unstage Action
+                // 1. Open Current Working File (Editable)
                 IconButton(
-                    onClick = onStageToggle,
-                    modifier = Modifier.size(32.dp)
+                    onClick = onOpenCurrentFile,
+                    modifier = Modifier.size(30.dp)
                 ) {
                     Icon(
-                        imageVector = if (isStaged) Icons.Default.Remove else Icons.Default.Add,
-                        contentDescription = if (isStaged) "Unstage" else "Stage",
-                        tint = if (isStaged) Color(0xFFE57373) else Color(0xFF81C784),
-                        modifier = Modifier.size(18.dp)
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Open Current File (Editable)",
+                        tint = Color(0xFF81C784),
+                        modifier = Modifier.size(17.dp)
                     )
                 }
 
-                // Discard Action (if unstaged)
-                if (!isStaged) {
-                    IconButton(
-                        onClick = { showDiscardConfirmDialog = true },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Undo,
-                            contentDescription = "Discard Changes",
-                            tint = Color(0xFFE57373),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                // 2. Open Revision / Commit File (Read-Only)
+                IconButton(
+                    onClick = onOpenHistoricalFile,
+                    modifier = Modifier.size(30.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = "Open Revision File (Read-Only)",
+                        tint = ClaudeTerracotta,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
 
                 // Close Button
                 IconButton(
                     onClick = onClose,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(30.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
@@ -184,36 +193,6 @@ fun UnifiedDiffViewer(
             }
         }
 
-        // Discard Confirmation Dialog
-        if (showDiscardConfirmDialog) {
-            AlertDialog(
-                onDismissRequest = { showDiscardConfirmDialog = false },
-                title = { Text("Discard Changes?", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
-                text = {
-                    Text(
-                        "Are you sure you want to discard all changes in $fileName? This cannot be undone.",
-                        fontSize = 13.5.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            showDiscardConfirmDialog = false
-                            onDiscard()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Discard", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDiscardConfirmDialog = false }) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
 
         // --- 2. Unified Diff Content ---
         if (parsedLines.isEmpty()) {
@@ -324,6 +303,11 @@ private fun parseUnifiedDiff(diffText: String): List<ParsedDiffLine> {
     val hunkRegex = Regex("""^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@(.*)""")
 
     for (raw in lines) {
+        // Ignore git special escape markers like "\ No newline at end of file"
+        if (raw.startsWith("\\")) {
+            continue
+        }
+
         if (raw.startsWith("diff --git") || raw.startsWith("index ") ||
             raw.startsWith("---") || raw.startsWith("+++") ||
             raw.startsWith("new file mode") || raw.startsWith("deleted file mode")) {

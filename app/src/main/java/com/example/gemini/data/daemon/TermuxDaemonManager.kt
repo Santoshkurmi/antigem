@@ -30,6 +30,8 @@ data class OpenTab(
     val isDiff: Boolean = false,
     val diffFile: String? = null,
     val isStagedDiff: Boolean = false,
+    val commitHash: String? = null,
+    val isReadOnly: Boolean = false,
     val originalHash: String = "",
     val diskConflict: Boolean = false,
     val diskContentOnConflict: String = ""
@@ -219,7 +221,7 @@ object TermuxDaemonManager {
         }
     }
 
-    fun openOrSelectTab(path: String, name: String, content: String, hash: String = "") {
+    fun openOrSelectTab(path: String, name: String, content: String, hash: String = "", isReadOnly: Boolean = false) {
         val existing = _openTabs.value.find { it.path == path }
         val finalHash = hash.ifBlank { computeSha256(content) }
         if (existing == null) {
@@ -228,15 +230,17 @@ object TermuxDaemonManager {
                 name = name,
                 content = content,
                 originalContent = content,
-                originalHash = finalHash
+                originalHash = finalHash,
+                isReadOnly = isReadOnly
             )
         }
         _activeTabPath.value = path
     }
 
-    fun openDiffTab(filePath: String, diffContent: String, isStaged: Boolean) {
-        val diffPath = "diff:${if (isStaged) "staged:" else ""}$filePath"
-        val tabName = "Diff: ${java.io.File(filePath).name}${if (isStaged) " (Staged)" else ""}"
+
+    fun openDiffTab(filePath: String, diffContent: String, isStaged: Boolean, commitHash: String? = null) {
+        val diffPath = if (commitHash != null) "diff:commit:${commitHash.take(7)}:$filePath" else "diff:${if (isStaged) "staged:" else ""}$filePath"
+        val tabName = if (commitHash != null) "Diff: ${java.io.File(filePath).name} (${commitHash.take(7)})" else "Diff: ${java.io.File(filePath).name}${if (isStaged) " (Staged)" else ""}"
         val existing = _openTabs.value.find { it.path == diffPath }
         if (existing != null) {
             _openTabs.value = _openTabs.value.map {
@@ -252,12 +256,14 @@ object TermuxDaemonManager {
                 isModified = false,
                 isDiff = true,
                 diffFile = filePath,
-                isStagedDiff = isStaged
+                isStagedDiff = isStaged,
+                commitHash = commitHash
             )
             _openTabs.value = _openTabs.value + newTab
             _activeTabPath.value = diffPath
         }
     }
+
 
     fun setAutoStart(enabled: Boolean) {
         _autoStartEnabled.value = enabled

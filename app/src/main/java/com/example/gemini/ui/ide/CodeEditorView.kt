@@ -61,6 +61,13 @@ class CodeEditorView @JvmOverloads constructor(
             editor.isWordwrap = value
         }
 
+    var isReadOnly: Boolean
+        get() = !editor.isEditable
+        set(value) {
+            editor.isEditable = !value
+        }
+
+
     init {
         addView(editor, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 

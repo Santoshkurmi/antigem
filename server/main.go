@@ -159,6 +159,14 @@ func main() {
 
 	// Git Source Control Endpoints
 	mux.HandleFunc("/api/git/status", h.GitStatusHandler)
+	mux.HandleFunc("/api/git/init", h.GitInitHandler)
+	mux.HandleFunc("/api/git/config", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.GitSetConfigHandler(w, r)
+		} else {
+			h.GitGetConfigHandler(w, r)
+		}
+	})
 	mux.HandleFunc("/api/git/branches", h.GitBranchesHandler)
 	mux.HandleFunc("/api/git/checkout", h.GitCheckoutHandler)
 	mux.HandleFunc("/api/git/branch/create", h.GitCheckoutHandler)
@@ -172,6 +180,9 @@ func main() {
 	mux.HandleFunc("/api/git/stash/pop", h.GitStashPopHandler)
 	mux.HandleFunc("/api/git/diff", h.GitDiffHandler)
 	mux.HandleFunc("/api/git/log", h.GitLogHandler)
+	mux.HandleFunc("/api/git/commit/details", h.GitCommitDetailsHandler)
+	mux.HandleFunc("/api/git/commit/diff", h.GitCommitFileDiffHandler)
+	mux.HandleFunc("/api/git/commit/content", h.GitCommitFileContentHandler)
 
 	// Sub-resource endpoints
 	mux.HandleFunc("/api/instances/", func(w http.ResponseWriter, r *http.Request) {

@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -27,6 +28,9 @@ func runGitCmd(dir string, args ...string) (string, error) {
 	if err != nil {
 		errStr := strings.TrimSpace(errOut.String())
 		if errStr == "" {
+			errStr = strings.TrimSpace(out.String())
+		}
+		if errStr == "" {
 			errStr = err.Error()
 		}
 		return out.String(), fmt.Errorf("%s", errStr)
@@ -38,10 +42,21 @@ func runGitCmd(dir string, args ...string) (string, error) {
 func GetStatus(projectDir string) (*models.GitStatusResponse, error) {
 	out, err := runGitCmd(projectDir, "status", "--porcelain=v1", "-b", "-uall")
 	if err != nil {
+		errStr := err.Error()
+		if strings.Contains(strings.ToLower(errStr), "not a git repository") {
+			return &models.GitStatusResponse{
+				IsGitRepo:      false,
+				Branch:         "",
+				StagedFiles:    []models.GitFileStatus{},
+				UnstagedFiles:  []models.GitFileStatus{},
+				UntrackedFiles: []models.GitFileStatus{},
+			}, nil
+		}
 		return nil, err
 	}
 
 	res := &models.GitStatusResponse{
+		IsGitRepo:      true,
 		Branch:         "HEAD",
 		StagedFiles:    []models.GitFileStatus{},
 		UnstagedFiles:  []models.GitFileStatus{},
@@ -98,10 +113,8 @@ func GetStatus(projectDir string) (*models.GitStatusResponse, error) {
 			oldPath = parts[0]
 			filePath = parts[1]
 		}
-		// Strip quotes if git quoted special filenames
-		filePath = strings.Trim(filePath, "\"")
-		oldPath = strings.Trim(oldPath, "\"")
 
+		// 1. Untracked
 		if indexStatus == '?' && workTreeStatus == '?' {
 			res.UntrackedFiles = append(res.UntrackedFiles, models.GitFileStatus{
 				Path:   filePath,
@@ -111,7 +124,7 @@ func GetStatus(projectDir string) (*models.GitStatusResponse, error) {
 			continue
 		}
 
-		// Staged status
+		// 2. Staged
 		if indexStatus != ' ' && indexStatus != '?' {
 			res.StagedFiles = append(res.StagedFiles, models.GitFileStatus{
 				Path:    filePath,
@@ -121,7 +134,7 @@ func GetStatus(projectDir string) (*models.GitStatusResponse, error) {
 			})
 		}
 
-		// Unstaged status
+		// 3. Unstaged / Working tree modified
 		if workTreeStatus != ' ' && workTreeStatus != '?' {
 			res.UnstagedFiles = append(res.UnstagedFiles, models.GitFileStatus{
 				Path:    filePath,
@@ -132,30 +145,116 @@ func GetStatus(projectDir string) (*models.GitStatusResponse, error) {
 		}
 	}
 
-	// Check for stash
+	// Check for existing stashes
 	stashOut, _ := runGitCmd(projectDir, "stash", "list")
 	res.HasStash = strings.TrimSpace(stashOut) != ""
 
 	return res, nil
 }
 
+// InitRepo initializes a new Git repository and generates a .gitignore if missing.
+func InitRepo(projectDir string) error {
+	_, err := runGitCmd(projectDir, "init")
+	if err != nil {
+		return err
+	}
+	gitignorePath := filepath.Join(projectDir, ".gitignore")
+	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
+		defaultIgnore := `# Dependencies & Build
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+dist/
+build/
+.gradle/
+*.class
+*.apk
+*.aab
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.tmp
+*.log
+`
+		_ = os.WriteFile(gitignorePath, []byte(defaultIgnore), 0644)
+	}
+	return nil
+}
+
+// GetConfig reads git username, email, pull.rebase, and remote origin URL.
+func GetConfig(projectDir string) (*models.GitConfig, error) {
+	userName, _ := runGitCmd(projectDir, "config", "user.name")
+	userEmail, _ := runGitCmd(projectDir, "config", "user.email")
+	pullRebase, _ := runGitCmd(projectDir, "config", "pull.rebase")
+	remoteUrl, _ := runGitCmd(projectDir, "remote", "get-url", "origin")
+
+	return &models.GitConfig{
+		UserName:   strings.TrimSpace(userName),
+		UserEmail:  strings.TrimSpace(userEmail),
+		PullRebase: strings.TrimSpace(pullRebase),
+		RemoteURL:  strings.TrimSpace(remoteUrl),
+	}, nil
+}
+
+// SetConfig sets git user.name, user.email, pull.rebase, and remote origin URL.
+func SetConfig(projectDir string, req models.GitSetConfigReq) error {
+	scopeArgs := []string{"config"}
+	if req.IsGlobal {
+		scopeArgs = append(scopeArgs, "--global")
+	}
+
+	if req.UserName != "" {
+		args := append(scopeArgs, "user.name", req.UserName)
+		if _, err := runGitCmd(projectDir, args...); err != nil {
+			return err
+		}
+	}
+	if req.UserEmail != "" {
+		args := append(scopeArgs, "user.email", req.UserEmail)
+		if _, err := runGitCmd(projectDir, args...); err != nil {
+			return err
+		}
+	}
+	if req.PullRebase != "" {
+		args := append(scopeArgs, "pull.rebase", req.PullRebase)
+		if _, err := runGitCmd(projectDir, args...); err != nil {
+			return err
+		}
+	}
+	if req.RemoteURL != "" {
+		if _, err := runGitCmd(projectDir, "remote", "set-url", "origin", req.RemoteURL); err != nil {
+			_, _ = runGitCmd(projectDir, "remote", "add", "origin", req.RemoteURL)
+		}
+	}
+	return nil
+}
+
 // GetBranches returns all local and remote branches.
 func GetBranches(projectDir string) ([]models.GitBranchInfo, error) {
 	out, err := runGitCmd(projectDir, "branch", "-a", "--no-color")
 	if err != nil {
-		return nil, err
+		return []models.GitBranchInfo{}, nil
 	}
 
 	var branches []models.GitBranchInfo
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.Contains(trimmed, "->") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.Contains(line, "->") {
 			continue
 		}
 
 		isCurrent := strings.HasPrefix(line, "*")
-		name := strings.TrimPrefix(trimmed, "* ")
+		name := strings.TrimPrefix(line, "*")
+		name = strings.TrimSpace(name)
+
 		isRemote := strings.HasPrefix(name, "remotes/")
 		if isRemote {
 			name = strings.TrimPrefix(name, "remotes/")
@@ -167,20 +266,21 @@ func GetBranches(projectDir string) ([]models.GitBranchInfo, error) {
 			IsRemote:  isRemote,
 		})
 	}
+
 	return branches, nil
 }
 
 // CheckoutBranch switches to an existing branch or creates a new one.
-func CheckoutBranch(projectDir, branch string, create bool) error {
+func CheckoutBranch(projectDir, branchName string, create bool) error {
 	if create {
-		_, err := runGitCmd(projectDir, "checkout", "-b", branch)
+		_, err := runGitCmd(projectDir, "checkout", "-b", branchName)
 		return err
 	}
-	_, err := runGitCmd(projectDir, "checkout", branch)
+	_, err := runGitCmd(projectDir, "checkout", branchName)
 	return err
 }
 
-// Stage adds files to staging area.
+// Stage adds paths to the git index.
 func Stage(projectDir string, paths []string) error {
 	if len(paths) == 0 {
 		_, err := runGitCmd(projectDir, "add", "-A")
@@ -191,7 +291,7 @@ func Stage(projectDir string, paths []string) error {
 	return err
 }
 
-// Unstage resets files from index.
+// Unstage resets paths from the git index.
 func Unstage(projectDir string, paths []string) error {
 	if len(paths) == 0 {
 		_, err := runGitCmd(projectDir, "reset", "HEAD")
@@ -212,12 +312,10 @@ func Discard(projectDir string, paths []string) error {
 	}
 
 	for _, p := range paths {
-		// Try restore first (Git 2.23+), fallback to checkout
 		_, err := runGitCmd(projectDir, "restore", "--", p)
 		if err != nil {
 			_, _ = runGitCmd(projectDir, "checkout", "--", p)
 		}
-		// In case it was untracked, clean it
 		_, _ = runGitCmd(projectDir, "clean", "-fd", "--", p)
 	}
 	return nil
@@ -229,16 +327,14 @@ func Commit(projectDir, message string) error {
 	return err
 }
 
-// Push pushes commits to remote.
-func Push(projectDir string) error {
-	_, err := runGitCmd(projectDir, "push")
-	return err
+// PushWithOutput pushes commits to remote and returns combined output.
+func PushWithOutput(projectDir string) (string, error) {
+	return runGitCmd(projectDir, "push")
 }
 
-// Pull pulls commits from remote.
-func Pull(projectDir string) error {
-	_, err := runGitCmd(projectDir, "pull")
-	return err
+// PullWithOutput pulls commits from remote and returns combined output.
+func PullWithOutput(projectDir string) (string, error) {
+	return runGitCmd(projectDir, "pull")
 }
 
 // Stash saves local modifications.
@@ -267,7 +363,6 @@ func GetDiff(projectDir, path string, staged bool) (*models.GitDiffResponse, err
 	} else {
 		out, err = runGitCmd(projectDir, "diff", "--", path)
 		if out == "" {
-			// Check if file is untracked
 			fullPath := filepath.Join(projectDir, path)
 			out, _ = runGitCmd(projectDir, "diff", "--no-index", "/dev/null", fullPath)
 		}
@@ -297,12 +392,23 @@ func GetDiff(projectDir, path string, staged bool) (*models.GitDiffResponse, err
 	}, nil
 }
 
-// GetLog returns recent commit history.
-func GetLog(projectDir string, limit int) ([]models.GitCommitLog, error) {
+// GetLog returns recent commit history with pagination.
+func GetLog(projectDir string, limit int, skip int) ([]models.GitCommitLog, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	out, err := runGitCmd(projectDir, "log", fmt.Sprintf("-n%d", limit), "--pretty=format:%H%x00%h%x00%an%x00%cr%x00%s")
+	skipArg := ""
+	if skip > 0 {
+		skipArg = fmt.Sprintf("--skip=%d", skip)
+	}
+
+	args := []string{"log", fmt.Sprintf("-n%d", limit)}
+	if skipArg != "" {
+		args = append(args, skipArg)
+	}
+	args = append(args, "--pretty=format:%H%x00%h%x00%an%x00%cr%x00%s")
+
+	out, err := runGitCmd(projectDir, args...)
 	if err != nil {
 		return []models.GitCommitLog{}, nil
 	}
@@ -330,3 +436,52 @@ func GetLog(projectDir string, limit int) ([]models.GitCommitLog, error) {
 	}
 	return logs, nil
 }
+
+// GetCommitDetails returns detailed metadata and changed files for a commit.
+func GetCommitDetails(projectDir, hash string) (*models.GitCommitDetails, error) {
+	headerOut, err := runGitCmd(projectDir, "show", "-s", "--format=%H%x00%h%x00%an%x00%cr%x00%s%x00%b", hash)
+	if err != nil {
+		return nil, err
+	}
+	parts := strings.Split(headerOut, "\x00")
+	if len(parts) < 6 {
+		return nil, fmt.Errorf("invalid commit header format")
+	}
+
+	filesOut, _ := runGitCmd(projectDir, "diff-tree", "--no-commit-id", "--name-status", "-r", hash)
+	var changedFiles []models.GitCommitFileChange
+	for _, line := range strings.Split(filesOut, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) >= 2 {
+			changedFiles = append(changedFiles, models.GitCommitFileChange{
+				Status: fields[0],
+				Path:   fields[1],
+			})
+		}
+	}
+
+	return &models.GitCommitDetails{
+		Hash:         parts[0],
+		ShortHash:    parts[1],
+		Author:       parts[2],
+		Date:         parts[3],
+		Subject:      parts[4],
+		Body:         strings.TrimSpace(parts[5]),
+		ChangedFiles: changedFiles,
+	}, nil
+}
+
+// GetCommitFileDiff returns unified diff of a specific file at a commit vs its parent.
+func GetCommitFileDiff(projectDir, hash, filePath string) (string, error) {
+	return runGitCmd(projectDir, "show", "--format=", "--patch", hash, "--", filePath)
+}
+
+// GetCommitFileContent returns the full content of a file at a specific commit.
+func GetCommitFileContent(projectDir, hash, filePath string) (string, error) {
+	return runGitCmd(projectDir, "show", fmt.Sprintf("%s:%s", hash, filePath))
+}
+
