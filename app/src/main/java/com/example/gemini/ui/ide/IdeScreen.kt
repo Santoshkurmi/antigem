@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -79,6 +80,17 @@ fun IdeScreen(
     var tabToClose by remember { mutableStateOf<OpenTab?>(null) }
     var conflictDialogTab by remember { mutableStateOf<OpenTab?>(null) }
     var autoUpdateNotification by remember { mutableStateOf<String?>(null) }
+    val tabListState = rememberLazyListState()
+
+    // Auto-scroll active tab into view when activeTabPath or tabs change
+    LaunchedEffect(activeTabPath, openTabs.size) {
+        if (activeTabPath != null) {
+            val idx = openTabs.indexOfFirst { it.path == activeTabPath }
+            if (idx >= 0) {
+                tabListState.animateScrollToItem(idx)
+            }
+        }
+    }
 
     fun refreshProjectsAndTree() {
         coroutineScope.launch {
@@ -367,6 +379,7 @@ fun IdeScreen(
                 // Open File Tabs Bar
                 if (openTabs.isNotEmpty()) {
                     LazyRow(
+                        state = tabListState,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(38.dp)
