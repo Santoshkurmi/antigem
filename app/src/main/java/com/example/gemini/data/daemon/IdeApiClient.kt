@@ -85,6 +85,18 @@ data class FsBrowseResult(
     val items: List<FsItemNode> = emptyList()
 )
 
+sealed class FileSaveResult {
+    data class Success(val path: String, val hash: String) : FileSaveResult()
+    data class Conflict(val diskHash: String, val diskContent: String, val message: String) : FileSaveResult()
+    data class Error(val message: String) : FileSaveResult()
+}
+
+fun computeSha256(content: String): String {
+    val md = java.security.MessageDigest.getInstance("SHA-256")
+    val bytes = md.digest(content.toByteArray(Charsets.UTF_8))
+    return bytes.joinToString("") { "%02x".format(it) }
+}
+
 object IdeApiClient {
     private const val TAG = "IdeApiClient"
     var baseUrl: String
@@ -320,18 +332,12 @@ object IdeApiClient {
     }
 
     suspend fun readFile(path: String): String? = withContext(Dispatchers.IO) {
-        val cached = com.example.gemini.data.remote.HubMediaResolver.getCachedDocument(path)
-        if (cached != null) return@withContext cached
         try {
             val url = "$baseUrl/api/file/read?path=${java.net.URLEncoder.encode(path, "UTF-8")}"
             val request = Request.Builder().url(url).get().build()
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
-                    val body = response.body?.string()
-                    if (body != null) {
-                        com.example.gemini.data.remote.HubMediaResolver.putCachedDocument(path, body)
-                    }
-                    body
+                    response.body?.string()
                 } else null
             }
         } catch (e: Exception) {
@@ -340,22 +346,56 @@ object IdeApiClient {
         }
     }
 
-    suspend fun saveFile(path: String, content: String): Boolean = withContext(Dispatchers.IO) {
-        com.example.gemini.data.remote.HubMediaResolver.putCachedDocument(path, content)
+    suspend fun saveFileDetailed(
+        path: String,
+        content: String,
+        expectedHash: String? = null,
+        force: Boolean = false
+    ): FileSaveResult = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
                 put("path", path)
                 put("content", content)
+                if (!expectedHash.isNullOrBlank()) {
+                    put("expectedHash", expectedHash)
+                }
+                if (force) {
+                    put("force", true)
+                }
             }.toString()
             val request = Request.Builder()
                 .url("$baseUrl/api/file/save")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
-            client.newCall(request).execute().use { it.isSuccessful }
+            client.newCall(request).execute().use { response ->
+                val bodyStr = response.body?.string().orEmpty()
+                if (response.code == 409) {
+                    val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                    val diskHash = json.optString("diskHash")
+                    val diskContent = json.optString("diskContent")
+                    val msg = json.optString("message", "File on disk has been modified externally")
+                    FileSaveResult.Conflict(diskHash = diskHash, diskContent = diskContent, message = msg)
+                } else if (response.isSuccessful) {
+                    val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                    val hash = json.optString("hash").ifBlank { computeSha256(content) }
+                    FileSaveResult.Success(path = path, hash = hash)
+                } else {
+                    FileSaveResult.Error("Save failed with HTTP ${response.code}: $bodyStr")
+                }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error saving file: $path", e)
-            false
+            FileSaveResult.Error(e.message ?: "Network error saving file")
         }
+    }
+
+    suspend fun saveFile(
+        path: String,
+        content: String,
+        expectedHash: String? = null,
+        force: Boolean = false
+    ): Boolean {
+        return saveFileDetailed(path, content, expectedHash, force) is FileSaveResult.Success
     }
 
     suspend fun patchFile(path: String, startLine: Int, endLine: Int, replacement: String): Boolean = withContext(Dispatchers.IO) {

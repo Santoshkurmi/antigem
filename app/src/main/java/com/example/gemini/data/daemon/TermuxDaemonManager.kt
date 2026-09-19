@@ -29,8 +29,17 @@ data class OpenTab(
     val isModified: Boolean = false,
     val isDiff: Boolean = false,
     val diffFile: String? = null,
-    val isStagedDiff: Boolean = false
+    val isStagedDiff: Boolean = false,
+    val originalHash: String = "",
+    val diskConflict: Boolean = false,
+    val diskContentOnConflict: String = ""
 )
+
+enum class TabDiskUpdateResult {
+    NO_CHANGE,
+    AUTO_UPDATED,
+    CONFLICT_DETECTED
+}
 
 object TermuxDaemonManager {
 
@@ -135,10 +144,69 @@ object TermuxDaemonManager {
         }
     }
 
-    fun markTabSaved(path: String) {
+    fun markTabSaved(path: String, newHash: String = "") {
         _openTabs.value = _openTabs.value.map { tab ->
             if (tab.path == path) {
-                tab.copy(originalContent = tab.content, isModified = false)
+                val finalHash = newHash.ifBlank { computeSha256(tab.content) }
+                tab.copy(
+                    originalContent = tab.content,
+                    originalHash = finalHash,
+                    isModified = false,
+                    diskConflict = false,
+                    diskContentOnConflict = ""
+                )
+            } else tab
+        }
+    }
+
+    fun updateTabFromDisk(path: String, diskContent: String, diskHash: String = ""): TabDiskUpdateResult {
+        val finalHash = diskHash.ifBlank { computeSha256(diskContent) }
+        var result = TabDiskUpdateResult.NO_CHANGE
+        _openTabs.value = _openTabs.value.map { tab ->
+            if (tab.path == path) {
+                if (!tab.isModified) {
+                    if (tab.content != diskContent || tab.originalHash != finalHash) {
+                        result = TabDiskUpdateResult.AUTO_UPDATED
+                        tab.copy(
+                            content = diskContent,
+                            originalContent = diskContent,
+                            originalHash = finalHash,
+                            isModified = false,
+                            diskConflict = false,
+                            diskContentOnConflict = ""
+                        )
+                    } else tab
+                } else {
+                    if (finalHash != tab.originalHash) {
+                        result = TabDiskUpdateResult.CONFLICT_DETECTED
+                        tab.copy(
+                            diskConflict = true,
+                            diskContentOnConflict = diskContent
+                        )
+                    } else tab
+                }
+            } else tab
+        }
+        return result
+    }
+
+    fun resolveTabConflict(path: String, keepMine: Boolean) {
+        _openTabs.value = _openTabs.value.map { tab ->
+            if (tab.path == path) {
+                if (keepMine) {
+                    tab.copy(diskConflict = false)
+                } else {
+                    val diskContent = tab.diskContentOnConflict
+                    val diskHash = computeSha256(diskContent)
+                    tab.copy(
+                        content = diskContent,
+                        originalContent = diskContent,
+                        originalHash = diskHash,
+                        isModified = false,
+                        diskConflict = false,
+                        diskContentOnConflict = ""
+                    )
+                }
             } else tab
         }
     }
@@ -151,10 +219,17 @@ object TermuxDaemonManager {
         }
     }
 
-    fun openOrSelectTab(path: String, name: String, content: String) {
+    fun openOrSelectTab(path: String, name: String, content: String, hash: String = "") {
         val existing = _openTabs.value.find { it.path == path }
+        val finalHash = hash.ifBlank { computeSha256(content) }
         if (existing == null) {
-            _openTabs.value = _openTabs.value + OpenTab(path = path, name = name, content = content, originalContent = content)
+            _openTabs.value = _openTabs.value + OpenTab(
+                path = path,
+                name = name,
+                content = content,
+                originalContent = content,
+                originalHash = finalHash
+            )
         }
         _activeTabPath.value = path
     }

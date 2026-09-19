@@ -58,6 +58,12 @@ fun GitSourceControlView(
     var showStashDialog by remember { mutableStateOf(false) }
     var stashMessage by remember { mutableStateOf("") }
 
+    var pendingDiscardFile by remember { mutableStateOf<String?>(null) }
+    var showDiscardAllDialog by remember { mutableStateOf(false) }
+    var showPullDialog by remember { mutableStateOf(false) }
+    var showPushDialog by remember { mutableStateOf(false) }
+    var showCommitDialog by remember { mutableStateOf(false) }
+
     fun refreshGitData() {
         val projPath = activeProject?.path ?: return
         scope.launch {
@@ -200,16 +206,7 @@ fun GitSourceControlView(
 
                 // Pull Button
                 IconButton(
-                    onClick = {
-                        val projPath = activeProject?.path ?: return@IconButton
-                        scope.launch {
-                            isOperating = true
-                            val ok = GitApiClient.pull(projPath)
-                            refreshGitData()
-                            Toast.makeText(context, if (ok) "Git Pull Successful" else "Git Pull Failed", Toast.LENGTH_SHORT).show()
-                            isOperating = false
-                        }
-                    },
+                    onClick = { showPullDialog = true },
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(imageVector = Icons.Default.CloudDownload, contentDescription = "Pull", modifier = Modifier.size(16.dp))
@@ -217,16 +214,7 @@ fun GitSourceControlView(
 
                 // Push Button
                 IconButton(
-                    onClick = {
-                        val projPath = activeProject?.path ?: return@IconButton
-                        scope.launch {
-                            isOperating = true
-                            val ok = GitApiClient.push(projPath)
-                            refreshGitData()
-                            Toast.makeText(context, if (ok) "Git Push Successful" else "Git Push Failed", Toast.LENGTH_SHORT).show()
-                            isOperating = false
-                        }
-                    },
+                    onClick = { showPushDialog = true },
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(imageVector = Icons.Default.CloudUpload, contentDescription = "Push", modifier = Modifier.size(16.dp))
@@ -329,27 +317,11 @@ fun GitSourceControlView(
         // Commit Button
         Button(
             onClick = {
-                val projPath = activeProject?.path ?: return@Button
                 if (commitMessage.isBlank()) {
                     Toast.makeText(context, "Please enter a commit message", Toast.LENGTH_SHORT).show()
                     return@Button
                 }
-                scope.launch {
-                    isOperating = true
-                    // Auto-stage all if nothing staged
-                    if (status?.stagedFiles.isNullOrEmpty()) {
-                        GitApiClient.stage(projPath, emptyList())
-                    }
-                    val ok = GitApiClient.commit(projPath, commitMessage.trim())
-                    if (ok) {
-                        commitMessage = ""
-                        refreshGitData()
-                        Toast.makeText(context, "Committed successfully!", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(context, "Commit failed", Toast.LENGTH_SHORT).show()
-                    }
-                    isOperating = false
-                }
+                showCommitDialog = true
             },
             enabled = !isOperating && (status?.hasChanges == true || commitMessage.isNotBlank()),
             shape = RoundedCornerShape(8.dp),
@@ -436,13 +408,7 @@ fun GitSourceControlView(
                         actions = {
                             Row {
                                 IconButton(
-                                    onClick = {
-                                        val projPath = activeProject?.path ?: return@IconButton
-                                        scope.launch {
-                                            GitApiClient.discard(projPath, emptyList())
-                                            refreshGitData()
-                                        }
-                                    },
+                                    onClick = { showDiscardAllDialog = true },
                                     modifier = Modifier.size(24.dp)
                                 ) {
                                     Icon(imageVector = Icons.Default.Undo, contentDescription = "Discard All", modifier = Modifier.size(13.dp), tint = Color(0xFFE57373))
@@ -479,11 +445,7 @@ fun GitSourceControlView(
                             actionIcon = Icons.Default.Add,
                             actionDesc = "Stage",
                             onDiscard = {
-                                val projPath = activeProject?.path ?: return@GitFileRow
-                                scope.launch {
-                                    GitApiClient.discard(projPath, listOf(file.path))
-                                    refreshGitData()
-                                }
+                                pendingDiscardFile = file.path
                             }
                         )
                     }
@@ -531,11 +493,7 @@ fun GitSourceControlView(
                             actionIcon = Icons.Default.Add,
                             actionDesc = "Stage",
                             onDiscard = {
-                                val projPath = activeProject?.path ?: return@GitFileRow
-                                scope.launch {
-                                    GitApiClient.discard(projPath, listOf(file.path))
-                                    refreshGitData()
-                                }
+                                pendingDiscardFile = file.path
                             }
                         )
                     }
@@ -722,6 +680,199 @@ fun GitSourceControlView(
             },
             dismissButton = {
                 TextButton(onClick = { showStashDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // --- Safety Confirmation Dialogs ---
+
+    // 1. Discard Single File Confirmation Dialog
+    if (pendingDiscardFile != null) {
+        val targetPath = pendingDiscardFile!!
+        val fileName = File(targetPath).name
+        AlertDialog(
+            onDismissRequest = { pendingDiscardFile = null },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFE57373)) },
+            title = { Text("Discard Changes", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to discard all changes in '$fileName'? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val filePath = pendingDiscardFile ?: return@Button
+                        pendingDiscardFile = null
+                        val projPath = activeProject?.path ?: return@Button
+                        scope.launch {
+                            isOperating = true
+                            GitApiClient.discard(projPath, listOf(filePath))
+                            refreshGitData()
+                            isOperating = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Discard")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDiscardFile = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 2. Discard All Unstaged Changes Confirmation Dialog
+    if (showDiscardAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardAllDialog = false },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFE57373)) },
+            title = { Text("Discard All Changes", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to discard all unstaged changes? All uncommitted edits will be lost permanently.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDiscardAllDialog = false
+                        val projPath = activeProject?.path ?: return@Button
+                        scope.launch {
+                            isOperating = true
+                            GitApiClient.discard(projPath, emptyList())
+                            refreshGitData()
+                            isOperating = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Discard All")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardAllDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 3. Git Pull Confirmation Dialog
+    if (showPullDialog) {
+        AlertDialog(
+            onDismissRequest = { showPullDialog = false },
+            icon = { Icon(Icons.Default.CloudDownload, contentDescription = null, tint = ClaudeTerracotta) },
+            title = { Text("Git Pull", fontWeight = FontWeight.Bold) },
+            text = { Text("Pull latest changes from the remote repository?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPullDialog = false
+                        val projPath = activeProject?.path ?: return@Button
+                        scope.launch {
+                            isOperating = true
+                            val ok = GitApiClient.pull(projPath)
+                            refreshGitData()
+                            Toast.makeText(context, if (ok) "Git Pull Successful" else "Git Pull Failed", Toast.LENGTH_SHORT).show()
+                            isOperating = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                ) {
+                    Text("Pull")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPullDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 4. Git Push Confirmation Dialog
+    if (showPushDialog) {
+        AlertDialog(
+            onDismissRequest = { showPushDialog = false },
+            icon = { Icon(Icons.Default.CloudUpload, contentDescription = null, tint = ClaudeTerracotta) },
+            title = { Text("Git Push", fontWeight = FontWeight.Bold) },
+            text = { Text("Push committed changes to the remote repository?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPushDialog = false
+                        val projPath = activeProject?.path ?: return@Button
+                        scope.launch {
+                            isOperating = true
+                            val ok = GitApiClient.push(projPath)
+                            refreshGitData()
+                            Toast.makeText(context, if (ok) "Git Push Successful" else "Git Push Failed", Toast.LENGTH_SHORT).show()
+                            isOperating = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                ) {
+                    Text("Push")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPushDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 5. Commit Confirmation Dialog
+    if (showCommitDialog) {
+        AlertDialog(
+            onDismissRequest = { showCommitDialog = false },
+            icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = ClaudeTerracotta) },
+            title = { Text("Confirm Commit", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Are you sure you want to commit staged changes with the following message?")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = commitMessage.trim(),
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showCommitDialog = false
+                        val projPath = activeProject?.path ?: return@Button
+                        scope.launch {
+                            isOperating = true
+                            if (status?.stagedFiles.isNullOrEmpty()) {
+                                GitApiClient.stage(projPath, emptyList())
+                            }
+                            val ok = GitApiClient.commit(projPath, commitMessage.trim())
+                            if (ok) {
+                                commitMessage = ""
+                                refreshGitData()
+                                Toast.makeText(context, "Committed successfully!", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Commit failed", Toast.LENGTH_SHORT).show()
+                            }
+                            isOperating = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                ) {
+                    Text("Commit")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCommitDialog = false }) {
                     Text("Cancel")
                 }
             }

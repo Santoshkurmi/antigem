@@ -213,8 +213,10 @@ type CreateProjectReq struct {
 
 // FileSaveReq represents an atomic file save request.
 type FileSaveReq struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
+	Path         string `json:"path"`
+	Content      string `json:"content"`
+	ExpectedHash string `json:"expectedHash,omitempty"`
+	Force        bool   `json:"force,omitempty"`
 }
 
 // FilePatchReq represents a line-range patch request.

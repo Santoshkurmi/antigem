@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -32,8 +33,10 @@ type FileNode struct {
 }
 
 type FileSaveReq struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
+	Path         string `json:"path"`
+	Content      string `json:"content"`
+	ExpectedHash string `json:"expectedHash,omitempty"`
+	Force        bool   `json:"force,omitempty"`
 }
 
 type FilePatchReq struct {
@@ -468,6 +471,25 @@ func main() {
 			return
 		}
 
+		// Hash Conflict Check
+		if req.ExpectedHash != "" && !req.Force {
+			if existingData, err := os.ReadFile(req.Path); err == nil {
+				diskHash := fmt.Sprintf("%x", sha256.Sum256(existingData))
+				if !strings.EqualFold(diskHash, req.ExpectedHash) {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusConflict)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"status":      "conflict",
+						"error":       "CONFLICT",
+						"message":     "File on disk has been modified externally",
+						"diskHash":    diskHash,
+						"diskContent": string(existingData),
+					})
+					return
+				}
+			}
+		}
+
 		tmpPath := req.Path + ".tmp"
 		if err := os.WriteFile(tmpPath, []byte(req.Content), 0644); err != nil {
 			http.Error(w, err.Error(), 500)
@@ -478,8 +500,13 @@ func main() {
 			return
 		}
 
+		newHash := fmt.Sprintf("%x", sha256.Sum256([]byte(req.Content)))
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true}`))
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"path":    req.Path,
+			"hash":    newHash,
+		})
 	}))
 
 	// 7. Line Patch File

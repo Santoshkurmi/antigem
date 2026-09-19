@@ -23,6 +23,7 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     private var currentFile = ""
+    private var isSettingContentProgrammatically = false
 
     val editor = CodeEditor(context).apply {
         typefaceText = Typeface.MONOSPACE
@@ -67,8 +68,20 @@ class CodeEditorView @JvmOverloads constructor(
         editor.getComponent(EditorAutoCompletion::class.java).isEnabled = false
 
         editor.subscribeEvent(ContentChangeEvent::class.java) { _, _ ->
+            if (isSettingContentProgrammatically) return@subscribeEvent
             Log.d(TAG, "ContentChangeEvent: editorTextLen=${editor.text.length}")
             onContentChangeListener?.invoke(editor.text.toString())
+        }
+    }
+
+    fun updateContentIfDifferent(content: String) {
+        if (editor.text.toString() != content) {
+            isSettingContentProgrammatically = true
+            try {
+                editor.setText(content)
+            } finally {
+                isSettingContentProgrammatically = false
+            }
         }
     }
 
@@ -83,7 +96,14 @@ class CodeEditorView @JvmOverloads constructor(
             }
             Log.d(TAG, "setFile: setting language ${lang.javaClass.simpleName} for ext=$ext, contentLen=${content.length}")
             editor.setEditorLanguage(lang)
-            editor.setText(content)
+            isSettingContentProgrammatically = true
+            try {
+                editor.setText(content)
+            } finally {
+                isSettingContentProgrammatically = false
+            }
+        } else {
+            updateContentIfDifferent(content)
         }
     }
 }

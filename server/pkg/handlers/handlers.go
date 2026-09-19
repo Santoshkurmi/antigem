@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -849,6 +850,23 @@ func (h *Handler) FileSaveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Path = expandHome(req.Path)
 
+	// Hash Conflict Check
+	if req.ExpectedHash != "" && !req.Force {
+		if existingData, err := os.ReadFile(req.Path); err == nil {
+			diskHash := fmt.Sprintf("%x", sha256.Sum256(existingData))
+			if !strings.EqualFold(diskHash, req.ExpectedHash) {
+				writeJSON(w, http.StatusConflict, map[string]interface{}{
+					"status":      "conflict",
+					"error":       "CONFLICT",
+					"message":     "File on disk has been modified externally",
+					"diskHash":    diskHash,
+					"diskContent": string(existingData),
+				})
+				return
+			}
+		}
+	}
+
 	_ = os.MkdirAll(filepath.Dir(req.Path), 0755)
 	tmpPath := req.Path + ".tmp"
 	if err := os.WriteFile(tmpPath, []byte(req.Content), 0644); err != nil {
@@ -860,8 +878,13 @@ func (h *Handler) FileSaveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	newHash := fmt.Sprintf("%x", sha256.Sum256([]byte(req.Content)))
 	h.NotifyGitChanged(req.Path)
-	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": req.Path})
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"path":    req.Path,
+		"hash":    newHash,
+	})
 }
 
 func (h *Handler) FilePatchHandler(w http.ResponseWriter, r *http.Request) {

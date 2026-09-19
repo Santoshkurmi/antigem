@@ -46,6 +46,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.example.gemini.data.daemon.FileSaveResult
+
+import kotlinx.coroutines.delay
+
+import com.example.gemini.data.daemon.TabDiskUpdateResult
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IdeScreen(
@@ -55,6 +63,7 @@ fun IdeScreen(
     onExecuteRunCommand: (command: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
     val conversations by (viewModel?.conversations ?: MutableStateFlow(emptyList())).collectAsState()
@@ -67,6 +76,9 @@ fun IdeScreen(
     var isWordWrap by remember { mutableStateOf(false) }
     var showNewProjectDialog by remember { mutableStateOf(false) }
     var showFileManager by remember { mutableStateOf(false) }
+    var tabToClose by remember { mutableStateOf<OpenTab?>(null) }
+    var conflictDialogTab by remember { mutableStateOf<OpenTab?>(null) }
+    var autoUpdateNotification by remember { mutableStateOf<String?>(null) }
 
     fun refreshProjectsAndTree() {
         coroutineScope.launch {
@@ -94,6 +106,42 @@ fun IdeScreen(
     LaunchedEffect(Unit) {
         TermuxDaemonManager.serverReconnectedEvent.collect {
             refreshProjectsAndTree()
+        }
+    }
+
+    // Periodically poll active tab disk content & file tree in the background while user is in IDE
+    LaunchedEffect(isVisible, activeProject?.path, activeTabPath) {
+        if (isVisible) {
+            while (true) {
+                if (activeTabPath != null) {
+                    val currentTab = TermuxDaemonManager.openTabs.value.find { it.path == activeTabPath }
+                    if (currentTab != null && !currentTab.isDiff) {
+                        val diskContent = IdeApiClient.readFile(currentTab.path)
+                        if (diskContent != null) {
+                            val res = TermuxDaemonManager.updateTabFromDisk(currentTab.path, diskContent)
+                            if (res == TabDiskUpdateResult.AUTO_UPDATED) {
+                                autoUpdateNotification = "${currentTab.name} reloaded from disk"
+                            }
+                        }
+                    }
+                }
+                val projPath = activeProject?.path
+                if (!projPath.isNullOrBlank()) {
+                    val freshTree = IdeApiClient.getFileTree(projPath)
+                    if (freshTree.isNotEmpty() && freshTree != fileTree) {
+                        fileTree = freshTree
+                    }
+                }
+                delay(3000)
+            }
+        }
+    }
+
+    // Auto-dismiss reload notification banner after 3 seconds
+    LaunchedEffect(autoUpdateNotification) {
+        if (autoUpdateNotification != null) {
+            delay(3000)
+            autoUpdateNotification = null
         }
     }
 
@@ -232,9 +280,26 @@ fun IdeScreen(
                             IconButton(
                                 onClick = {
                                     coroutineScope.launch {
-                                        val success = IdeApiClient.saveFile(activeTab.path, activeTab.content)
-                                        if (success) {
-                                            TermuxDaemonManager.markTabSaved(activeTab.path)
+                                        val result = IdeApiClient.saveFileDetailed(
+                                            path = activeTab.path,
+                                            content = activeTab.content,
+                                            expectedHash = activeTab.originalHash,
+                                            force = false
+                                        )
+                                        when (result) {
+                                            is FileSaveResult.Success -> {
+                                                TermuxDaemonManager.markTabSaved(activeTab.path, result.hash)
+                                                Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+                                            }
+                                            is FileSaveResult.Conflict -> {
+                                                conflictDialogTab = activeTab.copy(
+                                                    diskConflict = true,
+                                                    diskContentOnConflict = result.diskContent
+                                                )
+                                            }
+                                            is FileSaveResult.Error -> {
+                                                Toast.makeText(context, "Save Error: ${result.message}", Toast.LENGTH_LONG).show()
+                                            }
                                         }
                                     }
                                 },
@@ -339,10 +404,80 @@ fun IdeScreen(
                                     tint = Color.Gray,
                                     modifier = Modifier
                                         .size(14.dp)
-                                        .clickable { TermuxDaemonManager.closeTab(tab.path) }
+                                        .clickable {
+                                            if (tab.isModified) {
+                                                tabToClose = tab
+                                            } else {
+                                                TermuxDaemonManager.closeTab(tab.path)
+                                            }
+                                        }
                                 )
                             }
                             Spacer(modifier = Modifier.width(1.dp))
+                        }
+                    }
+                }
+
+                // Auto-Reload Info Banner
+                if (autoUpdateNotification != null) {
+                    Surface(
+                        color = Color(0xFF1E3A8A),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = null,
+                                tint = Color(0xFF60A5FA),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = autoUpdateNotification!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFDBEAFE),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                // Disk Conflict Warning Banner
+                if (activeTab != null && activeTab.diskConflict) {
+                    Surface(
+                        color = Color(0xFF451A03),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFF59E0B),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "File modified on disk externally",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFFDE68A),
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(
+                                onClick = { conflictDialogTab = activeTab },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            ) {
+                                Text("Resolve", color = Color(0xFFF59E0B), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -440,6 +575,112 @@ fun IdeScreen(
                         }
                     }
                 }
+            }
+
+            // Unsaved Tab Close Confirmation Dialog
+            if (tabToClose != null) {
+                val closingTarget = tabToClose!!
+                AlertDialog(
+                    onDismissRequest = { tabToClose = null },
+                    icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = ClaudeTerracotta) },
+                    title = { Text("Unsaved Changes", fontWeight = FontWeight.Bold) },
+                    text = { Text("Do you want to save the changes made to '${closingTarget.name}' before closing?") },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val target = tabToClose ?: return@Button
+                                tabToClose = null
+                                coroutineScope.launch {
+                                    val res = IdeApiClient.saveFileDetailed(
+                                        path = target.path,
+                                        content = target.content,
+                                        expectedHash = target.originalHash,
+                                        force = false
+                                    )
+                                    if (res is FileSaveResult.Success) {
+                                        TermuxDaemonManager.closeTab(target.path)
+                                        Toast.makeText(context, "Saved and closed", Toast.LENGTH_SHORT).show()
+                                    } else if (res is FileSaveResult.Conflict) {
+                                        conflictDialogTab = target.copy(diskConflict = true, diskContentOnConflict = res.diskContent)
+                                    } else {
+                                        Toast.makeText(context, "Failed to save file", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                        ) {
+                            Text("Save & Close")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                val target = tabToClose ?: return@TextButton
+                                tabToClose = null
+                                TermuxDaemonManager.closeTab(target.path)
+                            }
+                        ) {
+                            Text("Don't Save", color = Color(0xFFE57373))
+                        }
+                    }
+                )
+            }
+
+            // External Conflict Resolution Dialog
+            if (conflictDialogTab != null) {
+                val conflictingTarget = conflictDialogTab!!
+                AlertDialog(
+                    onDismissRequest = { conflictDialogTab = null },
+                    icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFFFA726)) },
+                    title = { Text("File Conflict Detected", fontWeight = FontWeight.Bold) },
+                    text = {
+                        Column {
+                            Text("The file '${conflictingTarget.name}' has been modified on disk or by AI.")
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Choose whether to overwrite the disk version with your editor changes or reload the version from disk.",
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val target = conflictDialogTab ?: return@Button
+                                conflictDialogTab = null
+                                coroutineScope.launch {
+                                    val res = IdeApiClient.saveFileDetailed(
+                                        path = target.path,
+                                        content = target.content,
+                                        force = true
+                                    )
+                                    if (res is FileSaveResult.Success) {
+                                        TermuxDaemonManager.markTabSaved(target.path, res.hash)
+                                        Toast.makeText(context, "Saved (Overwritten)", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Failed to overwrite disk", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                        ) {
+                            Text("Overwrite Disk (Keep Mine)")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                val target = conflictDialogTab ?: return@TextButton
+                                conflictDialogTab = null
+                                TermuxDaemonManager.resolveTabConflict(target.path, keepMine = false)
+                                Toast.makeText(context, "Reverted to disk version", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Text("Revert to Disk", color = Color(0xFFE57373))
+                        }
+                    }
+                )
             }
 
             // Full-Screen File Manager & Project Selector Dialog
