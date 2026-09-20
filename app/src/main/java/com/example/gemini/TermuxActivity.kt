@@ -23,6 +23,7 @@ class TermuxActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        com.example.gemini.data.service.TermuxService.start(this)
 
         setContent {
             val initialThemeMode = remember { authPreferences.getThemeModeSync() }

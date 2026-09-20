@@ -843,6 +843,122 @@ object LocalEnvironmentManager {
         }
     }
 
+    private fun extractGlibcMinAsset(context: Context, prefixDir: File): Boolean {
+        log("Checking for bundled minimal Glibc runtime...")
+        val assetName = "glibc-min-arm64.tar"
+        val inStream = try {
+            context.assets.open(assetName)
+        } catch (e: Exception) {
+            log("ℹ Minimal Glibc asset ($assetName) not found in APK: ${e.message}")
+            return false
+        }
+
+        return try {
+            val glibcDir = File(prefixDir, "glibc")
+            glibcDir.mkdirs()
+            File(glibcDir, "lib").mkdirs()
+            File(glibcDir, "etc").mkdirs()
+
+            var extractedFiles = 0
+            BufferedInputStream(inStream).use { rawStream ->
+                TarArchiveInputStream(rawStream).use { tarIn ->
+                    var entry: TarArchiveEntry? = tarIn.nextEntry
+                    while (entry != null) {
+                        val rawName = entry.name
+                        val entryName = rawName.removePrefix("glibc/").removePrefix("./glibc/").removePrefix("./")
+                        if (entryName.isNotBlank() && entryName != "/") {
+                            val targetFile = File(glibcDir, entryName)
+                            if (entry.isDirectory) {
+                                targetFile.mkdirs()
+                            } else if (entry.isSymbolicLink) {
+                                targetFile.parentFile?.mkdirs()
+                                if (targetFile.exists() || isSymlink(targetFile)) {
+                                    targetFile.delete()
+                                }
+                                try {
+                                    Os.symlink(entry.linkName, targetFile.absolutePath)
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Symlink error for ${entry.name}: ${e.message}")
+                                }
+                            } else {
+                                targetFile.parentFile?.mkdirs()
+                                FileOutputStream(targetFile).use { fos ->
+                                    tarIn.copyTo(fos)
+                                }
+                                targetFile.setExecutable(true, false)
+                                targetFile.setReadable(true, false)
+                                extractedFiles++
+                            }
+                        }
+                        entry = tarIn.nextEntry
+                    }
+                }
+            }
+            log("✓ Successfully unpacked bundled Glibc runtime ($extractedFiles files) from $assetName into ${glibcDir.absolutePath}")
+            true
+        } catch (e: Exception) {
+            val err = "❌ Failed extracting glibc-min asset: ${e.localizedMessage ?: e.message}"
+            log(err)
+            Log.e(TAG, err, e)
+            false
+        }
+    }
+
+    fun ensureGlibcEnvironment(context: Context): Boolean {
+        val prefixDir = getPrefixDir(context)
+        val glibcDir = File(prefixDir, "glibc")
+        val glibcLib = File(glibcDir, "lib")
+        val ldLinux = File(glibcLib, "ld-linux-aarch64.so.1")
+
+        if (!ldLinux.exists()) {
+            extractGlibcMinAsset(context, prefixDir)
+        }
+
+        // Configure Glibc DNS & NSS resolver
+        val glibcEtc = File(glibcDir, "etc")
+        glibcEtc.mkdirs()
+        val glibcNsswitch = File(glibcEtc, "nsswitch.conf")
+        if (!glibcNsswitch.exists()) {
+            glibcNsswitch.writeText("hosts: files dns\nnetworks: files\nprotocols: files\nservices: files\n")
+        }
+
+        val etcResolv = File(getEtcDir(context), "resolv.conf")
+        val glibcResolv = File(glibcEtc, "resolv.conf")
+        if (!glibcResolv.exists() && !isSymlink(glibcResolv)) {
+            try {
+                Os.symlink(etcResolv.absolutePath, glibcResolv.absolutePath)
+            } catch (_: Exception) {
+                glibcResolv.writeText("nameserver 8.8.8.8\nnameserver 8.8.4.4\nnameserver 1.1.1.1\n")
+            }
+        }
+
+        val etcHosts = File(getEtcDir(context), "hosts")
+        val glibcHosts = File(glibcEtc, "hosts")
+        if (!glibcHosts.exists() && !isSymlink(glibcHosts)) {
+            try {
+                Os.symlink(etcHosts.absolutePath, glibcHosts.absolutePath)
+            } catch (_: Exception) {
+                glibcHosts.writeText("127.0.0.1 localhost\n::1 localhost\n")
+            }
+        }
+
+        if (glibcLib.exists()) {
+            try {
+                val nssDns = File(glibcLib, "libnss_dns.so")
+                if (!nssDns.exists()) {
+                    Os.symlink("libnss_dns.so.2", nssDns.absolutePath)
+                }
+                val nssFiles = File(glibcLib, "libnss_files.so")
+                if (!nssFiles.exists()) {
+                    Os.symlink("libnss_files.so.2", nssFiles.absolutePath)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Glibc lib symlink setup: ${e.message}")
+            }
+        }
+        return ldLinux.exists()
+    }
+
     private fun extractDebsArchive(
         archiveFile: File,
         prefixDir: File,
@@ -1133,7 +1249,6 @@ export PREFIX="${prefixDir.absolutePath}"
 export HOME="${homeDir.absolutePath}"
 export PATH="${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/system/xbin"
 export TMPDIR="${prefixDir.absolutePath}/tmp"
-export LD_LIBRARY_PATH="${prefixDir.absolutePath}/lib:/system/lib64:/system/lib"
 export TERM="xterm-256color"
 export COLORTERM="truecolor"
 export TERMUX_VERSION="0.118.0"
@@ -1171,7 +1286,6 @@ fi
 export HOME="${homeDir.absolutePath}"
 export PATH="${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/system/xbin"
 export TMPDIR="${prefixDir.absolutePath}/tmp"
-export LD_LIBRARY_PATH="${prefixDir.absolutePath}/lib:/system/lib64:/system/lib"
 export TERM="xterm-256color"
 export COLORTERM="truecolor"
 export TERMUX_VERSION="0.118.0"
@@ -1184,6 +1298,60 @@ export LANG="en_US.UTF-8"
 export LC_ALL="en_US.UTF-8"
 """.trimIndent()
         )
+
+        // Ensure standard DNS resolution files exist in $PREFIX/etc
+        val etcResolv = File(etcDir, "resolv.conf")
+        if (!etcResolv.exists()) {
+            etcResolv.writeText("nameserver 8.8.8.8\nnameserver 8.8.4.4\nnameserver 1.1.1.1\n")
+        }
+        val etcHosts = File(etcDir, "hosts")
+        if (!etcHosts.exists()) {
+            etcHosts.writeText("127.0.0.1 localhost\n::1 localhost\n")
+        }
+
+        // Extract bundled minimal glibc runtime (1.7MB) if available
+        extractGlibcMinAsset(context, prefixDir)
+
+        // Configure Glibc DNS & NSS resolver if glibc directory is present
+        val glibcDir = File(prefixDir, "glibc")
+        val glibcEtc = File(glibcDir, "etc")
+        glibcEtc.mkdirs()
+        val glibcNsswitch = File(glibcEtc, "nsswitch.conf")
+        glibcNsswitch.writeText("hosts: files dns\nnetworks: files\nprotocols: files\nservices: files\n")
+
+        val glibcResolv = File(glibcEtc, "resolv.conf")
+        if (!glibcResolv.exists() && !isSymlink(glibcResolv)) {
+            try {
+                android.system.Os.symlink(etcResolv.absolutePath, glibcResolv.absolutePath)
+            } catch (_: Exception) {
+                glibcResolv.writeText("nameserver 8.8.8.8\nnameserver 8.8.4.4\nnameserver 1.1.1.1\n")
+            }
+        }
+
+        val glibcHosts = File(glibcEtc, "hosts")
+        if (!glibcHosts.exists() && !isSymlink(glibcHosts)) {
+            try {
+                android.system.Os.symlink(etcHosts.absolutePath, glibcHosts.absolutePath)
+            } catch (_: Exception) {
+                glibcHosts.writeText("127.0.0.1 localhost\n::1 localhost\n")
+            }
+        }
+
+        val glibcLib = File(glibcDir, "lib")
+        if (glibcLib.exists()) {
+            try {
+                val nssDns = File(glibcLib, "libnss_dns.so")
+                if (!nssDns.exists()) {
+                    android.system.Os.symlink("libnss_dns.so.2", nssDns.absolutePath)
+                }
+                val nssFiles = File(glibcLib, "libnss_files.so")
+                if (!nssFiles.exists()) {
+                    android.system.Os.symlink("libnss_files.so.2", nssFiles.absolutePath)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Glibc lib symlink setup: ${e.message}")
+            }
+        }
 
         // Ensure README in projects directory
         val readme = File(projectsDir, "README.md")
@@ -1219,7 +1387,6 @@ All files created here persist inside the application.
             env["HOME"] = home.absolutePath
             env["PATH"] = "${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin"
             env["TMPDIR"] = tmp.absolutePath
-            env["LD_LIBRARY_PATH"] = "${lib.absolutePath}:/system/lib64:/system/lib"
             env["TERM"] = "xterm-256color"
             env["COLORTERM"] = "truecolor"
             env["TERMUX_VERSION"] = "0.118.0"

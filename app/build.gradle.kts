@@ -66,6 +66,10 @@ android {
       shaders = false
     }
 
+    androidResources {
+        noCompress += listOf("gz", "tgz", "tar.gz", "tar")
+    }
+
     packaging {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"

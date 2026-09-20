@@ -141,6 +141,8 @@ class LocalPtySession(
             val home = LocalEnvironmentManager.getHomeDir(context)
             val tmp = LocalEnvironmentManager.getTmpDir(context)
 
+            LocalEnvironmentManager.ensureGlibcEnvironment(context)
+
             val shellBinary = when {
                 File(bin, "zsh").exists() && File(bin, "zsh").canExecute() -> File(bin, "zsh").absolutePath
                 File(bin, "bash").exists() && File(bin, "bash").canExecute() -> File(bin, "bash").absolutePath
@@ -157,7 +159,6 @@ class LocalPtySession(
                 "HOME=${home.absolutePath}",
                 "PATH=${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin",
                 "TMPDIR=${tmp.absolutePath}",
-                "LD_LIBRARY_PATH=${lib.absolutePath}:/system/lib64:/system/lib",
                 "TERM=xterm-256color",
                 "COLORTERM=truecolor",
                 "TERMUX_VERSION=0.118.0",

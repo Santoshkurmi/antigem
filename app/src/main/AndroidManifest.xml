@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -62,14 +64,15 @@
             android:taskAffinity="com.antigem.floating"
             android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize" />
 
+
         <service
-            android:name=".ui.bubble.FloatingBubbleService"
+            android:name=".data.service.TermuxService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Floating assistant overlay for AI chat and terminal multitasking" />
+                android:value="Background terminal and AI language server execution" />
         </service>
     </application>
 
