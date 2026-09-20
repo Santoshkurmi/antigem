@@ -649,32 +649,63 @@ object LocalEnvironmentManager {
                                 symlinksContent = inStream.bufferedReader(Charsets.UTF_8).readText()
                             }
                         } else {
-                            val entryName = rawName
-                                .removePrefix("./")
-                                .replaceFirst(Regex("^data/data/[^/]+/files/usr/"), "")
-                                .replaceFirst(Regex("^data/data/[^/]+/files/"), "")
-                                .removePrefix("usr/")
-                                .removePrefix("./")
+                            val cleanPath = rawName.removePrefix("./")
+                            val isHomePath = cleanPath.startsWith("home/") || cleanPath.contains("/files/home/")
+                            val targetFile = if (isHomePath) {
+                                val relHome = cleanPath
+                                    .replaceFirst(Regex("^.*?files/home/"), "")
+                                    .removePrefix("home/")
+                                    .removePrefix("./")
+                                if (relHome.isBlank()) null else File(homeDir, relHome)
+                            } else {
+                                val entryName = cleanPath
+                                    .replaceFirst(Regex("^.*?files/usr/"), "")
+                                    .replaceFirst(Regex("^.*?files/"), "")
+                                    .removePrefix("usr/")
+                                    .removePrefix("./")
+                                if (entryName.isBlank() || entryName == "/") null else File(prefixDir, entryName)
+                            }
 
-                            if (entryName.isNotBlank() && entryName != "/") {
-                                val targetFile = File(prefixDir, entryName)
-
+                            if (targetFile != null) {
                                 if (entry.isDirectory) {
                                     targetFile.mkdirs()
+                                    targetFile.setReadable(true, false)
+                                    targetFile.setWritable(true, false)
+                                    targetFile.setExecutable(true, false)
                                 } else {
-                                    targetFile.parentFile?.mkdirs()
-                                    zip.getInputStream(entry).use { inStream ->
-                                        FileOutputStream(targetFile).use { fos ->
-                                            inStream.copyTo(fos)
+                                    targetFile.parentFile?.let { p ->
+                                        if (!p.exists()) {
+                                            p.mkdirs()
                                         }
+                                        p.setReadable(true, false)
+                                        p.setWritable(true, false)
+                                        p.setExecutable(true, false)
                                     }
 
-                                    // Mark executables
-                                    val isExecutableDir = targetFile.parentFile?.name in listOf("bin", "libexec", "applets", "sbin")
-                                    val isExecutablePath = targetFile.absolutePath.contains("/bin/") || targetFile.absolutePath.contains("/libexec/")
-                                    if (isExecutableDir || isExecutablePath || !targetFile.name.contains(".")) {
-                                        targetFile.setExecutable(true, false)
+                                    if (targetFile.exists() || isSymlink(targetFile)) {
+                                        targetFile.setWritable(true, false)
+                                        try {
+                                            targetFile.delete()
+                                        } catch (_: Exception) {}
+                                    }
+
+                                    try {
+                                        zip.getInputStream(entry).use { inStream ->
+                                            FileOutputStream(targetFile).use { fos ->
+                                                inStream.copyTo(fos)
+                                            }
+                                        }
+
+                                        // Mark executables
+                                        val isExecutableDir = targetFile.parentFile?.name in listOf("bin", "libexec", "applets", "sbin")
+                                        val isExecutablePath = targetFile.absolutePath.contains("/bin/") || targetFile.absolutePath.contains("/libexec/")
+                                        if (isExecutableDir || isExecutablePath || !targetFile.name.contains(".")) {
+                                            targetFile.setExecutable(true, false)
+                                        }
                                         targetFile.setReadable(true, false)
+                                        targetFile.setWritable(true, false)
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Non-fatal error extracting ${rawName} to ${targetFile.absolutePath}: ${e.message}")
                                     }
                                 }
                             }
@@ -720,20 +751,33 @@ object LocalEnvironmentManager {
 
                     if (parts.size == 2) {
                         val target = parts[0].trim()
-                        val rawRelPath = parts[1].trim()
-                        val symlinkRelPath = rawRelPath
-                            .removePrefix("./")
-                            .replaceFirst(Regex("^data/data/[^/]+/files/usr/"), "")
-                            .replaceFirst(Regex("^data/data/[^/]+/files/"), "")
-                            .removePrefix("usr/")
-                            .removePrefix("./")
-
-                        val symlinkFile = File(prefixDir, symlinkRelPath)
+                        val rawRelPath = parts[1].trim().removePrefix("./")
+                        val isHomeSymlink = rawRelPath.startsWith("home/") || rawRelPath.contains("/files/home/")
+                        val symlinkFile = if (isHomeSymlink) {
+                            val relHome = rawRelPath
+                                .replaceFirst(Regex("^.*?files/home/"), "")
+                                .removePrefix("home/")
+                                .removePrefix("./")
+                            File(homeDir, relHome)
+                        } else {
+                            val symlinkRelPath = rawRelPath
+                                .replaceFirst(Regex("^.*?files/usr/"), "")
+                                .replaceFirst(Regex("^.*?files/"), "")
+                                .removePrefix("usr/")
+                                .removePrefix("./")
+                            File(prefixDir, symlinkRelPath)
+                        }
 
                         try {
-                            symlinkFile.parentFile?.mkdirs()
+                            symlinkFile.parentFile?.let { p ->
+                                if (!p.exists()) p.mkdirs()
+                                p.setReadable(true, false)
+                                p.setWritable(true, false)
+                                p.setExecutable(true, false)
+                            }
                             if (symlinkFile.exists() || isSymlink(symlinkFile)) {
-                                symlinkFile.delete()
+                                symlinkFile.setWritable(true, false)
+                                try { symlinkFile.delete() } catch (_: Exception) {}
                             }
                             Os.symlink(target, symlinkFile.absolutePath)
                         } catch (e: Exception) {
