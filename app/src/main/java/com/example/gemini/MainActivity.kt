@@ -16,7 +16,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.example.gemini.theme.GeminiTheme
-import com.example.gemini.ui.bubble.FloatingBubbleService
 import com.example.gemini.ui.chat.ChatScreen
 import com.example.gemini.ui.chat.ChatViewModel
 import com.example.gemini.ui.chat.ChatViewModelHolder
@@ -103,15 +102,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        FloatingBubbleService.setMainAppForeground(true)
-    }
 
-    override fun onStop() {
-        super.onStop()
-        FloatingBubbleService.setMainAppForeground(false)
-    }
 
     override fun onResume() {
         super.onResume()

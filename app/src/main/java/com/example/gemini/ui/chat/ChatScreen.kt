@@ -7,7 +7,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import com.example.gemini.ui.bubble.FloatingBubbleService
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -209,11 +208,6 @@ fun ChatScreen(
     var showAttachmentSelector by remember { mutableStateOf(false) }
     var showProjectPickerDialog by remember { mutableStateOf(false) }
     var showWorkspaceFolderBrowserDialog by remember { mutableStateOf(false) }
-    var showOverlayPermissionDialog by remember { mutableStateOf(false) }
-
-    val isFloatingBubbleEnabled by viewModel.isFloatingBubbleEnabled.collectAsState()
-    val autoShowFloatingBubbleOnMinimize by viewModel.autoShowFloatingBubbleOnMinimize.collectAsState()
-    val isBubbleServiceRunning by FloatingBubbleService.isServiceRunning.collectAsState()
 
     LaunchedEffect(showSettingsDialog) {
         if (showSettingsDialog) {
@@ -735,22 +729,6 @@ fun ChatScreen(
                         }
                     },
                     actions = {
-                        if (!isInFloatingWindow && isFloatingBubbleEnabled) {
-                            IconButton(onClick = {
-                                if (Settings.canDrawOverlays(context)) {
-                                    FloatingBubbleService.start(context)
-                                    (context as? Activity)?.moveTaskToBack(true)
-                                } else {
-                                    showOverlayPermissionDialog = true
-                                }
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.BubbleChart,
-                                    contentDescription = "Pop out to Floating Bubble",
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-                                )
-                            }
-                        }
                         if (isInFloatingWindow) {
                             IconButton(onClick = onMinimizeWindow) {
                                 Icon(
@@ -1552,10 +1530,6 @@ fun ChatScreen(
             onChangePermissionRuleDecision = { rawRule, newDecision -> viewModel.changeGlobalPermissionGrantDecision(rawRule, newDecision) },
             groupChatsByWorkspace = groupChatsByWorkspace,
             onToggleGroupChatsByWorkspace = { viewModel.setGroupChatsByWorkspace(it) },
-            isFloatingBubbleEnabled = isFloatingBubbleEnabled,
-            autoShowFloatingBubbleOnMinimize = autoShowFloatingBubbleOnMinimize,
-            onToggleFloatingBubbleEnabled = { viewModel.setFloatingBubbleEnabled(it) },
-            onToggleAutoShowFloatingBubbleOnMinimize = { viewModel.setAutoShowFloatingBubbleOnMinimize(it) },
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1715,51 +1689,7 @@ fun ChatScreen(
         )
     }
 
-    // Overlay Permission Request Dialog for Floating Bubble
-    if (showOverlayPermissionDialog) {
-        AlertDialog(
-            onDismissRequest = { showOverlayPermissionDialog = false },
-            icon = {
-                Icon(
-                    imageVector = Icons.Filled.BubbleChart,
-                    contentDescription = null,
-                    tint = ClaudeTerracotta,
-                    modifier = Modifier.size(32.dp)
-                )
-            },
-            title = {
-                Text("Overlay Permission Required")
-            },
-            text = {
-                Text("To use the Facebook Messenger-style Floating Bubble (Chat Heads) across Termux and other apps, please grant 'Display over other apps' permission.")
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showOverlayPermissionDialog = false
-                        try {
-                            val intent = Intent(
-                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse("package:${context.packageName}")
-                            )
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                            context.startActivity(intent)
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                ) {
-                    Text("Open Settings")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showOverlayPermissionDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
+
 
     // Fully Working Local Terminal (Termux Shell with close button above)
     if (showLocalTerminalDialog) {
