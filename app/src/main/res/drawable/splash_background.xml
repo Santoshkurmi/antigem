@@ -5,10 +5,16 @@
 
     <!-- Centered AntiGem Logo -->
     <item
-        android:drawable="@drawable/splash_logo"
         android:gravity="center"
         android:width="160dp"
-        android:height="160dp" />
+        android:height="160dp">
+        <bitmap
+            android:src="@drawable/splash_logo"
+            android:filter="true"
+            android:antialias="true"
+            android:dither="true"
+            android:gravity="center" />
+    </item>
 
     <!-- Bottom AntiGem Brand Typography -->
     <item
