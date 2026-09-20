@@ -34,7 +34,6 @@ object FloatingBubbleManager {
     fun start(context: Context) {
         if (Settings.canDrawOverlays(context)) {
             _isBubbleEnabled.value = true
-            TermuxService.start(context)
         }
     }
 

@@ -60,8 +60,10 @@
             android:theme="@style/Theme.AntiGem.FloatingTranslucent"
             android:windowSoftInputMode="adjustResize"
             android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:autoRemoveFromRecents="true"
             android:launchMode="singleInstance"
-            android:taskAffinity="com.antigem.floating"
+            android:taskAffinity=""
             android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize" />
 
 

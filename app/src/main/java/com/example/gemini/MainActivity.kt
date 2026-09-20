@@ -106,20 +106,11 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         FloatingBubbleService.setMainAppForeground(true)
-        val autoShow = chatViewModel.authPreferences.getAutoShowFloatingBubbleOnMinimizeSync()
-        if (!autoShow) {
-            FloatingBubbleService.stop(this)
-        }
     }
 
     override fun onStop() {
         super.onStop()
         FloatingBubbleService.setMainAppForeground(false)
-        val isEnabled = chatViewModel.authPreferences.getFloatingBubbleEnabledSync()
-        val autoShow = chatViewModel.authPreferences.getAutoShowFloatingBubbleOnMinimizeSync()
-        if (isEnabled && autoShow && android.provider.Settings.canDrawOverlays(this)) {
-            FloatingBubbleService.start(this)
-        }
     }
 
     override fun onResume() {

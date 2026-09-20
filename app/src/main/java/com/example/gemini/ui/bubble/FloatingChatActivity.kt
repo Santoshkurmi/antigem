@@ -69,8 +69,7 @@ class FloatingChatActivity : ComponentActivity() {
                         overridePendingTransition(0, 0)
                     },
                     onMinimize = {
-                        FloatingBubbleService.start(this)
-                        moveTaskToBack(true)
+                        finish()
                     }
                 )
             }
@@ -81,16 +80,6 @@ class FloatingChatActivity : ComponentActivity() {
     override fun finish() {
         super.finish()
         overridePendingTransition(0, 0)
-    }
-
-    override fun onStart() {
-        super.onStart()
-        FloatingBubbleService.setActivityOpen(true)
-    }
-
-    override fun onStop() {
-        super.onStop()
-        FloatingBubbleService.setActivityOpen(false)
     }
 }
 

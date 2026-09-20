@@ -1,6 +1,5 @@
 package com.example.gemini.data.service
 
-import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -9,7 +8,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.graphics.PixelFormat
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -17,30 +15,18 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
-import android.view.Gravity
-import android.view.WindowManager
-import android.view.animation.OvershootInterpolator
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.example.gemini.MainActivity
 import com.example.gemini.R
 import com.example.gemini.data.local.LocalTerminalManager
-import com.example.gemini.theme.GeminiTheme
-import com.example.gemini.ui.bubble.FloatingBubbleContent
-import com.example.gemini.ui.bubble.FloatingBubbleManager
 import com.example.gemini.ui.bubble.FloatingChatActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,13 +47,6 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private var currentSessionCount: Int = 0
-
-    // Floating Bubble Overlay state
-    private var windowManager: WindowManager? = null
-    private var composeView: ComposeView? = null
-    private var layoutParams: WindowManager.LayoutParams? = null
-    private var bubbleX = 30
-    private var bubbleY = 400
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -119,13 +98,15 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
 
         runStartForeground()
         observeTerminalSessions()
-        observeFloatingBubble()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        runStartForeground()
-
         when (intent?.action) {
+            ACTION_STOP_SERVICE -> {
+                Log.d(TAG, "ACTION_STOP_SERVICE intent received")
+                actionStopService()
+                return START_NOT_STICKY
+            }
             ACTION_WAKE_LOCK -> {
                 Log.d(TAG, "ACTION_WAKE_LOCK intent received")
                 actionAcquireWakeLock()
@@ -134,21 +115,18 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
                 Log.d(TAG, "ACTION_WAKE_UNLOCK intent received")
                 actionReleaseWakeLock()
             }
-            ACTION_STOP_SERVICE -> {
-                Log.d(TAG, "ACTION_STOP_SERVICE intent received")
-                actionStopService()
-                return START_NOT_STICKY
+            else -> {
+                runStartForeground()
             }
         }
 
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         serviceScope.cancel()
-        removeOverlayBubble()
         actionReleaseWakeLock()
 
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
@@ -171,156 +149,6 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
                 currentSessionCount = sessions.size
                 updateNotification()
             }
-        }
-    }
-
-    private fun observeFloatingBubble() {
-        serviceScope.launch {
-            FloatingBubbleManager.isBubbleEnabled.collect { isEnabled ->
-                if (isEnabled) {
-                    setupOverlayBubble()
-                } else {
-                    removeOverlayBubble()
-                }
-            }
-        }
-    }
-
-    private fun setupOverlayBubble() {
-        if (!Settings.canDrawOverlays(this)) {
-            Log.d(TAG, "Cannot draw overlays: permission not granted")
-            return
-        }
-        if (composeView != null) return
-
-        try {
-            windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-
-            val displayMetrics = resources.displayMetrics
-            bubbleX = displayMetrics.widthPixels - 180
-            bubbleY = (displayMetrics.heightPixels * 0.35f).toInt()
-
-            val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            }
-
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                overlayType,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                gravity = Gravity.TOP or Gravity.START
-                x = bubbleX
-                y = bubbleY
-            }
-            layoutParams = params
-
-            val view = ComposeView(this).apply {
-                setViewTreeLifecycleOwner(this@TermuxService)
-                setViewTreeSavedStateRegistryOwner(this@TermuxService)
-                setViewTreeViewModelStoreOwner(this@TermuxService)
-
-                setContent {
-                    val isForeground by FloatingBubbleManager.isMainAppForeground.collectAsState()
-                    val isActivityOpen by FloatingBubbleManager.isActivityOpen.collectAsState()
-                    val shouldShow = !isForeground && !isActivityOpen
-
-                    GeminiTheme {
-                        FloatingBubbleContent(
-                            isVisible = shouldShow,
-                            onClick = {
-                                val intent = Intent(this@TermuxService, FloatingChatActivity::class.java).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                                }
-                                startActivity(intent)
-                            },
-                            onDrag = { dx, dy ->
-                                updateBubblePosition(dx, dy)
-                            },
-                            onSnap = {
-                                snapBubbleToEdge()
-                            },
-                            onDismissToDropZone = {
-                                FloatingBubbleManager.setBubbleEnabled(false)
-                            }
-                        )
-                    }
-                }
-            }
-
-            composeView = view
-            windowManager?.addView(view, params)
-            Log.d(TAG, "Overlay bubble attached successfully")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to attach overlay bubble: ${e.message}")
-            composeView = null
-        }
-    }
-
-    private fun updateBubblePosition(dx: Float, dy: Float) {
-        val wm = windowManager ?: return
-        val view = composeView ?: return
-        val lp = layoutParams ?: return
-
-        val displayMetrics = resources.displayMetrics
-        bubbleX = (bubbleX + dx.toInt()).coerceIn(0, displayMetrics.widthPixels - 100)
-        bubbleY = (bubbleY + dy.toInt()).coerceIn(60, displayMetrics.heightPixels - 160)
-
-        lp.x = bubbleX
-        lp.y = bubbleY
-
-        try {
-            wm.updateViewLayout(view, lp)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to update bubble position: ${e.message}")
-        }
-    }
-
-    private fun snapBubbleToEdge() {
-        val wm = windowManager ?: return
-        val view = composeView ?: return
-        val lp = layoutParams ?: return
-
-        val displayMetrics = resources.displayMetrics
-        val screenWidth = displayMetrics.widthPixels
-        val margin = 30
-        val targetX = if (bubbleX + 70 < screenWidth / 2) {
-            margin
-        } else {
-            screenWidth - 170 - margin
-        }
-
-        val startX = bubbleX
-        val animator = ValueAnimator.ofInt(startX, targetX).apply {
-            duration = 260
-            interpolator = OvershootInterpolator(1.1f)
-            addUpdateListener { va ->
-                bubbleX = va.animatedValue as Int
-                lp.x = bubbleX
-                try {
-                    wm.updateViewLayout(view, lp)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to snap bubble: ${e.message}")
-                }
-            }
-        }
-        animator.start()
-    }
-
-    private fun removeOverlayBubble() {
-        if (composeView != null && windowManager != null) {
-            try {
-                windowManager?.removeView(composeView)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to remove overlay bubble: ${e.message}")
-            }
-            composeView = null
         }
     }
 
@@ -362,6 +190,18 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Float Window Action
+        val floatIntent = Intent(this, FloatingChatActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+        }
+        val floatPendingIntent = PendingIntent.getActivity(
+            this, 3, floatIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         // Exit action
         val exitIntent = Intent(this, TermuxService::class.java).setAction(ACTION_STOP_SERVICE)
         val exitPendingIntent = PendingIntent.getService(
@@ -391,6 +231,7 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
             .setPriority(priority)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Exit", exitPendingIntent)
             .addAction(wakeActionIcon, wakeActionTitle, wakePendingIntent)
+            .addAction(android.R.drawable.ic_menu_view, "Float", floatPendingIntent)
             .build()
     }
 
@@ -457,8 +298,6 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
 
     private fun actionStopService() {
         actionReleaseWakeLock()
-        FloatingBubbleManager.setBubbleEnabled(false)
-        removeOverlayBubble()
         LocalTerminalManager.closeAll()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -467,5 +306,6 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
             stopForeground(true)
         }
         stopSelf()
+        android.os.Process.killProcess(android.os.Process.myPid())
     }
 }
