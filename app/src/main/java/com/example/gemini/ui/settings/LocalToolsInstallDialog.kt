@@ -149,6 +149,30 @@ fun LocalToolsInstallDialog(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            if (!LocalEnvironmentManager.isTermuxPackage(context)) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(
+                                            text = "Running as '${context.packageName}'",
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Text(
+                                            text = "Native Termux bootstrap binaries require package name 'com.termux' (install via './gradlew installTermuxDebug'). For this standard build, please use SSH Terminal Mode to connect to your Termux app or server.",
+                                            fontSize = 11.5.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
                             // Option 1: Auto Download from GitHub (Recommended)
                             Surface(
                                 shape = RoundedCornerShape(12.dp),

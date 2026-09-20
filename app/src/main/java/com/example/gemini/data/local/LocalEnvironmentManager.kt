@@ -74,6 +74,7 @@ object LocalEnvironmentManager {
     fun getTmpDir(context: Context): File = File(getPrefixDir(context), "tmp")
     fun getHomeDir(context: Context): File = File(context.filesDir, "home")
     fun getProjectsDir(context: Context): File = File(getHomeDir(context), "projects")
+    fun isTermuxPackage(context: Context): Boolean = context.packageName == "com.termux"
 
     fun getBootstrapArch(): String {
         val abis = Build.SUPPORTED_ABIS ?: emptyArray()
@@ -1135,6 +1136,12 @@ export TMPDIR="${prefixDir.absolutePath}/tmp"
 export LD_LIBRARY_PATH="${prefixDir.absolutePath}/lib:/system/lib64:/system/lib"
 export TERM="xterm-256color"
 export COLORTERM="truecolor"
+export TERMUX_VERSION="0.118.0"
+export TERMUX_MAIN_PACKAGE_NAME="${context.packageName}"
+export TERMUX_APK_RELEASE="GITHUB"
+export SHELL="${binDir.absolutePath}/bash"
+export ANDROID_DATA="/data"
+export ANDROID_ROOT="/system"
 export LANG="en_US.UTF-8"
 export LC_ALL="en_US.UTF-8"
 
@@ -1166,6 +1173,15 @@ export PATH="${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/
 export TMPDIR="${prefixDir.absolutePath}/tmp"
 export LD_LIBRARY_PATH="${prefixDir.absolutePath}/lib:/system/lib64:/system/lib"
 export TERM="xterm-256color"
+export COLORTERM="truecolor"
+export TERMUX_VERSION="0.118.0"
+export TERMUX_MAIN_PACKAGE_NAME="${context.packageName}"
+export TERMUX_APK_RELEASE="GITHUB"
+export SHELL="${binDir.absolutePath}/bash"
+export ANDROID_DATA="/data"
+export ANDROID_ROOT="/system"
+export LANG="en_US.UTF-8"
+export LC_ALL="en_US.UTF-8"
 """.trimIndent()
         )
 
@@ -1206,6 +1222,12 @@ All files created here persist inside the application.
             env["LD_LIBRARY_PATH"] = "${lib.absolutePath}:/system/lib64:/system/lib"
             env["TERM"] = "xterm-256color"
             env["COLORTERM"] = "truecolor"
+            env["TERMUX_VERSION"] = "0.118.0"
+            env["TERMUX_MAIN_PACKAGE_NAME"] = context.packageName
+            env["TERMUX_APK_RELEASE"] = "GITHUB"
+            env["TERMUX_APP_PID"] = android.os.Process.myPid().toString()
+            env["ANDROID_DATA"] = "/data"
+            env["ANDROID_ROOT"] = "/system"
             env["LANG"] = "en_US.UTF-8"
             env["LC_ALL"] = "en_US.UTF-8"
 

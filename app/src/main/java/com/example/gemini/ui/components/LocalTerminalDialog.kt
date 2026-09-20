@@ -188,6 +188,24 @@ fun LocalTerminalContent(
         termView?.requestFocus()
     }
 
+    DisposableEffect(activeSession, currentTerminalView) {
+        val tv = currentTerminalView
+        if (tv != null) {
+            val listener: () -> Unit = {
+                tv.post {
+                    tv.onScreenUpdated()
+                    tv.invalidate()
+                }
+            }
+            activeSession.addTextChangedListener(listener)
+            onDispose {
+                activeSession.removeTextChangedListener(listener)
+            }
+        } else {
+            onDispose {}
+        }
+    }
+
     val density = androidx.compose.ui.platform.LocalDensity.current
     val statusBarHeightPx = WindowInsets.statusBars.getTop(density)
     val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
@@ -348,12 +366,6 @@ fun LocalTerminalContent(
                                 }
                                 android.util.Log.d("AntiGemTerminal", "[TerminalView-factory] Attaching session ${activeSession.id} (${activeSession.name})")
                                 attachSession(activeSession.terminalSession)
-                                activeSession.onTextChangedListener = {
-                                    post {
-                                        onScreenUpdated()
-                                        invalidate()
-                                    }
-                                }
                                 currentTerminalView = this
                                 post {
                                     requestFocus()
@@ -388,12 +400,6 @@ fun LocalTerminalContent(
                             tv.setTerminalSizeListener { cols, rows, widthPx, heightPx ->
                                 android.util.Log.d("AntiGemTerminal", "[TerminalView-update] setTerminalSizeListener: cols=$cols, rows=$rows, widthPx=$widthPx, heightPx=$heightPx for session ${activeSession.id}")
                                 activeSession.updateSize(cols, rows, widthPx, heightPx)
-                            }
-                            activeSession.onTextChangedListener = {
-                                tv.post {
-                                    tv.onScreenUpdated()
-                                    tv.invalidate()
-                                }
                             }
                             currentTerminalView = tv
                         },

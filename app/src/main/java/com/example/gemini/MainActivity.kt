@@ -37,7 +37,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         com.example.gemini.data.daemon.TermuxDaemonManager.init(this)
-
         handleOAuthIntent(intent)
 
         setContent {
@@ -50,14 +49,14 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemDark
             }
 
+            var currentViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
+
             GeminiTheme(darkTheme = useDarkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    var currentViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
-
-                    BackHandler(enabled = currentViewMode == AppViewMode.IDE) {
+                    BackHandler(enabled = currentViewMode != AppViewMode.CHAT) {
                         currentViewMode = AppViewMode.CHAT
                     }
 

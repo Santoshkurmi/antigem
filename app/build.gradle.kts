@@ -24,9 +24,20 @@ android {
         }
     }
 
+    flavorDimensions += "mode"
+    productFlavors {
+        create("standard") {
+            dimension = "mode"
+            applicationId = "com.antigem"
+        }
+        create("termux") {
+            dimension = "mode"
+            applicationId = "com.termux"
+        }
+    }
+
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
         }
         release {
             isMinifyEnabled = true

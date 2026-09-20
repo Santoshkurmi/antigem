@@ -141,19 +141,6 @@ class LocalPtySession(
             val home = LocalEnvironmentManager.getHomeDir(context)
             val tmp = LocalEnvironmentManager.getTmpDir(context)
 
-            val envList = arrayOf(
-                "PREFIX=${prefix.absolutePath}",
-                "HOME=${home.absolutePath}",
-                "PATH=${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin",
-                "TMPDIR=${tmp.absolutePath}",
-                "LD_LIBRARY_PATH=${lib.absolutePath}:/system/lib64:/system/lib",
-                "TERM=xterm-256color",
-                "COLORTERM=truecolor",
-                "LANG=en_US.UTF-8",
-                "LC_ALL=en_US.UTF-8",
-                "PS1=$ "
-            )
-
             val shellBinary = when {
                 File(bin, "zsh").exists() && File(bin, "zsh").canExecute() -> File(bin, "zsh").absolutePath
                 File(bin, "bash").exists() && File(bin, "bash").canExecute() -> File(bin, "bash").absolutePath
@@ -164,6 +151,26 @@ class LocalPtySession(
                 File(bin, "sh").exists() -> File(bin, "sh").absolutePath
                 else -> "/system/bin/sh"
             }
+
+            val envList = arrayOf(
+                "PREFIX=${prefix.absolutePath}",
+                "HOME=${home.absolutePath}",
+                "PATH=${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin",
+                "TMPDIR=${tmp.absolutePath}",
+                "LD_LIBRARY_PATH=${lib.absolutePath}:/system/lib64:/system/lib",
+                "TERM=xterm-256color",
+                "COLORTERM=truecolor",
+                "TERMUX_VERSION=0.118.0",
+                "TERMUX_MAIN_PACKAGE_NAME=${context.packageName}",
+                "TERMUX_APK_RELEASE=GITHUB",
+                "TERMUX_APP_PID=${android.os.Process.myPid()}",
+                "SHELL=$shellBinary",
+                "ANDROID_DATA=/data",
+                "ANDROID_ROOT=/system",
+                "LANG=en_US.UTF-8",
+                "LC_ALL=en_US.UTF-8",
+                "PS1=$ "
+            )
 
             val cwd = if (File(workingDirectory).exists()) workingDirectory else home.absolutePath
 
@@ -214,7 +221,7 @@ class LocalPtySession(
                     Log.d(TAG, "[$id] Flushing early buffered output: ${buffered.size} bytes")
                     sessionScope.launch(Dispatchers.Main) {
                         terminalSession.emulator?.append(buffered, buffered.size)
-                        onTextChangedListener?.invoke()
+                        notifyTextChanged()
                     }
                 }
             }
@@ -338,7 +345,7 @@ class LocalPtySession(
                         }
                     }
                     terminalSession.emulator?.append(data, data.size)
-                    onTextChangedListener?.invoke()
+                    notifyTextChanged()
                 }
                 if (hasClear && isSsh) {
                     sessionScope.launch(Dispatchers.IO) {
@@ -365,7 +372,7 @@ class LocalPtySession(
                 Log.d(TAG, "[$id] FALLBACK -> EMULATOR: len=${chunk.size} -> \"$preview\"")
                 sessionScope.launch(Dispatchers.Main) {
                     terminalSession.emulator?.append(chunk, chunk.size)
-                    onTextChangedListener?.invoke()
+                    notifyTextChanged()
                 }
             }
         },
@@ -461,7 +468,7 @@ class LocalPtySession(
                         if (formatted.isNotEmpty()) {
                             terminalSession.emulator?.append(formatted, formatted.size)
                         }
-                        onTextChangedListener?.invoke()
+                        notifyTextChanged()
                     }
                 }
             }
@@ -539,7 +546,7 @@ class LocalPtySession(
             }
 
             if (changed) {
-                onTextChangedListener?.invoke()
+                notifyTextChanged()
             }
         }
 
@@ -787,16 +794,32 @@ class LocalPtySession(
             val bytes = text.toByteArray(Charsets.UTF_8)
             sessionScope.launch(Dispatchers.Main) {
                 terminalSession.emulator?.append(bytes, bytes.size)
-                onTextChangedListener?.invoke()
+                notifyTextChanged()
             }
         } catch (_: Exception) {
         }
     }
 
-    var onTextChangedListener: (() -> Unit)? = null
+    private val textChangedListeners = java.util.concurrent.CopyOnWriteArraySet<() -> Unit>()
+
+    fun addTextChangedListener(listener: () -> Unit) {
+        textChangedListeners.add(listener)
+    }
+
+    fun removeTextChangedListener(listener: () -> Unit) {
+        textChangedListeners.remove(listener)
+    }
+
+    fun notifyTextChanged() {
+        for (listener in textChangedListeners) {
+            try {
+                listener.invoke()
+            } catch (_: Exception) {}
+        }
+    }
 
     override fun onTextChanged(changedSession: TerminalSession) {
-        onTextChangedListener?.invoke()
+        notifyTextChanged()
     }
 
     override fun onTitleChanged(changedSession: TerminalSession) {
