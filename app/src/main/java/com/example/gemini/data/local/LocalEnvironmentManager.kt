@@ -843,6 +843,7 @@ object LocalEnvironmentManager {
                 totalDiskUsageFormatted = getFormattedDiskSpace(appContext)
             )
             log("✅ Local environment ready and verified! Total space: ${getFormattedDiskSpace(appContext)}")
+            LocalTerminalManager.autoLaunchServerIfReady(appContext)
             return@withContext true
 
         } catch (e: Exception) {

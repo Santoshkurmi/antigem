@@ -59,6 +59,7 @@ class LocalPtySession(
     initialWorkingDir: String? = null,
     initialPaneId: String? = null,
     initialWindowId: String? = null,
+    val initialCommand: String? = null,
     initialCols: Int = 80,
     initialRows: Int = 24,
     initialWidthPx: Int = 800,
@@ -174,11 +175,16 @@ class LocalPtySession(
             )
 
             val cwd = if (File(workingDirectory).exists()) workingDirectory else home.absolutePath
+            val shellArgs = if (!initialCommand.isNullOrBlank()) {
+                arrayOf("-l", "-c", "$initialCommand; exec $shellBinary")
+            } else {
+                emptyArray()
+            }
 
             terminalSession = TerminalSession(
                 shellBinary,
                 cwd,
-                emptyArray(),
+                shellArgs,
                 envList,
                 3000,
                 this
@@ -1032,6 +1038,37 @@ object LocalTerminalManager {
         return null
     }
 
+    private var hasAutoLaunchedServer = false
+
+    fun autoLaunchServerIfReady(context: Context) {
+        if (hasAutoLaunchedServer) return
+        val pkg = context.packageName
+        val isTermux = pkg == "com.termux" || pkg.contains("termux")
+        if (!isTermux) return
+
+        if (!LocalEnvironmentManager.isInstalled(context)) {
+            Log.d(TAG, "[AutoLaunch] Bootstrap is not installed yet, skipping auto-launch")
+            return
+        }
+
+        val homeDir = LocalEnvironmentManager.getHomeDir(context)
+        val serverFile = File(homeDir, "server")
+        if (!serverFile.exists()) {
+            Log.d(TAG, "[AutoLaunch] Server binary not found at ${serverFile.absolutePath}")
+            return
+        }
+
+        try {
+            serverFile.setExecutable(true, false)
+            serverFile.setReadable(true, false)
+        } catch (_: Exception) {}
+
+        hasAutoLaunchedServer = true
+        managerScope.launch(Dispatchers.Main) {
+            getOrCreateOrRestoreSessions(context)
+        }
+    }
+
     suspend fun getOrCreateOrRestoreSessions(context: Context): List<LocalPtySession> {
         Log.d(TAG, "[Manager] getOrCreateOrRestoreSessions called, existing count=${_sessions.value.size}")
         if (_sessions.value.isNotEmpty()) {
@@ -1048,11 +1085,19 @@ object LocalTerminalManager {
 
         if (!useSsh) {
             return withContext(Dispatchers.Main) {
+                val pkg = context.packageName
+                val isTermux = pkg == "com.termux" || pkg.contains("termux")
+                val homeDir = LocalEnvironmentManager.getHomeDir(context)
+                val serverFile = File(homeDir, "server")
+                val isServerPresent = serverFile.exists() && serverFile.canExecute()
+                val shouldRunServer = isTermux && isServerPresent
+
                 val primary = LocalPtySession(
                     id = "session-1",
-                    initialTitle = "Session 1",
+                    initialTitle = if (shouldRunServer) "Server" else "Session 1",
                     context = context.applicationContext,
                     isSsh = false,
+                    initialCommand = if (shouldRunServer) "./server -f" else null,
                     initialCols = lastKnownCols,
                     initialRows = lastKnownRows,
                     initialWidthPx = lastKnownWidthPx,
@@ -1060,7 +1105,7 @@ object LocalTerminalManager {
                 )
                 _sessions.value = listOf(primary)
                 _activeSessionId.value = primary.id
-                Log.d(TAG, "[Manager] Created local non-SSH primary session")
+                Log.d(TAG, "[Manager] Created local non-SSH primary session (command=${primary.initialCommand})")
                 listOf(primary)
             }
         }

@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
 
         com.example.gemini.data.service.TermuxService.start(this)
         com.example.gemini.data.daemon.TermuxDaemonManager.init(this)
+        com.example.gemini.data.local.LocalTerminalManager.autoLaunchServerIfReady(this)
         handleOAuthIntent(intent)
 
         setContent {
