@@ -202,6 +202,8 @@ fun ChatScreen(
     var showTerminalInspector by remember { mutableStateOf(false) }
     var showLocalTerminalDialog by rememberSaveable { mutableStateOf(false) }
     var showLocalToolsInstallDialog by remember { mutableStateOf(false) }
+    var showLocalServerOutputDialog by remember { mutableStateOf(false) }
+    val serverStatus by com.example.gemini.data.local.LocalServerManager.status.collectAsState()
     var showRawPayloadDialog by remember { mutableStateOf<String?>(null) }
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -742,6 +744,30 @@ fun ChatScreen(
                                     imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
                                     contentDescription = "Open Full Screen",
                                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
+                        if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) {
+                            val dotColor = when (serverStatus) {
+                                is com.example.gemini.data.local.LocalServerStatus.Running -> Color(0xFF22C55E)
+                                is com.example.gemini.data.local.LocalServerStatus.Starting -> Color(0xFFF59E0B)
+                                is com.example.gemini.data.local.LocalServerStatus.Stopped -> Color(0xFF9CA3AF)
+                                is com.example.gemini.data.local.LocalServerStatus.Error -> Color(0xFFEF4444)
+                                is com.example.gemini.data.local.LocalServerStatus.Idle -> Color(0xFF9CA3AF)
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .clickable { showLocalServerOutputDialog = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(11.dp)
+                                        .clip(CircleShape)
+                                        .background(dotColor)
                                 )
                             }
                         }
@@ -1710,6 +1736,13 @@ fun ChatScreen(
                 onDismiss = { showLocalTerminalDialog = false }
             )
         }
+    }
+
+    // Local Server Output & Logs Dialog
+    if (showLocalServerOutputDialog) {
+        com.example.gemini.ui.components.LocalServerOutputDialog(
+            onDismiss = { showLocalServerOutputDialog = false }
+        )
     }
 
     // Local Tools Setup & Progress Dialog

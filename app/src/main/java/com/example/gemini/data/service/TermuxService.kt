@@ -297,8 +297,18 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
     }
 
     private fun actionStopService() {
+        Log.d(TAG, "actionStopService: Force-killing all background processes and stopping service")
         actionReleaseWakeLock()
-        LocalTerminalManager.closeAll()
+        try {
+            com.example.gemini.data.local.LocalServerManager.forceKillAll()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error force killing server manager: ${e.message}")
+        }
+        try {
+            LocalTerminalManager.closeAll()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error closing terminal sessions: ${e.message}")
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
@@ -307,5 +317,6 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
         }
         stopSelf()
         android.os.Process.killProcess(android.os.Process.myPid())
+        kotlin.system.exitProcess(0)
     }
 }

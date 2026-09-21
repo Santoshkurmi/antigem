@@ -1038,10 +1038,7 @@ object LocalTerminalManager {
         return null
     }
 
-    private var hasAutoLaunchedServer = false
-
     fun autoLaunchServerIfReady(context: Context) {
-        if (hasAutoLaunchedServer) return
         val pkg = context.packageName
         val isTermux = pkg == "com.termux" || pkg.contains("termux")
         if (!isTermux) return
@@ -1051,22 +1048,7 @@ object LocalTerminalManager {
             return
         }
 
-        val homeDir = LocalEnvironmentManager.getHomeDir(context)
-        val serverFile = File(homeDir, "server")
-        if (!serverFile.exists()) {
-            Log.d(TAG, "[AutoLaunch] Server binary not found at ${serverFile.absolutePath}")
-            return
-        }
-
-        try {
-            serverFile.setExecutable(true, false)
-            serverFile.setReadable(true, false)
-        } catch (_: Exception) {}
-
-        hasAutoLaunchedServer = true
-        managerScope.launch(Dispatchers.Main) {
-            getOrCreateOrRestoreSessions(context)
-        }
+        LocalServerManager.autoStartOnAppLaunch(context)
     }
 
     suspend fun getOrCreateOrRestoreSessions(context: Context): List<LocalPtySession> {
@@ -1085,19 +1067,12 @@ object LocalTerminalManager {
 
         if (!useSsh) {
             return withContext(Dispatchers.Main) {
-                val pkg = context.packageName
-                val isTermux = pkg == "com.termux" || pkg.contains("termux")
-                val homeDir = LocalEnvironmentManager.getHomeDir(context)
-                val serverFile = File(homeDir, "server")
-                val isServerPresent = serverFile.exists() && serverFile.canExecute()
-                val shouldRunServer = isTermux && isServerPresent
-
                 val primary = LocalPtySession(
                     id = "session-1",
-                    initialTitle = if (shouldRunServer) "Server" else "Session 1",
+                    initialTitle = "Session 1",
                     context = context.applicationContext,
                     isSsh = false,
-                    initialCommand = if (shouldRunServer) "./server -f" else null,
+                    initialCommand = null,
                     initialCols = lastKnownCols,
                     initialRows = lastKnownRows,
                     initialWidthPx = lastKnownWidthPx,
@@ -1105,7 +1080,7 @@ object LocalTerminalManager {
                 )
                 _sessions.value = listOf(primary)
                 _activeSessionId.value = primary.id
-                Log.d(TAG, "[Manager] Created local non-SSH primary session (command=${primary.initialCommand})")
+                Log.d(TAG, "[Manager] Created local non-SSH primary interactive session")
                 listOf(primary)
             }
         }

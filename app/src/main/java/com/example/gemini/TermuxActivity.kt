@@ -24,7 +24,6 @@ class TermuxActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         com.example.gemini.data.service.TermuxService.start(this)
-        com.example.gemini.data.local.LocalTerminalManager.autoLaunchServerIfReady(this)
 
         setContent {
             val initialThemeMode = remember { authPreferences.getThemeModeSync() }

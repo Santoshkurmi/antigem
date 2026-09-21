@@ -37,9 +37,9 @@ class MainActivity : ComponentActivity() {
 
         if (com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(this)) {
             com.example.gemini.data.service.TermuxService.start(this)
+            com.example.gemini.data.local.LocalServerManager.autoStartOnAppLaunch(this)
         }
         com.example.gemini.data.daemon.TermuxDaemonManager.init(this)
-        com.example.gemini.data.local.LocalTerminalManager.autoLaunchServerIfReady(this)
         handleOAuthIntent(intent)
 
         setContent {
@@ -75,6 +75,7 @@ class MainActivity : ComponentActivity() {
                             onDismissOrCompleted = {
                                 showPermissionsDialog = false
                                 com.example.gemini.data.service.TermuxService.start(context)
+                                com.example.gemini.data.local.LocalServerManager.autoStartOnAppLaunch(context)
                             }
                         )
                     } else if (showFullScreenInstaller) {
@@ -87,7 +88,7 @@ class MainActivity : ComponentActivity() {
                             onComplete = {
                                 isInstalledState = true
                                 hasSkippedInstaller = true
-                                com.example.gemini.data.local.LocalTerminalManager.autoLaunchServerIfReady(context)
+                                com.example.gemini.data.local.LocalServerManager.autoStartOnAppLaunch(context)
                             }
                         )
                     } else {
@@ -144,6 +145,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         if (com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(this)) {
             com.example.gemini.data.service.TermuxService.start(this)
+            com.example.gemini.data.local.LocalServerManager.autoStartOnAppLaunch(this)
         }
         lifecycleScope.launch {
             com.example.gemini.data.daemon.TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
