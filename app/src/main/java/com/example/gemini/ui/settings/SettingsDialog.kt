@@ -89,9 +89,9 @@ fun SettingsDialog(
     sshPort: Int = 8022,
     sshUser: String = "root",
     sshPass: String = "root",
-    terminalFontSize: Int = 13,
-    terminalCursorStyle: String = "BLOCK",
-    terminalBufferSize: Int = 2000,
+    terminalFontSize: Int = 14,
+    terminalCursorStyle: String = "BAR",
+    terminalBufferSize: Int = 20000,
     terminalTheme: String = "DEFAULT",
     isLocalToolsEnabled: Boolean = false,
     isLocalToolsInstalled: Boolean = false,
@@ -2980,13 +2980,24 @@ private fun TerminalSubScreen(
 
                 // Buffer Size
                 Text("Scrollback Buffer", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val buffers = listOf(1000 to "1,000", 2000 to "2,000", 5000 to "5,000", 10000 to "10,000")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val buffers = listOf(
+                        1000 to "1k",
+                        5000 to "5k",
+                        10000 to "10k",
+                        20000 to "20k",
+                        50000 to "50k",
+                        100000 to "Unlimited"
+                    )
                     buffers.forEach { (buf, label) ->
-                        val isSel = bufferSizeState == buf
+                        val isSel = bufferSizeState == buf || (buf == 100000 && bufferSizeState >= 100000)
                         Surface(
                             modifier = Modifier
-                                .weight(1f)
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable {
                                     bufferSizeState = buf
@@ -2996,8 +3007,8 @@ private fun TerminalSubScreen(
                             color = if (isSel) ClaudeTerracotta else MaterialTheme.colorScheme.surface,
                             border = BorderStroke(1.dp, if (isSel) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
                         ) {
-                            Box(modifier = Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                                Text(text = label, fontSize = 11.sp, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium, color = if (isSel) Color.White else MaterialTheme.colorScheme.onSurface)
+                            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                Text(text = label, fontSize = 11.5.sp, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium, color = if (isSel) Color.White else MaterialTheme.colorScheme.onSurface)
                             }
                         }
                     }

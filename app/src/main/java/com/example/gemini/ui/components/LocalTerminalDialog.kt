@@ -44,6 +44,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.PopupProperties
 import com.example.gemini.data.local.LocalPtySession
 import com.example.gemini.data.local.LocalTerminalManager
+import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.theme.*
 import com.termux.terminal.KeyHandler
 import com.termux.terminal.TerminalSession
@@ -146,10 +147,22 @@ fun LocalTerminalContent(
         }
     }
 
+    val authPreferences = remember { AuthPreferences(context) }
+    val savedFontSize by authPreferences.terminalFontSize.collectAsState(initial = 14)
+    val savedCursorStyle by authPreferences.terminalCursorStyle.collectAsState(initial = "BAR")
+    val savedBufferSize by authPreferences.terminalBufferSize.collectAsState(initial = 20000)
+
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
+
+    val baseTextSizePx = remember(savedFontSize, density) {
+        (savedFontSize * density.density).roundToInt().coerceIn(16, 60)
+    }
+
     val isExited by activeSession.isExited.collectAsState()
     val title by activeSession.title.collectAsState()
 
-    var terminalTextSize by remember { mutableIntStateOf(34) }
+    var terminalTextSize by remember(baseTextSizePx) { mutableIntStateOf(baseTextSizePx) }
     var ctrlState by remember { mutableStateOf(ModifierState.OFF) }
     var altState by remember { mutableStateOf(ModifierState.OFF) }
     var isTabsMenuExpanded by remember { mutableStateOf(false) }
@@ -159,6 +172,12 @@ fun LocalTerminalContent(
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
 
     var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
+
+    LaunchedEffect(savedCursorStyle, savedBufferSize) {
+        LocalTerminalManager.updatePreferences(savedCursorStyle, savedBufferSize)
+        currentTerminalView?.currentSession?.emulator?.setCursorStyle()
+        currentTerminalView?.invalidate()
+    }
 
     val sendKeyToTerminal: (Int, String) -> Unit = sendKey@{ keyCode, fallbackString ->
         if (activeSession.isExited.value && (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER || fallbackString == "\r" || fallbackString == "\n")) {
@@ -206,7 +225,6 @@ fun LocalTerminalContent(
         }
     }
 
-    val density = androidx.compose.ui.platform.LocalDensity.current
     val statusBarHeightPx = WindowInsets.statusBars.getTop(density)
     val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
 
@@ -242,9 +260,18 @@ fun LocalTerminalContent(
                                         if (scale < 0.9f || scale > 1.1f) {
                                             val doIncrease = scale > 1.0f
                                             val newSize = if (doIncrease) terminalTextSize + 1 else terminalTextSize - 1
-                                            if (newSize in 18..60) {
+                                            if (newSize in 16..60) {
                                                 terminalTextSize = newSize
                                                 currentTerminalView?.setTextSize(terminalTextSize)
+                                                val newSp = (newSize / density.density).roundToInt().coerceIn(8, 28)
+                                                coroutineScope.launch {
+                                                    authPreferences.saveTerminalPreferences(
+                                                        fontSize = newSp,
+                                                        cursorStyle = savedCursorStyle,
+                                                        bufferSize = savedBufferSize,
+                                                        theme = "DEFAULT"
+                                                    )
+                                                }
                                             }
                                             return 1.0f
                                         }
@@ -366,6 +393,7 @@ fun LocalTerminalContent(
                                 }
                                 android.util.Log.d("AntiGemTerminal", "[TerminalView-factory] Attaching session ${activeSession.id} (${activeSession.name})")
                                 attachSession(activeSession.terminalSession)
+                                activeSession.terminalSession.emulator?.setCursorStyle()
                                 currentTerminalView = this
                                 post {
                                     requestFocus()
@@ -380,6 +408,7 @@ fun LocalTerminalContent(
                             if (tv.currentSession != activeSession.terminalSession) {
                                 android.util.Log.d("AntiGemTerminal", "[TerminalView-update] Switching attached session to ${activeSession.id} (${activeSession.name})")
                                 tv.attachSession(activeSession.terminalSession)
+                                activeSession.terminalSession.emulator?.setCursorStyle()
                             }
                             tv.setTerminalInputListener(object : TerminalView.TerminalInputListener {
                                 override fun onTerminalInput(text: String) {

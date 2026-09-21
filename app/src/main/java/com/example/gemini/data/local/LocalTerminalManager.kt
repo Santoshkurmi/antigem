@@ -126,7 +126,7 @@ class LocalPtySession(
                 safeCwd,
                 dummyArgs,
                 arrayOf("TERM=xterm-256color"),
-                3000,
+                LocalTerminalManager.currentBufferSize,
                 this
             )
 
@@ -188,7 +188,7 @@ class LocalPtySession(
                 cwd,
                 shellArgs,
                 envList,
-                3000,
+                LocalTerminalManager.currentBufferSize,
                 this
             )
             try {
@@ -883,7 +883,7 @@ class LocalPtySession(
     override fun onBell(session: TerminalSession) {}
     override fun onColorsChanged(session: TerminalSession) {}
     override fun onTerminalCursorStateChange(state: Boolean) {}
-    override fun getTerminalCursorStyle(): Int = 0
+    override fun getTerminalCursorStyle(): Int = LocalTerminalManager.currentCursorStyleInt
 
     override fun logError(tag: String, message: String) {
         Log.e(TAG, "[$id][TermuxError] $message")
@@ -1007,6 +1007,24 @@ object LocalTerminalManager {
     var lastKnownRows: Int = 30
     var lastKnownWidthPx: Int = 1200
     var lastKnownHeightPx: Int = 1500
+
+    var currentCursorStyleInt: Int = 2 // 0 = BLOCK, 1 = UNDERLINE, 2 = BAR
+    var currentBufferSize: Int = 20000
+
+    fun updatePreferences(cursorStyle: String, bufferSize: Int) {
+        currentCursorStyleInt = when (cursorStyle.uppercase()) {
+            "UNDERLINE" -> 1
+            "BAR" -> 2
+            else -> 0
+        }
+        currentBufferSize = if (bufferSize <= 0 || bufferSize >= 100000) 100000 else bufferSize
+        _sessions.value.forEach { session ->
+            try {
+                session.terminalSession.emulator?.setCursorStyle()
+                session.notifyTextChanged()
+            } catch (_: Exception) {}
+        }
+    }
 
     private val _sessions = MutableStateFlow<List<LocalPtySession>>(emptyList())
     val sessions: StateFlow<List<LocalPtySession>> = _sessions.asStateFlow()

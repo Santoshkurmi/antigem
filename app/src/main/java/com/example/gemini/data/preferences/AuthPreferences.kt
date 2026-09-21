@@ -155,9 +155,9 @@ class AuthPreferences(private val context: Context) {
         }
         mode
     }
-    val terminalFontSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_FONT_SIZE] ?: 13 }
-    val terminalCursorStyle: Flow<String> = context.dataStore.data.map { it[TERMINAL_CURSOR_STYLE] ?: "BLOCK" }
-    val terminalBufferSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_BUFFER_SIZE] ?: 2000 }
+    val terminalFontSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_FONT_SIZE] ?: 14 }
+    val terminalCursorStyle: Flow<String> = context.dataStore.data.map { it[TERMINAL_CURSOR_STYLE] ?: "BAR" }
+    val terminalBufferSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_BUFFER_SIZE] ?: 20000 }
     val terminalTheme: Flow<String> = context.dataStore.data.map { it[TERMINAL_THEME] ?: "DEFAULT" }
 
     val termuxSshHost: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_HOST] ?: "127.0.0.1" }
