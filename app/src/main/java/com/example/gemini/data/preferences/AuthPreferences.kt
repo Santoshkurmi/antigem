@@ -91,7 +91,9 @@ class AuthPreferences(private val context: Context) {
     val preferredModelId: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_ID] }
     val preferredModelKey: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_KEY] }
     val preferredModelName: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_NAME] }
-    val useSshTerminal: Flow<Boolean> = context.dataStore.data.map { it[USE_SSH_TERMINAL] ?: false }
+    val useSshTerminal: Flow<Boolean> = context.dataStore.data.map { 
+        it[USE_SSH_TERMINAL] ?: (context.packageName != "com.termux")
+    }
     val isLocalToolsEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_ENABLED] ?: false }
     val isLocalToolsInstalled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_INSTALLED] ?: false }
     val localToolsInstallDate: Flow<Long?> = context.dataStore.data.map { it[LOCAL_TOOLS_INSTALL_DATE] }

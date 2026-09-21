@@ -1058,7 +1058,8 @@ object LocalTerminalManager {
         }
 
         val authPrefs = AuthPreferences(context)
-        val useSsh = authPrefs.useSshTerminal.firstOrNull() ?: false
+        val defaultUseSsh = !LocalEnvironmentManager.isTermuxPackage(context)
+        val useSsh = authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh
         val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
         val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
         val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"
@@ -1307,7 +1308,8 @@ object LocalTerminalManager {
     fun createNewSession(context: Context, workingDir: String? = null) {
         val authPrefs = AuthPreferences(context)
         managerScope.launch {
-            val useSsh = authPrefs.useSshTerminal.firstOrNull() ?: false
+            val defaultUseSsh = !LocalEnvironmentManager.isTermuxPackage(context)
+            val useSsh = authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh
             val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
             val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
             val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"
