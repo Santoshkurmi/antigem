@@ -777,8 +777,9 @@ fun ChatHistoryDrawer(
                         }
                     }
                 } else if (authInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING) {
-                    // Non-animated checking / connecting indicator
+                    // Non-animated checking / connecting indicator (clickable to refresh)
                     Surface(
+                        onClick = onCheckAuth,
                         shape = RoundedCornerShape(14.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier.height(30.dp)

@@ -905,7 +905,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
             val hubUrl = AuthPreferences.currentHubUrl
             val bridgeUrl = AuthPreferences.currentBridgeHttpUrl
-            val res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
+            var res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
+
+            // If failed on non-manual check during startup/connection phase, retry shortly
+            if (res.isFailure && !userInitiated) {
+                delay(800)
+                if (isNetworkConnected()) {
+                    res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
+                }
+                if (res.isFailure) {
+                    delay(1500)
+                    if (isNetworkConnected()) {
+                        res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
+                    }
+                }
+            }
+
             if (res.isSuccess) {
                 val info = res.getOrThrow()
                 _agyAuthInfo.value = info
@@ -1080,6 +1095,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 _isBridgeOnline.value = true
                                 _conversationError.value = null
                                 syncAgyConversations(force = true)
+                                checkAgyAuthStatus(userInitiated = false)
                                 refreshQuotas()
                                 loadMcpServers()
                             }
@@ -1230,6 +1246,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 delay(20_000)
             }
         }
+
+        // Initial auth status check
+        checkAgyAuthStatus(userInitiated = false)
     }
 
     fun getDraft(conversationId: String): androidx.compose.ui.text.input.TextFieldValue {
@@ -1339,6 +1358,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         _isServerOnline.value = true
                         _conversationError.value = null
                         _isConversationsLoading.value = false
+                        if (!_agyAuthInfo.value.isLoggedIn || _agyAuthInfo.value.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.OFFLINE || _agyAuthInfo.value.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING) {
+                            checkAgyAuthStatus(userInitiated = false)
+                        }
                     }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) {
@@ -1407,6 +1429,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 startPersistentStream(convId)
             }
             refreshQuotas()
+            if (!_agyAuthInfo.value.isLoggedIn || _agyAuthInfo.value.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING) {
+                checkAgyAuthStatus(userInitiated = false)
+            }
             com.example.gemini.data.daemon.TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
         }
     }
