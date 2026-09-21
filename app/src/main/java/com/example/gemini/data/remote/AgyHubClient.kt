@@ -754,9 +754,9 @@ class AgyHubClient(
                             )
                         )
                     }
-                    if (frameList.isNotEmpty() || removedIds.isNotEmpty()) {
-                        emit(SummariesUpdate(frameList, removedIds))
-                    }
+                    emit(SummariesUpdate(frameList, removedIds))
+                } else {
+                    emit(SummariesUpdate(emptyList(), emptySet()))
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing conversation updates: ${e.message}")

@@ -740,46 +740,7 @@ private fun AppearanceSubScreen(
             }
         }
 
-        // Group Chats By Workspace Switch
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = cardBg,
-            border = cardBorder,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text(
-                        text = "Group Chats by Workspace",
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Categorize chat history in drawer under workspace folders matching repository paths",
-                        fontSize = 11.5.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-                Switch(
-                    checked = groupChatsByWorkspace,
-                    onCheckedChange = onToggleGroupChatsByWorkspace,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = ClaudeTerracotta
-                    )
-                )
-            }
-        }
-
-        // Live Chat Message Preview Box
+        // Live Chat Message Preview Box (Directly under Chat Text Scaling)
         Text(
             text = "Live Preview",
             fontSize = 13.sp,
@@ -837,6 +798,45 @@ private fun AppearanceSubScreen(
                         }
                     }
                 }
+            }
+        }
+
+        // Group Chats By Workspace Switch
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = cardBg,
+            border = cardBorder,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        text = "Group Chats by Workspace",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Categorize chat history in drawer under workspace folders matching repository paths",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                Switch(
+                    checked = groupChatsByWorkspace,
+                    onCheckedChange = onToggleGroupChatsByWorkspace,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = ClaudeTerracotta
+                    )
+                )
             }
         }
 
