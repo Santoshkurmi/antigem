@@ -587,7 +587,7 @@ fun ChatScreen(
                 authInfo = agyAuthInfo,
                 isAuthBusy = isAuthBusy,
                 onLogin = {
-                    viewModel.loginToAgyHub()
+                    viewModel.loginToAgyHub(force = true)
                 },
                 onLogout = {
                     viewModel.logoutFromAgyHub()

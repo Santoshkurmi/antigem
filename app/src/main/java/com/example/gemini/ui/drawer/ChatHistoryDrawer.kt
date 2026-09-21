@@ -95,6 +95,7 @@ fun ChatHistoryDrawer(
     var showFullSearchDialog by remember { mutableStateOf(false) }
     var instanceToTerminate by remember { mutableStateOf<Pair<com.example.gemini.data.remote.AgyActiveInstance, String>?>(null) }
     var showProfileDialog by remember { mutableStateOf(false) }
+    var showSigningInProgressDialog by remember { mutableStateOf(false) }
 
     val filtered = remember(conversations, searchQuery) {
         if (searchQuery.isBlank()) conversations
@@ -231,6 +232,53 @@ fun ChatHistoryDrawer(
             dismissButton = {
                 TextButton(onClick = { instanceToTerminate = null }) {
                     Text("Keep Running", fontSize = 13.sp)
+                }
+            }
+        )
+    }
+
+    if (showSigningInProgressDialog) {
+        AlertDialog(
+            onDismissRequest = { showSigningInProgressDialog = false },
+            title = {
+                Text(
+                    text = "Sign-In in Progress",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text(
+                    text = "A sign-in request is currently pending. If you already completed authentication in your browser, tap 'Check Status'. You can also restart sign-in if needed.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextButton(
+                        onClick = {
+                            showSigningInProgressDialog = false
+                            onCheckAuth()
+                        }
+                    ) {
+                        Text("Check Status")
+                    }
+                    Button(
+                        onClick = {
+                            showSigningInProgressDialog = false
+                            onLogin()
+                        }
+                    ) {
+                        Text("Sign In Again")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSigningInProgressDialog = false }) {
+                    Text("Cancel")
                 }
             }
         )
@@ -705,6 +753,7 @@ fun ChatHistoryDrawer(
                 // Profile / Login on right
                 if (isAuthBusy) {
                     Surface(
+                        onClick = { showSigningInProgressDialog = true },
                         shape = RoundedCornerShape(14.dp),
                         color = ClaudeTerracotta.copy(alpha = 0.12f),
                         modifier = Modifier.height(30.dp)

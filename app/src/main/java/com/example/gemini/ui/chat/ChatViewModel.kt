@@ -897,6 +897,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     status = com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.OFFLINE,
                     isOffline = true
                 )
+                _isAuthBusy.value = false
                 return@launch
             }
             val hubUrl = AuthPreferences.currentHubUrl
@@ -906,6 +907,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val info = res.getOrThrow()
                 _agyAuthInfo.value = info
                 if (info.isLoggedIn) {
+                    _isAuthBusy.value = false
+                    _pendingLoginUrl.value = null
+                    loginPollJob?.cancel()
+                    _authFeedbackMessage.tryEmit("Signed in as ${info.displayName.ifBlank { info.email }}")
                     refreshQuotas(force = false)
                 }
             } else {
@@ -917,8 +922,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun loginToAgyHub() {
-        if (_isAuthBusy.value) return
+    fun loginToAgyHub(force: Boolean = false) {
+        if (_isAuthBusy.value && !force) return
         if (!isNetworkConnected()) {
             _authFeedbackMessage.tryEmit("Cannot sign in: no internet connection.")
             return
@@ -929,13 +934,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val hubUrl = AuthPreferences.currentHubUrl
             val bridgeUrl = AuthPreferences.currentBridgeHttpUrl
+
+            // Pre-check: if user is already authenticated, finish immediately!
+            val preCheck = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
+            if (preCheck.isSuccess && preCheck.getOrThrow().isLoggedIn) {
+                _agyAuthInfo.value = preCheck.getOrThrow()
+                _isAuthBusy.value = false
+                _authFeedbackMessage.tryEmit("Already signed in as ${preCheck.getOrThrow().displayName}!")
+                refreshQuotas(force = true)
+                return@launch
+            }
+
             _authFeedbackMessage.tryEmit("Initiating sign-in with Antigravity...")
 
             // 1. Poll for login URL and poll for successful auth completion concurrently every 800ms
             loginPollJob = launch {
                 val startTime = System.currentTimeMillis()
                 var urlFound = false
-                while (isActive && System.currentTimeMillis() - startTime < 180_000) {
+                while (isActive && System.currentTimeMillis() - startTime < 120_000) {
                     delay(800)
 
                     // Check if bridge detected a login URL
