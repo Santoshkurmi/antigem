@@ -11,7 +11,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ==============================================================================
-# Termux Complete Bootstrap Packager (usr + home + dotfiles + symlinks)
+# Termux Complete Bootstrap Packager (usr + home + dotfiles)
 # ==============================================================================
 set -euo pipefail
 
@@ -34,17 +34,7 @@ echo "========================================"
 
 cd "$FILES_DIR"
 
-echo "[1/4] Scanning and mapping all symbolic links..."
-rm -f SYMLINKS.txt
-find usr home -type l 2>/dev/null | while IFS= read -r link; do
-    target="$(readlink "$link")"
-    echo "${link}←${target}"
-done > SYMLINKS.txt
-
-LINK_COUNT=$(wc -l < SYMLINKS.txt)
-echo "      Found and indexed $LINK_COUNT symlinks."
-
-echo "[2/4] Archiving usr/, home/ and SYMLINKS.txt (excluding tokens & temp data)..."
+echo "[1/3] Archiving usr/ and home/ (preserving unix permissions & symlinks)..."
 TEMP_ZIP="${FILES_DIR}/bootstrap-bundle.zip"
 rm -f "$TEMP_ZIP"
 
@@ -52,6 +42,9 @@ EXCLUDE_PATTERNS=(
     "*.sock"
     "*cache*"
     "home/.cache/*"
+    "home/.ssh/*"
+    "usr/etc/ssh/ssh_host_*"
+    "etc/ssh/ssh_host_*"
     "home/.gemini/jetski-standalone-oauth-token*"
     "home/.gemini/*oauth*"
     "home/.gemini/*token*"
@@ -71,6 +64,8 @@ TOTAL_FILES=$(find usr home \
     \( ! -name "*.sock" \
        -a ! -path "*/cache/*" \
        -a ! -path "home/.cache/*" \
+       -a ! -path "home/.ssh/*" \
+       -a ! -name "ssh_host_*" \
        -a ! -path "home/.gemini/jetski-standalone-oauth-token*" \
        -a ! -path "home/.gemini/*oauth*" \
        -a ! -path "home/.gemini/*token*" \
@@ -83,11 +78,10 @@ TOTAL_FILES=$(find usr home \
        -a ! -name ".bash_history" \
        -a ! -name ".zsh_history" \
     \) 2>/dev/null | wc -l)
-TOTAL_FILES=$((TOTAL_FILES + 1)) # Include SYMLINKS.txt
 echo "      Total entries to package: $TOTAL_FILES"
 
 # Run zip with live progress bar and security exclusions
-zip -r -y "$TEMP_ZIP" usr home SYMLINKS.txt -x "${EXCLUDE_PATTERNS[@]}" | awk -v total="$TOTAL_FILES" '
+zip -r -y "$TEMP_ZIP" usr home -x "${EXCLUDE_PATTERNS[@]}" | awk -v total="$TOTAL_FILES" '
 BEGIN {
     cols = 35;
     count = 0;
@@ -115,7 +109,7 @@ END {
 }
 '
 
-echo "[3/4] Exporting archive to SDCard storage..."
+echo "[2/3] Exporting archive to SDCard storage..."
 if cp "$TEMP_ZIP" "$OUTPUT_ZIP" 2>/dev/null; then
     echo "      Saved to $OUTPUT_ZIP"
 else
@@ -126,7 +120,7 @@ fi
 # Copy to Download if accessible
 cp "$TEMP_ZIP" "$DOWNLOAD_ZIP" 2>/dev/null || cp "$TEMP_ZIP" "$HOME/storage/downloads/${ZIP_BASENAME}" 2>/dev/null || true
 
-rm -f "$TEMP_ZIP" SYMLINKS.txt
+rm -f "$TEMP_ZIP"
 
-echo "[4/4] Done! Bootstrap archive ready:"
+echo "[3/3] Done! Bootstrap archive ready:"
 ls -lh "$OUTPUT_ZIP" 2>/dev/null || ls -lh "$HOME/storage/shared/${ZIP_BASENAME}" 2>/dev/null || true

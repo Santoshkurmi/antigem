@@ -235,14 +235,12 @@ fun FullScreenLocalToolsInstaller(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        scope.launch {
-                                            val uri = Uri.fromFile(detectedLocalZip)
-                                            LocalEnvironmentManager.installLocalEnvironment(
-                                                context,
-                                                authPreferences,
-                                                BootstrapSource.LocalZipUri(uri)
-                                            )
-                                        }
+                                        val uri = Uri.fromFile(detectedLocalZip)
+                                        LocalEnvironmentManager.launchInstall(
+                                            context,
+                                            authPreferences,
+                                            BootstrapSource.LocalZipUri(uri)
+                                        )
                                     }
                             ) {
                                 Row(
@@ -790,20 +788,18 @@ fun FullScreenLocalToolsInstaller(
                 is LocalInstallerState.Idle -> {
                     Button(
                         onClick = {
-                            scope.launch {
-                                when (selectedSourceType) {
-                                    0 -> LocalEnvironmentManager.discoverBootstrapPackage(context)
-                                    1 -> {
-                                        val source = BootstrapSource.DirectUrl(directUrlText.trim())
-                                        LocalEnvironmentManager.installLocalEnvironment(context, authPreferences, source)
-                                    }
-                                    2 -> {
-                                        if (selectedFileUri != null) {
-                                            val source = BootstrapSource.LocalZipUri(selectedFileUri!!)
-                                            LocalEnvironmentManager.installLocalEnvironment(context, authPreferences, source)
-                                        } else {
-                                            zipPickerLauncher.launch("*/*")
-                                        }
+                            when (selectedSourceType) {
+                                0 -> LocalEnvironmentManager.launchDiscover(context)
+                                1 -> {
+                                    val source = BootstrapSource.DirectUrl(directUrlText.trim())
+                                    LocalEnvironmentManager.launchInstall(context, authPreferences, source)
+                                }
+                                2 -> {
+                                    if (selectedFileUri != null) {
+                                        val source = BootstrapSource.LocalZipUri(selectedFileUri!!)
+                                        LocalEnvironmentManager.launchInstall(context, authPreferences, source)
+                                    } else {
+                                        zipPickerLauncher.launch("*/*")
                                     }
                                 }
                             }
@@ -848,13 +844,11 @@ fun FullScreenLocalToolsInstaller(
                     ) {
                         Button(
                             onClick = {
-                                scope.launch {
-                                    LocalEnvironmentManager.installLocalEnvironment(
-                                        context,
-                                        authPreferences,
-                                        BootstrapSource.DirectUrl(state.packageInfo.url)
-                                    )
-                                }
+                                LocalEnvironmentManager.launchInstall(
+                                    context,
+                                    authPreferences,
+                                    BootstrapSource.DirectUrl(state.packageInfo.url)
+                                )
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -888,6 +882,21 @@ fun FullScreenLocalToolsInstaller(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("Cancel Search")
+                    }
+                }
+
+                is LocalInstallerState.Downloading,
+                is LocalInstallerState.Extracting,
+                is LocalInstallerState.Configuring,
+                is LocalInstallerState.Verifying -> {
+                    OutlinedButton(
+                        onClick = onSkip,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Run in Background & Open AntiGem")
                     }
                 }
 
@@ -931,17 +940,15 @@ fun FullScreenLocalToolsInstaller(
                     ) {
                         Button(
                             onClick = {
-                                scope.launch {
-                                    when (selectedSourceType) {
-                                        0 -> LocalEnvironmentManager.discoverBootstrapPackage(context)
-                                        1 -> {
-                                            val source = BootstrapSource.DirectUrl(directUrlText.trim())
-                                            LocalEnvironmentManager.installLocalEnvironment(context, authPreferences, source)
-                                        }
-                                        2 -> {
-                                            val source = selectedFileUri?.let { BootstrapSource.LocalZipUri(it) } ?: BootstrapSource.Auto
-                                            LocalEnvironmentManager.installLocalEnvironment(context, authPreferences, source)
-                                        }
+                                when (selectedSourceType) {
+                                    0 -> LocalEnvironmentManager.launchDiscover(context)
+                                    1 -> {
+                                        val source = BootstrapSource.DirectUrl(directUrlText.trim())
+                                        LocalEnvironmentManager.launchInstall(context, authPreferences, source)
+                                    }
+                                    2 -> {
+                                        val source = selectedFileUri?.let { BootstrapSource.LocalZipUri(it) } ?: BootstrapSource.Auto
+                                        LocalEnvironmentManager.launchInstall(context, authPreferences, source)
                                     }
                                 }
                             },

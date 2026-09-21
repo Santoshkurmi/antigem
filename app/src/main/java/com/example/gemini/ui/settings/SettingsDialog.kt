@@ -1,6 +1,7 @@
 package com.example.gemini.ui.settings
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -21,6 +22,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -43,6 +46,7 @@ import androidx.core.content.ContextCompat
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ModelQuota
 import com.example.gemini.data.preferences.AuthPreferences
+import com.example.gemini.data.local.LocalEnvironmentManager
 import com.example.gemini.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -833,6 +837,72 @@ private fun AppearanceSubScreen(
                         }
                     }
                 }
+            }
+        }
+
+        // AntiTerminal Standalone Launcher Icon Switch
+        val context = LocalContext.current
+        val terminalComponentName = remember { ComponentName(context, "com.example.gemini.TermuxActivity") }
+        var isTerminalLauncherEnabled by remember {
+            mutableStateOf(
+                context.packageManager.getComponentEnabledSetting(terminalComponentName).let { state ->
+                    state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ||
+                    state == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
+                }
+            )
+        }
+
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = cardBg,
+            border = cardBorder,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        text = "Separate AntiTerminal App Icon",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Show or hide the standalone AntiTerminal launcher icon on your Android home screen and app drawer",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                Switch(
+                    checked = isTerminalLauncherEnabled,
+                    onCheckedChange = { enable ->
+                        isTerminalLauncherEnabled = enable
+                        try {
+                            val newState = if (enable) {
+                                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                            } else {
+                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                            }
+                            context.packageManager.setComponentEnabledSetting(
+                                terminalComponentName,
+                                newState,
+                                PackageManager.DONT_KILL_APP
+                            )
+                        } catch (e: Exception) {
+                            android.util.Log.e("SettingsDialog", "Failed to update TermuxActivity component enabled state: ${e.message}")
+                        }
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = ClaudeTerracotta
+                    )
+                )
             }
         }
     }
@@ -2582,7 +2652,13 @@ private fun TerminalSubScreen(
     onSaveTerminalPreferences: (Int, String, Int, String) -> Unit,
     onOpenLocalTerminal: () -> Unit
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    var showResetWarningDialog by remember { mutableStateOf(false) }
+    var showResetPasswordDialog by remember { mutableStateOf(false) }
+    var resetPasswordInput by remember { mutableStateOf("") }
+    var isResettingRootfs by remember { mutableStateOf(false) }
+
     var hostState by remember { mutableStateOf(sshHost) }
     var portState by remember { mutableStateOf(sshPort.toString()) }
     var userState by remember { mutableStateOf(sshUser) }
@@ -2820,7 +2896,7 @@ private fun TerminalSubScreen(
                                 Text("Reinstall", fontSize = 12.sp)
                             }
                             OutlinedButton(
-                                onClick = onResetLocalTools,
+                                onClick = { showResetWarningDialog = true },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
@@ -2940,6 +3016,176 @@ private fun TerminalSubScreen(
             Icon(imageVector = Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text("Launch Terminal Now", fontWeight = FontWeight.Bold)
+        }
+    }
+
+    if (showResetWarningDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetWarningDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = Color.Red,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Reset Local Linux Rootfs?",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "Warning: All installed packages, custom configurations, files in \$HOME, and local project history will be permanently deleted.\n\nThis action cannot be undone. Are you sure you want to proceed?",
+                    fontSize = 13.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showResetWarningDialog = false
+                        resetPasswordInput = ""
+                        showResetPasswordDialog = true
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Yes, Continue", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showResetWarningDialog = false },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Cancel")
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    if (showResetPasswordDialog) {
+        val isMatch = resetPasswordInput.trim() == "iknowwhatiamdoing"
+        AlertDialog(
+            onDismissRequest = { showResetPasswordDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = Color.Red,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Confirm Destruction",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "To confirm and permanently delete the entire local rootfs, type the confirmation phrase exactly as shown below:",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = "iknowwhatiamdoing",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = ClaudeTerracotta,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    OutlinedTextField(
+                        value = resetPasswordInput,
+                        onValueChange = { resetPasswordInput = it },
+                        singleLine = true,
+                        placeholder = { Text("iknowwhatiamdoing", fontSize = 13.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        isError = resetPasswordInput.isNotEmpty() && !isMatch
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (isMatch) {
+                            showResetPasswordDialog = false
+                            isResettingRootfs = true
+                            LocalEnvironmentManager.launchReset(context) {
+                                isResettingRootfs = false
+                                onResetLocalTools()
+                            }
+                        }
+                    },
+                    enabled = isMatch,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Red,
+                        disabledContainerColor = Color.Red.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Delete Everything", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showResetPasswordDialog = false },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Cancel")
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    if (isResettingRootfs) {
+        Dialog(
+            onDismissRequest = {},
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth(0.85f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.5.dp,
+                        color = Color.Red
+                    )
+                    Text(
+                        text = "Resetting rootfs & environment... Please wait.",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
         }
     }
 }

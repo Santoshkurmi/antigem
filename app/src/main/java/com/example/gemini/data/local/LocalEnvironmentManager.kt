@@ -59,6 +59,8 @@ object LocalEnvironmentManager {
     private val _installerLogs = MutableStateFlow<List<String>>(emptyList())
     val installerLogs: StateFlow<List<String>> = _installerLogs.asStateFlow()
 
+    private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     fun log(message: String) {
         Log.d(TAG, message)
         val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
@@ -302,6 +304,9 @@ object LocalEnvironmentManager {
 
         clearLogs()
         log("Starting installation: arch=$arch, source=${source.javaClass.simpleName}")
+
+        // Ensure a clean slate by clearing any previous partial/broken install
+        resetEnvironment(appContext)
 
         try {
             Log.d(TAG, "Starting local bootstrap installation (arch: $arch, source: $source) at ${prefixDir.absolutePath}...")
@@ -577,7 +582,7 @@ object LocalEnvironmentManager {
                             innerZipFound = innerFile
                             break
                         }
-                        if (name.contains("bin/") || name == "SYMLINKS.txt" || name.contains("usr/")) {
+                        if (name.contains("bin/") || name.contains("usr/")) {
                             hasRootfsFiles = true
                         }
                         if (name.endsWith("debs.tar.gz") || name.endsWith(".deb")) {
@@ -622,7 +627,6 @@ object LocalEnvironmentManager {
             etcDir.mkdirs()
             tmpDir.mkdirs()
 
-            var symlinksContent: String? = null
             var extractedCount = 0
 
             if (isDebsOnlyArchive) {
@@ -646,99 +650,97 @@ object LocalEnvironmentManager {
                         val rawName = entry.name
 
                         if (rawName == "SYMLINKS.txt" || rawName.endsWith("/SYMLINKS.txt")) {
-                            zip.getInputStream(entry).use { inStream ->
-                                symlinksContent = inStream.bufferedReader(Charsets.UTF_8).readText()
-                            }
+                            continue
+                        }
+
+                        val cleanPath = rawName.removePrefix("./")
+                        val isHomePath = cleanPath.startsWith("home/") || cleanPath.contains("/files/home/")
+                        val targetFile = if (isHomePath) {
+                            val relHome = cleanPath
+                                .replaceFirst(Regex("^.*?files/home/"), "")
+                                .removePrefix("home/")
+                                .removePrefix("./")
+                            if (relHome.isBlank()) null else File(homeDir, relHome)
                         } else {
-                            val cleanPath = rawName.removePrefix("./")
-                            val isHomePath = cleanPath.startsWith("home/") || cleanPath.contains("/files/home/")
-                            val targetFile = if (isHomePath) {
-                                val relHome = cleanPath
-                                    .replaceFirst(Regex("^.*?files/home/"), "")
-                                    .removePrefix("home/")
-                                    .removePrefix("./")
-                                if (relHome.isBlank()) null else File(homeDir, relHome)
-                            } else {
-                                val entryName = cleanPath
-                                    .replaceFirst(Regex("^.*?files/usr/"), "")
-                                    .replaceFirst(Regex("^.*?files/"), "")
-                                    .removePrefix("usr/")
-                                    .removePrefix("./")
-                                if (entryName.isBlank() || entryName == "/") null else File(prefixDir, entryName)
-                            }
+                            val entryName = cleanPath
+                                .replaceFirst(Regex("^.*?files/usr/"), "")
+                                .replaceFirst(Regex("^.*?files/"), "")
+                                .removePrefix("usr/")
+                                .removePrefix("./")
+                            if (entryName.isBlank() || entryName == "/") null else File(prefixDir, entryName)
+                        }
 
-                            if (targetFile != null) {
-                                val unixMode = entry.unixMode
+                        if (targetFile != null) {
+                            val unixMode = entry.unixMode
 
-                                if (entry.isUnixSymlink) {
-                                    try {
-                                        targetFile.parentFile?.let { p ->
-                                            if (!p.exists()) {
-                                                p.mkdirs()
-                                                try { Os.chmod(p.absolutePath, 493) } catch (_: Exception) {}
-                                            }
-                                        }
-                                        if (targetFile.exists() || isSymlink(targetFile)) {
-                                            targetFile.setWritable(true, true)
-                                            try { targetFile.delete() } catch (_: Exception) {}
-                                        }
-                                        val symlinkTarget = zip.getUnixSymlink(entry)
-                                        if (!symlinkTarget.isNullOrBlank()) {
-                                            Os.symlink(symlinkTarget, targetFile.absolutePath)
-                                        }
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Failed creating embedded symlink for $rawName: ${e.message}")
-                                    }
-                                } else if (entry.isDirectory) {
-                                    targetFile.mkdirs()
-                                    val dirMode = if (unixMode != 0) unixMode else 493 // 0755
-                                    try {
-                                        Os.chmod(targetFile.absolutePath, dirMode)
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "chmod failed on directory ${targetFile.name}: ${e.message}")
-                                    }
-                                } else {
+                            if (entry.isUnixSymlink) {
+                                try {
                                     targetFile.parentFile?.let { p ->
                                         if (!p.exists()) {
                                             p.mkdirs()
                                             try { Os.chmod(p.absolutePath, 493) } catch (_: Exception) {}
                                         }
                                     }
-
                                     if (targetFile.exists() || isSymlink(targetFile)) {
                                         targetFile.setWritable(true, true)
-                                        try {
-                                            targetFile.delete()
-                                        } catch (_: Exception) {}
+                                        try { targetFile.delete() } catch (_: Exception) {}
                                     }
+                                    val symlinkTarget = zip.getUnixSymlink(entry)
+                                    if (!symlinkTarget.isNullOrBlank()) {
+                                        Os.symlink(symlinkTarget, targetFile.absolutePath)
+                                    }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed creating embedded symlink for $rawName: ${e.message}")
+                                }
+                            } else if (entry.isDirectory) {
+                                targetFile.mkdirs()
+                                val dirMode = if (unixMode != 0) unixMode else 493 // 0755
+                                try {
+                                    Os.chmod(targetFile.absolutePath, dirMode)
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "chmod failed on directory ${targetFile.name}: ${e.message}")
+                                }
+                            } else {
+                                targetFile.parentFile?.let { p ->
+                                    if (!p.exists()) {
+                                        p.mkdirs()
+                                        try { Os.chmod(p.absolutePath, 493) } catch (_: Exception) {}
+                                    }
+                                }
 
+                                if (targetFile.exists() || isSymlink(targetFile)) {
+                                    targetFile.setWritable(true, true)
                                     try {
-                                        zip.getInputStream(entry).use { inStream ->
-                                            FileOutputStream(targetFile).use { fos ->
-                                                inStream.copyTo(fos)
-                                            }
-                                        }
+                                        targetFile.delete()
+                                    } catch (_: Exception) {}
+                                }
 
-                                        // Apply exact Unix mode recorded in the ZIP header
-                                        if (unixMode != 0) {
-                                            try {
-                                                Os.chmod(targetFile.absolutePath, unixMode)
-                                            } catch (e: Exception) {
-                                                Log.w(TAG, "chmod failed on ${targetFile.name} (mode $unixMode): ${e.message}")
-                                            }
-                                        } else {
-                                            // Fallback if ZIP had no Unix attributes
-                                            val isExecutableDir = targetFile.parentFile?.name in listOf("bin", "libexec", "applets", "sbin")
-                                            val isExecutablePath = targetFile.absolutePath.contains("/bin/") || targetFile.absolutePath.contains("/libexec/")
-                                            if (isExecutableDir || isExecutablePath || !targetFile.name.contains(".")) {
-                                                targetFile.setExecutable(true, false)
-                                            }
-                                            targetFile.setReadable(true, false)
-                                            targetFile.setWritable(true, true)
+                                try {
+                                    zip.getInputStream(entry).use { inStream ->
+                                        FileOutputStream(targetFile).use { fos ->
+                                            inStream.copyTo(fos)
                                         }
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Non-fatal error extracting ${rawName} to ${targetFile.absolutePath}: ${e.message}")
                                     }
+
+                                    // Apply exact Unix mode recorded in the ZIP header
+                                    if (unixMode != 0) {
+                                        try {
+                                            Os.chmod(targetFile.absolutePath, unixMode)
+                                        } catch (e: Exception) {
+                                            Log.w(TAG, "chmod failed on ${targetFile.name} (mode $unixMode): ${e.message}")
+                                        }
+                                    } else {
+                                        // Fallback if ZIP had no Unix attributes
+                                        val isExecutableDir = targetFile.parentFile?.name in listOf("bin", "libexec", "applets", "sbin")
+                                        val isExecutablePath = targetFile.absolutePath.contains("/bin/") || targetFile.absolutePath.contains("/libexec/")
+                                        if (isExecutableDir || isExecutablePath || !targetFile.name.contains(".")) {
+                                            targetFile.setExecutable(true, false)
+                                        }
+                                        targetFile.setReadable(true, false)
+                                        targetFile.setWritable(true, true)
+                                    }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Non-fatal error extracting ${rawName} to ${targetFile.absolutePath}: ${e.message}")
                                 }
                             }
                         }
@@ -760,66 +762,7 @@ object LocalEnvironmentManager {
             // Clean up downloaded zip
             tempZipFile.delete()
 
-            // STEP 3: Process Symlinks
-            val symlinks = symlinksContent
-            if (!symlinks.isNullOrBlank()) {
-                log("Creating system symlinks from SYMLINKS.txt...")
-                _installerState.value = LocalInstallerState.Configuring(
-                    stepDescription = "Creating system symlinks and bindings...",
-                    progressFraction = 0.80f
-                )
-
-                val lines = symlinks.lines()
-                for (line in lines) {
-                    val trimmed = line.trim()
-                    if (trimmed.isEmpty()) continue
-
-                    val parts = when {
-                        trimmed.contains("←") -> trimmed.split("←")
-                        trimmed.contains("<-") -> trimmed.split("<-")
-                        trimmed.contains("->") -> trimmed.split("->").reversed()
-                        else -> emptyList()
-                    }
-
-                    if (parts.size == 2) {
-                        val target = parts[0].trim()
-                        val rawRelPath = parts[1].trim().removePrefix("./")
-                        val isHomeSymlink = rawRelPath.startsWith("home/") || rawRelPath.contains("/files/home/")
-                        val symlinkFile = if (isHomeSymlink) {
-                            val relHome = rawRelPath
-                                .replaceFirst(Regex("^.*?files/home/"), "")
-                                .removePrefix("home/")
-                                .removePrefix("./")
-                            File(homeDir, relHome)
-                        } else {
-                            val symlinkRelPath = rawRelPath
-                                .replaceFirst(Regex("^.*?files/usr/"), "")
-                                .replaceFirst(Regex("^.*?files/"), "")
-                                .removePrefix("usr/")
-                                .removePrefix("./")
-                            File(prefixDir, symlinkRelPath)
-                        }
-
-                        try {
-                            symlinkFile.parentFile?.let { p ->
-                                if (!p.exists()) {
-                                    p.mkdirs()
-                                    try { Os.chmod(p.absolutePath, 493) } catch (_: Exception) {}
-                                }
-                            }
-                            if (symlinkFile.exists() || isSymlink(symlinkFile)) {
-                                symlinkFile.setWritable(true, true)
-                                try { symlinkFile.delete() } catch (_: Exception) {}
-                            }
-                            Os.symlink(target, symlinkFile.absolutePath)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to create symlink '$target' -> '${symlinkFile.absolutePath}': ${e.message}")
-                        }
-                    }
-                }
-            }
-
-            // STEP 4: Configure Shell Profiles & Environment
+            // STEP 3: Configure Shell Profiles & Environment
             log("Configuring shell profiles (.bashrc) and directory permissions...")
             _installerState.value = LocalInstallerState.Configuring(
                 stepDescription = "Configuring shell profiles, paths, and environment...",
@@ -827,7 +770,7 @@ object LocalEnvironmentManager {
             )
             configureEnvironmentFiles(appContext, prefixDir, binDir, etcDir, homeDir, projectsDir)
 
-            // STEP 5: Strict Verification
+            // STEP 4: Strict Verification
             _installerState.value = LocalInstallerState.Verifying(
                 testName = "Verifying Termux binaries and shell execution..."
             )
@@ -1403,6 +1346,27 @@ All files created here persist inside the application.
 """.trimIndent()
             )
         }
+
+        // Generate fresh SSH host keys if OpenSSH (ssh-keygen) is installed
+        val sshKeygen = File(binDir, "ssh-keygen")
+        if (sshKeygen.exists()) {
+            val sshDir = File(etcDir, "ssh")
+            if (!sshDir.exists()) {
+                sshDir.mkdirs()
+                try { Os.chmod(sshDir.absolutePath, 493) } catch (_: Exception) {} // 0755
+            }
+            try {
+                val pb = ProcessBuilder(sshKeygen.absolutePath, "-A")
+                pb.environment()["PREFIX"] = prefixDir.absolutePath
+                pb.environment()["HOME"] = homeDir.absolutePath
+                pb.environment()["PATH"] = "${binDir.absolutePath}:/system/bin"
+                val process = pb.start()
+                process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+                log("Generated fresh OpenSSH host keys via ssh-keygen -A")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to run ssh-keygen -A: ${e.message}")
+            }
+        }
     }
 
     suspend fun executeCommand(
@@ -1505,20 +1469,72 @@ All files created here persist inside the application.
         }
     }
 
-    fun resetEnvironment(context: Context) {
+    suspend fun resetEnvironment(context: Context) = withContext(Dispatchers.IO) {
         try {
             LocalTerminalManager.closeAll()
         } catch (_: Exception) {}
 
-        val prefix = getPrefixDir(context)
-        val tmp = getTmpDir(context)
-        if (prefix.exists()) {
-            prefix.deleteRecursively()
-        }
-        if (tmp.exists()) {
-            tmp.deleteRecursively()
-        }
+        val appContext = context.applicationContext
+        val prefix = getPrefixDir(appContext)
+        val home = getHomeDir(appContext)
+        val projects = getProjectsDir(appContext)
+        val tmp = getTmpDir(appContext)
+
+        // Delete bootstrap rootfs and user folders strictly within filesDir
+        try { if (prefix.exists()) prefix.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting prefix: ${e.message}") }
+        try { if (home.exists()) home.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting home: ${e.message}") }
+        try { if (projects.exists()) projects.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting projects: ${e.message}") }
+        try { if (tmp.exists()) tmp.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting tmp: ${e.message}") }
+
+        // Clean any stray directories created in filesDir
+        val filesDir = appContext.filesDir
+        try {
+            val legacyProjects = File(filesDir, "projects")
+            if (legacyProjects.exists()) legacyProjects.deleteRecursively()
+        } catch (_: Exception) {}
+
+        // Clean bootstrap temporary caches in cacheDir
+        try {
+            val cacheDir = appContext.cacheDir
+            File(cacheDir, "deb_extract_tmp").deleteRecursively()
+            File(cacheDir, "inner_bootstrap.zip").delete()
+            cacheDir.listFiles()?.forEach { file ->
+                if (file.name.startsWith("deb_tmp_") ||
+                    file.name.startsWith("bootstrap-") ||
+                    file.name.endsWith("-download.zip")) {
+                    try { file.deleteRecursively() } catch (_: Exception) {}
+                }
+            }
+        } catch (_: Exception) {}
+
         _installerState.value = LocalInstallerState.Idle
-        Log.d(TAG, "Local environment cleared and reset.")
+        clearLogs()
+        Log.d(TAG, "Local environment bootstrap files cleared and reset.")
+    }
+
+    fun launchInstall(
+        context: Context,
+        authPreferences: AuthPreferences,
+        source: BootstrapSource = BootstrapSource.Auto
+    ): Job {
+        return managerScope.launch {
+            installLocalEnvironment(context, authPreferences, source)
+        }
+    }
+
+    fun launchDiscover(context: Context): Job {
+        return managerScope.launch {
+            discoverBootstrapPackage(context)
+        }
+    }
+
+    fun launchReset(
+        context: Context,
+        onComplete: (() -> Unit)? = null
+    ): Job {
+        return managerScope.launch {
+            resetEnvironment(context)
+            onComplete?.invoke()
+        }
     }
 }

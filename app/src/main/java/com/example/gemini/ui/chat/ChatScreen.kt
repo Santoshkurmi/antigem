@@ -1488,9 +1488,10 @@ fun ChatScreen(
             onInstallLocalTools = { showLocalToolsInstallDialog = true },
             onOpenLocalTerminal = { showLocalTerminalDialog = true },
             onResetLocalTools = {
-                LocalEnvironmentManager.resetEnvironment(context)
-                viewModel.setLocalToolsEnabled(false)
-                scope.launch { viewModel.authPreferences.setLocalToolsInstalled(false) }
+                LocalEnvironmentManager.launchReset(context) {
+                    viewModel.setLocalToolsEnabled(false)
+                    scope.launch { viewModel.authPreferences.setLocalToolsInstalled(false) }
+                }
             },
             mcpServers = mcpServers,
             isMcpLoading = isMcpLoading,
