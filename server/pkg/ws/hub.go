@@ -28,15 +28,22 @@ func (c *ClientConn) SendJSON(v interface{}) error {
 	return c.ws.WriteJSON(v)
 }
 
+type HubStatusProvider interface {
+	GetStatusInfo() (status string, errorMsg string, logs []string)
+}
+
 type Hub struct {
-	Cfg     *config.Config
-	clients map[*ClientConn]bool
-	mu      sync.RWMutex
+	Cfg        *config.Config
+	StatusProv HubStatusProvider
+	HubPort    string
+	clients    map[*ClientConn]bool
+	mu         sync.RWMutex
 }
 
 func NewHub(cfg *config.Config) *Hub {
 	return &Hub{
 		Cfg:     cfg,
+		HubPort: "8090",
 		clients: make(map[*ClientConn]bool),
 	}
 }
@@ -47,6 +54,16 @@ func (h *Hub) Broadcast(msg interface{}) {
 	for client := range h.clients {
 		_ = client.SendJSON(msg)
 	}
+}
+
+func (h *Hub) BroadcastHubStatus(status string, port string, errorMsg string, logs []string) {
+	h.Broadcast(map[string]interface{}{
+		"type":   "hub_status",
+		"status": status,
+		"port":   port,
+		"error":  errorMsg,
+		"logs":   logs,
+	})
 }
 
 type clientMessage struct {
@@ -67,7 +84,21 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	h.mu.Lock()
 	h.clients[client] = true
+	prov := h.StatusProv
+	port := h.HubPort
 	h.mu.Unlock()
+
+	// Send initial hub status immediately on connection
+	if prov != nil {
+		st, errMsg, logs := prov.GetStatusInfo()
+		_ = client.SendJSON(map[string]interface{}{
+			"type":   "hub_status",
+			"status": st,
+			"port":   port,
+			"error":  errMsg,
+			"logs":   logs,
+		})
+	}
 
 	defer func() {
 		h.mu.Lock()

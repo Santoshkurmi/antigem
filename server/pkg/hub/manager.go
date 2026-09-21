@@ -18,17 +18,28 @@ import (
 
 var loginURLRegex = regexp.MustCompile(`https://accounts\.google\.com/[^\s"'<>]+`)
 
+const (
+	HubStatusIdle     = "idle"
+	HubStatusStarting = "starting"
+	HubStatusOnline   = "online"
+	HubStatusError    = "error"
+	HubStatusStopped  = "stopped"
+)
+
 // HubManager supervises the background `agy --hub` process on port 8090.
 type HubManager struct {
-	HubPort      string
-	WorkspaceDir string
-	AppDataDir   string
-	AgyBinPath   string
-	OnLoginURL   func(url string)
+	HubPort        string
+	WorkspaceDir   string
+	AppDataDir     string
+	AgyBinPath     string
+	OnLoginURL     func(url string)
+	OnStatusChange func(status string, errorMsg string, logs []string)
 
 	cmd         *exec.Cmd
 	stdinPipe   io.WriteCloser
 	cancel      context.CancelFunc
+	status      string
+	lastError   string
 	isRunning   bool
 	isExternal  bool
 	processDone chan struct{}
@@ -46,6 +57,7 @@ func NewHubManager(hubPort, workspaceDir, appDataDir string) *HubManager {
 		WorkspaceDir: workspaceDir,
 		AppDataDir:   appDataDir,
 		AgyBinPath:   resolveAgyBinary(),
+		status:       HubStatusIdle,
 		recentLogs:   make([]string, 0, 50),
 	}
 }
@@ -94,6 +106,27 @@ func (m *HubManager) isHubReady() bool {
 	return false
 }
 
+// GetStatusInfo returns the current status, last error, and captured logs.
+func (m *HubManager) GetStatusInfo() (string, string, []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	logsCopy := make([]string, len(m.recentLogs))
+	copy(logsCopy, m.recentLogs)
+	return m.status, m.lastError, logsCopy
+}
+
+func (m *HubManager) setStatus(status string, errorMsg string) {
+	m.status = status
+	m.lastError = errorMsg
+	cb := m.OnStatusChange
+	logsCopy := make([]string, len(m.recentLogs))
+	copy(logsCopy, m.recentLogs)
+
+	if cb != nil {
+		go cb(status, errorMsg, logsCopy)
+	}
+}
+
 // IsPortActive checks if the hub port is currently listening.
 func (m *HubManager) IsPortActive() bool {
 	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+m.HubPort, 300*time.Millisecond)
@@ -120,9 +153,12 @@ func (m *HubManager) Start() error {
 	if m.isHubReady() {
 		m.isRunning = true
 		m.isExternal = true
+		m.setStatus(HubStatusOnline, "")
 		fmt.Printf(" \033[32m[✓]\033[0m AGY Hub is already active and listening on http://127.0.0.1:%s\n", m.HubPort)
 		return nil
 	}
+
+	m.setStatus(HubStatusStarting, "")
 
 	args := []string{
 		"--hub",
@@ -164,6 +200,7 @@ func (m *HubManager) Start() error {
 
 	if err := cmd.Start(); err != nil {
 		cancel()
+		m.setStatus(HubStatusError, err.Error())
 		return fmt.Errorf("failed to start agy hub (%s): %w", m.AgyBinPath, err)
 	}
 
@@ -203,6 +240,11 @@ func (m *HubManager) Start() error {
 		streamWg.Wait() // Ensure all remaining output is drained and processed
 		m.mu.Lock()
 		m.isRunning = false
+		if err != nil {
+			m.setStatus(HubStatusError, err.Error())
+		} else {
+			m.setStatus(HubStatusStopped, "")
+		}
 		m.mu.Unlock()
 		processExited <- err
 		close(m.processDone)
@@ -220,6 +262,7 @@ func (m *HubManager) Start() error {
 		case err := <-processExited:
 			fmt.Printf("\r\033[K \033[31m[✗]\033[0m AGY Hub process terminated: %v\n", err)
 			m.dumpRecentLogs()
+			m.setStatus(HubStatusError, fmt.Sprintf("Process exited: %v", err))
 			return fmt.Errorf("agy hub process exited unexpectedly: %w", err)
 		default:
 		}
@@ -234,6 +277,7 @@ func (m *HubManager) Start() error {
 	}
 
 	if ready {
+		m.setStatus(HubStatusOnline, "")
 		fmt.Printf("\r\033[K \033[32m[✓]\033[0m AGY Hub is online and listening on http://127.0.0.1:%s\n", m.HubPort)
 	} else {
 		fmt.Printf("\r\033[K \033[33m[!]\033[0m AGY Hub started (PID %d), waiting for initialization on port %s...\n", cmd.Process.Pid, m.HubPort)

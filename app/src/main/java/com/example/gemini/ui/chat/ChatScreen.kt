@@ -196,6 +196,7 @@ fun ChatScreen(
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
     val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
     val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
+    val hubStatus by viewModel.hubStatus.collectAsState()
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -204,6 +205,10 @@ fun ChatScreen(
     var showLocalToolsInstallDialog by remember { mutableStateOf(false) }
     var showLocalServerOutputDialog by remember { mutableStateOf(false) }
     val serverStatus by com.example.gemini.data.local.LocalServerManager.status.collectAsState()
+    val isLocalRunning = serverStatus is com.example.gemini.data.local.LocalServerStatus.Running
+    val isLocalStarting = serverStatus is com.example.gemini.data.local.LocalServerStatus.Starting
+    val isLocalStopped = serverStatus is com.example.gemini.data.local.LocalServerStatus.Stopped
+    val isLocalError = serverStatus is com.example.gemini.data.local.LocalServerStatus.Error
     var showRawPayloadDialog by remember { mutableStateOf<String?>(null) }
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -304,6 +309,7 @@ fun ChatScreen(
     val isOAuthServerListening by viewModel.isOAuthServerListening.collectAsState()
     val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
     val isConversationsLoading by viewModel.isConversationsLoading.collectAsState()
+    val hasReceivedInitialSync by viewModel.hasReceivedInitialSync.collectAsState()
     val isLoadingConversation by viewModel.isLoadingConversation.collectAsState()
     val mcpServers by viewModel.mcpServers.collectAsState()
     val isMcpLoading by viewModel.isMcpLoading.collectAsState()
@@ -550,6 +556,7 @@ fun ChatScreen(
                 currentConversationId = currentConv?.id,
                 activeInstances = activeInstances,
                 isLoading = isConversationsLoading,
+                hasReceivedInitialSync = hasReceivedInitialSync,
                 errorMessage = conversationError,
                 isStreaming = isStreaming,
                 groupByWorkspace = groupChatsByWorkspace,
@@ -747,13 +754,13 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) {
-                            val dotColor = when (serverStatus) {
-                                is com.example.gemini.data.local.LocalServerStatus.Running -> Color(0xFF22C55E)
-                                is com.example.gemini.data.local.LocalServerStatus.Starting -> Color(0xFFF59E0B)
-                                is com.example.gemini.data.local.LocalServerStatus.Stopped -> Color(0xFF9CA3AF)
-                                is com.example.gemini.data.local.LocalServerStatus.Error -> Color(0xFFEF4444)
-                                is com.example.gemini.data.local.LocalServerStatus.Idle -> Color(0xFF9CA3AF)
+                        if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) || hubStatus.status != "idle") {
+                            val dotColor = when {
+                                isLocalError || hubStatus.status == "error" -> Color(0xFFEF4444) // Red: Error
+                                hubStatus.status == "online" && (isLocalRunning || !com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) -> Color(0xFF22C55E) // Green: Online
+                                isLocalStarting || isLocalRunning || hubStatus.status == "starting" || isBridgeOnline == true -> Color(0xFFF59E0B) // Yellow: Starting / Initializing
+                                isLocalStopped || hubStatus.status == "stopped" -> Color(0xFF9CA3AF) // Gray: Stopped
+                                else -> Color(0xFF9CA3AF) // Gray: Idle / Offline
                             }
 
                             Box(
@@ -831,9 +838,10 @@ fun ChatScreen(
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    if (isLoadingConversation && messages.isEmpty()) {
+                    val isServerInitializing = (hubStatus.status == "starting" || (isLocalRunning && hubStatus.status != "online"))
+                    if ((isLoadingConversation || isServerInitializing) && messages.isEmpty()) {
                         com.example.gemini.ui.components.ConversationLoadingSkeleton()
-                    } else if (!conversationError.isNullOrBlank() && messages.isEmpty()) {
+                    } else if (!conversationError.isNullOrBlank() && messages.isEmpty() && currentConv?.title != "New Chat" && conversations.any { it.id == currentConv?.id }) {
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()

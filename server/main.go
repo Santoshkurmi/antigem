@@ -258,7 +258,12 @@ func main() {
 	if shouldStartHub {
 		hubMgr = hub.NewHubManager(hubPort, cfg.WorkspaceDir, cfg.AppDataDir)
 		h.HubManager = hubMgr
+		wsHub.StatusProv = hubMgr
+		wsHub.HubPort = hubPort
 		hubMgr.OnLoginURL = h.HandleLoginURL
+		hubMgr.OnStatusChange = func(status string, errorMsg string, logs []string) {
+			wsHub.BroadcastHubStatus(status, hubPort, errorMsg, logs)
+		}
 		if err := hubMgr.Start(); err != nil {
 			fmt.Printf(" \033[31m[!] Warning starting AGY Hub:\033[0m %v\n", err)
 		}

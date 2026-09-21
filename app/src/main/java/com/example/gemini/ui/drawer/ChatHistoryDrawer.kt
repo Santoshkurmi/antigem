@@ -69,6 +69,7 @@ fun ChatHistoryDrawer(
     currentConversationId: String?,
     activeInstances: List<com.example.gemini.data.remote.AgyActiveInstance> = emptyList(),
     isLoading: Boolean = false,
+    hasReceivedInitialSync: Boolean = false,
     errorMessage: String? = null,
     isStreaming: Boolean = false,
     authInfo: AgyHubClient.AgyAuthInfo = AgyHubClient.AgyAuthInfo(),
@@ -456,7 +457,7 @@ fun ChatHistoryDrawer(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            val showSkeleton = isLoading && conversations.isEmpty() && errorMessage.isNullOrBlank()
+            val showSkeleton = (!hasReceivedInitialSync || isLoading) && conversations.isEmpty() && errorMessage.isNullOrBlank()
 
             Crossfade(
                 targetState = when {

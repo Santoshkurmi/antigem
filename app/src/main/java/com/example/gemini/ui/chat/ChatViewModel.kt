@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import android.util.Log
@@ -43,6 +44,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val authPrefs get() = authPreferences
     private val apiService = AntigravityApiService()
     private val agyBridgeService = com.example.gemini.data.remote.AgyBridgeService()
+    val hubStatus: StateFlow<com.example.gemini.data.remote.AgyHubStatus> = agyBridgeService.hubStatus
     private val agyHubClient = com.example.gemini.data.remote.AgyHubClient()
     val trajectoryEngine = com.example.gemini.domain.chat.TrajectoryEngine()
     val speechManager = com.example.gemini.data.audio.AgyAudioTranscriptionManager(agyHubClient) {
@@ -53,6 +55,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _conversations = MutableStateFlow<List<Conversation>>(emptyList())
     val conversations: StateFlow<List<Conversation>> = _conversations.asStateFlow()
+
+    private val _hasReceivedInitialSync = MutableStateFlow(false)
+    val hasReceivedInitialSync: StateFlow<Boolean> = _hasReceivedInitialSync.asStateFlow()
 
     private val _isConversationsLoading = MutableStateFlow(true)
     val isConversationsLoading: StateFlow<Boolean> = _isConversationsLoading.asStateFlow()
@@ -1037,6 +1042,45 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     var pendingPkceVerifier: String? = null
 
     init {
+        // 1. Hub status live monitoring via WebSocket
+        viewModelScope.launch {
+            while (currentCoroutineContext().isActive) {
+                try {
+                    val wsUrl = AuthPreferences.currentBridgeWsUrl
+                    agyBridgeService.monitorHubStatus(wsUrl).collect { status ->
+                        when (status.status) {
+                            "online" -> {
+                                _isServerOnline.value = true
+                                _isBridgeOnline.value = true
+                                _conversationError.value = null
+                                syncAgyConversations(force = true)
+                                refreshQuotas()
+                                loadMcpServers()
+                            }
+                            "starting" -> {
+                                _isBridgeOnline.value = true
+                                _conversationError.value = null
+                                _isConversationsLoading.value = true
+                            }
+                            "error" -> {
+                                _isServerOnline.value = false
+                                _isConversationsLoading.value = false
+                                _conversationError.value = "Antigravity Hub failed to start: ${status.error ?: "Check server logs"}"
+                            }
+                            "stopped" -> {
+                                _isServerOnline.value = false
+                                _isBridgeOnline.value = false
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    _isServerOnline.value = false
+                    _isBridgeOnline.value = false
+                    delay(2000)
+                }
+            }
+        }
+
         viewModelScope.launch {
             agyHubClient.csrfEvents.collect { msg ->
                 withContext(Dispatchers.Main) {
@@ -1065,7 +1109,36 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _selectedModelId.value = initial
             }
             startNewChat()
-            syncAgyConversations()
+
+            // 5-second handshake polling with Go IDE server
+            val initialStatus = withTimeoutOrNull(5000) {
+                while (isActive) {
+                    val st = agyBridgeService.fetchServerStatus()
+                    if (st != null) return@withTimeoutOrNull st
+                    delay(300)
+                }
+                null
+            }
+
+            if (initialStatus != null) {
+                _isBridgeOnline.value = true
+                if (initialStatus.status == "online") {
+                    _isServerOnline.value = true
+                    _conversationError.value = null
+                    syncAgyConversations()
+                    refreshQuotas()
+                    loadMcpServers()
+                } else {
+                    _conversationError.value = null
+                    _isConversationsLoading.value = true
+                    android.util.Log.d("ChatViewModel", "Go IDE server online, waiting for AGY hub status: ${initialStatus.status}")
+                }
+            } else {
+                // Not running Go server or timed out -> attempt standard direct sync
+                syncAgyConversations()
+                refreshQuotas()
+                loadMcpServers()
+            }
         }
 
         viewModelScope.launch {
@@ -1117,27 +1190,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        viewModelScope.launch {
-            refreshQuotas()
-            loadMcpServers()
-        }
-
         // Periodic auto-reconnect monitor for Hub RPC streams & Bridge (every 20 seconds)
         viewModelScope.launch {
-            checkBridgeHealth()
-            checkAgyAuthStatus()
+            delay(20_000)
             while (currentCoroutineContext().isActive) {
-                delay(20_000)
                 checkBridgeHealth()
-                checkAgyAuthStatus()
-                if (_isServerOnline.value != true || syncJob?.isActive != true) {
-                    android.util.Log.d("ChatViewModel", "Periodic check: reconnecting hub streams...")
-                    syncAgyConversations(force = false)
-                    val convId = _currentConversation.value?.id
-                    if (!convId.isNullOrBlank() && persistentStreamJob?.isActive != true) {
-                        startPersistentStream(convId)
+                if (agyBridgeService.hubStatus.value.status != "starting") {
+                    checkAgyAuthStatus()
+                    if (_isServerOnline.value == true && syncJob?.isActive != true) {
+                        android.util.Log.d("ChatViewModel", "Periodic check: reconnecting hub streams...")
+                        syncAgyConversations(force = false)
                     }
                 }
+                delay(20_000)
             }
         }
     }
@@ -1245,6 +1310,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 }
                             }
                         }
+                        _hasReceivedInitialSync.value = true
                         _isServerOnline.value = true
                         _conversationError.value = null
                         _isConversationsLoading.value = false
@@ -1255,15 +1321,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     android.util.Log.e("ChatViewModel", "subscribeToSummaries failed: ${e.message}")
                     _isServerOnline.value = false
-                    _isConversationsLoading.value = false
                     val rawErr = e.message ?: "Connection failed"
                     val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
                         "Cannot connect to Antigravity Hub (${AuthPreferences.currentHubUrl}). Make sure 'agy --hub' is running."
                     } else {
                         "Antigravity Hub unreachable: $rawErr"
                     }
-                    if (_conversations.value.isEmpty()) {
+                    val isStarting = agyBridgeService.hubStatus.value.status == "starting"
+                    if (_conversations.value.isEmpty() && !isStarting) {
                         _conversationError.value = helpfulMsg
+                        _isConversationsLoading.value = false
+                    } else if (isStarting || _conversations.value.isEmpty()) {
+                        _isConversationsLoading.value = true
+                    } else {
+                        _isConversationsLoading.value = false
                     }
                     delay(20_000) // Auto-retry conversation sync every 20 seconds while offline
                 }
@@ -1368,9 +1439,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         com.example.gemini.ui.components.CodeBlockExpansionCache.setChat(newConv.id)
         _messages.value = emptyList()
         _isLoadingConversation.value = false
-        if (_isServerOnline.value == true) {
-            _conversationError.value = null
-        }
+        _conversationError.value = null
     }
 
     fun selectConversation(id: String) {
@@ -1506,7 +1575,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         _isServerOnline.value = false
                         _isReconnecting.value = false
                         _isLoadingConversation.value = false
-                        if (_messages.value.isEmpty()) {
+                        val isStarting = agyBridgeService.hubStatus.value.status == "starting"
+                        if (_messages.value.isEmpty() && !isStarting && _currentConversation.value?.title != "New Chat") {
                             val rawErr = e.message ?: "Connection failed"
                             val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
                                 "Cannot connect to Antigravity Hub (${AuthPreferences.currentHubUrl}). Make sure 'agy --hub' is running."

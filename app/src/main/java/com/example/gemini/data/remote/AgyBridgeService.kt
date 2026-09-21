@@ -60,6 +60,13 @@ enum class BridgeConnectionState {
     OFFLINE_ERROR
 }
 
+data class AgyHubStatus(
+    val status: String = "idle", // "idle", "starting", "online", "error", "stopped"
+    val port: String = "8090",
+    val error: String? = null,
+    val logs: List<String> = emptyList()
+)
+
 sealed class AgyStreamEvent {
     data class TextChunk(val text: String, val seq: Long? = null) : AgyStreamEvent()
     data class ThoughtChunk(val thought: String, val durationMs: Long? = null, val seq: Long? = null) : AgyStreamEvent()
@@ -90,15 +97,16 @@ sealed class AgyStreamEvent {
     ) : AgyStreamEvent()
 
     data class LoginUrl(val url: String) : AgyStreamEvent()
+    data class HubStatusEvent(val hubStatus: AgyHubStatus) : AgyStreamEvent()
     data class Error(val message: String) : AgyStreamEvent()
 }
 
 class AgyBridgeService(
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS) // Infinite read timeout for persistent WebSocket
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .pingInterval(10, TimeUnit.SECONDS) // Active heartbeat ping every 10 seconds
+        .writeTimeout(10, TimeUnit.SECONDS)
+        .pingInterval(3, TimeUnit.SECONDS) // Active heartbeat ping every 3 seconds to instantly detect broken TCP socket
         .retryOnConnectionFailure(true)
         .build()
 ) {
@@ -109,11 +117,18 @@ class AgyBridgeService(
     private val _connectionState = MutableStateFlow(BridgeConnectionState.CONNECTING)
     val connectionState: StateFlow<BridgeConnectionState> = _connectionState.asStateFlow()
 
+    private val _hubStatus = MutableStateFlow(AgyHubStatus())
+    val hubStatus: StateFlow<AgyHubStatus> = _hubStatus.asStateFlow()
+
     private val _loginUrlEvents = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 5)
     val loginUrlEvents: SharedFlow<String> = _loginUrlEvents.asSharedFlow()
 
     fun updateConnectionState(newState: BridgeConnectionState) {
         _connectionState.value = newState
+    }
+
+    fun updateHubStatus(newStatus: AgyHubStatus) {
+        _hubStatus.value = newStatus
     }
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
@@ -254,25 +269,95 @@ class AgyBridgeService(
         )
     }
 
-    suspend fun checkServerHealth(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Boolean =
+    suspend fun fetchServerStatus(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): AgyHubStatus? =
         withContext(Dispatchers.IO) {
             try {
                 val request = Request.Builder()
-                    .url("$httpBaseUrl/api/health")
+                    .url("$httpBaseUrl/api/status")
                     .get()
                     .build()
 
                 client.newCall(request).execute().use { response ->
-                    val online = response.isSuccessful
-                    _connectionState.value =
-                        if (online) BridgeConnectionState.CONNECTED_READY else BridgeConnectionState.OFFLINE_ERROR
-                    online
+                    if (!response.isSuccessful) {
+                        return@withContext null
+                    }
+                    _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                    val body = response.body?.string() ?: "{}"
+                    val json = JSONObject(body)
+                    val hubObj = json.optJSONObject("hub")
+                    val st = hubObj?.optString("status", if (hubObj.optBoolean("active", false)) "online" else "stopped") ?: "stopped"
+                    val p = hubObj?.optString("port", "8090") ?: "8090"
+                    val err = hubObj?.optString("error")?.takeIf { it.isNotBlank() }
+                    val logsArr = hubObj?.optJSONArray("logs")
+                    val logsList = mutableListOf<String>()
+                    if (logsArr != null) {
+                        for (i in 0 until logsArr.length()) {
+                            logsList.add(logsArr.optString(i))
+                        }
+                    }
+                    val statusObj = AgyHubStatus(status = st, port = p, error = err, logs = logsList)
+                    _hubStatus.value = statusObj
+                    statusObj
                 }
             } catch (e: Exception) {
-                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
-                false
+                null
             }
         }
+
+    suspend fun checkServerHealth(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Boolean {
+        return fetchServerStatus(httpBaseUrl) != null
+    }
+
+    fun monitorHubStatus(wsUrl: String = AuthPreferences.currentBridgeWsUrl): Flow<AgyHubStatus> = callbackFlow {
+        val request = Request.Builder().url(wsUrl).build()
+        val wsListener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                _connectionState.value = BridgeConnectionState.CONNECTED_READY
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                try {
+                    val root = JSONObject(text)
+                    if (root.optString("type") == "hub_status") {
+                        val st = root.optString("status", "idle")
+                        val p = root.optString("port", "8090")
+                        val err = root.optString("error").takeIf { it.isNotBlank() }
+                        val logsArr = root.optJSONArray("logs")
+                        val logsList = mutableListOf<String>()
+                        if (logsArr != null) {
+                            for (i in 0 until logsArr.length()) {
+                                logsList.add(logsArr.optString(i))
+                            }
+                        }
+                        val statusObj = AgyHubStatus(status = st, port = p, error = err, logs = logsList)
+                        _hubStatus.value = statusObj
+                        trySend(statusObj)
+                    }
+                } catch (_: Exception) {}
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                val stoppedStatus = AgyHubStatus(status = "stopped", error = t.message)
+                _hubStatus.value = stoppedStatus
+                trySend(stoppedStatus)
+                close(t)
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                val stoppedStatus = AgyHubStatus(status = "stopped", error = reason.takeIf { it.isNotBlank() })
+                _hubStatus.value = stoppedStatus
+                trySend(stoppedStatus)
+                close()
+            }
+        }
+
+        val ws = client.newWebSocket(request, wsListener)
+        awaitClose {
+            ws.cancel()
+        }
+    }.flowOn(Dispatchers.IO)
 
     suspend fun fetchConversations(
         searchQuery: String? = null,
