@@ -17,6 +17,8 @@ import org.apache.commons.compress.archivers.ar.ArArchiveEntry
 import org.apache.commons.compress.archivers.ar.ArArchiveInputStream
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
+import org.apache.commons.compress.archivers.zip.ZipFile as CommonsZipFile
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
 import java.io.*
@@ -636,12 +638,11 @@ object LocalEnvironmentManager {
                 }
             } else {
                 log("Extracting rootfs files from ZIP into ${prefixDir.absolutePath}...")
-                java.util.zip.ZipFile(archiveToExtract).use { zip ->
-                    val totalEntries = zip.size()
-                    val entries = zip.entries()
+                CommonsZipFile(archiveToExtract).use { zip ->
+                    val entriesList = zip.entries.toList()
+                    val totalEntries = entriesList.size
 
-                    while (entries.hasMoreElements()) {
-                        val entry = entries.nextElement()
+                    for (entry in entriesList) {
                         val rawName = entry.name
 
                         if (rawName == "SYMLINKS.txt" || rawName.endsWith("/SYMLINKS.txt")) {
@@ -667,23 +668,45 @@ object LocalEnvironmentManager {
                             }
 
                             if (targetFile != null) {
-                                if (entry.isDirectory) {
+                                val unixMode = entry.unixMode
+
+                                if (entry.isUnixSymlink) {
+                                    try {
+                                        targetFile.parentFile?.let { p ->
+                                            if (!p.exists()) {
+                                                p.mkdirs()
+                                                try { Os.chmod(p.absolutePath, 493) } catch (_: Exception) {}
+                                            }
+                                        }
+                                        if (targetFile.exists() || isSymlink(targetFile)) {
+                                            targetFile.setWritable(true, true)
+                                            try { targetFile.delete() } catch (_: Exception) {}
+                                        }
+                                        val symlinkTarget = zip.getUnixSymlink(entry)
+                                        if (!symlinkTarget.isNullOrBlank()) {
+                                            Os.symlink(symlinkTarget, targetFile.absolutePath)
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Failed creating embedded symlink for $rawName: ${e.message}")
+                                    }
+                                } else if (entry.isDirectory) {
                                     targetFile.mkdirs()
-                                    targetFile.setReadable(true, false)
-                                    targetFile.setWritable(true, false)
-                                    targetFile.setExecutable(true, false)
+                                    val dirMode = if (unixMode != 0) unixMode else 493 // 0755
+                                    try {
+                                        Os.chmod(targetFile.absolutePath, dirMode)
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "chmod failed on directory ${targetFile.name}: ${e.message}")
+                                    }
                                 } else {
                                     targetFile.parentFile?.let { p ->
                                         if (!p.exists()) {
                                             p.mkdirs()
+                                            try { Os.chmod(p.absolutePath, 493) } catch (_: Exception) {}
                                         }
-                                        p.setReadable(true, false)
-                                        p.setWritable(true, false)
-                                        p.setExecutable(true, false)
                                     }
 
                                     if (targetFile.exists() || isSymlink(targetFile)) {
-                                        targetFile.setWritable(true, false)
+                                        targetFile.setWritable(true, true)
                                         try {
                                             targetFile.delete()
                                         } catch (_: Exception) {}
@@ -696,14 +719,23 @@ object LocalEnvironmentManager {
                                             }
                                         }
 
-                                        // Mark executables
-                                        val isExecutableDir = targetFile.parentFile?.name in listOf("bin", "libexec", "applets", "sbin")
-                                        val isExecutablePath = targetFile.absolutePath.contains("/bin/") || targetFile.absolutePath.contains("/libexec/")
-                                        if (isExecutableDir || isExecutablePath || !targetFile.name.contains(".")) {
-                                            targetFile.setExecutable(true, false)
+                                        // Apply exact Unix mode recorded in the ZIP header
+                                        if (unixMode != 0) {
+                                            try {
+                                                Os.chmod(targetFile.absolutePath, unixMode)
+                                            } catch (e: Exception) {
+                                                Log.w(TAG, "chmod failed on ${targetFile.name} (mode $unixMode): ${e.message}")
+                                            }
+                                        } else {
+                                            // Fallback if ZIP had no Unix attributes
+                                            val isExecutableDir = targetFile.parentFile?.name in listOf("bin", "libexec", "applets", "sbin")
+                                            val isExecutablePath = targetFile.absolutePath.contains("/bin/") || targetFile.absolutePath.contains("/libexec/")
+                                            if (isExecutableDir || isExecutablePath || !targetFile.name.contains(".")) {
+                                                targetFile.setExecutable(true, false)
+                                            }
+                                            targetFile.setReadable(true, false)
+                                            targetFile.setWritable(true, true)
                                         }
-                                        targetFile.setReadable(true, false)
-                                        targetFile.setWritable(true, false)
                                     } catch (e: Exception) {
                                         Log.w(TAG, "Non-fatal error extracting ${rawName} to ${targetFile.absolutePath}: ${e.message}")
                                     }
@@ -770,13 +802,13 @@ object LocalEnvironmentManager {
 
                         try {
                             symlinkFile.parentFile?.let { p ->
-                                if (!p.exists()) p.mkdirs()
-                                p.setReadable(true, false)
-                                p.setWritable(true, false)
-                                p.setExecutable(true, false)
+                                if (!p.exists()) {
+                                    p.mkdirs()
+                                    try { Os.chmod(p.absolutePath, 493) } catch (_: Exception) {}
+                                }
                             }
                             if (symlinkFile.exists() || isSymlink(symlinkFile)) {
-                                symlinkFile.setWritable(true, false)
+                                symlinkFile.setWritable(true, true)
                                 try { symlinkFile.delete() } catch (_: Exception) {}
                             }
                             Os.symlink(target, symlinkFile.absolutePath)
@@ -1214,37 +1246,6 @@ object LocalEnvironmentManager {
         }
     }
 
-    private fun setPermissionsRecursively(file: File) {
-        try {
-            if (file.isDirectory) {
-                file.setReadable(true, false)
-                file.setWritable(true, true)
-                file.setExecutable(true, false)
-                try {
-                    Os.chmod(file.absolutePath, 493) // 0755
-                } catch (_: Exception) {}
-                file.listFiles()?.forEach { child ->
-                    setPermissionsRecursively(child)
-                }
-            } else {
-                val isExec = file.parentFile?.name in listOf("bin", "libexec", "sbin", "applets") ||
-                        file.absolutePath.contains("/bin/") ||
-                        file.absolutePath.contains("/libexec/") ||
-                        !file.name.contains(".") ||
-                        file.name.endsWith(".so") ||
-                        file.name.endsWith(".sh")
-                file.setReadable(true, false)
-                if (isExec) {
-                    file.setExecutable(true, false)
-                    try {
-                        Os.chmod(file.absolutePath, 493) // 0755
-                    } catch (_: Exception) {}
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Permission setup error for ${file.name}: ${e.message}")
-        }
-    }
 
     private fun configureEnvironmentFiles(
         context: Context,
@@ -1258,38 +1259,22 @@ object LocalEnvironmentManager {
         val bashFile = File(binDir, "bash")
         val shFile = File(binDir, "sh")
 
-        // Ensure dash has direct execute permission
-        if (dashFile.exists()) {
-            dashFile.setExecutable(true, false)
-            dashFile.setReadable(true, false)
-            try { Os.chmod(dashFile.absolutePath, 493) } catch (_: Exception) {}
-
-            if (!bashFile.exists()) {
-                try {
-                    Os.symlink("dash", bashFile.absolutePath)
-                } catch (_: Exception) {
-                    try { dashFile.copyTo(bashFile, overwrite = true) } catch (_: Exception) {}
-                }
-            }
-            if (!shFile.exists() || !shFile.canExecute()) {
-                try {
-                    if (shFile.exists() || isSymlink(shFile)) shFile.delete()
-                    Os.symlink("dash", shFile.absolutePath)
-                } catch (_: Exception) {
-                    try { dashFile.copyTo(shFile, overwrite = true) } catch (_: Exception) {}
-                }
+        // Ensure a working sh fallback exists if not present in archive
+        if (!shFile.exists() || !shFile.canExecute()) {
+            if (bashFile.exists() && bashFile.canExecute()) {
+                try { Os.symlink("bash", shFile.absolutePath) } catch (_: Exception) {}
+            } else if (dashFile.exists() && dashFile.canExecute()) {
+                try { Os.symlink("dash", shFile.absolutePath) } catch (_: Exception) {}
             }
         }
 
-        // Apply 0755 permissions recursively
-        setPermissionsRecursively(prefixDir)
-        setPermissionsRecursively(homeDir)
-        setPermissionsRecursively(projectsDir)
+        projectsDir.mkdirs()
 
-        // Setup $HOME/.bashrc
+        // Setup $HOME/.bashrc only if not provided by the archive
         val bashrc = File(homeDir, ".bashrc")
-        bashrc.writeText(
-            """# Gemini Local Linux Environment
+        if (!bashrc.exists()) {
+            bashrc.writeText(
+                """# Gemini Local Linux Environment
 export PREFIX="${prefixDir.absolutePath}"
 export HOME="${homeDir.absolutePath}"
 export PATH="${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/system/xbin"
@@ -1314,20 +1299,26 @@ alias proj='cd ${projectsDir.absolutePath}'
 # Termux styled color prompt
 PS1='\[\033[01;32m\]gemini\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
 """.trimIndent()
-        )
+            )
+            try { Os.chmod(bashrc.absolutePath, 420) } catch (_: Exception) {} // 0644
+        }
 
         val profile = File(homeDir, ".profile")
-        profile.writeText(
-            """if [ -f "${bashrc.absolutePath}" ]; then
+        if (!profile.exists()) {
+            profile.writeText(
+                """if [ -f "${bashrc.absolutePath}" ]; then
     . "${bashrc.absolutePath}"
 fi
 """.trimIndent()
-        )
+            )
+            try { Os.chmod(profile.absolutePath, 420) } catch (_: Exception) {} // 0644
+        }
 
-        // Setup $PREFIX/etc/profile
+        // Setup $PREFIX/etc/profile only if not provided by archive
         val etcProfile = File(etcDir, "profile")
-        etcProfile.writeText(
-            """export PREFIX="${prefixDir.absolutePath}"
+        if (!etcProfile.exists()) {
+            etcProfile.writeText(
+                """export PREFIX="${prefixDir.absolutePath}"
 export HOME="${homeDir.absolutePath}"
 export PATH="${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/system/xbin"
 export TMPDIR="${prefixDir.absolutePath}/tmp"
@@ -1342,16 +1333,20 @@ export ANDROID_ROOT="/system"
 export LANG="en_US.UTF-8"
 export LC_ALL="en_US.UTF-8"
 """.trimIndent()
-        )
+            )
+            try { Os.chmod(etcProfile.absolutePath, 420) } catch (_: Exception) {} // 0644
+        }
 
-        // Ensure standard DNS resolution files exist in $PREFIX/etc
+        // Ensure standard DNS resolution files exist in $PREFIX/etc if missing
         val etcResolv = File(etcDir, "resolv.conf")
         if (!etcResolv.exists()) {
             etcResolv.writeText("nameserver 8.8.8.8\nnameserver 8.8.4.4\nnameserver 1.1.1.1\n")
+            try { Os.chmod(etcResolv.absolutePath, 420) } catch (_: Exception) {} // 0644
         }
         val etcHosts = File(etcDir, "hosts")
         if (!etcHosts.exists()) {
             etcHosts.writeText("127.0.0.1 localhost\n::1 localhost\n")
+            try { Os.chmod(etcHosts.absolutePath, 420) } catch (_: Exception) {} // 0644
         }
 
         // Extract bundled minimal glibc runtime (1.7MB) if available
