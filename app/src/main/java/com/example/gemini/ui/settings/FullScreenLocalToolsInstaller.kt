@@ -68,32 +68,6 @@ fun FullScreenLocalToolsInstaller(
         }
     }
 
-    // Quick auto-detection for /sdcard/bootrapz*.zip
-    val detectedLocalZip by produceState<File?>(initialValue = null) {
-        val candidates = mutableListOf<File>()
-        try {
-            val sdcard = Environment.getExternalStorageDirectory()
-            if (sdcard != null && sdcard.exists()) {
-                val files = sdcard.listFiles() ?: emptyArray()
-                for (f in files) {
-                    if (f.isFile && f.name.startsWith("bootrap") && f.name.endsWith(".zip") && f.length() > 5_000_000L) {
-                        candidates.add(f)
-                    }
-                }
-                val downloadDir = File(sdcard, "Download")
-                if (downloadDir.exists()) {
-                    val dFiles = downloadDir.listFiles() ?: emptyArray()
-                    for (f in dFiles) {
-                        if (f.isFile && f.name.startsWith("bootrap") && f.name.endsWith(".zip") && f.length() > 5_000_000L) {
-                            candidates.add(f)
-                        }
-                    }
-                }
-            }
-        } catch (_: Exception) {}
-        value = candidates.maxByOrNull { it.lastModified() }
-    }
-
     val logsListState = rememberLazyListState()
     LaunchedEffect(installerLogs.size) {
         if (installerLogs.isNotEmpty()) {
@@ -226,72 +200,6 @@ fun FullScreenLocalToolsInstaller(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Quick offline option if /sdcard/bootrapz.zip exists
-                        if (detectedLocalZip != null) {
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = ClaudeTerracotta.copy(alpha = 0.08f),
-                                border = BorderStroke(1.5.dp, ClaudeTerracotta.copy(alpha = 0.6f)),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        val uri = Uri.fromFile(detectedLocalZip)
-                                        LocalEnvironmentManager.launchInstall(
-                                            context,
-                                            authPreferences,
-                                            BootstrapSource.LocalZipUri(uri)
-                                        )
-                                    }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                            .background(ClaudeTerracotta.copy(alpha = 0.2f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.FlashOn,
-                                            contentDescription = null,
-                                            tint = ClaudeTerracotta,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = "Install Detected Local Backup",
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(QuotaGreen.copy(alpha = 0.18f))
-                                                    .padding(horizontal = 5.dp, vertical = 1.dp)
-                                            ) {
-                                                Text("Instant Offline", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = QuotaGreen)
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = "${detectedLocalZip?.name} (${LocalEnvironmentManager.formatFileSize(detectedLocalZip?.length() ?: 0L)})",
-                                            fontSize = 11.5.sp,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
                         // Option 1: Auto Download (GitHub)
                         Surface(
                             shape = RoundedCornerShape(14.dp),

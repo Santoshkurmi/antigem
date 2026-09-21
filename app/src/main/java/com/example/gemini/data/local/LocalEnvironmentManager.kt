@@ -735,6 +735,7 @@ object LocalEnvironmentManager {
                 }
             } else {
                 log("Extracting rootfs files from ZIP into ${prefixDir.absolutePath}...")
+                val symlinksFromTxt = mutableListOf<Pair<String, String>>()
                 CommonsZipFile(archiveToExtract).use { zip ->
                     val entriesList = zip.entries.toList()
                     val totalEntries = entriesList.size
@@ -743,6 +744,21 @@ object LocalEnvironmentManager {
                         val rawName = entry.name
 
                         if (rawName == "SYMLINKS.txt" || rawName.endsWith("/SYMLINKS.txt")) {
+                            try {
+                                zip.getInputStream(entry).bufferedReader(Charsets.UTF_8).useLines { lines ->
+                                    lines.forEach { line ->
+                                        val trimmed = line.trim()
+                                        if (trimmed.isNotEmpty()) {
+                                            val parts = trimmed.split("←")
+                                            if (parts.size == 2) {
+                                                symlinksFromTxt.add(Pair(parts[0].trim(), parts[1].trim()))
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed reading SYMLINKS.txt: ${e.message}")
+                            }
                             continue
                         }
 
@@ -851,6 +867,47 @@ object LocalEnvironmentManager {
                             updateInstallNotification(appContext, "Extracting Rootfs ($pct%)", rawName.substringAfterLast("/"), pct)
                         }
                     }
+
+                    // Apply all symlinks listed in SYMLINKS.txt
+                    if (symlinksFromTxt.isNotEmpty()) {
+                        log("Creating ${symlinksFromTxt.size} symlinks from SYMLINKS.txt...")
+                        for ((target, linkRelPath) in symlinksFromTxt) {
+                            try {
+                                val cleanRel = linkRelPath.removePrefix("./")
+                                val isHome = cleanRel.startsWith("home/") || cleanRel.contains("/files/home/")
+                                val linkFile = if (isHome) {
+                                    val relHome = cleanRel
+                                        .replaceFirst(Regex("^.*?files/home/"), "")
+                                        .removePrefix("home/")
+                                        .removePrefix("./")
+                                    if (relHome.isBlank()) null else File(homeDir, relHome)
+                                } else {
+                                    val relUsr = cleanRel
+                                        .replaceFirst(Regex("^.*?files/usr/"), "")
+                                        .replaceFirst(Regex("^.*?files/"), "")
+                                        .removePrefix("usr/")
+                                        .removePrefix("./")
+                                    if (relUsr.isBlank() || relUsr == "/") null else File(prefixDir, relUsr)
+                                }
+
+                                if (linkFile != null) {
+                                    linkFile.parentFile?.let { p ->
+                                        if (!p.exists()) {
+                                            p.mkdirs()
+                                            try { Os.chmod(p.absolutePath, 493) } catch (_: Exception) {}
+                                        }
+                                    }
+                                    if (linkFile.exists() || isSymlink(linkFile)) {
+                                        linkFile.setWritable(true, true)
+                                        try { linkFile.delete() } catch (_: Exception) {}
+                                    }
+                                    Os.symlink(target, linkFile.absolutePath)
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Error creating symlink for $linkRelPath -> $target: ${e.message}")
+                            }
+                        }
+                    }
                 }
             }
 
@@ -880,6 +937,7 @@ object LocalEnvironmentManager {
             if (installedSize < 5 * 1024 * 1024L) {
                 val errorMsg = "Verification failed: installed package directory is too small ($installedSizeStr). Installation is incomplete."
                 log("❌ $errorMsg")
+                cleanupFailedInstall(appContext, authPreferences)
                 updateInstallNotification(appContext, "Installation Failed", errorMsg, -2, ongoing = false, force = true)
                 _installerState.value = LocalInstallerState.Error(
                     errorMessage = errorMsg,
@@ -898,6 +956,7 @@ object LocalEnvironmentManager {
             if (!testRes.output.contains("GEMINI_LOCAL_TOOLS_OK")) {
                 val errorMsg = "Shell verification test failed: ${testRes.output}"
                 log("❌ $errorMsg")
+                cleanupFailedInstall(appContext, authPreferences)
                 updateInstallNotification(appContext, "Installation Failed", errorMsg, -2, ongoing = false, force = true)
                 _installerState.value = LocalInstallerState.Error(
                     errorMessage = errorMsg,
@@ -923,12 +982,25 @@ object LocalEnvironmentManager {
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to install local tools: ${e.message}", e)
+            cleanupFailedInstall(appContext, authPreferences)
             updateInstallNotification(appContext, "Installation Failed", e.localizedMessage ?: "Installation error", -2, ongoing = false, force = true)
             _installerState.value = LocalInstallerState.Error(
                 errorMessage = "Installation failed: ${e.localizedMessage ?: e.message}",
                 canRetry = true
             )
             return@withContext false
+        }
+    }
+
+    private suspend fun cleanupFailedInstall(context: Context, authPreferences: AuthPreferences) {
+        try {
+            log("🧹 Cleaning up incomplete/failed installation via uninstaller (resetEnvironment)...")
+            resetEnvironment(context)
+            authPreferences.setLocalToolsInstalled(false)
+            authPreferences.setLocalToolsEnabled(false)
+            authPreferences.setTerminalToolEnabled(false)
+        } catch (e: Exception) {
+            Log.w(TAG, "Cleanup error: ${e.message}")
         }
     }
 
