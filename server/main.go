@@ -84,45 +84,11 @@ func main() {
 	fmt.Printf("  \033[1m• Target Hub Port:\033[0m  %s\n", hubPort)
 	fmt.Println("\033[1;36m============================================================\033[0m")
 
-	// Determine if AGY Hub should be started
-	shouldStartHub := false
-	if !skipHub {
-		if forceStart {
-			fmt.Println(" \033[33m⚡ Force flag (-f) detected: auto-starting AGY Hub...\033[0m")
-			shouldStartHub = true
-		} else {
-			// Interactive user prompt
-			fmt.Print(" \033[1;33m? Do you want to start AGY Hub server (port " + hubPort + ")? [Y/n]: \033[0m")
-			reader := bufio.NewReader(os.Stdin)
-			input, err := reader.ReadString('\n')
-			if err == nil {
-				trimmed := strings.ToLower(strings.TrimSpace(input))
-				if trimmed == "" || trimmed == "y" || trimmed == "yes" {
-					shouldStartHub = true
-				} else {
-					fmt.Println(" \033[90mℹ Skipping AGY Hub. Running IDE Server only.\033[0m")
-				}
-			} else {
-				// Non-interactive fallback (e.g. piped or redirected stdin) -> default to starting hub
-				shouldStartHub = true
-			}
-		}
-	}
-
 	var hubMgr *hub.HubManager
-	if shouldStartHub {
-		hubMgr = hub.NewHubManager(hubPort, cfg.WorkspaceDir, cfg.AppDataDir)
-		if err := hubMgr.Start(); err != nil {
-			fmt.Printf(" \033[31m[!] Warning starting AGY Hub:\033[0m %v\n", err)
-		}
-	}
 
 	wsHub := ws.NewHub(cfg)
 	h := handlers.NewHandler(cfg, hubMgr)
 	h.SetHub(wsHub)
-	if hubMgr != nil {
-		hubMgr.OnLoginURL = h.HandleLoginURL
-	}
 
 	mux := http.NewServeMux()
 
@@ -257,12 +223,46 @@ func main() {
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		fmt.Printf(" \033[32m🚀 antiGem IDE Server running at http://0.0.0.0:%s\033[0m\n\n", cfg.Port)
-
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
 		}
 	}()
+
+	fmt.Printf(" \033[32m🚀 antiGem IDE Server running at http://0.0.0.0:%s\033[0m\n\n", cfg.Port)
+
+	// Determine if AGY Hub should be started
+	shouldStartHub := false
+	if !skipHub {
+		if forceStart {
+			fmt.Println(" \033[33m⚡ Force flag (-f) detected: auto-starting AGY Hub...\033[0m")
+			shouldStartHub = true
+		} else {
+			// Interactive user prompt
+			fmt.Print(" \033[1;33m? Do you want to start AGY Hub server (port " + hubPort + ")? [Y/n]: \033[0m")
+			reader := bufio.NewReader(os.Stdin)
+			input, err := reader.ReadString('\n')
+			if err == nil {
+				trimmed := strings.ToLower(strings.TrimSpace(input))
+				if trimmed == "" || trimmed == "y" || trimmed == "yes" {
+					shouldStartHub = true
+				} else {
+					fmt.Println(" \033[90mℹ Skipping AGY Hub. Running IDE Server only.\033[0m")
+				}
+			} else {
+				// Non-interactive fallback (e.g. piped or redirected stdin) -> default to starting hub
+				shouldStartHub = true
+			}
+		}
+	}
+
+	if shouldStartHub {
+		hubMgr = hub.NewHubManager(hubPort, cfg.WorkspaceDir, cfg.AppDataDir)
+		h.HubManager = hubMgr
+		hubMgr.OnLoginURL = h.HandleLoginURL
+		if err := hubMgr.Start(); err != nil {
+			fmt.Printf(" \033[31m[!] Warning starting AGY Hub:\033[0m %v\n", err)
+		}
+	}
 
 	<-stopChan
 	fmt.Println("\n🛑 Shutting down antiGem server gracefully...")

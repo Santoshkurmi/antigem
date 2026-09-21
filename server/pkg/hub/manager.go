@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,6 +32,7 @@ type HubManager struct {
 	isRunning   bool
 	isExternal  bool
 	processDone chan struct{}
+	recentLogs  []string
 	mu          sync.Mutex
 }
 
@@ -44,6 +46,7 @@ func NewHubManager(hubPort, workspaceDir, appDataDir string) *HubManager {
 		WorkspaceDir: workspaceDir,
 		AppDataDir:   appDataDir,
 		AgyBinPath:   resolveAgyBinary(),
+		recentLogs:   make([]string, 0, 50),
 	}
 }
 
@@ -71,6 +74,26 @@ func resolveAgyBinary() string {
 	return "agy"
 }
 
+// isHubReady probes the AGY language server RPC endpoint to verify it is actually up and serving.
+func (m *HubManager) isHubReady() bool {
+	client := &http.Client{
+		Timeout: 500 * time.Millisecond,
+	}
+	req, err := http.NewRequest("POST", fmt.Sprintf("http://127.0.0.1:%s/exa.language_server_pb.LanguageServerService/GetAuthStatus", m.HubPort), strings.NewReader("{}"))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", "application/grpc-web+json")
+	req.Header.Set("x-grpc-web", "1")
+
+	resp, err := client.Do(req)
+	if err == nil {
+		_ = resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}
+	return false
+}
+
 // IsPortActive checks if the hub port is currently listening.
 func (m *HubManager) IsPortActive() bool {
 	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+m.HubPort, 300*time.Millisecond)
@@ -85,7 +108,7 @@ func (m *HubManager) IsPortActive() bool {
 func (m *HubManager) IsRunning() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.isRunning || m.IsPortActive()
+	return m.isRunning || m.isHubReady()
 }
 
 // Start launches agy --hub with interactive feedback, a spinner, and non-blocking update bypass.
@@ -93,8 +116,8 @@ func (m *HubManager) Start() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// 1. Check if already active
-	if m.IsPortActive() {
+	// 1. Check if already active and responding to RPC requests
+	if m.isHubReady() {
 		m.isRunning = true
 		m.isExternal = true
 		fmt.Printf(" \033[32m[✓]\033[0m AGY Hub is already active and listening on http://127.0.0.1:%s\n", m.HubPort)
@@ -136,9 +159,6 @@ func (m *HubManager) Start() error {
 		"DEBIAN_FRONTEND=noninteractive",
 	)
 
-	// Automatic 'n' feed to stdin: answers any potential agy update prompt with 'no' immediately
-	cmd.Stdin = strings.NewReader("n\n")
-
 	stdoutPipe, errOut := cmd.StdoutPipe()
 	stderrPipe, errErr := cmd.StderrPipe()
 
@@ -153,9 +173,13 @@ func (m *HubManager) Start() error {
 	m.processDone = make(chan struct{})
 	processExited := make(chan error, 1)
 
+	var streamWg sync.WaitGroup
+
 	// Stream stdout & stderr cleanly with [agy-hub] prefix and extract auth URLs
 	if errOut == nil {
+		streamWg.Add(1)
 		go func() {
+			defer streamWg.Done()
 			scanner := bufio.NewScanner(stdoutPipe)
 			for scanner.Scan() {
 				m.handleHubLine(scanner.Text())
@@ -163,7 +187,9 @@ func (m *HubManager) Start() error {
 		}()
 	}
 	if errErr == nil {
+		streamWg.Add(1)
 		go func() {
+			defer streamWg.Done()
 			scanner := bufio.NewScanner(stderrPipe)
 			for scanner.Scan() {
 				m.handleHubLine(scanner.Text())
@@ -174,6 +200,7 @@ func (m *HubManager) Start() error {
 	// Supervise process exit in background
 	go func() {
 		err := cmd.Wait()
+		streamWg.Wait() // Ensure all remaining output is drained and processed
 		m.mu.Lock()
 		m.isRunning = false
 		m.mu.Unlock()
@@ -181,34 +208,35 @@ func (m *HubManager) Start() error {
 		close(m.processDone)
 	}()
 
-	// Loading animation while waiting for port to open
+	// Loading animation while waiting for port and RPC server readiness
 	spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	spinIdx := 0
 	ready := false
 	startTime := time.Now()
-	timeout := 25 * time.Second
+	timeout := 30 * time.Second
 
 	for time.Since(startTime) < timeout {
 		select {
 		case err := <-processExited:
-			fmt.Printf("\r \033[31m[✗]\033[0m AGY Hub process terminated: %v\n", err)
+			fmt.Printf("\r\033[K \033[31m[✗]\033[0m AGY Hub process terminated: %v\n", err)
+			m.dumpRecentLogs()
 			return fmt.Errorf("agy hub process exited unexpectedly: %w", err)
 		default:
 		}
 
-		if m.IsPortActive() {
+		if m.isHubReady() {
 			ready = true
 			break
 		}
-		fmt.Printf("\r \033[36m[%s]\033[0m Starting AGY Hub on port %s...", spinner[spinIdx%len(spinner)], m.HubPort)
+		fmt.Printf("\r\033[K \033[36m[%s]\033[0m Starting AGY Hub on port %s...", spinner[spinIdx%len(spinner)], m.HubPort)
 		spinIdx++
-		time.Sleep(120 * time.Millisecond)
+		time.Sleep(150 * time.Millisecond)
 	}
 
 	if ready {
-		fmt.Printf("\r \033[32m[✓]\033[0m AGY Hub is online and listening on http://127.0.0.1:%s   \n", m.HubPort)
+		fmt.Printf("\r\033[K \033[32m[✓]\033[0m AGY Hub is online and listening on http://127.0.0.1:%s\n", m.HubPort)
 	} else {
-		fmt.Printf("\r \033[33m[!]\033[0m AGY Hub started (PID %d), waiting for initialization on port %s...\n", cmd.Process.Pid, m.HubPort)
+		fmt.Printf("\r\033[K \033[33m[!]\033[0m AGY Hub started (PID %d), waiting for initialization on port %s...\n", cmd.Process.Pid, m.HubPort)
 	}
 
 	return nil
@@ -252,7 +280,15 @@ func (m *HubManager) handleHubLine(line string) {
 	if trimmed == "" {
 		return
 	}
-	fmt.Printf("\033[90m[agy-hub]\033[0m %s\n", line)
+
+	m.mu.Lock()
+	if len(m.recentLogs) >= 50 {
+		m.recentLogs = m.recentLogs[1:]
+	}
+	m.recentLogs = append(m.recentLogs, line)
+	m.mu.Unlock()
+
+	fmt.Printf("\r\033[K\033[90m[agy-hub]\033[0m %s\n", line)
 
 	if m.OnLoginURL != nil && strings.Contains(trimmed, "accounts.google.com") {
 		matches := loginURLRegex.FindAllString(trimmed, -1)
@@ -264,3 +300,18 @@ func (m *HubManager) handleHubLine(line string) {
 		}
 	}
 }
+
+func (m *HubManager) dumpRecentLogs() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.recentLogs) == 0 {
+		fmt.Printf(" \033[33mℹ No output was captured from AGY binary.\033[0m Path: %s\n", m.AgyBinPath)
+		return
+	}
+	fmt.Println(" \033[1;31m--- AGY Hub Output / Error Logs ---\033[0m")
+	for _, l := range m.recentLogs {
+		fmt.Printf("   \033[90m%s\033[0m\n", l)
+	}
+	fmt.Println(" \033[1;31m------------------------------------\033[0m")
+}
+
