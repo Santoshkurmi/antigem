@@ -73,147 +73,6 @@ object LocalServerManager {
         }
     }
 
-    private fun getSessionPid(session: LocalPtySession): Int? {
-        return try {
-            val pidField = session.terminalSession.javaClass.getDeclaredField("mPid")
-            pidField.isAccessible = true
-            val pid = pidField.getInt(session.terminalSession)
-            if (pid > 0) pid else null
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun isProcessAlive(pid: Int): Boolean {
-        return try {
-            File("/proc/$pid").exists()
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    private fun getDescendantPids(rootPid: Int): List<Int> {
-        val descendants = mutableListOf<Int>()
-        try {
-            val procDir = File("/proc")
-            val pidDirs = procDir.listFiles { f -> f.isDirectory && f.name.all { it.isDigit() } } ?: return emptyList()
-            val ppidMap = mutableMapOf<Int, Int>()
-            val myPid = android.os.Process.myPid()
-
-            for (pDir in pidDirs) {
-                val p = pDir.name.toIntOrNull() ?: continue
-                if (p == myPid) continue
-                try {
-                    val statFile = File(pDir, "stat")
-                    if (statFile.exists()) {
-                        val stat = statFile.readText()
-                        val lastParen = stat.lastIndexOf(')')
-                        if (lastParen != -1 && lastParen + 2 < stat.length) {
-                            val rest = stat.substring(lastParen + 2).trim().split(" ")
-                            if (rest.size >= 2) {
-                                val ppid = rest[1].toIntOrNull()
-                                if (ppid != null) {
-                                    ppidMap[p] = ppid
-                                }
-                            }
-                        }
-                    }
-                } catch (_: Exception) {}
-            }
-
-            fun collect(parent: Int) {
-                for ((child, parentId) in ppidMap) {
-                    if (parentId == parent && !descendants.contains(child)) {
-                        descendants.add(child)
-                        collect(child)
-                    }
-                }
-            }
-            collect(rootPid)
-        } catch (_: Exception) {}
-        return descendants
-    }
-
-    private suspend fun killServerAndChildProcesses(session: LocalPtySession, maxWaitMs: Long = 10000L) {
-        val rootPid = getSessionPid(session)
-        Log.d(TAG, "[ServerManager] Gracefully terminating server child processes inside session (root PID: $rootPid)...")
-
-        try {
-            // Send Ctrl+C (0x03) character to the PTY interactive terminal session
-            session.write("\u0003")
-        } catch (_: Exception) {}
-
-        if (rootPid != null) {
-            // Send SIGINT (2) and SIGTERM (15) to descendants (server, agy, go, etc.)
-            val descendants = getDescendantPids(rootPid)
-            for (child in descendants) {
-                try { android.system.Os.kill(child, 2) } catch (_: Exception) {}
-                try { android.system.Os.kill(child, 15) } catch (_: Exception) {}
-            }
-
-            val pollInterval = 200L
-            val maxIterations = (maxWaitMs / pollInterval).toInt().coerceAtLeast(1)
-
-            for (i in 1..maxIterations) {
-                delay(pollInterval)
-                val aliveChildren = getDescendantPids(rootPid).filter { isProcessAlive(it) }
-                if (aliveChildren.isEmpty()) {
-                    Log.d(TAG, "[ServerManager] Server child processes exited gracefully after ${i * pollInterval}ms")
-                    return
-                }
-            }
-
-            // Fallback escalation to SIGKILL only for remaining stuck child processes
-            val remaining = getDescendantPids(rootPid).filter { isProcessAlive(it) }
-            for (child in remaining) {
-                try { android.system.Os.kill(child, 9) } catch (_: Exception) {}
-            }
-        }
-    }
-
-    private fun killLingeringServerProcesses(force: Boolean = false) {
-        try {
-            val procDir = File("/proc")
-            val myPid = android.os.Process.myPid()
-            val pidDirs = procDir.listFiles { f -> f.isDirectory && f.name.all { it.isDigit() } } ?: emptyArray()
-            val interactivePids = mutableSetOf<Int>()
-            for (s in LocalTerminalManager.sessions.value) {
-                val pid = getSessionPid(s)
-                if (pid != null) {
-                    interactivePids.add(pid)
-                    interactivePids.addAll(getDescendantPids(pid))
-                }
-            }
-
-            for (pDir in pidDirs) {
-                val p = pDir.name.toIntOrNull() ?: continue
-                if (p == myPid || interactivePids.contains(p)) continue
-                try {
-                    val cmdlineFile = File(pDir, "cmdline")
-                    if (cmdlineFile.exists()) {
-                        val cmdline = cmdlineFile.readBytes().toString(Charsets.UTF_8).replace('\u0000', ' ')
-                        val isServerOrAgy = cmdline.contains("server -f") || 
-                                            cmdline.contains("agy") || 
-                                            cmdline.contains("server") && !cmdline.contains("com.termux") && !cmdline.contains("gemini") ||
-                                            cmdline.contains("start.sh") || 
-                                            cmdline.contains("./start") ||
-                                            cmdline.contains("ld-linux-aarch64") && cmdline.contains("agy")
-                        if (isServerOrAgy) {
-                            Log.d(TAG, "Killing lingering server process: PID $p ($cmdline)")
-                            val signal = if (force) 9 else 15
-                            try { android.system.Os.kill(-p, signal) } catch (_: Exception) {}
-                            try { android.system.Os.kill(p, signal) } catch (_: Exception) {}
-                            if (force) {
-                                try { android.system.Os.kill(-p, 9) } catch (_: Exception) {}
-                                try { android.system.Os.kill(p, 9) } catch (_: Exception) {}
-                            }
-                        }
-                    }
-                } catch (_: Exception) {}
-            }
-        } catch (_: Exception) {}
-    }
-
     /**
      * Clear terminal transcript logs upon user request
      */
@@ -227,7 +86,7 @@ object LocalServerManager {
     }
 
     /**
-     * Immediate force kill for service notification exit (kills all background processes)
+     * Immediate force kill for service notification exit (closes session and finishes processes)
      */
     fun forceKillAll() {
         exitObserverJob?.cancel()
@@ -237,21 +96,13 @@ object LocalServerManager {
 
         val session = _serverSession.value
         if (session != null) {
-            val pid = getSessionPid(session)
-            if (pid != null) {
-                try { android.system.Os.kill(-pid, 9) } catch (_: Exception) {}
-                try { android.system.Os.kill(pid, 9) } catch (_: Exception) {}
-                for (child in getDescendantPids(pid)) {
-                    try { android.system.Os.kill(child, 9) } catch (_: Exception) {}
-                }
-            }
             try {
+                session.write("\u0003")
                 session.terminalSession.finishIfRunning()
                 session.close()
             } catch (_: Exception) {}
         }
 
-        killLingeringServerProcesses(force = true)
         _serverSession.value = null
         _status.value = LocalServerStatus.Stopped(exitCode = 0)
     }
@@ -297,23 +148,17 @@ object LocalServerManager {
 
         _status.value = LocalServerStatus.Starting
 
-        // If a terminal session is already alive, keep it and simply send the start command inside it!
+        // If a persistent terminal session is already alive, reuse it and execute command inside it
         if (existingSession != null && !existingSession.isExited.value) {
-            Log.d(TAG, "[ServerManager] Reusing active terminal session to launch: $command")
-            killServerAndChildProcesses(existingSession)
-            delay(250)
-            killLingeringServerProcesses(force = true)
-            delay(100)
-            existingSession.write("\r\n\u001b[1;36m>> Starting $command\u001b[0m\r\n")
-            existingSession.write("$command\n")
+            Log.d(TAG, "[ServerManager] Reusing active persistent terminal session to launch: $command")
+            existingSession.write("\u0003")
+            delay(150)
+            existingSession.write("cd \$HOME && $command\n")
             _status.value = LocalServerStatus.Running()
             return
         }
 
-        stopServerInternal()
-        delay(150)
-
-        Log.d(TAG, "[ServerManager] Spawning dedicated Termux PTY session for server: $command")
+        Log.d(TAG, "[ServerManager] Spawning dedicated persistent terminal session for server runner with initialCommand: $command")
 
         val session = withContext(Dispatchers.Main) {
             LocalPtySession(
@@ -348,16 +193,11 @@ object LocalServerManager {
     }
 
     private suspend fun stopServerInternal() {
-        exitObserverJob?.cancel()
-        exitObserverJob = null
-
         val session = _serverSession.value
-        if (session != null) {
-            // Kill only the server child processes inside the session (do NOT close the terminal session or wipe history!)
-            killServerAndChildProcesses(session, maxWaitMs = 10000L)
+        if (session != null && !session.isExited.value) {
+            // Gracefully stop the foreground server process via standard Ctrl+C in the persistent terminal
+            session.write("\u0003")
         }
-
-        killLingeringServerProcesses(force = false)
 
         // Retain _serverSession.value so terminal logs and history remain fully visible in the dialog
         _status.value = LocalServerStatus.Stopped(exitCode = 0)
@@ -369,10 +209,7 @@ object LocalServerManager {
         activeJob = managerScope.launch {
             _status.value = LocalServerStatus.Starting
             stopServerInternal()
-            // Graceful cooldown to ensure ports and sockets are completely freed
-            delay(300)
-            killLingeringServerProcesses(force = true)
-            delay(100)
+            delay(200)
             startServerInternal(context, forceRestart = true)
         }
     }
