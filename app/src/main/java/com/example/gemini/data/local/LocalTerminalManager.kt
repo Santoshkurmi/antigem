@@ -171,6 +171,8 @@ class LocalPtySession(
                 "ANDROID_ROOT=/system",
                 "LANG=en_US.UTF-8",
                 "LC_ALL=en_US.UTF-8",
+                "COLUMNS=$ptyCols",
+                "LINES=$ptyRows",
                 "PS1=$ "
             )
 
@@ -189,6 +191,10 @@ class LocalPtySession(
                 3000,
                 this
             )
+            try {
+                terminalSession.updateSize(ptyCols, ptyRows)
+            } catch (_: Exception) {
+            }
         }
     }
 

@@ -592,6 +592,9 @@ public final class TerminalView extends View {
                 skipScrolling = true;
                 mTopRow -= rowShift;
                 decrementYTextSelectionCursors(rowShift);
+                int lineSpacing = (mRenderer != null && mRenderer.mFontLineSpacing > 0) ? mRenderer.mFontLineSpacing : 40;
+                mScrollPixelY = -mTopRow * lineSpacing;
+                mSubRowOffset = 0f;
             }
         } else if (mTopRow != 0) {
             // Keep user scroll position locked to the historical lines they are viewing
@@ -660,9 +663,11 @@ public final class TerminalView extends View {
      */
     public int[] getColumnAndRow(MotionEvent event, boolean relativeToScroll) {
         int column = (int) (event.getX() / mRenderer.mFontWidth);
-        int row = (int) Math.floor((event.getY() - mTopPadding - mScrollPixelY) / (double) mRenderer.mFontLineSpacing);
+        int row;
         if (relativeToScroll) {
-            row += mTopRow;
+            row = (int) Math.floor((event.getY() - mTopPadding - mScrollPixelY) / (double) mRenderer.mFontLineSpacing);
+        } else {
+            row = (int) Math.floor((event.getY() - mTopPadding) / (double) mRenderer.mFontLineSpacing);
         }
         return new int[] { column, row };
     }
@@ -701,6 +706,9 @@ public final class TerminalView extends View {
                                        : (mEmulator != null && mEmulator.isCursorKeysApplicationMode() ? "\033OB" : "\033[B"));
             } else {
                 mTopRow = Math.min(0, Math.max(-(mEmulator.getScreen().getActiveTranscriptRows()), mTopRow + (up ? -1 : 1)));
+                int lineSpacing = (mRenderer != null && mRenderer.mFontLineSpacing > 0) ? mRenderer.mFontLineSpacing : 40;
+                mScrollPixelY = -mTopRow * lineSpacing;
+                mSubRowOffset = 0f;
                 showScrollBar();
                 invalidate();
             }
