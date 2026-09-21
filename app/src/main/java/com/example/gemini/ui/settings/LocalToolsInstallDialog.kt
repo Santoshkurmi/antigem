@@ -868,23 +868,6 @@ fun LocalToolsInstallDialog(
                                     Text("Done", fontWeight = FontWeight.SemiBold)
                                 }
                             }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            OutlinedButton(
-                                onClick = {
-                                    LocalEnvironmentManager.launchReset(context) {
-                                        scope.launch { authPreferences.setLocalToolsInstalled(false) }
-                                        LocalEnvironmentManager.resetState()
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Reinstall / Change Source", fontSize = 12.sp)
-                            }
                         }
                     }
 

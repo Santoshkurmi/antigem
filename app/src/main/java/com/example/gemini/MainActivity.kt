@@ -35,7 +35,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        com.example.gemini.data.service.TermuxService.start(this)
+        if (com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(this)) {
+            com.example.gemini.data.service.TermuxService.start(this)
+        }
         com.example.gemini.data.daemon.TermuxDaemonManager.init(this)
         com.example.gemini.data.local.LocalTerminalManager.autoLaunchServerIfReady(this)
         handleOAuthIntent(intent)
@@ -53,6 +55,10 @@ class MainActivity : ComponentActivity() {
             var currentViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
 
             val context = androidx.compose.ui.platform.LocalContext.current
+            var showPermissionsDialog by remember {
+                mutableStateOf(!com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(context))
+            }
+
             val isTermuxPackage = remember { com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) }
             var isInstalledState by remember { mutableStateOf(com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context)) }
             var hasSkippedInstaller by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
@@ -64,7 +70,14 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    if (showFullScreenInstaller) {
+                    if (showPermissionsDialog) {
+                        com.example.gemini.ui.components.AppPermissionsDialog(
+                            onDismissOrCompleted = {
+                                showPermissionsDialog = false
+                                com.example.gemini.data.service.TermuxService.start(context)
+                            }
+                        )
+                    } else if (showFullScreenInstaller) {
                         BackHandler {
                             hasSkippedInstaller = true
                         }
@@ -129,6 +142,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(this)) {
+            com.example.gemini.data.service.TermuxService.start(this)
+        }
         lifecycleScope.launch {
             com.example.gemini.data.daemon.TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
         }

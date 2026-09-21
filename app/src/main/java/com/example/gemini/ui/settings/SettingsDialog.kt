@@ -2890,19 +2890,18 @@ private fun TerminalSubScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
                         if (isLocalToolsInstalled) {
-                            OutlinedButton(onClick = onInstallLocalTools, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) {
-                                Text("Reinstall", fontSize = 12.sp)
-                            }
                             OutlinedButton(
                                 onClick = { showResetWarningDialog = true },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
-                                border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.3f))
+                                border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.4f))
                             ) {
-                                Text("Reset Rootfs", fontSize = 12.sp, color = Color.Red)
+                                Icon(imageVector = Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color.Red)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Delete Rootfs", fontSize = 12.5.sp, color = Color.Red, fontWeight = FontWeight.SemiBold)
                             }
                         } else {
                             Button(
@@ -2911,7 +2910,7 @@ private fun TerminalSubScreen(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                             ) {
-                                Text("Download & Install Local Tools", fontSize = 12.sp)
+                                Text("Download & Install Local Tools", fontSize = 12.5.sp)
                             }
                         }
                     }

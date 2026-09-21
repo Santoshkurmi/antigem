@@ -50,10 +50,6 @@ class FloatingChatActivity : ComponentActivity() {
         window.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
 
         setContent {
-            var showOverlayPermissionDialog by remember {
-                mutableStateOf(!Settings.canDrawOverlays(this@FloatingChatActivity))
-            }
-
             val initialThemeMode = remember { chatViewModel.authPreferences.getThemeModeSync() }
             val themeMode by chatViewModel.themeMode.collectAsState(initial = initialThemeMode)
             val isSystemDark = isSystemInDarkThemeRobust()
@@ -64,51 +60,6 @@ class FloatingChatActivity : ComponentActivity() {
             }
 
             GeminiTheme(darkTheme = useDarkTheme) {
-                if (showOverlayPermissionDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showOverlayPermissionDialog = false },
-                        title = {
-                            Text(
-                                text = "Display Over Other Apps Permission",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                        },
-                        text = {
-                            Text(
-                                text = "To show the floating multitasking window above other apps smoothly, please grant 'Display over other apps' permission in Settings."
-                            )
-                        },
-                        confirmButton = {
-                            Button(
-                                onClick = {
-                                    showOverlayPermissionDialog = false
-                                    try {
-                                        val intent = Intent(
-                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                            Uri.parse("package:$packageName")
-                                        ).apply {
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        }
-                                        startActivity(intent)
-                                    } catch (e: Exception) {
-                                        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        }
-                                        startActivity(intent)
-                                    }
-                                }
-                            ) {
-                                Text("Open Settings")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showOverlayPermissionDialog = false }) {
-                                Text("Continue")
-                            }
-                        }
-                    )
-                }
-
                 FloatingChatWindow(
                     viewModel = chatViewModel,
                     onOpenFullApp = {
