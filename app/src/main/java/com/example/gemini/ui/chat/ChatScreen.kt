@@ -593,7 +593,7 @@ fun ChatScreen(
                     viewModel.logoutFromAgyHub()
                 },
                 onCheckAuth = {
-                    viewModel.checkAgyAuthStatus()
+                    viewModel.checkAgyAuthStatus(userInitiated = true)
                 },
                 onOpenSettings = {
                     showSettingsDialog = true

@@ -889,7 +889,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private var loginPollJob: Job? = null
 
-    fun checkAgyAuthStatus() {
+    fun checkAgyAuthStatus(userInitiated: Boolean = false) {
         viewModelScope.launch {
             if (!isNetworkConnected()) {
                 android.util.Log.d("ChatViewModel", "Skipping auth status check: device is offline.")
@@ -898,6 +898,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     isOffline = true
                 )
                 _isAuthBusy.value = false
+                if (userInitiated) {
+                    _authFeedbackMessage.tryEmit("Cannot check status: device is offline.")
+                }
                 return@launch
             }
             val hubUrl = AuthPreferences.currentHubUrl
@@ -910,14 +913,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _isAuthBusy.value = false
                     _pendingLoginUrl.value = null
                     loginPollJob?.cancel()
-                    _authFeedbackMessage.tryEmit("Signed in as ${info.displayName.ifBlank { info.email }}")
+                    if (userInitiated) {
+                        _authFeedbackMessage.tryEmit("Signed in as ${info.displayName.ifBlank { info.email }}")
+                    }
                     refreshQuotas(force = false)
+                } else if (userInitiated) {
+                    _authFeedbackMessage.tryEmit("Not signed in.")
                 }
             } else {
                 _agyAuthInfo.value = _agyAuthInfo.value.copy(
                     status = com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.OFFLINE,
                     isOffline = true
                 )
+                if (userInitiated) {
+                    _authFeedbackMessage.tryEmit("Unable to reach server.")
+                }
             }
         }
     }
@@ -1212,7 +1222,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             while (currentCoroutineContext().isActive) {
                 checkBridgeHealth()
                 if (agyBridgeService.hubStatus.value.status != "starting") {
-                    checkAgyAuthStatus()
                     if (_isServerOnline.value == true && syncJob?.isActive != true) {
                         android.util.Log.d("ChatViewModel", "Periodic check: reconnecting hub streams...")
                         syncAgyConversations(force = false)
