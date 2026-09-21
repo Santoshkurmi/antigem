@@ -40,23 +40,6 @@
         </activity>
 
         <activity
-            android:name=".TermuxActivity"
-            android:exported="true"
-            android:label="AntiTerminal"
-            android:icon="@mipmap/ic_launcher"
-            android:roundIcon="@mipmap/ic_launcher_round"
-            android:launchMode="singleTask"
-            android:taskAffinity="com.termux.terminal"
-            android:theme="@style/Theme.Gemini"
-            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize"
-            android:windowSoftInputMode="adjustResize">
-            <intent-filter android:priority="1">
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <activity
             android:name=".ui.bubble.FloatingChatActivity"
             android:exported="false"
             android:theme="@style/Theme.AntiGem.FloatingTranslucent"

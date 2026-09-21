@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
@@ -183,19 +182,6 @@ fun LocalServerOutputDialog(
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
-                        }
-
-                        // Clear Logs / Delete History Button
-                        IconButton(
-                            onClick = { LocalServerManager.clearLogs() },
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Clear History",
-                                tint = Color(0xFF9CA3AF),
-                                modifier = Modifier.size(18.dp)
-                            )
                         }
 
                         // Close Dialog Button

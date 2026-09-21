@@ -867,14 +867,14 @@ private fun AppearanceSubScreen(
             ) {
                 Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                     Text(
-                        text = "Separate AntiTerminal App Icon",
+                        text = "Separate AntiTerm App Icon",
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Show or hide the standalone AntiTerminal launcher icon on your Android home screen and app drawer",
+                        text = "Show or hide the standalone AntiTerm launcher icon on your Android home screen and app drawer",
                         fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
