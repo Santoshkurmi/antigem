@@ -52,50 +52,72 @@ class MainActivity : ComponentActivity() {
 
             var currentViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
 
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val isTermuxPackage = remember { com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) }
+            var isInstalledState by remember { mutableStateOf(com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context)) }
+            var hasSkippedInstaller by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+
+            val showFullScreenInstaller = isTermuxPackage && !isInstalledState && !hasSkippedInstaller
+
             GeminiTheme(darkTheme = useDarkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    BackHandler(enabled = currentViewMode != AppViewMode.CHAT) {
-                        currentViewMode = AppViewMode.CHAT
-                    }
-
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Persistent Chat Screen (Never destroyed on toggle)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    val isVisible = currentViewMode == AppViewMode.CHAT
-                                    alpha = if (isVisible) 1f else 0f
-                                    translationX = if (isVisible) 0f else -20000f
-                                }
-                        ) {
-                            ChatScreen(
-                                viewModel = chatViewModel,
-                                onNavigateToIde = { currentViewMode = AppViewMode.IDE }
-                            )
+                    if (showFullScreenInstaller) {
+                        BackHandler {
+                            hasSkippedInstaller = true
+                        }
+                        com.example.gemini.ui.settings.FullScreenLocalToolsInstaller(
+                            authPreferences = chatViewModel.authPreferences,
+                            onSkip = { hasSkippedInstaller = true },
+                            onComplete = {
+                                isInstalledState = true
+                                hasSkippedInstaller = true
+                                com.example.gemini.data.local.LocalTerminalManager.autoLaunchServerIfReady(context)
+                            }
+                        )
+                    } else {
+                        BackHandler(enabled = currentViewMode != AppViewMode.CHAT) {
+                            currentViewMode = AppViewMode.CHAT
                         }
 
-                        // Persistent IDE Screen (Retains open tabs, daemon connection & state)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    val isVisible = currentViewMode == AppViewMode.IDE
-                                    alpha = if (isVisible) 1f else 0f
-                                    translationX = if (isVisible) 0f else 20000f
-                                }
-                        ) {
-                            IdeScreen(
-                                viewModel = chatViewModel,
-                                isVisible = currentViewMode == AppViewMode.IDE,
-                                onNavigateToChat = { currentViewMode = AppViewMode.CHAT },
-                                onExecuteRunCommand = { cmd ->
-                                    // Connect with terminal / chat execution
-                                }
-                            )
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            // Persistent Chat Screen (Never destroyed on toggle)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        val isVisible = currentViewMode == AppViewMode.CHAT
+                                        alpha = if (isVisible) 1f else 0f
+                                        translationX = if (isVisible) 0f else -20000f
+                                    }
+                            ) {
+                                ChatScreen(
+                                    viewModel = chatViewModel,
+                                    onNavigateToIde = { currentViewMode = AppViewMode.IDE }
+                                )
+                            }
+
+                            // Persistent IDE Screen (Retains open tabs, daemon connection & state)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        val isVisible = currentViewMode == AppViewMode.IDE
+                                        alpha = if (isVisible) 1f else 0f
+                                        translationX = if (isVisible) 0f else 20000f
+                                    }
+                            ) {
+                                IdeScreen(
+                                    viewModel = chatViewModel,
+                                    isVisible = currentViewMode == AppViewMode.IDE,
+                                    onNavigateToChat = { currentViewMode = AppViewMode.CHAT },
+                                    onExecuteRunCommand = { cmd ->
+                                        // Connect with terminal / chat execution
+                                    }
+                                )
+                            }
                         }
                     }
                 }
