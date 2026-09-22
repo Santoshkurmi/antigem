@@ -1141,13 +1141,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        viewModelScope.launch {
-            agyHubClient.csrfEvents.collect { msg ->
-                withContext(Dispatchers.Main) {
-                    android.widget.Toast.makeText(getApplication(), msg, android.widget.Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
+
 
         viewModelScope.launch {
             agyBridgeService.loginUrlEvents.collect { url ->
@@ -1755,6 +1749,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendMessage(content: String) {
         if ((content.isBlank() && _attachments.value.isEmpty()) || _isStreaming.value) return
+
+        if (!systemConnectionState.value.isHubOnline) {
+            android.widget.Toast.makeText(getApplication(), "Cannot send message: Server is offline. Please start the server.", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
 
         val currentAtts = _attachments.value
         val finalPrompt = content.trim().ifBlank {

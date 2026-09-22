@@ -167,6 +167,7 @@ fun ChatInputBar(
     isTranscribingAudio: Boolean = false,
     speechManager: com.example.gemini.data.audio.AgyAudioTranscriptionManager? = null,
     cascadeId: String = "",
+    isOnline: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1196,10 +1197,15 @@ fun ChatInputBar(
                                 }
                             }
                         } else if (canSend) {
+                            val sendBtnColor = if (isOnline) ClaudeTerracotta else Color(0xFF6B7280)
                             Surface(
                                 onClick = {
                                     val trimmed = textFieldValue.text.trim()
                                     if (canSend) {
+                                        if (!isOnline) {
+                                            Toast.makeText(context, "Server is offline. Start the server to send messages.", Toast.LENGTH_SHORT).show()
+                                            return@Surface
+                                        }
                                         if (isLiveDictating) {
                                             stopLiveDictation()
                                         }
@@ -1208,14 +1214,14 @@ fun ChatInputBar(
                                     }
                                 },
                                 shape = CircleShape,
-                                color = ClaudeTerracotta,
+                                color = sendBtnColor,
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.ArrowUpward,
                                         contentDescription = "Send",
-                                        tint = Color.White,
+                                        tint = if (isOnline) Color.White else Color(0xFFD1D5DB),
                                         modifier = Modifier.size(19.dp)
                                     )
                                 }
