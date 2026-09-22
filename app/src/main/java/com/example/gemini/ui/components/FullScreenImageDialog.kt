@@ -14,8 +14,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,34 +52,8 @@ fun FullScreenImageDialog(
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
-    fun shareImage() {
-        try {
-            val clean = imageUrl.removePrefix("file://")
-            val file = File(clean)
-            if (file.exists() && file.length() > 0) {
-                val uri: Uri = try {
-                    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                } catch (_: Exception) {
-                    Uri.fromFile(file)
-                }
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/*"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    if (title.isNotBlank()) putExtra(Intent.EXTRA_TEXT, title)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                context.startActivity(Intent.createChooser(shareIntent, "Share Image"))
-            } else {
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, if (title.isNotBlank()) "$title\n$imageUrl" else imageUrl)
-                }
-                context.startActivity(Intent.createChooser(shareIntent, "Share Image Link"))
-            }
-        } catch (e: Exception) {
-            android.widget.Toast.makeText(context, "Could not share image: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-        }
-    }
+    val snackbarHostState = LocalSnackbarHostState.current
+    val coroutineScope = rememberCoroutineScope()
 
     val memKey = remember(imageUrl) { com.example.gemini.data.remote.HubMediaResolver.normalizeKey(imageUrl) }
     var resolvedUri by remember(imageUrl) {
@@ -236,15 +210,23 @@ fun FullScreenImageDialog(
                 }
 
                 IconButton(
-                    onClick = { shareImage() },
+                    onClick = {
+                        ImageDownloadHelper.downloadImage(
+                            context = context,
+                            imageSource = finalUri,
+                            title = title,
+                            coroutineScope = coroutineScope,
+                            snackbarHostState = snackbarHostState
+                        )
+                    },
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.15f))
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share",
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Download",
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
                     )

@@ -356,7 +356,7 @@ fun AgentToolCallCard(
 
 
             // Always-visible Image Preview for Generate Image tool
-            if (isGenImg) {
+            if (isImageOutput) {
                 if (isRunning) {
                     Surface(
                         shape = if (isExpanded) RoundedCornerShape(0.dp) else RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp),
@@ -369,12 +369,6 @@ fun AgentToolCallCard(
                                 .padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = ClaudeTerracotta
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = "Generating image with Gemini...",
                                 fontSize = 12.sp,
@@ -426,10 +420,10 @@ fun AgentToolCallCard(
                                             .height(180.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(28.dp),
-                                            strokeWidth = 2.5.dp,
-                                            color = ClaudeTerracotta
+                                        Text(
+                                            text = "Loading image...",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 } else {
@@ -473,17 +467,25 @@ fun AgentToolCallCard(
                                     )
                                 }
 
+                                val snackbarHostState = LocalSnackbarHostState.current
+                                val coroutineScope = rememberCoroutineScope()
                                 IconButton(
                                     onClick = {
-                                        shareMediaFile(context, displayUri, toolCall.command)
+                                        ImageDownloadHelper.downloadImage(
+                                            context = context,
+                                            imageSource = displayUri,
+                                            title = toolCall.command,
+                                            coroutineScope = coroutineScope,
+                                            snackbarHostState = snackbarHostState
+                                        )
                                     },
                                     modifier = Modifier.size(26.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Share,
-                                        contentDescription = "Share",
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = "Download Image",
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(15.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
                             }
@@ -598,35 +600,6 @@ fun AgentToolCallCard(
             title = toolCall.command,
             onDismiss = { showFullScreenViewer = false }
         )
-    }
-}
-
-private fun shareMediaFile(context: Context, mediaUriOrPath: String, title: String) {
-    try {
-        val clean = mediaUriOrPath.removePrefix("file://")
-        val file = File(clean)
-        if (file.exists() && file.length() > 0) {
-            val uri: Uri = try {
-                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            } catch (_: Exception) {
-                Uri.fromFile(file)
-            }
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "image/*"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                if (title.isNotBlank()) putExtra(Intent.EXTRA_TEXT, title)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            context.startActivity(Intent.createChooser(intent, "Share Image"))
-        } else {
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, if (title.isNotBlank()) "$title\n$mediaUriOrPath" else mediaUriOrPath)
-            }
-            context.startActivity(Intent.createChooser(intent, "Share Image"))
-        }
-    } catch (e: Exception) {
-        Toast.makeText(context, "Cannot share: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }
 

@@ -547,7 +547,12 @@ fun ChatScreen(
         )
     }
 
-    CompositionLocalProvider(LocalFileLinkHandler provides fileLinkHandler) {
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    CompositionLocalProvider(
+        LocalFileLinkHandler provides fileLinkHandler,
+        com.example.gemini.ui.components.LocalSnackbarHostState provides snackbarHostState
+    ) {
         Box(modifier = Modifier.fillMaxSize()) {
             ModalNavigationDrawer(
                 drawerState = drawerState,
@@ -656,6 +661,14 @@ fun ChatScreen(
             )
         }
         Scaffold(
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .imePadding()
+                )
+            },
             topBar = {
                 TopAppBar(
                     title = {
