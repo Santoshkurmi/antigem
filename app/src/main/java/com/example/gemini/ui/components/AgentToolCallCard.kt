@@ -3,10 +3,14 @@ package com.example.gemini.ui.components
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -14,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Functions
@@ -24,20 +29,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.content.Intent
-import android.net.Uri
-import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.gemini.data.remote.HubMediaResolver
-import java.io.File
 import com.example.gemini.domain.model.ToolCall
 import com.example.gemini.domain.model.ToolType
 import com.example.gemini.theme.*
@@ -45,8 +48,9 @@ import com.example.gemini.theme.*
 private val IMAGE_FILE_REGEX = Regex(".*\\.(png|jpe?g|webp|gif)(\\?.*)?$", RegexOption.IGNORE_CASE)
 
 /**
- * Interactive inline tool call card rendered inside assistant messages.
- * Shows status (Executing, Success, Failed), command preview, duration, and expandable terminal stdout.
+ * Clean, professional inline tool call component matching Cursor & Claude developer UI.
+ * Rendered without heavy bordered boxes — features an animated frontend chevron (->), status icon,
+ * concise action description, and smoothly expandable terminal stdout output.
  */
 @Composable
 fun AgentToolCallCard(
@@ -118,392 +122,385 @@ fun AgentToolCallCard(
     val isSuccess = toolCall.status == "SUCCESS" || (toolCall.status != "FAILED" && !isTerminated && !isRejected && !isPendingApproval && toolCall.exitCode == 0)
     val isFailed = toolCall.status == "FAILED" || (toolCall.exitCode != null && toolCall.exitCode != 0 && !isTerminated && !isRejected)
 
-    val borderColor = when {
-        isPendingApproval -> Color(0xFFF59E0B).copy(alpha = 0.6f)
-        isRunning -> ClaudeTerracotta.copy(alpha = 0.5f)
-        isSuccess -> QuotaGreen.copy(alpha = 0.35f)
-        isTerminated -> Color(0xFFEF4444).copy(alpha = 0.5f)
-        isRejected -> Color.Gray.copy(alpha = 0.35f)
-        isFailed -> Color.Red.copy(alpha = 0.4f)
-        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    val actionPrefix = when {
+        isPendingApproval && isMcp -> "Approve MCP:"
+        isPendingApproval -> "Approve Command:"
+        isRunning && isSearch -> "Searching web..."
+        isRunning && isReader -> "Fetching page..."
+        isRunning && isMath -> "Evaluating math..."
+        isRunning && isViewFile -> "Reading file..."
+        isRunning && isEditFile -> "Editing file..."
+        isRunning && isListDir -> "Listing directory..."
+        isRunning && (isFind || isGrep) -> "Searching code..."
+        isRunning && isGenImg -> "Generating image..."
+        isRunning && isMcp -> "Executing MCP tool..."
+        isRunning -> "Executing in Termux..."
+
+        isSuccess && isSearch -> "Web search"
+        isSuccess && isReader -> "Read page"
+        isSuccess && isMath -> "Math evaluated"
+        isSuccess && isViewFile -> "Read file"
+        isSuccess && isEditFile -> "Edited file"
+        isSuccess && isListDir -> "Listed directory"
+        isSuccess && (isFind || isGrep) -> "Searched code"
+        isSuccess && isGenImg -> "Generated image"
+        isSuccess && isMcp -> "MCP tool"
+        isSuccess -> "Ran bash"
+
+        isTerminated -> "Stopped:"
+        isRejected -> "Rejected:"
+        isFailed -> "Failed:"
+        else -> "Tool:"
     }
 
-    val headerBg = when {
-        isPendingApproval -> Color(0xFFF59E0B).copy(alpha = 0.12f)
-        isRunning -> ClaudeTerracotta.copy(alpha = 0.1f)
-        isSuccess -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        isTerminated -> Color(0xFFEF4444).copy(alpha = 0.1f)
-        isRejected -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-        isFailed -> Color.Red.copy(alpha = 0.08f)
-        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+    val actionColor = when {
+        isPendingApproval -> Color(0xFFF59E0B)
+        isRunning -> ClaudeTerracotta
+        isSuccess -> MaterialTheme.colorScheme.onSurface
+        isTerminated || isFailed -> Color(0xFFEF4444)
+        isRejected -> Color.Gray
+        else -> MaterialTheme.colorScheme.onSurface
     }
 
-    Surface(
+    val rotation by animateFloatAsState(
+        targetValue = if (isExpanded) 90f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "tool_chevron_rotation"
+    )
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
+            .padding(vertical = 2.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // Header Row
-            Row(
+        // Flat, borderless single-line Header Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .clickable { ToolCallExpansionCache.setExpanded(toolCall, !isExpanded) }
+                .padding(horizontal = 4.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Frontend Expand Chevron (-> / rotating arrow)
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { ToolCallExpansionCache.setExpanded(toolCall, !isExpanded) }
-                    .background(headerBg)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Status Icon
-                if (isPendingApproval) {
-                    Icon(
-                        imageVector = Icons.Default.HourglassEmpty,
-                        contentDescription = "Pending Approval",
-                        tint = Color(0xFFF59E0B),
-                        modifier = Modifier.size(15.dp)
-                    )
-                } else if (isRunning) {
-                    Box(
-                        modifier = Modifier
-                            .size(9.dp)
-                            .clip(CircleShape)
-                            .background(ClaudeTerracotta)
-                    )
-                } else if (isSuccess) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Success",
-                        tint = QuotaGreen,
-                        modifier = Modifier.size(15.dp)
-                    )
-                } else if (isTerminated) {
-                    Icon(
-                        imageVector = Icons.Default.Cancel,
-                        contentDescription = "Terminated",
-                        tint = Color(0xFFEF4444),
-                        modifier = Modifier.size(15.dp)
-                    )
-                } else if (isRejected) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Rejected",
-                        tint = Color.Gray,
-                        modifier = Modifier.size(15.dp)
-                    )
-                } else if (isFailed) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = "Failed",
-                        tint = Color.Red,
-                        modifier = Modifier.size(15.dp)
-                    )
-                } else {
-                    val toolIcon = when {
-                        isSearch -> Icons.Outlined.Search
-                        isReader -> Icons.Outlined.Language
-                        isMath -> Icons.Outlined.Functions
-                        isViewFile -> Icons.Default.Description
-                        isEditFile -> Icons.Default.Edit
-                        isListDir -> Icons.Default.Folder
-                        isFind || isGrep -> Icons.Default.Search
-                        isGenImg -> Icons.Default.Image
-                        isMcp -> Icons.Default.Build
-                        else -> Icons.Default.Terminal
-                    }
-                    Icon(
-                        imageVector = toolIcon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(15.dp)
-                    )
-                }
+                    .size(16.dp)
+                    .rotate(rotation)
+            )
 
-                Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(4.dp))
 
-                // Action Label & Command
-                val actionPrefix = when {
-                    isPendingApproval && isMcp -> "Approve MCP Tool:"
-                    isPendingApproval -> "Approval Needed:"
-                    isRunning && isSearch -> "Searching Web:"
-                    isRunning && isReader -> "Fetching Page:"
-                    isRunning && isMath -> "Evaluating CAS Math:"
-                    isRunning && isViewFile -> "Viewing File:"
-                    isRunning && isEditFile -> "Editing File:"
-                    isRunning && isListDir -> "Listing Directory:"
-                    isRunning && (isFind || isGrep) -> "Searching Code:"
-                    isRunning && isGenImg -> "Generating Image:"
-                    isRunning && isMcp -> "Executing MCP Tool:"
-                    isRunning -> "Executing in Termux:"
-
-                    isSuccess && isSearch -> "Web Search:"
-                    isSuccess && isReader -> "Read Webpage:"
-                    isSuccess && isMath -> "Symja CAS Math Engine:"
-                    isSuccess && isViewFile -> "Viewed File:"
-                    isSuccess && isEditFile -> "Edited File:"
-                    isSuccess && isListDir -> "Listed Directory:"
-                    isSuccess && (isFind || isGrep) -> "Searched Code:"
-                    isSuccess && isGenImg -> "Generated Image:"
-                    isSuccess && isMcp -> "MCP Tool Output:"
-                    isSuccess -> "Executed:"
-
-                    isTerminated -> "Terminated:"
-                    isRejected -> "Rejected:"
-                    isFailed -> "Failed:"
-                    else -> "Tool:"
-                }
-
-                val actionColor = when {
-                    isPendingApproval -> Color(0xFFF59E0B)
-                    isRunning -> ClaudeTerracotta
-                    isSuccess -> QuotaGreen
-                    isTerminated || isFailed -> Color(0xFFEF4444)
-                    isRejected -> Color.Gray
-                    else -> MaterialTheme.colorScheme.onSurface
-                }
-
-                Text(
-                    text = actionPrefix,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = actionColor
-                )
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                Text(
-                    text = toolCall.command,
-                    fontFamily = if (isBash || isMcp) FontFamily.Monospace else FontFamily.Default,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f)
-                )
-
-                // Terminate (Stop) Button while Running
-                if (isRunning && onTerminate != null && isBash) {
-                    IconButton(
-                        onClick = { onTerminate(toolCall) },
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(Color.Red.copy(alpha = 0.18f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop command",
-                            tint = Color.Red,
-                            modifier = Modifier.size(13.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
-
-                // Duration & Exit Code Badges
-                if (toolCall.durationMs != null && toolCall.durationMs > 0) {
-                    Text(
-                        text = "${toolCall.durationMs}ms",
-                        fontSize = 10.5.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-                }
-
-                if (isTerminated) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color.Red.copy(alpha = 0.15f))
-                            .padding(horizontal = 5.dp, vertical = 1.dp)
-                    ) {
-                        Text(
-                            text = "stopped",
-                            fontSize = 9.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Red
-                        )
-                    }
-                } else if (toolCall.exitCode != null && !isRunning && !isPendingApproval && !isRejected) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (isSuccess) QuotaGreen.copy(alpha = 0.15f) else Color.Red.copy(alpha = 0.15f))
-                            .padding(horizontal = 5.dp, vertical = 1.dp)
-                    ) {
-                        Text(
-                            text = "exit ${toolCall.exitCode}",
-                            fontSize = 9.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSuccess) QuotaGreen else Color.Red
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
+            // Tool / State Icon
+            if (isPendingApproval) {
                 Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = "Toggle output",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
+                    imageVector = Icons.Default.HourglassEmpty,
+                    contentDescription = "Pending Approval",
+                    tint = Color(0xFFF59E0B),
+                    modifier = Modifier.size(14.dp)
+                )
+            } else if (isRunning) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 2.dp,
+                    color = ClaudeTerracotta
+                )
+            } else if (isSuccess) {
+                val toolIcon = when {
+                    isSearch -> Icons.Outlined.Search
+                    isReader -> Icons.Outlined.Language
+                    isMath -> Icons.Outlined.Functions
+                    isViewFile -> Icons.Default.Description
+                    isEditFile -> Icons.Default.Edit
+                    isListDir -> Icons.Default.Folder
+                    isFind || isGrep -> Icons.Default.Search
+                    isGenImg -> Icons.Default.Image
+                    isMcp -> Icons.Default.Build
+                    else -> Icons.Default.Terminal
+                }
+                Icon(
+                    imageVector = toolIcon,
+                    contentDescription = null,
+                    tint = QuotaGreen,
+                    modifier = Modifier.size(14.dp)
+                )
+            } else if (isTerminated) {
+                Icon(
+                    imageVector = Icons.Default.Cancel,
+                    contentDescription = "Terminated",
+                    tint = Color(0xFFEF4444),
+                    modifier = Modifier.size(14.dp)
+                )
+            } else if (isRejected) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Rejected",
+                    tint = Color.Gray,
+                    modifier = Modifier.size(14.dp)
+                )
+            } else if (isFailed) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = "Failed",
+                    tint = Color.Red,
+                    modifier = Modifier.size(14.dp)
                 )
             }
 
+            Spacer(modifier = Modifier.width(6.dp))
 
+            // Action Verb
+            Text(
+                text = actionPrefix,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = actionColor
+            )
 
+            Spacer(modifier = Modifier.width(6.dp))
 
-            // Always-visible Image Preview for Generate Image tool
-            if (isImageOutput) {
-                if (isRunning) {
-                    Surface(
-                        shape = if (isExpanded) RoundedCornerShape(0.dp) else RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp),
-                        color = Color(0xFF090A10),
-                        modifier = Modifier.fillMaxWidth()
+            // Command / Target argument
+            Text(
+                text = toolCall.command,
+                fontFamily = if (isBash || isMcp || isViewFile || isEditFile) FontFamily.Monospace else FontFamily.Default,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+
+            // Terminate (Stop) Button while Running
+            if (isRunning && onTerminate != null && isBash) {
+                IconButton(
+                    onClick = { onTerminate(toolCall) },
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(Color.Red.copy(alpha = 0.15f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Stop,
+                        contentDescription = "Stop command",
+                        tint = Color.Red,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+
+            // Duration in ms
+            if (toolCall.durationMs != null && toolCall.durationMs > 0) {
+                Text(
+                    text = "${toolCall.durationMs}ms",
+                    fontSize = 10.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+
+            // Exit Code Badge
+            if (isTerminated) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.Red.copy(alpha = 0.12f))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        text = "stopped",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Red
+                    )
+                }
+            } else if (toolCall.exitCode != null && !isRunning && !isPendingApproval && !isRejected) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (isSuccess) QuotaGreen.copy(alpha = 0.12f) else Color.Red.copy(alpha = 0.12f))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        text = "exit ${toolCall.exitCode}",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSuccess) QuotaGreen else Color.Red
+                    )
+                }
+            }
+        }
+
+        // Always-visible Image Preview for Generate Image tool
+        if (isImageOutput) {
+            if (isRunning) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF090A10),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(13.dp),
+                            strokeWidth = 2.dp,
+                            color = ClaudeTerracotta
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Generating image with Gemini...",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else if (toolCall.output.isNotBlank() || isSuccess) {
+                val displayUri = resolvedImageUri.ifBlank { toolCall.output }
+                val coilData = remember(displayUri) {
+                    val memKey = HubMediaResolver.normalizeKey(toolCall.output)
+                    val cachedBytes = HubMediaResolver.getImageBytes(memKey)
+                    when {
+                        cachedBytes != null -> cachedBytes
+                        displayUri.startsWith("data:image/") -> {
+                            try {
+                                val b64 = displayUri.substringAfter("base64,")
+                                android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                            } catch (_: Exception) { displayUri }
+                        }
+                        else -> displayUri
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF090A10),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF13151F))
+                                .clickable {
+                                    if (displayUri.isNotBlank()) showFullScreenViewer = true
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isResolvingImage) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(180.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Loading image...",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(coilData)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = toolCall.command,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 140.dp, max = 340.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Generating image with Gemini...",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "Tap image to enlarge • Double-tap zoom",
+                                fontSize = 11.sp,
+                                color = Color.Gray,
+                                modifier = Modifier.weight(1f)
                             )
-                        }
-                    }
-                } else if (toolCall.output.isNotBlank() || isSuccess) {
-                    val displayUri = resolvedImageUri.ifBlank { toolCall.output }
-                    val coilData = remember(displayUri) {
-                        val memKey = HubMediaResolver.normalizeKey(toolCall.output)
-                        val cachedBytes = HubMediaResolver.getImageBytes(memKey)
-                        when {
-                            cachedBytes != null -> cachedBytes
-                            displayUri.startsWith("data:image/") -> {
-                                try {
-                                    val b64 = displayUri.substringAfter("base64,")
-                                    android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
-                                } catch (_: Exception) { displayUri }
-                            }
-                            else -> displayUri
-                        }
-                    }
-                    Surface(
-                        shape = if (isExpanded) RoundedCornerShape(0.dp) else RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp),
-                        color = Color(0xFF090A10),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF13151F))
-                                    .clickable {
-                                        if (displayUri.isNotBlank()) showFullScreenViewer = true
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isResolvingImage) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(180.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "Loading image...",
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                } else {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(coilData)
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = toolCall.command,
-                                        contentScale = ContentScale.Fit,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(min = 140.dp, max = 340.dp)
-                                    )
-                                }
-                            }
 
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            IconButton(
+                                onClick = { showFullScreenViewer = true },
+                                modifier = Modifier.size(26.dp)
                             ) {
-                                Text(
-                                    text = "Tap image to enlarge • Double-tap zoom",
-                                    fontSize = 11.sp,
-                                    color = Color.Gray,
-                                    modifier = Modifier.weight(1f)
+                                Icon(
+                                    imageVector = Icons.Default.Fullscreen,
+                                    contentDescription = "Full view",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
                                 )
+                            }
 
-                                IconButton(
-                                    onClick = { showFullScreenViewer = true },
-                                    modifier = Modifier.size(26.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Fullscreen,
-                                        contentDescription = "Full view",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp)
+                            val snackbarHostState = LocalSnackbarHostState.current
+                            val coroutineScope = rememberCoroutineScope()
+                            IconButton(
+                                onClick = {
+                                    ImageDownloadHelper.downloadImage(
+                                        context = context,
+                                        imageSource = displayUri,
+                                        title = toolCall.command,
+                                        coroutineScope = coroutineScope,
+                                        snackbarHostState = snackbarHostState
                                     )
-                                }
-
-                                val snackbarHostState = LocalSnackbarHostState.current
-                                val coroutineScope = rememberCoroutineScope()
-                                IconButton(
-                                    onClick = {
-                                        ImageDownloadHelper.downloadImage(
-                                            context = context,
-                                            imageSource = displayUri,
-                                            title = toolCall.command,
-                                            coroutineScope = coroutineScope,
-                                            snackbarHostState = snackbarHostState
-                                        )
-                                    },
-                                    modifier = Modifier.size(26.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Download,
-                                        contentDescription = "Download Image",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
+                                },
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Download Image",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
                             }
                         }
                     }
                 }
             }
+        }
 
-            // Expanded Terminal / Tool Output
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+        // Expanded Terminal / Tool Output
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF0D0E15),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF0D0E15))
                         .padding(10.dp)
                 ) {
                     // Command Bar with copy
@@ -602,4 +599,3 @@ fun AgentToolCallCard(
         )
     }
 }
-
