@@ -19,9 +19,54 @@ import org.json.JSONObject
 class AgyProjectService(
     private val grpcClient: AgyGrpcClient = AgyGrpcClient.instance
 ) {
+    data class SkillItem(
+        val name: String,
+        val description: String,
+        val path: String = "",
+        val pluginName: String? = null,
+        val content: String = ""
+    )
+
     companion object {
         private const val TAG = "AgyProjectService"
         val instance by lazy { AgyProjectService() }
+    }
+
+    /**
+     * Fetches all registered skills directly from AGY Hub via GetAllSkills RPC.
+     */
+    suspend fun fetchAllSkills(hubUrl: String = AuthPreferences.currentHubUrl): Result<List<SkillItem>> = withContext(Dispatchers.IO) {
+        try {
+            val res = grpcClient.callUnary("GetAllSkills", "{}", hubUrl)
+            if (!res.isSuccess) {
+                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("GetAllSkills failed"))
+            }
+            val jsonStr = res.getOrThrow()
+            val json = JSONObject(jsonStr)
+            val skillsArr = json.optJSONArray("skills") ?: JSONArray()
+            val list = mutableListOf<SkillItem>()
+            for (i in 0 until skillsArr.length()) {
+                val obj = skillsArr.getJSONObject(i)
+                val name = obj.optString("name", "")
+                val desc = obj.optString("description", "")
+                val path = obj.optString("path", "")
+                val pluginName = obj.optString("pluginName", "").takeIf { it.isNotBlank() }
+                val content = obj.optString("content", "")
+                if (name.isNotBlank()) {
+                    list.add(SkillItem(
+                        name = name,
+                        description = desc,
+                        path = path,
+                        pluginName = pluginName,
+                        content = content
+                    ))
+                }
+            }
+            Result.success(list)
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchAllSkills failed: ${e.message}")
+            Result.failure(e)
+        }
     }
 
     /**
