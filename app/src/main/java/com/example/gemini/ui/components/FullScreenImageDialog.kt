@@ -52,7 +52,7 @@ fun FullScreenImageDialog(
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
-    val snackbarHostState = LocalSnackbarHostState.current
+    val dialogSnackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
     val memKey = remember(imageUrl) { com.example.gemini.data.remote.HubMediaResolver.normalizeKey(imageUrl) }
@@ -216,7 +216,7 @@ fun FullScreenImageDialog(
                             imageSource = finalUri,
                             title = title,
                             coroutineScope = coroutineScope,
-                            snackbarHostState = snackbarHostState
+                            snackbarHostState = dialogSnackbarHostState
                         )
                     },
                     modifier = Modifier
@@ -232,6 +232,15 @@ fun FullScreenImageDialog(
                     )
                 }
             }
+
+            // In-dialog Snackbar Host
+            SnackbarHost(
+                hostState = dialogSnackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(16.dp)
+            )
         }
     }
 }
