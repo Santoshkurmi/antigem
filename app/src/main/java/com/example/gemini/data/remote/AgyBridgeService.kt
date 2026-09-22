@@ -18,9 +18,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -112,7 +114,28 @@ class AgyBridgeService(
 ) {
     companion object {
         const val TAG = "AgyBridgeService"
+        val instance by lazy { AgyBridgeService() }
     }
+
+    // Fast-failing client for localhost health/status checks (500ms connect timeout)
+    private val fastClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(500, TimeUnit.MILLISECONDS)
+        .readTimeout(1000, TimeUnit.MILLISECONDS)
+        .writeTimeout(1000, TimeUnit.MILLISECONDS)
+        .retryOnConnectionFailure(false)
+        .build()
+
+    // Dedicated WebSocket client for live bridge monitoring with 1s connect timeout and 1s heartbeat ping
+    private val wsClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(1000, TimeUnit.MILLISECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .writeTimeout(3, TimeUnit.SECONDS)
+        .pingInterval(1, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(false)
+        .build()
+
+    private val _systemConnectionState = MutableStateFlow<SystemConnectionState>(SystemConnectionState.Offline)
+    val systemConnectionState: StateFlow<SystemConnectionState> = _systemConnectionState.asStateFlow()
 
     private val _connectionState = MutableStateFlow(BridgeConnectionState.CONNECTING)
     val connectionState: StateFlow<BridgeConnectionState> = _connectionState.asStateFlow()
@@ -123,12 +146,52 @@ class AgyBridgeService(
     private val _loginUrlEvents = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 5)
     val loginUrlEvents: SharedFlow<String> = _loginUrlEvents.asSharedFlow()
 
+    /**
+     * Suspends until the IDE Bridge (:8080) is connected and online, or returns false on timeout.
+     */
+    suspend fun awaitBridgeReady(timeoutMs: Long = 8000L): Boolean {
+        if (_systemConnectionState.value.isBridgeOnline) return true
+        return withTimeoutOrNull(timeoutMs) {
+            _systemConnectionState.first { it.isBridgeOnline }
+            true
+        } ?: false
+    }
+
+    /**
+     * Suspends until the Antigravity Hub (:8090) is fully ready and online, or returns false on timeout.
+     */
+    suspend fun awaitHubReady(timeoutMs: Long = 8000L): Boolean {
+        if (_systemConnectionState.value.isHubOnline) return true
+        return withTimeoutOrNull(timeoutMs) {
+            _systemConnectionState.first { it.isHubOnline }
+            true
+        } ?: false
+    }
+
     fun updateConnectionState(newState: BridgeConnectionState) {
         _connectionState.value = newState
     }
 
     fun updateHubStatus(newStatus: AgyHubStatus) {
         _hubStatus.value = newStatus
+        _systemConnectionState.value = SystemConnectionState.Connected(
+            hubStatus = newStatus.status,
+            error = newStatus.error
+        )
+    }
+
+    fun resetState() {
+        _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+        _hubStatus.value = AgyHubStatus(status = "stopped")
+        _systemConnectionState.value = SystemConnectionState.Offline
+        try {
+            activeWebSocket?.cancel()
+        } catch (_: Exception) {}
+        activeWebSocket = null
+    }
+
+    fun notifyLocalStopped() {
+        resetState()
     }
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
@@ -137,6 +200,9 @@ class AgyBridgeService(
     suspend fun fetchModels(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Result<List<AiModel>> =
         withContext(Dispatchers.IO) {
             try {
+                if (!awaitBridgeReady()) {
+                    return@withContext Result.failure(Exception("IDE Bridge is offline"))
+                }
                 val request = Request.Builder()
                     .url("$httpBaseUrl/api/models")
                     .get()
@@ -174,6 +240,9 @@ class AgyBridgeService(
         force: Boolean = false
     ): Result<com.example.gemini.domain.model.QuotaSummaryResponse> = withContext(Dispatchers.IO) {
         try {
+            if (!awaitBridgeReady()) {
+                return@withContext Result.failure(Exception("IDE Bridge is offline"))
+            }
             val url = if (force) "$httpBaseUrl/api/quotas?force=true" else "$httpBaseUrl/api/quotas"
             val request = Request.Builder()
                 .url(url)
@@ -277,7 +346,7 @@ class AgyBridgeService(
                     .get()
                     .build()
 
-                client.newCall(request).execute().use { response ->
+                fastClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
                         return@withContext null
                     }
@@ -297,9 +366,16 @@ class AgyBridgeService(
                     }
                     val statusObj = AgyHubStatus(status = st, port = p, error = err, logs = logsList)
                     _hubStatus.value = statusObj
+                    _systemConnectionState.value = SystemConnectionState.Connected(
+                        hubStatus = st,
+                        error = err
+                    )
                     statusObj
                 }
             } catch (e: Exception) {
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                _systemConnectionState.value = SystemConnectionState.Offline
+                _hubStatus.value = AgyHubStatus(status = "stopped")
                 null
             }
         }
@@ -313,6 +389,15 @@ class AgyBridgeService(
         val wsListener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                val currentHub = if (_hubStatus.value.status == "stopped") "starting" else _hubStatus.value.status
+                _systemConnectionState.value = SystemConnectionState.Connected(
+                    hubStatus = currentHub
+                )
+                if (_hubStatus.value.status == "stopped" || _hubStatus.value.status == "idle") {
+                    val startingStatus = AgyHubStatus(status = "starting")
+                    _hubStatus.value = startingStatus
+                    trySend(startingStatus)
+                }
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -331,6 +416,10 @@ class AgyBridgeService(
                         }
                         val statusObj = AgyHubStatus(status = st, port = p, error = err, logs = logsList)
                         _hubStatus.value = statusObj
+                        _systemConnectionState.value = SystemConnectionState.Connected(
+                            hubStatus = st,
+                            error = err
+                        )
                         trySend(statusObj)
                     }
                 } catch (_: Exception) {}
@@ -338,24 +427,29 @@ class AgyBridgeService(
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
-                val stoppedStatus = AgyHubStatus(status = "stopped", error = t.message)
-                _hubStatus.value = stoppedStatus
-                trySend(stoppedStatus)
+                _systemConnectionState.value = SystemConnectionState.Offline
+                val stopped = AgyHubStatus(status = "stopped")
+                _hubStatus.value = stopped
+                trySend(stopped)
                 close(t)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
-                val stoppedStatus = AgyHubStatus(status = "stopped", error = reason.takeIf { it.isNotBlank() })
-                _hubStatus.value = stoppedStatus
-                trySend(stoppedStatus)
+                _systemConnectionState.value = SystemConnectionState.Offline
+                val stopped = AgyHubStatus(status = "stopped")
+                _hubStatus.value = stopped
+                trySend(stopped)
                 close()
             }
         }
 
-        val ws = client.newWebSocket(request, wsListener)
+        val ws = wsClient.newWebSocket(request, wsListener)
         awaitClose {
             ws.cancel()
+            _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+            _systemConnectionState.value = SystemConnectionState.Offline
+            _hubStatus.value = AgyHubStatus(status = "stopped")
         }
     }.flowOn(Dispatchers.IO)
 
@@ -547,6 +641,9 @@ class AgyBridgeService(
     suspend fun fetchProjects(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Result<List<AgyProjectSummary>> =
         withContext(Dispatchers.IO) {
             try {
+                if (!awaitBridgeReady()) {
+                    return@withContext Result.failure(Exception("IDE Bridge is offline"))
+                }
                 val request = Request.Builder()
                     .url("$httpBaseUrl/api/projects")
                     .get()
@@ -607,6 +704,9 @@ class AgyBridgeService(
     suspend fun fetchActiveInstances(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Result<List<AgyActiveInstance>> =
         withContext(Dispatchers.IO) {
             try {
+                if (!awaitBridgeReady()) {
+                    return@withContext Result.failure(Exception("IDE Bridge is offline"))
+                }
                 val request = Request.Builder()
                     .url("$httpBaseUrl/api/instances")
                     .get()
@@ -668,6 +768,11 @@ class AgyBridgeService(
         workspaceDir: String? = null,
         wsUrl: String = AuthPreferences.currentBridgeWsUrl
     ): Flow<AgyStreamEvent> = callbackFlow {
+        if (!awaitBridgeReady(timeoutMs = 10_000L)) {
+            trySend(AgyStreamEvent.Error("IDE Bridge is offline. Please start the server to chat."))
+            close()
+            return@callbackFlow
+        }
         _connectionState.value = BridgeConnectionState.CONNECTING
         val request = Request.Builder().url(wsUrl).build()
 
@@ -929,6 +1034,11 @@ class AgyBridgeService(
         conversationId: String,
         wsUrl: String = AuthPreferences.currentBridgeWsUrl
     ): Flow<AgyStreamEvent> = callbackFlow {
+        if (!awaitBridgeReady(timeoutMs = 10_000L)) {
+            trySend(AgyStreamEvent.Error("IDE Bridge is offline. Please start the server to view live chat."))
+            close()
+            return@callbackFlow
+        }
         _connectionState.value = BridgeConnectionState.CONNECTING
         val request = Request.Builder().url(wsUrl).build()
         val activeToolsMap = mutableMapOf<String, ToolCall>()

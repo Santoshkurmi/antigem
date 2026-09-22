@@ -35,6 +35,9 @@ class AgyConversationService(
      * Subscribes to live conversation summary updates pushed by the AGY daemon.
      */
     fun subscribeToSummaries(hubUrl: String = AuthPreferences.currentHubUrl): Flow<SummariesUpdate> = flow {
+        if (!com.example.gemini.data.remote.AgyBridgeService.instance.awaitHubReady(timeoutMs = 10_000L)) {
+            throw Exception("Antigravity Hub is not running")
+        }
         grpcClient.callStream("JetboxSubscribeToSummaries", "{}", hubUrl).collect { frameJson ->
             try {
                 val root = JSONObject(frameJson)

@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -147,13 +148,12 @@ func (m *HubManager) IsRunning() bool {
 // Start launches agy --hub with interactive feedback, a spinner, and non-blocking update bypass.
 func (m *HubManager) Start() error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	// 1. Check if already active and responding to RPC requests
 	if m.isHubReady() {
 		m.isRunning = true
 		m.isExternal = true
 		m.setStatus(HubStatusOnline, "")
+		m.mu.Unlock()
 		fmt.Printf(" \033[32m[✓]\033[0m AGY Hub is already active and listening on http://127.0.0.1:%s\n", m.HubPort)
 		return nil
 	}
@@ -201,6 +201,7 @@ func (m *HubManager) Start() error {
 	if err := cmd.Start(); err != nil {
 		cancel()
 		m.setStatus(HubStatusError, err.Error())
+		m.mu.Unlock()
 		return fmt.Errorf("failed to start agy hub (%s): %w", m.AgyBinPath, err)
 	}
 
@@ -208,8 +209,10 @@ func (m *HubManager) Start() error {
 	m.isRunning = true
 	m.isExternal = false
 	m.processDone = make(chan struct{})
-	processExited := make(chan error, 1)
+	doneChan := m.processDone
+	m.mu.Unlock()
 
+	processExited := make(chan error, 1)
 	var streamWg sync.WaitGroup
 
 	// Stream stdout & stderr cleanly with [agy-hub] prefix and extract auth URLs
@@ -247,7 +250,11 @@ func (m *HubManager) Start() error {
 		}
 		m.mu.Unlock()
 		processExited <- err
-		close(m.processDone)
+		select {
+		case <-doneChan:
+		default:
+			close(doneChan)
+		}
 	}()
 
 	// Loading animation while waiting for port and RPC server readiness
@@ -258,6 +265,10 @@ func (m *HubManager) Start() error {
 	timeout := 30 * time.Second
 
 	for time.Since(startTime) < timeout {
+		if !m.IsRunning() {
+			return nil
+		}
+
 		select {
 		case err := <-processExited:
 			fmt.Printf("\r\033[K \033[31m[✗]\033[0m AGY Hub process terminated: %v\n", err)
@@ -279,44 +290,57 @@ func (m *HubManager) Start() error {
 	if ready {
 		m.setStatus(HubStatusOnline, "")
 		fmt.Printf("\r\033[K \033[32m[✓]\033[0m AGY Hub is online and listening on http://127.0.0.1:%s\n", m.HubPort)
-	} else {
+	} else if m.IsRunning() {
 		fmt.Printf("\r\033[K \033[33m[!]\033[0m AGY Hub started (PID %d), waiting for initialization on port %s...\n", cmd.Process.Pid, m.HubPort)
 	}
 
 	return nil
 }
 
-// Stop gracefully shuts down the agy --hub child process.
+// Stop gracefully shuts down the agy --hub child process and child tree.
 func (m *HubManager) Stop() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	cmd := m.cmd
+	cancel := m.cancel
+	isRunning := m.isRunning
+	isExternal := m.isExternal
+	doneChan := m.processDone
+	m.isRunning = false
+	m.mu.Unlock()
 
-	if !m.isRunning || m.isExternal {
+	if !isRunning || isExternal {
 		return
 	}
 
-	if m.stdinPipe != nil {
-		_ = m.stdinPipe.Close()
+	if cancel != nil {
+		cancel()
 	}
 
-	if m.cancel != nil {
-		m.cancel()
-	}
+	if cmd != nil && cmd.Process != nil {
+		pid := cmd.Process.Pid
+		fmt.Printf("🛑 Stopping AGY Hub (PID %d)...\n", pid)
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		_ = cmd.Process.Signal(os.Interrupt)
 
-	if m.cmd != nil && m.cmd.Process != nil {
-		fmt.Printf("🛑 Stopping AGY Hub (PID %d)...\n", m.cmd.Process.Pid)
-		_ = m.cmd.Process.Signal(os.Interrupt)
+		stopped := false
+		if doneChan != nil {
+			select {
+			case <-doneChan:
+				stopped = true
+				fmt.Println("✅ AGY Hub stopped cleanly.")
+			case <-time.After(1500 * time.Millisecond):
+			}
+		}
 
-		select {
-		case <-m.processDone:
-			fmt.Println("✅ AGY Hub stopped cleanly.")
-		case <-time.After(3 * time.Second):
-			_ = m.cmd.Process.Kill()
-			fmt.Println("⚠️  AGY Hub terminated.")
+		if !stopped {
+			_ = cmd.Process.Kill()
+			_ = exec.Command("pkill", "-9", "-P", fmt.Sprintf("%d", pid)).Run()
+			_ = exec.Command("pkill", "-9", "-f", "agy --hub").Run()
+			fmt.Println("⚠️  AGY Hub force terminated.")
 		}
 	}
 
-	m.isRunning = false
+	m.setStatus(HubStatusStopped, "")
 }
 
 func (m *HubManager) handleHubLine(line string) {

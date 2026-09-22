@@ -6,12 +6,19 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.example.gemini.data.preferences.AuthPreferences
+import com.example.gemini.data.remote.AgyBridgeService
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 sealed class LocalServerStatus {
     object Idle : LocalServerStatus()
     object Starting : LocalServerStatus()
     data class Running(val startTimeMs: Long = System.currentTimeMillis()) : LocalServerStatus()
+    object Stopping : LocalServerStatus()
     data class Stopped(val exitCode: Int? = null, val stopTimeMs: Long = System.currentTimeMillis()) : LocalServerStatus()
     data class Error(val message: String) : LocalServerStatus()
 }
@@ -193,12 +200,49 @@ object LocalServerManager {
     }
 
     private suspend fun stopServerInternal() {
+        _status.value = LocalServerStatus.Stopping
+
+        val bridgeUrl = AuthPreferences.currentBridgeHttpUrl
         val session = _serverSession.value
-        if (session != null && !session.isExited.value) {
-            // Gracefully stop the foreground server process via standard Ctrl+C in the persistent terminal
-            session.write("\u0003")
+
+        // 1. Send graceful shutdown HTTP request to the Go IDE bridge
+        withContext(Dispatchers.IO) {
+            try {
+                val fastClient = OkHttpClient.Builder()
+                    .connectTimeout(800, TimeUnit.MILLISECONDS)
+                    .writeTimeout(800, TimeUnit.MILLISECONDS)
+                    .readTimeout(800, TimeUnit.MILLISECONDS)
+                    .build()
+                val req = Request.Builder()
+                    .url("$bridgeUrl/api/shutdown")
+                    .post("{}".toRequestBody(null))
+                    .build()
+                fastClient.newCall(req).execute().close()
+            } catch (_: Exception) {}
         }
 
+        // 2. Also send Ctrl+C to persistent PTY terminal session
+        if (session != null && !session.isExited.value) {
+            try {
+                session.write("\u0003")
+            } catch (_: Exception) {}
+        }
+
+        // 3. Send pkill to terminate any child tree processes (agy daemon, child node processes)
+        if (session != null && !session.isExited.value) {
+            try {
+                session.write("pkill -f gemini-server; pkill -f 'server -f'; pkill -f 'agy '\n")
+            } catch (_: Exception) {}
+        }
+
+        // 4. Wait for SystemConnectionState to transition to Offline
+        withTimeoutOrNull(2500L) {
+            while (AgyBridgeService.instance.systemConnectionState.value !is com.example.gemini.data.remote.SystemConnectionState.Offline) {
+                delay(150)
+            }
+        }
+
+        AgyBridgeService.instance.notifyLocalStopped()
         // Retain _serverSession.value so terminal logs and history remain fully visible in the dialog
         _status.value = LocalServerStatus.Stopped(exitCode = 0)
     }

@@ -43,7 +43,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val authPreferences = AuthPreferences(application)
     private val authPrefs get() = authPreferences
     private val apiService = AntigravityApiService()
-    private val agyBridgeService = com.example.gemini.data.remote.AgyBridgeService()
+    private val agyBridgeService = com.example.gemini.data.remote.AgyBridgeService.instance
+    val systemConnectionState: StateFlow<com.example.gemini.data.remote.SystemConnectionState> = agyBridgeService.systemConnectionState
     val hubStatus: StateFlow<com.example.gemini.data.remote.AgyHubStatus> = agyBridgeService.hubStatus
     private val agyHubClient = com.example.gemini.data.remote.AgyHubClient()
     val trajectoryEngine = com.example.gemini.domain.chat.TrajectoryEngine()
@@ -1049,7 +1050,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             online == true -> com.example.gemini.data.remote.BridgeConnectionState.CONNECTED_READY
             else -> com.example.gemini.data.remote.BridgeConnectionState.CONNECTING
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, com.example.gemini.data.remote.BridgeConnectionState.CONNECTED_READY)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, com.example.gemini.data.remote.BridgeConnectionState.CONNECTING)
 
     private val _conversationError = MutableStateFlow<String?>(null)
     val conversationError: StateFlow<String?> = _conversationError.asStateFlow()
@@ -1112,13 +1113,30 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             "stopped" -> {
                                 _isServerOnline.value = false
                                 _isBridgeOnline.value = false
+                                agyBridgeService.resetState()
                             }
                         }
                     }
                 } catch (e: Exception) {
                     _isServerOnline.value = false
                     _isBridgeOnline.value = false
-                    delay(2000)
+                    agyBridgeService.resetState()
+                    delay(1000)
+                }
+            }
+        }
+
+        // 1b. Active health watchdog to instantly detect server death if socket remains half-open
+        viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(2000)
+                if (_isBridgeOnline.value == true || systemConnectionState.value is com.example.gemini.data.remote.SystemConnectionState.Connected) {
+                    val status = agyBridgeService.fetchServerStatus()
+                    if (status == null) {
+                        _isServerOnline.value = false
+                        _isBridgeOnline.value = false
+                        agyBridgeService.resetState()
+                    }
                 }
             }
         }
@@ -1355,7 +1373,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
                         _hasReceivedInitialSync.value = true
-                        _isServerOnline.value = true
+                        if (systemConnectionState.value.isBridgeOnline) {
+                            _isServerOnline.value = true
+                            _isBridgeOnline.value = true
+                        }
                         _conversationError.value = null
                         _isConversationsLoading.value = false
                         if (!_agyAuthInfo.value.isLoggedIn || _agyAuthInfo.value.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.OFFLINE || _agyAuthInfo.value.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING) {

@@ -115,6 +115,7 @@ fun LocalServerOutputDialog(
                         val dotColor = when (status) {
                             is LocalServerStatus.Running -> Color(0xFF22C55E)
                             is LocalServerStatus.Starting -> Color(0xFFF59E0B)
+                            is LocalServerStatus.Stopping -> Color(0xFFF59E0B)
                             is LocalServerStatus.Stopped -> Color(0xFF9CA3AF)
                             is LocalServerStatus.Error -> Color(0xFFEF4444)
                             is LocalServerStatus.Idle -> Color(0xFF9CA3AF)
@@ -138,6 +139,7 @@ fun LocalServerOutputDialog(
                             val statusText = when (val s = status) {
                                 is LocalServerStatus.Running -> "Running"
                                 is LocalServerStatus.Starting -> "Starting..."
+                                is LocalServerStatus.Stopping -> "Stopping..."
                                 is LocalServerStatus.Stopped -> "Stopped"
                                 is LocalServerStatus.Error -> "Error: ${s.message.take(25)}"
                                 is LocalServerStatus.Idle -> "Idle"
@@ -159,12 +161,13 @@ fun LocalServerOutputDialog(
                         // Restart / Start Button
                         IconButton(
                             onClick = { LocalServerManager.restartServer(context) },
+                            enabled = status !is LocalServerStatus.Stopping,
                             modifier = Modifier.size(34.dp)
                         ) {
                             Icon(
                                 imageVector = if (status is LocalServerStatus.Running) Icons.Default.Refresh else Icons.Default.PlayArrow,
                                 contentDescription = "Restart Server",
-                                tint = ClaudeTerracotta,
+                                tint = if (status is LocalServerStatus.Stopping) Color.Gray else ClaudeTerracotta,
                                 modifier = Modifier.size(18.dp)
                             )
                         }

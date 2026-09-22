@@ -197,6 +197,7 @@ fun ChatScreen(
     val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
     val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
     val hubStatus by viewModel.hubStatus.collectAsState()
+    val systemConnectionState by viewModel.systemConnectionState.collectAsState()
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -754,13 +755,24 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) || hubStatus.status != "idle") {
+                        if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) || systemConnectionState !is com.example.gemini.data.remote.SystemConnectionState.Offline || hubStatus.status != "idle") {
                             val dotColor = when {
-                                isLocalError || hubStatus.status == "error" -> Color(0xFFEF4444) // Red: Error
-                                hubStatus.status == "online" && (isLocalRunning || !com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) -> Color(0xFF22C55E) // Green: Online
-                                isLocalStarting || isLocalRunning || hubStatus.status == "starting" || isBridgeOnline == true -> Color(0xFFF59E0B) // Yellow: Starting / Initializing
-                                isLocalStopped || hubStatus.status == "stopped" -> Color(0xFF9CA3AF) // Gray: Stopped
-                                else -> Color(0xFF9CA3AF) // Gray: Idle / Offline
+                                serverStatus is com.example.gemini.data.local.LocalServerStatus.Stopping -> Color(0xFFF59E0B)
+                                systemConnectionState is com.example.gemini.data.remote.SystemConnectionState.Connected -> {
+                                    when ((systemConnectionState as com.example.gemini.data.remote.SystemConnectionState.Connected).hubStatus) {
+                                        "online" -> Color(0xFF22C55E) // Green: Hub is online & ready
+                                        "starting", "idle" -> Color(0xFFF59E0B) // Yellow: Bridge online, Hub starting
+                                        "error" -> Color(0xFFEF4444) // Red: Hub error
+                                        "stopped" -> Color(0xFF9CA3AF) // Gray: Hub stopped
+                                        else -> Color(0xFFF59E0B)
+                                    }
+                                }
+                                systemConnectionState is com.example.gemini.data.remote.SystemConnectionState.Error -> Color(0xFFEF4444) // Red: Bridge error
+                                else -> when {
+                                    isLocalStarting || isLocalRunning -> Color(0xFFF59E0B) // Yellow: Local process booting
+                                    isLocalError -> Color(0xFFEF4444) // Red: Local process error
+                                    else -> Color(0xFF9CA3AF) // Gray: Offline
+                                }
                             }
 
                             Box(
