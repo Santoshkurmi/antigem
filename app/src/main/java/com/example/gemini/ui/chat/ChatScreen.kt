@@ -1930,9 +1930,6 @@ fun ChatScreen(
         AttachmentSelectorBottomSheet(
             onPickImage = { photoPickerLauncher.launch("image/*") },
             onPickFile = { filePickerLauncher.launch("*/*") },
-            onPickProjectFile = {
-                onNavigateToIde()
-            },
             onDismiss = { showAttachmentSelector = false }
         )
     }

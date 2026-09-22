@@ -26,7 +26,6 @@ import com.example.gemini.theme.GeminiBlue
 fun AttachmentSelectorBottomSheet(
     onPickImage: () -> Unit,
     onPickFile: () -> Unit,
-    onPickProjectFile: () -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
@@ -72,19 +71,6 @@ fun AttachmentSelectorBottomSheet(
                 onClick = {
                     onDismiss()
                     onPickFile()
-                }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            AttachmentOptionRow(
-                icon = Icons.Outlined.Folder,
-                iconColor = Color(0xFF10B981),
-                title = "Project Workspace File",
-                subtitle = "Attach an existing code file from your active project",
-                onClick = {
-                    onDismiss()
-                    onPickProjectFile()
                 }
             )
         }
