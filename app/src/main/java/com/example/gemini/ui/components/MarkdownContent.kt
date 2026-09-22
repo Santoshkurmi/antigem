@@ -1607,7 +1607,7 @@ private fun buildRichAnnotatedString(
  * Full Markdown block parser supporting:
  * Math ($$, \[\], ```math), Fenced Code, <details><summary>, GFM Tables, Headers (1-6), Images, Task Checklists, Blockquotes, Lists, Dividers, Paragraphs.
  */
-private val THOUGHT_START_REGEX = Regex("<(?:!--\\s*)?thought(?:\\s+duration=[\"']?([0-9]+)[\"']?)?(?:\\s*--)?>", RegexOption.IGNORE_CASE)
+private val THOUGHT_START_REGEX = Regex("<(?:!--\\s*)?thought(?:[:\\s]+(streaming))?(?:[:\\s]+(?:duration=)?[\"']?([0-9]+)[\"']?)?(?:\\s*--)?>", RegexOption.IGNORE_CASE)
 private val THOUGHT_END_REGEX = Regex("<(?:!--\\s*)?/thought(?:\\s*--)?>", RegexOption.IGNORE_CASE)
 private val TOOL_TAG_PATTERN = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|tool_|execute_|web_|read_|ask_|user_)", RegexOption.IGNORE_CASE)
 private val TOOL_MARKER_REGEX = Regex("<!--\\s*tool_call:([a-zA-Z0-9_-]+)\\s*-->")
@@ -1641,13 +1641,14 @@ fun parseMarkdownBlocks(
             // -1. Sequential Agent Thought Block <!-- thought -->...<!-- /thought --> or <thought>
             val thoughtStartMatch = THOUGHT_START_REGEX.find(line)
             if (thoughtStartMatch != null) {
-                val durationMs = thoughtStartMatch.groupValues.getOrNull(1)?.toLongOrNull()
+                val isExplicitStreaming = !thoughtStartMatch.groupValues.getOrNull(1).isNullOrBlank()
+                val durationMs = thoughtStartMatch.groupValues.getOrNull(2)?.toLongOrNull()
                 val thoughtLines = mutableListOf<String>()
 
                 if (line.contains("</thought>", ignoreCase = true) || line.contains("<!-- /thought -->", ignoreCase = true)) {
                     val raw = line.replace(THOUGHT_START_REGEX, "").replace(THOUGHT_END_REGEX, "").trim()
                     if (raw.isNotBlank()) {
-                        result.add(MarkdownBlock.AgentThought(raw, durationMs))
+                        result.add(MarkdownBlock.AgentThought(raw, durationMs, isStreaming = isExplicitStreaming))
                     }
                     i++
                     continue
@@ -1672,9 +1673,10 @@ fun parseMarkdownBlocks(
                 }
 
                 val finalThought = thoughtLines.joinToString("\n").trim()
+                val isStreamingThought = isExplicitStreaming || !closed
                 if (finalThought.isNotBlank()) {
-                    result.add(MarkdownBlock.AgentThought(finalThought, durationMs, isStreaming = !closed))
-                } else if (!closed) {
+                    result.add(MarkdownBlock.AgentThought(finalThought, durationMs, isStreaming = isStreamingThought))
+                } else if (!closed || isExplicitStreaming) {
                     result.add(MarkdownBlock.AgentThought("Thinking...", durationMs, isStreaming = true))
                 }
                 continue

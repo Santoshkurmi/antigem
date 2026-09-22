@@ -4,29 +4,26 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.gemini.theme.ClaudeThinkingDark
-import com.example.gemini.theme.ClaudeThinkingLight
+import androidx.compose.ui.text.style.TextOverflow
 import com.example.gemini.theme.ClaudeTerracotta
 
 @Composable
@@ -39,111 +36,137 @@ fun ThinkingAccordion(
     var isExpanded by remember { mutableStateOf(isStreaming) }
     var hasUserManuallyToggled by remember { mutableStateOf(false) }
 
-    // Auto-expand while streaming thoughts if user hasn't toggled
+    // Auto-expand while actively streaming thoughts if user hasn't manually toggled
     LaunchedEffect(isStreaming) {
-        if (!hasUserManuallyToggled) {
-            isExpanded = isStreaming
+        if (isStreaming && !hasUserManuallyToggled) {
+            isExpanded = true
         }
     }
 
-    val isDark = MaterialTheme.colorScheme.background.red < 0.5f
-    val bgColor = if (isDark) ClaudeThinkingDark else ClaudeThinkingLight
-    val borderColor = if (isExpanded) ClaudeTerracotta.copy(alpha = 0.35f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    val rotation by animateFloatAsState(
+        targetValue = if (isExpanded) 90f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "thought_chevron_rotation"
+    )
 
-    Card(
+    val previewText = remember(thoughtText) {
+        thoughtText.trim()
+            .lines()
+            .map { it.trim().removePrefix("#").removePrefix("*").removePrefix("-").trim() }
+            .firstOrNull { it.isNotBlank() } ?: ""
+    }
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, borderColor),
-        colors = CardDefaults.cardColors(containerColor = bgColor)
+            .padding(vertical = 2.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // Clickable Header
+        // Clean borderless inline header row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .clickable {
+                    hasUserManuallyToggled = true
+                    isExpanded = !isExpanded
+                }
+                .padding(horizontal = 4.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                modifier = Modifier
+                    .size(15.dp)
+                    .rotate(rotation)
+            )
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            Icon(
+                imageVector = Icons.Outlined.Psychology,
+                contentDescription = "Thinking",
+                tint = ClaudeTerracotta.copy(alpha = 0.85f),
+                modifier = Modifier.size(15.dp)
+            )
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            if (isStreaming) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(ClaudeTerracotta)
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = "Thinking...",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = ClaudeTerracotta
+                )
+            } else {
+                val durationSeconds = durationMs?.let { String.format("%.1fs", it / 1000.0) } ?: ""
+                val title = if (durationSeconds.isNotEmpty()) "Thought for $durationSeconds" else "Thinking process"
+                Text(
+                    text = title,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                )
+
+                if (!isExpanded && previewText.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "·",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = previewText,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                }
+            }
+        }
+
+        // Clean borderless expandable content with subtle left accent line
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        hasUserManuallyToggled = true
-                        isExpanded = !isExpanded
-                    }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(start = 10.dp, top = 4.dp, bottom = 4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Psychology,
-                    contentDescription = "Thinking",
-                    tint = ClaudeTerracotta,
-                    modifier = Modifier.size(20.dp)
+                // Subtle vertical left bar
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(1.dp))
+                        .background(ClaudeTerracotta.copy(alpha = 0.35f))
                 )
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                // Static dot during streaming
-                if (isStreaming) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(ClaudeTerracotta)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Thinking in progress...",
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = ClaudeTerracotta
-                    )
-                } else {
-                    val durationSeconds = durationMs?.let { String.format("%.1fs", it / 1000.0) } ?: ""
-                    Column {
-                        Text(
-                            text = if (durationSeconds.isNotEmpty()) "Thought for $durationSeconds" else "Thought Process",
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = if (isExpanded) "Tap to collapse" else "Tap to view reasoning (${thoughtText.length} chars)",
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    tint = if (isExpanded) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    modifier = Modifier.size(22.dp)
+                Text(
+                    text = thoughtText,
+                    fontFamily = FontFamily.SansSerif,
+                    fontSize = 12.sp,
+                    lineHeight = 17.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    modifier = Modifier.fillMaxWidth()
                 )
-            }
-
-            // Expandable Content
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = expandVertically(),
-                exit = shrinkVertically()
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    HorizontalDivider(
-                        thickness = 0.5.dp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                    )
-                    Text(
-                        text = thoughtText,
-                        fontFamily = FontFamily.SansSerif,
-                        fontSize = 13.sp,
-                        lineHeight = 19.sp,
-                        fontStyle = FontStyle.Normal,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp)
-                    )
-                }
             }
         }
     }

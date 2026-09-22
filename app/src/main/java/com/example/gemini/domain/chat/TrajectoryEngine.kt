@@ -440,8 +440,14 @@ class TrajectoryEngine {
                     for (block in turn.blocks) {
                         when (block) {
                             is TurnBlock.Thinking -> {
-                                if (block.thought.isNotBlank()) {
-                                    thoughts.add(block.thought.trim())
+                                val thoughtText = block.thought.trim()
+                                val streamTag = if (block.isStreaming) ":streaming" else ""
+                                val durTag = if (block.durationMs != null && block.durationMs > 0) ":${block.durationMs}" else ""
+                                if (thoughtText.isNotBlank()) {
+                                    contentParts.add("<!-- thought$streamTag$durTag -->\n$thoughtText\n<!-- /thought -->")
+                                    thoughts.add(thoughtText)
+                                } else if (block.isStreaming) {
+                                    contentParts.add("<!-- thought:streaming -->\nThinking...\n<!-- /thought -->")
                                 }
                                 if (block.durationMs != null) {
                                     maxDuration = maxOf(maxDuration ?: 0L, block.durationMs)
