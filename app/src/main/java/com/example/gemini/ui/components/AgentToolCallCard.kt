@@ -194,6 +194,19 @@ fun AgentToolCallCard(
 
             Spacer(modifier = Modifier.width(4.dp))
 
+            val toolIcon = when {
+                isSearch -> Icons.Outlined.Search
+                isReader -> Icons.Outlined.Language
+                isMath -> Icons.Outlined.Functions
+                isViewFile -> Icons.Default.Description
+                isEditFile -> Icons.Default.Edit
+                isListDir -> Icons.Default.Folder
+                isFind || isGrep -> Icons.Default.Search
+                isGenImg -> Icons.Default.Image
+                isMcp -> Icons.Default.Build
+                else -> Icons.Default.Terminal
+            }
+
             // Tool / State Icon
             if (isPendingApproval) {
                 Icon(
@@ -203,24 +216,13 @@ fun AgentToolCallCard(
                     modifier = Modifier.size(14.dp)
                 )
             } else if (isRunning) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 2.dp,
-                    color = ClaudeTerracotta
+                Icon(
+                    imageVector = toolIcon,
+                    contentDescription = "Running",
+                    tint = ClaudeTerracotta,
+                    modifier = Modifier.size(14.dp)
                 )
             } else if (isSuccess) {
-                val toolIcon = when {
-                    isSearch -> Icons.Outlined.Search
-                    isReader -> Icons.Outlined.Language
-                    isMath -> Icons.Outlined.Functions
-                    isViewFile -> Icons.Default.Description
-                    isEditFile -> Icons.Default.Edit
-                    isListDir -> Icons.Default.Folder
-                    isFind || isGrep -> Icons.Default.Search
-                    isGenImg -> Icons.Default.Image
-                    isMcp -> Icons.Default.Build
-                    else -> Icons.Default.Terminal
-                }
                 Icon(
                     imageVector = toolIcon,
                     contentDescription = null,
@@ -274,23 +276,27 @@ fun AgentToolCallCard(
                 modifier = Modifier.weight(1f)
             )
 
-            // Terminate (Stop) Button while Running
+            // Pristine Circular Terminate (Stop) Button while Running
             if (isRunning && onTerminate != null && isBash) {
-                IconButton(
-                    onClick = { onTerminate(toolCall) },
+                Box(
                     modifier = Modifier
                         .size(22.dp)
                         .clip(CircleShape)
-                        .background(Color.Red.copy(alpha = 0.15f))
+                        .background(Color(0xFFEF4444).copy(alpha = 0.18f))
+                        .clickable(
+                            role = androidx.compose.ui.semantics.Role.Button,
+                            onClick = { onTerminate(toolCall) }
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Stop,
                         contentDescription = "Stop command",
-                        tint = Color.Red,
+                        tint = Color(0xFFEF4444),
                         modifier = Modifier.size(12.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(6.dp))
             }
 
             // Duration in ms
