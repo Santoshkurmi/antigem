@@ -76,7 +76,17 @@ class AgyConversationService(
                             }
                         }
 
-                        val wsUri = obj.optJSONObject("trajectoryMetadata")?.optJSONArray("workspaceUris")?.optString(0)
+                        val metaObj = obj.optJSONObject("trajectoryMetadata")
+                        val parentCid = metaObj?.optString("parentConversationId")?.takeIf { it.isNotBlank() }
+                            ?: obj.optString("parentConversationId").takeIf { it.isNotBlank() }
+                        val subagentSpec = metaObj?.optJSONObject("subagentSpec")
+                            ?: obj.optJSONObject("subagentSpec")
+                        val subagentRole = subagentSpec?.optString("role")?.takeIf { it.isNotBlank() }
+                        val subagentTypeName = subagentSpec?.optString("typeName")?.takeIf { it.isNotBlank() }
+                        val nestingDepth = metaObj?.optInt("nestingDepth", 0)
+                            ?: obj.optInt("nestingDepth", 0)
+
+                        val wsUri = metaObj?.optJSONArray("workspaceUris")?.optString(0)
                             ?.takeIf { it.isNotBlank() }
                             ?: obj.optJSONArray("workspaces")?.optJSONObject(0)?.optString("workspaceFolderAbsoluteUri")
                             ?.takeIf { it.isNotBlank() }
@@ -94,7 +104,11 @@ class AgyConversationService(
                                 updatedAt = lastModEpoch,
                                 isRunning = isRunning,
                                 stepCount = stepCount,
-                                workspaceUri = wsUri
+                                workspaceUri = wsUri,
+                                parentConversationId = parentCid,
+                                subagentRole = subagentRole,
+                                subagentTypeName = subagentTypeName,
+                                nestingDepth = nestingDepth
                             )
                         )
                     }

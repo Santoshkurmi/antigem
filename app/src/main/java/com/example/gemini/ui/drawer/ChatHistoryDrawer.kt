@@ -99,11 +99,51 @@ fun ChatHistoryDrawer(
 
     val filtered = remember(conversations, searchQuery) {
         if (searchQuery.isBlank()) conversations
-        else conversations.filter { it.title.contains(searchQuery, ignoreCase = true) }
+        else conversations.filter {
+            it.title.contains(searchQuery, ignoreCase = true) ||
+            (it.subagentRole != null && it.subagentRole.contains(searchQuery, ignoreCase = true))
+        }
     }
 
-    val grouped = remember(filtered) {
-        filtered.groupBy { conv ->
+    val allFilteredIds = remember(filtered) { filtered.map { it.id }.toSet() }
+
+    // Map parentConversationId -> List<Conversation> (subagents)
+    // Only if parentConversationId != null and parentConversationId is found in allFilteredIds!
+    val subagentsByParent = remember(filtered, allFilteredIds) {
+        filtered.filter { conv ->
+            conv.parentConversationId != null &&
+            conv.parentConversationId != conv.id &&
+            conv.parentConversationId in allFilteredIds
+        }.groupBy { it.parentConversationId!! }
+    }
+
+    // Top-level conversations (conversations without a valid parent in the list)
+    val topLevelChats = remember(filtered, allFilteredIds) {
+        filtered.filter { conv ->
+            val pId = conv.parentConversationId
+            pId == null || pId == conv.id || !allFilteredIds.contains(pId)
+        }
+    }
+
+    var expandedParentIds by remember { mutableStateOf(setOf<String>()) }
+
+    // Auto expand parent if current conversation is a subagent or a selected parent with subagents
+    LaunchedEffect(currentConversationId) {
+        if (!currentConversationId.isNullOrBlank()) {
+            val currentConv = conversations.find { it.id == currentConversationId }
+            if (currentConv != null) {
+                val pId = currentConv.parentConversationId
+                if (pId != null && conversations.any { it.id == pId }) {
+                    expandedParentIds = expandedParentIds + pId
+                } else if (conversations.any { it.parentConversationId == currentConv.id }) {
+                    expandedParentIds = expandedParentIds + currentConv.id
+                }
+            }
+        }
+    }
+
+    val grouped = remember(topLevelChats) {
+        topLevelChats.groupBy { conv ->
             if (conv.workspaceUri.isNotBlank()) {
                 val clean = conv.workspaceUri.removePrefix("file://").trimEnd('/')
                 java.io.File(clean).name.ifBlank { "Workspace" }
@@ -129,11 +169,37 @@ fun ChatHistoryDrawer(
         }
 
         val targetIndex = if (!groupByWorkspace) {
-            filtered.indexOfFirst { it.id == currentConversationId }
+            var idx = 0
+            var foundIdx = -1
+            for (top in topLevelChats) {
+                if (top.id == currentConversationId) {
+                    foundIdx = idx
+                    break
+                }
+                idx++
+                if (expandedParentIds.contains(top.id)) {
+                    val subs = subagentsByParent[top.id] ?: emptyList()
+                    for (sub in subs) {
+                        if (sub.id == currentConversationId) {
+                            foundIdx = idx
+                            break
+                        }
+                        idx++
+                    }
+                    if (foundIdx != -1) break
+                }
+            }
+            foundIdx
         } else {
-            val targetGroup = grouped.entries.firstOrNull { (_, chats) -> chats.any { it.id == currentConversationId } }
+            val targetGroup = grouped.entries.firstOrNull { (_, chats) ->
+                chats.any { top ->
+                    top.id == currentConversationId || (subagentsByParent[top.id]?.any { it.id == currentConversationId } == true)
+                }
+            }
             val currentExpanded = if (targetGroup != null) {
-                val chatIndexInGroup = targetGroup.value.indexOfFirst { it.id == currentConversationId }
+                val chatIndexInGroup = targetGroup.value.indexOfFirst { top ->
+                    top.id == currentConversationId || (subagentsByParent[top.id]?.any { it.id == currentConversationId } == true)
+                }
                 if (chatIndexInGroup >= 5 && !expandedGroups.contains(targetGroup.key)) {
                     expandedGroups = expandedGroups + targetGroup.key
                     kotlinx.coroutines.yield()
@@ -157,6 +223,17 @@ fun ChatHistoryDrawer(
                         break
                     }
                     index++
+                    if (expandedParentIds.contains(conv.id)) {
+                        val subs = subagentsByParent[conv.id] ?: emptyList()
+                        for (sub in subs) {
+                            if (sub.id == currentConversationId) {
+                                foundIndex = index
+                                break
+                            }
+                            index++
+                        }
+                        if (foundIndex != -1) break
+                    }
                 }
                 if (foundIndex != -1) break
                 if (chats.size > 5) {
@@ -575,23 +652,63 @@ fun ChatHistoryDrawer(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             if (!groupByWorkspace) {
-                                items(filtered, key = { it.id }) { conv ->
+                                topLevelChats.forEach { conv ->
                                     val isSelected = conv.id == currentConversationId
                                     val activeInst = activeInstances.find { it.conversationId == conv.id }
                                     val isConvRunning = conv.isRunning || (conv.id == currentConversationId && isStreaming) || activeInst != null
+                                    val subagents = subagentsByParent[conv.id] ?: emptyList()
+                                    val isSubExpanded = expandedParentIds.contains(conv.id)
 
-                                    ChatHistoryItemRow(
-                                        conv = conv,
-                                        isSelected = isSelected,
-                                        activeInst = activeInst,
-                                        isConvRunning = isConvRunning,
-                                        onSelectConversation = onSelectConversation,
-                                        onForkConversation = onForkConversation,
-                                        onDeleteConversation = onDeleteConversation,
-                                        onTerminateInstance = { inst, title ->
-                                            instanceToTerminate = inst to title
+                                    item(key = conv.id) {
+                                        ChatHistoryItemRow(
+                                            conv = conv,
+                                            isSelected = isSelected,
+                                            activeInst = activeInst,
+                                            isConvRunning = isConvRunning,
+                                            isSubagent = false,
+                                            subagents = subagents,
+                                            isSubagentsExpanded = isSubExpanded,
+                                            onToggleSubagents = if (subagents.isNotEmpty()) {
+                                                {
+                                                    expandedParentIds = if (isSubExpanded) expandedParentIds - conv.id else expandedParentIds + conv.id
+                                                }
+                                            } else null,
+                                            onSelectConversation = {
+                                                if (subagents.isNotEmpty()) {
+                                                    expandedParentIds = expandedParentIds + conv.id
+                                                }
+                                                onSelectConversation(conv.id)
+                                            },
+                                            onForkConversation = onForkConversation,
+                                            onDeleteConversation = onDeleteConversation,
+                                            onTerminateInstance = { inst, title ->
+                                                instanceToTerminate = inst to title
+                                            }
+                                        )
+                                    }
+
+                                    if (isSubExpanded && subagents.isNotEmpty()) {
+                                        items(subagents, key = { "sub_${it.id}" }) { sub ->
+                                            val isSubSelected = sub.id == currentConversationId
+                                            val subActiveInst = activeInstances.find { it.conversationId == sub.id }
+                                            val isSubRunning = sub.isRunning || (sub.id == currentConversationId && isStreaming) || subActiveInst != null
+
+                                            ChatHistoryItemRow(
+                                                conv = sub,
+                                                isSelected = isSubSelected,
+                                                activeInst = subActiveInst,
+                                                isConvRunning = isSubRunning,
+                                                isSubagent = true,
+                                                displayName = sub.subagentRole?.takeIf { it.isNotBlank() } ?: sub.title,
+                                                onSelectConversation = onSelectConversation,
+                                                onForkConversation = onForkConversation,
+                                                onDeleteConversation = onDeleteConversation,
+                                                onTerminateInstance = { inst, title ->
+                                                    instanceToTerminate = inst to title
+                                                }
+                                            )
                                         }
-                                    )
+                                    }
                                 }
                             } else {
                                 grouped.forEach { (groupName, chats) ->
@@ -656,23 +773,63 @@ fun ChatHistoryDrawer(
                                         }
                                     }
 
-                                    items(displayChats, key = { it.id }) { conv ->
+                                    displayChats.forEach { conv ->
                                         val isSelected = conv.id == currentConversationId
                                         val activeInst = activeInstances.find { it.conversationId == conv.id }
                                         val isConvRunning = conv.isRunning || (conv.id == currentConversationId && isStreaming) || activeInst != null
+                                        val subagents = subagentsByParent[conv.id] ?: emptyList()
+                                        val isSubExpanded = expandedParentIds.contains(conv.id)
 
-                                        ChatHistoryItemRow(
-                                            conv = conv,
-                                            isSelected = isSelected,
-                                            activeInst = activeInst,
-                                            isConvRunning = isConvRunning,
-                                            onSelectConversation = onSelectConversation,
-                                            onForkConversation = onForkConversation,
-                                            onDeleteConversation = onDeleteConversation,
-                                            onTerminateInstance = { inst, title ->
-                                                instanceToTerminate = inst to title
+                                        item(key = conv.id) {
+                                            ChatHistoryItemRow(
+                                                conv = conv,
+                                                isSelected = isSelected,
+                                                activeInst = activeInst,
+                                                isConvRunning = isConvRunning,
+                                                isSubagent = false,
+                                                subagents = subagents,
+                                                isSubagentsExpanded = isSubExpanded,
+                                                onToggleSubagents = if (subagents.isNotEmpty()) {
+                                                    {
+                                                        expandedParentIds = if (isSubExpanded) expandedParentIds - conv.id else expandedParentIds + conv.id
+                                                    }
+                                                } else null,
+                                                onSelectConversation = {
+                                                    if (subagents.isNotEmpty()) {
+                                                        expandedParentIds = expandedParentIds + conv.id
+                                                    }
+                                                    onSelectConversation(conv.id)
+                                                },
+                                                onForkConversation = onForkConversation,
+                                                onDeleteConversation = onDeleteConversation,
+                                                onTerminateInstance = { inst, title ->
+                                                    instanceToTerminate = inst to title
+                                                }
+                                            )
+                                        }
+
+                                        if (isSubExpanded && subagents.isNotEmpty()) {
+                                            items(subagents, key = { "sub_${it.id}" }) { sub ->
+                                                val isSubSelected = sub.id == currentConversationId
+                                                val subActiveInst = activeInstances.find { it.conversationId == sub.id }
+                                                val isSubRunning = sub.isRunning || (sub.id == currentConversationId && isStreaming) || subActiveInst != null
+
+                                                ChatHistoryItemRow(
+                                                    conv = sub,
+                                                    isSelected = isSubSelected,
+                                                    activeInst = subActiveInst,
+                                                    isConvRunning = isSubRunning,
+                                                    isSubagent = true,
+                                                    displayName = sub.subagentRole?.takeIf { it.isNotBlank() } ?: sub.title,
+                                                    onSelectConversation = onSelectConversation,
+                                                    onForkConversation = onForkConversation,
+                                                    onDeleteConversation = onDeleteConversation,
+                                                    onTerminateInstance = { inst, title ->
+                                                        instanceToTerminate = inst to title
+                                                    }
+                                                )
                                             }
-                                        )
+                                        }
                                     }
 
                                     if (chats.size > 5) {
@@ -974,6 +1131,11 @@ private fun ChatHistoryItemRow(
     isSelected: Boolean,
     activeInst: com.example.gemini.data.remote.AgyActiveInstance?,
     isConvRunning: Boolean,
+    isSubagent: Boolean = false,
+    displayName: String = conv.title,
+    subagents: List<Conversation> = emptyList(),
+    isSubagentsExpanded: Boolean = false,
+    onToggleSubagents: (() -> Unit)? = null,
     onSelectConversation: (String) -> Unit,
     onForkConversation: (String) -> Unit,
     onDeleteConversation: (String) -> Unit,
@@ -982,35 +1144,63 @@ private fun ChatHistoryItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp)
+            .padding(
+                start = if (isSubagent) 24.dp else 0.dp,
+                end = 0.dp,
+                top = if (isSubagent) 1.dp else 2.dp,
+                bottom = if (isSubagent) 1.dp else 2.dp
+            )
             .clip(RoundedCornerShape(8.dp))
             .background(
                 if (isSelected) MaterialTheme.colorScheme.surfaceVariant
                 else Color.Transparent
             )
             .clickable { onSelectConversation(conv.id) }
-            .padding(horizontal = 10.dp, vertical = 9.dp),
+            .padding(
+                horizontal = if (isSubagent) 8.dp else 10.dp,
+                vertical = if (isSubagent) 7.dp else 9.dp
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = Icons.Outlined.ChatBubbleOutline,
-                contentDescription = null,
-                tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier.size(17.dp)
-            )
-            if (isConvRunning) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .align(Alignment.TopEnd)
-                        .offset(x = 2.dp, y = (-2).dp)
-                        .background(Color(0xFF4CAF50), CircleShape)
+        if (isSubagent) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.CallSplit,
+                    contentDescription = "Subagent",
+                    tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(15.dp)
                 )
+                if (isConvRunning) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .align(Alignment.TopEnd)
+                            .offset(x = 2.dp, y = (-2).dp)
+                            .background(Color(0xFF4CAF50), CircleShape)
+                    )
+                }
             }
+            Spacer(modifier = Modifier.width(8.dp))
+        } else {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Outlined.ChatBubbleOutline,
+                    contentDescription = null,
+                    tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.size(17.dp)
+                )
+                if (isConvRunning) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .align(Alignment.TopEnd)
+                            .offset(x = 2.dp, y = (-2).dp)
+                            .background(Color(0xFF4CAF50), CircleShape)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
         }
-
-        Spacer(modifier = Modifier.width(10.dp))
 
         Row(
             modifier = Modifier.weight(1f),
@@ -1018,23 +1208,57 @@ private fun ChatHistoryItemRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = conv.title,
-                fontSize = 13.5.sp,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                text = displayName,
+                fontSize = if (isSubagent) 12.8.sp else 13.5.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else if (isSubagent) FontWeight.Medium else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (isSubagent && isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f, fill = false)
             )
 
-            val timeStr = formatRelativeTime(conv.updatedAt)
-            if (timeStr.isNotBlank()) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = timeStr,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-                )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (subagents.isNotEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSubagentsExpanded) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                        border = BorderStroke(1.dp, if (isSubagentsExpanded) ClaudeTerracotta.copy(alpha = 0.4f) else Color.Transparent),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onToggleSubagents?.invoke() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${subagents.size}",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isSubagentsExpanded) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Icon(
+                                imageVector = if (isSubagentsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isSubagentsExpanded) "Collapse subagents" else "Expand subagents",
+                                tint = if (isSubagentsExpanded) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+                }
+
+                val timeStr = formatRelativeTime(conv.updatedAt)
+                if (timeStr.isNotBlank()) {
+                    Text(
+                        text = timeStr,
+                        fontSize = if (isSubagent) 10.5.sp else 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                    )
+                }
             }
         }
 
@@ -1200,6 +1424,7 @@ fun SearchChatsDialog(
 
             val matchesQuery = if (query.isBlank()) true else {
                 conv.title.contains(query, ignoreCase = true) ||
+                    (conv.subagentRole?.contains(query, ignoreCase = true) == true) ||
                     (conv.summary?.contains(query, ignoreCase = true) == true) ||
                     conv.modelId.contains(query, ignoreCase = true)
             }

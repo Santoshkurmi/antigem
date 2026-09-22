@@ -99,7 +99,11 @@ data class Conversation(
     val updatedAt: Long = System.currentTimeMillis(),
     val isRunning: Boolean = false,
     val stepCount: Int = 0,
-    val workspaceUri: String = ""
+    val workspaceUri: String = "",
+    val parentConversationId: String? = null,
+    val subagentRole: String? = null,
+    val subagentTypeName: String? = null,
+    val nestingDepth: Int = 0
 )
 
 enum class ModelFamily {
