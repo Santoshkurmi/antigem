@@ -311,7 +311,15 @@ class TrajectoryEngine {
 
         if (blocks.isNotEmpty()) {
             val turnId = "${conversationId}_$activeTurnStartStep"
-            completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = blocks.toList(), isStreaming = false))
+            val existingIndex = completedTurns.indexOfLast { it is ChatTurn.Assistant && it.turnId == turnId }
+            if (existingIndex >= 0) {
+                val existingTurn = completedTurns[existingIndex] as ChatTurn.Assistant
+                val mergedBlocks = (existingTurn.blocks.filterNot { eb -> blocks.any { it.stepIndex == eb.stepIndex } } + blocks)
+                    .sortedBy { it.stepIndex }
+                completedTurns[existingIndex] = existingTurn.copy(blocks = mergedBlocks, isStreaming = false)
+            } else {
+                completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = blocks.toList(), isStreaming = false))
+            }
         }
 
         activeStepsMap.clear()
@@ -329,10 +337,16 @@ class TrajectoryEngine {
         }
 
         val nextAssistantStartStep = if (pendingUserTurn != null) activeTurnStartStep + 1 else activeTurnStartStep
+        val turnId = "${conversationId}_$nextAssistantStartStep"
+        val existingAssistantIdx = baseTurns.indexOfLast { it is ChatTurn.Assistant && it.turnId == turnId }
 
         if (activeStepsMap.isEmpty()) {
             if (isRunning && !isWaitingInteraction) {
-                val turnId = "${conversationId}_$nextAssistantStartStep"
+                if (existingAssistantIdx >= 0) {
+                    val existingTurn = baseTurns[existingAssistantIdx] as ChatTurn.Assistant
+                    val updatedTurn = existingTurn.copy(isStreaming = true)
+                    return baseTurns.toMutableList().apply { set(existingAssistantIdx, updatedTurn) }
+                }
                 val activeTurn = ChatTurn.Assistant(
                     turnId = turnId,
                     blocks = emptyList(),
@@ -362,14 +376,27 @@ class TrajectoryEngine {
 
         isWaitingInteraction = waitingFound
 
-        return if (activeBlocks.isNotEmpty() || (isRunning && !isWaitingInteraction)) {
-            val turnId = "${conversationId}_$nextAssistantStartStep"
+        val finalBlocks = if (existingAssistantIdx >= 0) {
+            val existingTurn = baseTurns[existingAssistantIdx] as ChatTurn.Assistant
+            (existingTurn.blocks.filterNot { eb -> activeBlocks.any { it.stepIndex == eb.stepIndex } } + activeBlocks)
+                .sortedBy { it.stepIndex }
+        } else {
+            activeBlocks.toList()
+        }
+
+        return if (finalBlocks.isNotEmpty() || (isRunning && !isWaitingInteraction)) {
             val activeTurn = ChatTurn.Assistant(
                 turnId = turnId,
-                blocks = activeBlocks.toList(),
+                blocks = finalBlocks,
                 isStreaming = isRunning && !isWaitingInteraction
             )
-            baseTurns + activeTurn
+            if (existingAssistantIdx >= 0) {
+                baseTurns.toMutableList().apply {
+                    set(existingAssistantIdx, activeTurn)
+                }
+            } else {
+                baseTurns + activeTurn
+            }
         } else {
             baseTurns
         }
