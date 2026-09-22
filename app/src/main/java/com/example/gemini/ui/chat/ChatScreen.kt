@@ -480,14 +480,18 @@ fun ChatScreen(
         }
     }
 
-    // Smart auto-scroll during streaming: follows live stream smoothly
+    // Smart auto-scroll during streaming & tool execution: follows live stream and tool calls smoothly
     val lastMsg = messages.lastOrNull()
     val lastContentLen = lastMsg?.content?.length ?: 0
     val lastThoughtLen = lastMsg?.thoughtText?.length ?: 0
-    val contentBucket = (lastContentLen + lastThoughtLen) / 50
+    val lastToolCalls = lastMsg?.toolCalls.orEmpty()
+    val toolCallsCount = lastToolCalls.size
+    val toolCallsPayloadLen = lastToolCalls.sumOf { it.command.length + it.output.length + it.status.length }
+    val contentBucket = (lastContentLen + lastThoughtLen + toolCallsPayloadLen) / 30
+    val isRunningOrStreaming = isStreaming || (currentConv?.isRunning == true) || (lastMsg?.isStreaming == true)
 
-    LaunchedEffect(feedItems.size, contentBucket, isStreaming) {
-        if (feedItems.isNotEmpty() && isStreaming && shouldAutoScroll && !listState.isScrollInProgress) {
+    LaunchedEffect(feedItems.size, contentBucket, toolCallsCount, isRunningOrStreaming) {
+        if (feedItems.isNotEmpty() && isRunningOrStreaming && shouldAutoScroll && !listState.isScrollInProgress) {
             listState.scrollToItem(maxOf(0, feedItems.size - 1))
         }
     }
