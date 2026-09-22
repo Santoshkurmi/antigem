@@ -1208,162 +1208,185 @@ fun ChatScreen(
                             }
                         }
                     }
-                }
 
-                // Slash Commands & Skills Autocomplete Suggestions when user types /
-                val slashIndex = inputText.lastIndexOf('/')
-                val isSlashCommand = slashIndex == 0 || (slashIndex > 0 && inputText.getOrNull(slashIndex - 1)?.isWhitespace() == true)
-                val isSlashActive = isSlashCommand && !inputText.substring(slashIndex).contains(" ")
-                val slashQuery = if (isSlashActive) inputText.substring(slashIndex + 1) else ""
+                    // Floating Slash Commands & Skills Autocomplete Suggestions
+                    val slashIndex = inputText.lastIndexOf('/')
+                    val isSlashCommand = slashIndex == 0 || (slashIndex > 0 && inputText.getOrNull(slashIndex - 1)?.isWhitespace() == true)
+                    val isSlashActive = isSlashCommand && !inputText.substring(slashIndex).contains(" ")
+                    val slashQuery = if (isSlashActive) inputText.substring(slashIndex + 1) else ""
 
-                val slashSuggestions = remember(slashQuery, allSlashCommands, isSlashActive) {
-                    if (!isSlashActive || allSlashCommands.isEmpty()) emptyList()
-                    else {
-                        allSlashCommands.filter { item ->
-                            slashQuery.isBlank() ||
-                            item.name.contains(slashQuery, ignoreCase = true) ||
-                            item.command.removePrefix("/").contains(slashQuery, ignoreCase = true) ||
-                            item.description.contains(slashQuery, ignoreCase = true)
-                        }.take(6)
+                    val slashSuggestions = remember(slashQuery, allSlashCommands, isSlashActive) {
+                        if (!isSlashActive || allSlashCommands.isEmpty()) emptyList()
+                        else {
+                            allSlashCommands.filter { item ->
+                                slashQuery.isBlank() ||
+                                item.name.contains(slashQuery, ignoreCase = true) ||
+                                item.command.removePrefix("/").contains(slashQuery, ignoreCase = true) ||
+                                item.description.contains(slashQuery, ignoreCase = true)
+                            }
+                        }
                     }
-                }
 
-                if (slashSuggestions.isNotEmpty()) {
-                    Surface(
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = slashSuggestions.isNotEmpty(),
+                        enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+                        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom),
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.4f)),
-                        shadowElevation = 6.dp
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
-                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                            slashSuggestions.forEach { item ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            val before = inputText.substring(0, slashIndex)
-                                            val newText = "$before${item.command} "
-                                            val tfv = TextFieldValue(
-                                                text = newText,
-                                                selection = androidx.compose.ui.text.TextRange(newText.length)
-                                            )
-                                            textFieldValue = tfv
-                                            viewModel.setDraft(activeConversationKey, tfv)
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = if (item.type == "command") Icons.Default.Bolt else Icons.Default.Extension,
-                                        contentDescription = null,
-                                        tint = if (item.type == "command") ClaudeTerracotta else QuotaGreen,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = item.command,
-                                                fontSize = 13.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                fontFamily = FontFamily.Monospace,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Surface(
-                                                shape = RoundedCornerShape(4.dp),
-                                                color = if (item.type == "command") ClaudeTerracotta.copy(alpha = 0.15f) else QuotaGreen.copy(alpha = 0.15f)
-                                            ) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.4f)),
+                            shadowElevation = 8.dp,
+                            tonalElevation = 6.dp
+                        ) {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 240.dp)
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                items(slashSuggestions, key = { item -> "${item.type}_${item.command}" }) { item ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                val before = inputText.substring(0, slashIndex)
+                                                val newText = "$before${item.command} "
+                                                val tfv = TextFieldValue(
+                                                    text = newText,
+                                                    selection = TextRange(newText.length)
+                                                )
+                                                textFieldValue = tfv
+                                                viewModel.setDraft(activeConversationKey, tfv)
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = if (item.type == "command") Icons.Default.Bolt else Icons.Default.Extension,
+                                            contentDescription = null,
+                                            tint = if (item.type == "command") ClaudeTerracotta else QuotaGreen,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Text(
-                                                    text = (item.pluginName ?: item.type).uppercase(),
-                                                    fontSize = 9.sp,
+                                                    text = item.command,
+                                                    fontSize = 13.5.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = if (item.type == "command") ClaudeTerracotta else QuotaGreen,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    fontFamily = FontFamily.Monospace,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = if (item.type == "command") ClaudeTerracotta.copy(alpha = 0.15f) else QuotaGreen.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = (item.pluginName ?: item.type).uppercase(),
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (item.type == "command") ClaudeTerracotta else QuotaGreen,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
+                                            if (item.description.isNotBlank()) {
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = item.description,
+                                                    fontSize = 11.5.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
                                             }
-                                        }
-                                        if (item.description.isNotBlank()) {
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                text = item.description,
-                                                fontSize = 11.5.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                // File Autocomplete Suggestions when user types @
-                val atIndex = inputText.lastIndexOf('@')
-                val isAtMentioning = atIndex >= 0 && (atIndex == inputText.length - 1 || !inputText.substring(atIndex + 1).contains(" "))
-                val atQuery = if (atIndex >= 0 && atIndex < inputText.length) inputText.substring(atIndex + 1) else ""
+                    // Floating File Autocomplete Suggestions when user types @
+                    val atIndex = inputText.lastIndexOf('@')
+                    val isAtMentioning = atIndex >= 0 && (atIndex == inputText.length - 1 || !inputText.substring(atIndex + 1).contains(" "))
+                    val atQuery = if (atIndex >= 0 && atIndex < inputText.length) inputText.substring(atIndex + 1) else ""
 
-                val fileSuggestions = remember(atQuery, chatProjectFiles, isAtMentioning) {
-                    if (!isAtMentioning || chatProjectFiles.isEmpty()) emptyList()
-                    else {
-                        chatProjectFiles.filter { file ->
-                            !file.isDir && (atQuery.isBlank() || file.name.contains(atQuery, ignoreCase = true) || file.path.contains(atQuery, ignoreCase = true))
-                        }.take(5)
+                    val fileSuggestions = remember(atQuery, chatProjectFiles, isAtMentioning) {
+                        if (!isAtMentioning || chatProjectFiles.isEmpty()) emptyList()
+                        else {
+                            chatProjectFiles.filter { file ->
+                                !file.isDir && (atQuery.isBlank() || file.name.contains(atQuery, ignoreCase = true) || file.path.contains(atQuery, ignoreCase = true))
+                            }
+                        }
                     }
-                }
 
-                if (fileSuggestions.isNotEmpty()) {
-                    Surface(
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = fileSuggestions.isNotEmpty(),
+                        enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+                        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom),
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
-                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                            fileSuggestions.forEach { file ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            val newText = inputText.substring(0, atIndex) + "@${file.path} "
-                                            val tfv = TextFieldValue(
-                                                text = newText,
-                                                selection = androidx.compose.ui.text.TextRange(newText.length)
-                                            )
-                                            textFieldValue = tfv
-                                            viewModel.setDraft(activeConversationKey, tfv)
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Description,
-                                        contentDescription = null,
-                                        tint = ClaudeTerracotta,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = file.name,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = file.path,
-                                        fontSize = 11.sp,
-                                        color = Color.Gray,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                            shadowElevation = 8.dp,
+                            tonalElevation = 6.dp
+                        ) {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 220.dp)
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                items(fileSuggestions, key = { file -> file.path }) { file ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                val newText = inputText.substring(0, atIndex) + "@${file.path} "
+                                                val tfv = TextFieldValue(
+                                                    text = newText,
+                                                    selection = TextRange(newText.length)
+                                                )
+                                                textFieldValue = tfv
+                                                viewModel.setDraft(activeConversationKey, tfv)
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Description,
+                                            contentDescription = null,
+                                            tint = ClaudeTerracotta,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = file.name,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = file.path,
+                                            fontSize = 11.sp,
+                                            color = Color.Gray,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
                         }
