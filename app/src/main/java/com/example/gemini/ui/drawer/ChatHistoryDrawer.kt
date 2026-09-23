@@ -57,11 +57,11 @@ import coil.request.ImageRequest
 import com.example.gemini.data.remote.AgyHubClient
 import com.example.gemini.domain.model.Conversation
 import com.example.gemini.theme.ClaudeTerracotta
+import com.example.gemini.ui.components.DrawerEngineWarmingUpView
 import com.example.gemini.ui.components.SidebarChatListSkeleton
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlinx.coroutines.launch
 
 @Composable
 fun ChatHistoryDrawer(
@@ -70,6 +70,7 @@ fun ChatHistoryDrawer(
     activeInstances: List<com.example.gemini.data.remote.AgyActiveInstance> = emptyList(),
     isLoading: Boolean = false,
     hasReceivedInitialSync: Boolean = false,
+    isHubOnline: Boolean = true,
     errorMessage: String? = null,
     isStreaming: Boolean = false,
     authInfo: AgyHubClient.AgyAuthInfo = AgyHubClient.AgyAuthInfo(),
@@ -576,10 +577,12 @@ fun ChatHistoryDrawer(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            val isEngineConnecting = !isHubOnline && conversations.isEmpty()
             val showSkeleton = (!hasReceivedInitialSync || isLoading) && conversations.isEmpty() && errorMessage.isNullOrBlank()
 
             Crossfade(
                 targetState = when {
+                    isEngineConnecting -> "engine_warming"
                     showSkeleton -> "loading"
                     !errorMessage.isNullOrBlank() && conversations.isEmpty() -> "error"
                     filtered.isEmpty() -> "empty"
@@ -591,6 +594,9 @@ fun ChatHistoryDrawer(
                     .fillMaxWidth()
             ) { state ->
                 when (state) {
+                    "engine_warming" -> {
+                        DrawerEngineWarmingUpView()
+                    }
                     "loading" -> {
                         SidebarChatListSkeleton()
                     }

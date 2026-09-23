@@ -578,6 +578,7 @@ fun ChatScreen(
                 activeInstances = activeInstances,
                 isLoading = isConversationsLoading,
                 hasReceivedInitialSync = hasReceivedInitialSync,
+                isHubOnline = hubStatus.status == "online",
                 errorMessage = conversationError,
                 isStreaming = isStreaming,
                 groupByWorkspace = groupChatsByWorkspace,
@@ -879,7 +880,9 @@ fun ChatScreen(
                         .fillMaxWidth()
                 ) {
                     val isServerInitializing = (hubStatus.status == "starting" || (isLocalRunning && hubStatus.status != "online"))
-                    if ((isLoadingConversation || isServerInitializing) && messages.isEmpty()) {
+                    if (isServerInitializing && messages.isEmpty()) {
+                        com.example.gemini.ui.components.EngineWarmingUpView()
+                    } else if (isLoadingConversation && messages.isEmpty()) {
                         com.example.gemini.ui.components.ConversationLoadingSkeleton()
                     } else if (!conversationError.isNullOrBlank() && messages.isEmpty() && currentConv?.title != "New Chat" && conversations.any { it.id == currentConv?.id }) {
                         Column(
