@@ -5,8 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
@@ -72,24 +72,20 @@ func resolveAgyBinary() string {
 	return "agy"
 }
 
-// isHubReady probes the AGY language server RPC endpoint to verify it is actually up and serving.
+// isHubReady probes if port 8090 is active and accepting connections, logging probe details for debugging
 func (m *HubManager) isHubReady() bool {
-	client := &http.Client{
-		Timeout: 500 * time.Millisecond,
-	}
-	req, err := http.NewRequest("POST", fmt.Sprintf("http://127.0.0.1:%s/exa.language_server_pb.LanguageServerService/GetAuthStatus", m.HubPort), strings.NewReader("{}"))
+	start := time.Now()
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+m.HubPort, 400*time.Millisecond)
+	elapsed := time.Since(start)
+
 	if err != nil {
+		log.Printf("\033[90m[Hub Probe] 127.0.0.1:%s -> Not connected (%v in %v) | Assumed state: offline\033[0m", m.HubPort, err, elapsed)
 		return false
 	}
-	req.Header.Set("Content-Type", "application/grpc-web+json")
-	req.Header.Set("x-grpc-web", "1")
+	_ = conn.Close()
 
-	resp, err := client.Do(req)
-	if err == nil {
-		_ = resp.Body.Close()
-		return resp.StatusCode == http.StatusOK
-	}
-	return false
+	log.Printf("\033[32m[Hub Probe] 127.0.0.1:%s -> TCP Connected OK in %v | Assumed state: ONLINE\033[0m", m.HubPort, elapsed)
+	return true
 }
 
 // GetStatusInfo returns the current status, last error, and captured logs.
@@ -102,25 +98,56 @@ func (m *HubManager) GetStatusInfo() (string, string, []string) {
 }
 
 func (m *HubManager) setStatus(status string, errorMsg string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.setStatusLocked(status, errorMsg)
+}
+
+func (m *HubManager) setStatusLocked(status string, errorMsg string) {
+	oldStatus := m.status
 	m.status = status
 	m.lastError = errorMsg
 	cb := m.OnStatusChange
 	logsCopy := make([]string, len(m.recentLogs))
 	copy(logsCopy, m.recentLogs)
 
+	log.Printf("\033[1;36m[Hub State Update]\033[0m Transition: '%s' -> '%s' (err: '%s')", oldStatus, status, errorMsg)
+
 	if cb != nil {
 		go cb(status, errorMsg, logsCopy)
 	}
 }
 
+// StartContinuousMonitor actively checks AGY Hub state every 2 seconds in the background and broadcasts updates.
+func (m *HubManager) StartContinuousMonitor() {
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			active := m.isHubReady()
+			m.mu.Lock()
+			currentStatus := m.status
+			if active {
+				if currentStatus != HubStatusOnline {
+					m.isRunning = true
+					m.setStatusLocked(HubStatusOnline, "")
+					log.Printf("\033[1;32m[Hub Monitor]\033[0m ✅ AGY Hub detected ONLINE on http://127.0.0.1:%s", m.HubPort)
+				}
+			} else {
+				if currentStatus == HubStatusOnline {
+					m.isRunning = false
+					m.setStatusLocked(HubStatusStopped, "")
+					log.Printf("\033[1;33m[Hub Monitor]\033[0m ⚠️ AGY Hub port %s became unreachable -> marked STOPPED", m.HubPort)
+				}
+			}
+			m.mu.Unlock()
+		}
+	}()
+}
+
 // IsPortActive checks if the hub port is currently listening.
 func (m *HubManager) IsPortActive() bool {
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+m.HubPort, 300*time.Millisecond)
-	if err == nil {
-		_ = conn.Close()
-		return true
-	}
-	return false
+	return m.isHubReady()
 }
 
 // IsRunning reports whether the hub process is active.
@@ -137,13 +164,13 @@ func (m *HubManager) Start() error {
 	if m.isHubReady() {
 		m.isRunning = true
 		m.isExternal = true
-		m.setStatus(HubStatusOnline, "")
+		m.setStatusLocked(HubStatusOnline, "")
 		m.mu.Unlock()
 		fmt.Printf(" \033[32m[✓]\033[0m AGY Hub is already active and listening on http://127.0.0.1:%s\n", m.HubPort)
 		return nil
 	}
 
-	m.setStatus(HubStatusStarting, "")
+	m.setStatusLocked(HubStatusStarting, "")
 
 	args := []string{
 		"--hub",
