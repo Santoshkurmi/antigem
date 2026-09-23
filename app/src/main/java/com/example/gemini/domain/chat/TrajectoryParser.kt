@@ -225,10 +225,17 @@ object TrajectoryParser {
                             turnStepTexts[stepIndex] = if (existing != null) "$existing\n\n$marker" else marker
                         }
                     } else {
-                        val stepErr = extractStepError(step)
-                        if (stepErr != null) {
+                        val stepErrJson = extractStepErrorJson(step, stepIndex)
+                        if (stepErrJson != null) {
+                            val marker = "<!-- error:$stepIndex -->\n$stepErrJson\n<!-- /error -->"
                             val existing = turnStepTexts[stepIndex]
-                            turnStepTexts[stepIndex] = if (existing != null) "$existing\n\n⚠️ $stepErr" else "⚠️ $stepErr"
+                            turnStepTexts[stepIndex] = if (existing != null) "$existing\n\n$marker" else marker
+                        } else {
+                            val stepErr = extractStepError(step)
+                            if (stepErr != null) {
+                                val existing = turnStepTexts[stepIndex]
+                                turnStepTexts[stepIndex] = if (existing != null) "$existing\n\n⚠️ $stepErr" else "⚠️ $stepErr"
+                            }
                         }
                     }
                 }
@@ -798,6 +805,50 @@ object TrajectoryParser {
         }
 
         return null
+    }
+
+    /**
+     * Extracts structured error JSON payload from a trajectory step if present.
+     */
+    fun extractStepErrorJson(step: JSONObject, stepIndex: Int): String? {
+        val errMsgObj = step.optJSONObject("errorMessage")
+        val errObj = errMsgObj?.optJSONObject("error") ?: step.optJSONObject("error")
+        val plannerErr = step.optJSONObject("plannerResponse")?.optJSONObject("error")
+        val stepType = step.optString("type", "")
+        val isErrorStep = errMsgObj != null || step.has("error") || plannerErr != null || stepType.contains("ERROR", ignoreCase = true)
+
+        if (!isErrorStep && errObj == null && plannerErr == null) {
+            return null
+        }
+
+        val target = errObj ?: plannerErr ?: step
+        val userError = target.optString("userErrorMessage", "").takeIf { it.isNotBlank() }
+            ?: if (stepType.contains("AUTH", ignoreCase = true)) "Authentication Required" else "Agent Execution Error"
+        val shortError = target.optString("shortError", "").takeIf { it.isNotBlank() }
+            ?: target.optString("message", "").takeIf { it.isNotBlank() }
+            ?: target.optString("modelErrorMessage", "").takeIf { it.isNotBlank() }
+            ?: ""
+        val fullError = target.optString("fullError", "").takeIf { it.isNotBlank() } ?: ""
+        val errorCode = if (target.has("errorCode")) target.optInt("errorCode") else if (target.has("code")) target.optInt("code") else null
+        val errorId = target.optString("errorId", "")
+
+        val title = when {
+            shortError.contains("auth", ignoreCase = true) || userError.contains("auth", ignoreCase = true) -> "Authentication Required"
+            shortError.contains("quota", ignoreCase = true) || shortError.contains("credit", ignoreCase = true) || errorCode == 429 -> "Quota / Usage Limit Exceeded"
+            shortError.contains("model not found", ignoreCase = true) || shortError.contains("unknown model", ignoreCase = true) -> "Model Configuration Error"
+            shortError.contains("network", ignoreCase = true) || shortError.contains("connect", ignoreCase = true) -> "Network / Server Connection Error"
+            else -> "Agent Execution Error"
+        }
+
+        return JSONObject().apply {
+            put("title", title)
+            put("userMessage", userError)
+            put("shortError", shortError)
+            put("fullError", fullError)
+            if (errorCode != null) put("errorCode", errorCode)
+            if (errorId.isNotBlank()) put("errorId", errorId)
+            if (fullError.isBlank() && errObj != null) put("rawJson", errObj.toString())
+        }.toString()
     }
 
     /**

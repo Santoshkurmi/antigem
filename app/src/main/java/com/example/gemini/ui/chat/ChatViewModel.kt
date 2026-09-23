@@ -2124,6 +2124,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     if (startRes.isFailure) {
                         val err = startRes.exceptionOrNull()?.message ?: "Failed to start conversation on daemon"
                         Log.e("ChatViewModel", "startCascade error: $err")
+                        val formattedErr = formatStructuredErrorMessage(
+                            title = if (err.contains("auth", ignoreCase = true)) "Authentication Required" else "Failed to Start Conversation",
+                            userMessage = err,
+                            shortError = err
+                        )
                         withContext(Dispatchers.Main) {
                             isPromptInFlight = false
                             _isStreaming.value = false
@@ -2131,7 +2136,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             trajectoryEngine.cancelRunning()
                             updateAssistantMessage(
                                 msgId = assistantMsgId,
-                                content = "⚠️ $err",
+                                content = formattedErr,
                                 isStreaming = false,
                                 forceImmediate = true
                             )
@@ -2212,6 +2217,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     val err = sendRes.exceptionOrNull()?.message ?: "Failed to send message"
                     Log.e("ChatViewModel", "sendUserPrompt final error: $err")
+                    val formattedErr = formatStructuredErrorMessage(
+                        title = when {
+                            err.contains("auth", ignoreCase = true) -> "Authentication Required"
+                            err.contains("quota", ignoreCase = true) || err.contains("credit", ignoreCase = true) || err.contains("429") -> "Quota Limit Exceeded"
+                            err.contains("model not found", ignoreCase = true) -> "Model Not Found"
+                            err.contains("connect", ignoreCase = true) || err.contains("network", ignoreCase = true) -> "Server Connection Error"
+                            else -> "Message Delivery Error"
+                        },
+                        userMessage = err,
+                        shortError = err
+                    )
                     withContext(Dispatchers.Main) {
                         _isServerOnline.value = false
                         isPromptInFlight = false
@@ -2220,7 +2236,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         trajectoryEngine.cancelRunning()
                         updateAssistantMessage(
                             msgId = assistantMsgId,
-                            content = "⚠️ $err",
+                            content = formattedErr,
                             isStreaming = false,
                             forceImmediate = true
                         )
@@ -2228,6 +2244,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "sendUserPrompt exception: ${e.message}", e)
+                val formattedErr = formatStructuredErrorMessage(
+                    title = "Execution Failure",
+                    userMessage = e.message ?: "Unknown error",
+                    shortError = e.message ?: "",
+                    fullError = e.stackTraceToString()
+                )
                 withContext(Dispatchers.Main) {
                     _isServerOnline.value = false
                     isPromptInFlight = false
@@ -2236,12 +2258,35 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     trajectoryEngine.cancelRunning()
                     updateAssistantMessage(
                         msgId = assistantMsgId,
-                        content = "⚠️ ${e.message}",
+                        content = formattedErr,
                         isStreaming = false,
                         forceImmediate = true
                     )
                 }
             }
+        }
+    }
+
+    private fun formatStructuredErrorMessage(
+        title: String,
+        userMessage: String,
+        shortError: String = "",
+        fullError: String = "",
+        errorCode: Int? = null,
+        errorId: String = ""
+    ): String {
+        return try {
+            val json = org.json.JSONObject().apply {
+                put("title", title)
+                put("userMessage", userMessage)
+                put("shortError", shortError.ifBlank { userMessage })
+                put("fullError", fullError)
+                if (errorCode != null) put("errorCode", errorCode)
+                if (errorId.isNotBlank()) put("errorId", errorId)
+            }.toString()
+            "<!-- error -->\n$json\n<!-- /error -->"
+        } catch (_: Exception) {
+            "⚠️ $title: $userMessage"
         }
     }
 

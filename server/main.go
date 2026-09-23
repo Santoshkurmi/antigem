@@ -160,6 +160,7 @@ func main() {
 	// REST Endpoints
 	mux.HandleFunc("/api/health", h.HealthHandler)
 	mux.HandleFunc("/api/status", h.StatusHandler)
+	mux.HandleFunc("/api/shutdown", h.ShutdownHandler)
 	mux.HandleFunc("/api/auth/login-url", h.GetLoginURLHandler)
 	mux.HandleFunc("/api/auth/start-login", h.StartLoginHandler)
 	mux.HandleFunc("/api/models", h.ModelsHandler)
@@ -371,6 +372,14 @@ func main() {
 
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+
+	h.OnShutdown = func() {
+		log.Println("🛑 Received /api/shutdown request. Initiating graceful shutdown...")
+		select {
+		case stopChan <- syscall.SIGTERM:
+		default:
+		}
+	}
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

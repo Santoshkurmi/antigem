@@ -135,6 +135,16 @@ func main() {
 		w.Write([]byte(`{"status":"ok","version":"1.0.0"}`))
 	}))
 
+	// 1.0 Shutdown
+	http.HandleFunc("/api/shutdown", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"Server shutting down..."}`))
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			os.Exit(0)
+		}()
+	}))
+
 	// 1.1 Auth Login URL placeholder
 	http.HandleFunc("/api/auth/login-url", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

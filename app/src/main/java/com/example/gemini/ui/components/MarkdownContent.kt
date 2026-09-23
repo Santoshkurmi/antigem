@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckBox
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -56,6 +58,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import ru.noties.jlatexmath.JLatexMathDrawable
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.LineHeightStyle
@@ -82,6 +88,16 @@ sealed class MarkdownBlock {
     data class AgentThought(val thought: String, val durationMs: Long? = null, val isStreaming: Boolean = false) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class AgentTool(val toolCall: com.example.gemini.domain.model.ToolCall) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
+    data class AgentError(
+        val title: String = "Error",
+        val userMessage: String = "",
+        val shortError: String = "",
+        val fullError: String = "",
+        val errorCode: Int? = null,
+        val errorId: String = "",
+        val rawJson: String = ""
+    ) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class Header(val level: Int, val text: String) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
@@ -139,6 +155,9 @@ fun MarkdownBlockView(
                 onSkipChoices = onSkipChoices,
                 modifier = modifier
             )
+        }
+        is MarkdownBlock.AgentError -> {
+            AgentErrorCard(error = block, modifier = modifier)
         }
         is MarkdownBlock.InteractiveUi -> {
             InteractiveUiView(htmlCode = block.htmlCode, title = block.title, modifier = modifier)
@@ -892,6 +911,188 @@ fun MarkdownDetailsView(
 }
 
 /**
+ * Polished Error Card rendering structured model/system/network/auth errors with user summary,
+ * error code badges, and an expandable verbose/JSON stack trace accordion with copy-to-clipboard.
+ */
+@Composable
+fun AgentErrorCard(
+    error: MarkdownBlock.AgentError,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var isExpanded by remember { mutableStateOf(false) }
+    val isDark = isAppInDarkTheme()
+
+    val cardBg = if (isDark) Color(0xFF2A1515) else Color(0xFFFDECEC)
+    val cardBorder = if (isDark) Color(0xFF742A2A) else Color(0xFFF5C2C2)
+    val errorColor = if (isDark) Color(0xFFFF6B6B) else Color(0xFFD32F2F)
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = cardBg,
+        border = BorderStroke(1.dp, cardBorder)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            // Header Row: Icon, Title, Error Code pill, Copy Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ErrorOutline,
+                    contentDescription = "Error",
+                    tint = errorColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = error.title.ifBlank { "Agent Execution Error" },
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = errorColor
+                )
+                if (error.errorCode != null && error.errorCode != 0) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = errorColor.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "Code: ${error.errorCode}",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = errorColor,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+
+                IconButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val copyText = buildString {
+                            appendLine("Error: ${error.title}")
+                            if (error.userMessage.isNotBlank()) appendLine("Message: ${error.userMessage}")
+                            if (error.shortError.isNotBlank()) appendLine("Detail: ${error.shortError}")
+                            if (error.errorCode != null) appendLine("Code: ${error.errorCode}")
+                            if (error.errorId.isNotBlank()) appendLine("ID: ${error.errorId}")
+                            if (error.fullError.isNotBlank()) appendLine("\nFull Trace:\n${error.fullError}")
+                            if (error.rawJson.isNotBlank()) appendLine("\nRaw JSON:\n${error.rawJson}")
+                        }.trim()
+                        val clip = ClipData.newPlainText("Error Details", copyText)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, "Error details copied to clipboard", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ContentCopy,
+                        contentDescription = "Copy Error Details",
+                        tint = errorColor.copy(alpha = 0.7f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
+            // User message / short error
+            if (error.userMessage.isNotBlank() && error.userMessage != error.title) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = error.userMessage,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                    lineHeight = 18.sp
+                )
+            }
+
+            if (error.shortError.isNotBlank() && error.shortError != error.userMessage) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = error.shortError,
+                    fontSize = 12.5.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    lineHeight = 17.sp
+                )
+            }
+
+            // Full Error / Stack Trace / JSON Accordion if present
+            val hasVerboseDetails = error.fullError.isNotBlank() || error.rawJson.isNotBlank() || error.errorId.isNotBlank()
+            if (hasVerboseDetails) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { isExpanded = !isExpanded }
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ExpandMore,
+                        contentDescription = if (isExpanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier
+                            .size(16.dp)
+                            .rotate(if (isExpanded) 180f else 0f)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (isExpanded) "Hide Error Details & Stack Trace" else "View Error Details & Stack Trace",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = isExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isDark) Color(0xFF1E1010) else Color(0xFFF7E2E2))
+                            .padding(8.dp)
+                    ) {
+                        if (error.errorId.isNotBlank()) {
+                            Text(
+                                text = "Error ID: ${error.errorId}",
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                        val verboseText = error.fullError.ifBlank { error.rawJson }
+                        SelectionContainer {
+                            Text(
+                                text = verboseText,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * Renders an Image in Markdown using Coil with rounded corners and full-screen viewer.
  */
 @Composable
@@ -1609,6 +1810,8 @@ private fun buildRichAnnotatedString(
  */
 private val THOUGHT_START_REGEX = Regex("<(?:!--\\s*)?thought(?:[:\\s]+(streaming))?(?:[:\\s]+(?:duration=)?[\"']?([0-9]+)[\"']?)?(?:\\s*--)?>", RegexOption.IGNORE_CASE)
 private val THOUGHT_END_REGEX = Regex("<(?:!--\\s*)?/thought(?:\\s*--)?>", RegexOption.IGNORE_CASE)
+private val ERROR_START_REGEX = Regex("<(?:!--\\s*)?error(?:[:\\s]+([a-zA-Z0-9_-]+))?(?:\\s*--)?>", RegexOption.IGNORE_CASE)
+private val ERROR_END_REGEX = Regex("<(?:!--\\s*)?/error(?:\\s*--)?>", RegexOption.IGNORE_CASE)
 private val TOOL_TAG_PATTERN = Regex("<\\s*(tool_call|execute_command|web_search|read_url|ask_choices|user_choice|tool_|execute_|web_|read_|ask_|user_)", RegexOption.IGNORE_CASE)
 private val TOOL_MARKER_REGEX = Regex("<!--\\s*tool_call:([a-zA-Z0-9_-]+)\\s*-->")
 private val UNIFIED_TOOL_REGEX = Regex("<tool_call\\s+name=[\"']?([a-zA-Z0-9_-]+)[\"']?\\s*>([\\s\\S]*?)</tool_call>", RegexOption.IGNORE_CASE)
@@ -1618,6 +1821,43 @@ private val WEB_SEARCH_REGEX = Regex("<web_search>([\\s\\S]*?)</web_search>")
 private val READ_URL_REGEX = Regex("<read_url>([\\s\\S]*?)</read_url>")
 private val CHAT_TITLE_REGEX = Regex("<chat_title>[\\s\\S]*?</chat_title>\\s*", RegexOption.IGNORE_CASE)
 private val INFLIGHT_CHAT_TITLE_REGEX = Regex("<\\s*chat_title[\\s\\S]*", RegexOption.IGNORE_CASE)
+
+private fun parseErrorPayloadToBlock(raw: String): MarkdownBlock.AgentError {
+    try {
+        val trimmed = raw.trim()
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            val json = Json.parseToJsonElement(trimmed).jsonObject
+            val title = json["title"]?.jsonPrimitive?.content ?: "Agent Execution Error"
+            val userMessage = json["userMessage"]?.jsonPrimitive?.content ?: ""
+            val shortError = json["shortError"]?.jsonPrimitive?.content ?: ""
+            val fullError = json["fullError"]?.jsonPrimitive?.content ?: ""
+            val errorCode = json["errorCode"]?.jsonPrimitive?.intOrNull
+            val errorId = json["errorId"]?.jsonPrimitive?.content ?: ""
+            val rawJson = json["rawJson"]?.jsonPrimitive?.content ?: ""
+            return MarkdownBlock.AgentError(
+                title = title,
+                userMessage = userMessage,
+                shortError = shortError,
+                fullError = fullError,
+                errorCode = errorCode,
+                errorId = errorId,
+                rawJson = rawJson
+            )
+        }
+    } catch (_: Exception) {}
+
+    val clean = raw.removePrefix("⚠️").trim()
+    val lines = clean.lines()
+    val firstLine = lines.firstOrNull() ?: "Agent Execution Error"
+    val rest = if (lines.size > 1) lines.drop(1).joinToString("\n").trim() else ""
+    val isStackOrTrace = rest.contains("stack trace", ignoreCase = true) || rest.contains("Wraps:", ignoreCase = true)
+    return MarkdownBlock.AgentError(
+        title = if (firstLine.length < 50 && !firstLine.contains('\n')) firstLine else "Execution Notice",
+        userMessage = if (firstLine.length >= 50) firstLine else (if (rest.isNotBlank() && !isStackOrTrace) rest else firstLine),
+        shortError = if (rest.isNotBlank() && !isStackOrTrace) rest else (if (firstLine.length >= 50) firstLine else ""),
+        fullError = if (isStackOrTrace) rest else (if (clean.contains("stack trace", ignoreCase = true)) clean else "")
+    )
+}
 
 fun parseMarkdownBlocks(
     rawText: String,
@@ -1636,8 +1876,44 @@ fun parseMarkdownBlocks(
     while (i < lines.size) {
         val line = lines[i]
 
-        // Fast-path for tool tags & thoughts
+        // Fast-path for tool tags, errors & thoughts
         if (line.contains('<')) {
+            // -0.5. Structured Agent Error Block <!-- error -->...<!-- /error -->
+            val errorStartMatch = ERROR_START_REGEX.find(line)
+            if (errorStartMatch != null) {
+                val errorLines = mutableListOf<String>()
+                if (line.contains("</error>", ignoreCase = true) || line.contains("<!-- /error -->", ignoreCase = true)) {
+                    val raw = line.replace(ERROR_START_REGEX, "").replace(ERROR_END_REGEX, "").trim()
+                    if (raw.isNotBlank()) {
+                        result.add(parseErrorPayloadToBlock(raw))
+                    }
+                    i++
+                    continue
+                }
+
+                val firstLine = line.replace(ERROR_START_REGEX, "").trim()
+                if (firstLine.isNotBlank()) errorLines.add(firstLine)
+
+                i++
+                while (i < lines.size) {
+                    val curr = lines[i]
+                    if (curr.contains("</error>", ignoreCase = true) || curr.contains("<!-- /error -->", ignoreCase = true)) {
+                        val endContent = curr.replace(ERROR_END_REGEX, "").trim()
+                        if (endContent.isNotBlank()) errorLines.add(endContent)
+                        i++
+                        break
+                    }
+                    errorLines.add(curr)
+                    i++
+                }
+
+                val finalErrorPayload = errorLines.joinToString("\n").trim()
+                if (finalErrorPayload.isNotBlank()) {
+                    result.add(parseErrorPayloadToBlock(finalErrorPayload))
+                }
+                continue
+            }
+
             // -1. Sequential Agent Thought Block <!-- thought -->...<!-- /thought --> or <thought>
             val thoughtStartMatch = THOUGHT_START_REGEX.find(line)
             if (thoughtStartMatch != null) {
@@ -1756,6 +2032,20 @@ fun parseMarkdownBlocks(
                 i++
                 continue
             }
+        }
+
+        // 0.5 Warning notice / fallback error notice starting with ⚠️
+        if (line.trimStart().startsWith("⚠️")) {
+            val errorLines = mutableListOf<String>()
+            errorLines.add(line.trimStart())
+            i++
+            while (i < lines.size && lines[i].isNotBlank() && !lines[i].startsWith('#') && !lines[i].startsWith('<') && !lines[i].startsWith("```") && !lines[i].startsWith("$$")) {
+                errorLines.add(lines[i])
+                i++
+            }
+            val raw = errorLines.joinToString("\n").trim()
+            result.add(parseErrorPayloadToBlock(raw))
+            continue
         }
 
         // 1. Math block starting with $$

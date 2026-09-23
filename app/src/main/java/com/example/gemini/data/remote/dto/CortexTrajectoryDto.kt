@@ -15,6 +15,8 @@ data class AgyStreamFrameDto(
     val mainTrajectoryUpdate: AgyMainTrajectoryUpdateDto? = null,
     val stepsUpdate: AgyStepsUpdateDto? = null,
     val steps: List<CortexStepDto>? = null,
+    val lastStepError: CortexErrorDto? = null,
+    val lastStepType: String = "",
     val conversationId: String = "",
     val trajectoryId: String = "",
     val status: String = "",
@@ -32,6 +34,8 @@ data class AgyMainUpdateDto(
     val executorLoopStatus: String = "",
     val mainTrajectoryUpdate: AgyMainTrajectoryUpdateDto? = null,
     val stepsUpdate: AgyStepsUpdateDto? = null,
+    val lastStepError: CortexErrorDto? = null,
+    val lastStepType: String = "",
     val fullyIdle: Boolean = false
 )
 
@@ -39,6 +43,8 @@ data class AgyMainUpdateDto(
 data class AgyMainTrajectoryUpdateDto(
     val stepsUpdate: AgyStepsUpdateDto? = null,
     val trajectoryId: String = "",
+    val lastStepError: CortexErrorDto? = null,
+    val lastStepType: String = "",
     val generatorMetadatasUpdate: JsonObject? = null,
     val executorMetadatasUpdate: JsonObject? = null
 )
@@ -74,6 +80,7 @@ data class CortexStepDto(
     val taskDetails: CortexTaskDetailsDto? = null,
     val completedInteractions: List<CompletedInteractionDto> = emptyList(),
     val permissions: JsonElement? = null,
+    val errorMessage: CortexErrorMessageDto? = null,
     val error: CortexErrorDto? = null,
 
     // Direct step fields (when step.type != CORTEX_STEP_TYPE_GENERIC)
@@ -209,7 +216,20 @@ data class CortexErrorDto(
     val shortError: String = "",
     val fullError: String = "",
     val message: String = "",
-    val code: Int = 0
+    val userErrorMessage: String = "",
+    val modelErrorMessage: String = "",
+    val code: Int? = null,
+    val errorCode: Int? = null,
+    val errorId: String = "",
+    val details: String = "",
+    val isBenign: Boolean = false,
+    val structuredErrorParts: List<JsonObject> = emptyList()
+)
+
+@Serializable
+data class CortexErrorMessageDto(
+    val error: CortexErrorDto? = null,
+    val shouldShowUser: Boolean = true
 )
 
 // ==========================================

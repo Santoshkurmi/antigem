@@ -76,7 +76,13 @@ sealed interface TurnBlock {
 
     data class ErrorNotice(
         override val stepIndex: Int,
-        val message: String
+        val title: String = "Error",
+        val userMessage: String = "",
+        val shortError: String = "",
+        val fullError: String = "",
+        val errorCode: Int? = null,
+        val errorId: String = "",
+        val rawJson: String = ""
     ) : TurnBlock {
         override val key: String get() = "err_$stepIndex"
     }

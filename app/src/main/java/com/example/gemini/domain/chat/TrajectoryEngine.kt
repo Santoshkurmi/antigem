@@ -170,6 +170,41 @@ class TrajectoryEngine {
             }
         }
 
+        val frameLastStepError = update?.mainTrajectoryUpdate?.lastStepError
+            ?: update?.lastStepError
+            ?: frame.mainTrajectoryUpdate?.lastStepError
+            ?: frame.lastStepError
+
+        if (frameLastStepError != null) {
+            val errStepIdx = activeStepsMap.keys.maxOrNull() ?: activeTurnStartStep
+            val existingStep = activeStepsMap[errStepIdx]
+            if (existingStep != null && (existingStep.errorMessage != null || existingStep.error != null)) {
+                // Enrich existing error step with fullError if missing
+                val curErr = existingStep.errorMessage?.error ?: existingStep.error
+                val baseErr = curErr ?: frameLastStepError
+                val enrichedErr = baseErr.copy(
+                    fullError = if (curErr?.fullError.isNullOrBlank()) frameLastStepError.fullError else curErr.fullError,
+                    shortError = if (curErr?.shortError.isNullOrBlank()) frameLastStepError.shortError else curErr.shortError,
+                    userErrorMessage = if (curErr?.userErrorMessage.isNullOrBlank()) frameLastStepError.userErrorMessage else curErr.userErrorMessage,
+                    errorCode = curErr?.errorCode ?: frameLastStepError.errorCode,
+                    errorId = if (curErr?.errorId.isNullOrBlank()) frameLastStepError.errorId else curErr.errorId
+                )
+                activeStepsMap[errStepIdx] = existingStep.copy(
+                    errorMessage = CortexErrorMessageDto(error = enrichedErr, shouldShowUser = true),
+                    error = enrichedErr
+                )
+            } else if (activeStepsMap.none { (_, s) -> s.errorMessage != null || s.error != null || s.type.contains("ERROR", ignoreCase = true) }) {
+                // Add error step if not already present in active turn
+                val newErrorStep = CortexStepDto(
+                    type = "CORTEX_STEP_TYPE_ERROR_MESSAGE",
+                    status = CortexStepStatuses.DONE,
+                    errorMessage = CortexErrorMessageDto(error = frameLastStepError, shouldShowUser = true),
+                    error = frameLastStepError
+                )
+                activeStepsMap[errStepIdx] = newErrorStep
+            }
+        }
+
         // If a user prompt was optimistically submitted and is in flight to daemon,
         // keep isRunning = true until daemon actually acknowledges or finishes.
         isRunning = daemonRunning || (pendingUserTurn != null)
@@ -483,9 +518,16 @@ class TrajectoryEngine {
                                 }
                             }
                             is TurnBlock.ErrorNotice -> {
-                                if (block.message.isNotBlank()) {
-                                    contentParts.add("⚠️ ${block.message}")
-                                }
+                                val errJson = kotlinx.serialization.json.buildJsonObject {
+                                    put("title", kotlinx.serialization.json.JsonPrimitive(block.title))
+                                    put("userMessage", kotlinx.serialization.json.JsonPrimitive(block.userMessage))
+                                    put("shortError", kotlinx.serialization.json.JsonPrimitive(block.shortError))
+                                    put("fullError", kotlinx.serialization.json.JsonPrimitive(block.fullError))
+                                    if (block.errorCode != null) put("errorCode", kotlinx.serialization.json.JsonPrimitive(block.errorCode))
+                                    if (block.errorId.isNotBlank()) put("errorId", kotlinx.serialization.json.JsonPrimitive(block.errorId))
+                                    if (block.rawJson.isNotBlank()) put("rawJson", kotlinx.serialization.json.JsonPrimitive(block.rawJson))
+                                }.toString()
+                                contentParts.add("<!-- error:${block.stepIndex} -->\n$errJson\n<!-- /error -->")
                             }
                             is TurnBlock.SystemNotice -> {
                                 if (block.content.isNotBlank()) {
@@ -565,7 +607,50 @@ class TrajectoryEngine {
             return
         }
 
-        // 4. Tool / Step execution (including those waiting for permission approval)
+        // 4. Error messages and notices
+        val stepError = step.errorMessage?.error ?: step.error
+        val isErrorType = step.type == CortexStepTypes.ERROR_MESSAGE ||
+                step.type == "CORTEX_STEP_TYPE_ERROR_MESSAGE" ||
+                step.type.contains("ERROR", ignoreCase = true) ||
+                step.status == CortexStepStatuses.ERROR ||
+                step.errorMessage != null ||
+                step.error != null
+
+        if (isErrorType) {
+            val userMsg = stepError?.userErrorMessage?.takeIf { it.isNotBlank() }
+                ?: if (step.type.contains("AUTH", ignoreCase = true)) "Authentication Required" else "Agent Execution Error"
+            val shortErr = stepError?.shortError?.takeIf { it.isNotBlank() }
+                ?: stepError?.message?.takeIf { it.isNotBlank() }
+                ?: stepError?.modelErrorMessage?.takeIf { it.isNotBlank() }
+                ?: ""
+            val fullErr = stepError?.fullError?.takeIf { it.isNotBlank() } ?: ""
+            val code = stepError?.errorCode ?: stepError?.code
+            val errId = stepError?.errorId ?: ""
+
+            val title = when {
+                shortErr.contains("auth", ignoreCase = true) || userMsg.contains("auth", ignoreCase = true) -> "Authentication Required"
+                shortErr.contains("quota", ignoreCase = true) || shortErr.contains("credit", ignoreCase = true) || code == 429 -> "Quota / Usage Limit Exceeded"
+                shortErr.contains("model not found", ignoreCase = true) || shortErr.contains("unknown model", ignoreCase = true) -> "Model Configuration Error"
+                shortErr.contains("network", ignoreCase = true) || shortErr.contains("connect", ignoreCase = true) -> "Network / Server Connection Error"
+                else -> "Agent Execution Error"
+            }
+
+            blocks.add(
+                TurnBlock.ErrorNotice(
+                    stepIndex = stepIndex,
+                    title = title,
+                    userMessage = userMsg,
+                    shortError = shortErr,
+                    fullError = fullErr,
+                    errorCode = code,
+                    errorId = errId,
+                    rawJson = if (fullErr.isBlank() && stepError != null) stepError.toString() else ""
+                )
+            )
+            return
+        }
+
+        // 5. Tool / Step execution (including those waiting for permission approval)
         val toolCall = extractToolCallFromStep(step, stepIndex)
         if (toolCall != null) {
             blocks.add(TurnBlock.Tool(stepIndex = stepIndex, toolCall = toolCall))
@@ -573,14 +658,6 @@ class TrajectoryEngine {
             // Standalone permission request without an associated tool call
             step.requestedInteraction?.let { req ->
                 blocks.add(TurnBlock.Permission(stepIndex = stepIndex, trajectoryId = trajectoryId, interaction = req))
-            }
-        }
-
-        // 5. Error notices
-        if (step.status == CortexStepStatuses.ERROR && step.error != null) {
-            val errMsg = step.error.shortError.ifBlank { step.error.message.ifBlank { step.error.fullError } }
-            if (errMsg.isNotBlank()) {
-                blocks.add(TurnBlock.ErrorNotice(stepIndex = stepIndex, message = errMsg))
             }
         }
     }

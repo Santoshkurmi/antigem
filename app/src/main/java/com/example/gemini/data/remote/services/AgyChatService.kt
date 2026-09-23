@@ -161,6 +161,8 @@ class AgyChatService(
         val payload = JSONObject().apply {
             put("conversationId", cascadeId)
             put("cascadeId", cascadeId)
+            put("subscriberId", UUID.randomUUID().toString())
+            put("trajectoryVerbosity", 2)
         }.toString()
         grpcClient.callStream("StreamAgentStateUpdates", payload, hubUrl).collect { frame ->
             emit(frame)
@@ -177,6 +179,8 @@ class AgyChatService(
         val payload = JSONObject().apply {
             put("conversationId", cascadeId)
             put("cascadeId", cascadeId)
+            put("subscriberId", UUID.randomUUID().toString())
+            put("trajectoryVerbosity", 2)
         }.toString()
         val customHeaders = mapOf("x-conversation-id" to cascadeId)
 

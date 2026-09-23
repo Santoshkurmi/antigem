@@ -37,6 +37,7 @@ type Handler struct {
 	Cfg        *config.Config
 	HubManager *hub.HubManager
 	Hub        Broadcaster
+	OnShutdown func()
 
 	lastLoginURL   string
 	lastLoginURLMu sync.RWMutex
@@ -69,6 +70,20 @@ func (h *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 		"version":   "2.0.0",
 	})
+}
+
+func (h *Handler) ShutdownHandler(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "antiGem Go server is shutting down...",
+	})
+
+	if h.OnShutdown != nil {
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			h.OnShutdown()
+		}()
+	}
 }
 
 func (h *Handler) StatusHandler(w http.ResponseWriter, r *http.Request) {
