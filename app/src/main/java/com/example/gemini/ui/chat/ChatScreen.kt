@@ -223,6 +223,12 @@ fun ChatScreen(
     var showAttachmentSelector by remember { mutableStateOf(false) }
     var showProjectPickerDialog by remember { mutableStateOf(false) }
     var showWorkspaceFolderBrowserDialog by remember { mutableStateOf(false) }
+    var isInitialGracePeriod by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1200)
+        isInitialGracePeriod = false
+    }
 
     LaunchedEffect(showSettingsDialog) {
         if (showSettingsDialog) {
@@ -886,65 +892,50 @@ fun ChatScreen(
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    val isServerInitializing = (hubStatus.status == "starting" || (isLocalRunning && hubStatus.status != "online"))
-                    if (isServerInitializing && messages.isEmpty()) {
-                        com.example.gemini.ui.components.EngineWarmingUpView()
-                    } else if (isLoadingConversation && messages.isEmpty()) {
-                        com.example.gemini.ui.components.ConversationLoadingSkeleton()
-                    } else if (!conversationError.isNullOrBlank() && messages.isEmpty() && currentConv?.title != "New Chat" && conversations.any { it.id == currentConv?.id }) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                    val isHubOnline = hubStatus.status == "online" || (systemConnectionState is com.example.gemini.data.remote.SystemConnectionState.Connected && (systemConnectionState as com.example.gemini.data.remote.SystemConnectionState.Connected).hubStatus == "online")
+                    val isServerInitializing = !isHubOnline && (
+                        isInitialGracePeriod ||
+                        hubStatus.status == "starting" ||
+                        hubStatus.status == "idle" ||
+                        isLocalStarting ||
+                        isLocalRunning ||
+                        serverStatus is com.example.gemini.data.local.LocalServerStatus.Starting ||
+                        serverStatus is com.example.gemini.data.local.LocalServerStatus.Stopping
+                    )
+                    val isServerStopped = !isHubOnline && !isServerInitializing && (
+                        isLocalStopped ||
+                        serverStatus is com.example.gemini.data.local.LocalServerStatus.Stopped ||
+                        systemConnectionState is com.example.gemini.data.remote.SystemConnectionState.Offline ||
+                        hubStatus.status == "stopped"
+                    )
+                    val isExistingChat = messages.isEmpty() && currentConv != null && currentConv?.title != "New Chat" && conversations.any { it.id == currentConv?.id }
+
+                    if (isServerStopped && messages.isEmpty()) {
+                        BoxWithConstraints(
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.CloudOff,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Unable to Load Chat",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = conversationError ?: "",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(
-                                onClick = {
-                                    val convId = currentConv?.id
-                                    if (!convId.isNullOrBlank() && conversations.any { it.id == convId }) {
-                                        viewModel.selectConversation(convId)
-                                    } else {
+                            val minHeight = maxHeight
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .verticalScroll(emptyScrollState)
+                                    .heightIn(min = minHeight)
+                                    .padding(horizontal = 24.dp, vertical = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                com.example.gemini.ui.components.ServerStoppedPromptCard(
+                                    onStartServerClick = {
+                                        com.example.gemini.data.local.LocalServerManager.startServer(context)
                                         viewModel.retryConnections()
                                     }
-                                },
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Retry", fontSize = 13.5.sp)
                             }
                         }
-                    } else if (messages.isEmpty() && conversations.any { it.id == currentConv?.id && it.title != "New Chat" && it.title != "Conversation" }) {
-                        if (hubStatus.status == "online" || isServerInitializing) {
-                            com.example.gemini.ui.components.ConversationLoadingSkeleton()
-                        } else {
+                    } else if (isServerInitializing && messages.isEmpty()) {
+                        com.example.gemini.ui.components.EngineWarmingUpView()
+                    } else if (isExistingChat) {
+                        if (!conversationError.isNullOrBlank() && hubStatus.status != "online" && !isServerInitializing) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -967,7 +958,7 @@ fun ChatScreen(
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "Failed to load messages for \"${currentConv?.title ?: "this conversation"}\". Ensure Antigravity is running and tap Retry.",
+                                    text = conversationError ?: "Failed to load conversation messages.",
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                                     textAlign = TextAlign.Center,
@@ -976,7 +967,12 @@ fun ChatScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Button(
                                     onClick = {
-                                        currentConv?.id?.let { viewModel.selectConversation(it) } ?: viewModel.retryConnections()
+                                        val convId = currentConv?.id
+                                        if (!convId.isNullOrBlank()) {
+                                            viewModel.selectConversation(convId)
+                                        } else {
+                                            viewModel.retryConnections()
+                                        }
                                     },
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
@@ -989,10 +985,13 @@ fun ChatScreen(
                                     Text("Retry", fontSize = 13.5.sp)
                                 }
                             }
+                        } else {
+                            com.example.gemini.ui.components.ConversationLoadingSkeleton()
                         }
                     } else if (messages.isEmpty()) {
-                        // Clean minimal empty state for true New Chat
+                        // Clean minimal empty state for true New Chat (NEVER SHOWS SKELETON LOADER)
                         val isAuth = systemConnectionState.isAuth
+                        val isCheckingAuth = isAuthBusy || agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING
                         BoxWithConstraints(
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -1012,7 +1011,9 @@ fun ChatScreen(
                                     )
                                 }
 
-                                if (!isAuth) {
+                                if (isCheckingAuth) {
+                                    com.example.gemini.ui.components.NewChatCheckingAuthPromptCard()
+                                } else if (!isAuth || !agyAuthInfo.isLoggedIn) {
                                     com.example.gemini.ui.components.NewChatSignInPromptCard(
                                         onSignInClick = { viewModel.loginToAgyHub(force = true) }
                                     )

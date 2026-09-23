@@ -1190,23 +1190,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 1b. Active health watchdog to instantly detect server death if socket remains half-open
-        viewModelScope.launch(Dispatchers.IO) {
-            while (isActive) {
-                delay(2000)
-                if (_isBridgeOnline.value == true || systemConnectionState.value is com.example.gemini.data.remote.SystemConnectionState.Connected) {
-                    val status = agyBridgeService.fetchServerStatus()
-                    if (status == null) {
-                        _isServerOnline.value = false
-                        _isBridgeOnline.value = false
-                        agyBridgeService.resetState()
-                    }
-                }
-            }
-        }
-
-
-
         viewModelScope.launch {
             agyBridgeService.loginUrlEvents.collect { url ->
                 if (url.isNotBlank()) {
@@ -1227,36 +1210,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _selectedModelId.value = initial
             }
             startNewChat()
-
-            // 5-second handshake polling with Go IDE server
-            val initialStatus = withTimeoutOrNull(5000) {
-                while (isActive) {
-                    val st = agyBridgeService.fetchServerStatus()
-                    if (st != null) return@withTimeoutOrNull st
-                    delay(300)
-                }
-                null
-            }
-
-            if (initialStatus != null) {
-                _isBridgeOnline.value = true
-                if (initialStatus.status == "online") {
-                    _isServerOnline.value = true
-                    _conversationError.value = null
-                    syncAgyConversations()
-                    refreshQuotas()
-                    loadMcpServers()
-                } else {
-                    _conversationError.value = null
-                    _isConversationsLoading.value = true
-                    android.util.Log.d("ChatViewModel", "Go IDE server online, waiting for AGY hub status: ${initialStatus.status}")
-                }
-            } else {
-                // Not running Go server or timed out -> attempt standard direct sync
-                syncAgyConversations()
-                refreshQuotas()
-                loadMcpServers()
-            }
         }
 
         viewModelScope.launch {

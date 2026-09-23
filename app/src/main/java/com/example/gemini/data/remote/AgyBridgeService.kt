@@ -362,12 +362,11 @@ class AgyBridgeService(
                     if (!response.isSuccessful) {
                         return@withContext null
                     }
-                    _connectionState.value = BridgeConnectionState.CONNECTED_READY
                     val body = response.body?.string() ?: "{}"
                     val json = JSONObject(body)
                     val hubObj = json.optJSONObject("hub")
                     val st = hubObj?.optString("status", if (hubObj.optBoolean("active", false)) "online" else "stopped") ?: "stopped"
-                    val p = hubObj?.optString("port", "8090") ?: "8090"
+                    val p = java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "8090"
                     val err = hubObj?.optString("error")?.takeIf { it.isNotBlank() }
                     val logsArr = hubObj?.optJSONArray("logs")
                     val logsList = mutableListOf<String>()
@@ -376,19 +375,9 @@ class AgyBridgeService(
                             logsList.add(logsArr.optString(i))
                         }
                     }
-                    val statusObj = AgyHubStatus(status = st, port = p, error = err, logs = logsList)
-                    _hubStatus.value = statusObj
-                    _systemConnectionState.value = SystemConnectionState.Connected(
-                        hubStatus = st,
-                        error = err,
-                        isAuth = currentAuthState
-                    )
-                    statusObj
+                    AgyHubStatus(status = st, port = p, error = err, logs = logsList)
                 }
-            } catch (e: Exception) {
-                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
-                _systemConnectionState.value = SystemConnectionState.Offline
-                _hubStatus.value = AgyHubStatus(status = "stopped")
+            } catch (_: Exception) {
                 null
             }
         }
@@ -402,16 +391,6 @@ class AgyBridgeService(
         val wsListener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 _connectionState.value = BridgeConnectionState.CONNECTED_READY
-                val currentHub = if (_hubStatus.value.status == "stopped") "starting" else _hubStatus.value.status
-                _systemConnectionState.value = SystemConnectionState.Connected(
-                    hubStatus = currentHub,
-                    isAuth = currentAuthState
-                )
-                if (_hubStatus.value.status == "stopped" || _hubStatus.value.status == "idle") {
-                    val startingStatus = AgyHubStatus(status = "starting")
-                    _hubStatus.value = startingStatus
-                    trySend(startingStatus)
-                }
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -419,7 +398,7 @@ class AgyBridgeService(
                     val root = JSONObject(text)
                     if (root.optString("type") == "hub_status") {
                         val st = root.optString("status", "idle")
-                        val p = root.optString("port", "8090")
+                        val p = java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "8090"
                         val err = root.optString("error").takeIf { it.isNotBlank() }
                         val logsArr = root.optJSONArray("logs")
                         val logsList = mutableListOf<String>()
