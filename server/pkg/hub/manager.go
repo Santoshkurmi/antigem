@@ -45,6 +45,7 @@ type HubManager struct {
 	isRunning   bool
 	isExternal  bool
 	processDone chan struct{}
+	monitorStop chan struct{}
 	recentLogs  []string
 	mu          sync.Mutex
 }
@@ -61,6 +62,7 @@ func NewHubManager(hubPort, workspaceDir, appDataDir string) *HubManager {
 		AgyBinPath:   resolveAgyBinary(),
 		status:       HubStatusIdle,
 		recentLogs:   make([]string, 0, 50),
+		monitorStop:  make(chan struct{}),
 	}
 }
 
@@ -118,29 +120,40 @@ func (m *HubManager) setStatusLocked(status string, errorMsg string) {
 	}
 }
 
-// StartContinuousMonitor actively checks AGY Hub state every 2 seconds in the background and broadcasts updates.
+// StartContinuousMonitor actively checks AGY Hub state in the background and broadcasts updates.
+// When online, it checks every 10 seconds; when offline/starting, it checks every 1 second.
 func (m *HubManager) StartContinuousMonitor() {
 	go func() {
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			active := m.isHubReady()
+		for {
+			interval := 1 * time.Second
 			m.mu.Lock()
-			currentStatus := m.status
-			if active {
-				if currentStatus != HubStatusOnline {
-					m.isRunning = true
-					m.setStatusLocked(HubStatusOnline, "")
-					log.Printf("\033[1;32m[Hub Monitor]\033[0m ✅ AGY Hub detected ONLINE on http://127.0.0.1:%s", m.HubPort)
-				}
-			} else {
-				if currentStatus == HubStatusOnline {
-					m.isRunning = false
-					m.setStatusLocked(HubStatusStopped, "")
-					log.Printf("\033[1;33m[Hub Monitor]\033[0m ⚠️ AGY Hub port %s became unreachable -> marked STOPPED", m.HubPort)
-				}
+			if m.status == HubStatusOnline {
+				interval = 10 * time.Second
 			}
 			m.mu.Unlock()
+
+			select {
+			case <-m.monitorStop:
+				return
+			case <-time.After(interval):
+				active := m.isHubReady()
+				m.mu.Lock()
+				currentStatus := m.status
+				if active {
+					if currentStatus != HubStatusOnline {
+						m.isRunning = true
+						m.setStatusLocked(HubStatusOnline, "")
+						log.Printf("\033[1;32m[Hub Monitor]\033[0m ✅ AGY Hub detected ONLINE on http://127.0.0.1:%s", m.HubPort)
+					}
+				} else {
+					if currentStatus == HubStatusOnline {
+						m.isRunning = false
+						m.setStatusLocked(HubStatusStopped, "")
+						log.Printf("\033[1;33m[Hub Monitor]\033[0m ⚠️ AGY Hub port %s became unreachable -> marked STOPPED", m.HubPort)
+					}
+				}
+				m.mu.Unlock()
+			}
 		}
 	}()
 }
@@ -195,6 +208,7 @@ func (m *HubManager) Start() error {
 
 	shArgs := append([]string{"-c", `exec agy "$@"`, "agy"}, args...)
 	cmd := exec.CommandContext(ctx, "sh", shArgs...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Set required environment variables for agy hub mode
 	home, _ := os.UserHomeDir()
@@ -221,7 +235,7 @@ func (m *HubManager) Start() error {
 
 	if err := cmd.Start(); err != nil {
 		cancel()
-		m.setStatus(HubStatusError, err.Error())
+		m.setStatusLocked(HubStatusError, err.Error())
 		m.mu.Unlock()
 		return fmt.Errorf("failed to start agy hub via sh: %w", err)
 	}
@@ -265,9 +279,9 @@ func (m *HubManager) Start() error {
 		m.mu.Lock()
 		m.isRunning = false
 		if err != nil {
-			m.setStatus(HubStatusError, err.Error())
+			m.setStatusLocked(HubStatusError, err.Error())
 		} else {
-			m.setStatus(HubStatusStopped, "")
+			m.setStatusLocked(HubStatusStopped, "")
 		}
 		m.mu.Unlock()
 		processExited <- err
@@ -283,7 +297,7 @@ func (m *HubManager) Start() error {
 	spinIdx := 0
 	ready := false
 	startTime := time.Now()
-	timeout := 30 * time.Second
+	timeout := 5 * time.Minute
 
 	for time.Since(startTime) < timeout {
 		if !m.IsRunning() {
@@ -305,7 +319,7 @@ func (m *HubManager) Start() error {
 		}
 		fmt.Printf("\r\033[K \033[36m[%s]\033[0m Starting AGY Hub on port %s...", spinner[spinIdx%len(spinner)], m.HubPort)
 		spinIdx++
-		time.Sleep(150 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 	}
 
 	if ready {
@@ -318,7 +332,7 @@ func (m *HubManager) Start() error {
 	return nil
 }
 
-// Stop gracefully shuts down the agy --hub child process and child tree.
+// Stop gracefully shuts down the agy --hub child process, its process group, and the continuous monitor.
 func (m *HubManager) Stop() {
 	m.mu.Lock()
 	cmd := m.cmd
@@ -327,9 +341,15 @@ func (m *HubManager) Stop() {
 	isExternal := m.isExternal
 	doneChan := m.processDone
 	m.isRunning = false
+	select {
+	case <-m.monitorStop:
+	default:
+		close(m.monitorStop)
+	}
 	m.mu.Unlock()
 
 	if !isRunning || isExternal {
+		m.setStatus(HubStatusStopped, "")
 		return
 	}
 
@@ -339,9 +359,15 @@ func (m *HubManager) Stop() {
 
 	if cmd != nil && cmd.Process != nil {
 		pid := cmd.Process.Pid
-		fmt.Printf("🛑 Stopping AGY Hub (PID %d)...\n", pid)
-		_ = cmd.Process.Signal(syscall.SIGTERM)
-		_ = cmd.Process.Signal(os.Interrupt)
+		fmt.Printf("🛑 Stopping AGY Hub process tree (PID %d)...\n", pid)
+
+		// Terminate the entire process group
+		pgid, err := syscall.Getpgid(pid)
+		if err == nil {
+			_ = syscall.Kill(-pgid, syscall.SIGTERM)
+		} else {
+			_ = cmd.Process.Signal(syscall.SIGTERM)
+		}
 
 		stopped := false
 		if doneChan != nil {
@@ -349,11 +375,14 @@ func (m *HubManager) Stop() {
 			case <-doneChan:
 				stopped = true
 				fmt.Println("✅ AGY Hub stopped cleanly.")
-			case <-time.After(1500 * time.Millisecond):
+			case <-time.After(1000 * time.Millisecond):
 			}
 		}
 
 		if !stopped {
+			if pgid > 0 {
+				_ = syscall.Kill(-pgid, syscall.SIGKILL)
+			}
 			_ = cmd.Process.Kill()
 			_ = exec.Command("pkill", "-9", "-P", fmt.Sprintf("%d", pid)).Run()
 			_ = exec.Command("pkill", "-9", "-f", "agy --hub").Run()

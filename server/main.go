@@ -434,12 +434,20 @@ func main() {
 	<-stopChan
 	fmt.Println("\n🛑 Shutting down antiGem server gracefully...")
 
+	// 1. Close all active WebSocket client connections immediately
+	wsHub.Close()
+
+	// 2. Stop AGY Hub process group and continuous background monitor
 	if hubMgr != nil {
 		hubMgr.Stop()
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 3. Close the HTTP listener without hanging on lingering connections
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	_ = server.Shutdown(ctx)
+	_ = server.Close()
+
 	fmt.Println("✅ antiGem Go server stopped.")
+	os.Exit(0)
 }

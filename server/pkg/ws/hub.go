@@ -66,6 +66,16 @@ func (h *Hub) BroadcastHubStatus(status string, port string, errorMsg string, lo
 	})
 }
 
+// Close disconnects all active WebSocket clients cleanly.
+func (h *Hub) Close() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for client := range h.clients {
+		_ = client.ws.Close()
+	}
+	h.clients = make(map[*ClientConn]bool)
+}
+
 type clientMessage struct {
 	Type           string `json:"type"` // "ping", "attach_session", "abort"
 	ConversationID string `json:"conversationId"`
