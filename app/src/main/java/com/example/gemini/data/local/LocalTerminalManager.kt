@@ -145,20 +145,36 @@ class LocalPtySession(
 
             LocalEnvironmentManager.ensureGlibcEnvironment(context)
 
+            val loginShellBinaries = arrayOf("login", "bash", "zsh", "fish", "sh")
+
             val shellBinary = when {
                 forceShell != null && File(bin, forceShell).exists() && File(bin, forceShell).canExecute() -> File(bin, forceShell).absolutePath
                 forceShell != null && File(bin, forceShell).exists() -> File(bin, forceShell).absolutePath
                 forceShell != null && File(forceShell).exists() -> File(forceShell).absolutePath
-                File(bin, "zsh").exists() && File(bin, "zsh").canExecute() -> File(bin, "zsh").absolutePath
-                File(bin, "bash").exists() && File(bin, "bash").canExecute() -> File(bin, "bash").absolutePath
-                File(bin, "dash").exists() && File(bin, "dash").canExecute() -> File(bin, "dash").absolutePath
-                File(bin, "sh").exists() && File(bin, "sh").canExecute() -> File(bin, "sh").absolutePath
-                File(bin, "zsh").exists() -> File(bin, "zsh").absolutePath
-                File(bin, "bash").exists() -> File(bin, "bash").absolutePath
-                File(bin, "dash").exists() -> File(bin, "dash").absolutePath
-                File(bin, "sh").exists() -> File(bin, "sh").absolutePath
-                else -> "/system/bin/sh"
+                else -> {
+                    var found: String? = null
+                    for (name in loginShellBinaries) {
+                        val file = File(bin, name)
+                        if (file.exists() && file.canExecute()) {
+                            found = file.absolutePath
+                            break
+                        }
+                    }
+                    if (found == null) {
+                        for (name in loginShellBinaries) {
+                            val file = File(bin, name)
+                            if (file.exists()) {
+                                found = file.absolutePath
+                                break
+                            }
+                        }
+                    }
+                    found ?: "/system/bin/sh"
+                }
             }
+
+            val safeCols = if (ptyCols > 0) ptyCols else if (LocalTerminalManager.lastKnownCols > 0) LocalTerminalManager.lastKnownCols else 80
+            val safeRows = if (ptyRows > 0) ptyRows else if (LocalTerminalManager.lastKnownRows > 0) LocalTerminalManager.lastKnownRows else 24
 
             val envList = arrayOf(
                 "PREFIX=${prefix.absolutePath}",
@@ -176,16 +192,18 @@ class LocalPtySession(
                 "ANDROID_ROOT=/system",
                 "LANG=en_US.UTF-8",
                 "LC_ALL=en_US.UTF-8",
-                "COLUMNS=$ptyCols",
-                "LINES=$ptyRows",
+                "COLUMNS=$safeCols",
+                "LINES=$safeRows",
                 "PS1=$ "
             )
 
+            val isLoginShell = shellBinary != "/system/bin/sh"
+            val processName = (if (isLoginShell) "-" else "") + File(shellBinary).name
             val cwd = if (File(workingDirectory).exists()) workingDirectory else home.absolutePath
             val shellArgs = if (!initialCommand.isNullOrBlank()) {
-                arrayOf("-l", "-c", "$initialCommand; exec $shellBinary")
+                arrayOf(processName, "-c", "$initialCommand; exec $shellBinary")
             } else {
-                emptyArray()
+                arrayOf(processName)
             }
 
             terminalSession = TerminalSession(
@@ -197,7 +215,7 @@ class LocalPtySession(
                 this
             )
             try {
-                terminalSession.updateSize(ptyCols, ptyRows)
+                terminalSession.updateSize(safeCols, safeRows)
             } catch (_: Exception) {
             }
         }
