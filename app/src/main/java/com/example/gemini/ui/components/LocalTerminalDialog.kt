@@ -180,8 +180,9 @@ fun LocalTerminalContent(
     }
 
     val sendKeyToTerminal: (Int, String) -> Unit = sendKey@{ keyCode, fallbackString ->
-        if (activeSession.isExited.value && (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER || fallbackString == "\r" || fallbackString == "\n")) {
-            LocalTerminalManager.closeSession(activeSession.id)
+        val currentPty = LocalTerminalManager.sessions.value.find { it.id == LocalTerminalManager.activeSessionId.value } ?: activeSession
+        if (currentPty.isExited.value && (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER || fallbackString == "\r" || fallbackString == "\n")) {
+            LocalTerminalManager.closeSession(currentPty.id)
             return@sendKey
         }
         val termView = currentTerminalView
@@ -196,7 +197,7 @@ fun LocalTerminalContent(
         }
 
         if (!handled) {
-            activeSession.write(fallbackString)
+            currentPty.write(fallbackString)
         }
         if (ctrlState == ModifierState.ONE_SHOT) {
             ctrlState = ModifierState.OFF
@@ -248,150 +249,158 @@ fun LocalTerminalContent(
                     .background(Color(0xFF000000))
                     .padding(horizontal = 4.dp)
             ) {
-                AndroidView(
-                    factory = { ctx ->
+                key(activeSession.id) {
+                    AndroidView(
+                        factory = { ctx ->
                             TerminalView(ctx, null).apply {
                                 setTopPadding(statusBarHeightPx)
                                 setTextSize(terminalTextSize)
                                 isFocusable = true
                                 isFocusableInTouchMode = true
-                                setTerminalViewClient(object : TerminalViewClient {
-                                    override fun onScale(scale: Float): Float {
-                                        if (scale < 0.9f || scale > 1.1f) {
-                                            val doIncrease = scale > 1.0f
-                                            val newSize = if (doIncrease) terminalTextSize + 1 else terminalTextSize - 1
-                                            if (newSize in 16..60) {
-                                                terminalTextSize = newSize
-                                                currentTerminalView?.setTextSize(terminalTextSize)
-                                                val newSp = (newSize / density.density).roundToInt().coerceIn(8, 28)
-                                                coroutineScope.launch {
-                                                    authPreferences.saveTerminalPreferences(
-                                                        fontSize = newSp,
-                                                        cursorStyle = savedCursorStyle,
-                                                        bufferSize = savedBufferSize,
-                                                        theme = "DEFAULT"
-                                                    )
+
+                                val createClient: () -> TerminalViewClient = {
+                                    object : TerminalViewClient {
+                                        override fun onScale(scale: Float): Float {
+                                            if (scale < 0.9f || scale > 1.1f) {
+                                                val doIncrease = scale > 1.0f
+                                                val newSize = if (doIncrease) terminalTextSize + 1 else terminalTextSize - 1
+                                                if (newSize in 16..60) {
+                                                    terminalTextSize = newSize
+                                                    currentTerminalView?.setTextSize(terminalTextSize)
+                                                    val newSp = (newSize / density.density).roundToInt().coerceIn(8, 28)
+                                                    coroutineScope.launch {
+                                                        authPreferences.saveTerminalPreferences(
+                                                            fontSize = newSp,
+                                                            cursorStyle = savedCursorStyle,
+                                                            bufferSize = savedBufferSize,
+                                                            theme = "DEFAULT"
+                                                        )
+                                                    }
+                                                }
+                                                return 1.0f
+                                            }
+                                            return scale
+                                        }
+                                        override fun onSingleTapUp(e: MotionEvent) {
+                                            val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                                            this@apply.requestFocus()
+                                            imm.showSoftInput(this@apply, 0)
+                                        }
+                                        override fun shouldBackButtonBeMappedToEscape(): Boolean = false
+                                        override fun shouldEnforceCharBasedInput(): Boolean = true
+                                        override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
+                                        override fun isTerminalViewSelected(): Boolean = true
+                                        override fun copyModeChanged(copyMode: Boolean) {}
+                                        override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
+                                            val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == session } ?: activeSession
+                                            if (targetPty.isExited.value) {
+                                                if (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+                                                    LocalTerminalManager.closeSession(targetPty.id)
+                                                    return true
                                                 }
                                             }
-                                            return 1.0f
+                                            val isCtrl = e.isCtrlPressed || ctrlState != ModifierState.OFF
+                                            if (isCtrl) {
+                                                when (keyCode) {
+                                                    KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_NUMPAD_1 -> {
+                                                        LocalTerminalManager.selectPreviousSession(ctx)
+                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                        return true
+                                                    }
+                                                    KeyEvent.KEYCODE_2, KeyEvent.KEYCODE_NUMPAD_2 -> {
+                                                        LocalTerminalManager.selectNextSession(ctx)
+                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                        return true
+                                                    }
+                                                    KeyEvent.KEYCODE_T -> {
+                                                        LocalTerminalManager.createNewSession(ctx)
+                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                        return true
+                                                    }
+                                                }
+                                            }
+                                            return false
                                         }
-                                        return scale
-                                    }
-                                    override fun onSingleTapUp(e: MotionEvent) {
-                                        val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                                        this@apply.requestFocus()
-                                        imm.showSoftInput(this@apply, 0)
-                                    }
-                                    override fun shouldBackButtonBeMappedToEscape(): Boolean = false
-                                    override fun shouldEnforceCharBasedInput(): Boolean = true
-                                    override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
-                                    override fun isTerminalViewSelected(): Boolean = true
-                                    override fun copyModeChanged(copyMode: Boolean) {}
-                                     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
-                                         if (activeSession.isExited.value) {
-                                             if (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-                                                 LocalTerminalManager.closeSession(activeSession.id)
-                                                 return true
-                                             }
-                                         }
-                                         val isCtrl = e.isCtrlPressed || ctrlState != ModifierState.OFF
-                                         if (isCtrl) {
-                                             when (keyCode) {
-                                                 KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_NUMPAD_1 -> {
-                                                     LocalTerminalManager.selectPreviousSession(ctx)
-                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                     return true
-                                                 }
-                                                 KeyEvent.KEYCODE_2, KeyEvent.KEYCODE_NUMPAD_2 -> {
-                                                     LocalTerminalManager.selectNextSession(ctx)
-                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                     return true
-                                                 }
-                                                 KeyEvent.KEYCODE_T -> {
-                                                     LocalTerminalManager.createNewSession(ctx)
-                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                     return true
-                                                 }
-                                             }
-                                         }
-                                         return false
-                                     }
-                                     override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
-                                     override fun onLongPress(event: MotionEvent): Boolean = false
-                                     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
-                                         if (activeSession.isExited.value) {
-                                             if (codePoint == '\n'.code || codePoint == '\r'.code) {
-                                                 LocalTerminalManager.closeSession(activeSession.id)
-                                                 return true
-                                             }
-                                         }
-                                         if (ctrlDown) {
-                                             when (codePoint.toChar()) {
-                                                 '1' -> {
-                                                     LocalTerminalManager.selectPreviousSession(ctx)
-                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                     return true
-                                                 }
-                                                 '2' -> {
-                                                     LocalTerminalManager.selectNextSession(ctx)
-                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                     return true
-                                                 }
-                                                 't', 'T' -> {
-                                                     LocalTerminalManager.createNewSession(ctx)
-                                                     if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                     return true
-                                                 }
-                                             }
-                                         }
-                                         return false
-                                     }
-                                    override fun readControlKey(): Boolean {
-                                        val active = ctrlState != ModifierState.OFF
-                                        if (ctrlState == ModifierState.ONE_SHOT) {
-                                            ctrlState = ModifierState.OFF
+                                        override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
+                                        override fun onLongPress(event: MotionEvent): Boolean = false
+                                        override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
+                                            val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == session } ?: activeSession
+                                            if (targetPty.isExited.value) {
+                                                if (codePoint == '\n'.code || codePoint == '\r'.code) {
+                                                    LocalTerminalManager.closeSession(targetPty.id)
+                                                    return true
+                                                }
+                                            }
+                                            if (ctrlDown) {
+                                                when (codePoint.toChar()) {
+                                                    '1' -> {
+                                                        LocalTerminalManager.selectPreviousSession(ctx)
+                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                        return true
+                                                    }
+                                                    '2' -> {
+                                                        LocalTerminalManager.selectNextSession(ctx)
+                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                        return true
+                                                    }
+                                                    't', 'T' -> {
+                                                        LocalTerminalManager.createNewSession(ctx)
+                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+                                                        return true
+                                                    }
+                                                }
+                                            }
+                                            return false
                                         }
-                                        return active
-                                    }
-                                    override fun readAltKey(): Boolean {
-                                        val active = altState != ModifierState.OFF
-                                        if (altState == ModifierState.ONE_SHOT) {
-                                            altState = ModifierState.OFF
+                                        override fun readControlKey(): Boolean {
+                                            val active = ctrlState != ModifierState.OFF
+                                            if (ctrlState == ModifierState.ONE_SHOT) {
+                                                ctrlState = ModifierState.OFF
+                                            }
+                                            return active
                                         }
-                                        return active
+                                        override fun readAltKey(): Boolean {
+                                            val active = altState != ModifierState.OFF
+                                            if (altState == ModifierState.ONE_SHOT) {
+                                                altState = ModifierState.OFF
+                                            }
+                                            return active
+                                        }
+                                        override fun readShiftKey(): Boolean = false
+                                        override fun readFnKey(): Boolean = false
+                                        override fun onEmulatorSet() {}
+                                        override fun logError(tag: String, message: String) { android.util.Log.e("TerminalViewKey", message) }
+                                        override fun logWarn(tag: String, message: String) { android.util.Log.w("TerminalViewKey", message) }
+                                        override fun logInfo(tag: String, message: String) { android.util.Log.i("TerminalViewKey", message) }
+                                        override fun logDebug(tag: String, message: String) { android.util.Log.d("TerminalViewKey", message) }
+                                        override fun logVerbose(tag: String, message: String) { android.util.Log.v("TerminalViewKey", message) }
+                                        override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) { android.util.Log.e("TerminalViewKey", message, e) }
+                                        override fun logStackTrace(tag: String, e: Exception) { android.util.Log.e("TerminalViewKey", "stacktrace", e) }
                                     }
-                                    override fun readShiftKey(): Boolean = false
-                                    override fun readFnKey(): Boolean = false
-                                    override fun onEmulatorSet() {}
-                                    override fun logError(tag: String, message: String) { android.util.Log.e("TerminalViewKey", message) }
-                                    override fun logWarn(tag: String, message: String) { android.util.Log.w("TerminalViewKey", message) }
-                                    override fun logInfo(tag: String, message: String) { android.util.Log.i("TerminalViewKey", message) }
-                                    override fun logDebug(tag: String, message: String) { android.util.Log.d("TerminalViewKey", message) }
-                                    override fun logVerbose(tag: String, message: String) { android.util.Log.v("TerminalViewKey", message) }
-                                    override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) { android.util.Log.e("TerminalViewKey", message, e) }
-                                    override fun logStackTrace(tag: String, e: Exception) { android.util.Log.e("TerminalViewKey", "stacktrace", e) }
-                                })
+                                }
+
+                                setTerminalViewClient(createClient())
                                 setTerminalInputListener(object : TerminalView.TerminalInputListener {
                                     override fun onTerminalInput(text: String) {
-                                        if (activeSession.isExited.value && (text.contains("\n") || text.contains("\r"))) {
-                                            LocalTerminalManager.closeSession(activeSession.id)
+                                        val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == currentSession } ?: activeSession
+                                        if (targetPty.isExited.value && (text.contains("\n") || text.contains("\r"))) {
+                                            LocalTerminalManager.closeSession(targetPty.id)
                                             return
                                         }
-                                        activeSession.write(text)
+                                        targetPty.write(text)
                                     }
                                     override fun onTerminalInputCodePoint(prependEscape: Boolean, codePoint: Int) {
-                                        if (activeSession.isExited.value && (codePoint == '\n'.code || codePoint == '\r'.code)) {
-                                            LocalTerminalManager.closeSession(activeSession.id)
+                                        val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == currentSession } ?: activeSession
+                                        if (targetPty.isExited.value && (codePoint == '\n'.code || codePoint == '\r'.code)) {
+                                            LocalTerminalManager.closeSession(targetPty.id)
                                             return
                                         }
-                                        activeSession.writeCodePoint(prependEscape, codePoint)
+                                        targetPty.writeCodePoint(prependEscape, codePoint)
                                     }
                                 })
                                 setTerminalSizeListener { cols, rows, widthPx, heightPx ->
-                                    android.util.Log.d("AntiGemTerminal", "[TerminalView-factory] setTerminalSizeListener: cols=$cols, rows=$rows, widthPx=$widthPx, heightPx=$heightPx for session ${activeSession.id}")
                                     activeSession.updateSize(cols, rows, widthPx, heightPx)
                                 }
-                                android.util.Log.d("AntiGemTerminal", "[TerminalView-factory] Attaching session ${activeSession.id} (${activeSession.name})")
                                 attachSession(activeSession.terminalSession)
                                 activeSession.terminalSession.emulator?.setCursorStyle()
                                 currentTerminalView = this
@@ -406,34 +415,35 @@ fun LocalTerminalContent(
                             tv.setTopPadding(statusBarHeightPx)
                             tv.setTextSize(terminalTextSize)
                             if (tv.currentSession != activeSession.terminalSession) {
-                                android.util.Log.d("AntiGemTerminal", "[TerminalView-update] Switching attached session to ${activeSession.id} (${activeSession.name})")
                                 tv.attachSession(activeSession.terminalSession)
                                 activeSession.terminalSession.emulator?.setCursorStyle()
                             }
                             tv.setTerminalInputListener(object : TerminalView.TerminalInputListener {
                                 override fun onTerminalInput(text: String) {
-                                    if (activeSession.isExited.value && (text.contains("\n") || text.contains("\r"))) {
-                                        LocalTerminalManager.closeSession(activeSession.id)
+                                    val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == tv.currentSession } ?: activeSession
+                                    if (targetPty.isExited.value && (text.contains("\n") || text.contains("\r"))) {
+                                        LocalTerminalManager.closeSession(targetPty.id)
                                         return
                                     }
-                                    activeSession.write(text)
+                                    targetPty.write(text)
                                 }
                                 override fun onTerminalInputCodePoint(prependEscape: Boolean, codePoint: Int) {
-                                    if (activeSession.isExited.value && (codePoint == '\n'.code || codePoint == '\r'.code)) {
-                                        LocalTerminalManager.closeSession(activeSession.id)
+                                    val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == tv.currentSession } ?: activeSession
+                                    if (targetPty.isExited.value && (codePoint == '\n'.code || codePoint == '\r'.code)) {
+                                        LocalTerminalManager.closeSession(targetPty.id)
                                         return
                                     }
-                                    activeSession.writeCodePoint(prependEscape, codePoint)
+                                    targetPty.writeCodePoint(prependEscape, codePoint)
                                 }
                             })
                             tv.setTerminalSizeListener { cols, rows, widthPx, heightPx ->
-                                android.util.Log.d("AntiGemTerminal", "[TerminalView-update] setTerminalSizeListener: cols=$cols, rows=$rows, widthPx=$widthPx, heightPx=$heightPx for session ${activeSession.id}")
                                 activeSession.updateSize(cols, rows, widthPx, heightPx)
                             }
                             currentTerminalView = tv
                         },
                         modifier = Modifier.fillMaxSize()
                     )
+                }
             }
 
             // EXTRA-KEYS TOOLBAR (Physical visual click feedback, auto-repeat for arrows, one-shot/lock modifiers)
