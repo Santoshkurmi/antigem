@@ -59,8 +59,8 @@ fun MessageBubble(
     onApproveTool: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
     onRejectTool: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
     onTerminateTool: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
-    onSubmitChoices: ((com.example.gemini.domain.model.ToolCall, String, String) -> Unit)? = null,
-    onSkipChoices: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
+    onSubmitChoices: ((com.example.gemini.domain.model.ToolCall, String, List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto>, String) -> Unit)? = null,
+    onSkipChoices: ((com.example.gemini.domain.model.ToolCall, String, List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto>) -> Unit)? = null,
     onUpdateSummary: ((String) -> Unit)? = null,
     onDeleteSummary: (() -> Unit)? = null,
     onViewRawPayload: ((String) -> Unit)? = null,
@@ -242,8 +242,8 @@ fun MessageBubble(
                             onApproveTool = if (onApproveTool != null) { toolCall -> onApproveTool(toolCall, message.id) } else null,
                             onRejectTool = if (onRejectTool != null) { toolCall -> onRejectTool(toolCall, message.id) } else null,
                             onTerminateTool = if (onTerminateTool != null) { toolCall -> onTerminateTool(toolCall, message.id) } else null,
-                            onSubmitChoices = if (onSubmitChoices != null) { toolCall, summary -> onSubmitChoices(toolCall, message.id, summary) } else null,
-                            onSkipChoices = if (onSkipChoices != null) { toolCall -> onSkipChoices(toolCall, message.id) } else null
+                            onSubmitChoices = if (onSubmitChoices != null) { toolCall, responses, summary -> onSubmitChoices(toolCall, message.id, responses, summary) } else null,
+                            onSkipChoices = if (onSkipChoices != null) { toolCall, responses -> onSkipChoices(toolCall, message.id, responses) } else null
                         )
                     }
 

@@ -269,6 +269,15 @@ class AgyHubClient {
     ): Result<Unit> =
         chatService.handleCascadeUserInteraction(cascadeId, stepIndex, trajectoryId, allow, scope, userDenyInstruction, interactionType, hubUrl)
 
+    suspend fun handleAskQuestionInteraction(
+        cascadeId: String,
+        stepIndex: Int,
+        trajectoryId: String = "",
+        responses: List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto>,
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<Unit> =
+        chatService.handleAskQuestionInteraction(cascadeId, stepIndex, trajectoryId, responses, hubUrl)
+
     suspend fun resolveOutstandingSteps(
         cascadeId: String,
         hubUrl: String = AuthPreferences.currentHubUrl

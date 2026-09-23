@@ -73,7 +73,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val pendingApprovals: StateFlow<List<PendingToolApproval>> = _messages.map { msgs ->
         msgs.filter { it.role == com.example.gemini.domain.model.MessageRole.ASSISTANT }
             .flatMap { msg ->
-                msg.toolCalls.filter { it.status == "PENDING_APPROVAL" }
+                msg.toolCalls.filter { it.status == "PENDING_APPROVAL" && it.toolType != com.example.gemini.domain.model.ToolType.ASK_CHOICE }
                     .distinctBy { it.stepIndex }
                     .map { PendingToolApproval(it, msg.id) }
             }
@@ -1426,13 +1426,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun retryConnections() {
         _conversationError.value = null
-        if (_messages.value.isEmpty()) {
+        val conv = _currentConversation.value
+        val isExistingConv = conv != null && conv.title != "New Chat" && _conversations.value.any { it.id == conv.id }
+        if (_messages.value.isEmpty() && isExistingConv) {
             _isLoadingConversation.value = true
         }
         _isReconnecting.value = true
         syncAgyConversations(force = true)
-        val convId = _currentConversation.value?.id
-        if (!convId.isNullOrBlank()) {
+        val convId = conv?.id
+        if (!convId.isNullOrBlank() && isExistingConv) {
             startPersistentStream(convId)
         }
         refreshQuotas()
@@ -1450,15 +1452,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun onAppForegrounded() {
         android.util.Log.d("ChatViewModel", "App foregrounded: inspecting RPC streams...")
         viewModelScope.launch {
-            val convId = _currentConversation.value?.id
+            val conv = _currentConversation.value
+            val isExistingConv = conv != null && conv.title != "New Chat" && _conversations.value.any { it.id == conv.id }
             val isSyncActive = syncJob?.isActive == true
             val isStreamActive = persistentStreamJob?.isActive == true
 
             if (!isSyncActive || _isServerOnline.value != true) {
                 syncAgyConversations(force = true)
             }
-            if (!convId.isNullOrBlank() && (!isStreamActive || _isServerOnline.value != true)) {
-                startPersistentStream(convId)
+            if (conv != null && isExistingConv && (!isStreamActive || _isServerOnline.value != true)) {
+                startPersistentStream(conv.id)
             }
             refreshQuotas()
             if (!_agyAuthInfo.value.isLoggedIn || _agyAuthInfo.value.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING) {
@@ -1525,7 +1528,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectConversation(id: String) {
-        if (id == activeStreamConversationId && !_isLoadingConversation.value && _messages.value.isNotEmpty()) return
+        Log.d("CHAT_OPEN_DEBUG", "👉 [ChatViewModel.selectConversation] id=$id, activeStreamId=$activeStreamConversationId, isLoading=${_isLoadingConversation.value}, msgCount=${_messages.value.size}")
+        if (id == activeStreamConversationId && !_isLoadingConversation.value && _messages.value.isNotEmpty()) {
+            Log.d("CHAT_OPEN_DEBUG", "👉 [ChatViewModel.selectConversation] Skipped: already active conversation with messages")
+            return
+        }
 
         persistentStreamJob?.cancel()
         persistentStreamJob = null
@@ -1550,19 +1557,31 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             val conv = _conversations.value.find { it.id == id }
                 ?: Conversation(id = id, title = "Antigravity Chat", sessionId = id)
+            Log.d("CHAT_OPEN_DEBUG", "👉 [ChatViewModel.selectConversation] Launching stream for conv: title='${conv.title}', id=${conv.id}")
             _currentConversation.value = conv
-            // Keep globally selected model intact across all chats
             knownDaemonCascadeIds.add(id)
 
-            // Connect persistent stream for this conversation.
+            // Connect persistent stream for real-time live streaming.
             // StreamAgentStateUpdates delivers the complete history in Chunk 0!
             startPersistentStream(id)
         }
     }
 
     fun startPersistentStream(conversationId: String) {
+        Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel.startPersistentStream] convId=$conversationId, current activeId=$activeStreamConversationId, jobActive=${persistentStreamJob?.isActive}")
         if (conversationId.isBlank()) return
+
+        // Brand new unsaved conversation: do not fetch trajectory from backend
+        val isNewUnsaved = (_currentConversation.value?.id == conversationId && _currentConversation.value?.title == "New Chat" && _messages.value.isEmpty()) && !_conversations.value.any { it.id == conversationId }
+        if (isNewUnsaved) {
+            Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel.startPersistentStream] Skipped: $conversationId is a brand new unsaved chat")
+            _isLoadingConversation.value = false
+            _conversationError.value = null
+            return
+        }
+
         if (activeStreamConversationId == conversationId && persistentStreamJob?.isActive == true) {
+            Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel.startPersistentStream] Already actively running for $conversationId")
             return
         }
 
@@ -1584,14 +1603,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 trajectoryEngine.reset(conversationId)
             }
 
+            Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel.startPersistentStream] Starting loop for $conversationId on $hubUrl")
+
             while (activeStreamConversationId == conversationId) {
                 try {
                     _isServerOnline.value = true
                     agyHubClient.streamAgentStateFrames(conversationId, hubUrl).collect { frame ->
                         if (activeStreamConversationId != conversationId) {
+                            Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel Stream] Dropping frame for inactive conversation (active=$activeStreamConversationId vs frame=$conversationId)")
                             return@collect
                         }
 
+                        val statusStr = frame.status.ifBlank { frame.update?.status ?: "" }
+                        val stepsCount = frame.steps?.size ?: frame.update?.stepsUpdate?.steps?.size ?: frame.update?.mainTrajectoryUpdate?.stepsUpdate?.steps?.size ?: 0
+                        Log.d("CHAT_OPEN_DEBUG", "📥 [ChatViewModel Stream Frame] convId=$conversationId, isFirstChunk=$isFirstChunk, status=$statusStr, stepsCount=$stepsCount")
                         isFirstChunk = false
                         val turns = trajectoryEngine.ingestFrame(frame)
                         val msgs = trajectoryEngine.toChatMessages(conversationId)
@@ -1606,8 +1631,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             val isWaiting = trajectoryEngine.isWaitingInteraction
                             _isStreaming.value = isRunning && !isWaiting
 
+                            Log.d("CHAT_OPEN_DEBUG", "✨ [ChatViewModel State Update] convId=$conversationId, turnsCount=${turns.size}, msgsCount=${msgs.size}, isRunning=$isRunning, isWaiting=$isWaiting")
+
+                            _messages.value = msgs
                             if (msgs.isNotEmpty()) {
-                                _messages.value = msgs
                                 com.example.gemini.ui.chat.ChatFeedCache.prewarm(msgs)
 
                                 msgs.flatMap { it.toolCalls }.filter {
@@ -1626,34 +1653,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     if (isFirstChunk) {
                         if (activeStreamConversationId != conversationId) break
                         val isHubOnline = agyBridgeService.hubStatus.value.status == "online"
-                        val isHubStarting = agyBridgeService.hubStatus.value.status == "starting"
-                        if (isHubOnline || isHubStarting) {
-                            // Hub is alive or starting up: keep loading skeleton and retry connecting stream
-                            withContext(Dispatchers.Main) {
-                                if (_messages.value.isEmpty()) {
-                                    _isLoadingConversation.value = true
+                        Log.w("CHAT_OPEN_DEBUG", "⚠️ [ChatViewModel Stream Loop] Stream finished without delivering frames: isFirstChunk=true, isHubOnline=$isHubOnline")
+                        withContext(Dispatchers.Main) {
+                            _isLoadingConversation.value = false
+                            _isReconnecting.value = false
+                            val isKnownExisting = _conversations.value.any { it.id == conversationId && it.title != "New Chat" }
+                            if (activeStreamConversationId == conversationId) {
+                                if (isKnownExisting && _messages.value.isEmpty()) {
+                                    _conversationError.value = "No messages received from Antigravity. Tap Retry."
+                                    _isServerOnline.value = isHubOnline
+                                } else {
                                     _conversationError.value = null
                                 }
                             }
-                            delay(1000)
-                            continue
-                        } else {
-                            // Truly offline
-                            withContext(Dispatchers.Main) {
-                                _isLoadingConversation.value = false
-                                _isReconnecting.value = false
-                                val isKnownExisting = _conversations.value.any { it.id == conversationId && it.title != "New Chat" }
-                                if (activeStreamConversationId == conversationId) {
-                                    if (isKnownExisting && _messages.value.isEmpty()) {
-                                        _conversationError.value = "Unable to load conversation messages. Make sure Antigravity is running and tap Retry."
-                                        _isServerOnline.value = false
-                                    } else {
-                                        _conversationError.value = null
-                                    }
-                                }
-                            }
-                            break // Stop stream loop
                         }
+                        break
                     } else {
                         // Normal disconnection after receiving data; clean up in-flight states and pause briefly before reconnecting
                         withContext(Dispatchers.Main) {
@@ -1672,30 +1686,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     if (e is kotlinx.coroutines.CancellationException) {
                         break
                     }
-                    Log.w("ChatViewModel", "Persistent stream disconnected ($conversationId): ${e.message}. Reconnecting in 1.5s...")
-                    val isHubOnline = agyBridgeService.hubStatus.value.status == "online"
-                    val isHubStarting = agyBridgeService.hubStatus.value.status == "starting"
+                    Log.e("CHAT_OPEN_DEBUG", "❌ [ChatViewModel Stream Exception] convId=$conversationId: ${e.message}", e)
+                    Log.w("ChatViewModel", "Persistent stream error ($conversationId): ${e.message}")
+                    val rawErr = e.localizedMessage ?: e.message ?: e.toString()
+                    val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
+                        "Cannot connect to Antigravity. Make sure Antigravity is running and tap Retry."
+                    } else {
+                        "Error loading conversation: $rawErr"
+                    }
+
                     withContext(Dispatchers.Main) {
                         _isReconnecting.value = false
-                        if (isHubOnline || isHubStarting) {
-                            // Hub is running or waking up: keep loading skeleton and do not flash error
-                            _isServerOnline.value = true
-                            if (_messages.value.isEmpty()) {
-                                _isLoadingConversation.value = true
-                                _conversationError.value = null
-                            }
-                        } else {
-                            _isServerOnline.value = false
-                            _isLoadingConversation.value = false
-                            if (_messages.value.isEmpty() && _currentConversation.value?.title != "New Chat") {
-                                val rawErr = e.message ?: "Connection failed"
-                                val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
-                                    "Cannot connect to Antigravity. Make sure Antigravity is running and tap Retry."
-                                } else {
-                                    "Antigravity unreachable: $rawErr"
-                                }
-                                _conversationError.value = helpfulMsg
-                            }
+                        _isLoadingConversation.value = false
+                        if (_messages.value.isEmpty()) {
+                            _conversationError.value = helpfulMsg
                         }
                         if (isPromptInFlight || _isStreaming.value) {
                             isPromptInFlight = false
@@ -1704,7 +1708,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             markLastAssistantMessageDisconnected()
                         }
                     }
-                    delay(1500)
+
+                    // If we have no messages yet, stop the loop so the error message is cleanly shown with a Retry button
+                    if (_messages.value.isEmpty()) {
+                        break
+                    }
+                    delay(2000)
                 }
             }
         }
@@ -2858,92 +2867,163 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun submitUserChoices(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, summary: String) {
+    fun submitUserChoices(
+        toolCall: com.example.gemini.domain.model.ToolCall,
+        messageId: String,
+        responses: List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto>,
+        summaryDisplay: String
+    ) {
         val conv = _currentConversation.value ?: return
-        val msg = _messages.value.find { it.id == messageId } ?: return
+        val stepIndex = toolCall.stepIndex
 
+        if (stepIndex != null) {
+            trajectoryEngine.markStepResponded(stepIndex)
+            trajectoryEngine.optimisticUpdateStepStatus(
+                stepIndex = stepIndex,
+                status = com.example.gemini.data.remote.dto.CortexStepStatuses.DONE,
+                output = summaryDisplay
+            )
+            _messages.value = trajectoryEngine.toChatMessages(conv.id)
+        }
+
+        val msg = _messages.value.find { it.id == messageId }
         val completedToolCall = toolCall.copy(
             status = "SUCCESS",
-            output = summary
+            output = summaryDisplay
         )
-        val updatedToolCalls = msg.toolCalls.map { if (it.stepIndex != null && it.stepIndex == toolCall.stepIndex) completedToolCall else it }
-
-        updateAssistantMessage(
-            msgId = messageId,
-            content = msg.content,
-            thought = msg.thoughtText ?: "",
-            thoughtDuration = msg.thoughtDurationMs,
-            toolCalls = updatedToolCalls,
-            isStreaming = true
-        )
+        if (msg != null) {
+            val updatedToolCalls = msg.toolCalls.map { if (it.stepIndex != null && it.stepIndex == toolCall.stepIndex) completedToolCall else it }
+            updateAssistantMessage(
+                msgId = messageId,
+                content = msg.content,
+                thought = msg.thoughtText ?: "",
+                thoughtDuration = msg.thoughtDurationMs,
+                toolCalls = updatedToolCalls,
+                isStreaming = true
+            )
+        }
 
         viewModelScope.launch {
-            val currentHistory = _messages.value.filter { it.id != messageId }
-            val syntheticHistory = currentHistory + listOf(
-                ChatMessage(
-                    conversationId = conv.id,
-                    role = MessageRole.ASSISTANT,
-                    content = "<ask_choices>${toolCall.command}</ask_choices>"
-                ),
-                ChatMessage(
-                    conversationId = conv.id,
-                    role = MessageRole.USER,
-                    content = summary
+            val hubUrl = AuthPreferences.currentHubUrl
+            if (stepIndex != null) {
+                val res = agyHubClient.handleAskQuestionInteraction(
+                    cascadeId = conv.id,
+                    stepIndex = stepIndex,
+                    trajectoryId = toolCall.trajectoryId ?: "",
+                    responses = responses,
+                    hubUrl = hubUrl
                 )
-            )
-
-            executeStream(
-                conv = conv,
-                currentHistory = syntheticHistory,
-                existingAssistantMsgId = messageId,
-                existingToolCalls = updatedToolCalls,
-                priorTextPrefix = msg.content
-            )
+                if (res.isFailure) {
+                    Log.e("ChatViewModel", "handleAskQuestionInteraction failed: ${res.exceptionOrNull()}")
+                }
+            }
         }
     }
 
-    fun skipUserChoices(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String) {
+    fun skipUserChoices(
+        toolCall: com.example.gemini.domain.model.ToolCall,
+        messageId: String,
+        responses: List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto> = emptyList()
+    ) {
         val conv = _currentConversation.value ?: return
-        val msg = _messages.value.find { it.id == messageId } ?: return
+        val stepIndex = toolCall.stepIndex
+        val skipSummary = "Skipped by user"
 
-        val skippedSummary = "[User skipped clarification choices. Please proceed using the most sensible standard defaults and best practices.]"
+        if (stepIndex != null) {
+            trajectoryEngine.markStepResponded(stepIndex)
+            trajectoryEngine.optimisticUpdateStepStatus(
+                stepIndex = stepIndex,
+                status = com.example.gemini.data.remote.dto.CortexStepStatuses.DONE,
+                output = skipSummary
+            )
+            _messages.value = trajectoryEngine.toChatMessages(conv.id)
+        }
+
+        val msg = _messages.value.find { it.id == messageId }
         val completedToolCall = toolCall.copy(
             status = "SUCCESS",
-            output = skippedSummary
+            output = skipSummary
         )
-        val updatedToolCalls = msg.toolCalls.map { if (it.stepIndex != null && it.stepIndex == toolCall.stepIndex) completedToolCall else it }
-
-        updateAssistantMessage(
-            msgId = messageId,
-            content = msg.content,
-            thought = msg.thoughtText ?: "",
-            thoughtDuration = msg.thoughtDurationMs,
-            toolCalls = updatedToolCalls,
-            isStreaming = true
-        )
+        if (msg != null) {
+            val updatedToolCalls = msg.toolCalls.map { if (it.stepIndex != null && it.stepIndex == toolCall.stepIndex) completedToolCall else it }
+            updateAssistantMessage(
+                msgId = messageId,
+                content = msg.content,
+                thought = msg.thoughtText ?: "",
+                thoughtDuration = msg.thoughtDurationMs,
+                toolCalls = updatedToolCalls,
+                isStreaming = true
+            )
+        }
 
         viewModelScope.launch {
-            val currentHistory = _messages.value.filter { it.id != messageId }
-            val syntheticHistory = currentHistory + listOf(
-                ChatMessage(
-                    conversationId = conv.id,
-                    role = MessageRole.ASSISTANT,
-                    content = "<ask_choices>${toolCall.command}</ask_choices>"
-                ),
-                ChatMessage(
-                    conversationId = conv.id,
-                    role = MessageRole.USER,
-                    content = skippedSummary
-                )
-            )
+            val hubUrl = AuthPreferences.currentHubUrl
+            if (stepIndex != null) {
+                val actualResponses = if (responses.isNotEmpty()) {
+                    responses
+                } else {
+                    val questionnaire = com.example.gemini.domain.model.ChoiceQuestionnaire.parse(toolCall.command)
+                    questionnaire?.questions?.map { q ->
+                        com.example.gemini.data.remote.dto.AskQuestionResponseItemDto(
+                            question = q.prompt,
+                            options = q.options.map { com.example.gemini.data.remote.dto.AskQuestionOptionDto(id = it.id, text = it.label) },
+                            isMultiSelect = if (q.isMultiSelect) true else null,
+                            skipped = true
+                        )
+                    } ?: emptyList()
+                }
 
-            executeStream(
-                conv = conv,
-                currentHistory = syntheticHistory,
-                existingAssistantMsgId = messageId,
-                existingToolCalls = updatedToolCalls,
-                priorTextPrefix = msg.content
+                val res = agyHubClient.handleAskQuestionInteraction(
+                    cascadeId = conv.id,
+                    stepIndex = stepIndex,
+                    trajectoryId = toolCall.trajectoryId ?: "",
+                    responses = actualResponses,
+                    hubUrl = hubUrl
+                )
+                if (res.isFailure) {
+                    Log.e("ChatViewModel", "handleAskQuestionInteraction (skip) failed: ${res.exceptionOrNull()}")
+                }
+            }
+        }
+    }
+
+    fun cancelUserChoices(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String) {
+        val conv = _currentConversation.value ?: return
+        val stepIndex = toolCall.stepIndex
+        val hubUrl = AuthPreferences.currentHubUrl
+
+        if (stepIndex != null) {
+            trajectoryEngine.markStepResponded(stepIndex)
+            trajectoryEngine.optimisticUpdateStepStatus(
+                stepIndex = stepIndex,
+                status = com.example.gemini.data.remote.dto.CortexStepStatuses.CANCELED,
+                output = "Questionnaire cancelled by user."
             )
+            _messages.value = trajectoryEngine.toChatMessages(conv.id)
+        }
+
+        val msg = _messages.value.find { it.id == messageId }
+        val canceledToolCall = toolCall.copy(
+            status = "CANCELED",
+            output = "Cancelled by user."
+        )
+        if (msg != null) {
+            val updatedToolCalls = msg.toolCalls.map { if (it.stepIndex != null && it.stepIndex == toolCall.stepIndex) canceledToolCall else it }
+            updateAssistantMessage(
+                msgId = messageId,
+                content = msg.content,
+                thought = msg.thoughtText ?: "",
+                thoughtDuration = msg.thoughtDurationMs,
+                toolCalls = updatedToolCalls,
+                isStreaming = false
+            )
+        }
+
+        viewModelScope.launch {
+            val res = agyHubClient.cancelCascadeInvocation(conv.id, hubUrl)
+            if (res.isFailure) {
+                Log.e("ChatViewModel", "cancelCascadeInvocation failed: ${res.exceptionOrNull()}")
+            }
         }
     }
 

@@ -3,6 +3,7 @@ package com.example.gemini.ui.chat
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -60,6 +61,7 @@ import com.example.gemini.data.daemon.TermuxDaemonManager
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
+import com.example.gemini.domain.model.ToolType
 import com.example.gemini.theme.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -81,7 +83,6 @@ import com.example.gemini.ui.models.ThinkingSelectorBottomSheet
 import com.example.gemini.ui.components.ToolApprovalDialog
 import com.example.gemini.ui.components.ToolApprovalDockedPanel
 import com.example.gemini.ui.settings.SettingsDialog
-import android.util.Log
 import com.example.gemini.ui.components.MarkdownBlock
 import com.example.gemini.ui.components.MarkdownBlockView
 import com.example.gemini.ui.components.parseMarkdownBlocks
@@ -334,7 +335,8 @@ fun ChatScreen(
                 allSlashCommands = fetched
             }
             val curId = currentConv?.id
-            if (!curId.isNullOrBlank() && curId != "new" && currentConv?.title != "New Chat" && messages.isEmpty()) {
+            val isExisting = currentConv != null && currentConv?.title != "New Chat" && conversations.any { it.id == currentConv?.id }
+            if (!curId.isNullOrBlank() && curId != "new" && isExisting && messages.isEmpty()) {
                 viewModel.startPersistentStream(curId)
             }
         }
@@ -596,6 +598,7 @@ fun ChatScreen(
                 onRetry = { viewModel.retryConnections() },
                 isOpen = drawerState.isOpen || drawerState.targetValue == DrawerValue.Open,
                 onSelectConversation = { id ->
+                    Log.d("CHAT_OPEN_DEBUG", "🎯 [ChatScreen] User selected conversation: id=$id")
                     viewModel.selectConversation(id)
                     scope.launch { drawerState.close() }
                 },
@@ -908,7 +911,9 @@ fun ChatScreen(
                         systemConnectionState is com.example.gemini.data.remote.SystemConnectionState.Offline ||
                         hubStatus.status == "stopped"
                     )
-                    val isExistingChat = messages.isEmpty() && currentConv != null && currentConv?.title != "New Chat" && conversations.any { it.id == currentConv?.id }
+                    val isExistingConversation = currentConv != null && currentConv?.title != "New Chat" && conversations.any { it.id == currentConv?.id }
+                    val isExistingChat = messages.isEmpty() && isExistingConversation && isLoadingConversation
+                    Log.d("CHAT_OPEN_DEBUG", "🖥️ [ChatScreen Render] convId=${currentConv?.id}, title='${currentConv?.title}', isLoading=$isLoadingConversation, isExisting=$isExistingChat, msgCount=${messages.size}, error=$conversationError, isServerStopped=$isServerStopped")
 
                     if (isServerStopped && messages.isEmpty()) {
                         BoxWithConstraints(
@@ -934,60 +939,60 @@ fun ChatScreen(
                         }
                     } else if (isServerInitializing && messages.isEmpty()) {
                         com.example.gemini.ui.components.EngineWarmingUpView()
-                    } else if (isExistingChat) {
-                        if (!conversationError.isNullOrBlank() && hubStatus.status != "online" && !isServerInitializing) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CloudOff,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "Unable to Load Chat",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
+                    } else if (!conversationError.isNullOrBlank() && messages.isEmpty() && (isExistingConversation || currentConv != null)) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Unable to Load Chat",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            SelectionContainer {
                                 Text(
                                     text = conversationError ?: "Failed to load conversation messages.",
                                     fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(
-                                    onClick = {
-                                        val convId = currentConv?.id
-                                        if (!convId.isNullOrBlank()) {
-                                            viewModel.selectConversation(convId)
-                                        } else {
-                                            viewModel.retryConnections()
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Retry", fontSize = 13.5.sp)
-                                }
                             }
-                        } else {
-                            com.example.gemini.ui.components.ConversationLoadingSkeleton()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = {
+                                    val convId = currentConv?.id
+                                    if (!convId.isNullOrBlank()) {
+                                        viewModel.selectConversation(convId)
+                                    } else {
+                                        viewModel.retryConnections()
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Retry", fontSize = 13.5.sp)
+                            }
                         }
+                    } else if (isExistingChat) {
+                        com.example.gemini.ui.components.ConversationLoadingSkeleton()
                     } else if (messages.isEmpty()) {
                         // Clean minimal empty state for true New Chat (NEVER SHOWS SKELETON LOADER)
                         val isAuth = systemConnectionState.isAuth
@@ -1126,10 +1131,10 @@ fun ChatScreen(
                                                         MarkdownBlockView(
                                                             block = block,
                                                             onApproveTool = if (isTool) { { toolCall -> viewModel.approveAndExecuteTerminalTool(toolCall, feedItem.message.id) } } else null,
-                                                            onRejectTool = if (isTool) { { toolCall -> viewModel.rejectTerminalTool(toolCall, feedItem.message.id) } } else null,
+                                                            onRejectTool = if (isTool) { { toolCall -> if (toolCall.toolType == ToolType.ASK_CHOICE) viewModel.cancelUserChoices(toolCall, feedItem.message.id) else viewModel.rejectTerminalTool(toolCall, feedItem.message.id) } } else null,
                                                             onTerminateTool = if (isTool) { { toolCall -> viewModel.terminateRunningTerminalTool(toolCall, feedItem.message.id) } } else null,
-                                                            onSubmitChoices = if (isTool) { { toolCall, summaryPayload -> viewModel.submitUserChoices(toolCall, feedItem.message.id, summaryPayload) } } else null,
-                                                            onSkipChoices = if (isTool) { { toolCall -> viewModel.skipUserChoices(toolCall, feedItem.message.id) } } else null
+                                                            onSubmitChoices = if (isTool) { { toolCall, responses, summaryPayload -> viewModel.submitUserChoices(toolCall, feedItem.message.id, responses, summaryPayload) } } else null,
+                                                            onSkipChoices = if (isTool) { { toolCall, responses -> viewModel.skipUserChoices(toolCall, feedItem.message.id, responses) } } else null
                                                         )
                                                     }
                                                 }
@@ -1167,16 +1172,20 @@ fun ChatScreen(
                                                 viewModel.approveAndExecuteTerminalTool(toolCall, msgId)
                                             },
                                             onRejectTool = { toolCall, msgId ->
-                                                viewModel.rejectTerminalTool(toolCall, msgId)
+                                                if (toolCall.toolType == ToolType.ASK_CHOICE) {
+                                                    viewModel.cancelUserChoices(toolCall, msgId)
+                                                } else {
+                                                    viewModel.rejectTerminalTool(toolCall, msgId)
+                                                }
                                             },
                                             onTerminateTool = { toolCall, msgId ->
                                                 viewModel.terminateRunningTerminalTool(toolCall, msgId)
                                             },
-                                            onSubmitChoices = { toolCall, msgId, summaryPayload ->
-                                                viewModel.submitUserChoices(toolCall, msgId, summaryPayload)
+                                            onSubmitChoices = { toolCall, msgId, responses, summaryPayload ->
+                                                viewModel.submitUserChoices(toolCall, msgId, responses, summaryPayload)
                                             },
-                                            onSkipChoices = { toolCall, msgId ->
-                                                viewModel.skipUserChoices(toolCall, msgId)
+                                            onSkipChoices = { toolCall, msgId, responses ->
+                                                viewModel.skipUserChoices(toolCall, msgId, responses)
                                             },
                                             summarizingModelName = summarizingModelName,
                                             pendingQueuedUserMessage = pendingQueuedUserMessage

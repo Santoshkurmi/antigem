@@ -1,5 +1,6 @@
 package com.example.gemini.domain.chat
 
+import android.util.Log
 import com.example.gemini.data.remote.AgyHubClient
 import com.example.gemini.data.remote.dto.*
 import com.example.gemini.domain.model.ChatAttachment
@@ -161,8 +162,11 @@ class TrajectoryEngine {
         val effectiveIndices = stepsUpdate?.indices ?: effectiveSteps?.indices?.toList() ?: emptyList()
         val totalLength = stepsUpdate?.totalLength ?: effectiveSteps?.size ?: 0
 
+        Log.d("CHAT_OPEN_DEBUG", "⚙️ [TrajectoryEngine.ingestFrame] convId=$conversationId, trajId=$trajectoryId, status=$status, stepsCount=${effectiveSteps?.size ?: 0}, indicesPreview=${effectiveIndices.take(10)}")
+
         if (!effectiveSteps.isNullOrEmpty()) {
             val isInitialFullSync = (effectiveIndices.firstOrNull() == 0) || (completedTurns.isEmpty() && activeStepsMap.isEmpty())
+            Log.d("CHAT_OPEN_DEBUG", "⚙️ [TrajectoryEngine.ingestFrame] isInitialFullSync=$isInitialFullSync (indices.first=${effectiveIndices.firstOrNull()}, completedTurns=${completedTurns.size}, activeSteps=${activeStepsMap.size})")
             if (isInitialFullSync) {
                 ingestInitialFullSync(effectiveIndices, effectiveSteps, daemonRunning)
             } else {
@@ -211,8 +215,10 @@ class TrajectoryEngine {
         val isIdle = daemonIdle && (pendingUserTurn == null)
 
         val hasPendingInteraction = activeStepsMap.any { (stepIdx, step) ->
-            (step.status == CortexStepStatuses.WAITING || step.requestedInteraction != null) &&
-                    !userRespondedStepIndices.contains(stepIdx)
+            val isAskChoice = step.metadata?.toolCall?.name == "ask_question" || step.generic?.name == "ask_question" || step.type == CortexStepTypes.ASK_QUESTION
+            val isWaiting = step.status == CortexStepStatuses.WAITING || step.requestedInteraction != null ||
+                    (isAskChoice && step.status != CortexStepStatuses.DONE && step.status != CortexStepStatuses.CANCELED && step.status != CortexStepStatuses.ERROR)
+            isWaiting && !userRespondedStepIndices.contains(stepIdx)
         }
         isWaitingInteraction = hasPendingInteraction
 
@@ -401,8 +407,11 @@ class TrajectoryEngine {
                     step.status == CortexStepStatuses.GENERATING ||
                     step.status == CortexStepStatuses.QUEUED
 
-            if ((step.status == CortexStepStatuses.WAITING || step.requestedInteraction != null) &&
-                !userRespondedStepIndices.contains(stepIndex)) {
+            val isAskChoice = step.metadata?.toolCall?.name == "ask_question" || step.generic?.name == "ask_question" || step.type == CortexStepTypes.ASK_QUESTION
+            val isWaiting = step.status == CortexStepStatuses.WAITING || step.requestedInteraction != null ||
+                    (isAskChoice && step.status != CortexStepStatuses.DONE && step.status != CortexStepStatuses.CANCELED && step.status != CortexStepStatuses.ERROR)
+
+            if (isWaiting && !userRespondedStepIndices.contains(stepIndex)) {
                 waitingFound = true
             }
 
@@ -563,6 +572,7 @@ class TrajectoryEngine {
                 }
             }
         }
+        Log.d("CHAT_OPEN_DEBUG", "📋 [TrajectoryEngine.toChatMessages] convId=$convId produced ${messages.size} messages from ${currentTurns.size} turns (roles: ${messages.map { it.role }})")
         return messages
     }
 
@@ -867,9 +877,19 @@ class TrajectoryEngine {
                     ?: mcp?.error?.takeIf { it.isNotBlank() }?.let { "Error: $it" }
                     ?: ""
             }
-            "ask_question" -> {
+            "ask_choices", "ask_question", "user_choice" -> {
+                val argsJsonStr = args?.toString()
+                val askQJson = if (askQ != null) {
+                    try { AgyHubClient.agyJson.encodeToString(AskQuestionResultDto.serializer(), askQ) } catch (_: Exception) { null }
+                } else null
+
+                command = when {
+                    !argsJsonStr.isNullOrBlank() && argsJsonStr != "{}" -> argsJsonStr
+                    !askQJson.isNullOrBlank() -> askQJson
+                    else -> meta?.toolSummary?.ifBlank { meta.toolAction.ifBlank { "ask_question" } } ?: "ask_question"
+                }
+
                 val questions = askQ?.questions ?: emptyList()
-                command = questions.firstOrNull()?.question ?: meta?.toolSummary?.ifBlank { "ask_question" } ?: "ask_question"
                 output = if (questions.isNotEmpty()) {
                     questions.joinToString("\n\n") { q ->
                         "${q.question}\n" + q.options.joinToString("\n") { "• $it" }
@@ -911,13 +931,23 @@ class TrajectoryEngine {
                 }
             }
             CortexStepStatuses.WAITING -> {
-                if (userRespondedStepIndices.contains(stepIndex)) "RUNNING" else "PENDING_APPROVAL"
+                if (toolType == ToolType.ASK_CHOICE) {
+                    if (userRespondedStepIndices.contains(stepIndex)) "RUNNING" else "AWAITING_CHOICE"
+                } else {
+                    if (userRespondedStepIndices.contains(stepIndex)) "RUNNING" else "PENDING_APPROVAL"
+                }
             }
             CortexStepStatuses.RUNNING,
             CortexStepStatuses.PENDING,
-            CortexStepStatuses.GENERATING -> "RUNNING"
-            else -> if (step.requestedInteraction != null) {
-                if (userRespondedStepIndices.contains(stepIndex)) "RUNNING" else "PENDING_APPROVAL"
+            CortexStepStatuses.GENERATING -> {
+                if (toolType == ToolType.ASK_CHOICE && !userRespondedStepIndices.contains(stepIndex)) {
+                    "AWAITING_CHOICE"
+                } else {
+                    "RUNNING"
+                }
+            }
+            else -> if (step.requestedInteraction != null || toolType == ToolType.ASK_CHOICE) {
+                if (userRespondedStepIndices.contains(stepIndex)) "RUNNING" else if (toolType == ToolType.ASK_CHOICE) "AWAITING_CHOICE" else "PENDING_APPROVAL"
             } else "RUNNING"
         }
 

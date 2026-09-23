@@ -40,8 +40,8 @@ rm -f "$TEMP_ZIP"
 
 EXCLUDE_PATTERNS=(
     "*.sock"
-    "*cache*"
-    "home/.cache/*"
+    "*/cache/*"   
+    "*/.cache/*"
     "home/.ssh/*"
     "usr/etc/ssh/ssh_host_*"
     "etc/ssh/ssh_host_*"
@@ -63,7 +63,7 @@ echo "      Calculating total files..."
 TOTAL_FILES=$(find usr home \
     \( ! -name "*.sock" \
        -a ! -path "*/cache/*" \
-       -a ! -path "home/.cache/*" \
+       -a ! -path "*/.cache/*" \
        -a ! -path "home/.ssh/*" \
        -a ! -name "ssh_host_*" \
        -a ! -path "home/.gemini/jetski-standalone-oauth-token*" \

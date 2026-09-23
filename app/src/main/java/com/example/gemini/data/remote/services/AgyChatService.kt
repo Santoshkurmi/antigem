@@ -6,7 +6,11 @@ import com.example.gemini.data.remote.AgyHubClient.AgyMediaItem
 import com.example.gemini.data.remote.AgyHubClient.Companion.resolveModelEnum
 import com.example.gemini.data.remote.core.AgyGrpcClient
 import com.example.gemini.data.remote.dto.AgyStreamFrameDto
+import com.example.gemini.data.remote.dto.AskQuestionInteractionDto
+import com.example.gemini.data.remote.dto.AskQuestionResponseItemDto
 import com.example.gemini.data.remote.dto.CancelCascadeStepsRequestDto
+import com.example.gemini.data.remote.dto.CascadeInteractionPayloadDto
+import com.example.gemini.data.remote.dto.HandleCascadeUserInteractionRequestDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -32,6 +36,7 @@ class AgyChatService(
             ignoreUnknownKeys = true
             isLenient = true
             coerceInputValues = true
+            explicitNulls = false
         }
     }
 
@@ -183,14 +188,20 @@ class AgyChatService(
             put("trajectoryVerbosity", 2)
         }.toString()
         val customHeaders = mapOf("x-conversation-id" to cascadeId)
+        Log.d("CHAT_OPEN_DEBUG", "📡 [AgyChatService] Connecting to StreamAgentStateUpdates for cascadeId=$cascadeId, hubUrl=$hubUrl")
 
         grpcClient.callStream("StreamAgentStateUpdates", payload, hubUrl, customHeaders).collect { frameJson ->
-            try {
-                val frame = jsonParser.decodeFromString<AgyStreamFrameDto>(frameJson)
-                emit(frame)
+            Log.d("CHAT_OPEN_DEBUG", "📦 [AgyChatService] Received raw stream frame (len=${frameJson.length}): ${frameJson.take(300)}")
+            val frame = try {
+                jsonParser.decodeFromString<AgyStreamFrameDto>(frameJson)
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to decode stream frame DTO: ${e.message}")
+                Log.e("CHAT_OPEN_DEBUG", "❌ [AgyChatService] JSON DECODE ERROR for frame (len=${frameJson.length}): ${frameJson.take(500)}", e)
+                throw IllegalStateException("JSON decoding error: ${e.message}", e)
             }
+            val statusStr = frame.status.ifBlank { frame.update?.status ?: "" }
+            val stepsCount = frame.steps?.size ?: frame.update?.stepsUpdate?.steps?.size ?: frame.update?.mainTrajectoryUpdate?.stepsUpdate?.steps?.size ?: 0
+            Log.d("CHAT_OPEN_DEBUG", "✅ [AgyChatService] Successfully decoded AgyStreamFrameDto: status=$statusStr, stepsCount=$stepsCount")
+            emit(frame)
         }
     }.flowOn(Dispatchers.IO)
 
@@ -321,6 +332,48 @@ class AgyChatService(
         }
 
         return Result.failure(lastErr ?: Exception("HandleCascadeUserInteraction failed across all payload formats"))
+    }
+
+    /**
+     * Handles interactive ask_question tool submissions and skips with structured responses.
+     */
+    suspend fun handleAskQuestionInteraction(
+        cascadeId: String,
+        stepIndex: Int,
+        trajectoryId: String = "",
+        responses: List<AskQuestionResponseItemDto>,
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<Unit> {
+        val req = HandleCascadeUserInteractionRequestDto(
+            cascadeId = cascadeId,
+            interaction = CascadeInteractionPayloadDto(
+                trajectoryId = trajectoryId,
+                stepIndex = stepIndex,
+                askQuestion = AskQuestionInteractionDto(
+                    responses = responses
+                )
+            )
+        )
+        val payload = jsonParser.encodeToString(HandleCascadeUserInteractionRequestDto.serializer(), req)
+        Log.d(TAG, "handleAskQuestionInteraction payload: $payload")
+
+        // Strategy A: Connect-RPC unary call
+        val unaryRes = grpcClient.callUnary("HandleCascadeUserInteraction", payload, hubUrl)
+        if (unaryRes.isSuccess) {
+            Log.d(TAG, "handleAskQuestionInteraction succeeded via Connect-RPC")
+            return Result.success(Unit)
+        }
+
+        // Strategy B: gRPC-Web framed call
+        val grpcRes = grpcClient.executeGrpcWebCall("HandleCascadeUserInteraction", payload, hubUrl)
+        if (grpcRes.isSuccess) {
+            Log.d(TAG, "handleAskQuestionInteraction succeeded via gRPC-Web")
+            return Result.success(Unit)
+        }
+
+        val err = unaryRes.exceptionOrNull() ?: grpcRes.exceptionOrNull() ?: Exception("HandleCascadeUserInteraction failed")
+        Log.e(TAG, "handleAskQuestionInteraction failed", err)
+        return Result.failure(err)
     }
 
     /**

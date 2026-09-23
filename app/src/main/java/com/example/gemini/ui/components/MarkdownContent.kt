@@ -133,8 +133,8 @@ fun MarkdownBlockView(
     onApproveTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
     onRejectTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
     onTerminateTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
-    onSubmitChoices: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
-    onSkipChoices: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null
+    onSubmitChoices: ((com.example.gemini.domain.model.ToolCall, List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto>, String) -> Unit)? = null,
+    onSkipChoices: ((com.example.gemini.domain.model.ToolCall, List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto>) -> Unit)? = null
 ) {
     when (block) {
         is MarkdownBlock.AgentThought -> {
@@ -323,8 +323,8 @@ fun MarkdownContent(
     onApproveTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
     onRejectTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
     onTerminateTool: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null,
-    onSubmitChoices: ((com.example.gemini.domain.model.ToolCall, String) -> Unit)? = null,
-    onSkipChoices: ((com.example.gemini.domain.model.ToolCall) -> Unit)? = null
+    onSubmitChoices: ((com.example.gemini.domain.model.ToolCall, List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto>, String) -> Unit)? = null,
+    onSkipChoices: ((com.example.gemini.domain.model.ToolCall, List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto>) -> Unit)? = null
 ) {
     val t0 = System.nanoTime()
     val blocks = remember(content, toolCalls) {

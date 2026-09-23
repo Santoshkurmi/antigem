@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.gemini.data.remote.HubMediaResolver
+import com.example.gemini.data.remote.dto.AskQuestionResponseItemDto
 import com.example.gemini.domain.model.ToolCall
 import com.example.gemini.domain.model.ToolType
 import com.example.gemini.theme.*
@@ -59,15 +60,16 @@ fun AgentToolCallCard(
     onApprove: ((ToolCall) -> Unit)? = null,
     onReject: ((ToolCall) -> Unit)? = null,
     onTerminate: ((ToolCall) -> Unit)? = null,
-    onSubmitChoices: ((ToolCall, String) -> Unit)? = null,
-    onSkipChoices: ((ToolCall) -> Unit)? = null
+    onSubmitChoices: ((ToolCall, List<AskQuestionResponseItemDto>, String) -> Unit)? = null,
+    onSkipChoices: ((ToolCall, List<AskQuestionResponseItemDto>) -> Unit)? = null
 ) {
     val isChoice = toolCall.toolType == ToolType.ASK_CHOICE
     if (isChoice) {
         ChoiceQuestionnaireCard(
             toolCall = toolCall,
-            onSubmit = { summary -> onSubmitChoices?.invoke(toolCall, summary) },
-            onSkip = { onSkipChoices?.invoke(toolCall) },
+            onSubmit = { responses, summary -> onSubmitChoices?.invoke(toolCall, responses, summary) },
+            onSkip = { responses -> onSkipChoices?.invoke(toolCall, responses) },
+            onCancel = { onReject?.invoke(toolCall) },
             modifier = modifier
         )
         return

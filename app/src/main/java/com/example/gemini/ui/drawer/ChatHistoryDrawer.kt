@@ -1,5 +1,6 @@
 package com.example.gemini.ui.drawer
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.expandVertically
@@ -690,6 +691,7 @@ fun ChatHistoryDrawer(
                                             if (item.subagents.isNotEmpty()) {
                                                 expandedParentIds = expandedParentIds + conv.id
                                             }
+                                            Log.d("CHAT_OPEN_DEBUG", "📂 [Drawer] User clicked conversation: id=${conv.id}, title='${conv.title}'")
                                             onSelectConversation(conv.id)
                                         },
                                         onForkConversation = onForkConversation,
@@ -787,6 +789,7 @@ fun ChatHistoryDrawer(
                                                 if (item.subagents.isNotEmpty()) {
                                                     expandedParentIds = expandedParentIds + conv.id
                                                 }
+                                                Log.d("CHAT_OPEN_DEBUG", "📂 [Drawer Compact] User clicked conversation: id=${conv.id}, title='${conv.title}'")
                                                 onSelectConversation(conv.id)
                                             },
                                             onForkConversation = onForkConversation,
@@ -1161,7 +1164,10 @@ private fun ChatHistoryItemRow(
                 if (isSelected) MaterialTheme.colorScheme.surfaceVariant
                 else Color.Transparent
             )
-            .clickable { onSelectConversation(conv.id) }
+            .clickable {
+                Log.d("CHAT_OPEN_DEBUG", "📂 [Drawer Row] User clicked: id=${conv.id}, title='${conv.title}'")
+                onSelectConversation(conv.id)
+            }
             .padding(
                 horizontal = if (isSubagent) 8.dp else 10.dp,
                 vertical = if (isSubagent) 7.dp else 9.dp
@@ -1700,6 +1706,7 @@ fun SearchChatsDialog(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
                                     .clickable {
+                                        Log.d("CHAT_OPEN_DEBUG", "📂 [Drawer Dialog] User clicked: id=${conv.id}, title='${conv.title}'")
                                         onSelectConversation(conv.id)
                                         onDismiss()
                                     }

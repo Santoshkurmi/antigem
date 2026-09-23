@@ -402,8 +402,10 @@ data class AskQuestionResultDto(
 @Serializable
 data class AskQuestionItemDto(
     val question: String = "",
-    val options: List<String> = emptyList(),
-    val is_multi_select: Boolean = false
+    val options: List<AskQuestionOptionDto> = emptyList(),
+    val is_multi_select: Boolean = false,
+    val isMultiSelect: Boolean = false,
+    val IsMultiSelect: Boolean = false
 )
 
 // ==========================================

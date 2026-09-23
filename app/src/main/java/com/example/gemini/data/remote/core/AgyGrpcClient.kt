@@ -194,11 +194,13 @@ class AgyGrpcClient(
             }
         val req = reqBuilder.build()
 
+        Log.d("CHAT_OPEN_DEBUG", "🌐 [AgyGrpcClient.callStream] Request: endpoint=$endpoint, url=$url, payload=${jsonPayload.take(200)}")
         val call = okHttpClient.newCall(req)
         currentCoroutineContext()[Job]?.invokeOnCompletion {
             call.cancel()
         }
         val resp = call.execute()
+        Log.d("CHAT_OPEN_DEBUG", "🌐 [AgyGrpcClient.callStream] Response: code=${resp.code}, msg=${resp.message}, headers=${resp.headers}")
         if (!resp.isSuccessful) {
             val err = resp.body?.string() ?: "HTTP ${resp.code}"
             resp.close()
@@ -206,29 +208,37 @@ class AgyGrpcClient(
             if (isCsrfError) {
                 csrfManager.notifyCsrfExpired(hubUrl, endpoint)
             }
+            Log.e("CHAT_OPEN_DEBUG", "❌ [AgyGrpcClient.callStream] HTTP Error: code=${resp.code}, body=$err")
             Log.e(TAG, "callStream $endpoint failed: HTTP ${resp.code}")
-            return@flow
+            throw java.io.IOException("HTTP ${resp.code}: $err")
         }
 
         val headerStatus = resp.header("grpc-status")?.toIntOrNull()
         if (headerStatus != null && headerStatus != 0) {
             val msg = resp.header("grpc-message") ?: "gRPC status $headerStatus"
             resp.close()
+            Log.e("CHAT_OPEN_DEBUG", "❌ [AgyGrpcClient.callStream] Header gRPC Status Error: status=$headerStatus, msg=$msg")
             Log.e(TAG, "callStream $endpoint header error ($headerStatus): $msg")
-            return@flow
+            throw java.io.IOException("gRPC status $headerStatus: $msg")
         }
 
         val bodyStream = resp.body?.byteStream()
         if (bodyStream == null) {
+            Log.e("CHAT_OPEN_DEBUG", "❌ [AgyGrpcClient.callStream] bodyStream is null")
             resp.close()
-            return@flow
+            throw java.io.IOException("Response body stream is null")
         }
 
         try {
             GrpcWebFrameCodec.readStreamFrames(bodyStream) { frameJson ->
+                Log.d("CHAT_OPEN_DEBUG", "📦 [AgyGrpcClient.callStream] Received decoded frame (len=${frameJson.length})")
                 emit(frameJson)
             }
+        } catch (e: Exception) {
+            Log.e("CHAT_OPEN_DEBUG", "❌ [AgyGrpcClient.callStream] Exception reading stream frames: ${e.message}", e)
+            throw e
         } finally {
+            Log.d("CHAT_OPEN_DEBUG", "🏁 [AgyGrpcClient.callStream] Stream closed for $endpoint")
             resp.close()
         }
     }.flowOn(Dispatchers.IO)
