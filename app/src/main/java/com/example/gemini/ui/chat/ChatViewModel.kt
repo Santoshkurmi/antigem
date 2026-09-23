@@ -3,6 +3,7 @@ package com.example.gemini.ui.chat
 import android.app.Application
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -859,6 +860,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private val _isNetworkConnectedState = MutableStateFlow(isNetworkConnected())
+    val isNetworkConnectedState: StateFlow<Boolean> = _isNetworkConnectedState.asStateFlow()
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            _isNetworkConnectedState.value = true
+        }
+        override fun onLost(network: Network) {
+            _isNetworkConnectedState.value = isNetworkConnected()
+        }
+        override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+            val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            _isNetworkConnectedState.value = hasInternet
+        }
+    }
+
     fun isNetworkConnected(): Boolean {
         return try {
             val cm = getApplication<Application>().getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -889,6 +907,29 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private var loginPollJob: Job? = null
+    private var lastAuthCheckTimeMs = 0L
+
+    fun onDrawerOpened() {
+        val isLoggedIn = _agyAuthInfo.value.isLoggedIn
+        val now = System.currentTimeMillis()
+        if (!isLoggedIn) {
+            // Not authenticated: check every single time user opens sidebar
+            checkAgyAuthStatus(userInitiated = false)
+        } else {
+            // Authenticated: only check after 2 minutes (120,000ms) have passed
+            if (now - lastAuthCheckTimeMs >= 120_000L) {
+                checkAgyAuthStatus(userInitiated = false)
+            }
+        }
+    }
+
+    fun cancelAgyLogin() {
+        loginPollJob?.cancel()
+        loginPollJob = null
+        _isAuthBusy.value = false
+        _pendingLoginUrl.value = null
+        checkAgyAuthStatus(userInitiated = false)
+    }
 
     fun checkAgyAuthStatus(userInitiated: Boolean = false) {
         viewModelScope.launch {
@@ -925,7 +966,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             if (res.isSuccess) {
                 val info = res.getOrThrow()
                 _agyAuthInfo.value = info
+                agyBridgeService.updateAuthState(info.isLoggedIn)
                 if (info.isLoggedIn) {
+                    lastAuthCheckTimeMs = System.currentTimeMillis()
                     _isAuthBusy.value = false
                     _pendingLoginUrl.value = null
                     loginPollJob?.cancel()
@@ -964,9 +1007,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             // Pre-check: if user is already authenticated, finish immediately!
             val preCheck = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
             if (preCheck.isSuccess && preCheck.getOrThrow().isLoggedIn) {
-                _agyAuthInfo.value = preCheck.getOrThrow()
+                val authed = preCheck.getOrThrow()
+                _agyAuthInfo.value = authed
+                agyBridgeService.updateAuthState(true)
+                lastAuthCheckTimeMs = System.currentTimeMillis()
                 _isAuthBusy.value = false
-                _authFeedbackMessage.tryEmit("Already signed in as ${preCheck.getOrThrow().displayName}!")
+                _authFeedbackMessage.tryEmit("Already signed in as ${authed.displayName}!")
                 refreshQuotas(force = true)
                 return@launch
             }
@@ -992,7 +1038,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     if (isNetworkConnected()) {
                         val res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
                         if (res.isSuccess && res.getOrThrow().isLoggedIn) {
-                            _agyAuthInfo.value = res.getOrThrow()
+                            val authed = res.getOrThrow()
+                            _agyAuthInfo.value = authed
+                            agyBridgeService.updateAuthState(true)
+                            lastAuthCheckTimeMs = System.currentTimeMillis()
                             _isAuthBusy.value = false
                             _pendingLoginUrl.value = null
                             _authFeedbackMessage.tryEmit("Signed in successfully!")
@@ -1033,6 +1082,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     status = com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED,
                     isLoggedIn = false
                 )
+                agyBridgeService.updateAuthState(false)
                 _authFeedbackMessage.tryEmit("Logged out successfully.")
                 refreshQuotas(force = true)
             } catch (e: Exception) {
@@ -1084,6 +1134,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     var pendingPkceVerifier: String? = null
 
     init {
+        try {
+            val cm = getApplication<Application>().getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            cm?.registerDefaultNetworkCallback(networkCallback)
+        } catch (e: Exception) {
+            android.util.Log.w("ChatViewModel", "Could not register network callback: ${e.message}")
+        }
+
         // 1. Hub status live monitoring via WebSocket
         viewModelScope.launch {
             while (currentCoroutineContext().isActive) {
@@ -1096,6 +1153,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 _isBridgeOnline.value = true
                                 _conversationError.value = null
                                 syncAgyConversations(force = true)
+                                val curConv = _currentConversation.value
+                                val curId = curConv?.id
+                                if (!curId.isNullOrBlank() && curId != "new" && curConv.title != "New Chat") {
+                                    _conversationError.value = null
+                                    _isLoadingConversation.value = true
+                                    startPersistentStream(curId)
+                                }
                                 checkAgyAuthStatus(userInitiated = false)
                                 refreshQuotas()
                                 loadMcpServers()
@@ -1554,6 +1618,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentTurnStartStep = 0
         totalStepsCount = 0
 
+        if (_messages.value.isEmpty()) {
+            _isLoadingConversation.value = true
+            _conversationError.value = null
+        }
+
         persistentStreamJob = viewModelScope.launch(Dispatchers.IO) {
             val hubUrl = AuthPreferences.currentHubUrl
             var isFirstChunk = true
@@ -1602,21 +1671,36 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     if (isFirstChunk) {
-                        // Stream closed without emitting any frames (EOF or new empty chat without trajectory yet).
-                        withContext(Dispatchers.Main) {
-                            _isLoadingConversation.value = false
-                            _isReconnecting.value = false
-                            val isKnownExisting = _conversations.value.any { it.id == conversationId && it.title != "New Chat" } && conversationId in knownDaemonCascadeIds
-                            if (activeStreamConversationId == conversationId) {
-                                if (isKnownExisting && _messages.value.isEmpty()) {
-                                    _conversationError.value = "Unable to load conversation messages from Antigravity Hub. Make sure 'agy' is running and tap Retry."
-                                    _isServerOnline.value = false
-                                } else {
+                        if (activeStreamConversationId != conversationId) break
+                        val isHubOnline = agyBridgeService.hubStatus.value.status == "online"
+                        val isHubStarting = agyBridgeService.hubStatus.value.status == "starting"
+                        if (isHubOnline || isHubStarting) {
+                            // Hub is alive or starting up: keep loading skeleton and retry connecting stream
+                            withContext(Dispatchers.Main) {
+                                if (_messages.value.isEmpty()) {
+                                    _isLoadingConversation.value = true
                                     _conversationError.value = null
                                 }
                             }
+                            delay(1000)
+                            continue
+                        } else {
+                            // Truly offline
+                            withContext(Dispatchers.Main) {
+                                _isLoadingConversation.value = false
+                                _isReconnecting.value = false
+                                val isKnownExisting = _conversations.value.any { it.id == conversationId && it.title != "New Chat" }
+                                if (activeStreamConversationId == conversationId) {
+                                    if (isKnownExisting && _messages.value.isEmpty()) {
+                                        _conversationError.value = "Unable to load conversation messages. Make sure Antigravity is running and tap Retry."
+                                        _isServerOnline.value = false
+                                    } else {
+                                        _conversationError.value = null
+                                    }
+                                }
+                            }
+                            break // Stop stream loop
                         }
-                        break // Stop stream loop
                     } else {
                         // Normal disconnection after receiving data; clean up in-flight states and pause briefly before reconnecting
                         withContext(Dispatchers.Main) {
@@ -1635,30 +1719,39 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     if (e is kotlinx.coroutines.CancellationException) {
                         break
                     }
-                    Log.w("ChatViewModel", "Persistent stream disconnected ($conversationId): ${e.message}. Reconnecting in 2s...")
+                    Log.w("ChatViewModel", "Persistent stream disconnected ($conversationId): ${e.message}. Reconnecting in 1.5s...")
+                    val isHubOnline = agyBridgeService.hubStatus.value.status == "online"
+                    val isHubStarting = agyBridgeService.hubStatus.value.status == "starting"
                     withContext(Dispatchers.Main) {
-                        _isServerOnline.value = false
                         _isReconnecting.value = false
-                        _isLoadingConversation.value = false
-                        val isStarting = agyBridgeService.hubStatus.value.status == "starting"
-                        if (_messages.value.isEmpty() && !isStarting && _currentConversation.value?.title != "New Chat") {
-                            val rawErr = e.message ?: "Connection failed"
-                            val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
-                                "Cannot connect to Antigravity Hub (${AuthPreferences.currentHubUrl}). Make sure 'agy --hub' is running."
-                            } else {
-                                "Antigravity Hub unreachable: $rawErr"
+                        if (isHubOnline || isHubStarting) {
+                            // Hub is running or waking up: keep loading skeleton and do not flash error
+                            _isServerOnline.value = true
+                            if (_messages.value.isEmpty()) {
+                                _isLoadingConversation.value = true
+                                _conversationError.value = null
                             }
-                            _conversationError.value = helpfulMsg
                         } else {
-                            if (isPromptInFlight || _isStreaming.value) {
-                                isPromptInFlight = false
-                                _isStreaming.value = false
-                                trajectoryEngine.cancelRunning()
-                                markLastAssistantMessageDisconnected()
+                            _isServerOnline.value = false
+                            _isLoadingConversation.value = false
+                            if (_messages.value.isEmpty() && _currentConversation.value?.title != "New Chat") {
+                                val rawErr = e.message ?: "Connection failed"
+                                val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
+                                    "Cannot connect to Antigravity. Make sure Antigravity is running and tap Retry."
+                                } else {
+                                    "Antigravity unreachable: $rawErr"
+                                }
+                                _conversationError.value = helpfulMsg
                             }
                         }
+                        if (isPromptInFlight || _isStreaming.value) {
+                            isPromptInFlight = false
+                            _isStreaming.value = false
+                            trajectoryEngine.cancelRunning()
+                            markLastAssistantMessageDisconnected()
+                        }
                     }
-                    delay(2000)
+                    delay(1500)
                 }
             }
         }
@@ -3187,6 +3280,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
+        try {
+            val cm = getApplication<Application>().getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            cm?.unregisterNetworkCallback(networkCallback)
+        } catch (_: Exception) {}
         persistentStreamJob?.cancel()
         streamingJob?.cancel()
     }

@@ -88,6 +88,7 @@ fun ChatHistoryDrawer(
     onLogin: () -> Unit = {},
     onLogout: () -> Unit = {},
     onCheckAuth: () -> Unit = {},
+    onCancelLogin: () -> Unit = {},
     isOpen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -349,8 +350,20 @@ fun ChatHistoryDrawer(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showSigningInProgressDialog = false }) {
-                    Text("Cancel")
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextButton(
+                        onClick = {
+                            showSigningInProgressDialog = false
+                            onCancelLogin()
+                        }
+                    ) {
+                        Text("Later")
+                    }
+                    TextButton(onClick = { showSigningInProgressDialog = false }) {
+                        Text("Cancel")
+                    }
                 }
             }
         )

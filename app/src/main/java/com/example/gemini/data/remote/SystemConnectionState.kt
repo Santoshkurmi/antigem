@@ -24,7 +24,8 @@ sealed class SystemConnectionState {
         val hubStatus: String = "idle",
         val hubUrl: String = AuthPreferences.currentHubUrl,
         val bridgeUrl: String = AuthPreferences.currentBridgeHttpUrl,
-        val error: String? = null
+        val error: String? = null,
+        override val isAuth: Boolean = true
     ) : SystemConnectionState()
 
     /**
@@ -40,5 +41,8 @@ sealed class SystemConnectionState {
 
     val isHubStarting: Boolean
         get() = this is Connected && this.hubStatus == "starting"
+
+    open val isAuth: Boolean
+        get() = true
 }
 

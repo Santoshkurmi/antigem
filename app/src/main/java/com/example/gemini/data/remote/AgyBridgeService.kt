@@ -168,6 +168,16 @@ class AgyBridgeService(
         } ?: false
     }
 
+    private var currentAuthState: Boolean = true
+
+    fun updateAuthState(isAuth: Boolean) {
+        currentAuthState = isAuth
+        val current = _systemConnectionState.value
+        if (current is SystemConnectionState.Connected) {
+            _systemConnectionState.value = current.copy(isAuth = isAuth)
+        }
+    }
+
     fun updateConnectionState(newState: BridgeConnectionState) {
         _connectionState.value = newState
     }
@@ -176,7 +186,8 @@ class AgyBridgeService(
         _hubStatus.value = newStatus
         _systemConnectionState.value = SystemConnectionState.Connected(
             hubStatus = newStatus.status,
-            error = newStatus.error
+            error = newStatus.error,
+            isAuth = currentAuthState
         )
     }
 
@@ -184,6 +195,7 @@ class AgyBridgeService(
         _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
         _hubStatus.value = AgyHubStatus(status = "stopped")
         _systemConnectionState.value = SystemConnectionState.Offline
+        currentAuthState = true
         try {
             activeWebSocket?.cancel()
         } catch (_: Exception) {}
@@ -368,7 +380,8 @@ class AgyBridgeService(
                     _hubStatus.value = statusObj
                     _systemConnectionState.value = SystemConnectionState.Connected(
                         hubStatus = st,
-                        error = err
+                        error = err,
+                        isAuth = currentAuthState
                     )
                     statusObj
                 }
@@ -391,7 +404,8 @@ class AgyBridgeService(
                 _connectionState.value = BridgeConnectionState.CONNECTED_READY
                 val currentHub = if (_hubStatus.value.status == "stopped") "starting" else _hubStatus.value.status
                 _systemConnectionState.value = SystemConnectionState.Connected(
-                    hubStatus = currentHub
+                    hubStatus = currentHub,
+                    isAuth = currentAuthState
                 )
                 if (_hubStatus.value.status == "stopped" || _hubStatus.value.status == "idle") {
                     val startingStatus = AgyHubStatus(status = "starting")
@@ -418,7 +432,8 @@ class AgyBridgeService(
                         _hubStatus.value = statusObj
                         _systemConnectionState.value = SystemConnectionState.Connected(
                             hubStatus = st,
-                            error = err
+                            error = err,
+                            isAuth = currentAuthState
                         )
                         trySend(statusObj)
                     }

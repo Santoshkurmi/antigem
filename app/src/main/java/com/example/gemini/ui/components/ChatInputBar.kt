@@ -168,6 +168,7 @@ fun ChatInputBar(
     speechManager: com.example.gemini.data.audio.AgyAudioTranscriptionManager? = null,
     cascadeId: String = "",
     isOnline: Boolean = true,
+    isAuth: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -499,8 +500,12 @@ fun ChatInputBar(
                     val combined = cur + sep + finalText
                     onTextFieldValueChange(TextFieldValue(combined, selection = TextRange(combined.length)))
                     if (andSend) {
-                        onSendMessage(combined.trim())
-                        onTextFieldValueChange(TextFieldValue(""))
+                        if (!isAuth) {
+                            Toast.makeText(context, "Please sign in first to send messages.", Toast.LENGTH_SHORT).show()
+                        } else {
+                            onSendMessage(combined.trim())
+                            onTextFieldValueChange(TextFieldValue(""))
+                        }
                     }
                 } else {
                     Toast.makeText(context, "No speech recognized", Toast.LENGTH_SHORT).show()
@@ -542,10 +547,15 @@ fun ChatInputBar(
             )
 
             if (andSend) {
-                onAddAttachment(att)
-                val trimmed = textFieldValue.text.trim()
-                onSendMessage(trimmed)
-                onTextFieldValueChange(TextFieldValue(""))
+                if (!isAuth) {
+                    Toast.makeText(context, "Please sign in first to send messages.", Toast.LENGTH_SHORT).show()
+                    onAddAttachment(att)
+                } else {
+                    onAddAttachment(att)
+                    val trimmed = textFieldValue.text.trim()
+                    onSendMessage(trimmed)
+                    onTextFieldValueChange(TextFieldValue(""))
+                }
             } else {
                 onAddAttachment(att)
             }
@@ -1197,11 +1207,15 @@ fun ChatInputBar(
                                 }
                             }
                         } else if (canSend) {
-                            val sendBtnColor = if (isOnline) ClaudeTerracotta else Color(0xFF6B7280)
+                            val sendBtnColor = if (!isAuth) Color(0xFF6B7280) else if (isOnline) ClaudeTerracotta else Color(0xFF6B7280)
                             Surface(
                                 onClick = {
                                     val trimmed = textFieldValue.text.trim()
                                     if (canSend) {
+                                        if (!isAuth) {
+                                            Toast.makeText(context, "Please sign in first to send messages.", Toast.LENGTH_SHORT).show()
+                                            return@Surface
+                                        }
                                         if (!isOnline) {
                                             Toast.makeText(context, "Server is offline. Start the server to send messages.", Toast.LENGTH_SHORT).show()
                                             return@Surface
@@ -1221,7 +1235,7 @@ fun ChatInputBar(
                                     Icon(
                                         imageVector = Icons.Default.ArrowUpward,
                                         contentDescription = "Send",
-                                        tint = if (isOnline) Color.White else Color(0xFFD1D5DB),
+                                        tint = if (isAuth && isOnline) Color.White else Color(0xFFD1D5DB),
                                         modifier = Modifier.size(19.dp)
                                     )
                                 }

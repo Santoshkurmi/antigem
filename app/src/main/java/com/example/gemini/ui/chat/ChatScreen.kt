@@ -198,6 +198,13 @@ fun ChatScreen(
     val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
     val hubStatus by viewModel.hubStatus.collectAsState()
     val systemConnectionState by viewModel.systemConnectionState.collectAsState()
+    val isNetworkConnected by viewModel.isNetworkConnectedState.collectAsState()
+
+    LaunchedEffect(drawerState.isOpen) {
+        if (drawerState.isOpen) {
+            viewModel.onDrawerOpened()
+        }
+    }
 
     var showModelSelector by remember { mutableStateOf(false) }
     var showThinkingSelector by remember { mutableStateOf(false) }
@@ -251,13 +258,6 @@ fun ChatScreen(
         if (currentToast != null) {
             delay(3500)
             currentToast = null
-        }
-    }
-
-    LaunchedEffect(conversationError) {
-        val err = conversationError
-        if (!err.isNullOrBlank()) {
-            showToast(err, ChatToastType.ERROR)
         }
     }
 
@@ -326,6 +326,10 @@ fun ChatScreen(
             val fetched = com.example.gemini.data.remote.SlashCommandsCache.getCommands(agyHubUrl)
             if (fetched.isNotEmpty()) {
                 allSlashCommands = fetched
+            }
+            val curId = currentConv?.id
+            if (!curId.isNullOrBlank() && curId != "new" && currentConv?.title != "New Chat" && messages.isEmpty()) {
+                viewModel.startPersistentStream(curId)
             }
         }
     }
@@ -616,6 +620,9 @@ fun ChatScreen(
                 },
                 onCheckAuth = {
                     viewModel.checkAgyAuthStatus(userInitiated = true)
+                },
+                onCancelLogin = {
+                    viewModel.cancelAgyLogin()
                 },
                 onOpenSettings = {
                     showSettingsDialog = true
@@ -935,53 +942,57 @@ fun ChatScreen(
                             }
                         }
                     } else if (messages.isEmpty() && conversations.any { it.id == currentConv?.id && it.title != "New Chat" && it.title != "Conversation" }) {
-                        // Selected an existing conversation from sidebar, but no messages loaded and stream ended
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CloudOff,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Unable to Load Chat",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Failed to load messages for \"${currentConv?.title ?: "this conversation"}\". Ensure Antigravity is running and tap Retry.",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(
-                                onClick = {
-                                    currentConv?.id?.let { viewModel.selectConversation(it) } ?: viewModel.retryConnections()
-                                },
-                                shape = RoundedCornerShape(10.dp)
+                        if (hubStatus.status == "online" || isServerInitializing) {
+                            com.example.gemini.ui.components.ConversationLoadingSkeleton()
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Refresh,
+                                    imageVector = Icons.Default.CloudOff,
                                     contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(48.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Retry", fontSize = 13.5.sp)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Unable to Load Chat",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Failed to load messages for \"${currentConv?.title ?: "this conversation"}\". Ensure Antigravity is running and tap Retry.",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = {
+                                        currentConv?.id?.let { viewModel.selectConversation(it) } ?: viewModel.retryConnections()
+                                    },
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Retry", fontSize = 13.5.sp)
+                                }
                             }
                         }
                     } else if (messages.isEmpty()) {
                         // Clean minimal empty state for true New Chat
+                        val isAuth = systemConnectionState.isAuth
                         BoxWithConstraints(
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -991,24 +1002,36 @@ fun ChatScreen(
                                     .fillMaxWidth()
                                     .verticalScroll(emptyScrollState)
                                     .heightIn(min = minHeight)
-                                    .padding(horizontal = 32.dp, vertical = 24.dp),
+                                    .padding(horizontal = 24.dp, vertical = 24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
-                                Text(
-                                    text = "How can I help you today?",
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Ask a question, brainstorm ideas, or start coding",
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                                    textAlign = TextAlign.Center
-                                )
+                                if (!isNetworkConnected) {
+                                    com.example.gemini.ui.components.NewChatOfflinePromptCard(
+                                        modifier = Modifier.padding(bottom = 20.dp)
+                                    )
+                                }
+
+                                if (!isAuth) {
+                                    com.example.gemini.ui.components.NewChatSignInPromptCard(
+                                        onSignInClick = { viewModel.loginToAgyHub(force = true) }
+                                    )
+                                } else {
+                                    Text(
+                                        text = "How can I help you today?",
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Ask a question, brainstorm ideas, or start coding",
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -1536,6 +1559,7 @@ fun ChatScreen(
                 // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)
                 ChatInputBar(
                     isOnline = systemConnectionState.isHubOnline,
+                    isAuth = systemConnectionState.isAuth,
                     selectedModel = currentModel,
                     quota = currentQuota,
                     thinkingPreference = thinkingPref,
