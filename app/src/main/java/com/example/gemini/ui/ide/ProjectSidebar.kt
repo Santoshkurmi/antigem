@@ -54,7 +54,6 @@ fun ProjectSidebar(
     var isNewFolderMode by remember { mutableStateOf(false) }
     var newItemName by remember { mutableStateOf("") }
     val daemonStatus by com.example.gemini.data.daemon.TermuxDaemonManager.status.collectAsState()
-    val daemonMessage by com.example.gemini.data.daemon.TermuxDaemonManager.statusMessage.collectAsState()
 
     Column(
         modifier = modifier
@@ -428,87 +427,6 @@ fun ProjectSidebar(
                     }
                 }
             }
-        }
-
-        // --- 4. Daemon Connection Status & Logs Footer ---
-        var showDaemonLogsDialog by remember { mutableStateOf(false) }
-
-        Spacer(modifier = Modifier.height(4.dp))
-        HorizontalDivider()
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = when (daemonStatus) {
-                com.example.gemini.data.daemon.DaemonStatus.RUNNING -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                com.example.gemini.data.daemon.DaemonStatus.STARTING -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
-                else -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showDaemonLogsDialog = true }
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(
-                            when (daemonStatus) {
-                                com.example.gemini.data.daemon.DaemonStatus.RUNNING -> Color(0xFF4CAF50)
-                                com.example.gemini.data.daemon.DaemonStatus.STARTING -> Color(0xFFFF9100)
-                                else -> Color(0xFFFF5252)
-                            },
-                            androidx.compose.foundation.shape.CircleShape
-                        )
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Daemon Status: ${daemonStatus.name}",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = daemonMessage,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (daemonStatus != com.example.gemini.data.daemon.DaemonStatus.RUNNING) {
-                    IconButton(
-                        onClick = onRefreshTree,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Retry",
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
-                Icon(
-                    imageVector = Icons.Default.Terminal,
-                    contentDescription = "View Logs",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        }
-
-        if (showDaemonLogsDialog) {
-            DaemonLogsDialog(onDismiss = { showDaemonLogsDialog = false })
         }
     }
 
