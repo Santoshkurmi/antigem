@@ -60,6 +60,7 @@ class LocalPtySession(
     initialPaneId: String? = null,
     initialWindowId: String? = null,
     val initialCommand: String? = null,
+    val forceShell: String? = null,
     initialCols: Int = 80,
     initialRows: Int = 24,
     initialWidthPx: Int = 800,
@@ -145,12 +146,16 @@ class LocalPtySession(
             LocalEnvironmentManager.ensureGlibcEnvironment(context)
 
             val shellBinary = when {
+                forceShell != null && File(bin, forceShell).exists() && File(bin, forceShell).canExecute() -> File(bin, forceShell).absolutePath
+                forceShell != null && File(bin, forceShell).exists() -> File(bin, forceShell).absolutePath
+                forceShell != null && File(forceShell).exists() -> File(forceShell).absolutePath
                 File(bin, "zsh").exists() && File(bin, "zsh").canExecute() -> File(bin, "zsh").absolutePath
                 File(bin, "bash").exists() && File(bin, "bash").canExecute() -> File(bin, "bash").absolutePath
                 File(bin, "dash").exists() && File(bin, "dash").canExecute() -> File(bin, "dash").absolutePath
                 File(bin, "sh").exists() && File(bin, "sh").canExecute() -> File(bin, "sh").absolutePath
-                File(bin, "dash").exists() -> File(bin, "dash").absolutePath
+                File(bin, "zsh").exists() -> File(bin, "zsh").absolutePath
                 File(bin, "bash").exists() -> File(bin, "bash").absolutePath
+                File(bin, "dash").exists() -> File(bin, "dash").absolutePath
                 File(bin, "sh").exists() -> File(bin, "sh").absolutePath
                 else -> "/system/bin/sh"
             }
@@ -1329,7 +1334,7 @@ object LocalTerminalManager {
         }
     }
 
-    fun createNewSession(context: Context, workingDir: String? = null) {
+    fun createNewSession(context: Context, workingDir: String? = null, forceShell: String? = null) {
         val authPrefs = AuthPreferences(context)
         managerScope.launch {
             val defaultUseSsh = !LocalEnvironmentManager.isTermuxPackage(context)
@@ -1344,13 +1349,15 @@ object LocalTerminalManager {
                     it.id.removePrefix("session-").substringBefore("-").toIntOrNull()
                 }
                 val nextWinIndex = (existingIndices.maxOrNull() ?: _sessions.value.size) + 1
-                Log.d(TAG, "[Manager] Creating local session $nextWinIndex")
+                val sessionTitle = if (forceShell == "bash") "Bash $nextWinIndex" else "Session $nextWinIndex"
+                Log.d(TAG, "[Manager] Creating local session $nextWinIndex (forceShell=$forceShell)")
                 val newSession = LocalPtySession(
                     id = "session-$nextWinIndex-${System.currentTimeMillis() % 10000}",
-                    initialTitle = "Session $nextWinIndex",
+                    initialTitle = sessionTitle,
                     context = context.applicationContext,
                     isSsh = false,
                     initialWorkingDir = workingDir,
+                    forceShell = forceShell,
                     initialCols = lastKnownCols,
                     initialRows = lastKnownRows,
                     initialWidthPx = lastKnownWidthPx,

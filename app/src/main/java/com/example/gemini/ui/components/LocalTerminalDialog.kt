@@ -643,25 +643,47 @@ fun LocalTerminalContent(
 
                         HorizontalDivider(thickness = 0.5.dp, color = Color(0x33FFFFFF))
 
-                        DropdownMenuItem(
-                            enabled = !isSyncingTmux,
-                            text = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "New Tab",
-                                        tint = if (!isSyncingTmux) ClaudeTerracotta else Color.Gray,
-                                        modifier = Modifier.size(16.dp)
+                        Surface(
+                            color = Color.Transparent,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    enabled = !isSyncingTmux,
+                                    onClick = {
+                                        LocalTerminalManager.createNewSession(context)
+                                        isTabsMenuExpanded = false
+                                    },
+                                    onLongClick = {
+                                        LocalTerminalManager.createNewSession(context, forceShell = "bash")
+                                        android.widget.Toast.makeText(context, "Created Bash session", android.widget.Toast.LENGTH_SHORT).show()
+                                        isTabsMenuExpanded = false
+                                    }
+                                )
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "New Tab",
+                                    tint = if (!isSyncingTmux) ClaudeTerracotta else Color.Gray,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = "New Session",
+                                        color = if (!isSyncingTmux) ClaudeTerracotta else Color.Gray,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("New Session", color = if (!isSyncingTmux) ClaudeTerracotta else Color.Gray, fontSize = 13.sp)
+                                    Text(
+                                        text = "Long-press to force Bash shell",
+                                        color = Color(0x88FFFFFF),
+                                        fontSize = 10.sp
+                                    )
                                 }
-                            },
-                            onClick = {
-                                LocalTerminalManager.createNewSession(context)
-                                isTabsMenuExpanded = false
                             }
-                        )
+                        }
                     }
                 }
 

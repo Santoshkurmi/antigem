@@ -9,12 +9,13 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"gemini-server/pkg/config"
 )
 
 var loginURLRegex = regexp.MustCompile(`https://accounts\.google\.com/[^\s"'<>]+`)
@@ -65,25 +66,9 @@ func NewHubManager(hubPort, workspaceDir, appDataDir string) *HubManager {
 
 // resolveAgyBinary finds the agy executable in standard locations.
 func resolveAgyBinary() string {
-	home, _ := os.UserHomeDir()
-	candidates := []string{
-		filepath.Join(home, ".gemini", "bin", "agy"),
-		"/data/data/com.termux/files/home/.gemini/bin/agy",
-		"/usr/bin/agy",
-		"/usr/local/bin/agy",
-		"/data/data/com.termux/files/usr/bin/agy",
-	}
-
-	for _, c := range candidates {
-		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
-			return c
-		}
-	}
-
-	if p, err := exec.LookPath("agy"); err == nil {
+	if p := config.SafeLookPath("agy"); p != "" {
 		return p
 	}
-
 	return "agy"
 }
 
@@ -181,12 +166,21 @@ func (m *HubManager) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 
-	cmd := exec.CommandContext(ctx, m.AgyBinPath, args...)
+	shArgs := append([]string{"-c", `exec agy "$@"`, "agy"}, args...)
+	cmd := exec.CommandContext(ctx, "sh", shArgs...)
+
 	// Set required environment variables for agy hub mode
 	home, _ := os.UserHomeDir()
+	termuxBin := "/data/data/com.termux/files/usr/bin"
+	geminiBin := "/data/data/com.termux/files/home/.gemini/bin"
+	if home != "" {
+		geminiBin = home + "/.gemini/bin"
+	}
+
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
 		"USERPROFILE="+home,
+		"PATH="+geminiBin+":"+termuxBin+":/usr/local/bin:/usr/bin:/bin:/system/bin:/system/xbin:"+os.Getenv("PATH"),
 		"AGY_ENABLE_HUB=1",
 		"ANTIGRAVITY_VSCODE_HOST=1",
 		"ANTIGRAVITY_AUTH_SUCCESS_APP=vscode",
@@ -202,7 +196,7 @@ func (m *HubManager) Start() error {
 		cancel()
 		m.setStatus(HubStatusError, err.Error())
 		m.mu.Unlock()
-		return fmt.Errorf("failed to start agy hub (%s): %w", m.AgyBinPath, err)
+		return fmt.Errorf("failed to start agy hub via sh: %w", err)
 	}
 
 	m.cmd = cmd

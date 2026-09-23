@@ -9,23 +9,91 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
+	"gemini-server/pkg/config"
 	"gemini-server/pkg/models"
 )
 
 var (
-	aheadReg  = regexp.MustCompile(`ahead (\d+)`)
-	behindReg = regexp.MustCompile(`behind (\d+)`)
+	aheadReg        = regexp.MustCompile(`ahead (\d+)`)
+	behindReg       = regexp.MustCompile(`behind (\d+)`)
+	cachedGitBinary string
+	cachedGitOnce   sync.Once
 )
 
+func getGitBinary() string {
+	cachedGitOnce.Do(func() {
+		if p := config.SafeLookPath("git"); p != "" {
+			cachedGitBinary = p
+			return
+		}
+		cachedGitBinary = "git"
+	})
+	return cachedGitBinary
+}
+
+func getEnv() []string {
+	env := os.Environ()
+	termuxBin := "/data/data/com.termux/files/usr/bin"
+	home, _ := os.UserHomeDir()
+	geminiBin := filepath.Join(home, ".gemini", "bin")
+
+	pathFound := false
+	for i, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			pathFound = true
+			curPath := strings.TrimPrefix(e, "PATH=")
+			var newParts []string
+			if !strings.Contains(curPath, termuxBin) {
+				newParts = append(newParts, termuxBin)
+			}
+			if home != "" && !strings.Contains(curPath, geminiBin) {
+				newParts = append(newParts, geminiBin)
+			}
+			newParts = append(newParts, curPath)
+			env[i] = "PATH=" + strings.Join(newParts, ":")
+			break
+		}
+	}
+	if !pathFound {
+		env = append(env, "PATH="+termuxBin+":"+geminiBin+":/usr/local/bin:/usr/bin:/bin:/system/bin:/system/xbin")
+	}
+	return env
+}
+
+func cleanDir(dir string) (string, error) {
+	d := config.ExpandHome(strings.TrimSpace(dir))
+	if d == "" {
+		return "", fmt.Errorf("empty project directory")
+	}
+	d = filepath.Clean(d)
+	fi, err := os.Stat(d)
+	if err != nil {
+		return "", fmt.Errorf("project directory does not exist: %s", d)
+	}
+	if !fi.IsDir() {
+		return "", fmt.Errorf("project path is not a directory: %s", d)
+	}
+	return d, nil
+}
+
 func runGitCmd(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
+	resolvedDir, err := cleanDir(dir)
+	if err != nil {
+		return "", err
+	}
+
+	shArgs := append([]string{"-c", `exec git "$@"`, "git"}, args...)
+	cmd := exec.Command("sh", shArgs...)
+	cmd.Dir = resolvedDir
+	cmd.Env = getEnv()
+
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errOut
-	err := cmd.Run()
-	if err != nil {
+
+	if err := cmd.Run(); err != nil {
 		errStr := strings.TrimSpace(errOut.String())
 		if errStr == "" {
 			errStr = strings.TrimSpace(out.String())
@@ -38,24 +106,83 @@ func runGitCmd(dir string, args ...string) (string, error) {
 	return out.String(), nil
 }
 
-// GetStatus parses git status into structured Staged, Unstaged, and Untracked lists.
-func GetStatus(projectDir string) (*models.GitStatusResponse, error) {
-	out, err := runGitCmd(projectDir, "status", "--porcelain=v1", "-b", "-uall")
+// runGitDiffCmd handles git diff commands where exit code 1 signifies differences exist (not a fatal failure).
+func runGitDiffCmd(dir string, args ...string) (string, error) {
+	resolvedDir, err := cleanDir(dir)
 	if err != nil {
-		errStr := err.Error()
-		if strings.Contains(strings.ToLower(errStr), "not a git repository") {
-			return &models.GitStatusResponse{
+		return "", err
+	}
+
+	shArgs := append([]string{"-c", `exec git "$@"`, "git"}, args...)
+	cmd := exec.Command("sh", shArgs...)
+	cmd.Dir = resolvedDir
+	cmd.Env = getEnv()
+
+	var out, errOut bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errOut
+
+	err = cmd.Run()
+	if err != nil {
+		// Exit code 1 for git diff indicates differences were found
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return out.String(), nil
+		}
+		errStr := strings.TrimSpace(errOut.String())
+		if errStr == "" {
+			errStr = strings.TrimSpace(out.String())
+		}
+		if errStr == "" {
+			errStr = err.Error()
+		}
+		return out.String(), fmt.Errorf("%s", errStr)
+	}
+	return out.String(), nil
+}
+
+func unquotePath(p string) string {
+	p = strings.TrimSpace(p)
+	if strings.HasPrefix(p, "\"") && strings.HasSuffix(p, "\"") {
+		if unq, err := strconv.Unquote(p); err == nil {
+			return unq
+		}
+	}
+	return p
+}
+
+// GetStatus parses git status into structured Staged, Unstaged, and Untracked lists.
+func GetStatus(projectDir string) (res *models.GitStatusResponse, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			res = &models.GitStatusResponse{
 				IsGitRepo:      false,
-				Branch:         "",
+				Branch:         "HEAD",
 				StagedFiles:    []models.GitFileStatus{},
 				UnstagedFiles:  []models.GitFileStatus{},
 				UntrackedFiles: []models.GitFileStatus{},
-			}, nil
+			}
+			err = fmt.Errorf("panic in GetStatus: %v", r)
 		}
-		return nil, err
+	}()
+
+	emptyResp := &models.GitStatusResponse{
+		IsGitRepo:      false,
+		Branch:         "HEAD",
+		StagedFiles:    []models.GitFileStatus{},
+		UnstagedFiles:  []models.GitFileStatus{},
+		UntrackedFiles: []models.GitFileStatus{},
 	}
 
-	res := &models.GitStatusResponse{
+	out, err := runGitCmd(projectDir, "status", "--porcelain=v1", "-b", "-uall")
+	if err != nil {
+		errStr := strings.ToLower(err.Error())
+		if strings.Contains(errStr, "not a git repository") || strings.Contains(errStr, "does not exist") || strings.Contains(errStr, "no such file") {
+			return emptyResp, nil
+		}
+		return emptyResp, err
+	}
+
+	res = &models.GitStatusResponse{
 		IsGitRepo:      true,
 		Branch:         "HEAD",
 		StagedFiles:    []models.GitFileStatus{},
@@ -76,9 +203,11 @@ func GetStatus(projectDir string) (*models.GitStatusResponse, error) {
 				res.Branch = strings.TrimPrefix(header, "Initial commit on ")
 			} else if strings.HasPrefix(header, "No commits yet on ") {
 				res.Branch = strings.TrimPrefix(header, "No commits yet on ")
+			} else if strings.HasPrefix(header, "HEAD (no branch)") {
+				res.Branch = "HEAD"
 			} else {
 				parts := strings.SplitN(header, "...", 2)
-				res.Branch = parts[0]
+				res.Branch = strings.TrimSpace(parts[0])
 				if len(parts) > 1 {
 					trackingPart := parts[1]
 					if idx := strings.Index(trackingPart, " ["); idx != -1 {
@@ -98,20 +227,21 @@ func GetStatus(projectDir string) (*models.GitStatusResponse, error) {
 			continue
 		}
 
-		if len(line) < 4 {
+		if len(line) < 3 {
 			continue
 		}
 
 		indexStatus := line[0]
 		workTreeStatus := line[1]
-		filePath := strings.TrimSpace(line[3:])
+		filePath := strings.TrimSpace(line[2:])
+		filePath = unquotePath(filePath)
 
 		// Handle renamed files (e.g. "old -> new")
 		oldPath := ""
 		if strings.Contains(filePath, " -> ") {
 			parts := strings.SplitN(filePath, " -> ", 2)
-			oldPath = parts[0]
-			filePath = parts[1]
+			oldPath = unquotePath(parts[0])
+			filePath = unquotePath(parts[1])
 		}
 
 		// 1. Untracked
@@ -154,11 +284,15 @@ func GetStatus(projectDir string) (*models.GitStatusResponse, error) {
 
 // InitRepo initializes a new Git repository and generates a .gitignore if missing.
 func InitRepo(projectDir string) error {
-	_, err := runGitCmd(projectDir, "init")
+	resolvedDir, err := cleanDir(projectDir)
 	if err != nil {
 		return err
 	}
-	gitignorePath := filepath.Join(projectDir, ".gitignore")
+	_, err = runGitCmd(resolvedDir, "init")
+	if err != nil {
+		return err
+	}
+	gitignorePath := filepath.Join(resolvedDir, ".gitignore")
 	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
 		defaultIgnore := `# Dependencies & Build
 node_modules/
@@ -243,7 +377,7 @@ func GetBranches(projectDir string) ([]models.GitBranchInfo, error) {
 		return []models.GitBranchInfo{}, nil
 	}
 
-	var branches []models.GitBranchInfo
+	branches := []models.GitBranchInfo{}
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -272,6 +406,10 @@ func GetBranches(projectDir string) ([]models.GitBranchInfo, error) {
 
 // CheckoutBranch switches to an existing branch or creates a new one.
 func CheckoutBranch(projectDir, branchName string, create bool) error {
+	branchName = strings.TrimSpace(branchName)
+	if branchName == "" {
+		return fmt.Errorf("branch name cannot be empty")
+	}
 	if create {
 		_, err := runGitCmd(projectDir, "checkout", "-b", branchName)
 		return err
@@ -281,8 +419,13 @@ func CheckoutBranch(projectDir, branchName string, create bool) error {
 }
 
 func cleanRelPath(projectDir, p string) string {
+	resolvedDir, err := cleanDir(projectDir)
+	if err != nil {
+		resolvedDir = projectDir
+	}
+	p = unquotePath(p)
 	if filepath.IsAbs(p) {
-		if rel, err := filepath.Rel(projectDir, p); err == nil && !strings.HasPrefix(rel, "..") {
+		if rel, err := filepath.Rel(resolvedDir, p); err == nil && !strings.HasPrefix(rel, "..") {
 			return filepath.ToSlash(rel)
 		}
 	}
@@ -297,7 +440,13 @@ func Stage(projectDir string, paths []string) error {
 	}
 	var cleanPaths []string
 	for _, p := range paths {
-		cleanPaths = append(cleanPaths, cleanRelPath(projectDir, p))
+		if strings.TrimSpace(p) != "" {
+			cleanPaths = append(cleanPaths, cleanRelPath(projectDir, p))
+		}
+	}
+	if len(cleanPaths) == 0 {
+		_, err := runGitCmd(projectDir, "add", "-A")
+		return err
 	}
 	args := append([]string{"add", "--"}, cleanPaths...)
 	_, err := runGitCmd(projectDir, args...)
@@ -324,6 +473,9 @@ func Unstage(projectDir string, paths []string) error {
 
 	for _, p := range paths {
 		rel := cleanRelPath(projectDir, p)
+		if rel == "" {
+			continue
+		}
 		_, err := runGitCmd(projectDir, "restore", "--staged", "--", rel)
 		if err != nil {
 			_, err = runGitCmd(projectDir, "reset", "HEAD", "--", rel)
@@ -346,6 +498,9 @@ func Discard(projectDir string, paths []string) error {
 
 	for _, p := range paths {
 		rel := cleanRelPath(projectDir, p)
+		if rel == "" {
+			continue
+		}
 		_, err := runGitCmd(projectDir, "restore", "--", rel)
 		if err != nil {
 			_, _ = runGitCmd(projectDir, "checkout", "--", rel)
@@ -355,9 +510,12 @@ func Discard(projectDir string, paths []string) error {
 	return nil
 }
 
-
 // Commit creates a new commit with the given message.
 func Commit(projectDir, message string) error {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return fmt.Errorf("commit message cannot be empty")
+	}
 	_, err := runGitCmd(projectDir, "commit", "-m", message)
 	return err
 }
@@ -388,23 +546,37 @@ func StashPop(projectDir string) error {
 	return err
 }
 
-// GetDiff retrieves the unified diff for a single file.
+// GetDiff retrieves the unified diff for a single file safely.
 func GetDiff(projectDir, path string, staged bool) (*models.GitDiffResponse, error) {
-	var out string
-	var err error
-
-	if staged {
-		out, err = runGitCmd(projectDir, "diff", "--cached", "--", path)
-	} else {
-		out, err = runGitCmd(projectDir, "diff", "--", path)
-		if out == "" {
-			fullPath := filepath.Join(projectDir, path)
-			out, _ = runGitCmd(projectDir, "diff", "--no-index", "/dev/null", fullPath)
-		}
+	resolvedDir, err := cleanDir(projectDir)
+	if err != nil {
+		return &models.GitDiffResponse{
+			Path:      path,
+			Staged:    staged,
+			Diff:      "",
+			Additions: 0,
+			Deletions: 0,
+		}, err
 	}
 
-	if err != nil && out == "" {
-		return nil, err
+	relPath := cleanRelPath(resolvedDir, path)
+	fullPath := filepath.Join(resolvedDir, relPath)
+
+	var out string
+	if staged {
+		out, err = runGitDiffCmd(resolvedDir, "diff", "--cached", "--", relPath)
+		// If HEAD is unborn / empty repository, diff against empty tree hash (4b825dc642cb6eb9a060e54bf8d69288fbee4904)
+		if err != nil && strings.Contains(strings.ToLower(err.Error()), "unknown revision") {
+			out, err = runGitDiffCmd(resolvedDir, "diff", "--cached", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "--", relPath)
+		}
+	} else {
+		out, err = runGitDiffCmd(resolvedDir, "diff", "--", relPath)
+		if out == "" {
+			// For untracked or new files, diff against /dev/null
+			if fi, statErr := os.Stat(fullPath); statErr == nil && !fi.IsDir() {
+				out, _ = runGitDiffCmd(resolvedDir, "diff", "--no-index", "/dev/null", fullPath)
+			}
+		}
 	}
 
 	additions := 0
@@ -445,12 +617,14 @@ func GetLog(projectDir string, limit int, skip int) ([]models.GitCommitLog, erro
 
 	out, err := runGitCmd(projectDir, args...)
 	if err != nil {
+		// Empty repo with no commits yet returns empty list cleanly
 		return []models.GitCommitLog{}, nil
 	}
 
-	var logs []models.GitCommitLog
+	logs := []models.GitCommitLog{}
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
@@ -466,25 +640,54 @@ func GetLog(projectDir string, limit int, skip int) ([]models.GitCommitLog, erro
 		}
 	}
 
-	if logs == nil {
-		logs = []models.GitCommitLog{}
-	}
 	return logs, nil
 }
 
 // GetCommitDetails returns detailed metadata and changed files for a commit.
 func GetCommitDetails(projectDir, hash string) (*models.GitCommitDetails, error) {
+	hash = strings.TrimSpace(hash)
+	if hash == "" {
+		return nil, fmt.Errorf("hash parameter required")
+	}
+
 	headerOut, err := runGitCmd(projectDir, "show", "-s", "--format=%H%x00%h%x00%an%x00%cr%x00%s%x00%b", hash)
 	if err != nil {
 		return nil, err
 	}
 	parts := strings.Split(headerOut, "\x00")
-	if len(parts) < 6 {
-		return nil, fmt.Errorf("invalid commit header format")
+
+	hashVal := hash
+	shortHash := hash
+	if len(shortHash) > 7 {
+		shortHash = shortHash[:7]
+	}
+	author := ""
+	date := ""
+	subject := ""
+	body := ""
+
+	if len(parts) > 0 && parts[0] != "" {
+		hashVal = parts[0]
+	}
+	if len(parts) > 1 && parts[1] != "" {
+		shortHash = parts[1]
+	}
+	if len(parts) > 2 {
+		author = parts[2]
+	}
+	if len(parts) > 3 {
+		date = parts[3]
+	}
+	if len(parts) > 4 {
+		subject = parts[4]
+	}
+	if len(parts) > 5 {
+		body = strings.TrimSpace(parts[5])
 	}
 
-	filesOut, _ := runGitCmd(projectDir, "diff-tree", "--no-commit-id", "--name-status", "-r", hash)
-	var changedFiles []models.GitCommitFileChange
+	// Use --root to support root commits
+	filesOut, _ := runGitCmd(projectDir, "diff-tree", "--no-commit-id", "--name-status", "--root", "-r", hash)
+	changedFiles := []models.GitCommitFileChange{}
 	for _, line := range strings.Split(filesOut, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -494,29 +697,30 @@ func GetCommitDetails(projectDir, hash string) (*models.GitCommitDetails, error)
 		if len(fields) >= 2 {
 			changedFiles = append(changedFiles, models.GitCommitFileChange{
 				Status: fields[0],
-				Path:   fields[1],
+				Path:   unquotePath(fields[1]),
 			})
 		}
 	}
 
 	return &models.GitCommitDetails{
-		Hash:         parts[0],
-		ShortHash:    parts[1],
-		Author:       parts[2],
-		Date:         parts[3],
-		Subject:      parts[4],
-		Body:         strings.TrimSpace(parts[5]),
+		Hash:         hashVal,
+		ShortHash:    shortHash,
+		Author:       author,
+		Date:         date,
+		Subject:      subject,
+		Body:         body,
 		ChangedFiles: changedFiles,
 	}, nil
 }
 
 // GetCommitFileDiff returns unified diff of a specific file at a commit vs its parent.
 func GetCommitFileDiff(projectDir, hash, filePath string) (string, error) {
-	return runGitCmd(projectDir, "show", "--format=", "--patch", hash, "--", filePath)
+	relPath := cleanRelPath(projectDir, filePath)
+	return runGitDiffCmd(projectDir, "show", "--format=", "--patch", hash, "--", relPath)
 }
 
 // GetCommitFileContent returns the full content of a file at a specific commit.
 func GetCommitFileContent(projectDir, hash, filePath string) (string, error) {
-	return runGitCmd(projectDir, "show", fmt.Sprintf("%s:%s", hash, filePath))
+	relPath := cleanRelPath(projectDir, filePath)
+	return runGitCmd(projectDir, "show", fmt.Sprintf("%s:%s", hash, relPath))
 }
-

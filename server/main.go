@@ -2,12 +2,16 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -31,6 +35,67 @@ Flags:
   --no-hub               Skip launching AGY Hub (run IDE server only)
   -d, --dir <path>       Custom workspace directory
   -h, --help             Show help documentation`)
+}
+
+// statusRecorder intercepts HTTP status code and response body for logging and error reporting
+type statusRecorder struct {
+	http.ResponseWriter
+	statusCode   int
+	responseBody bytes.Buffer
+	wroteHeader  bool
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	if !r.wroteHeader {
+		r.statusCode = code
+		r.wroteHeader = true
+		r.ResponseWriter.WriteHeader(code)
+	}
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	if !r.wroteHeader {
+		r.WriteHeader(http.StatusOK)
+	}
+	if r.responseBody.Len() < 4096 {
+		r.responseBody.Write(b)
+	}
+	return r.ResponseWriter.Write(b)
+}
+
+// formatHumanCrash converts raw runtime panics and stacks into human-readable diagnostics
+func formatHumanCrash(p interface{}, rawStack []byte) (reason string, location string) {
+	reason = fmt.Sprintf("%v", p)
+	switch {
+	case strings.Contains(reason, "invalid memory address") || strings.Contains(reason, "nil pointer"):
+		reason = "Nil Pointer / Missing Object (tried to access data that was not initialized)"
+	case strings.Contains(reason, "index out of range"):
+		reason = "Array/Slice Index Out Of Range (tried to read beyond array length)"
+	case strings.Contains(reason, "slice bounds out of range"):
+		reason = "Slice Bounds Out Of Range"
+	case strings.Contains(reason, "concurrent map"):
+		reason = "Concurrent Map Access Collision"
+	}
+
+	lines := strings.Split(string(rawStack), "\n")
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if (strings.Contains(line, "gemini-server/pkg/") || strings.Contains(line, "gemini-server/main.go")) && !strings.Contains(line, "recoveryHandler") {
+			if i+1 < len(lines) && strings.Contains(lines[i+1], ".go:") {
+				fileLoc := strings.TrimSpace(lines[i+1])
+				if idx := strings.Index(fileLoc, " +0x"); idx != -1 {
+					fileLoc = fileLoc[:idx]
+				}
+				funcName := line
+				if idx := strings.LastIndex(funcName, "/"); idx != -1 {
+					funcName = funcName[idx+1:]
+				}
+				return reason, fmt.Sprintf("%s (in %s)", fileLoc, funcName)
+			}
+			return reason, line
+		}
+	}
+	return reason, "Unknown internal code location"
 }
 
 func main() {
@@ -212,9 +277,94 @@ func main() {
 		mux.ServeHTTP(w, r)
 	})
 
+	// Global Panic Recovery & Error Logging Middleware:
+	// 1. Prevents any API handler panic or crash from bringing down the Go server
+	// 2. Formats and prints truncated request payload, query params, and error details to stdout/log stream
+	recoveryHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Bypass recorder for WebSocket upgrade requests so Gorilla websocket can hijack directly
+		if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" || r.URL.Path == "/ws" {
+			defer func() {
+				if p := recover(); p != nil {
+					log.Printf("\033[1;31m[WS CRASH / PANIC RECOVERED] %s: %v\033[0m\n", r.URL.Path, p)
+					debug.PrintStack()
+				}
+			}()
+			corsHandler.ServeHTTP(w, r)
+			return
+		}
+
+		var reqPayload string
+		if r.Body != nil && !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 4096))
+			if err == nil && len(bodyBytes) > 0 {
+				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+				trimmed := strings.TrimSpace(string(bodyBytes))
+				if len(trimmed) > 300 {
+					reqPayload = trimmed[:300] + "... (truncated)"
+				} else {
+					reqPayload = trimmed
+				}
+			}
+		}
+
+		rec := &statusRecorder{
+			ResponseWriter: w,
+			statusCode:     http.StatusOK,
+		}
+
+		defer func() {
+			if p := recover(); p != nil {
+				rawStack := debug.Stack()
+				reason, codeLoc := formatHumanCrash(p, rawStack)
+
+				log.Printf("\033[1;31m═══════════════════════════════════════════════════════════════\033[0m\n")
+				log.Printf("\033[1;31m[API CRASH RECOVERED SAFELY] %s %s\033[0m\n", r.Method, r.URL.Path)
+				if r.URL.RawQuery != "" {
+					log.Printf("  \033[1;33m• Query:\033[0m    %s\n", r.URL.RawQuery)
+				}
+				if reqPayload != "" {
+					log.Printf("  \033[1;33m• Payload:\033[0m  %s\n", reqPayload)
+				}
+				log.Printf("  \033[1;31m• Reason:\033[0m   %s\n", reason)
+				log.Printf("  \033[1;36m• Code Line:\033[0m %s\n", codeLoc)
+				log.Printf("\033[1;31m═══════════════════════════════════════════════════════════════\033[0m\n")
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"error":    fmt.Sprintf("Internal Server Error: %s", reason),
+					"location": codeLoc,
+					"success":  false,
+				})
+			}
+		}()
+
+		corsHandler.ServeHTTP(rec, r)
+
+		// Log API errors (status >= 400 or response payload containing "error" / "success":false)
+		respStr := rec.responseBody.String()
+		isErrorResp := rec.statusCode >= 400 || (strings.Contains(respStr, `"error"`) && strings.Contains(respStr, `"success":false`))
+		if isErrorResp {
+			log.Printf("\033[1;33m[API ERROR %d] %s %s\033[0m\n", rec.statusCode, r.Method, r.URL.Path)
+			if r.URL.RawQuery != "" {
+				log.Printf("  \033[33m• Query:\033[0m   %s\n", r.URL.RawQuery)
+			}
+			if reqPayload != "" {
+				log.Printf("  \033[33m• Payload:\033[0m %s\n", reqPayload)
+			}
+			if len(respStr) > 0 {
+				respSnippet := strings.TrimSpace(respStr)
+				if len(respSnippet) > 300 {
+					respSnippet = respSnippet[:300] + "... (truncated)"
+				}
+				log.Printf("  \033[31m• Error Response:\033[0m %s\n", respSnippet)
+			}
+		}
+	})
+
 	server := &http.Server{
 		Addr:         "0.0.0.0:" + cfg.Port,
-		Handler:      corsHandler,
+		Handler:      recoveryHandler,
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}
