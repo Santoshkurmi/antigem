@@ -578,6 +578,18 @@ fun ChatScreen(
                 val decoded = try { java.net.URLDecoder.decode(rawUrl, "UTF-8") } catch (_: Exception) { rawUrl }
                 val cleanPath = decoded.removePrefix("file://").substringBefore("#")
                 activeFileDetailsPath = cleanPath
+            },
+            onOpenConversation = { convId ->
+                val cleanId = convId.trim()
+                val target = conversations.find { it.id.equals(cleanId, ignoreCase = true) }
+                if (target != null) {
+                    viewModel.selectConversation(target.id)
+                    if (drawerState.isOpen) {
+                        scope.launch { drawerState.close() }
+                    }
+                } else {
+                    android.widget.Toast.makeText(context, "This conversation doesn't exist", android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         )
     }
@@ -591,6 +603,9 @@ fun ChatScreen(
             override fun openUri(uri: String) {
                 if (uri.startsWith("file://", ignoreCase = true) || uri.startsWith("/")) {
                     fileLinkHandler.onOpenFile(uri)
+                } else if (uri.startsWith("conversation://", ignoreCase = true)) {
+                    val convId = uri.removePrefix("conversation://").substringBefore("#").substringBefore("/").trim()
+                    fileLinkHandler.onOpenConversation(convId)
                 } else {
                     try {
                         currentUriHandler.openUri(uri)

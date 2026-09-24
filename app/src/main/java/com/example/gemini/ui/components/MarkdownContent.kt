@@ -1401,9 +1401,10 @@ data class FormattedInlineResult(
 private val BR_REGEX = Regex("<br\\s*/?>", RegexOption.IGNORE_CASE)
 
 private val INLINE_MARKDOWN_PATTERN: Pattern = Pattern.compile(
-    "(\\[(.*?)\\]\\(((?:https?|file)://[^\\s)]+)\\))|" +                              // 1: Markdown Link [text](url)
-    "(<a\\s+href=[\"']((?:https?|file)://[^\"']+)[\"']\\s*>(.*?)</a>)|" +             // 4: HTML Link <a href="url">text</a>
+    "(\\[(.*?)\\]\\(((?:https?|file|conversation)://[^\\s)]+|/[^\\s)]+)\\))|" +                              // 1: Markdown Link [text](url)
+    "(<a\\s+href=[\"']((?:https?|file|conversation)://[^\"']+|/[^\"']+)[\"']\\s*>(.*?)</a>)|" +             // 4: HTML Link <a href="url">text</a>
     "(file:///[a-zA-Z0-9_./\\-#]+)|" +                                                 // 7: Bare file link file:///...
+    "(conversation://[a-zA-Z0-9_./\\-#]+)|" +                                          // Bare conversation link conversation://...
     "(`([^`\\n]+)`)|" +                                                                // 8: Inline code `code`
     "(<code>(.*?)</code>)|" +                                                          // 10: HTML code <code>code</code>
     "([$]{1,2}([^$\\n]+)[$]{1,2})|" +                                                  // 12: Inline Math $formula$ or $$formula$$
@@ -1495,12 +1496,41 @@ fun FormattedInlineText(
     )
 }
 
+private fun appendFormattedContent(
+    builder: AnnotatedString.Builder,
+    content: String,
+    isDark: Boolean,
+    density: Density?,
+    fileLinkHandler: FileLinkHandler?,
+    inlineContentMap: MutableMap<String, InlineTextContent>,
+    depth: Int
+) {
+    if (depth >= 3 || (!content.contains('[') && !content.contains('<') && !content.contains('`') &&
+        !content.contains('$') && !content.contains('*') && !content.contains('_') &&
+        !content.contains("conversation://", ignoreCase = true) && !content.contains("file://", ignoreCase = true))) {
+        builder.append(content)
+        return
+    }
+
+    val nested = buildRichAnnotatedString(
+        text = content,
+        globalStrikethrough = false,
+        isDark = isDark,
+        density = density,
+        fileLinkHandler = fileLinkHandler,
+        depth = depth + 1
+    )
+    builder.append(nested.annotatedString)
+    inlineContentMap.putAll(nested.inlineContent)
+}
+
 private fun buildRichAnnotatedString(
     text: String,
     globalStrikethrough: Boolean = false,
     isDark: Boolean = false,
     density: Density? = null,
-    fileLinkHandler: FileLinkHandler? = null
+    fileLinkHandler: FileLinkHandler? = null,
+    depth: Int = 0
 ): FormattedInlineResult {
     val t0 = System.nanoTime()
     val builder = AnnotatedString.Builder()
@@ -1530,9 +1560,37 @@ private fun buildRichAnnotatedString(
             // Markdown Link [title](url)
             val linkTitle = fullMatch.substringAfter("[").substringBefore("](")
             val linkUrl = fullMatch.substringAfter("](").substringBeforeLast(")")
+            val isConversation = linkUrl.startsWith("conversation://", ignoreCase = true)
             val isFile = linkUrl.startsWith("file://", ignoreCase = true) || linkUrl.startsWith("/")
 
-            if (isFile) {
+            if (isConversation) {
+                val convId = linkUrl.removePrefix("conversation://").substringBefore("#").substringBefore("/").trim()
+                val displayLabel = if (linkTitle.isNotBlank() && !linkTitle.startsWith("conversation://", ignoreCase = true)) {
+                    linkTitle
+                } else {
+                    "Chat #${convId.take(8)}"
+                }
+
+                builder.pushLink(
+                    LinkAnnotation.Clickable(
+                        tag = linkUrl,
+                        linkInteractionListener = {
+                            val handler = fileLinkHandler ?: ActiveFileLinkHandlerHolder.current
+                            handler?.onOpenConversation?.invoke(convId)
+                        }
+                    )
+                )
+                builder.pushStyle(
+                    SpanStyle(
+                        color = Color(0xFF7C3AED),
+                        fontWeight = FontWeight.SemiBold,
+                        background = Color(0xFF7C3AED).copy(alpha = 0.12f)
+                    )
+                )
+                builder.append(" 💬 $displayLabel ")
+                builder.pop()
+                builder.pop()
+            } else if (isFile) {
                 val cleanPath = linkUrl.removePrefix("file://").substringBefore("#")
                 val fileName = java.io.File(cleanPath).name.ifBlank { cleanPath }
                 val displayLabel = if (linkTitle.isBlank() || linkTitle.startsWith("file://", ignoreCase = true) || linkTitle.startsWith("/")) {
@@ -1578,9 +1636,37 @@ private fun buildRichAnnotatedString(
             // HTML Link <a href="url">title</a>
             val linkUrl = matcher.group(5) ?: ""
             val linkTitle = matcher.group(6) ?: ""
+            val isConversation = linkUrl.startsWith("conversation://", ignoreCase = true)
             val isFile = linkUrl.startsWith("file://", ignoreCase = true) || linkUrl.startsWith("/")
 
-            if (isFile) {
+            if (isConversation) {
+                val convId = linkUrl.removePrefix("conversation://").substringBefore("#").substringBefore("/").trim()
+                val displayLabel = if (linkTitle.isNotBlank() && !linkTitle.startsWith("conversation://", ignoreCase = true)) {
+                    linkTitle
+                } else {
+                    "Chat #${convId.take(8)}"
+                }
+
+                builder.pushLink(
+                    LinkAnnotation.Clickable(
+                        tag = linkUrl,
+                        linkInteractionListener = {
+                            val handler = fileLinkHandler ?: ActiveFileLinkHandlerHolder.current
+                            handler?.onOpenConversation?.invoke(convId)
+                        }
+                    )
+                )
+                builder.pushStyle(
+                    SpanStyle(
+                        color = Color(0xFF7C3AED),
+                        fontWeight = FontWeight.SemiBold,
+                        background = Color(0xFF7C3AED).copy(alpha = 0.12f)
+                    )
+                )
+                builder.append(" 💬 $displayLabel ")
+                builder.pop()
+                builder.pop()
+            } else if (isFile) {
                 val cleanPath = linkUrl.removePrefix("file://").substringBefore("#")
                 val fileName = java.io.File(cleanPath).name.ifBlank { cleanPath }
                 val displayLabel = if (linkTitle.isBlank() || linkTitle.startsWith("file://", ignoreCase = true) || linkTitle.startsWith("/")) fileName else linkTitle
@@ -1617,6 +1703,29 @@ private fun buildRichAnnotatedString(
                 builder.pop()
                 builder.pop()
             }
+        } else if (fullMatch.startsWith("conversation://", ignoreCase = true)) {
+            // Bare conversation link
+            val convId = fullMatch.removePrefix("conversation://").substringBefore("#").substringBefore("/").trim()
+            val displayLabel = "Chat #${convId.take(8)}"
+            builder.pushLink(
+                LinkAnnotation.Clickable(
+                    tag = fullMatch,
+                    linkInteractionListener = {
+                        val handler = fileLinkHandler ?: ActiveFileLinkHandlerHolder.current
+                        handler?.onOpenConversation?.invoke(convId)
+                    }
+                )
+            )
+            builder.pushStyle(
+                SpanStyle(
+                    color = Color(0xFF7C3AED),
+                    fontWeight = FontWeight.SemiBold,
+                    background = Color(0xFF7C3AED).copy(alpha = 0.12f)
+                )
+            )
+            builder.append(" 💬 $displayLabel ")
+            builder.pop()
+            builder.pop()
         } else if (fullMatch.startsWith("file:///", ignoreCase = true)) {
             // Bare file link
             val cleanPath = fullMatch.removePrefix("file://").substringBefore("#")
@@ -1719,67 +1828,67 @@ private fun buildRichAnnotatedString(
             // Bold Italic ***...***
             val content = fullMatch.removeSurrounding("***")
             builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic))
-            builder.append(content)
+            appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
         } else if (fullMatch.startsWith("___") && fullMatch.endsWith("___") && fullMatch.length >= 6) {
             // Bold Italic ___...___
             val content = fullMatch.removeSurrounding("___")
             builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic))
-            builder.append(content)
+            appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
         } else if (fullMatch.startsWith("**") && fullMatch.endsWith("**") && fullMatch.length >= 4) {
             // Bold **...**
             val content = fullMatch.removeSurrounding("**")
             builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-            builder.append(content)
+            appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
         } else if (fullMatch.startsWith("__") && fullMatch.endsWith("__") && fullMatch.length >= 4) {
             // Bold __...__
             val content = fullMatch.removeSurrounding("__")
             builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-            builder.append(content)
+            appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
         } else if (fullMatch.startsWith("<b", ignoreCase = true) || fullMatch.startsWith("<strong", ignoreCase = true)) {
             // HTML Bold <b>...</b> or <strong>...</strong>
             val content = fullMatch.replace(Regex("<[^>]+>"), "")
             builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-            builder.append(content)
+            appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
         } else if (fullMatch.startsWith("~~") && fullMatch.endsWith("~~") && fullMatch.length >= 4) {
             // Strikethrough ~~...~~
             val content = fullMatch.removeSurrounding("~~")
             builder.pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = Color.Gray))
-            builder.append(content)
+            appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
         } else if (fullMatch.startsWith("<u", ignoreCase = true)) {
             // HTML Underline <u>...</u>
             val content = fullMatch.replace(Regex("<[^>]+>"), "")
             builder.pushStyle(SpanStyle(textDecoration = TextDecoration.Underline))
-            builder.append(content)
+            appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
         } else if (fullMatch.startsWith("*") && fullMatch.endsWith("*") && fullMatch.length >= 2) {
             // Italic *...*
             val content = fullMatch.removeSurrounding("*")
             builder.pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-            builder.append(content)
+            appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
         } else if (fullMatch.startsWith("_") && fullMatch.endsWith("_") && fullMatch.length >= 2) {
             // Italic _..._
             val content = fullMatch.removeSurrounding("_")
             builder.pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-            builder.append(content)
+            appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
         } else if (fullMatch.startsWith("<i", ignoreCase = true) || fullMatch.startsWith("<em", ignoreCase = true)) {
             // HTML Italic <i>...</i> or <em>...</em>
             val content = fullMatch.replace(Regex("<[^>]+>"), "")
             builder.pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-            builder.append(content)
+            appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
         } else if (fullMatch.startsWith("<s", ignoreCase = true) || fullMatch.startsWith("<del", ignoreCase = true) || fullMatch.startsWith("<strike", ignoreCase = true)) {
             // HTML Strikethrough <s>, <del>, <strike>
             val content = fullMatch.replace(Regex("<[^>]+>"), "")
             builder.pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = Color.Gray))
-            builder.append(content)
+            appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
         } else {
             builder.append(fullMatch)

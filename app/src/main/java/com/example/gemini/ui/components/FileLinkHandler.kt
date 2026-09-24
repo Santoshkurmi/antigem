@@ -39,7 +39,8 @@ import java.util.Locale
 
 data class FileLinkHandler(
     val onOpenFile: (path: String) -> Unit = {},
-    val onShowDetails: (path: String) -> Unit = {}
+    val onShowDetails: (path: String) -> Unit = {},
+    val onOpenConversation: (conversationId: String) -> Unit = {}
 )
 
 object ActiveFileLinkHandlerHolder {
