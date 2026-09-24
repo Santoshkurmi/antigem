@@ -1641,9 +1641,31 @@ All files created here persist inside the application.
     }
 
     suspend fun resetEnvironment(context: Context) = withContext(Dispatchers.IO) {
+        Log.d(TAG, "[Reset] Initiating complete rootfs reset...")
+        // 1. Force kill local server runner and all child processes
+        try {
+            LocalServerManager.forceKillAll()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error stopping local server during reset: ${e.message}")
+        }
+
+        // 2. Close and terminate all active terminal sessions
         try {
             LocalTerminalManager.closeAll()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error closing terminal sessions during reset: ${e.message}")
+        }
+
+        // 3. Reset auto-start flag so next installation can immediately auto-start server
+        LocalServerManager.resetAutoStartFlag()
+
+        // 4. Notify bridge service that local server is offline
+        try {
+            com.example.gemini.data.remote.AgyBridgeService.instance.notifyLocalStopped()
         } catch (_: Exception) {}
+
+        // 5. Short delay for process termination and file descriptor release
+        delay(300)
 
         val appContext = context.applicationContext
         val prefix = getPrefixDir(appContext)
@@ -1657,24 +1679,29 @@ All files created here persist inside the application.
         try { if (projects.exists()) projects.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting projects: ${e.message}") }
         try { if (tmp.exists()) tmp.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting tmp: ${e.message}") }
 
-        // Clean any stray directories created in filesDir
+        // Clean any stray files/directories created in filesDir (excluding internal datastore and profileinstaller)
         val filesDir = appContext.filesDir
         try {
-            val legacyProjects = File(filesDir, "projects")
-            if (legacyProjects.exists()) legacyProjects.deleteRecursively()
+            filesDir.listFiles()?.forEach { file ->
+                val name = file.name
+                if (name != "datastore" && !name.startsWith("profile")) {
+                    try { file.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting stray file $name: ${e.message}") }
+                }
+            }
         } catch (_: Exception) {}
 
-        // Clean bootstrap temporary caches in cacheDir
+        // Clean all temporary caches, package archives, and downloaded debs in cacheDir
         try {
             val cacheDir = appContext.cacheDir
-            File(cacheDir, "deb_extract_tmp").deleteRecursively()
-            File(cacheDir, "inner_bootstrap.zip").delete()
             cacheDir.listFiles()?.forEach { file ->
-                if (file.name.startsWith("deb_tmp_") ||
-                    file.name.startsWith("bootstrap-") ||
-                    file.name.endsWith("-download.zip")) {
-                    try { file.deleteRecursively() } catch (_: Exception) {}
-                }
+                try { file.deleteRecursively() } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
+
+        // Clean external cache if present
+        try {
+            appContext.externalCacheDir?.listFiles()?.forEach { file ->
+                try { file.deleteRecursively() } catch (_: Exception) {}
             }
         } catch (_: Exception) {}
 

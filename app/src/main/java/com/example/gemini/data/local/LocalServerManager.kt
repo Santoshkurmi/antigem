@@ -115,9 +115,22 @@ object LocalServerManager {
     }
 
     @Synchronized
+    fun resetAutoStartFlag() {
+        hasInitialAutoStarted = false
+    }
+
+    @Synchronized
     fun autoStartOnAppLaunch(context: Context) {
         if (hasInitialAutoStarted) {
             Log.d(TAG, "[ServerManager] Initial auto-start already executed for this process, skipping autoStartOnAppLaunch")
+            return
+        }
+        if (!LocalEnvironmentManager.isInstalled(context)) {
+            Log.d(TAG, "[ServerManager] Bootstrap not installed yet, deferring auto-start until installation completes")
+            return
+        }
+        if (!hasServerScript(context)) {
+            Log.d(TAG, "[ServerManager] No server executable found in home directory, skipping autoStartOnAppLaunch")
             return
         }
         hasInitialAutoStarted = true
@@ -125,7 +138,9 @@ object LocalServerManager {
     }
 
     fun startServer(context: Context, forceRestart: Boolean = false) {
-        hasInitialAutoStarted = true
+        if (hasServerScript(context)) {
+            hasInitialAutoStarted = true
+        }
         activeJob?.cancel()
         activeJob = managerScope.launch {
             startServerInternal(context, forceRestart)

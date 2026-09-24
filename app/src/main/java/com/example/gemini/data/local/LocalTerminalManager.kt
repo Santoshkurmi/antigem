@@ -1095,7 +1095,12 @@ object LocalTerminalManager {
             return
         }
 
-        LocalServerManager.autoStartOnAppLaunch(context)
+        if (LocalServerManager.hasServerScript(context)) {
+            Log.d(TAG, "[AutoLaunch] Server script found in home directory, launching local server...")
+            LocalServerManager.startServer(context, forceRestart = true)
+        } else {
+            Log.d(TAG, "[AutoLaunch] No server executable in home directory, skipping auto-launch")
+        }
     }
 
     suspend fun getOrCreateOrRestoreSessions(context: Context): List<LocalPtySession> {
