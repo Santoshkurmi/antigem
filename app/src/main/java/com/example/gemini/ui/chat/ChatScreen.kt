@@ -23,9 +23,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -540,32 +538,9 @@ fun ChatScreen(
     var activeMarkdownDoc by remember { mutableStateOf<Pair<String, String>?>(null) }
     var activeFileDetailsPath by remember { mutableStateOf<String?>(null) }
 
-    val conversationBackStack = rememberSaveable(
-        saver = androidx.compose.runtime.saveable.listSaver(
-            save = { it.toList() },
-            restore = { mutableStateListOf<String>().apply { addAll(it) } }
-        )
-    ) {
-        mutableStateListOf<String>()
-    }
-
-    val navigateBackConversation: () -> Unit = {
-        while (conversationBackStack.isNotEmpty()) {
-            val prevId = conversationBackStack.removeAt(conversationBackStack.lastIndex)
-            if (conversations.isEmpty() || conversations.any { it.id.equals(prevId, ignoreCase = true) }) {
-                viewModel.selectConversation(prevId)
-                break
-            }
-        }
-    }
-
-    BackHandler(enabled = conversationBackStack.isNotEmpty() && !drawerState.isOpen && drawerState.targetValue != DrawerValue.Open) {
-        navigateBackConversation()
-    }
-
     val currentUriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
-    val fileLinkHandler = remember(scope, conversations, currentConv?.id) {
+    val fileLinkHandler = remember(scope) {
         FileLinkHandler(
             onOpenFile = { rawUrl ->
                 try {
@@ -608,10 +583,6 @@ fun ChatScreen(
                 val cleanId = convId.trim()
                 val target = conversations.find { it.id.equals(cleanId, ignoreCase = true) }
                 if (target != null) {
-                    val currentId = currentConv?.id
-                    if (!currentId.isNullOrBlank() && !currentId.equals(target.id, ignoreCase = true)) {
-                        conversationBackStack.add(currentId)
-                    }
                     viewModel.selectConversation(target.id)
                     if (drawerState.isOpen) {
                         scope.launch { drawerState.close() }
@@ -672,21 +643,17 @@ fun ChatScreen(
                 isOpen = drawerState.isOpen || drawerState.targetValue == DrawerValue.Open,
                 onSelectConversation = { id ->
                     Log.d("CHAT_OPEN_DEBUG", "🎯 [ChatScreen] User selected conversation: id=$id")
-                    conversationBackStack.clear()
                     viewModel.selectConversation(id)
                     scope.launch { drawerState.close() }
                 },
                 onNewChat = {
-                    conversationBackStack.clear()
                     viewModel.startNewChat()
                     scope.launch { drawerState.close() }
                 },
                 onDeleteConversation = { id ->
-                    conversationBackStack.removeAll { it.equals(id, ignoreCase = true) }
                     viewModel.deleteConversation(id)
                 },
                 onForkConversation = { id ->
-                    conversationBackStack.clear()
                     viewModel.forkConversation(id)
                     scope.launch { drawerState.close() }
                 },
@@ -852,22 +819,12 @@ fun ChatScreen(
                         }
                     },
                     navigationIcon = {
-                        if (conversationBackStack.isNotEmpty()) {
-                            IconButton(onClick = navigateBackConversation) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        } else {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "Open Drawer",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Open Drawer",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     },
                     actions = {
