@@ -157,7 +157,7 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 BrowserScreen(
                                     isVisible = currentViewMode == AppViewMode.BROWSER,
-                                    onClose = { currentViewMode = previousViewMode }
+                                    onClose = { currentViewMode = if (previousViewMode == AppViewMode.BROWSER) AppViewMode.CHAT else previousViewMode }
                                 )
                             }
                         }

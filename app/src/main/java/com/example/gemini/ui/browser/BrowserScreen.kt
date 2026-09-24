@@ -75,6 +75,63 @@ class BrowserTab(
     var webView: WebView? = null
 }
 
+private fun isBrowserUserUrl(url: String?): Boolean {
+    if (url.isNullOrBlank()) return false
+    val trimmed = url.trim()
+    if (trimmed == "about:blank" || trimmed.startsWith("about:", ignoreCase = true)) return false
+    if (trimmed.startsWith("data:", ignoreCase = true)) return false
+    if (trimmed.startsWith("javascript:", ignoreCase = true)) return false
+    return true
+}
+
+private fun getPreviousValidHistoryIndex(webView: WebView?): Int {
+    if (webView == null) return -1
+    val list = webView.copyBackForwardList()
+    val currentIndex = list.currentIndex
+    if (currentIndex <= 0) return -1
+
+    val currentItem = list.getItemAtIndex(currentIndex)
+    val currentUrl = currentItem?.url?.trim() ?: ""
+    val currentOrigUrl = currentItem?.originalUrl?.trim() ?: ""
+    val isCurrentError = !isBrowserUserUrl(currentUrl)
+
+    val startSearchIndex = if (isCurrentError) (currentIndex - 2) else (currentIndex - 1)
+    if (startSearchIndex < 0) return -1
+
+    for (i in startSearchIndex downTo 0) {
+        val item = list.getItemAtIndex(i) ?: continue
+        val itemUrl = item.url.trim()
+        val itemOrigUrl = item.originalUrl?.trim() ?: ""
+
+        val isValid = isBrowserUserUrl(itemUrl) || isBrowserUserUrl(itemOrigUrl)
+        if (!isValid) continue
+
+        if (isCurrentError || (itemUrl != currentUrl && itemOrigUrl != currentUrl && itemUrl != currentOrigUrl)) {
+            return i
+        }
+    }
+    return -1
+}
+
+fun canBrowserTabGoBack(webView: WebView?): Boolean {
+    return getPreviousValidHistoryIndex(webView) >= 0
+}
+
+fun handleBrowserBack(webView: WebView?, onClose: () -> Unit) {
+    if (webView == null) {
+        onClose()
+        return
+    }
+    val targetIndex = getPreviousValidHistoryIndex(webView)
+    if (targetIndex >= 0) {
+        val currentIndex = webView.copyBackForwardList().currentIndex
+        val steps = targetIndex - currentIndex
+        webView.goBackOrForward(steps)
+    } else {
+        onClose()
+    }
+}
+
 private fun formatBrowserUrl(input: String): String {
     val trimmed = input.trim()
     if (trimmed.isBlank()) return ""
@@ -273,12 +330,12 @@ fun BrowserScreen(
         }
     }
 
-    // Intercept back button: if sheet open -> close sheet, if webview can go back -> webview.goBack(), else -> go back to chat screen!
+    // Intercept back button: if sheet open -> close sheet, if active tab has preceding browsing history -> navigate back, else -> go back to chat screen!
     BackHandler(enabled = isVisible) {
         if (showTabSwitcherSheet) {
             showTabSwitcherSheet = false
-        } else if (activeTab != null && activeTab.webView?.canGoBack() == true) {
-            activeTab.webView?.goBack()
+        } else if (activeTab?.webView != null && canBrowserTabGoBack(activeTab.webView)) {
+            handleBrowserBack(activeTab.webView, onClose)
         } else {
             onClose()
         }
@@ -591,7 +648,7 @@ fun BrowserScreen(
                                                 addressInput = url
                                             }
                                         }
-                                        tab.canGoBack = view?.canGoBack() == true
+                                        tab.canGoBack = canBrowserTabGoBack(view)
                                         tab.canGoForward = view?.canGoForward() == true
                                     }
 
@@ -607,7 +664,7 @@ fun BrowserScreen(
                                         if (!pageTitle.isNullOrBlank()) {
                                             tab.title = pageTitle
                                         }
-                                        tab.canGoBack = view?.canGoBack() == true
+                                        tab.canGoBack = canBrowserTabGoBack(view)
                                         tab.canGoForward = view?.canGoForward() == true
                                     }
 
@@ -626,6 +683,7 @@ fun BrowserScreen(
                                             }
                                             val html = buildErrorHtml(failingUrl, description, isDarkTheme)
                                             view?.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                                            tab.canGoBack = canBrowserTabGoBack(view)
                                         }
                                     }
 
@@ -641,6 +699,7 @@ fun BrowserScreen(
                                         val desc = description ?: "Connection failed"
                                         val html = buildErrorHtml(url, desc, isDarkTheme)
                                         view?.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                                        tab.canGoBack = canBrowserTabGoBack(view)
                                     }
 
                                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -662,7 +721,7 @@ fun BrowserScreen(
                                     override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                         tab.progress = newProgress
                                         tab.isLoading = newProgress < 100
-                                        tab.canGoBack = view?.canGoBack() == true
+                                        tab.canGoBack = canBrowserTabGoBack(view)
                                         tab.canGoForward = view?.canGoForward() == true
                                     }
 
