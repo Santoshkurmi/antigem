@@ -70,8 +70,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
-    private val conversationMessagesCache = java.util.concurrent.ConcurrentHashMap<String, List<ChatMessage>>()
-
     val pendingApprovals: StateFlow<List<PendingToolApproval>> = _messages.map { msgs ->
         msgs.filter { it.role == com.example.gemini.domain.model.MessageRole.ASSISTANT }
             .flatMap { msg ->
@@ -1551,15 +1549,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentTrajectoryId = ""
         _isStreaming.value = false
         _bridgeStatusMessage.value = null
-        val cachedMsgs = conversationMessagesCache[id]
-        if (cachedMsgs != null && cachedMsgs.isNotEmpty()) {
-            _messages.value = cachedMsgs
-            _isLoadingConversation.value = false
-            com.example.gemini.ui.chat.ChatFeedCache.prewarm(cachedMsgs)
-        } else {
-            _messages.value = emptyList()
-            _isLoadingConversation.value = true
-        }
+        _messages.value = emptyList()
+        _isLoadingConversation.value = true
 
         viewModelScope.launch {
             _conversationError.value = null
@@ -1644,7 +1635,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                             _messages.value = msgs
                             if (msgs.isNotEmpty()) {
-                                conversationMessagesCache[conversationId] = msgs
                                 com.example.gemini.ui.chat.ChatFeedCache.prewarm(msgs)
 
                                 msgs.flatMap { it.toolCalls }.filter {
@@ -1751,7 +1741,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteConversation(id: String) {
-        conversationMessagesCache.remove(id)
         viewModelScope.launch {
             _conversations.value = _conversations.value.filter { it.id != id }
             knownDaemonCascadeIds.remove(id)

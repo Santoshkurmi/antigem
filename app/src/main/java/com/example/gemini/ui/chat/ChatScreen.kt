@@ -1704,7 +1704,7 @@ fun ChatScreen(
                     },
                     isTranscribingAudio = isTranscribingAudio,
                     speechManager = viewModel.speechManager,
-                    cascadeId = activeConversationKey ?: ""
+                    cascadeId = activeConversationKey
                 )
             }
         }
