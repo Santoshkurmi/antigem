@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -99,6 +100,8 @@ fun ChatHistoryDrawer(
     var instanceToTerminate by remember { mutableStateOf<Pair<com.example.gemini.data.remote.AgyActiveInstance, String>?>(null) }
     var showProfileDialog by remember { mutableStateOf(false) }
     var showSigningInProgressDialog by remember { mutableStateOf(false) }
+    var showExitConfirmDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     val filtered = remember(conversations, searchQuery) {
         if (searchQuery.isBlank()) conversations
@@ -370,6 +373,93 @@ fun ChatHistoryDrawer(
         )
     }
 
+    if (showExitConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirmDialog = false },
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PowerSettingsNew,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            },
+            title = {
+                Text(
+                    text = "Exit Antigravity?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "Do you want to exit the app? This will stop all active background services, servers, and terminals.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExitConfirmDialog = false
+                        try {
+                            com.example.gemini.data.service.TermuxService.stop(context)
+                        } catch (e: Exception) {
+                            Log.e("ChatHistoryDrawer", "Error stopping service", e)
+                            try {
+                                com.example.gemini.data.local.LocalServerManager.forceKillAll()
+                            } catch (_: Exception) {}
+                            try {
+                                com.example.gemini.data.local.LocalTerminalManager.closeAll()
+                            } catch (_: Exception) {}
+                            (context as? android.app.Activity)?.finishAffinity()
+                            android.os.Process.killProcess(android.os.Process.myPid())
+                            kotlin.system.exitProcess(0)
+                        }
+                        try {
+                            (context as? android.app.Activity)?.finishAffinity()
+                        } catch (e: Exception) {
+                            Log.e("ChatHistoryDrawer", "Error finishing activity", e)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PowerSettingsNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Exit App", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showExitConfirmDialog = false },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Cancel", fontSize = 13.5.sp)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
     ModalDrawerSheet(
         modifier = modifier.fillMaxWidth(0.82f),
         drawerContainerColor = MaterialTheme.colorScheme.surface,
@@ -420,6 +510,27 @@ fun ChatHistoryDrawer(
                         color = Color.White,
                         fontSize = 13.5.sp
                     )
+                }
+
+                // Power / Exit App Button
+                Surface(
+                    onClick = { showExitConfirmDialog = true },
+                    modifier = Modifier.size(36.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                    )
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.PowerSettingsNew,
+                            contentDescription = "Exit App",
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
                 }
 
                 // Workspace Folder Grouping Toggle Button
