@@ -1,6 +1,7 @@
 package com.example.gemini.ui.browser
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.graphics.Bitmap
 import android.util.Log
 import android.view.ViewGroup
@@ -13,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -39,8 +41,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -239,6 +243,29 @@ fun BrowserScreen(
 
     val activeTab = tabs.find { it.id == activeTabId } ?: tabs.firstOrNull()
 
+    // Sync status bar color and light/dark icons with header
+    val view = LocalView.current
+    val headerColor = if (isDarkTheme) MaterialTheme.colorScheme.surface else Color.White
+    if (!view.isInEditMode) {
+        val activity = view.context as? Activity
+        if (activity != null && activity !is com.example.gemini.ui.bubble.FloatingChatActivity && isVisible) {
+            DisposableEffect(isDarkTheme, isVisible, headerColor) {
+                val window = activity.window
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                val originalStatusBarColor = window.statusBarColor
+                val originalIsLightStatusBars = insetsController.isAppearanceLightStatusBars
+
+                window.statusBarColor = headerColor.toArgb()
+                insetsController.isAppearanceLightStatusBars = !isDarkTheme
+
+                onDispose {
+                    window.statusBarColor = originalStatusBarColor
+                    insetsController.isAppearanceLightStatusBars = originalIsLightStatusBars
+                }
+            }
+        }
+    }
+
     // Sync address input when active tab changes and address bar is not focused
     LaunchedEffect(activeTab?.url, isAddressFocused) {
         if (!isAddressFocused && activeTab != null) {
@@ -265,6 +292,8 @@ fun BrowserScreen(
         keyboardController?.hide()
         activeTab?.let { tab ->
             tab.url = targetUrl
+            tab.title = targetUrl
+            tab.isLoading = true
             tab.webView?.loadUrl(targetUrl)
         }
     }
@@ -310,9 +339,10 @@ fun BrowserScreen(
             // Top Compact Search Bar & Controls Header extending behind status bar
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 2.dp,
-                shadowElevation = 1.dp
+                color = headerColor,
+                tonalElevation = if (isDarkTheme) 2.dp else 0.dp,
+                shadowElevation = 1.dp,
+                border = if (!isDarkTheme) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)) else null
             ) {
                 Column(
                     modifier = Modifier
@@ -369,11 +399,11 @@ fun BrowserScreen(
                                 .weight(1f)
                                 .height(38.dp),
                             shape = RoundedCornerShape(19.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                            color = if (isDarkTheme) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f) else Color(0xFFF3F4F6),
                             border = BorderStroke(
                                 1.dp,
                                 if (isAddressFocused) ClaudeTerracotta.copy(alpha = 0.6f)
-                                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                             )
                         ) {
                             Row(
@@ -452,7 +482,7 @@ fun BrowserScreen(
                             onClick = { showTabSwitcherSheet = true },
                             modifier = Modifier.size(32.dp),
                             shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            color = if (isDarkTheme) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else Color(0xFFF3F4F6),
                             border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -510,26 +540,24 @@ fun BrowserScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .imePadding()
-                .background(MaterialTheme.colorScheme.background)
+                .background(if (isDarkTheme) MaterialTheme.colorScheme.background else Color(0xFFFAF9F6))
         ) {
             // Persistent WebViews: ALWAYS rendered so they never destroy or re-attach on tab switch/navigation
             tabs.forEach { tab ->
                 val isActive = tab.id == activeTabId
-                val hasPage = tab.url.isNotBlank() && tab.url != "about:blank"
-                val shouldShowWebView = isActive && hasPage
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            alpha = if (shouldShowWebView) 1f else 0f
-                            translationX = if (shouldShowWebView) 0f else -20000f
+                            alpha = if (isActive) 1f else 0f
+                            translationX = if (isActive) 0f else -20000f
                         }
                 ) {
                     AndroidView(
                         factory = { ctx ->
                             WebView(ctx).apply {
                                 tab.webView = this
-                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                setBackgroundColor(if (isDarkTheme) 0xFF181513.toInt() else android.graphics.Color.WHITE)
                                 layoutParams = ViewGroup.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
@@ -557,7 +585,7 @@ fun BrowserScreen(
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                         tab.isLoading = true
-                                        if (!url.isNullOrBlank() && url != "about:blank") {
+                                        if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("data:")) {
                                             tab.url = url
                                             if (!isAddressFocused && tab.id == activeTabId) {
                                                 addressInput = url
@@ -569,7 +597,7 @@ fun BrowserScreen(
 
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         tab.isLoading = false
-                                        if (!url.isNullOrBlank() && url != "about:blank") {
+                                        if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("data:")) {
                                             tab.url = url
                                             if (!isAddressFocused && tab.id == activeTabId) {
                                                 addressInput = url
@@ -597,7 +625,7 @@ fun BrowserScreen(
                                                 "Connection failed"
                                             }
                                             val html = buildErrorHtml(failingUrl, description, isDarkTheme)
-                                            view?.loadDataWithBaseURL(failingUrl, html, "text/html", "UTF-8", failingUrl)
+                                            view?.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
                                         }
                                     }
 
@@ -612,7 +640,7 @@ fun BrowserScreen(
                                         val url = failingUrl ?: tab.url
                                         val desc = description ?: "Connection failed"
                                         val html = buildErrorHtml(url, desc, isDarkTheme)
-                                        view?.loadDataWithBaseURL(url, html, "text/html", "UTF-8", url)
+                                        view?.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
                                     }
 
                                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -651,6 +679,7 @@ fun BrowserScreen(
                         },
                         update = { wv ->
                             tab.webView = wv
+                            wv.setBackgroundColor(if (isDarkTheme) 0xFF181513.toInt() else android.graphics.Color.WHITE)
                             @Suppress("DEPRECATION")
                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                                 wv.settings.isAlgorithmicDarkeningAllowed = isDarkTheme
@@ -669,7 +698,7 @@ fun BrowserScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
+                        .background(if (isDarkTheme) MaterialTheme.colorScheme.background else Color(0xFFFAF9F6))
                 ) {
                     NewTabLandingView(
                         onLaunchPort = { port ->
