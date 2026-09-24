@@ -344,24 +344,23 @@ fun BrowserScreen(
 
                         // Refresh / Stop Button
                         val hasActivePage = activeTab != null && activeTab.url.isNotBlank() && activeTab.url != "about:blank"
-                        if (hasActivePage) {
-                            IconButton(
-                                onClick = {
-                                    if (activeTab?.isLoading == true) {
-                                        activeTab.webView?.stopLoading()
-                                    } else {
-                                        activeTab?.webView?.reload()
-                                    }
-                                },
-                                modifier = Modifier.size(34.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (activeTab?.isLoading == true) Icons.Default.Close else Icons.Default.Refresh,
-                                    contentDescription = if (activeTab?.isLoading == true) "Stop" else "Reload",
-                                    tint = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(17.dp)
-                                )
-                            }
+                        IconButton(
+                            onClick = {
+                                if (activeTab?.isLoading == true) {
+                                    activeTab.webView?.stopLoading()
+                                } else {
+                                    activeTab?.webView?.reload()
+                                }
+                            },
+                            enabled = hasActivePage,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (activeTab?.isLoading == true) Icons.Default.Close else Icons.Default.Refresh,
+                                contentDescription = if (activeTab?.isLoading == true) "Stop" else "Reload",
+                                tint = if (hasActivePage) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                modifier = Modifier.size(17.dp)
+                            )
                         }
 
                         // Tab Switcher Button (Shows count badge: [ 1 ], [ 2 ], etc.)
@@ -396,21 +395,25 @@ fun BrowserScreen(
                         }
                     }
 
-                    // Loading Progress Indicator
+                    // Loading Progress Indicator (Fixed height to prevent header jitter)
                     val animatedProgress by animateFloatAsState(
                         targetValue = if (activeTab?.isLoading == true) (activeTab.progress / 100f).coerceIn(0.05f, 1f) else 0f,
                         label = "progress"
                     )
 
-                    if (activeTab?.isLoading == true && animatedProgress > 0f) {
-                        LinearProgressIndicator(
-                            progress = { animatedProgress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(2.5.dp),
-                            color = ClaudeTerracotta,
-                            trackColor = Color.Transparent
-                        )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.5.dp)
+                    ) {
+                        if (activeTab?.isLoading == true && animatedProgress > 0f) {
+                            LinearProgressIndicator(
+                                progress = { animatedProgress },
+                                modifier = Modifier.fillMaxSize(),
+                                color = ClaudeTerracotta,
+                                trackColor = Color.Transparent
+                            )
+                        }
                     }
                 }
             }
@@ -422,114 +425,125 @@ fun BrowserScreen(
                     .weight(1f)
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                val isLandingPage = activeTab == null || activeTab.url.isBlank() || activeTab.url == "about:blank"
-
-                if (isLandingPage) {
-                    // Cute Landing Page for New Tab
-                    NewTabLandingView(
-                        onLaunchPort = { port ->
-                            navigateToUrl("http://localhost:$port")
-                        },
-                        onNavigateUrl = { url ->
-                            navigateToUrl(url)
-                        }
-                    )
-                } else {
-                    // Render Persistent WebViews
-                    tabs.forEach { tab ->
-                        val isActive = tab.id == activeTabId
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    alpha = if (isActive) 1f else 0f
-                                    translationX = if (isActive) 0f else -20000f
-                                }
-                        ) {
-                            AndroidView(
-                                factory = { ctx ->
-                                    WebView(ctx).apply {
-                                        tab.webView = this
-                                        layoutParams = ViewGroup.LayoutParams(
-                                            ViewGroup.LayoutParams.MATCH_PARENT,
-                                            ViewGroup.LayoutParams.MATCH_PARENT
-                                        )
-                                        settings.apply {
-                                            javaScriptEnabled = true
-                                            domStorageEnabled = true
-                                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                            allowFileAccess = true
-                                            allowContentAccess = true
-                                            useWideViewPort = true
-                                            loadWithOverviewMode = true
-                                            cacheMode = WebSettings.LOAD_DEFAULT
-                                            setSupportZoom(true)
-                                            builtInZoomControls = true
-                                            displayZoomControls = false
+                // Persistent WebViews: ALWAYS rendered so they never destroy or re-attach on tab switch/navigation
+                tabs.forEach { tab ->
+                    val isActive = tab.id == activeTabId
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = if (isActive) 1f else 0f
+                                translationX = if (isActive) 0f else -20000f
+                            }
+                    ) {
+                        AndroidView(
+                            factory = { ctx ->
+                                WebView(ctx).apply {
+                                    tab.webView = this
+                                    layoutParams = ViewGroup.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                    settings.apply {
+                                        javaScriptEnabled = true
+                                        domStorageEnabled = true
+                                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                        allowFileAccess = true
+                                        allowContentAccess = true
+                                        useWideViewPort = true
+                                        loadWithOverviewMode = true
+                                        cacheMode = WebSettings.LOAD_DEFAULT
+                                        setSupportZoom(true)
+                                        builtInZoomControls = true
+                                        displayZoomControls = false
+                                    }
+                                    webViewClient = object : WebViewClient() {
+                                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                            tab.isLoading = true
+                                            if (!url.isNullOrBlank() && url != "about:blank") {
+                                                tab.url = url
+                                                if (!isAddressFocused && tab.id == activeTabId) {
+                                                    addressInput = url
+                                                }
+                                            }
+                                            tab.canGoBack = view?.canGoBack() == true
+                                            tab.canGoForward = view?.canGoForward() == true
                                         }
-                                        webViewClient = object : WebViewClient() {
-                                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                                tab.isLoading = true
-                                                if (!url.isNullOrBlank() && url != "about:blank") {
-                                                    tab.url = url
-                                                }
-                                                tab.canGoBack = view?.canGoBack() == true
-                                                tab.canGoForward = view?.canGoForward() == true
-                                            }
 
-                                            override fun onPageFinished(view: WebView?, url: String?) {
-                                                tab.isLoading = false
-                                                if (!url.isNullOrBlank() && url != "about:blank") {
-                                                    tab.url = url
-                                                }
-                                                val pageTitle = view?.title
-                                                if (!pageTitle.isNullOrBlank()) {
-                                                    tab.title = pageTitle
-                                                }
-                                                tab.canGoBack = view?.canGoBack() == true
-                                                tab.canGoForward = view?.canGoForward() == true
-                                            }
-
-                                            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                                val uri = request?.url ?: return false
-                                                val scheme = uri.scheme?.lowercase() ?: return false
-                                                if (scheme == "http" || scheme == "https" || scheme == "file" || scheme == "about") {
-                                                    return false
-                                                }
-                                                return try {
-                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-                                                    ctx.startActivity(intent)
-                                                    true
-                                                } catch (_: Exception) {
-                                                    false
+                                        override fun onPageFinished(view: WebView?, url: String?) {
+                                            tab.isLoading = false
+                                            if (!url.isNullOrBlank() && url != "about:blank") {
+                                                tab.url = url
+                                                if (!isAddressFocused && tab.id == activeTabId) {
+                                                    addressInput = url
                                                 }
                                             }
+                                            val pageTitle = view?.title
+                                            if (!pageTitle.isNullOrBlank()) {
+                                                tab.title = pageTitle
+                                            }
+                                            tab.canGoBack = view?.canGoBack() == true
+                                            tab.canGoForward = view?.canGoForward() == true
                                         }
-                                        webChromeClient = object : WebChromeClient() {
-                                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                                tab.progress = newProgress
-                                                tab.isLoading = newProgress < 100
-                                                tab.canGoBack = view?.canGoBack() == true
-                                                tab.canGoForward = view?.canGoForward() == true
-                                            }
 
-                                            override fun onReceivedTitle(view: WebView?, title: String?) {
-                                                if (!title.isNullOrBlank()) {
-                                                    tab.title = title
-                                                }
+                                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                            val uri = request?.url ?: return false
+                                            val scheme = uri.scheme?.lowercase() ?: return false
+                                            if (scheme == "http" || scheme == "https" || scheme == "file" || scheme == "about") {
+                                                return false
                                             }
-                                        }
-                                        if (tab.url.isNotBlank() && tab.url != "about:blank") {
-                                            loadUrl(tab.url)
+                                            return try {
+                                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                                ctx.startActivity(intent)
+                                                true
+                                            } catch (_: Exception) {
+                                                false
+                                            }
                                         }
                                     }
-                                },
-                                update = { wv ->
-                                    tab.webView = wv
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                                    webChromeClient = object : WebChromeClient() {
+                                        override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                            tab.progress = newProgress
+                                            tab.isLoading = newProgress < 100
+                                            tab.canGoBack = view?.canGoBack() == true
+                                            tab.canGoForward = view?.canGoForward() == true
+                                        }
+
+                                        override fun onReceivedTitle(view: WebView?, title: String?) {
+                                            if (!title.isNullOrBlank()) {
+                                                tab.title = title
+                                            }
+                                        }
+                                    }
+                                    if (tab.url.isNotBlank() && tab.url != "about:blank") {
+                                        loadUrl(tab.url)
+                                    }
+                                }
+                            },
+                            update = { wv ->
+                                tab.webView = wv
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                // Cute Landing Page Overlay (shown only when active tab is empty / new tab)
+                val isLandingPage = activeTab == null || activeTab.url.isBlank() || activeTab.url == "about:blank"
+                if (isLandingPage) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
+                        NewTabLandingView(
+                            onLaunchPort = { port ->
+                                navigateToUrl("http://localhost:$port")
+                            },
+                            onNavigateUrl = { url ->
+                                navigateToUrl(url)
+                            }
+                        )
                     }
                 }
             }
