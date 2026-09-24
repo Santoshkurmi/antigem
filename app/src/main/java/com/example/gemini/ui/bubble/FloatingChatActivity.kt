@@ -29,6 +29,7 @@ import com.example.gemini.AppViewMode
 import com.example.gemini.MainActivity
 import com.example.gemini.theme.GeminiTheme
 import com.example.gemini.theme.isSystemInDarkThemeRobust
+import com.example.gemini.ui.browser.BrowserScreen
 import com.example.gemini.ui.chat.ChatScreen
 import com.example.gemini.ui.chat.ChatViewModel
 import com.example.gemini.ui.chat.ChatViewModelHolder
@@ -178,7 +179,8 @@ fun FloatingChatWindow(
                                 onOpenFullScreen = onOpenFullApp,
                                 onMinimizeWindow = onMinimize,
                                 onNavigateToIde = { currentViewMode = AppViewMode.IDE },
-                                onNavigateToTerminal = { currentViewMode = AppViewMode.TERMINAL }
+                                onNavigateToTerminal = { currentViewMode = AppViewMode.TERMINAL },
+                                onNavigateToBrowser = { currentViewMode = AppViewMode.BROWSER }
                             )
                         }
 
@@ -217,6 +219,22 @@ fun FloatingChatWindow(
                                     onClose = { currentViewMode = AppViewMode.CHAT }
                                 )
                             }
+                        }
+
+                        // Persistent Floating Browser Screen
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    val isVisible = currentViewMode == AppViewMode.BROWSER
+                                    alpha = if (isVisible) 1f else 0f
+                                    translationX = if (isVisible) 0f else 20000f
+                                }
+                        ) {
+                            BrowserScreen(
+                                isVisible = currentViewMode == AppViewMode.BROWSER,
+                                onClose = { currentViewMode = AppViewMode.CHAT }
+                            )
                         }
                     }
                 }

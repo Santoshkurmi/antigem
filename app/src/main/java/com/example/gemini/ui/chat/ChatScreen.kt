@@ -118,7 +118,8 @@ fun ChatScreen(
     onOpenFullScreen: () -> Unit = {},
     onMinimizeWindow: () -> Unit = {},
     onNavigateToIde: () -> Unit = {},
-    onNavigateToTerminal: () -> Unit = {}
+    onNavigateToTerminal: () -> Unit = {},
+    onNavigateToBrowser: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -906,6 +907,13 @@ fun ChatScreen(
                                 imageVector = Icons.Default.Code,
                                 contentDescription = "Code Editor IDE",
                                 tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = onNavigateToBrowser) {
+                            Icon(
+                                imageVector = Icons.Outlined.Language,
+                                contentDescription = "Web Browser Preview",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                             )
                         }
                         if (isDevModeEnabled) {

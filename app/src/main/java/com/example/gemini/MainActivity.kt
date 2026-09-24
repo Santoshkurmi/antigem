@@ -17,6 +17,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.example.gemini.theme.GeminiTheme
 import com.example.gemini.ui.chat.ChatScreen
+import com.example.gemini.ui.browser.BrowserScreen
 import com.example.gemini.ui.chat.ChatViewModel
 import com.example.gemini.ui.chat.ChatViewModelHolder
 import com.example.gemini.ui.ide.IdeScreen
@@ -24,7 +25,8 @@ import com.example.gemini.ui.ide.IdeScreen
 enum class AppViewMode {
     CHAT,
     IDE,
-    TERMINAL
+    TERMINAL,
+    BROWSER
 }
 
 class MainActivity : ComponentActivity() {
@@ -53,6 +55,7 @@ class MainActivity : ComponentActivity() {
             }
 
             var currentViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
+            var previousViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
 
             val context = androidx.compose.ui.platform.LocalContext.current
             var showPermissionsDialog by remember {
@@ -94,7 +97,7 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else {
-                        BackHandler(enabled = currentViewMode != AppViewMode.CHAT) {
+                        BackHandler(enabled = currentViewMode != AppViewMode.CHAT && currentViewMode != AppViewMode.BROWSER) {
                             currentViewMode = AppViewMode.CHAT
                         }
 
@@ -111,7 +114,14 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 ChatScreen(
                                     viewModel = chatViewModel,
-                                    onNavigateToIde = { currentViewMode = AppViewMode.IDE }
+                                    onNavigateToIde = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.IDE
+                                    },
+                                    onNavigateToBrowser = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.BROWSER
+                                    }
                                 )
                             }
 
@@ -132,6 +142,22 @@ class MainActivity : ComponentActivity() {
                                     onExecuteRunCommand = { cmd ->
                                         // Connect with terminal / chat execution
                                     }
+                                )
+                            }
+
+                            // Persistent Web Preview Browser Screen (Retains open tabs, WebViews, state & navigation)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        val isVisible = currentViewMode == AppViewMode.BROWSER
+                                        alpha = if (isVisible) 1f else 0f
+                                        translationX = if (isVisible) 0f else 20000f
+                                    }
+                            ) {
+                                BrowserScreen(
+                                    isVisible = currentViewMode == AppViewMode.BROWSER,
+                                    onClose = { currentViewMode = previousViewMode }
                                 )
                             }
                         }
