@@ -93,6 +93,129 @@ private fun formatBrowserUrl(input: String): String {
     return "https://www.google.com/search?q=$encoded"
 }
 
+private fun buildErrorHtml(failingUrl: String, errorDescription: String, isDark: Boolean): String {
+    val escapedUrl = android.text.TextUtils.htmlEncode(failingUrl)
+    val escapedError = android.text.TextUtils.htmlEncode(errorDescription)
+    val encodedUrl = try { URLEncoder.encode(failingUrl, "UTF-8") } catch (_: Exception) { failingUrl }
+    val bg = if (isDark) "#181513" else "#FAF6F0"
+    val cardBg = if (isDark) "#23201D" else "#FFFFFF"
+    val textPrimary = if (isDark) "#EDE8DF" else "#262626"
+    val textSecondary = if (isDark) "#A8A29E" else "#737373"
+    val accent = if (isDark) "#D97706" else "#C86446"
+    val border = if (isDark) "#383430" else "#E5E7EB"
+    val codeBg = if (isDark) "#2C2825" else "#F3F4F6"
+
+    return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              padding: 32px 16px;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              background-color: $bg;
+              color: $textPrimary;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              min-height: 85vh;
+              text-align: center;
+            }
+            .card {
+              background-color: $cardBg;
+              border: 1px solid $border;
+              border-radius: 16px;
+              padding: 24px 20px;
+              max-width: 380px;
+              width: 100%;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            }
+            .icon-circle {
+              width: 56px;
+              height: 56px;
+              border-radius: 50%;
+              background-color: rgba(200, 100, 70, 0.15);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin-bottom: 16px;
+            }
+            .icon-circle svg {
+              width: 28px;
+              height: 28px;
+              fill: $accent;
+            }
+            h2 {
+              font-size: 18px;
+              font-weight: 700;
+              margin: 0 0 8px 0;
+              color: $textPrimary;
+            }
+            p {
+              font-size: 13.5px;
+              line-height: 1.5;
+              color: $textSecondary;
+              margin: 0 0 16px 0;
+            }
+            .url-box {
+              background-color: $codeBg;
+              border: 1px solid $border;
+              padding: 10px 12px;
+              border-radius: 8px;
+              font-family: monospace;
+              font-size: 12px;
+              color: $textPrimary;
+              word-break: break-all;
+              margin-bottom: 20px;
+              width: 100%;
+              text-align: left;
+            }
+            .url-box small {
+              display: block;
+              margin-top: 4px;
+              color: $textSecondary;
+            }
+            .btn-retry {
+              background-color: $accent;
+              color: #ffffff;
+              border: none;
+              padding: 10px 24px;
+              font-size: 13.5px;
+              font-weight: 600;
+              border-radius: 10px;
+              cursor: pointer;
+              outline: none;
+            }
+            .btn-retry:active {
+              opacity: 0.85;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="icon-circle">
+              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+            </div>
+            <h2>Web page not available</h2>
+            <p>Could not connect to the server. If this is a local app (React, Vite, Node, etc.), make sure the server is running.</p>
+            <div class="url-box">
+              <strong>URL:</strong> $escapedUrl
+              <small><strong>Reason:</strong> $escapedError</small>
+            </div>
+            <button class="btn-retry" onclick="window.location.href = decodeURIComponent('$encodedUrl');">Retry Connection</button>
+          </div>
+        </body>
+        </html>
+    """.trimIndent()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -104,6 +227,7 @@ fun BrowserScreen(
     val tabs = remember {
         mutableStateListOf(BrowserTab(initialUrl = "", initialTitle = "New Tab"))
     }
+    val isDarkTheme = com.example.gemini.theme.isAppInDarkTheme()
     var activeTabId by remember { mutableStateOf<String?>(tabs.firstOrNull()?.id) }
     var addressInput by remember { mutableStateOf("") }
     var isAddressFocused by remember { mutableStateOf(false) }
@@ -422,6 +546,13 @@ fun BrowserScreen(
                                     setSupportZoom(true)
                                     builtInZoomControls = true
                                     displayZoomControls = false
+
+                                    @Suppress("DEPRECATION")
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                        isAlgorithmicDarkeningAllowed = isDarkTheme
+                                    } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                        forceDark = if (isDarkTheme) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
+                                    }
                                 }
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -450,6 +581,38 @@ fun BrowserScreen(
                                         }
                                         tab.canGoBack = view?.canGoBack() == true
                                         tab.canGoForward = view?.canGoForward() == true
+                                    }
+
+                                    override fun onReceivedError(
+                                        view: WebView?,
+                                        request: WebResourceRequest?,
+                                        error: WebResourceError?
+                                    ) {
+                                        if (request?.isForMainFrame == true) {
+                                            tab.isLoading = false
+                                            val failingUrl = request.url?.toString() ?: tab.url
+                                            val description = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                                                error?.description?.toString() ?: "Connection failed"
+                                            } else {
+                                                "Connection failed"
+                                            }
+                                            val html = buildErrorHtml(failingUrl, description, isDarkTheme)
+                                            view?.loadDataWithBaseURL(failingUrl, html, "text/html", "UTF-8", failingUrl)
+                                        }
+                                    }
+
+                                    @Suppress("DEPRECATION")
+                                    override fun onReceivedError(
+                                        view: WebView?,
+                                        errorCode: Int,
+                                        description: String?,
+                                        failingUrl: String?
+                                    ) {
+                                        tab.isLoading = false
+                                        val url = failingUrl ?: tab.url
+                                        val desc = description ?: "Connection failed"
+                                        val html = buildErrorHtml(url, desc, isDarkTheme)
+                                        view?.loadDataWithBaseURL(url, html, "text/html", "UTF-8", url)
                                     }
 
                                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -488,6 +651,12 @@ fun BrowserScreen(
                         },
                         update = { wv ->
                             tab.webView = wv
+                            @Suppress("DEPRECATION")
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                wv.settings.isAlgorithmicDarkeningAllowed = isDarkTheme
+                            } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                wv.settings.forceDark = if (isDarkTheme) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
+                            }
                         },
                         modifier = Modifier.fillMaxSize()
                     )
