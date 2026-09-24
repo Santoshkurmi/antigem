@@ -42,6 +42,11 @@ data class FileLinkHandler(
     val onShowDetails: (path: String) -> Unit = {}
 )
 
+object ActiveFileLinkHandlerHolder {
+    @Volatile
+    var current: FileLinkHandler? = null
+}
+
 val LocalFileLinkHandler = staticCompositionLocalOf {
     FileLinkHandler()
 }

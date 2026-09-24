@@ -538,46 +538,75 @@ fun ChatScreen(
     var activeMarkdownDoc by remember { mutableStateOf<Pair<String, String>?>(null) }
     var activeFileDetailsPath by remember { mutableStateOf<String?>(null) }
 
+    val currentUriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+
     val fileLinkHandler = remember(scope) {
         FileLinkHandler(
             onOpenFile = { rawUrl ->
-                val cleanPath = rawUrl.removePrefix("file://").substringBefore("#")
-                val isMd = cleanPath.endsWith(".md", ignoreCase = true) || cleanPath.endsWith(".markdown", ignoreCase = true)
-                if (isMd) {
-                    scope.launch {
-                        val content = try {
-                            val f = File(cleanPath)
-                            if (f.exists()) f.readText() else (IdeApiClient.readFile(cleanPath) ?: "")
-                        } catch (e: Exception) {
-                            IdeApiClient.readFile(cleanPath) ?: ""
+                try {
+                    val decoded = try { java.net.URLDecoder.decode(rawUrl, "UTF-8") } catch (_: Exception) { rawUrl }
+                    val cleanPath = decoded.removePrefix("file://").substringBefore("#")
+                    val isMd = cleanPath.endsWith(".md", ignoreCase = true) || cleanPath.endsWith(".markdown", ignoreCase = true)
+                    if (isMd) {
+                        scope.launch {
+                            val content = try {
+                                val f = File(cleanPath)
+                                if (f.exists()) f.readText() else (IdeApiClient.readFile(cleanPath) ?: "")
+                            } catch (e: Exception) {
+                                IdeApiClient.readFile(cleanPath) ?: ""
+                            }
+                            activeMarkdownDoc = cleanPath to content
                         }
-                        activeMarkdownDoc = cleanPath to content
-                    }
-                } else {
-                    scope.launch {
-                        val content = try {
-                            val f = File(cleanPath)
-                            if (f.exists()) f.readText() else (IdeApiClient.readFile(cleanPath) ?: "")
-                        } catch (e: Exception) {
-                            IdeApiClient.readFile(cleanPath) ?: ""
+                    } else {
+                        scope.launch {
+                            val content = try {
+                                val f = File(cleanPath)
+                                if (f.exists()) f.readText() else (IdeApiClient.readFile(cleanPath) ?: "")
+                            } catch (e: Exception) {
+                                IdeApiClient.readFile(cleanPath) ?: ""
+                            }
+                            val fileName = File(cleanPath).name.ifBlank { "file" }
+                            TermuxDaemonManager.openOrSelectTab(cleanPath, fileName, content)
+                            onNavigateToIde()
                         }
-                        val fileName = File(cleanPath).name
-                        TermuxDaemonManager.openOrSelectTab(cleanPath, fileName, content)
-                        onNavigateToIde()
                     }
+                } catch (e: Exception) {
+                    Log.e("ChatScreen", "Error opening file link $rawUrl", e)
                 }
             },
             onShowDetails = { rawUrl ->
-                val cleanPath = rawUrl.removePrefix("file://").substringBefore("#")
+                val decoded = try { java.net.URLDecoder.decode(rawUrl, "UTF-8") } catch (_: Exception) { rawUrl }
+                val cleanPath = decoded.removePrefix("file://").substringBefore("#")
                 activeFileDetailsPath = cleanPath
             }
         )
+    }
+
+    LaunchedEffect(fileLinkHandler) {
+        com.example.gemini.ui.components.ActiveFileLinkHandlerHolder.current = fileLinkHandler
+    }
+
+    val safeUriHandler = remember(currentUriHandler, fileLinkHandler) {
+        object : androidx.compose.ui.platform.UriHandler {
+            override fun openUri(uri: String) {
+                if (uri.startsWith("file://", ignoreCase = true) || uri.startsWith("/")) {
+                    fileLinkHandler.onOpenFile(uri)
+                } else {
+                    try {
+                        currentUriHandler.openUri(uri)
+                    } catch (e: Exception) {
+                        Log.e("ChatScreen", "Failed to open external URI: $uri", e)
+                    }
+                }
+            }
+        }
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
     CompositionLocalProvider(
         LocalFileLinkHandler provides fileLinkHandler,
+        androidx.compose.ui.platform.LocalUriHandler provides safeUriHandler,
         com.example.gemini.ui.components.LocalSnackbarHostState provides snackbarHostState
     ) {
         Box(modifier = Modifier.fillMaxSize()) {

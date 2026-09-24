@@ -1530,29 +1530,26 @@ private fun buildRichAnnotatedString(
             // Markdown Link [title](url)
             val linkTitle = fullMatch.substringAfter("[").substringBefore("](")
             val linkUrl = fullMatch.substringAfter("](").substringBeforeLast(")")
-            val isFile = linkUrl.startsWith("file://")
+            val isFile = linkUrl.startsWith("file://", ignoreCase = true) || linkUrl.startsWith("/")
 
             if (isFile) {
                 val cleanPath = linkUrl.removePrefix("file://").substringBefore("#")
                 val fileName = java.io.File(cleanPath).name.ifBlank { cleanPath }
-                val displayLabel = if (linkTitle.isBlank() || linkTitle.startsWith("file://") || linkTitle.startsWith("/")) {
+                val displayLabel = if (linkTitle.isBlank() || linkTitle.startsWith("file://", ignoreCase = true) || linkTitle.startsWith("/")) {
                     fileName
                 } else {
                     linkTitle
                 }
 
-                if (fileLinkHandler != null) {
-                    builder.pushLink(
-                        LinkAnnotation.Clickable(
-                            tag = linkUrl,
-                            linkInteractionListener = {
-                                fileLinkHandler.onOpenFile(linkUrl)
-                            }
-                        )
+                builder.pushLink(
+                    LinkAnnotation.Clickable(
+                        tag = linkUrl,
+                        linkInteractionListener = {
+                            val handler = fileLinkHandler ?: ActiveFileLinkHandlerHolder.current
+                            handler?.onOpenFile?.invoke(linkUrl)
+                        }
                     )
-                } else {
-                    builder.pushLink(LinkAnnotation.Url(url = linkUrl))
-                }
+                )
                 builder.pushStyle(
                     SpanStyle(
                         color = ClaudeTerracotta,
@@ -1581,17 +1578,18 @@ private fun buildRichAnnotatedString(
             // HTML Link <a href="url">title</a>
             val linkUrl = matcher.group(5) ?: ""
             val linkTitle = matcher.group(6) ?: ""
-            val isFile = linkUrl.startsWith("file://")
+            val isFile = linkUrl.startsWith("file://", ignoreCase = true) || linkUrl.startsWith("/")
 
-            if (isFile && fileLinkHandler != null) {
+            if (isFile) {
                 val cleanPath = linkUrl.removePrefix("file://").substringBefore("#")
                 val fileName = java.io.File(cleanPath).name.ifBlank { cleanPath }
-                val displayLabel = if (linkTitle.isBlank() || linkTitle.startsWith("file://")) fileName else linkTitle
+                val displayLabel = if (linkTitle.isBlank() || linkTitle.startsWith("file://", ignoreCase = true) || linkTitle.startsWith("/")) fileName else linkTitle
                 builder.pushLink(
                     LinkAnnotation.Clickable(
                         tag = linkUrl,
                         linkInteractionListener = {
-                            fileLinkHandler.onOpenFile(linkUrl)
+                            val handler = fileLinkHandler ?: ActiveFileLinkHandlerHolder.current
+                            handler?.onOpenFile?.invoke(linkUrl)
                         }
                     )
                 )
@@ -1619,22 +1617,19 @@ private fun buildRichAnnotatedString(
                 builder.pop()
                 builder.pop()
             }
-        } else if (fullMatch.startsWith("file:///")) {
+        } else if (fullMatch.startsWith("file:///", ignoreCase = true)) {
             // Bare file link
             val cleanPath = fullMatch.removePrefix("file://").substringBefore("#")
             val fileName = java.io.File(cleanPath).name.ifBlank { cleanPath }
-            if (fileLinkHandler != null) {
-                builder.pushLink(
-                    LinkAnnotation.Clickable(
-                        tag = fullMatch,
-                        linkInteractionListener = {
-                            fileLinkHandler.onOpenFile(fullMatch)
-                        }
-                    )
+            builder.pushLink(
+                LinkAnnotation.Clickable(
+                    tag = fullMatch,
+                    linkInteractionListener = {
+                        val handler = fileLinkHandler ?: ActiveFileLinkHandlerHolder.current
+                        handler?.onOpenFile?.invoke(fullMatch)
+                    }
                 )
-            } else {
-                builder.pushLink(LinkAnnotation.Url(url = fullMatch))
-            }
+            )
             builder.pushStyle(
                 SpanStyle(
                     color = ClaudeTerracotta,
