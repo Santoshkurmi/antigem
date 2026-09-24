@@ -7,6 +7,9 @@ import android.util.Log
 import android.view.ViewGroup
 import android.webkit.*
 import androidx.activity.compose.BackHandler
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
@@ -330,6 +333,59 @@ fun BrowserScreen(
         }
     }
 
+    // Freeze & pause WebViews when browser is hidden or tab is inactive to eliminate background CPU/battery usage
+    LaunchedEffect(isVisible, activeTabId, tabs.size) {
+        tabs.forEach { tab ->
+            val wv = tab.webView ?: return@forEach
+            val isTabActiveAndVisible = isVisible && (tab.id == activeTabId)
+            if (isTabActiveAndVisible) {
+                wv.onResume()
+            } else {
+                wv.onPause()
+            }
+        }
+        val anyWebView = tabs.firstNotNullOfOrNull { it.webView }
+        if (isVisible) {
+            anyWebView?.resumeTimers()
+        } else {
+            anyWebView?.pauseTimers()
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, isVisible, activeTabId) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE,
+                Lifecycle.Event.ON_STOP -> {
+                    tabs.forEach { it.webView?.onPause() }
+                    tabs.firstNotNullOfOrNull { it.webView }?.pauseTimers()
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    if (isVisible) {
+                        tabs.forEach { tab ->
+                            val wv = tab.webView ?: return@forEach
+                            if (tab.id == activeTabId) {
+                                wv.onResume()
+                            } else {
+                                wv.onPause()
+                            }
+                        }
+                        tabs.firstNotNullOfOrNull { it.webView }?.resumeTimers()
+                    } else {
+                        tabs.forEach { it.webView?.onPause() }
+                        tabs.firstNotNullOfOrNull { it.webView }?.pauseTimers()
+                    }
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     // Intercept back button: if sheet open -> close sheet, if active tab has preceding browsing history -> navigate back, else -> go back to chat screen!
     BackHandler(enabled = isVisible) {
         if (showTabSwitcherSheet) {
@@ -371,6 +427,7 @@ fun BrowserScreen(
         if (index != -1) {
             val tabToRemove = tabs[index]
             try {
+                tabToRemove.webView?.onPause()
                 tabToRemove.webView?.destroy()
             } catch (e: Exception) {
                 Log.w("BrowserScreen", "Error destroying WebView", e)
@@ -734,6 +791,9 @@ fun BrowserScreen(
                                 if (tab.url.isNotBlank() && tab.url != "about:blank") {
                                     loadUrl(tab.url)
                                 }
+                                if (!isActive || !isVisible) {
+                                    onPause()
+                                }
                             }
                         },
                         update = { wv ->
@@ -744,6 +804,11 @@ fun BrowserScreen(
                                 wv.settings.isAlgorithmicDarkeningAllowed = isDarkTheme
                             } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                                 wv.settings.forceDark = if (isDarkTheme) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
+                            }
+                            if (isActive && isVisible) {
+                                wv.onResume()
+                            } else {
+                                wv.onPause()
                             }
                         },
                         modifier = Modifier.fillMaxSize()
