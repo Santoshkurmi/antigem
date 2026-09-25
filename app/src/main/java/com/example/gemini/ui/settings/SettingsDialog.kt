@@ -156,6 +156,15 @@ fun SettingsDialog(
     isTerminalAutomationEnabled: Boolean = true,
     onToggleBrowserAutomation: (Boolean) -> Unit = {},
     onToggleTerminalAutomation: (Boolean) -> Unit = {},
+    isFloatingSwitcherEnabled: Boolean = true,
+    floatingSwitcherOrientation: String = "HORIZONTAL",
+    floatingSwitcherItems: List<String> = listOf("chat", "ide", "terminal", "browser"),
+    floatingSwitcherAutoCollapseSec: Int = 0,
+    onToggleFloatingSwitcher: (Boolean) -> Unit = {},
+    onSetFloatingSwitcherOrientation: (String) -> Unit = {},
+    onSetFloatingSwitcherItems: (List<String>) -> Unit = {},
+    onSetFloatingSwitcherAutoCollapseSec: (Int) -> Unit = {},
+    onResetFloatingSwitcherPosition: () -> Unit = {},
     commandAutoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
     commandSandboxEnabled: Boolean = false,
     requireApprovalForFileEdits: Boolean = false,
@@ -309,11 +318,20 @@ fun SettingsDialog(
                         themeMode = themeMode,
                         chatFontScale = chatFontScale,
                         groupChatsByWorkspace = groupChatsByWorkspace,
+                        isFloatingSwitcherEnabled = isFloatingSwitcherEnabled,
+                        floatingSwitcherOrientation = floatingSwitcherOrientation,
+                        floatingSwitcherItems = floatingSwitcherItems,
+                        floatingSwitcherAutoCollapseSec = floatingSwitcherAutoCollapseSec,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onSetThemeMode = onSetThemeMode,
                         onSetChatFontScale = onSetChatFontScale,
-                        onToggleGroupChatsByWorkspace = onToggleGroupChatsByWorkspace
+                        onToggleGroupChatsByWorkspace = onToggleGroupChatsByWorkspace,
+                        onToggleFloatingSwitcher = onToggleFloatingSwitcher,
+                        onSetFloatingSwitcherOrientation = onSetFloatingSwitcherOrientation,
+                        onSetFloatingSwitcherItems = onSetFloatingSwitcherItems,
+                        onSetFloatingSwitcherAutoCollapseSec = onSetFloatingSwitcherAutoCollapseSec,
+                        onResetFloatingSwitcherPosition = onResetFloatingSwitcherPosition
                     )
 
                     SettingsSection.SERVERS -> ServersSubScreen(
@@ -692,11 +710,20 @@ private fun AppearanceSubScreen(
     themeMode: String,
     chatFontScale: Float,
     groupChatsByWorkspace: Boolean,
+    isFloatingSwitcherEnabled: Boolean,
+    floatingSwitcherOrientation: String,
+    floatingSwitcherItems: List<String>,
+    floatingSwitcherAutoCollapseSec: Int,
     cardBg: Color,
     cardBorder: BorderStroke,
     onSetThemeMode: (String) -> Unit,
     onSetChatFontScale: (Float) -> Unit,
-    onToggleGroupChatsByWorkspace: (Boolean) -> Unit
+    onToggleGroupChatsByWorkspace: (Boolean) -> Unit,
+    onToggleFloatingSwitcher: (Boolean) -> Unit,
+    onSetFloatingSwitcherOrientation: (String) -> Unit,
+    onSetFloatingSwitcherItems: (List<String>) -> Unit,
+    onSetFloatingSwitcherAutoCollapseSec: (Int) -> Unit,
+    onResetFloatingSwitcherPosition: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -952,6 +979,276 @@ private fun AppearanceSubScreen(
                         checkedTrackColor = ClaudeTerracotta
                     )
                 )
+            }
+        }
+
+        // Floating App Switcher Card
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = cardBg,
+            border = cardBorder,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Floating App Switcher",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "A glassy floating pill across the whole app for instant switching between Chat, IDE, Terminal, and Browser",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = isFloatingSwitcherEnabled,
+                        onCheckedChange = onToggleFloatingSwitcher,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
+                    )
+                }
+
+                if (isFloatingSwitcherEnabled) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Layout Orientation Selector
+                    Text(
+                        text = "Layout Orientation",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val isVert = floatingSwitcherOrientation.equals("VERTICAL", ignoreCase = true)
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { onSetFloatingSwitcherOrientation("VERTICAL") },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isVert) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Outlined.ExpandLess, contentDescription = null, tint = if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Vertical", fontSize = 12.sp, fontWeight = if (isVert) FontWeight.Bold else FontWeight.Normal, color = if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { onSetFloatingSwitcherOrientation("HORIZONTAL") },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (!isVert) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Horizontal", fontSize = 12.sp, fontWeight = if (!isVert) FontWeight.Bold else FontWeight.Normal, color = if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Auto-Collapse Timeout Selector
+                    Text(
+                        text = "Auto-Collapse Timeout",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Automatically collapses into a small arrow handle after inactivity",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val timeouts = listOf(0 to "Never", 3 to "3s", 5 to "5s", 10 to "10s", 15 to "15s")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        timeouts.forEach { (sec, label) ->
+                            val isSelected = floatingSwitcherAutoCollapseSec == sec
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onSetFloatingSwitcherAutoCollapseSec(sec) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Customize Items Order & Visibility
+                    Text(
+                        text = "Customize Icons & Order",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    val allAvailable = listOf("chat", "ide", "terminal", "browser")
+                    val currentItems = floatingSwitcherItems.toMutableList()
+                    val displayedList = currentItems + allAvailable.filterNot { currentItems.contains(it) }
+
+                    displayedList.forEach { itemId ->
+                        val isEnabled = currentItems.contains(itemId)
+                        val itemLabel = when (itemId) {
+                            "chat" -> "Chat"
+                            "ide" -> "IDE (Code Editor)"
+                            "terminal" -> "Terminal"
+                            "browser" -> "Web Browser"
+                            else -> itemId
+                        }
+                        val itemIcon = when (itemId) {
+                            "chat" -> Icons.Outlined.ChatBubbleOutline
+                            "ide" -> Icons.Outlined.Code
+                            "terminal" -> Icons.Outlined.Terminal
+                            "browser" -> Icons.Outlined.Language
+                            else -> Icons.Outlined.ChatBubbleOutline
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                            border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = isEnabled,
+                                        onCheckedChange = { checked ->
+                                            val updated = if (checked) {
+                                                currentItems + itemId
+                                            } else {
+                                                if (currentItems.size > 1) currentItems.filter { it != itemId } else currentItems
+                                            }
+                                            onSetFloatingSwitcherItems(updated)
+                                        },
+                                        colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(itemIcon, contentDescription = null, tint = if (isEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = itemLabel,
+                                        fontSize = 12.sp,
+                                        color = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                                    )
+                                }
+
+                                if (isEnabled) {
+                                    val itemOrderIndex = currentItems.indexOf(itemId)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        IconButton(
+                                            onClick = {
+                                                if (itemOrderIndex > 0) {
+                                                    val copy = currentItems.toMutableList()
+                                                    val temp = copy[itemOrderIndex]
+                                                    copy[itemOrderIndex] = copy[itemOrderIndex - 1]
+                                                    copy[itemOrderIndex - 1] = temp
+                                                    onSetFloatingSwitcherItems(copy)
+                                                }
+                                            },
+                                            enabled = itemOrderIndex > 0,
+                                            modifier = Modifier.size(26.dp)
+                                        ) {
+                                            Icon(Icons.Outlined.ExpandLess, contentDescription = "Move Up", modifier = Modifier.size(16.dp))
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                if (itemOrderIndex < currentItems.size - 1) {
+                                                    val copy = currentItems.toMutableList()
+                                                    val temp = copy[itemOrderIndex]
+                                                    copy[itemOrderIndex] = copy[itemOrderIndex + 1]
+                                                    copy[itemOrderIndex + 1] = temp
+                                                    onSetFloatingSwitcherItems(copy)
+                                                }
+                                            },
+                                            enabled = itemOrderIndex < currentItems.size - 1,
+                                            modifier = Modifier.size(26.dp)
+                                        ) {
+                                            Icon(Icons.Outlined.ExpandMore, contentDescription = "Move Down", modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Reset Position Button
+                    OutlinedButton(
+                        onClick = onResetFloatingSwitcherPosition,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ClaudeTerracotta)
+                    ) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Reset Screen Position to Right-Center", fontSize = 12.sp)
+                    }
+                }
             }
         }
 

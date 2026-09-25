@@ -64,7 +64,35 @@ class MainActivity : ComponentActivity() {
             var currentViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
             var previousViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
 
+            val isFloatingSwitcherEnabled by chatViewModel.isFloatingSwitcherEnabled.collectAsState()
+            val floatingSwitcherOrientation by chatViewModel.floatingSwitcherOrientation.collectAsState()
+            val floatingSwitcherItems by chatViewModel.floatingSwitcherItems.collectAsState()
+            val floatingSwitcherAutoCollapseSec by chatViewModel.floatingSwitcherAutoCollapseSec.collectAsState()
+            val floatingSwitcherPosX by chatViewModel.floatingSwitcherPosX.collectAsState()
+            val floatingSwitcherPosY by chatViewModel.floatingSwitcherPosY.collectAsState()
+
             val context = androidx.compose.ui.platform.LocalContext.current
+            val view = androidx.compose.ui.platform.LocalView.current
+            DisposableEffect(currentViewMode, useDarkTheme) {
+                val window = (context as? android.app.Activity)?.window
+                if (window != null && !view.isInEditMode) {
+                    val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
+                    if (currentViewMode == AppViewMode.TERMINAL) {
+                        window.statusBarColor = android.graphics.Color.BLACK
+                        window.navigationBarColor = android.graphics.Color.BLACK
+                        insetsController.isAppearanceLightStatusBars = false
+                        insetsController.isAppearanceLightNavigationBars = false
+                    } else {
+                        val bgArgb = if (useDarkTheme) android.graphics.Color.parseColor("#121212") else android.graphics.Color.WHITE
+                        window.statusBarColor = bgArgb
+                        window.navigationBarColor = bgArgb
+                        insetsController.isAppearanceLightStatusBars = !useDarkTheme
+                        insetsController.isAppearanceLightNavigationBars = !useDarkTheme
+                    }
+                }
+                onDispose {}
+            }
+
             var showPermissionsDialog by remember {
                 mutableStateOf(!com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(context))
             }
@@ -105,7 +133,12 @@ class MainActivity : ComponentActivity() {
                         )
                     } else {
                         BackHandler(enabled = currentViewMode != AppViewMode.CHAT && currentViewMode != AppViewMode.BROWSER) {
-                            currentViewMode = AppViewMode.CHAT
+                            currentViewMode = if (previousViewMode != currentViewMode && previousViewMode != AppViewMode.BROWSER) previousViewMode else AppViewMode.CHAT
+                        }
+
+                        var hasEverOpenedTerminal by remember { mutableStateOf(false) }
+                        if (currentViewMode == AppViewMode.TERMINAL) {
+                            hasEverOpenedTerminal = true
                         }
 
                         Box(modifier = Modifier.fillMaxSize()) {
@@ -124,6 +157,10 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToIde = {
                                         previousViewMode = currentViewMode
                                         currentViewMode = AppViewMode.IDE
+                                    },
+                                    onNavigateToTerminal = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.TERMINAL
                                     },
                                     onNavigateToBrowser = {
                                         previousViewMode = currentViewMode
@@ -152,6 +189,25 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            // Persistent Terminal Screen (Retains terminal tmux sessions & state)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        val isVisible = currentViewMode == AppViewMode.TERMINAL
+                                        alpha = if (isVisible) 1f else 0f
+                                        translationX = if (isVisible) 0f else 20000f
+                                    }
+                            ) {
+                                if (currentViewMode == AppViewMode.TERMINAL || hasEverOpenedTerminal) {
+                                    com.example.gemini.ui.components.LocalTerminalContent(
+                                        onClose = {
+                                            currentViewMode = if (previousViewMode == AppViewMode.TERMINAL) AppViewMode.CHAT else previousViewMode
+                                        }
+                                    )
+                                }
+                            }
+
                             // Persistent Web Preview Browser Screen (Retains open tabs, WebViews, state & navigation)
                             Box(
                                 modifier = Modifier
@@ -165,6 +221,37 @@ class MainActivity : ComponentActivity() {
                                 BrowserScreen(
                                     isVisible = currentViewMode == AppViewMode.BROWSER,
                                     onClose = { currentViewMode = if (previousViewMode == AppViewMode.BROWSER) AppViewMode.CHAT else previousViewMode }
+                                )
+                            }
+
+                            // Floating App Switcher Across Whole App (Renders on top of Chat, IDE, Terminal, Browser)
+                            if (isFloatingSwitcherEnabled) {
+                                com.example.gemini.ui.components.FloatingSwitcherWidget(
+                                    currentViewMode = currentViewMode,
+                                    orientation = floatingSwitcherOrientation,
+                                    items = floatingSwitcherItems,
+                                    autoCollapseTimeoutSec = floatingSwitcherAutoCollapseSec,
+                                    savedPosXRatio = floatingSwitcherPosX,
+                                    savedPosYRatio = floatingSwitcherPosY,
+                                    onNavigateToChat = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.CHAT
+                                    },
+                                    onNavigateToIde = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.IDE
+                                    },
+                                    onNavigateToBrowser = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.BROWSER
+                                    },
+                                    onNavigateToTerminal = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.TERMINAL
+                                    },
+                                    onPositionSaved = { x, y ->
+                                        chatViewModel.saveFloatingSwitcherPosition(x, y)
+                                    }
                                 )
                             }
                         }

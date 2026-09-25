@@ -202,6 +202,10 @@ fun ChatScreen(
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
     val isBrowserAutomationEnabled by viewModel.isBrowserAutomationEnabled.collectAsState()
     val isTerminalAutomationEnabled by viewModel.isTerminalAutomationEnabled.collectAsState()
+    val isFloatingSwitcherEnabled by viewModel.isFloatingSwitcherEnabled.collectAsState()
+    val floatingSwitcherOrientation by viewModel.floatingSwitcherOrientation.collectAsState()
+    val floatingSwitcherItems by viewModel.floatingSwitcherItems.collectAsState()
+    val floatingSwitcherAutoCollapseSec by viewModel.floatingSwitcherAutoCollapseSec.collectAsState()
     val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
     val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
     val hubStatus by viewModel.hubStatus.collectAsState()
@@ -1003,19 +1007,13 @@ fun ChatScreen(
                             )
                         }
                         IconButton(onClick = {
-                            if (isInFloatingWindow) {
+                            if (useSshTerminal || (isLocalToolsInstalled && isLocalToolsEnabled)) {
+                                onNavigateToTerminal()
+                            } else if (isLocalToolsInstalled) {
+                                viewModel.setLocalToolsEnabled(true)
                                 onNavigateToTerminal()
                             } else {
-                                if (useSshTerminal) {
-                                    showLocalTerminalDialog = true
-                                } else if (isLocalToolsInstalled && isLocalToolsEnabled) {
-                                    showLocalTerminalDialog = true
-                                } else if (isLocalToolsInstalled) {
-                                    viewModel.setLocalToolsEnabled(true)
-                                    showLocalTerminalDialog = true
-                                } else {
-                                    showLocalToolsInstallDialog = true
-                                }
+                                showLocalToolsInstallDialog = true
                             }
                         }) {
                             Icon(
@@ -1877,7 +1875,7 @@ fun ChatScreen(
             onSaveSshSettings = { h, p, u, pass -> viewModel.saveSshSettings(h, p, u, pass) },
             onToggleLocalTools = { viewModel.setLocalToolsEnabled(it) },
             onInstallLocalTools = { showLocalToolsInstallDialog = true },
-            onOpenLocalTerminal = { showLocalTerminalDialog = true },
+            onOpenLocalTerminal = onNavigateToTerminal,
             onResetLocalTools = {
                 LocalEnvironmentManager.launchReset(context) {
                     viewModel.setLocalToolsEnabled(false)
@@ -1923,6 +1921,15 @@ fun ChatScreen(
             isTerminalAutomationEnabled = isTerminalAutomationEnabled,
             onToggleBrowserAutomation = { viewModel.setBrowserAutomationEnabled(it) },
             onToggleTerminalAutomation = { viewModel.setTerminalAutomationEnabled(it) },
+            isFloatingSwitcherEnabled = isFloatingSwitcherEnabled,
+            floatingSwitcherOrientation = floatingSwitcherOrientation,
+            floatingSwitcherItems = floatingSwitcherItems,
+            floatingSwitcherAutoCollapseSec = floatingSwitcherAutoCollapseSec,
+            onToggleFloatingSwitcher = { viewModel.setFloatingSwitcherEnabled(it) },
+            onSetFloatingSwitcherOrientation = { viewModel.setFloatingSwitcherOrientation(it) },
+            onSetFloatingSwitcherItems = { viewModel.setFloatingSwitcherItems(it) },
+            onSetFloatingSwitcherAutoCollapseSec = { viewModel.setFloatingSwitcherAutoCollapseSec(it) },
+            onResetFloatingSwitcherPosition = { viewModel.resetFloatingSwitcherPosition() },
             commandAutoExecutionPolicy = commandAutoExecutionPolicy,
             commandSandboxEnabled = commandSandboxEnabled,
             requireApprovalForFileEdits = requireApprovalForFileEdits,
@@ -2141,7 +2148,7 @@ fun ChatScreen(
     if (showLocalToolsInstallDialog) {
         LocalToolsInstallDialog(
             authPreferences = viewModel.authPreferences,
-            onOpenTerminal = { showLocalTerminalDialog = true },
+            onOpenTerminal = onNavigateToTerminal,
             onDismiss = { showLocalToolsInstallDialog = false }
         )
     }

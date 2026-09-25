@@ -401,6 +401,65 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val autoShowFloatingBubbleOnMinimize: StateFlow<Boolean> = authPrefs.autoShowFloatingBubbleOnMinimize
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getAutoShowFloatingBubbleOnMinimizeSync())
 
+    val isFloatingSwitcherEnabled: StateFlow<Boolean> = authPrefs.isFloatingSwitcherEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingSwitcherEnabledSync())
+
+    val floatingSwitcherOrientation: StateFlow<String> = authPrefs.floatingSwitcherOrientation
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingSwitcherOrientationSync())
+
+    val floatingSwitcherItems: StateFlow<List<String>> = authPrefs.floatingSwitcherItems
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingSwitcherItemsSync())
+
+    val floatingSwitcherAutoCollapseSec: StateFlow<Int> = authPrefs.floatingSwitcherAutoCollapseSec
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingSwitcherAutoCollapseSecSync())
+
+    val floatingSwitcherPosX: StateFlow<Float> = authPrefs.floatingSwitcherPosX
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingSwitcherPositionSync().first)
+
+    val floatingSwitcherPosY: StateFlow<Float> = authPrefs.floatingSwitcherPosY
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingSwitcherPositionSync().second)
+
+    fun setFloatingSwitcherEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.saveFloatingSwitcherEnabled(enabled)
+        }
+    }
+
+    fun setFloatingSwitcherOrientation(orientation: String) {
+        viewModelScope.launch {
+            authPrefs.saveFloatingSwitcherOrientation(orientation)
+        }
+    }
+
+    fun setFloatingSwitcherItems(items: List<String>) {
+        viewModelScope.launch {
+            authPrefs.saveFloatingSwitcherItems(items)
+        }
+    }
+
+    fun setFloatingSwitcherAutoCollapseSec(sec: Int) {
+        viewModelScope.launch {
+            authPrefs.saveFloatingSwitcherAutoCollapseSec(sec)
+        }
+    }
+
+    private var saveFloatingSwitcherJob: kotlinx.coroutines.Job? = null
+
+    fun saveFloatingSwitcherPosition(x: Float, y: Float) {
+        saveFloatingSwitcherJob?.cancel()
+        saveFloatingSwitcherJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            kotlinx.coroutines.delay(250)
+            authPrefs.saveFloatingSwitcherPosition(x, y)
+        }
+    }
+
+    fun resetFloatingSwitcherPosition() {
+        saveFloatingSwitcherJob?.cancel()
+        viewModelScope.launch {
+            authPrefs.saveFloatingSwitcherPosition(0.95f, 0.50f)
+        }
+    }
+
     fun setGroupChatsByWorkspace(enabled: Boolean) {
         viewModelScope.launch {
             authPrefs.saveGroupChatsByWorkspace(enabled)
