@@ -357,7 +357,7 @@ fun ChatScreen(
     val convKey = currentConv?.id ?: "empty"
     val hasInitialFeedItems = feedItems.isNotEmpty()
     val listState = remember(convKey, hasInitialFeedItems) {
-        val initialIdx = if (feedItems.isNotEmpty()) feedItems.size - 1 else 0
+        val initialIdx = if (feedItems.isNotEmpty()) feedItems.size else 0
         LazyListState(firstVisibleItemIndex = initialIdx)
     }
 
@@ -371,8 +371,7 @@ fun ChatScreen(
                 val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
                 if (lastVisibleItem == null) false
                 else {
-                    lastVisibleItem.index >= totalItems - 1 &&
-                        (lastVisibleItem.offset + lastVisibleItem.size <= layoutInfo.viewportEndOffset + 160)
+                    lastVisibleItem.index >= totalItems - 2
                 }
             }
         }
@@ -496,7 +495,7 @@ fun ChatScreen(
     LaunchedEffect(userSentMessageTrigger) {
         if (userSentMessageTrigger > 0 && feedItems.isNotEmpty()) {
             shouldAutoScroll = true
-            listState.scrollToItem(maxOf(0, feedItems.size - 1))
+            listState.scrollToItem(feedItems.size)
         }
     }
 
@@ -510,7 +509,7 @@ fun ChatScreen(
 
     LaunchedEffect(feedItems.size, lastContentLen, lastThoughtLen, toolCallsPayloadLen, isRunningOrStreaming) {
         if (feedItems.isNotEmpty() && isRunningOrStreaming && shouldAutoScroll && !isUserDragging) {
-            listState.scrollToItem(maxOf(0, feedItems.size - 1))
+            listState.scrollToItem(feedItems.size)
         }
     }
 
@@ -1292,9 +1291,9 @@ fun ChatScreen(
                                 }
                             }
 
-                            // Bottom spacer to ensure scrolling reaches below the very bottom
+                            // Bottom spacer to ensure scrolling reaches comfortably above the input box
                             item(key = "bottom_anchor") {
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(16.dp))
                             }
                         }
                     }
