@@ -682,6 +682,7 @@ object CodeBlockCache {
     }
 
     fun getOrCompute(code: String, language: String): CachedCodeBlock {
+        val t0 = System.nanoTime()
         val key = code.hashCode() * 31 + language.lowercase().trim().hashCode()
         val hit = cache.get(key)
         if (hit != null) return hit

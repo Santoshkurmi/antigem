@@ -18,7 +18,7 @@ sealed class ChatFeedItem(val key: String, val contentType: String) {
     @Immutable
     data class AssistantThinking(val messageId: String, val thoughtText: String, val durationMs: Long?, val isStreaming: Boolean) : ChatFeedItem("thought_$messageId", "THOUGHT")
     @Immutable
-    data class AssistantMessage(val message: ChatMessage, val blocks: List<MarkdownBlock>) : ChatFeedItem("assistant_${message.id}", "ASSISTANT")
+    data class AssistantBlock(val messageId: String, val blockIndex: Int, val block: MarkdownBlock, val isFirst: Boolean, val isLast: Boolean) : ChatFeedItem("block_${messageId}_$blockIndex", block.javaClass.simpleName)
     @Immutable
     data class AssistantTyping(val messageId: String, val modelId: String) : ChatFeedItem("typing_$messageId", "TYPING")
     @Immutable
@@ -51,10 +51,15 @@ object ChatFeedCache {
                 }
                 if (contentToParse.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
                     val blocks = parseMarkdownBlocks(contentToParse, msg.toolCalls)
-                    msgItems.add(ChatFeedItem.AssistantMessage(
-                        message = msg,
-                        blocks = blocks
-                    ))
+                    for (i in blocks.indices) {
+                        msgItems.add(ChatFeedItem.AssistantBlock(
+                            messageId = msg.id,
+                            blockIndex = i,
+                            block = blocks[i],
+                            isFirst = i == 0,
+                            isLast = i == blocks.lastIndex
+                        ))
+                    }
                 }
                 if (msg.content.isNotEmpty()) {
                     msgItems.add(ChatFeedItem.AssistantFooter(msg))
@@ -67,40 +72,41 @@ object ChatFeedCache {
     }
 
     /**
-     * Prewarm markdown blocks asynchronously on Dispatchers.Default so the UI thread
-     * has zero parsing work during composition.
+     * Prewarm markdown blocks asynchronously on Dispatchers.Default for the most recent
+     * window of messages (last 12 messages by default) so the UI thread has zero parsing work
+     * during composition, without wasting memory/CPU on the entire chat history.
      */
-    fun prewarm(messages: List<ChatMessage>) {
-        for (msg in messages) {
+    fun prewarm(messages: List<ChatMessage>, windowSize: Int = 12, isDark: Boolean = true) {
+        if (messages.isEmpty()) return
+        val targetMessages = if (messages.size > windowSize) messages.takeLast(windowSize) else messages
+        for (msg in targetMessages) {
             if (!msg.isStreaming) {
                 val items = getOrParse(msg)
                 for (item in items) {
-                    if (item is ChatFeedItem.AssistantMessage) {
-                        for (block in item.blocks) {
-                            when (block) {
-                                is MarkdownBlock.Code -> {
-                                    CodeBlockCache.prewarm(block.code, block.language)
-                                }
-                                is MarkdownBlock.Paragraph -> {
-                                    MarkdownTextCache.prewarm(block.text)
-                                }
-                                is MarkdownBlock.Header -> {
-                                    MarkdownTextCache.prewarm(block.text)
-                                }
-                                is MarkdownBlock.Bullet -> {
-                                    MarkdownTextCache.prewarm(block.text)
-                                }
-                                is MarkdownBlock.Numbered -> {
-                                    MarkdownTextCache.prewarm(block.text)
-                                }
-                                is MarkdownBlock.Blockquote -> {
-                                    MarkdownTextCache.prewarm(block.text)
-                                }
-                                is MarkdownBlock.Task -> {
-                                    MarkdownTextCache.prewarm(block.text)
-                                }
-                                else -> {}
+                    if (item is ChatFeedItem.AssistantBlock) {
+                        when (val block = item.block) {
+                            is MarkdownBlock.Code -> {
+                                CodeBlockCache.prewarm(block.code, block.language)
                             }
+                            is MarkdownBlock.Paragraph -> {
+                                MarkdownTextCache.prewarm(block.text, isDark)
+                            }
+                            is MarkdownBlock.Header -> {
+                                MarkdownTextCache.prewarm(block.text, isDark)
+                            }
+                            is MarkdownBlock.Bullet -> {
+                                MarkdownTextCache.prewarm(block.text, isDark)
+                            }
+                            is MarkdownBlock.Numbered -> {
+                                MarkdownTextCache.prewarm(block.text, isDark)
+                            }
+                            is MarkdownBlock.Blockquote -> {
+                                MarkdownTextCache.prewarm(block.text, isDark)
+                            }
+                            is MarkdownBlock.Task -> {
+                                MarkdownTextCache.prewarm(block.text, isDark)
+                            }
+                            else -> {}
                         }
                     }
                 }
@@ -112,7 +118,7 @@ object ChatFeedCache {
         messages: List<ChatMessage>,
         selectedModelId: String
     ): List<ChatFeedItem> {
-        val result = ArrayList<ChatFeedItem>(messages.size * 2)
+        val result = ArrayList<ChatFeedItem>(messages.size * 3)
         val seenKeys = HashSet<String>()
 
         fun addItem(item: ChatFeedItem) {
@@ -142,10 +148,15 @@ object ChatFeedCache {
                 }
                 if (contentToParse.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
                     val blocks = parseMarkdownBlocks(contentToParse, msg.toolCalls)
-                    addItem(ChatFeedItem.AssistantMessage(
-                        message = msg,
-                        blocks = blocks
-                    ))
+                    for (i in blocks.indices) {
+                        addItem(ChatFeedItem.AssistantBlock(
+                            messageId = msg.id,
+                            blockIndex = i,
+                            block = blocks[i],
+                            isFirst = i == 0,
+                            isLast = i == blocks.lastIndex
+                        ))
+                    }
                 } else if (!hasActiveRunningTool) {
                     // Only show waiting indicator before ANY output or tool call has appeared
                     addItem(ChatFeedItem.AssistantTyping(msg.id, selectedModelId))
