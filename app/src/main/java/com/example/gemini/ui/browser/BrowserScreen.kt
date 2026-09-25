@@ -64,19 +64,7 @@ import java.net.URLEncoder
 /**
  * Tab model representing a live web session with its own state and WebView.
  */
-class BrowserTab(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    initialUrl: String = "",
-    initialTitle: String = "New Tab"
-) {
-    var url by mutableStateOf(initialUrl)
-    var title by mutableStateOf(initialTitle)
-    var isLoading by mutableStateOf(false)
-    var progress by mutableStateOf(0)
-    var canGoBack by mutableStateOf(false)
-    var canGoForward by mutableStateOf(false)
-    var webView: WebView? = null
-}
+typealias BrowserTab = BrowserTabSession
 
 private fun isBrowserUserUrl(url: String?): Boolean {
     if (url.isNullOrBlank()) return false
@@ -288,11 +276,10 @@ fun BrowserScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val tabs = remember {
-        mutableStateListOf(BrowserTab(initialUrl = "", initialTitle = "New Tab"))
-    }
+    val sessionManager = BrowserSessionManager.instance
+    val tabs = sessionManager.tabs
     val isDarkTheme = com.example.gemini.theme.isAppInDarkTheme()
-    var activeTabId by remember { mutableStateOf<String?>(tabs.firstOrNull()?.id) }
+    var activeTabId by remember { mutableStateOf(sessionManager.activeTabId) }
     var addressInput by remember { mutableStateOf("") }
     var isAddressFocused by remember { mutableStateOf(false) }
     var showTabSwitcherSheet by remember { mutableStateOf(false) }
@@ -300,6 +287,12 @@ fun BrowserScreen(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(sessionManager.activeTabId) {
+        if (sessionManager.activeTabId != null) {
+            activeTabId = sessionManager.activeTabId
+        }
+    }
 
     val activeTab = tabs.find { it.id == activeTabId } ?: tabs.firstOrNull()
 
@@ -333,19 +326,19 @@ fun BrowserScreen(
         }
     }
 
-    // Freeze & pause WebViews when browser is hidden or tab is inactive to eliminate background CPU/battery usage
+    // Manage WebViews pause/resume without interrupting background AI tasks
     LaunchedEffect(isVisible, activeTabId, tabs.size) {
         tabs.forEach { tab ->
             val wv = tab.webView ?: return@forEach
             val isTabActiveAndVisible = isVisible && (tab.id == activeTabId)
-            if (isTabActiveAndVisible) {
+            if (isTabActiveAndVisible || tab.isBackgroundActive) {
                 wv.onResume()
             } else {
                 wv.onPause()
             }
         }
         val anyWebView = tabs.firstNotNullOfOrNull { it.webView }
-        if (isVisible) {
+        if (isVisible || tabs.any { it.isBackgroundActive }) {
             anyWebView?.resumeTimers()
         } else {
             anyWebView?.pauseTimers()
@@ -358,24 +351,18 @@ fun BrowserScreen(
             when (event) {
                 Lifecycle.Event.ON_PAUSE,
                 Lifecycle.Event.ON_STOP -> {
-                    tabs.forEach { it.webView?.onPause() }
-                    tabs.firstNotNullOfOrNull { it.webView }?.pauseTimers()
+                    tabs.forEach { if (!it.isBackgroundActive) it.webView?.onPause() }
                 }
                 Lifecycle.Event.ON_RESUME -> {
-                    if (isVisible) {
-                        tabs.forEach { tab ->
-                            val wv = tab.webView ?: return@forEach
-                            if (tab.id == activeTabId) {
-                                wv.onResume()
-                            } else {
-                                wv.onPause()
-                            }
+                    tabs.forEach { tab ->
+                        val wv = tab.webView ?: return@forEach
+                        if ((isVisible && tab.id == activeTabId) || tab.isBackgroundActive) {
+                            wv.onResume()
+                        } else {
+                            wv.onPause()
                         }
-                        tabs.firstNotNullOfOrNull { it.webView }?.resumeTimers()
-                    } else {
-                        tabs.forEach { it.webView?.onPause() }
-                        tabs.firstNotNullOfOrNull { it.webView }?.pauseTimers()
                     }
+                    tabs.firstNotNullOfOrNull { it.webView }?.resumeTimers()
                 }
                 else -> {}
             }
@@ -403,48 +390,19 @@ fun BrowserScreen(
         addressInput = targetUrl
         focusManager.clearFocus()
         keyboardController?.hide()
-        activeTab?.let { tab ->
-            tab.url = targetUrl
-            tab.title = targetUrl
-            tab.isLoading = true
-            tab.webView?.loadUrl(targetUrl)
-        }
+        sessionManager.openUrl(targetUrl, tabId = activeTabId, newTab = false)
     }
 
     fun addNewTab(url: String = "", title: String = "New Tab") {
-        val newTab = BrowserTab(initialUrl = url, initialTitle = title)
-        tabs.add(newTab)
+        val newTab = sessionManager.addNewTab(url = url, title = title, activate = true)
         activeTabId = newTab.id
         addressInput = url
         showTabSwitcherSheet = false
-        if (url.isNotBlank()) {
-            newTab.webView?.loadUrl(url)
-        }
     }
 
     fun closeTab(tabId: String) {
-        val index = tabs.indexOfFirst { it.id == tabId }
-        if (index != -1) {
-            val tabToRemove = tabs[index]
-            try {
-                tabToRemove.webView?.onPause()
-                tabToRemove.webView?.destroy()
-            } catch (e: Exception) {
-                Log.w("BrowserScreen", "Error destroying WebView", e)
-            }
-            tabs.removeAt(index)
-
-            if (tabs.isEmpty()) {
-                val freshTab = BrowserTab(initialUrl = "", initialTitle = "New Tab")
-                tabs.add(freshTab)
-                activeTabId = freshTab.id
-                addressInput = ""
-            } else if (activeTabId == tabId) {
-                val nextIndex = (index - 1).coerceAtLeast(0)
-                activeTabId = tabs[nextIndex].id
-                addressInput = tabs[nextIndex].url
-            }
-        }
+        sessionManager.closeTab(tabId)
+        activeTabId = sessionManager.activeTabId
     }
 
     Scaffold(
@@ -494,7 +452,7 @@ fun BrowserScreen(
                                 if (activeTab?.isLoading == true) {
                                     activeTab.webView?.stopLoading()
                                 } else if (hasActivePage) {
-                                    activeTab?.webView?.reload()
+                                    activeTab.webView?.reload()
                                 }
                             },
                             modifier = Modifier.size(34.dp)
@@ -669,132 +627,13 @@ fun BrowserScreen(
                 ) {
                     AndroidView(
                         factory = { ctx ->
-                            WebView(ctx).apply {
-                                tab.webView = this
-                                setBackgroundColor(if (isDarkTheme) 0xFF181513.toInt() else android.graphics.Color.WHITE)
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                                settings.apply {
-                                    javaScriptEnabled = true
-                                    domStorageEnabled = true
-                                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                    allowFileAccess = true
-                                    allowContentAccess = true
-                                    useWideViewPort = true
-                                    loadWithOverviewMode = true
-                                    cacheMode = WebSettings.LOAD_DEFAULT
-                                    setSupportZoom(true)
-                                    builtInZoomControls = true
-                                    displayZoomControls = false
-
-                                    @Suppress("DEPRECATION")
-                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                                        isAlgorithmicDarkeningAllowed = isDarkTheme
-                                    } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                        forceDark = if (isDarkTheme) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
-                                    }
-                                }
-                                webViewClient = object : WebViewClient() {
-                                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                        tab.isLoading = true
-                                        if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("data:")) {
-                                            tab.url = url
-                                            if (!isAddressFocused && tab.id == activeTabId) {
-                                                addressInput = url
-                                            }
-                                        }
-                                        tab.canGoBack = canBrowserTabGoBack(view)
-                                        tab.canGoForward = view?.canGoForward() == true
-                                    }
-
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        tab.isLoading = false
-                                        if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("data:")) {
-                                            tab.url = url
-                                            if (!isAddressFocused && tab.id == activeTabId) {
-                                                addressInput = url
-                                            }
-                                        }
-                                        val pageTitle = view?.title
-                                        if (!pageTitle.isNullOrBlank()) {
-                                            tab.title = pageTitle
-                                        }
-                                        tab.canGoBack = canBrowserTabGoBack(view)
-                                        tab.canGoForward = view?.canGoForward() == true
-                                    }
-
-                                    override fun onReceivedError(
-                                        view: WebView?,
-                                        request: WebResourceRequest?,
-                                        error: WebResourceError?
-                                    ) {
-                                        if (request?.isForMainFrame == true) {
-                                            tab.isLoading = false
-                                            val failingUrl = request.url?.toString() ?: tab.url
-                                            val description = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                                                error?.description?.toString() ?: "Connection failed"
-                                            } else {
-                                                "Connection failed"
-                                            }
-                                            val html = buildErrorHtml(failingUrl, description, isDarkTheme)
-                                            view?.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
-                                            tab.canGoBack = canBrowserTabGoBack(view)
-                                        }
-                                    }
-
-                                    @Suppress("DEPRECATION")
-                                    override fun onReceivedError(
-                                        view: WebView?,
-                                        errorCode: Int,
-                                        description: String?,
-                                        failingUrl: String?
-                                    ) {
-                                        tab.isLoading = false
-                                        val url = failingUrl ?: tab.url
-                                        val desc = description ?: "Connection failed"
-                                        val html = buildErrorHtml(url, desc, isDarkTheme)
-                                        view?.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
-                                        tab.canGoBack = canBrowserTabGoBack(view)
-                                    }
-
-                                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                        val uri = request?.url ?: return false
-                                        val scheme = uri.scheme?.lowercase() ?: return false
-                                        if (scheme == "http" || scheme == "https" || scheme == "file" || scheme == "about") {
-                                            return false
-                                        }
-                                        return try {
-                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-                                            ctx.startActivity(intent)
-                                            true
-                                        } catch (_: Exception) {
-                                            false
-                                        }
-                                    }
-                                }
-                                webChromeClient = object : WebChromeClient() {
-                                    override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                        tab.progress = newProgress
-                                        tab.isLoading = newProgress < 100
-                                        tab.canGoBack = canBrowserTabGoBack(view)
-                                        tab.canGoForward = view?.canGoForward() == true
-                                    }
-
-                                    override fun onReceivedTitle(view: WebView?, title: String?) {
-                                        if (!title.isNullOrBlank()) {
-                                            tab.title = title
-                                        }
-                                    }
-                                }
-                                if (tab.url.isNotBlank() && tab.url != "about:blank") {
-                                    loadUrl(tab.url)
-                                }
-                                if (!isActive || !isVisible) {
-                                    onPause()
-                                }
-                            }
+                            val wv = sessionManager.ensureWebViewAttached(ctx, tab, isDarkTheme)
+                            (wv.parent as? ViewGroup)?.removeView(wv)
+                            wv.layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                            wv
                         },
                         update = { wv ->
                             tab.webView = wv
@@ -807,7 +646,7 @@ fun BrowserScreen(
                             }
                             if (isActive && isVisible) {
                                 wv.onResume()
-                            } else {
+                            } else if (!tab.isBackgroundActive) {
                                 wv.onPause()
                             }
                         },

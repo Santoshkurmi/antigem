@@ -98,6 +98,7 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
 
         runStartForeground()
         observeTerminalSessions()
+        com.example.gemini.data.remote.AndroidLocalBridgeServer.instance.start(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
