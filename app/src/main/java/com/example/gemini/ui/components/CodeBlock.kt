@@ -169,7 +169,14 @@ fun CodeBlock(
     val codeKey = remember(code, language) {
         "${code.hashCode()}_${language}"
     }
-    val isExpanded = CodeBlockExpansionCache.isExpanded(codeKey, default = false)
+    var isExpanded by remember(codeKey) {
+        mutableStateOf(CodeBlockExpansionCache.isExpanded(codeKey, default = false))
+    }
+    val toggleExpand = {
+        val next = !isExpanded
+        isExpanded = next
+        CodeBlockExpansionCache.setExpanded(codeKey, next)
+    }
 
     val cachedCode = remember(code, language) {
         CodeBlockCache.getOrCompute(code, language)
@@ -323,7 +330,7 @@ fun CodeBlock(
             // Expand / Collapse toggle for long code
             if (isLongCode && selectedTab == 0) {
                 IconButton(
-                    onClick = { CodeBlockExpansionCache.toggle(codeKey) },
+                    onClick = { toggleExpand() },
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
@@ -402,19 +409,9 @@ fun CodeBlock(
         } else {
             // Ultra-fast windowed syntax-highlighted code rendering (0.5ms layout, zero frame drops)
             val displayText = if (isExpanded || !isLongCode) cachedCode.fullText else cachedCode.previewText
-            val verticalScroll = rememberScrollState()
             val horizontalScroll = rememberScrollState()
 
-            val scrollModifier = if (isExpanded) {
-                Modifier.fillMaxWidth()
-            } else {
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 280.dp)
-                    .verticalScroll(verticalScroll)
-            }
-
-            Box(modifier = scrollModifier) {
+            Box(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = displayText,
                     fontFamily = FontFamily.Monospace,
@@ -434,18 +431,19 @@ fun CodeBlock(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { CodeBlockExpansionCache.toggle(codeKey) },
+                        .clickable { toggleExpand() },
                     color = CodeBlockBgDark.copy(alpha = 0.7f)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp),
+                            .padding(vertical = 7.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val hiddenLines = (lineCount - CODE_PREVIEW_LINES).coerceAtLeast(1)
                         Text(
-                            text = if (isExpanded) "Collapse code block ▲" else "Show all $lineCount lines (${lineCount - 25} more) ▼",
+                            text = if (isExpanded) "Collapse code block ▲" else "Show all $lineCount lines ($hiddenLines more) ▼",
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = ClaudeTerracotta
@@ -667,6 +665,8 @@ fun CodeBlock(
     }
 }
 
+const val CODE_PREVIEW_LINES = 10
+
 data class CachedCodeBlock(
     val fullText: AnnotatedString,
     val previewText: AnnotatedString,
@@ -694,13 +694,13 @@ object CodeBlockCache {
         while (i < raw.length) {
             if (raw[i] == '\n') {
                 lines++
-                if (lines == 26) {
+                if (lines == CODE_PREVIEW_LINES + 1) {
                     endOfPreview = i
                 }
             }
             i++
         }
-        val isLong = lines > 25
+        val isLong = lines > CODE_PREVIEW_LINES
         val preview = if (isLong) full.subSequence(0, endOfPreview) else full
         val cached = CachedCodeBlock(full, preview, lines, isLong)
         cache.put(key, cached)
