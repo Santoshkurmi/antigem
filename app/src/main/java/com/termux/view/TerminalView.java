@@ -624,12 +624,19 @@ public final class TerminalView extends View {
         mClient.logInfo(LOG_TAG, "onContextMenuClosed");
     }
 
+    public int getTextSize() {
+        return mRenderer == null ? 0 : mRenderer.mTextSize;
+    }
+
     /**
      * Sets the text size, which in turn sets the number of rows and columns.
      *
      * @param textSize the new font size, in density-independent pixels.
      */
     public void setTextSize(int textSize) {
+        if (mRenderer != null && mRenderer.mTextSize == textSize) {
+            return;
+        }
         mRenderer = new TerminalRenderer(textSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface);
         updateSize();
     }

@@ -30,10 +30,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.data.local.LocalServerManager
 import com.example.gemini.data.local.LocalServerStatus
+import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.theme.*
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
+import kotlin.math.roundToInt
 
 @Composable
 fun LocalServerOutputDialog(
@@ -44,7 +46,12 @@ fun LocalServerOutputDialog(
     val serverSession by LocalServerManager.serverSession.collectAsState()
     val isDark = isAppInDarkTheme() || isSystemInDarkTheme()
 
-    var terminalTextSize by remember { mutableStateOf(24) }
+    val authPreferences = remember { AuthPreferences(context) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val initialFontSizeSp = remember { authPreferences.getTerminalFontSizeSync() }
+    var terminalTextSize by remember {
+        mutableIntStateOf((initialFontSizeSp * density.density).roundToInt().coerceIn(16, 60))
+    }
     var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
 
     // Live terminal redraw hook: listen to pty text updates and trigger onScreenUpdated/invalidate

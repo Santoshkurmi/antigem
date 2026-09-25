@@ -162,10 +162,39 @@ class AuthPreferences(private val context: Context) {
         }
         mode
     }
-    val terminalFontSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_FONT_SIZE] ?: 14 }
-    val terminalCursorStyle: Flow<String> = context.dataStore.data.map { it[TERMINAL_CURSOR_STYLE] ?: "BAR" }
-    val terminalBufferSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_BUFFER_SIZE] ?: 20000 }
-    val terminalTheme: Flow<String> = context.dataStore.data.map { it[TERMINAL_THEME] ?: "DEFAULT" }
+    fun getTerminalFontSizeSync(): Int = syncPrefs.getInt("terminal_font_size", 14)
+    fun getTerminalCursorStyleSync(): String = syncPrefs.getString("terminal_cursor_style", "BAR") ?: "BAR"
+    fun getTerminalBufferSizeSync(): Int = syncPrefs.getInt("terminal_buffer_size", 20000)
+    fun getTerminalThemeSync(): String = syncPrefs.getString("terminal_theme", "DEFAULT") ?: "DEFAULT"
+
+    val terminalFontSize: Flow<Int> = context.dataStore.data.map { prefs ->
+        val size = prefs[TERMINAL_FONT_SIZE] ?: 14
+        if (syncPrefs.getInt("terminal_font_size", 14) != size) {
+            syncPrefs.edit().putInt("terminal_font_size", size).apply()
+        }
+        size
+    }
+    val terminalCursorStyle: Flow<String> = context.dataStore.data.map { prefs ->
+        val style = prefs[TERMINAL_CURSOR_STYLE] ?: "BAR"
+        if (syncPrefs.getString("terminal_cursor_style", null) != style) {
+            syncPrefs.edit().putString("terminal_cursor_style", style).apply()
+        }
+        style
+    }
+    val terminalBufferSize: Flow<Int> = context.dataStore.data.map { prefs ->
+        val size = prefs[TERMINAL_BUFFER_SIZE] ?: 20000
+        if (syncPrefs.getInt("terminal_buffer_size", 20000) != size) {
+            syncPrefs.edit().putInt("terminal_buffer_size", size).apply()
+        }
+        size
+    }
+    val terminalTheme: Flow<String> = context.dataStore.data.map { prefs ->
+        val th = prefs[TERMINAL_THEME] ?: "DEFAULT"
+        if (syncPrefs.getString("terminal_theme", null) != th) {
+            syncPrefs.edit().putString("terminal_theme", th).apply()
+        }
+        th
+    }
 
     val termuxSshHost: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_HOST] ?: "127.0.0.1" }
     val termuxSshPort: Flow<Int> = context.dataStore.data.map { it[TERMUX_SSH_PORT]?.toIntOrNull() ?: 8022 }
@@ -396,7 +425,17 @@ class AuthPreferences(private val context: Context) {
         }
     }
 
+    fun saveTerminalPreferencesSync(fontSize: Int, cursorStyle: String = "BAR", bufferSize: Int = 20000, theme: String = "DEFAULT") {
+        syncPrefs.edit()
+            .putInt("terminal_font_size", fontSize)
+            .putString("terminal_cursor_style", cursorStyle)
+            .putInt("terminal_buffer_size", bufferSize)
+            .putString("terminal_theme", theme)
+            .apply()
+    }
+
     suspend fun saveTerminalPreferences(fontSize: Int, cursorStyle: String, bufferSize: Int, theme: String) {
+        saveTerminalPreferencesSync(fontSize, cursorStyle, bufferSize, theme)
         context.dataStore.edit { prefs ->
             prefs[TERMINAL_FONT_SIZE] = fontSize
             prefs[TERMINAL_CURSOR_STYLE] = cursorStyle
