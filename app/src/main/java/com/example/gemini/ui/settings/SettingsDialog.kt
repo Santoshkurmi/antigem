@@ -1479,6 +1479,10 @@ private fun McpSubScreen(
                 "PATH" to "/data/data/com.termux/files/usr/bin:/system/bin"
             )
             val presets = listOf(
+                Triple("Browser Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(
+                    serverName = "android_bridge",
+                    serverUrl = "http://127.0.0.1:8765/mcp"
+                )),
                 Triple("Local Tools", "Stdio", com.example.gemini.domain.model.McpServerSpec(
                     serverName = "local_tools",
                     command = "sh",
