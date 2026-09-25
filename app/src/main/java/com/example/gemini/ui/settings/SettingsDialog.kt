@@ -60,6 +60,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     APPEARANCE("Appearance & Theme", "Theme, dark mode, and chat font scaling"),
     SERVERS("Servers & Connectivity", "Configure AGY Hub and IDE Bridge endpoints"),
     MCP("MCP Servers", "Model Context Protocol tools & integrations"),
+    SKILLS_PLUGINS("Skills & Plugins", "Agent capabilities, Google plugins, and extensions"),
     AUTOMATION("Automation & Device Tools", "Browser & Terminal AI agent permissions"),
     TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling"),
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals")
@@ -128,6 +129,29 @@ fun SettingsDialog(
     onToggleMcpServer: (String, Boolean) -> Unit = { _, _ -> },
     onSaveMcpServer: (com.example.gemini.domain.model.McpServerSpec, String?) -> Unit = { _, _ -> },
     onDeleteMcpServer: (String) -> Unit = {},
+    availableCascadePlugins: List<com.example.gemini.data.remote.dto.AvailableCascadePluginDto> = emptyList(),
+    isCascadePluginsLoading: Boolean = false,
+    installingCascadePluginId: String? = null,
+    onSearchCascadePlugins: (String) -> Unit = {},
+    onInstallCascadePlugin: (com.example.gemini.data.remote.dto.AvailableCascadePluginDto) -> Unit = {},
+    allSkills: List<com.example.gemini.data.remote.dto.SkillDefinitionDto> = emptyList(),
+    isSkillsLoading: Boolean = false,
+    skillsFilterScope: String = "GLOBAL",
+    onSetSkillsFilterScope: (String) -> Unit = {},
+    onRefreshSkills: () -> Unit = {},
+    installedPlugins: List<com.example.gemini.data.remote.dto.InstalledPluginDto> = emptyList(),
+    isInstalledPluginsLoading: Boolean = false,
+    onRefreshInstalledPlugins: () -> Unit = {},
+    googlePluginsCatalog: List<com.example.gemini.data.remote.dto.BuildWithGooglePluginItemDto> = emptyList(),
+    isGooglePluginsLoading: Boolean = false,
+    installingGooglePluginId: String? = null,
+    deletingPluginId: String? = null,
+    onRefreshGooglePlugins: () -> Unit = {},
+    onInstallGooglePlugin: (String, String) -> Unit = { _, _ -> },
+    onDeletePlugin: (String, String) -> Unit = { _, _ -> },
+    pluginActionStatusMessage: String? = null,
+    pluginActionErrorMessage: String? = null,
+    onClearPluginStatus: () -> Unit = {},
     isBrowserAutomationEnabled: Boolean = true,
     isTerminalAutomationEnabled: Boolean = true,
     onToggleBrowserAutomation: (Boolean) -> Unit = {},
@@ -270,6 +294,8 @@ fun SettingsDialog(
                         isBridgeOnline = isBridgeOnline,
                         useSshTerminal = useSshTerminal,
                         mcpServers = mcpServers,
+                        allSkills = allSkills,
+                        installedPlugins = installedPlugins,
                         isBrowserAutomationEnabled = isBrowserAutomationEnabled,
                         isTerminalAutomationEnabled = isTerminalAutomationEnabled,
                         commandAutoExecutionPolicy = commandAutoExecutionPolicy,
@@ -314,7 +340,35 @@ fun SettingsDialog(
                         onRefreshServer = onRefreshMcpServer,
                         onToggleServer = onToggleMcpServer,
                         onSaveServer = onSaveMcpServer,
-                        onDeleteServer = onDeleteMcpServer
+                        onDeleteServer = onDeleteMcpServer,
+                        availableCascadePlugins = availableCascadePlugins,
+                        isCascadePluginsLoading = isCascadePluginsLoading,
+                        installingCascadePluginId = installingCascadePluginId,
+                        onSearchCascadePlugins = onSearchCascadePlugins,
+                        onInstallCascadePlugin = onInstallCascadePlugin
+                    )
+
+                    SettingsSection.SKILLS_PLUGINS -> SkillsAndPluginsSubScreen(
+                        skills = allSkills,
+                        isSkillsLoading = isSkillsLoading,
+                        skillsFilterScope = skillsFilterScope,
+                        onSetSkillsFilterScope = onSetSkillsFilterScope,
+                        onRefreshSkills = onRefreshSkills,
+                        installedPlugins = installedPlugins,
+                        isInstalledPluginsLoading = isInstalledPluginsLoading,
+                        onRefreshInstalledPlugins = onRefreshInstalledPlugins,
+                        googlePlugins = googlePluginsCatalog,
+                        isGooglePluginsLoading = isGooglePluginsLoading,
+                        installingGooglePluginId = installingGooglePluginId,
+                        deletingPluginId = deletingPluginId,
+                        onRefreshGooglePlugins = onRefreshGooglePlugins,
+                        onInstallGooglePlugin = onInstallGooglePlugin,
+                        onDeletePlugin = onDeletePlugin,
+                        statusMessage = pluginActionStatusMessage,
+                        errorMessage = pluginActionErrorMessage,
+                        onClearStatus = onClearPluginStatus,
+                        cardBg = cardBg,
+                        cardBorder = cardBorder
                     )
 
                     SettingsSection.AUTOMATION -> AutomationSubScreen(
@@ -391,6 +445,8 @@ private fun MainSettingsMenu(
     isBridgeOnline: Boolean,
     useSshTerminal: Boolean,
     mcpServers: List<com.example.gemini.domain.model.McpServerState>,
+    allSkills: List<com.example.gemini.data.remote.dto.SkillDefinitionDto> = emptyList(),
+    installedPlugins: List<com.example.gemini.data.remote.dto.InstalledPluginDto> = emptyList(),
     isBrowserAutomationEnabled: Boolean,
     isTerminalAutomationEnabled: Boolean,
     commandAutoExecutionPolicy: String,
@@ -464,6 +520,22 @@ private fun MainSettingsMenu(
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.MCP) }
+        )
+
+        // Section 3.5: Skills & Plugins
+        val totalSkillsCount = allSkills.size
+        val totalPluginsCount = installedPlugins.size
+        val skillsBadge = "$totalSkillsCount Skills • $totalPluginsCount Plugins"
+        SettingsCategoryCard(
+            icon = Icons.Outlined.AutoAwesome,
+            iconTint = GeminiBlue,
+            title = "Skills & Plugins",
+            subtitle = "Installed skills, Google plugins catalog, and markdown guides",
+            badgeText = skillsBadge,
+            badgeColor = GeminiBlue,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.SKILLS_PLUGINS) }
         )
 
         // Section 4: Automation & Device Bridge
@@ -1322,9 +1394,15 @@ private fun McpSubScreen(
     onRefreshServer: (String) -> Unit,
     onToggleServer: (String, Boolean) -> Unit,
     onSaveServer: (com.example.gemini.domain.model.McpServerSpec, String?) -> Unit,
-    onDeleteServer: (String) -> Unit
+    onDeleteServer: (String) -> Unit,
+    availableCascadePlugins: List<com.example.gemini.data.remote.dto.AvailableCascadePluginDto> = emptyList(),
+    isCascadePluginsLoading: Boolean = false,
+    installingCascadePluginId: String? = null,
+    onSearchCascadePlugins: (String) -> Unit = {},
+    onInstallCascadePlugin: (com.example.gemini.data.remote.dto.AvailableCascadePluginDto) -> Unit = {}
 ) {
     var showDialog by remember { mutableStateOf(false) }
+    var showCascadeCatalogDialog by remember { mutableStateOf(false) }
     var serverToEdit by remember { mutableStateOf<com.example.gemini.domain.model.McpServerSpec?>(null) }
     var serverToDelete by remember { mutableStateOf<String?>(null) }
     var expandedTools by remember { mutableStateOf(setOf<String>()) }
@@ -1499,6 +1577,25 @@ private fun McpSubScreen(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Add Server", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
+                }
+
+                // Browse Cascade MCP Marketplace button
+                OutlinedButton(
+                    onClick = { showCascadeCatalogDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ClaudeTerracotta),
+                    border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.5f)),
+                    contentPadding = PaddingValues(vertical = 10.dp, horizontal = 12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Storefront,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = ClaudeTerracotta
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Browse MCP Catalog / Marketplace (1-Click)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = ClaudeTerracotta)
                 }
             }
         }
@@ -2174,6 +2271,19 @@ private fun McpSubScreen(
                 showDialog = false
                 serverToEdit = null
             }
+        )
+    }
+
+    // Cascade Marketplace Dialog
+    if (showCascadeCatalogDialog) {
+        CascadeMcpCatalogDialog(
+            availablePlugins = availableCascadePlugins,
+            isLoading = isCascadePluginsLoading,
+            installingPluginId = installingCascadePluginId,
+            existingServers = mcpServers,
+            onSearch = onSearchCascadePlugins,
+            onInstallPlugin = onInstallCascadePlugin,
+            onDismiss = { showCascadeCatalogDialog = false }
         )
     }
 }

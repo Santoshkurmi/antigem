@@ -173,6 +173,55 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _mcpErrorMessage.value = null
     }
 
+    // ==================== SKILLS & PLUGINS & CASCADE MARKETPLACE ====================
+
+    private val _availableCascadePlugins = MutableStateFlow<List<com.example.gemini.data.remote.dto.AvailableCascadePluginDto>>(emptyList())
+    val availableCascadePlugins: StateFlow<List<com.example.gemini.data.remote.dto.AvailableCascadePluginDto>> = _availableCascadePlugins.asStateFlow()
+
+    private val _isCascadePluginsLoading = MutableStateFlow(false)
+    val isCascadePluginsLoading: StateFlow<Boolean> = _isCascadePluginsLoading.asStateFlow()
+
+    private val _installingCascadePluginId = MutableStateFlow<String?>(null)
+    val installingCascadePluginId: StateFlow<String?> = _installingCascadePluginId.asStateFlow()
+
+    private val _allSkills = MutableStateFlow<List<com.example.gemini.data.remote.dto.SkillDefinitionDto>>(emptyList())
+    val allSkills: StateFlow<List<com.example.gemini.data.remote.dto.SkillDefinitionDto>> = _allSkills.asStateFlow()
+
+    private val _isSkillsLoading = MutableStateFlow(false)
+    val isSkillsLoading: StateFlow<Boolean> = _isSkillsLoading.asStateFlow()
+
+    private val _skillsFilterScope = MutableStateFlow("GLOBAL") // "GLOBAL", "WORKSPACE", "ALL"
+    val skillsFilterScope: StateFlow<String> = _skillsFilterScope.asStateFlow()
+
+    private val _installedPlugins = MutableStateFlow<List<com.example.gemini.data.remote.dto.InstalledPluginDto>>(emptyList())
+    val installedPlugins: StateFlow<List<com.example.gemini.data.remote.dto.InstalledPluginDto>> = _installedPlugins.asStateFlow()
+
+    private val _isInstalledPluginsLoading = MutableStateFlow(false)
+    val isInstalledPluginsLoading: StateFlow<Boolean> = _isInstalledPluginsLoading.asStateFlow()
+
+    private val _googlePluginsCatalog = MutableStateFlow<List<com.example.gemini.data.remote.dto.BuildWithGooglePluginItemDto>>(emptyList())
+    val googlePluginsCatalog: StateFlow<List<com.example.gemini.data.remote.dto.BuildWithGooglePluginItemDto>> = _googlePluginsCatalog.asStateFlow()
+
+    private val _isGooglePluginsLoading = MutableStateFlow(false)
+    val isGooglePluginsLoading: StateFlow<Boolean> = _isGooglePluginsLoading.asStateFlow()
+
+    private val _installingGooglePluginId = MutableStateFlow<String?>(null)
+    val installingGooglePluginId: StateFlow<String?> = _installingGooglePluginId.asStateFlow()
+
+    private val _deletingPluginId = MutableStateFlow<String?>(null)
+    val deletingPluginId: StateFlow<String?> = _deletingPluginId.asStateFlow()
+
+    private val _pluginActionStatusMessage = MutableStateFlow<String?>(null)
+    val pluginActionStatusMessage: StateFlow<String?> = _pluginActionStatusMessage.asStateFlow()
+
+    private val _pluginActionErrorMessage = MutableStateFlow<String?>(null)
+    val pluginActionErrorMessage: StateFlow<String?> = _pluginActionErrorMessage.asStateFlow()
+
+    fun clearPluginActionStatus() {
+        _pluginActionStatusMessage.value = null
+        _pluginActionErrorMessage.value = null
+    }
+
     fun addAttachmentsFromUris(uris: List<android.net.Uri>, context: android.content.Context) {
         if (uris.isEmpty()) return
         viewModelScope.launch {
@@ -3325,6 +3374,173 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _mcpErrorMessage.value = e.message
             } finally {
                 _isMcpLoading.value = false
+            }
+        }
+    }
+
+    // ==================== SKILLS & PLUGINS & MARKETPLACE ACTIONS ====================
+
+    fun loadAvailableCascadePlugins(query: String = "") {
+        viewModelScope.launch {
+            _isCascadePluginsLoading.value = true
+            try {
+                val res = agyHubClient.getAvailableCascadePlugins(os = "linux", searchQuery = query)
+                if (res.isSuccess) {
+                    _availableCascadePlugins.value = res.getOrDefault(emptyList())
+                } else {
+                    Log.w("ChatViewModel", "loadAvailableCascadePlugins error: ${res.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "loadAvailableCascadePlugins failed: ${e.message}", e)
+            } finally {
+                _isCascadePluginsLoading.value = false
+            }
+        }
+    }
+
+    fun installCascadeMcpPlugin(plugin: com.example.gemini.data.remote.dto.AvailableCascadePluginDto) {
+        viewModelScope.launch {
+            _installingCascadePluginId.value = plugin.id
+            _mcpErrorMessage.value = null
+            _mcpStatusMessage.value = null
+            try {
+                val res = agyHubClient.installCascadePlugin(plugin)
+                if (res.isSuccess) {
+                    _mcpStatusMessage.value = "Installed and activated '${plugin.title}' MCP server"
+                    delay(500)
+                    loadMcpServers()
+                } else {
+                    val err = res.exceptionOrNull()?.message ?: "Installation failed"
+                    _mcpErrorMessage.value = "Failed to install ${plugin.title}: $err"
+                }
+            } catch (e: Exception) {
+                _mcpErrorMessage.value = "Error installing ${plugin.title}: ${e.message}"
+            } finally {
+                _installingCascadePluginId.value = null
+            }
+        }
+    }
+
+    fun setSkillsFilterScope(scope: String) {
+        _skillsFilterScope.value = scope
+        loadAllSkills(scope)
+    }
+
+    fun loadAllSkills(scope: String = _skillsFilterScope.value) {
+        viewModelScope.launch {
+            _isSkillsLoading.value = true
+            try {
+                val workspaceUris: List<String> = when (scope) {
+                    "WORKSPACE", "ALL" -> {
+                        val currentWs = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
+                            ?: _currentConversation.value?.workspaceUri
+                            ?: ""
+                        if (currentWs.isNotBlank()) {
+                            listOf(if (currentWs.startsWith("file://")) currentWs else "file://$currentWs")
+                        } else emptyList()
+                    }
+                    else -> emptyList() // "GLOBAL" default
+                }
+                val res = agyHubClient.getAllSkills(workspaceUris)
+                if (res.isSuccess) {
+                    var skills = res.getOrDefault(emptyList())
+                    if (scope == "GLOBAL") {
+                        skills = skills.filter { it.isBuiltin || it.discoveryCategory == "DISCOVERY_CATEGORY_BUILTIN" || it.discoveryCategory == "DISCOVERY_CATEGORY_GLOBAL" || it.discoveryCategory == "DISCOVERY_CATEGORY_INSTALLED" }
+                    } else if (scope == "WORKSPACE") {
+                        skills = skills.filter { it.discoveryCategory == "DISCOVERY_CATEGORY_WORKSPACE" || it.scope?.workspaceScope != null }
+                    }
+                    _allSkills.value = skills
+                } else {
+                    _pluginActionErrorMessage.value = "Failed to load skills: ${res.exceptionOrNull()?.message}"
+                }
+            } catch (e: Exception) {
+                _pluginActionErrorMessage.value = e.message
+            } finally {
+                _isSkillsLoading.value = false
+            }
+        }
+    }
+
+    fun loadAllInstalledPlugins() {
+        viewModelScope.launch {
+            _isInstalledPluginsLoading.value = true
+            try {
+                val res = agyHubClient.getAllPlugins()
+                if (res.isSuccess) {
+                    _installedPlugins.value = res.getOrDefault(emptyList())
+                } else {
+                    Log.w("ChatViewModel", "loadAllInstalledPlugins failed: ${res.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "loadAllInstalledPlugins error: ${e.message}", e)
+            } finally {
+                _isInstalledPluginsLoading.value = false
+            }
+        }
+    }
+
+    fun loadGooglePluginsCatalog() {
+        viewModelScope.launch {
+            _isGooglePluginsLoading.value = true
+            try {
+                val res = agyHubClient.getBuildWithGooglePlugins()
+                if (res.isSuccess) {
+                    _googlePluginsCatalog.value = res.getOrDefault(emptyList())
+                } else {
+                    _pluginActionErrorMessage.value = "Failed to load Google plugins: ${res.exceptionOrNull()?.message}"
+                }
+            } catch (e: Exception) {
+                _pluginActionErrorMessage.value = e.message
+            } finally {
+                _isGooglePluginsLoading.value = false
+            }
+        }
+    }
+
+    fun installGooglePlugin(pluginId: String, pluginName: String = pluginId) {
+        viewModelScope.launch {
+            _installingGooglePluginId.value = pluginId
+            _pluginActionErrorMessage.value = null
+            _pluginActionStatusMessage.value = null
+            try {
+                val res = agyHubClient.downloadBuildWithGooglePlugin(pluginId)
+                if (res.isSuccess) {
+                    _pluginActionStatusMessage.value = "Successfully installed $pluginName!"
+                    delay(400)
+                    loadAllInstalledPlugins()
+                    loadAllSkills()
+                    loadMcpServers()
+                } else {
+                    _pluginActionErrorMessage.value = res.exceptionOrNull()?.message ?: "Failed to install $pluginName"
+                }
+            } catch (e: Exception) {
+                _pluginActionErrorMessage.value = e.message
+            } finally {
+                _installingGooglePluginId.value = null
+            }
+        }
+    }
+
+    fun deleteInstalledPlugin(pluginId: String, pluginName: String = pluginId) {
+        viewModelScope.launch {
+            _deletingPluginId.value = pluginId
+            _pluginActionErrorMessage.value = null
+            _pluginActionStatusMessage.value = null
+            try {
+                val res = agyHubClient.deletePlugin(pluginId)
+                if (res.isSuccess) {
+                    _pluginActionStatusMessage.value = "Uninstalled $pluginName successfully."
+                    delay(400)
+                    loadAllInstalledPlugins()
+                    loadAllSkills()
+                    loadMcpServers()
+                } else {
+                    _pluginActionErrorMessage.value = res.exceptionOrNull()?.message ?: "Failed to delete $pluginName"
+                }
+            } catch (e: Exception) {
+                _pluginActionErrorMessage.value = e.message
+            } finally {
+                _deletingPluginId.value = null
             }
         }
     }

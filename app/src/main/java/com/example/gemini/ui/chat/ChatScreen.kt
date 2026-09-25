@@ -332,6 +332,25 @@ fun ChatScreen(
     val mcpErrorMessage by viewModel.mcpErrorMessage.collectAsState()
     val mcpStatusMessage by viewModel.mcpStatusMessage.collectAsState()
 
+    val availableCascadePlugins by viewModel.availableCascadePlugins.collectAsState()
+    val isCascadePluginsLoading by viewModel.isCascadePluginsLoading.collectAsState()
+    val installingCascadePluginId by viewModel.installingCascadePluginId.collectAsState()
+
+    val allSkills by viewModel.allSkills.collectAsState()
+    val isSkillsLoading by viewModel.isSkillsLoading.collectAsState()
+    val skillsFilterScope by viewModel.skillsFilterScope.collectAsState()
+
+    val installedPlugins by viewModel.installedPlugins.collectAsState()
+    val isInstalledPluginsLoading by viewModel.isInstalledPluginsLoading.collectAsState()
+
+    val googlePluginsCatalog by viewModel.googlePluginsCatalog.collectAsState()
+    val isGooglePluginsLoading by viewModel.isGooglePluginsLoading.collectAsState()
+    val installingGooglePluginId by viewModel.installingGooglePluginId.collectAsState()
+    val deletingPluginId by viewModel.deletingPluginId.collectAsState()
+
+    val pluginActionStatusMessage by viewModel.pluginActionStatusMessage.collectAsState()
+    val pluginActionErrorMessage by viewModel.pluginActionErrorMessage.collectAsState()
+
     var allSlashCommands by remember { mutableStateOf(com.example.gemini.data.remote.SlashCommandsCache.getCachedSync()) }
 
     LaunchedEffect(agyHubUrl, systemConnectionState) {
@@ -1863,6 +1882,29 @@ fun ChatScreen(
             onToggleMcpServer = { name, enabled -> viewModel.toggleMcpServer(name, enabled) },
             onSaveMcpServer = { spec, rawJson -> viewModel.saveMcpServer(spec, rawJson) },
             onDeleteMcpServer = { name -> viewModel.deleteMcpServer(name) },
+            availableCascadePlugins = availableCascadePlugins,
+            isCascadePluginsLoading = isCascadePluginsLoading,
+            installingCascadePluginId = installingCascadePluginId,
+            onSearchCascadePlugins = { q -> viewModel.loadAvailableCascadePlugins(q) },
+            onInstallCascadePlugin = { p -> viewModel.installCascadeMcpPlugin(p) },
+            allSkills = allSkills,
+            isSkillsLoading = isSkillsLoading,
+            skillsFilterScope = skillsFilterScope,
+            onSetSkillsFilterScope = { s -> viewModel.setSkillsFilterScope(s) },
+            onRefreshSkills = { viewModel.loadAllSkills() },
+            installedPlugins = installedPlugins,
+            isInstalledPluginsLoading = isInstalledPluginsLoading,
+            onRefreshInstalledPlugins = { viewModel.loadAllInstalledPlugins() },
+            googlePluginsCatalog = googlePluginsCatalog,
+            isGooglePluginsLoading = isGooglePluginsLoading,
+            installingGooglePluginId = installingGooglePluginId,
+            deletingPluginId = deletingPluginId,
+            onRefreshGooglePlugins = { viewModel.loadGooglePluginsCatalog() },
+            onInstallGooglePlugin = { id, name -> viewModel.installGooglePlugin(id, name) },
+            onDeletePlugin = { id, name -> viewModel.deleteInstalledPlugin(id, name) },
+            pluginActionStatusMessage = pluginActionStatusMessage,
+            pluginActionErrorMessage = pluginActionErrorMessage,
+            onClearPluginStatus = { viewModel.clearPluginActionStatus() },
             isBrowserAutomationEnabled = isBrowserAutomationEnabled,
             isTerminalAutomationEnabled = isTerminalAutomationEnabled,
             onToggleBrowserAutomation = { viewModel.setBrowserAutomationEnabled(it) },
