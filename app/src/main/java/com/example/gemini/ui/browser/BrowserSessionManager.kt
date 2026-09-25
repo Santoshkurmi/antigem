@@ -87,6 +87,7 @@ class BrowserTabSession(
     var isBackgroundActive by mutableStateOf(true)
     var lastError by mutableStateOf<BrowserNetworkError?>(null)
     var isStalled by mutableStateOf(false)
+    var isDevToolsEnabled by mutableStateOf(false)
 
     // Circular buffers for real-time telemetry (capped to 300 entries each)
     val consoleLogs = ConcurrentLinkedDeque<BrowserConsoleMessage>()
@@ -572,6 +573,9 @@ class BrowserSessionManager private constructor() {
                     view?.title?.let { if (it.isNotBlank()) tab.title = it }
                     tab.canGoBack = view?.canGoBack() == true
                     tab.canGoForward = view?.canGoForward() == true
+                    if (tab.isDevToolsEnabled && view != null) {
+                        ErudaHelper.inject(view, showImmediately = false)
+                    }
                 }
 
                 override fun onPageCommitVisible(view: WebView?, url: String?) {

@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -165,6 +166,7 @@ fun BrowserScreen(
     var isAddressFocused by remember { mutableStateOf(false) }
     var showTabSwitcherSheet by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -424,8 +426,32 @@ fun BrowserScreen(
                             }
                         }
 
-                        // 4. Refresh / Stop Button
+                        // 4. DevTools / Web Inspector Button (Eruda Console, Elements, Network)
                         val hasActivePage = activeTab != null && activeTab.url.isNotBlank() && activeTab.url != "about:blank"
+                        val isDevToolsOn = activeTab?.isDevToolsEnabled == true
+                        IconButton(
+                            onClick = {
+                                if (activeTab != null) {
+                                    val wv = activeTab.webView ?: sessionManager.ensureWebViewAttached(context, activeTab, isDarkTheme)
+                                    if (!isDevToolsOn) {
+                                        activeTab.isDevToolsEnabled = true
+                                        ErudaHelper.inject(wv, showImmediately = true)
+                                    } else {
+                                        ErudaHelper.toggle(wv)
+                                    }
+                                }
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Code,
+                                contentDescription = "Inspect DevTools",
+                                tint = if (isDevToolsOn) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = if (hasActivePage) 0.8f else 0.38f),
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+
+                        // 5. Refresh / Stop Button
                         IconButton(
                             onClick = {
                                 if (activeTab?.isLoading == true) {
