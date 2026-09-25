@@ -1149,151 +1149,153 @@ fun ChatScreen(
                         }
 
                         CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides customDensity) {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp)
-                            ) {
-                                items(
-                                    items = feedItems,
-                                    key = { it.key },
-                                    contentType = { it.contentType }
-                                ) { feedItem ->
-                                    when (feedItem) {
-                                    is ChatFeedItem.Summary -> {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                                        ) {
-                                            if (feedItem.message.isStreaming) {
-                                                LiveSummarizingCard(
-                                                    modelName = summarizingModelName,
-                                                    pendingQueuedMessage = pendingQueuedUserMessage
-                                                )
-                                            } else {
-                                                ActiveContextSummaryCard(
-                                                    summaryText = feedItem.message.content,
-                                                    onEditSummary = { viewModel.updateSummaryMessage(feedItem.message.id, it) },
-                                                    onDeleteSummary = { viewModel.deleteSummaryMessage(feedItem.message.id) }
-                                                )
+                            SelectionContainer(modifier = Modifier.fillMaxSize()) {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp)
+                                ) {
+                                    items(
+                                        items = feedItems,
+                                        key = { it.key },
+                                        contentType = { it.contentType }
+                                    ) { feedItem ->
+                                        when (feedItem) {
+                                        is ChatFeedItem.Summary -> {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                            ) {
+                                                if (feedItem.message.isStreaming) {
+                                                    LiveSummarizingCard(
+                                                        modelName = summarizingModelName,
+                                                        pendingQueuedMessage = pendingQueuedUserMessage
+                                                    )
+                                                } else {
+                                                    ActiveContextSummaryCard(
+                                                        summaryText = feedItem.message.content,
+                                                        onEditSummary = { viewModel.updateSummaryMessage(feedItem.message.id, it) },
+                                                        onDeleteSummary = { viewModel.deleteSummaryMessage(feedItem.message.id) }
+                                                    )
+                                                }
                                             }
                                         }
-                                    }
-                                    is ChatFeedItem.User -> {
-                                        val msgIndex = messages.indexOfFirst { it.id == feedItem.message.id }
-                                        val isLastUserMsg = messages.indexOfLast { it.role == MessageRole.USER } == msgIndex
-                                        val willDeleteOutput = isLastUserMsg && msgIndex < messages.lastIndex
-                                        UserMessageBubble(
-                                            message = feedItem.message,
-                                            isLastUserMessage = isLastUserMsg,
-                                            isDevModeEnabled = isDevModeEnabled,
-                                            onEdit = { targetMsg ->
-                                                if (willDeleteOutput) {
-                                                    pendingMessageAction = PendingMessageAction(MessageActionType.EDIT, targetMsg)
-                                                } else {
-                                                    viewModel.revertAndEditLastUserMessage(targetMsg) { restoredText ->
-                                                        val tfv = TextFieldValue(restoredText, selection = TextRange(restoredText.length))
-                                                        textFieldValue = tfv
-                                                        viewModel.setDraft(activeConversationKey, tfv)
+                                        is ChatFeedItem.User -> {
+                                            val msgIndex = messages.indexOfFirst { it.id == feedItem.message.id }
+                                            val isLastUserMsg = messages.indexOfLast { it.role == MessageRole.USER } == msgIndex
+                                            val willDeleteOutput = isLastUserMsg && msgIndex < messages.lastIndex
+                                            UserMessageBubble(
+                                                message = feedItem.message,
+                                                isLastUserMessage = isLastUserMsg,
+                                                isDevModeEnabled = isDevModeEnabled,
+                                                onEdit = { targetMsg ->
+                                                    if (willDeleteOutput) {
+                                                        pendingMessageAction = PendingMessageAction(MessageActionType.EDIT, targetMsg)
+                                                    } else {
+                                                        viewModel.revertAndEditLastUserMessage(targetMsg) { restoredText ->
+                                                            val tfv = TextFieldValue(restoredText, selection = TextRange(restoredText.length))
+                                                            textFieldValue = tfv
+                                                            viewModel.setDraft(activeConversationKey, tfv)
+                                                        }
                                                     }
+                                                },
+                                                onViewRawPayload = { payloadJson ->
+                                                    showRawPayloadDialog = payloadJson
                                                 }
-                                            },
-                                            onViewRawPayload = { payloadJson ->
-                                                showRawPayloadDialog = payloadJson
-                                            }
-                                        )
-                                    }
-                                    is ChatFeedItem.AssistantThinking -> {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 16.dp, vertical = 2.dp)
-                                        ) {
-                                            ThinkingAccordion(
-                                                thoughtText = feedItem.thoughtText,
-                                                durationMs = feedItem.durationMs,
-                                                isStreaming = feedItem.isStreaming
                                             )
                                         }
-                                    }
-                                    is ChatFeedItem.AssistantBlock -> {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 16.dp, vertical = 2.dp)
-                                        ) {
-                                            val isTool = feedItem.block is MarkdownBlock.AgentTool
-                                            MarkdownBlockView(
-                                                block = feedItem.block,
-                                                onApproveTool = if (isTool) { { toolCall -> viewModel.approveAndExecuteTerminalTool(toolCall, feedItem.messageId) } } else null,
-                                                onRejectTool = if (isTool) { { toolCall -> if (toolCall.toolType == ToolType.ASK_CHOICE) viewModel.cancelUserChoices(toolCall, feedItem.messageId) else viewModel.rejectTerminalTool(toolCall, feedItem.messageId) } } else null,
-                                                onTerminateTool = if (isTool) { { toolCall -> viewModel.terminateRunningTerminalTool(toolCall, feedItem.messageId) } } else null,
-                                                onSubmitChoices = if (isTool) { { toolCall, responses, summaryPayload -> viewModel.submitUserChoices(toolCall, feedItem.messageId, responses, summaryPayload) } } else null,
-                                                onSkipChoices = if (isTool) { { toolCall, responses -> viewModel.skipUserChoices(toolCall, feedItem.messageId, responses) } } else null
+                                        is ChatFeedItem.AssistantThinking -> {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                                            ) {
+                                                ThinkingAccordion(
+                                                    thoughtText = feedItem.thoughtText,
+                                                    durationMs = feedItem.durationMs,
+                                                    isStreaming = feedItem.isStreaming
+                                                )
+                                            }
+                                        }
+                                        is ChatFeedItem.AssistantBlock -> {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                                            ) {
+                                                val isTool = feedItem.block is MarkdownBlock.AgentTool
+                                                MarkdownBlockView(
+                                                    block = feedItem.block,
+                                                    onApproveTool = if (isTool) { { toolCall -> viewModel.approveAndExecuteTerminalTool(toolCall, feedItem.messageId) } } else null,
+                                                    onRejectTool = if (isTool) { { toolCall -> if (toolCall.toolType == ToolType.ASK_CHOICE) viewModel.cancelUserChoices(toolCall, feedItem.messageId) else viewModel.rejectTerminalTool(toolCall, feedItem.messageId) } } else null,
+                                                    onTerminateTool = if (isTool) { { toolCall -> viewModel.terminateRunningTerminalTool(toolCall, feedItem.messageId) } } else null,
+                                                    onSubmitChoices = if (isTool) { { toolCall, responses, summaryPayload -> viewModel.submitUserChoices(toolCall, feedItem.messageId, responses, summaryPayload) } } else null,
+                                                    onSkipChoices = if (isTool) { { toolCall, responses -> viewModel.skipUserChoices(toolCall, feedItem.messageId, responses) } } else null
+                                                )
+                                            }
+                                        }
+                                        is ChatFeedItem.AssistantTyping -> {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                                            ) {
+                                                ModelTypingIndicator(modelId = feedItem.modelId)
+                                            }
+                                        }
+                                        is ChatFeedItem.AssistantFooter -> {
+                                            AssistantMessageFooter(
+                                                message = feedItem.message,
+                                                isDevModeEnabled = isDevModeEnabled,
+                                                onRetry = { targetMsg ->
+                                                    viewModel.retryMessage(targetMsg.id)
+                                                    userSentMessageTrigger++
+                                                },
+                                                onViewRawPayload = { payloadJson ->
+                                                    showRawPayloadDialog = payloadJson
+                                                }
                                             )
                                         }
-                                    }
-                                    is ChatFeedItem.AssistantTyping -> {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 16.dp, vertical = 4.dp)
-                                        ) {
-                                            ModelTypingIndicator(modelId = feedItem.modelId)
+                                        is ChatFeedItem.StreamingMessage -> {
+                                            MessageBubble(
+                                                message = feedItem.message,
+                                                modelId = selectedModelId,
+                                                isDevModeEnabled = isDevModeEnabled,
+                                                onApproveTool = { toolCall, msgId ->
+                                                    viewModel.approveAndExecuteTerminalTool(toolCall, msgId)
+                                                },
+                                                onRejectTool = { toolCall, msgId ->
+                                                    if (toolCall.toolType == ToolType.ASK_CHOICE) {
+                                                        viewModel.cancelUserChoices(toolCall, msgId)
+                                                    } else {
+                                                        viewModel.rejectTerminalTool(toolCall, msgId)
+                                                    }
+                                                },
+                                                onTerminateTool = { toolCall, msgId ->
+                                                    viewModel.terminateRunningTerminalTool(toolCall, msgId)
+                                                },
+                                                onSubmitChoices = { toolCall, msgId, responses, summaryPayload ->
+                                                    viewModel.submitUserChoices(toolCall, msgId, responses, summaryPayload)
+                                                },
+                                                onSkipChoices = { toolCall, msgId, responses ->
+                                                    viewModel.skipUserChoices(toolCall, msgId, responses)
+                                                },
+                                                summarizingModelName = summarizingModelName,
+                                                pendingQueuedUserMessage = pendingQueuedUserMessage
+                                            )
+                                        }
                                         }
                                     }
-                                    is ChatFeedItem.AssistantFooter -> {
-                                        AssistantMessageFooter(
-                                            message = feedItem.message,
-                                            isDevModeEnabled = isDevModeEnabled,
-                                            onRetry = { targetMsg ->
-                                                viewModel.retryMessage(targetMsg.id)
-                                                userSentMessageTrigger++
-                                            },
-                                            onViewRawPayload = { payloadJson ->
-                                                showRawPayloadDialog = payloadJson
-                                            }
-                                        )
-                                    }
-                                    is ChatFeedItem.StreamingMessage -> {
-                                        MessageBubble(
-                                            message = feedItem.message,
-                                            modelId = selectedModelId,
-                                            isDevModeEnabled = isDevModeEnabled,
-                                            onApproveTool = { toolCall, msgId ->
-                                                viewModel.approveAndExecuteTerminalTool(toolCall, msgId)
-                                            },
-                                            onRejectTool = { toolCall, msgId ->
-                                                if (toolCall.toolType == ToolType.ASK_CHOICE) {
-                                                    viewModel.cancelUserChoices(toolCall, msgId)
-                                                } else {
-                                                    viewModel.rejectTerminalTool(toolCall, msgId)
-                                                }
-                                            },
-                                            onTerminateTool = { toolCall, msgId ->
-                                                viewModel.terminateRunningTerminalTool(toolCall, msgId)
-                                            },
-                                            onSubmitChoices = { toolCall, msgId, responses, summaryPayload ->
-                                                viewModel.submitUserChoices(toolCall, msgId, responses, summaryPayload)
-                                            },
-                                            onSkipChoices = { toolCall, msgId, responses ->
-                                                viewModel.skipUserChoices(toolCall, msgId, responses)
-                                            },
-                                            summarizingModelName = summarizingModelName,
-                                            pendingQueuedUserMessage = pendingQueuedUserMessage
-                                        )
+
+                                    // Bottom spacer to ensure scrolling reaches comfortably above the input box
+                                    item(key = "bottom_anchor") {
+                                        Spacer(modifier = Modifier.height(16.dp))
                                     }
                                 }
                             }
-
-                            // Bottom spacer to ensure scrolling reaches comfortably above the input box
-                            item(key = "bottom_anchor") {
-                                Spacer(modifier = Modifier.height(16.dp))
-                            }
                         }
                     }
-                }
 
                     // Floating Scroll Up / Scroll Down Button (Instant Movement)
                     val showUpArrow = showScrollButton && scrollDirection == ScrollDirection.UP && !isAtTop
