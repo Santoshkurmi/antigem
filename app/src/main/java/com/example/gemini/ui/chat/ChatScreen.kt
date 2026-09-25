@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -359,8 +360,6 @@ fun ChatScreen(
         val initialIdx = if (feedItems.isNotEmpty()) feedItems.size - 1 else 0
         LazyListState(firstVisibleItemIndex = initialIdx)
     }
-    var lastScrolledConvId by remember { mutableStateOf<String?>(null) }
-    var lastScrolledMessageCount by remember { mutableStateOf(-1) }
 
     // Determine whether user is scrolled near the bottom (within the last item)
     val isAtBottom by remember(listState) {
@@ -370,7 +369,11 @@ fun ChatScreen(
             if (totalItems <= 1) true
             else {
                 val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                lastVisibleItem != null && lastVisibleItem.index >= totalItems - 2
+                if (lastVisibleItem == null) false
+                else {
+                    lastVisibleItem.index >= totalItems - 1 &&
+                        (lastVisibleItem.offset + lastVisibleItem.size <= layoutInfo.viewportEndOffset + 160)
+                }
             }
         }
     }
@@ -384,12 +387,27 @@ fun ChatScreen(
     var scrollDirection by remember { mutableStateOf(ScrollDirection.DOWN) }
     var showScrollButton by remember { mutableStateOf(false) }
     var shouldAutoScroll by remember { mutableStateOf(true) }
+    var isUserDragging by remember { mutableStateOf(false) }
 
     val density = LocalDensity.current
     val imeInsets = WindowInsets.ime
     var isKeyboardAnimating by remember { mutableStateOf(false) }
 
     val emptyScrollState = rememberScrollState()
+
+    // Track user drag interactions so programmatic scrolling never turns off shouldAutoScroll
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { interaction ->
+            when (interaction) {
+                is DragInteraction.Start -> {
+                    isUserDragging = true
+                }
+                is DragInteraction.Stop, is DragInteraction.Cancel -> {
+                    isUserDragging = false
+                }
+            }
+        }
+    }
 
     // Synchronized Chat & Keyboard movement:
     // When keyboard rises, scroll list / empty state up in lockstep with the rising input bar so messages and recent workspaces stay visible.
@@ -420,12 +438,11 @@ fun ChatScreen(
             }
     }
 
-
-
-    // Decoupled asynchronous scroll observer - zero recomposition during pixel scroll
+    // Decoupled asynchronous scroll observer - only user drags can change autoscroll state
     LaunchedEffect(listState) {
-        var prevIdx = 0
-        var prevOff = 0
+        var prevIdx = listState.firstVisibleItemIndex
+        var prevOff = listState.firstVisibleItemScrollOffset
+
         snapshotFlow {
             Triple(listState.isScrollInProgress, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
         }.collect { (isScrolling, currentIndex, currentOffset) ->
@@ -436,10 +453,12 @@ fun ChatScreen(
                 } else if (currentIndex > prevIdx || (currentIndex == prevIdx && currentOffset > prevOff)) {
                     ScrollDirection.DOWN
                 } else null
+
                 if (newDir != null && newDir != scrollDirection) {
                     scrollDirection = newDir
                 }
-                if (newDir == ScrollDirection.UP) {
+                // ONLY disable auto-scroll if the USER is actively dragging/swiping upwards
+                if (isUserDragging && newDir == ScrollDirection.UP) {
                     shouldAutoScroll = false
                 }
                 prevIdx = currentIndex
@@ -454,8 +473,6 @@ fun ChatScreen(
             shouldAutoScroll = true
         }
     }
-
-
 
     // Hide scroll button after scroll stops
     LaunchedEffect(listState.isScrollInProgress) {
@@ -474,20 +491,6 @@ fun ChatScreen(
         }
     }
 
-    // Always scroll to very bottom when a conversation is opened or loaded
-    LaunchedEffect(currentConv?.id, messages.size, feedItems.size) {
-        val convId = currentConv?.id
-        if (convId != null && feedItems.isNotEmpty()) {
-            if (lastScrolledConvId != convId || lastScrolledMessageCount != messages.size) {
-                lastScrolledConvId = convId
-                lastScrolledMessageCount = messages.size
-                shouldAutoScroll = true
-                if (listState.firstVisibleItemIndex < feedItems.size - 2) {
-                    listState.scrollToItem(maxOf(0, feedItems.size - 1))
-                }
-            }
-        }
-    }
 
     // Scroll to bottom when user explicitly sends a message (instant)
     LaunchedEffect(userSentMessageTrigger) {
@@ -497,18 +500,16 @@ fun ChatScreen(
         }
     }
 
-    // Smart auto-scroll during streaming & tool execution: follows live stream and tool calls smoothly
+    // Smart auto-scroll during streaming & tool execution: follows live stream and tool calls smoothly without getting stuck
     val lastMsg = messages.lastOrNull()
     val lastContentLen = lastMsg?.content?.length ?: 0
     val lastThoughtLen = lastMsg?.thoughtText?.length ?: 0
     val lastToolCalls = lastMsg?.toolCalls.orEmpty()
-    val toolCallsCount = lastToolCalls.size
     val toolCallsPayloadLen = lastToolCalls.sumOf { it.command.length + it.output.length + it.status.length }
-    val contentBucket = (lastContentLen + lastThoughtLen + toolCallsPayloadLen) / 30
     val isRunningOrStreaming = isStreaming || (currentConv?.isRunning == true) || (lastMsg?.isStreaming == true)
 
-    LaunchedEffect(feedItems.size, contentBucket, toolCallsCount, isRunningOrStreaming) {
-        if (feedItems.isNotEmpty() && isRunningOrStreaming && shouldAutoScroll && !listState.isScrollInProgress) {
+    LaunchedEffect(feedItems.size, lastContentLen, lastThoughtLen, toolCallsPayloadLen, isRunningOrStreaming) {
+        if (feedItems.isNotEmpty() && isRunningOrStreaming && shouldAutoScroll && !isUserDragging) {
             listState.scrollToItem(maxOf(0, feedItems.size - 1))
         }
     }
