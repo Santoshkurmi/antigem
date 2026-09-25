@@ -309,41 +309,35 @@ fun BrowserScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        // 1. Close / Exit Browser View Button
+                        // 1. New Tab "+" Button
                         IconButton(
-                            onClick = {
-                                focusManager.clearFocus()
-                                keyboardController?.hide()
-                                onClose()
-                            },
-                            modifier = Modifier.size(36.dp)
+                            onClick = { addNewTab() },
+                            modifier = Modifier.size(34.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Close Browser",
-                                tint = MaterialTheme.colorScheme.onSurface,
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "New Tab",
+                                tint = ClaudeTerracotta,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        // 2. Refresh / Stop Button
-                        val hasActivePage = activeTab != null && activeTab.url.isNotBlank() && activeTab.url != "about:blank"
-                        IconButton(
-                            onClick = {
-                                if (activeTab?.isLoading == true) {
-                                    activeTab.stopLoading(sessionManager.getMainHandler())
-                                } else if (hasActivePage) {
-                                    sessionManager.reloadTab(activeTab.id)
-                                }
-                            },
-                            modifier = Modifier.size(34.dp)
+                        // 2. Tab Switcher Button (Shows count badge: [ 1 ], [ 2 ], etc.)
+                        Surface(
+                            onClick = { showTabSwitcherSheet = true },
+                            modifier = Modifier.size(32.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isDarkTheme) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else Color(0xFFF3F4F6),
+                            border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         ) {
-                            Icon(
-                                imageVector = if (activeTab?.isLoading == true) Icons.Default.Close else Icons.Default.Refresh,
-                                contentDescription = if (activeTab?.isLoading == true) "Stop" else "Reload",
-                                tint = if (activeTab?.isLoading == true || hasActivePage) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "${tabs.size}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
 
                         // 3. Address Search Bar (Single Row, clean pill design)
@@ -430,33 +424,39 @@ fun BrowserScreen(
                             }
                         }
 
-                        // 4. Tab Switcher Button (Shows count badge: [ 1 ], [ 2 ], etc.)
-                        Surface(
-                            onClick = { showTabSwitcherSheet = true },
-                            modifier = Modifier.size(32.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isDarkTheme) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else Color(0xFFF3F4F6),
-                            border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "${tabs.size}",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-
-                        // 5. New Tab "+" Button
+                        // 4. Refresh / Stop Button
+                        val hasActivePage = activeTab != null && activeTab.url.isNotBlank() && activeTab.url != "about:blank"
                         IconButton(
-                            onClick = { addNewTab() },
+                            onClick = {
+                                if (activeTab?.isLoading == true) {
+                                    activeTab.stopLoading(sessionManager.getMainHandler())
+                                } else if (hasActivePage) {
+                                    sessionManager.reloadTab(activeTab.id)
+                                }
+                            },
                             modifier = Modifier.size(34.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "New Tab",
-                                tint = ClaudeTerracotta,
+                                imageVector = if (activeTab?.isLoading == true) Icons.Default.Close else Icons.Default.Refresh,
+                                contentDescription = if (activeTab?.isLoading == true) "Stop" else "Reload",
+                                tint = if (activeTab?.isLoading == true || hasActivePage) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // 5. Close / Exit Browser View Button
+                        IconButton(
+                            onClick = {
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                                onClose()
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close Browser",
+                                tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
