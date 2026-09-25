@@ -85,10 +85,53 @@ class BrowserTabSession(
     var canGoForward by mutableStateOf(false)
     var webView: WebView? = null
     var isBackgroundActive by mutableStateOf(true)
+    var lastError by mutableStateOf<BrowserNetworkError?>(null)
+    var isStalled by mutableStateOf(false)
 
     // Circular buffers for real-time telemetry (capped to 300 entries each)
     val consoleLogs = ConcurrentLinkedDeque<BrowserConsoleMessage>()
     val networkErrors = ConcurrentLinkedDeque<BrowserNetworkError>()
+
+    private var stallWatchdogRunnable: Runnable? = null
+
+    fun startLoadingWatchdog(handler: Handler, timeoutMs: Long = 15000L) {
+        cancelLoadingWatchdog(handler)
+        isStalled = false
+        val r = Runnable {
+            if (isLoading) {
+                isStalled = true
+                if (lastError == null) {
+                    lastError = BrowserNetworkError(
+                        url = url,
+                        errorCode = -1001,
+                        description = "Page load timed out (took longer than ${timeoutMs / 1000}s). The web server or host might be unreachable or stalled."
+                    )
+                }
+            }
+        }
+        stallWatchdogRunnable = r
+        handler.postDelayed(r, timeoutMs)
+    }
+
+    fun cancelLoadingWatchdog(handler: Handler) {
+        stallWatchdogRunnable?.let { handler.removeCallbacks(it) }
+        stallWatchdogRunnable = null
+    }
+
+    fun clearError() {
+        lastError = null
+        isStalled = false
+    }
+
+    fun stopLoading(handler: Handler? = null) {
+        try {
+            webView?.stopLoading()
+        } catch (_: Throwable) {}
+        isLoading = false
+        if (handler != null) {
+            cancelLoadingWatchdog(handler)
+        }
+    }
 
     fun addConsoleLog(msg: BrowserConsoleMessage) {
         if (consoleLogs.size >= 300) consoleLogs.pollFirst()
@@ -199,6 +242,8 @@ class BrowserSessionManager private constructor() {
         return array
     }
 
+    fun getMainHandler(): Handler = mainHandler
+
     fun addNewTab(url: String = "", title: String = "New Tab", activate: Boolean = true): BrowserTabSession {
         val formatted = if (url.isNotBlank()) formatUrl(url) else ""
         val newTab = BrowserTabSession(
@@ -209,13 +254,8 @@ class BrowserSessionManager private constructor() {
         if (activate || activeTabId == null) {
             activeTabId = newTab.id
         }
-        appContext?.let { ctx ->
-            mainHandler.post {
-                ensureWebViewAttached(ctx, newTab, isDark = true)
-                if (formatted.isNotBlank()) {
-                    newTab.webView?.loadUrl(formatted)
-                }
-            }
+        if (formatted.isNotBlank()) {
+            loadUrlInTab(newTab, formatted)
         }
         return newTab
     }
@@ -266,13 +306,7 @@ class BrowserSessionManager private constructor() {
             val t = getTab(tabId) ?: addNewTab(formatted, formatted, activate = true)
             t.url = formatted
             t.title = formatted
-            t.isLoading = true
-            appContext?.let { ctx ->
-                mainHandler.post {
-                    val wv = ensureWebViewAttached(ctx, t, isDark = true)
-                    wv.loadUrl(formatted)
-                }
-            }
+            loadUrlInTab(t, formatted)
             t
         }
         return targetTab
@@ -281,7 +315,16 @@ class BrowserSessionManager private constructor() {
     fun reloadTab(tabId: String? = null) {
         val tab = getTab(tabId) ?: return
         mainHandler.post {
-            tab.webView?.reload()
+            try {
+                tab.clearError()
+                tab.isLoading = true
+                tab.startLoadingWatchdog(mainHandler)
+                tab.webView?.reload() ?: run {
+                    if (tab.url.isNotBlank()) loadUrlInTab(tab, tab.url)
+                }
+            } catch (e: Throwable) {
+                if (tab.url.isNotBlank()) loadUrlInTab(tab, tab.url)
+            }
         }
     }
 
@@ -305,12 +348,59 @@ class BrowserSessionManager private constructor() {
         return false
     }
 
+    fun loadUrlInTab(tab: BrowserTabSession, url: String, context: Context? = null) {
+        val ctx = context ?: appContext
+        tab.clearError()
+        tab.url = url
+        tab.isLoading = true
+        tab.startLoadingWatchdog(mainHandler)
+
+        mainHandler.post {
+            try {
+                val effectiveCtx = ctx ?: tab.webView?.context ?: return@post
+                var wv = tab.webView
+                if (wv == null) {
+                    wv = ensureWebViewAttached(effectiveCtx, tab, isDark = true)
+                }
+
+                try {
+                    wv.loadUrl(url)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "WebView loadUrl failed on existing instance, recreating WebView...", e)
+                    wv = createWebView(effectiveCtx, tab, isDark = true)
+                    wv.loadUrl(url)
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Fatal error loading URL: $url", e)
+                tab.cancelLoadingWatchdog(mainHandler)
+                tab.isLoading = false
+                tab.lastError = BrowserNetworkError(
+                    url = url,
+                    errorCode = -999,
+                    description = "Failed to load page: ${e.message ?: "Unknown WebView Error"}"
+                )
+            }
+        }
+    }
+
     /**
      * Ensures the WebView instance is created, configured, and offscreen-measured if headless.
      */
     @SuppressLint("SetJavaScriptEnabled")
     fun ensureWebViewAttached(context: Context, tab: BrowserTabSession, isDark: Boolean): WebView {
         tab.webView?.let { return it }
+        return createWebView(context, tab, isDark)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    fun createWebView(context: Context, tab: BrowserTabSession, isDark: Boolean): WebView {
+        try {
+            tab.webView?.let { old ->
+                (old.parent as? ViewGroup)?.removeView(old)
+                old.destroy()
+            }
+        } catch (_: Exception) {}
+        tab.webView = null
 
         val wv = WebView(context).apply {
             setBackgroundColor(if (isDark) 0xFF181513.toInt() else Color.WHITE)
@@ -339,7 +429,9 @@ class BrowserSessionManager private constructor() {
 
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                    tab.clearError()
                     tab.isLoading = true
+                    tab.startLoadingWatchdog(mainHandler)
                     if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("data:")) {
                         tab.url = url
                     }
@@ -349,6 +441,7 @@ class BrowserSessionManager private constructor() {
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     tab.isLoading = false
+                    tab.cancelLoadingWatchdog(mainHandler)
                     if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("data:")) {
                         tab.url = url
                     }
@@ -359,33 +452,90 @@ class BrowserSessionManager private constructor() {
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                     val desc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        error?.description?.toString() ?: "Error code ${error?.errorCode}"
-                    } else "Network error"
+                        val descriptionStr = error?.description?.toString() ?: ""
+                        if (descriptionStr.isNotBlank()) descriptionStr else "Network Error (${error?.errorCode})"
+                    } else "Network Connection Failure"
                     val reqUrl = request?.url?.toString() ?: tab.url
                     val isMain = request?.isForMainFrame ?: true
 
-                    tab.addNetworkError(
-                        BrowserNetworkError(
-                            url = reqUrl,
-                            errorCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) error?.errorCode ?: 0 else 0,
-                            description = desc,
-                            isMainFrame = isMain
-                        )
+                    val err = BrowserNetworkError(
+                        url = reqUrl,
+                        errorCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) error?.errorCode ?: 0 else 0,
+                        description = desc,
+                        isMainFrame = isMain
                     )
+                    tab.addNetworkError(err)
+                    if (isMain) {
+                        tab.cancelLoadingWatchdog(mainHandler)
+                        tab.lastError = err
+                        tab.isLoading = false
+                    }
                 }
 
                 override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
                     val reqUrl = request?.url?.toString() ?: tab.url
                     val status = errorResponse?.statusCode ?: 0
                     val reason = errorResponse?.reasonPhrase ?: "HTTP Error"
-                    tab.addNetworkError(
-                        BrowserNetworkError(
-                            url = reqUrl,
-                            errorCode = status,
-                            description = "$status $reason",
-                            isMainFrame = request?.isForMainFrame ?: false
-                        )
+                    val isMain = request?.isForMainFrame ?: false
+
+                    val err = BrowserNetworkError(
+                        url = reqUrl,
+                        errorCode = status,
+                        description = "HTTP $status: $reason",
+                        isMainFrame = isMain
                     )
+                    tab.addNetworkError(err)
+                    if (isMain && status >= 400) {
+                        tab.cancelLoadingWatchdog(mainHandler)
+                        tab.lastError = err
+                        tab.isLoading = false
+                    }
+                }
+
+                override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: android.net.http.SslError?) {
+                    val reqUrl = error?.url ?: tab.url
+                    val isLocal = reqUrl.contains("localhost") || reqUrl.contains("127.0.0.1") || reqUrl.contains("192.168.") || reqUrl.contains("10.0.")
+                    
+                    // For local development on localhost/127.0.0.1, automatically bypass self-signed SSL errors so dev servers load seamlessly
+                    if (isLocal) {
+                        handler?.proceed()
+                        return
+                    }
+
+                    val primaryMsg = when (error?.primaryError) {
+                        android.net.http.SslError.SSL_UNTRUSTED -> "Untrusted Certificate Authority (Self-signed or invalid CA)"
+                        android.net.http.SslError.SSL_EXPIRED -> "SSL Certificate Expired"
+                        android.net.http.SslError.SSL_IDMISMATCH -> "Hostname Mismatch"
+                        android.net.http.SslError.SSL_NOTYETVALID -> "Certificate Not Yet Valid"
+                        else -> "SSL Handshake / Security Failure"
+                    }
+                    val err = BrowserNetworkError(
+                        url = reqUrl,
+                        errorCode = error?.primaryError ?: 0,
+                        description = "SSL Certificate Warning: $primaryMsg",
+                        isMainFrame = true
+                    )
+                    tab.addNetworkError(err)
+                    tab.cancelLoadingWatchdog(mainHandler)
+                    tab.lastError = err
+                    tab.isLoading = false
+                    handler?.cancel()
+                }
+
+                override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                    val didCrash = detail?.didCrash() == true
+                    val msg = if (didCrash) "WebView render process crashed unexpectedly." else "WebView render process was terminated by OS (Memory Pressure)."
+                    val err = BrowserNetworkError(
+                        url = tab.url,
+                        errorCode = -1,
+                        description = msg,
+                        isMainFrame = true
+                    )
+                    tab.addNetworkError(err)
+                    tab.cancelLoadingWatchdog(mainHandler)
+                    tab.lastError = err
+                    tab.isLoading = false
+                    return true
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {

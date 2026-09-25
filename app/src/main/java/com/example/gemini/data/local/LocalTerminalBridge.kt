@@ -19,7 +19,9 @@ data class TerminalSessionInfo(
     val assignedPaneId: String?,
     val isExited: Boolean,
     val ptyCols: Int,
-    val ptyRows: Int
+    val ptyRows: Int,
+    val lastCommand: String? = null,
+    val isCommandRunning: Boolean = false
 ) {
     fun toJsonObject(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -31,8 +33,19 @@ data class TerminalSessionInfo(
         put("isExited", isExited)
         put("cols", ptyCols)
         put("rows", ptyRows)
+        put("lastCommand", lastCommand ?: JSONObject.NULL)
+        put("isCommandRunning", isCommandRunning)
     }
 }
+
+data class TerminalExecutionRecord(
+    val command: String,
+    val startedAtMs: Long = System.currentTimeMillis(),
+    val startLineOffset: Int = 0,
+    var isRunning: Boolean = true,
+    var exitCode: Int? = null,
+    var finishedAtMs: Long? = null
+)
 
 /**
  * High-level bridge to inspect and interact with live terminal sessions.
@@ -42,20 +55,24 @@ class LocalTerminalBridge private constructor() {
     companion object {
         private const val TAG = "LocalTerminalBridge"
         val instance: LocalTerminalBridge by lazy { LocalTerminalBridge() }
+
+        private val ANSI_REGEX = Regex("\u001B\\[[;?0-9]*[a-zA-Z]|\u001B\\][^\u0007]*\u0007|\u001B[()][A-Z0-9]")
     }
 
     private var appContext: Context? = null
+    private val sessionExecutions = java.util.concurrent.ConcurrentHashMap<String, MutableList<TerminalExecutionRecord>>()
 
     fun init(context: Context) {
         appContext = context.applicationContext
     }
 
     /**
-     * Lists all active terminal sessions.
+     * Lists all active terminal sessions with live command state.
      */
     fun listSessions(): List<TerminalSessionInfo> {
         val sessions = LocalTerminalManager.sessions.value
         return sessions.map { s ->
+            val lastExec = sessionExecutions[s.id]?.lastOrNull()
             TerminalSessionInfo(
                 id = s.id,
                 title = s.name,
@@ -65,7 +82,9 @@ class LocalTerminalBridge private constructor() {
                 assignedPaneId = s.assignedPaneId,
                 isExited = s.isExited.value,
                 ptyCols = s.ptyCols,
-                ptyRows = s.ptyRows
+                ptyRows = s.ptyRows,
+                lastCommand = lastExec?.command,
+                isCommandRunning = lastExec?.isRunning ?: false
             )
         }
     }
@@ -100,6 +119,15 @@ class LocalTerminalBridge private constructor() {
             ?: return@withContext Result.failure(Exception("Terminal session not found: $sessionId"))
 
         try {
+            val transcriptLines = session.terminalSession.emulator?.screen?.getTranscriptText()?.lines()?.size ?: 0
+            val record = TerminalExecutionRecord(
+                command = command.trim(),
+                startedAtMs = System.currentTimeMillis(),
+                startLineOffset = transcriptLines,
+                isRunning = true
+            )
+            sessionExecutions.computeIfAbsent(session.id) { mutableListOf() }.add(record)
+
             val payload = if (appendEnter && !command.endsWith("\n") && !command.endsWith("\r")) {
                 "$command\n"
             } else {
@@ -125,7 +153,14 @@ class LocalTerminalBridge private constructor() {
 
         try {
             val bytes = when (key.uppercase()) {
-                "CTRL+C", "SIGINT" -> byteArrayOf(0x03)
+                "CTRL+C", "SIGINT" -> {
+                    sessionExecutions[session.id]?.lastOrNull()?.apply {
+                        isRunning = false
+                        finishedAtMs = System.currentTimeMillis()
+                        exitCode = 130
+                    }
+                    byteArrayOf(0x03)
+                }
                 "CTRL+D", "EOF" -> byteArrayOf(0x04)
                 "CTRL+Z", "SIGTSTP" -> byteArrayOf(0x1A)
                 "CTRL+\\", "SIGQUIT" -> byteArrayOf(0x1C)
@@ -154,15 +189,57 @@ class LocalTerminalBridge private constructor() {
         try {
             val em = session.terminalSession.emulator
             val transcript = em?.screen?.getTranscriptText() ?: ""
-            val lines = transcript.lines()
+            val clean = ANSI_REGEX.replace(transcript, "")
+            val lines = clean.lines()
             val limited = if (lines.size > maxLines) {
                 lines.takeLast(maxLines).joinToString("\n")
             } else {
-                transcript
+                clean
             }
             Result.success(limited)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read terminal transcript", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Reads structured execution data (last command and its direct output only).
+     */
+    suspend fun getLastExecution(
+        sessionId: String? = null,
+        maxLines: Int = 100
+    ): Result<JSONObject> = withContext(Dispatchers.Main) {
+        val session = getSession(sessionId)
+            ?: return@withContext Result.failure(Exception("Terminal session not found: $sessionId"))
+
+        try {
+            val em = session.terminalSession.emulator
+            val fullTranscript = em?.screen?.getTranscriptText() ?: ""
+            val allLines = fullTranscript.lines()
+            val lastExec = sessionExecutions[session.id]?.lastOrNull()
+
+            val outputText = if (lastExec != null && lastExec.startLineOffset in allLines.indices) {
+                allLines.drop(lastExec.startLineOffset).takeLast(maxLines).joinToString("\n")
+            } else {
+                allLines.takeLast(maxLines).joinToString("\n")
+            }
+
+            val cleanOutput = ANSI_REGEX.replace(outputText, "").trim()
+
+            val json = JSONObject().apply {
+                put("session_id", session.id)
+                put("session_title", session.name)
+                put("working_directory", session.workingDirectory)
+                put("last_command", lastExec?.command ?: "")
+                put("is_running", lastExec?.isRunning ?: false)
+                put("started_at_ms", lastExec?.startedAtMs ?: 0L)
+                put("exit_code", lastExec?.exitCode ?: JSONObject.NULL)
+                put("output", cleanOutput)
+            }
+            Result.success(json)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get last execution", e)
             Result.failure(e)
         }
     }

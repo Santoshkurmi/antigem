@@ -462,11 +462,16 @@ class AndroidLocalBridgeServer private constructor() {
             // 12. Terminal Read Output
             tools.put(JSONObject().apply {
                 put("name", "terminal_read_output")
-                put("description", "Read terminal transcript / output buffer from a live in-app terminal session.")
+                put("description", "Read terminal output from a live in-app terminal session. Supports structured 'last_command' mode (returns last executed command, running status, and its direct output) or 'raw' mode (returns full raw transcript).")
                 put("inputSchema", JSONObject().apply {
                     put("type", "object")
                     put("properties", JSONObject().apply {
-                        put("session_id", JSONObject().apply { put("type", "string") })
+                        put("session_id", JSONObject().apply { put("type", "string"); put("description", "Optional session ID (defaults to active session)") })
+                        put("mode", JSONObject().apply {
+                            put("type", "string")
+                            put("enum", JSONArray().apply { put("last_command"); put("raw") })
+                            put("description", "Output mode: 'last_command' (default, returns structured JSON of last command and its output) or 'raw' (returns unparsed transcript buffer).")
+                        })
                         put("lines_count", JSONObject().apply { put("type", "integer"); put("description", "Max lines to return (default 100)") })
                     })
                 })
@@ -731,11 +736,20 @@ class AndroidLocalBridgeServer private constructor() {
                 "terminal_read_output" -> {
                     val sessionId = args.optString("session_id").ifBlank { null }
                     val linesCount = args.optInt("lines_count", 100)
-                    val res = tBridge.readTranscript(sessionId, linesCount)
-                    content.put(JSONObject().apply {
-                        put("type", "text")
-                        put("text", if (res.isSuccess) res.getOrNull() ?: "" else "Error: ${res.exceptionOrNull()?.message}")
-                    })
+                    val mode = args.optString("mode", "last_command")
+                    if (mode == "raw") {
+                        val res = tBridge.readTranscript(sessionId, linesCount)
+                        content.put(JSONObject().apply {
+                            put("type", "text")
+                            put("text", if (res.isSuccess) res.getOrNull() ?: "" else "Error: ${res.exceptionOrNull()?.message}")
+                        })
+                    } else {
+                        val res = tBridge.getLastExecution(sessionId, linesCount)
+                        content.put(JSONObject().apply {
+                            put("type", "text")
+                            put("text", if (res.isSuccess) res.getOrNull()!!.toString(2) else "Error: ${res.exceptionOrNull()?.message}")
+                        })
+                    }
                 }
                 "terminal_create_session" -> {
                     val workingDir = args.optString("working_dir").ifBlank { null }
@@ -898,15 +912,29 @@ class AndroidLocalBridgeServer private constructor() {
             "read" -> {
                 val sessionId = bodyJson.optString("session_id").ifBlank { null }
                 val lines = bodyJson.optInt("lines_count", 100)
-                val res = tBridge.readTranscript(sessionId, lines)
-                if (res.isSuccess) {
-                    val json = JSONObject().apply {
-                        put("success", true)
-                        put("transcript", res.getOrNull())
+                val mode = bodyJson.optString("mode", "last_command")
+                if (mode == "raw") {
+                    val res = tBridge.readTranscript(sessionId, lines)
+                    if (res.isSuccess) {
+                        val json = JSONObject().apply {
+                            put("success", true)
+                            put("transcript", res.getOrNull())
+                        }
+                        sendResponse(out, 200, "application/json", json.toString())
+                    } else {
+                        sendResponse(out, 500, "application/json", "{\"error\": \"${res.exceptionOrNull()?.message}\"}")
                     }
-                    sendResponse(out, 200, "application/json", json.toString())
                 } else {
-                    sendResponse(out, 500, "application/json", "{\"error\": \"${res.exceptionOrNull()?.message}\"}")
+                    val res = tBridge.getLastExecution(sessionId, lines)
+                    if (res.isSuccess) {
+                        val json = JSONObject().apply {
+                            put("success", true)
+                            put("execution", res.getOrNull())
+                        }
+                        sendResponse(out, 200, "application/json", json.toString())
+                    } else {
+                        sendResponse(out, 500, "application/json", "{\"error\": \"${res.exceptionOrNull()?.message}\"}")
+                    }
                 }
             }
             "create" -> {

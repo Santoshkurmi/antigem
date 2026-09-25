@@ -450,9 +450,9 @@ fun BrowserScreen(
                         IconButton(
                             onClick = {
                                 if (activeTab?.isLoading == true) {
-                                    activeTab.webView?.stopLoading()
+                                    activeTab.stopLoading(sessionManager.getMainHandler())
                                 } else if (hasActivePage) {
-                                    activeTab.webView?.reload()
+                                    sessionManager.reloadTab(activeTab.id)
                                 }
                             },
                             modifier = Modifier.size(34.dp)
@@ -616,42 +616,47 @@ fun BrowserScreen(
         ) {
             // Persistent WebViews: ALWAYS rendered so they never destroy or re-attach on tab switch/navigation
             tabs.forEach { tab ->
-                val isActive = tab.id == activeTabId
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            alpha = if (isActive) 1f else 0f
-                            translationX = if (isActive) 0f else -20000f
-                        }
-                ) {
-                    AndroidView(
-                        factory = { ctx ->
-                            val wv = sessionManager.ensureWebViewAttached(ctx, tab, isDarkTheme)
-                            (wv.parent as? ViewGroup)?.removeView(wv)
-                            wv.layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT
-                            )
-                            wv
-                        },
-                        update = { wv ->
-                            tab.webView = wv
-                            wv.setBackgroundColor(if (isDarkTheme) 0xFF181513.toInt() else android.graphics.Color.WHITE)
-                            @Suppress("DEPRECATION")
-                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                                wv.settings.isAlgorithmicDarkeningAllowed = isDarkTheme
-                            } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                wv.settings.forceDark = if (isDarkTheme) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
+                key(tab.id) {
+                    val isActive = tab.id == activeTabId
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = if (isActive) 1f else 0f
+                                translationX = if (isActive) 0f else -20000f
                             }
-                            if (isActive && isVisible) {
-                                wv.onResume()
-                            } else if (!tab.isBackgroundActive) {
-                                wv.onPause()
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    ) {
+                        AndroidView(
+                            factory = { ctx ->
+                                val wv = sessionManager.ensureWebViewAttached(ctx, tab, isDarkTheme)
+                                (wv.parent as? ViewGroup)?.removeView(wv)
+                                wv.layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                                wv
+                            },
+                            update = { wv ->
+                                tab.webView = wv
+                                wv.setBackgroundColor(if (isDarkTheme) 0xFF181513.toInt() else android.graphics.Color.WHITE)
+                                @Suppress("DEPRECATION")
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                    wv.settings.isAlgorithmicDarkeningAllowed = isDarkTheme
+                                } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                    wv.settings.forceDark = if (isDarkTheme) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
+                                }
+                                if (isActive && isVisible) {
+                                    wv.onResume()
+                                } else if (!tab.isBackgroundActive) {
+                                    wv.onPause()
+                                }
+                            },
+                            onRelease = { wv ->
+                                (wv.parent as? ViewGroup)?.removeView(wv)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
 
@@ -672,6 +677,26 @@ fun BrowserScreen(
                         }
                     )
                 }
+            } else if (activeTab != null && (activeTab.lastError != null || activeTab.isStalled)) {
+                val currentTab = activeTab
+                // In-App Diagnostic Error Overlay
+                BrowserDiagnosticOverlay(
+                    tab = currentTab,
+                    isDark = isDarkTheme,
+                    onReload = {
+                        currentTab.clearError()
+                        currentTab.isLoading = true
+                        currentTab.webView?.reload() ?: navigateToUrl(currentTab.url)
+                    },
+                    onSearchGoogle = {
+                        val currentUrl = currentTab.url
+                        val encoded = try { URLEncoder.encode(currentUrl, "UTF-8") } catch (_: Exception) { currentUrl }
+                        navigateToUrl("https://www.google.com/search?q=$encoded")
+                    },
+                    onDismiss = {
+                        currentTab.clearError()
+                    }
+                )
             }
         }
     }
@@ -1009,6 +1034,231 @@ private fun NewTabLandingView(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Diagnostic Error & Stall Overlay shown when a web page fails to load or hangs.
+ */
+@Composable
+fun BrowserDiagnosticOverlay(
+    tab: BrowserTabSession,
+    isDark: Boolean,
+    onReload: () -> Unit,
+    onSearchGoogle: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var showDetails by remember { mutableStateOf(false) }
+    val lastErr = tab.lastError
+    val isStalled = tab.isStalled
+    val targetUrl = lastErr?.url ?: tab.url
+
+    val title = when {
+        isStalled -> "Page Loading Stalled"
+        lastErr?.description?.contains("SSL", ignoreCase = true) == true -> "SSL Security Warning"
+        lastErr?.errorCode == -1 -> "Renderer Process Crashed"
+        else -> "Unable to Load Page"
+    }
+
+    val description = when {
+        isStalled -> "The page is taking unusually long to respond (timeout > 15s). The local server or remote site might be unresponsive."
+        !lastErr?.description.isNullOrBlank() -> lastErr?.description ?: "An unexpected network or connection error occurred."
+        else -> "Could not connect to the server or display the requested URL."
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                if (isDark) Color(0xFF141211).copy(alpha = 0.94f)
+                else Color(0xFFFAF9F6).copy(alpha = 0.96f)
+            )
+            .padding(20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 480.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Column(
+                modifier = Modifier.padding(22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header Icon
+                Box(
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(CircleShape)
+                        .background(ClaudeTerracotta.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isStalled) Icons.Outlined.HourglassEmpty else Icons.Outlined.WarningAmber,
+                        contentDescription = null,
+                        tint = ClaudeTerracotta,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Failing URL Pill
+                if (targetUrl.isNotBlank() && targetUrl != "about:blank") {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = targetUrl,
+                            style = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                // Error Description
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Expandable Telemetry / Console Logs
+                val logCount = tab.consoleLogs.size
+                val netCount = tab.networkErrors.size
+                val recentLogs = remember(logCount, netCount) {
+                    tab.consoleLogs.toList().takeLast(5)
+                }
+                if (recentLogs.isNotEmpty()) {
+                    Surface(
+                        onClick = { showDetails = !showDetails },
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Transparent,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = if (showDetails) "Hide Diagnostic Logs" else "Show Diagnostic Logs (${recentLogs.size})",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = ClaudeTerracotta
+                            )
+                            Icon(
+                                imageVector = if (showDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                tint = ClaudeTerracotta,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = showDetails) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isDark) Color(0xFF100E0D) else Color(0xFFF3F4F6),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                for (log in recentLogs) {
+                                    val errColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    Text(
+                                        text = "[${log.level}] ${log.message}",
+                                        style = TextStyle(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontSize = 11.sp,
+                                            color = if (log.level == "ERROR") Color(0xFFEF4444) else errColor
+                                        ),
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                // Action Buttons Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onReload,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ClaudeTerracotta,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(42.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Reload", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    OutlinedButton(
+                        onClick = onSearchGoogle,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(42.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Search", fontSize = 13.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Dismiss", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
