@@ -1175,6 +1175,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _activeInstances = MutableStateFlow<List<com.example.gemini.data.remote.AgyActiveInstance>>(emptyList())
     val activeInstances: StateFlow<List<com.example.gemini.data.remote.AgyActiveInstance>> = _activeInstances.asStateFlow()
 
+    val isAnyGenerationOrTaskActive: StateFlow<Boolean> = combine(
+        _isStreaming,
+        _activeInstances,
+        _conversations
+    ) { streaming, instances, convs ->
+        streaming || instances.isNotEmpty() || convs.any { it.isRunning || it.notFullyIdle || it.hasActivity }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     private val _conversationDrafts = mutableMapOf<String, androidx.compose.ui.text.input.TextFieldValue>()
 
     private val _searchQuery = MutableStateFlow("")

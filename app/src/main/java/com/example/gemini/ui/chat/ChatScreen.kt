@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
+import android.view.WindowManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -206,6 +207,19 @@ fun ChatScreen(
     val hubStatus by viewModel.hubStatus.collectAsState()
     val systemConnectionState by viewModel.systemConnectionState.collectAsState()
     val isNetworkConnected by viewModel.isNetworkConnectedState.collectAsState()
+    val isAnyGenerationOrTaskActive by viewModel.isAnyGenerationOrTaskActive.collectAsState()
+
+    DisposableEffect(isAnyGenerationOrTaskActive) {
+        val window = (context as? Activity)?.window
+        if (isAnyGenerationOrTaskActive) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
 
     LaunchedEffect(drawerState.isOpen) {
         if (drawerState.isOpen) {

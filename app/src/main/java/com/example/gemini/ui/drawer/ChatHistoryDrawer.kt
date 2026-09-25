@@ -782,13 +782,15 @@ fun ChatHistoryDrawer(
                                     val conv = item.conv
                                     val isSelected = conv.id == currentConversationId
                                     val activeInst = activeInstances.find { it.conversationId == conv.id }
-                                    val isConvRunning = conv.isRunning || (conv.id == currentConversationId && isStreaming) || activeInst != null
+                                    val isActivelyRunning = conv.isRunning || (conv.id == currentConversationId && isStreaming)
+                                    val isScheduledOrBackground = !isActivelyRunning && (conv.notFullyIdle || conv.hasActivity || activeInst != null)
 
                                     ChatHistoryItemRow(
                                         conv = conv,
                                         isSelected = isSelected,
                                         activeInst = activeInst,
-                                        isConvRunning = isConvRunning,
+                                        isActivelyRunning = isActivelyRunning,
+                                        isScheduledOrBackground = isScheduledOrBackground,
                                         depth = item.depth,
                                         displayName = if (item.depth > 0) conv.subagentRole?.takeIf { it.isNotBlank() } ?: conv.title else conv.title,
                                         subagents = item.subagents,
@@ -880,13 +882,15 @@ fun ChatHistoryDrawer(
                                         val conv = item.conv
                                         val isSelected = conv.id == currentConversationId
                                         val activeInst = activeInstances.find { it.conversationId == conv.id }
-                                        val isConvRunning = conv.isRunning || (conv.id == currentConversationId && isStreaming) || activeInst != null
+                                        val isActivelyRunning = conv.isRunning || (conv.id == currentConversationId && isStreaming)
+                                        val isScheduledOrBackground = !isActivelyRunning && (conv.notFullyIdle || conv.hasActivity || activeInst != null)
 
                                         ChatHistoryItemRow(
                                             conv = conv,
                                             isSelected = isSelected,
                                             activeInst = activeInst,
-                                            isConvRunning = isConvRunning,
+                                            isActivelyRunning = isActivelyRunning,
+                                            isScheduledOrBackground = isScheduledOrBackground,
                                             depth = item.depth,
                                             displayName = if (item.depth > 0) conv.subagentRole?.takeIf { it.isNotBlank() } ?: conv.title else conv.title,
                                             subagents = item.subagents,
@@ -1248,7 +1252,8 @@ private fun ChatHistoryItemRow(
     conv: Conversation,
     isSelected: Boolean,
     activeInst: com.example.gemini.data.remote.AgyActiveInstance?,
-    isConvRunning: Boolean,
+    isActivelyRunning: Boolean,
+    isScheduledOrBackground: Boolean,
     depth: Int = 0,
     displayName: String = conv.title,
     subagents: List<Conversation> = emptyList(),
@@ -1261,6 +1266,11 @@ private fun ChatHistoryItemRow(
 ) {
     val isSubagent = depth > 0
     val startPadding = if (isSubagent) (12 + (depth * 14)).dp else 0.dp
+    val statusDotColor = when {
+        isActivelyRunning -> Color(0xFF4CAF50)
+        isScheduledOrBackground -> Color(0xFFFFB300)
+        else -> null
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1293,13 +1303,13 @@ private fun ChatHistoryItemRow(
                     tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.size(15.dp)
                 )
-                if (isConvRunning) {
+                if (statusDotColor != null) {
                     Box(
                         modifier = Modifier
                             .size(6.dp)
                             .align(Alignment.TopEnd)
                             .offset(x = 2.dp, y = (-2).dp)
-                            .background(Color(0xFF4CAF50), CircleShape)
+                            .background(statusDotColor, CircleShape)
                     )
                 }
             }
@@ -1312,13 +1322,13 @@ private fun ChatHistoryItemRow(
                     tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     modifier = Modifier.size(17.dp)
                 )
-                if (isConvRunning) {
+                if (statusDotColor != null) {
                     Box(
                         modifier = Modifier
                             .size(7.dp)
                             .align(Alignment.TopEnd)
                             .offset(x = 2.dp, y = (-2).dp)
-                            .background(Color(0xFF4CAF50), CircleShape)
+                            .background(statusDotColor, CircleShape)
                     )
                 }
             }
@@ -1417,12 +1427,12 @@ private fun ChatHistoryItemRow(
                 }
             }
             Spacer(modifier = Modifier.width(6.dp))
-        } else if (isConvRunning) {
+        } else if (statusDotColor != null) {
             Box(
                 modifier = Modifier
                     .padding(horizontal = 2.dp)
                     .size(7.dp)
-                    .background(Color(0xFF4CAF50), CircleShape)
+                    .background(statusDotColor, CircleShape)
             )
             Spacer(modifier = Modifier.width(4.dp))
         }
