@@ -35,6 +35,11 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.PriorityHigh
+import androidx.compose.material.icons.outlined.Report
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -80,10 +85,14 @@ import java.util.regex.Pattern
 
 enum class TableAlignment { LEFT, CENTER, RIGHT }
 
+enum class AlertType { NOTE, TIP, IMPORTANT, WARNING, CAUTION }
+
 @androidx.compose.runtime.Immutable
 sealed class MarkdownBlock {
     @androidx.compose.runtime.Immutable
     data class Paragraph(val text: String) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
+    data class Alert(val type: AlertType, val title: String? = null, val text: String) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class AgentThought(val thought: String, val durationMs: Long? = null, val isStreaming: Boolean = false) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
@@ -276,6 +285,12 @@ fun MarkdownBlockView(
                 )
             }
         }
+        is MarkdownBlock.Alert -> {
+            MarkdownAlertView(
+                alert = block,
+                modifier = modifier
+            )
+        }
         is MarkdownBlock.Blockquote -> {
             Surface(
                 modifier = modifier
@@ -311,6 +326,111 @@ fun MarkdownBlockView(
                 text = block.text,
                 modifier = modifier.padding(vertical = 3.dp)
             )
+        }
+    }
+}
+
+private data class AlertStyle(
+    val accentColor: Color,
+    val lightBg: Color,
+    val darkBg: Color,
+    val defaultTitle: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
+
+@Composable
+fun MarkdownAlertView(
+    alert: MarkdownBlock.Alert,
+    modifier: Modifier = Modifier
+) {
+    val isDark = isAppInDarkTheme()
+    val style = when (alert.type) {
+        AlertType.NOTE -> AlertStyle(
+            accentColor = Color(0xFF3B82F6),
+            lightBg = Color(0xFFEFF6FF),
+            darkBg = Color(0x223B82F6),
+            defaultTitle = "Note",
+            icon = Icons.Outlined.Info
+        )
+        AlertType.TIP -> AlertStyle(
+            accentColor = Color(0xFF10B981),
+            lightBg = Color(0xFFECFDF5),
+            darkBg = Color(0x2210B981),
+            defaultTitle = "Tip",
+            icon = Icons.Outlined.Lightbulb
+        )
+        AlertType.IMPORTANT -> AlertStyle(
+            accentColor = Color(0xFF8B5CF6),
+            lightBg = Color(0xFFF5F3FF),
+            darkBg = Color(0x228B5CF6),
+            defaultTitle = "Important",
+            icon = Icons.Outlined.PriorityHigh
+        )
+        AlertType.WARNING -> AlertStyle(
+            accentColor = Color(0xFFF59E0B),
+            lightBg = Color(0xFFFFFBEB),
+            darkBg = Color(0x22F59E0B),
+            defaultTitle = "Warning",
+            icon = Icons.Outlined.Warning
+        )
+        AlertType.CAUTION -> AlertStyle(
+            accentColor = Color(0xFFEF4444),
+            lightBg = Color(0xFFFEF2F2),
+            darkBg = Color(0x22EF4444),
+            defaultTitle = "Caution",
+            icon = Icons.Outlined.Report
+        )
+    }
+
+    val displayTitle = alert.title ?: style.defaultTitle
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = if (isDark) style.darkBg else style.lightBg,
+        border = BorderStroke(1.dp, style.accentColor.copy(alpha = if (isDark) 0.35f else 0.25f))
+    ) {
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(4.dp)
+                    .background(style.accentColor)
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = if (alert.text.isNotBlank()) 4.dp else 0.dp)
+                ) {
+                    Icon(
+                        imageVector = style.icon,
+                        contentDescription = displayTitle,
+                        tint = style.accentColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = displayTitle,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = style.accentColor,
+                        letterSpacing = 0.3.sp
+                    )
+                }
+
+                if (alert.text.isNotBlank()) {
+                    FormattedInlineText(
+                        text = alert.text,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
         }
     }
 }
@@ -2306,10 +2426,69 @@ fun parseMarkdownBlocks(
                 result.add(MarkdownBlock.Paragraph(line))
             }
         }
-        // 9. Blockquotes: >
+        // 9. Blockquotes & Callout Alerts: >
         else if (line.trimStart().startsWith(">")) {
-            val quoteText = line.trimStart().removePrefix(">").trim()
-            result.add(MarkdownBlock.Blockquote(quoteText))
+            val quoteLines = mutableListOf<String>()
+            val rawFirst = line.trimStart().removePrefix(">").trim()
+            quoteLines.add(rawFirst)
+            i++
+            while (i < lines.size && lines[i].trimStart().startsWith(">")) {
+                quoteLines.add(lines[i].trimStart().removePrefix(">").trim())
+                i++
+            }
+
+            // Check if first line starts with [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION], [!INFO]
+            val firstLine = quoteLines.firstOrNull() ?: ""
+            val alertMatch = Regex("^\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO)\\](.*)", RegexOption.IGNORE_CASE).find(firstLine)
+            if (alertMatch != null) {
+                val tag = alertMatch.groupValues[1].uppercase()
+                val customTitleOrInline = alertMatch.groupValues[2].trim()
+                val alertType = when (tag) {
+                    "TIP" -> AlertType.TIP
+                    "IMPORTANT" -> AlertType.IMPORTANT
+                    "WARNING" -> AlertType.WARNING
+                    "CAUTION" -> AlertType.CAUTION
+                    else -> AlertType.NOTE
+                }
+                val bodyLines = mutableListOf<String>()
+                if (customTitleOrInline.isNotBlank()) {
+                    bodyLines.add(customTitleOrInline)
+                }
+                if (quoteLines.size > 1) {
+                    bodyLines.addAll(quoteLines.drop(1))
+                }
+                val alertBody = bodyLines.joinToString("\n").trim()
+                result.add(MarkdownBlock.Alert(type = alertType, text = alertBody))
+            } else {
+                result.add(MarkdownBlock.Blockquote(quoteLines.joinToString("\n").trim()))
+            }
+            continue
+        }
+        // 9b. Standalone Alert Callout: [!NOTE], [!TIP], etc. without >
+        else if (line.trimStart().matches(Regex("^\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO)\\](\\s+.*)?", RegexOption.IGNORE_CASE))) {
+            val alertMatch = Regex("^\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO)\\](.*)", RegexOption.IGNORE_CASE).find(line.trimStart())
+            if (alertMatch != null) {
+                val tag = alertMatch.groupValues[1].uppercase()
+                val customTitleOrInline = alertMatch.groupValues[2].trim()
+                val alertType = when (tag) {
+                    "TIP" -> AlertType.TIP
+                    "IMPORTANT" -> AlertType.IMPORTANT
+                    "WARNING" -> AlertType.WARNING
+                    "CAUTION" -> AlertType.CAUTION
+                    else -> AlertType.NOTE
+                }
+                val bodyLines = mutableListOf<String>()
+                if (customTitleOrInline.isNotBlank()) {
+                    bodyLines.add(customTitleOrInline)
+                }
+                i++
+                while (i < lines.size && lines[i].isNotBlank() && !lines[i].startsWith("#") && !lines[i].startsWith("```") && !lines[i].startsWith(">") && !lines[i].startsWith("<") && !lines[i].matches(Regex("^[-*]\\s+.*")) && !lines[i].matches(Regex("^\\d+\\.\\s+.*"))) {
+                    bodyLines.add(lines[i].trim())
+                    i++
+                }
+                result.add(MarkdownBlock.Alert(type = alertType, text = bodyLines.joinToString("\n").trim()))
+                continue
+            }
         }
         // 10. Horizontal Rules: ---, ***, ___
         else if (line.trim() == "---" || line.trim() == "***" || line.trim() == "___") {
