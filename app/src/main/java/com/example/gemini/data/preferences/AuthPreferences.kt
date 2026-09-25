@@ -58,6 +58,8 @@ class AuthPreferences(private val context: Context) {
         val GROUP_CHATS_BY_WORKSPACE = androidx.datastore.preferences.core.booleanPreferencesKey("group_chats_by_workspace")
         val IS_FLOATING_BUBBLE_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_bubble_enabled")
         val AUTO_SHOW_FLOATING_BUBBLE_ON_MINIMIZE = androidx.datastore.preferences.core.booleanPreferencesKey("auto_show_floating_bubble_on_minimize")
+        val IS_BROWSER_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_browser_automation_enabled")
+        val IS_TERMINAL_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_automation_enabled")
         const val DEFAULT_HUB_URL = "http://127.0.0.1:8090"
         const val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:8080"
 
@@ -98,6 +100,11 @@ class AuthPreferences(private val context: Context) {
     val isLocalToolsInstalled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_INSTALLED] ?: false }
     val localToolsInstallDate: Flow<Long?> = context.dataStore.data.map { it[LOCAL_TOOLS_INSTALL_DATE] }
     val localToolsVersion: Flow<String?> = context.dataStore.data.map { it[LOCAL_TOOLS_VERSION] }
+    val isBrowserAutomationEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_BROWSER_AUTOMATION_ENABLED] ?: true }
+    val isTerminalAutomationEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_TERMINAL_AUTOMATION_ENABLED] ?: true }
+
+    fun isBrowserAutomationEnabledSync(): Boolean = syncPrefs.getBoolean("is_browser_automation_enabled", true)
+    fun isTerminalAutomationEnabledSync(): Boolean = syncPrefs.getBoolean("is_terminal_automation_enabled", true)
 
     val agyBridgeHttpUrl: Flow<String> = context.dataStore.data.map { 
         val url = it[AGY_BRIDGE_HTTP_URL] ?: DEFAULT_BRIDGE_HTTP_URL
@@ -247,6 +254,20 @@ class AuthPreferences(private val context: Context) {
     suspend fun setDevModeEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[IS_DEV_MODE_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setBrowserAutomationEnabled(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("is_browser_automation_enabled", enabled).apply()
+        context.dataStore.edit { prefs ->
+            prefs[IS_BROWSER_AUTOMATION_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setTerminalAutomationEnabled(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("is_terminal_automation_enabled", enabled).apply()
+        context.dataStore.edit { prefs ->
+            prefs[IS_TERMINAL_AUTOMATION_ENABLED] = enabled
         }
     }
 

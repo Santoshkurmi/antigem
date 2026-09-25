@@ -370,6 +370,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    val isBrowserAutomationEnabled: StateFlow<Boolean> = authPrefs.isBrowserAutomationEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.isBrowserAutomationEnabledSync())
+
+    val isTerminalAutomationEnabled: StateFlow<Boolean> = authPrefs.isTerminalAutomationEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.isTerminalAutomationEnabledSync())
+
+    fun setBrowserAutomationEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.setBrowserAutomationEnabled(enabled)
+        }
+    }
+
+    fun setTerminalAutomationEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.setTerminalAutomationEnabled(enabled)
+        }
+    }
+
     private val _globalSecuritySettings = MutableStateFlow<AgyHubClient.GlobalUserSettings?>(null)
     val globalSecuritySettings: StateFlow<AgyHubClient.GlobalUserSettings?> = _globalSecuritySettings.asStateFlow()
 

@@ -198,6 +198,8 @@ fun ChatScreen(
     val projectsList by viewModel.projectsList.collectAsState()
     val isProjectsLoading by viewModel.isProjectsLoading.collectAsState()
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
+    val isBrowserAutomationEnabled by viewModel.isBrowserAutomationEnabled.collectAsState()
+    val isTerminalAutomationEnabled by viewModel.isTerminalAutomationEnabled.collectAsState()
     val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
     val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
     val hubStatus by viewModel.hubStatus.collectAsState()
@@ -1828,6 +1830,10 @@ fun ChatScreen(
             onToggleMcpServer = { name, enabled -> viewModel.toggleMcpServer(name, enabled) },
             onSaveMcpServer = { spec, rawJson -> viewModel.saveMcpServer(spec, rawJson) },
             onDeleteMcpServer = { name -> viewModel.deleteMcpServer(name) },
+            isBrowserAutomationEnabled = isBrowserAutomationEnabled,
+            isTerminalAutomationEnabled = isTerminalAutomationEnabled,
+            onToggleBrowserAutomation = { viewModel.setBrowserAutomationEnabled(it) },
+            onToggleTerminalAutomation = { viewModel.setTerminalAutomationEnabled(it) },
             commandAutoExecutionPolicy = commandAutoExecutionPolicy,
             commandSandboxEnabled = commandSandboxEnabled,
             requireApprovalForFileEdits = requireApprovalForFileEdits,

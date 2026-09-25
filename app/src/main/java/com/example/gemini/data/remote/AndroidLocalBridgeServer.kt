@@ -254,28 +254,41 @@ class AndroidLocalBridgeServer private constructor() {
         return res
     }
 
+    private fun isBrowserAutomationEnabled(): Boolean {
+        val ctx = appContext ?: return true
+        return com.example.gemini.data.preferences.AuthPreferences(ctx).isBrowserAutomationEnabledSync()
+    }
+
+    private fun isTerminalAutomationEnabled(): Boolean {
+        val ctx = appContext ?: return true
+        return com.example.gemini.data.preferences.AuthPreferences(ctx).isTerminalAutomationEnabledSync()
+    }
+
     private fun getMcpToolsList(): JSONArray {
         val tools = JSONArray()
+        val browserEnabled = isBrowserAutomationEnabled()
+        val terminalEnabled = isTerminalAutomationEnabled()
 
-        // 1. Browser Open URL
-        tools.put(JSONObject().apply {
-            put("name", "browser_open_url")
-            put("description", "Open a URL in the in-app WebView browser (supports localhost:port, http, https). Runs in background without closing chat.")
-            put("inputSchema", JSONObject().apply {
-                put("type", "object")
-                put("properties", JSONObject().apply {
-                    put("url", JSONObject().apply {
-                        put("type", "string")
-                        put("description", "URL to load, e.g. http://localhost:5173 or https://example.com")
+        if (browserEnabled) {
+            // 1. Browser Open URL
+            tools.put(JSONObject().apply {
+                put("name", "browser_open_url")
+                put("description", "Open a URL in the in-app WebView browser (supports localhost:port, http, https). Runs in background without closing chat.")
+                put("inputSchema", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("url", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "URL to load, e.g. http://localhost:5173 or https://example.com")
+                        })
+                        put("new_tab", JSONObject().apply {
+                            put("type", "boolean")
+                            put("description", "Whether to open in a new tab (default false)")
+                        })
                     })
-                    put("new_tab", JSONObject().apply {
-                        put("type", "boolean")
-                        put("description", "Whether to open in a new tab (default false)")
-                    })
+                    put("required", JSONArray().apply { put("url") })
                 })
-                put("required", JSONArray().apply { put("url") })
             })
-        })
 
         // 2. Browser List Tabs
         tools.put(JSONObject().apply {
@@ -418,92 +431,118 @@ class AndroidLocalBridgeServer private constructor() {
                 })
             })
         })
+    }
 
-        // 10. Terminal List Sessions
-        tools.put(JSONObject().apply {
-            put("name", "terminal_list_sessions")
-            put("description", "List all active in-app terminal sessions (tmux windows & local PTYs) with their paths and status.")
-            put("inputSchema", JSONObject().apply {
-                put("type", "object")
-                put("properties", JSONObject())
-            })
-        })
-
-        // 11. Terminal Send Command
-        tools.put(JSONObject().apply {
-            put("name", "terminal_send_command")
-            put("description", "Send a command (e.g. npm run dev, git status) or control key (Ctrl+C) to a live in-app terminal session.")
-            put("inputSchema", JSONObject().apply {
-                put("type", "object")
-                put("properties", JSONObject().apply {
-                    put("session_id", JSONObject().apply { put("type", "string"); put("description", "Session ID or name") })
-                    put("command", JSONObject().apply { put("type", "string"); put("description", "Command line to execute") })
-                    put("control_key", JSONObject().apply { put("type", "string"); put("description", "Optional control key (e.g. CTRL+C, CTRL+D, ENTER)") })
-                    put("append_enter", JSONObject().apply { put("type", "boolean"); put("description", "Append Enter key (default true)") })
+    if (terminalEnabled) {
+            // 10. Terminal List Sessions
+            tools.put(JSONObject().apply {
+                put("name", "terminal_list_sessions")
+                put("description", "List all active in-app terminal sessions (tmux windows & local PTYs) with their paths and status.")
+                put("inputSchema", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
                 })
             })
-        })
 
-        // 12. Terminal Read Output
-        tools.put(JSONObject().apply {
-            put("name", "terminal_read_output")
-            put("description", "Read terminal transcript / output buffer from a live in-app terminal session.")
-            put("inputSchema", JSONObject().apply {
-                put("type", "object")
-                put("properties", JSONObject().apply {
-                    put("session_id", JSONObject().apply { put("type", "string") })
-                    put("lines_count", JSONObject().apply { put("type", "integer"); put("description", "Max lines to return (default 100)") })
-                })
-            })
-        })
-
-        // 13. Terminal Create Session
-        tools.put(JSONObject().apply {
-            put("name", "terminal_create_session")
-            put("description", "Create a new named terminal tab in the app.")
-            put("inputSchema", JSONObject().apply {
-                put("type", "object")
-                put("properties", JSONObject().apply {
-                    put("working_dir", JSONObject().apply { put("type", "string") })
-                    put("force_shell", JSONObject().apply { put("type", "string") })
-                })
-            })
-        })
-
-        // 14. Terminal Kill Process
-        tools.put(JSONObject().apply {
-            put("name", "terminal_kill_process")
-            put("description", "Send a termination signal (SIGINT/Ctrl+C, SIGTERM, or SIGKILL) to stop a running process in the terminal (e.g. npm run dev, python, long tasks).")
-            put("inputSchema", JSONObject().apply {
-                put("type", "object")
-                put("properties", JSONObject().apply {
-                    put("session_id", JSONObject().apply { put("type", "string"); put("description", "Session ID or name") })
-                    put("signal", JSONObject().apply {
-                        put("type", "string")
-                        put("enum", JSONArray().apply { put("SIGINT"); put("SIGTERM"); put("SIGKILL"); put("CTRL+C") })
-                        put("description", "Signal to send (default SIGINT / Ctrl+C)")
+            // 11. Terminal Send Command
+            tools.put(JSONObject().apply {
+                put("name", "terminal_send_command")
+                put("description", "Send a command (e.g. npm run dev, git status) or control key (Ctrl+C) to a live in-app terminal session.")
+                put("inputSchema", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("session_id", JSONObject().apply { put("type", "string"); put("description", "Session ID or name") })
+                        put("command", JSONObject().apply { put("type", "string"); put("description", "Command line to execute") })
+                        put("control_key", JSONObject().apply { put("type", "string"); put("description", "Optional control key (e.g. CTRL+C, CTRL+D, ENTER)") })
+                        put("append_enter", JSONObject().apply { put("type", "boolean"); put("description", "Append Enter key (default true)") })
                     })
                 })
             })
-        })
 
-        // 15. Terminal Close Session
-        tools.put(JSONObject().apply {
-            put("name", "terminal_close_session")
-            put("description", "Close and destroy an entire terminal session tab.")
-            put("inputSchema", JSONObject().apply {
-                put("type", "object")
-                put("properties", JSONObject().apply {
-                    put("session_id", JSONObject().apply { put("type", "string"); put("description", "Session ID to close") })
+            // 12. Terminal Read Output
+            tools.put(JSONObject().apply {
+                put("name", "terminal_read_output")
+                put("description", "Read terminal transcript / output buffer from a live in-app terminal session.")
+                put("inputSchema", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("session_id", JSONObject().apply { put("type", "string") })
+                        put("lines_count", JSONObject().apply { put("type", "integer"); put("description", "Max lines to return (default 100)") })
+                    })
                 })
-                put("required", JSONArray().apply { put("session_id") })
             })
-        })
+
+            // 13. Terminal Create Session
+            tools.put(JSONObject().apply {
+                put("name", "terminal_create_session")
+                put("description", "Create a new named terminal tab in the app.")
+                put("inputSchema", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("working_dir", JSONObject().apply { put("type", "string") })
+                        put("force_shell", JSONObject().apply { put("type", "string") })
+                    })
+                })
+            })
+
+            // 14. Terminal Kill Process
+            tools.put(JSONObject().apply {
+                put("name", "terminal_kill_process")
+                put("description", "Send a termination signal (SIGINT/Ctrl+C, SIGTERM, or SIGKILL) to stop a running process in the terminal (e.g. npm run dev, python, long tasks).")
+                put("inputSchema", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("session_id", JSONObject().apply { put("type", "string"); put("description", "Session ID or name") })
+                        put("signal", JSONObject().apply {
+                            put("type", "string")
+                            put("enum", JSONArray().apply { put("SIGINT"); put("SIGTERM"); put("SIGKILL"); put("CTRL+C") })
+                            put("description", "Signal to send (default SIGINT / Ctrl+C)")
+                        })
+                    })
+                })
+            })
+
+            // 15. Terminal Close Session
+            tools.put(JSONObject().apply {
+                put("name", "terminal_close_session")
+                put("description", "Close and destroy an entire terminal session tab.")
+                put("inputSchema", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("session_id", JSONObject().apply { put("type", "string"); put("description", "Session ID to close") })
+                    })
+                    put("required", JSONArray().apply { put("session_id") })
+                })
+            })
+        }
 
         return tools
     }
 
     private suspend fun executeMcpToolCall(toolName: String, args: JSONObject): JSONObject {
+        if (toolName.startsWith("browser_") && !isBrowserAutomationEnabled()) {
+            return JSONObject().apply {
+                put("isError", true)
+                put("content", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("type", "text")
+                        put("text", "Error: Browser automation is currently disabled in Settings > Automation.")
+                    })
+                })
+            }
+        }
+        if (toolName.startsWith("terminal_") && !isTerminalAutomationEnabled()) {
+            return JSONObject().apply {
+                put("isError", true)
+                put("content", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("type", "text")
+                        put("text", "Error: Terminal automation is currently disabled in Settings > Automation.")
+                    })
+                })
+            }
+        }
+
         val bManager = BrowserSessionManager.instance
         val tBridge = LocalTerminalBridge.instance
         val content = JSONArray()
