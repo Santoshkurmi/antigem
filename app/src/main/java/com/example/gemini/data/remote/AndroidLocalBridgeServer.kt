@@ -470,6 +470,36 @@ class AndroidLocalBridgeServer private constructor() {
             })
         })
 
+        // 14. Terminal Kill Process
+        tools.put(JSONObject().apply {
+            put("name", "terminal_kill_process")
+            put("description", "Send a termination signal (SIGINT/Ctrl+C, SIGTERM, or SIGKILL) to stop a running process in the terminal (e.g. npm run dev, python, long tasks).")
+            put("inputSchema", JSONObject().apply {
+                put("type", "object")
+                put("properties", JSONObject().apply {
+                    put("session_id", JSONObject().apply { put("type", "string"); put("description", "Session ID or name") })
+                    put("signal", JSONObject().apply {
+                        put("type", "string")
+                        put("enum", JSONArray().apply { put("SIGINT"); put("SIGTERM"); put("SIGKILL"); put("CTRL+C") })
+                        put("description", "Signal to send (default SIGINT / Ctrl+C)")
+                    })
+                })
+            })
+        })
+
+        // 15. Terminal Close Session
+        tools.put(JSONObject().apply {
+            put("name", "terminal_close_session")
+            put("description", "Close and destroy an entire terminal session tab.")
+            put("inputSchema", JSONObject().apply {
+                put("type", "object")
+                put("properties", JSONObject().apply {
+                    put("session_id", JSONObject().apply { put("type", "string"); put("description", "Session ID to close") })
+                })
+                put("required", JSONArray().apply { put("session_id") })
+            })
+        })
+
         return tools
     }
 
@@ -641,6 +671,23 @@ class AndroidLocalBridgeServer private constructor() {
                             put("text", if (res.isSuccess) "Sent command to terminal" else "Failed: ${res.exceptionOrNull()?.message}")
                         })
                     }
+                }
+                "terminal_kill_process" -> {
+                    val sessionId = args.optString("session_id").ifBlank { null }
+                    val signal = args.optString("signal", "SIGINT")
+                    val res = tBridge.killProcess(sessionId, signal)
+                    content.put(JSONObject().apply {
+                        put("type", "text")
+                        put("text", if (res.isSuccess) "Sent $signal to terminate running process" else "Failed to kill process: ${res.exceptionOrNull()?.message}")
+                    })
+                }
+                "terminal_close_session" -> {
+                    val sessionId = args.optString("session_id", "")
+                    val res = tBridge.closeSession(sessionId)
+                    content.put(JSONObject().apply {
+                        put("type", "text")
+                        put("text", if (res.isSuccess) "Closed terminal session $sessionId" else "Failed to close session: ${res.exceptionOrNull()?.message}")
+                    })
                 }
                 "terminal_read_output" -> {
                     val sessionId = args.optString("session_id").ifBlank { null }

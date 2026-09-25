@@ -168,6 +168,80 @@ class LocalTerminalBridge private constructor() {
     }
 
     /**
+     * Kills a foreground process running in the terminal session (SIGINT/Ctrl+C, SIGTERM, or SIGKILL).
+     */
+    suspend fun killProcess(
+        sessionId: String? = null,
+        signal: String = "SIGINT"
+    ): Result<Boolean> = withContext(Dispatchers.Main) {
+        val session = getSession(sessionId)
+            ?: return@withContext Result.failure(Exception("Terminal session not found: $sessionId"))
+
+        try {
+            when (signal.uppercase()) {
+                "SIGINT", "CTRL+C", "INT" -> {
+                    // Send standard Interrupt signal 0x03
+                    session.writeBytes(byteArrayOf(0x03))
+                }
+                "SIGQUIT", "CTRL+\\", "QUIT" -> {
+                    // Send Quit signal 0x1C
+                    session.writeBytes(byteArrayOf(0x1C))
+                }
+                "SIGTSTP", "CTRL+Z", "SUSPEND" -> {
+                    // Send Suspend signal 0x1A
+                    session.writeBytes(byteArrayOf(0x1A))
+                }
+                "SIGKILL", "KILL", "9" -> {
+                    // Send Ctrl+C first, followed by process termination command
+                    session.writeBytes(byteArrayOf(0x03))
+                    if (!session.isSsh) {
+                        try {
+                            val pid = session.terminalSession.pid
+                            if (pid > 0) {
+                                android.os.Process.sendSignal(pid, 9)
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+                "SIGTERM", "TERM", "15" -> {
+                    session.writeBytes(byteArrayOf(0x03))
+                    if (!session.isSsh) {
+                        try {
+                            val pid = session.terminalSession.pid
+                            if (pid > 0) {
+                                android.os.Process.sendSignal(pid, 15)
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+                else -> {
+                    session.writeBytes(byteArrayOf(0x03))
+                }
+            }
+            Result.success(true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to kill process in terminal session", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Closes and removes the terminal session tab.
+     */
+    suspend fun closeSession(sessionId: String): Result<Boolean> = withContext(Dispatchers.Main) {
+        val session = getSession(sessionId)
+            ?: return@withContext Result.failure(Exception("Terminal session not found: $sessionId"))
+
+        try {
+            LocalTerminalManager.closeSession(session.id)
+            Result.success(true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to close terminal session", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Spawns a new terminal tab/session.
      */
     suspend fun createSession(
