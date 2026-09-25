@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -291,6 +293,7 @@ fun MarkdownBlockView(
                 modifier = modifier
             )
         }
+
         is MarkdownBlock.Blockquote -> {
             Surface(
                 modifier = modifier
@@ -434,6 +437,8 @@ fun MarkdownAlertView(
         }
     }
 }
+
+
 
 @Composable
 fun MarkdownContent(
@@ -1514,36 +1519,73 @@ data class FormattedInlineResult(
     val inlineContent: Map<String, InlineTextContent>
 )
 
+fun parseHexOrRgbColor(str: String): Color? {
+    val clean = str.trim()
+    if (clean.matches(Regex("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"))) {
+        return try {
+            val hex = clean.removePrefix("#")
+            val argb = when (hex.length) {
+                3 -> {
+                    val r = hex[0]; val g = hex[1]; val b = hex[2]
+                    "FF$r$r$g$g$b$b".toLong(16)
+                }
+                6 -> "FF$hex".toLong(16)
+                8 -> hex.toLong(16)
+                else -> return null
+            }
+            Color(argb)
+        } catch (_: Exception) { null }
+    }
+    if (clean.matches(Regex("^(?:Color\\()?0x([0-9a-fA-F]{6,8})\\)?$"))) {
+        return try {
+            val hex = clean.replace(Regex("^(?:Color\\()?0x"), "").removeSuffix(")")
+            val argb = if (hex.length == 6) "FF$hex".toLong(16) else hex.toLong(16)
+            Color(argb)
+        } catch (_: Exception) { null }
+    }
+    val rgbMatch = Regex("^rgba?\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)(?:\\s*,\\s*([\\d.]+))?\\s*\\)$", RegexOption.IGNORE_CASE).find(clean)
+    if (rgbMatch != null) {
+        return try {
+            val r = rgbMatch.groupValues[1].toInt().coerceIn(0, 255)
+            val g = rgbMatch.groupValues[2].toInt().coerceIn(0, 255)
+            val b = rgbMatch.groupValues[3].toInt().coerceIn(0, 255)
+            val a = (rgbMatch.groupValues.getOrNull(4)?.toFloatOrNull() ?: 1f).coerceIn(0f, 1f)
+            Color(r / 255f, g / 255f, b / 255f, a)
+        } catch (_: Exception) { null }
+    }
+    return null
+}
+
 /**
  * Formats rich inline Markdown text with native JLatexMath inline rendering for symbols & equations,
- * and full support for Bold, Italic, Inline Code, Links, and Strikethrough.
+ * and live Color Swatch previews in code.
  */
 private val BR_REGEX = Regex("<br\\s*/?>", RegexOption.IGNORE_CASE)
 
 private val INLINE_MARKDOWN_PATTERN: Pattern = Pattern.compile(
-    "(\\[(.*?)\\]\\(((?:https?|file|conversation)://[^\\s)]+|/[^\\s)]+)\\))|" +                              // 1: Markdown Link [text](url)
-    "(<a\\s+href=[\"']((?:https?|file|conversation)://[^\"']+|/[^\"']+)[\"']\\s*>(.*?)</a>)|" +             // 4: HTML Link <a href="url">text</a>
-    "(file:///[a-zA-Z0-9_./\\-#]+)|" +                                                 // 7: Bare file link file:///...
-    "(conversation://[a-zA-Z0-9_./\\-#]+)|" +                                          // Bare conversation link conversation://...
-    "(`([^`\\n]+)`)|" +                                                                // 8: Inline code `code`
-    "(<code>(.*?)</code>)|" +                                                          // 10: HTML code <code>code</code>
-    "([$]{1,2}([^$\\n]+)[$]{1,2})|" +                                                  // 12: Inline Math $formula$ or $$formula$$
-    "(\\\\\\((.*?)\\\\\\))|" +                                                         // 14: Inline Math \(formula\)
-    "(\\*{3}(.+?)\\*{3})|" +                                                           // 16: Bold-Italic ***text***
-    "(___([^_\\n]+)___)|" +                                                            // 18: Bold-Italic ___text___
-    "(\\*{2}(.+?)\\*{2})|" +                                                           // 20: Bold **text**
-    "(__([^_\\n]+)__)|" +                                                              // 22: Bold __text__
-    "(<b>(.*?)</b>)|" +                                                                // 24: HTML bold <b>text</b>
-    "(<strong>(.*?)</strong>)|" +                                                      // 26: HTML strong <strong>text</strong>
-    "(~~(.+?)~~)|" +                                                                   // 28: Strikethrough ~~text~~
-    "(<s>(.*?)</s>)|" +                                                                // 30: HTML strike <s>text</s>
-    "(<del>(.*?)</del>)|" +                                                            // 32: HTML del <del>text</del>
-    "(<strike>(.*?)</strike>)|" +                                                      // 34: HTML strike <strike>text</strike>
-    "(<u>(.*?)</u>)|" +                                                                // 36: HTML underline <u>text</u>
-    "(\\*(?!\\s)(.+?)(?<!\\s)\\*)|" +                                                  // 38: Italic *text*
-    "(_(?!\\s)([^_\\n]+?)(?<!\\s)_)|" +                                                // 40: Italic _text_
-    "(<i>(.*?)</i>)|" +                                                                // 42: HTML italic <i>text</i>
-    "(<em>(.*?)</em>)",                                                                // 44: HTML em <em>text</em>
+    "(\\[(.*?)\\]\\(((?:https?|file|conversation)://[^\\s)]+|/[^\\s)]+)\\))|" +       // 1: Markdown Link [text](url)
+    "(<a\\s+href=[\"']((?:https?|file|conversation)://[^\"']+|/[^\"']+)[\"']\\s*>(.*?)</a>)|" + // 4: HTML Link
+    "(file:///[a-zA-Z0-9_./\\-#]+)|" +                                                // 7: Bare file link
+    "(conversation://[a-zA-Z0-9_./\\-#]+)|" +                                         // 8: Bare conversation link
+    "(`([^`\\n]+)`)|" +                                                               // 9: Inline code `code`
+    "(<code>(.*?)</code>)|" +                                                         // 11: HTML code <code>code</code>
+    "([$]{1,2}([^$\\n]+)[$]{1,2})|" +                                                 // 13: Inline Math $formula$
+    "(\\\\\\((.*?)\\\\\\))|" +                                                        // 15: Inline Math \(formula\)
+    "(\\*{3}(.+?)\\*{3})|" +                                                          // 17: Bold-Italic ***text***
+    "(___([^_\\n]+)___)|" +                                                           // 19: Bold-Italic ___text___
+    "(\\*{2}(.+?)\\*{2})|" +                                                          // 21: Bold **text**
+    "(__([^_\\n]+)__)|" +                                                             // 23: Bold __text__
+    "(<b>(.*?)</b>)|" +                                                               // 25: HTML bold <b>text</b>
+    "(<strong>(.*?)</strong>)|" +                                                     // 27: HTML strong <strong>text</strong>
+    "(~~(.+?)~~)|" +                                                                  // 29: Strikethrough ~~text~~
+    "(<s>(.*?)</s>)|" +                                                               // 31: HTML strike <s>text</s>
+    "(<del>(.*?)</del>)|" +                                                           // 33: HTML del <del>text</del>
+    "(<strike>(.*?)</strike>)|" +                                                     // 35: HTML strike <strike>text</strike>
+    "(<u>(.*?)</u>)|" +                                                               // 37: HTML underline <u>text</u>
+    "(\\*(?!\\s)(.+?)(?<!\\s)\\*)|" +                                                 // 39: Italic *text*
+    "(_(?!\\s)([^_\\n]+?)(?<!\\s)_)|" +                                               // 41: Italic _text_
+    "(<i>(.*?)</i>)|" +                                                               // 43: HTML italic <i>text</i>
+    "(<em>(.*?)</em>)",                                                               // 45: HTML em <em>text</em>
     Pattern.DOTALL or Pattern.CASE_INSENSITIVE
 )
 
@@ -1871,19 +1913,51 @@ private fun buildRichAnnotatedString(
             builder.pop()
             builder.pop()
         } else if ((fullMatch.startsWith("`") && fullMatch.endsWith("`")) || fullMatch.startsWith("<code", ignoreCase = true)) {
-            // Inline code `...` or <code>...</code>
+            // Inline code `...` or <code>...</code> with Color Swatch preview support
             val codeContent = if (fullMatch.startsWith("`")) fullMatch.removeSurrounding("`") else fullMatch.replace(Regex("<[^>]+>"), "")
-            builder.pushStyle(
-                SpanStyle(
-                    fontFamily = FontFamily.Monospace,
-                    background = Color(0x24D97706),
-                    fontWeight = FontWeight.SemiBold,
-                    color = ClaudeTerracotta,
-                    fontSize = 12.5.sp
+            val parsedColor = parseHexOrRgbColor(codeContent)
+            if (parsedColor != null) {
+                val swatchId = "color_swatch_${inlineContentMap.size}"
+                builder.appendInlineContent(swatchId, alternateText = "● ")
+                inlineContentMap[swatchId] = InlineTextContent(
+                    placeholder = Placeholder(
+                        width = 14.sp,
+                        height = 14.sp,
+                        placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(11.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(parsedColor)
+                            .border(1.dp, if (isDark) Color.White.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.25f), androidx.compose.foundation.shape.CircleShape)
+                    )
+                }
+                builder.pushStyle(
+                    SpanStyle(
+                        fontFamily = FontFamily.Monospace,
+                        background = parsedColor.copy(alpha = if (isDark) 0.22f else 0.14f),
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color(0xFFF1F1F4) else Color(0xFF1E1E24),
+                        fontSize = 12.5.sp
+                    )
                 )
-            )
-            builder.append(" $codeContent ")
-            builder.pop()
+                builder.append(" $codeContent ")
+                builder.pop()
+            } else {
+                builder.pushStyle(
+                    SpanStyle(
+                        fontFamily = FontFamily.Monospace,
+                        background = Color(0x24D97706),
+                        fontWeight = FontWeight.SemiBold,
+                        color = ClaudeTerracotta,
+                        fontSize = 12.5.sp
+                    )
+                )
+                builder.append(" $codeContent ")
+                builder.pop()
+            }
         } else if ((fullMatch.startsWith("$") && fullMatch.endsWith("$") && fullMatch.length > 2) || (fullMatch.startsWith("\\(") && fullMatch.endsWith("\\)"))) {
             // Native JLatexMath Inline Math
             val mathContent = if (fullMatch.startsWith("$")) fullMatch.removePrefix("$").removeSuffix("$").removePrefix("$").removeSuffix("$").trim()
