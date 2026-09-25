@@ -353,12 +353,21 @@ fun ChatScreen(
         ChatFeedCache.buildFeedItems(messages, selectedModelId)
     }
 
-    // Fresh LazyListState per conversation — initialize directly at bottom so item 0 is NEVER composed
+    // Fresh LazyListState per conversation — restores saved position if returning, or initializes directly at bottom
     val convKey = currentConv?.id ?: "empty"
-    val hasInitialFeedItems = feedItems.isNotEmpty()
-    val listState = remember(convKey, hasInitialFeedItems) {
-        val initialIdx = if (feedItems.isNotEmpty()) feedItems.size else 0
-        LazyListState(firstVisibleItemIndex = initialIdx)
+    val hasFeedItems = feedItems.isNotEmpty()
+    val initialSavedPos = remember(convKey) { ConversationScrollCache.get(convKey) }
+    val listState = remember(convKey, hasFeedItems) {
+        val savedPos = ConversationScrollCache.get(convKey)
+        if (savedPos != null) {
+            LazyListState(
+                firstVisibleItemIndex = savedPos.index.coerceIn(0, maxOf(0, feedItems.size)),
+                firstVisibleItemScrollOffset = savedPos.offset
+            )
+        } else {
+            val initialIdx = if (feedItems.isNotEmpty()) feedItems.size else 0
+            LazyListState(firstVisibleItemIndex = initialIdx)
+        }
     }
 
     // Determine whether user is scrolled near the bottom (within the last item)
@@ -385,7 +394,7 @@ fun ChatScreen(
 
     var scrollDirection by remember { mutableStateOf(ScrollDirection.DOWN) }
     var showScrollButton by remember { mutableStateOf(false) }
-    var shouldAutoScroll by remember { mutableStateOf(true) }
+    var shouldAutoScroll by remember(convKey) { mutableStateOf(initialSavedPos?.isNearBottom ?: true) }
     var isUserDragging by remember { mutableStateOf(false) }
 
     val density = LocalDensity.current
@@ -481,6 +490,16 @@ fun ChatScreen(
         }
     }
 
+    DisposableEffect(convKey) {
+        onDispose {
+            if (convKey != "empty" && feedItems.isNotEmpty()) {
+                ConversationScrollCache.save(convKey, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
+            }
+        }
+    }
+
+
+
     var userSentMessageTrigger by remember { mutableStateOf(0) }
 
     val isDarkTheme = com.example.gemini.theme.isAppInDarkTheme()
@@ -558,6 +577,10 @@ fun ChatScreen(
         while (conversationBackStack.isNotEmpty()) {
             val prevId = conversationBackStack.removeAt(conversationBackStack.lastIndex)
             if (conversations.isEmpty() || conversations.any { it.id.equals(prevId, ignoreCase = true) }) {
+                val currentId = currentConv?.id
+                if (!currentId.isNullOrBlank() && feedItems.isNotEmpty()) {
+                    ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
+                }
                 viewModel.selectConversation(prevId)
                 break
             }
@@ -570,7 +593,7 @@ fun ChatScreen(
 
     val currentUriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
-    val fileLinkHandler = remember(scope, conversations, currentConv?.id) {
+    val fileLinkHandler = remember(scope, conversations, currentConv?.id, listState, feedItems.size, isAtBottom) {
         FileLinkHandler(
             onOpenFile = { rawUrl ->
                 try {
@@ -615,6 +638,9 @@ fun ChatScreen(
                 if (target != null) {
                     val currentId = currentConv?.id
                     if (!currentId.isNullOrBlank() && !currentId.equals(target.id, ignoreCase = true)) {
+                        if (feedItems.isNotEmpty()) {
+                            ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
+                        }
                         conversationBackStack.add(currentId)
                     }
                     viewModel.selectConversation(target.id)
@@ -677,16 +703,25 @@ fun ChatScreen(
                 isOpen = drawerState.isOpen || drawerState.targetValue == DrawerValue.Open,
                 onSelectConversation = { id ->
                     Log.d("CHAT_OPEN_DEBUG", "🎯 [ChatScreen] User selected conversation: id=$id")
+                    val currentId = currentConv?.id
+                    if (!currentId.isNullOrBlank() && feedItems.isNotEmpty()) {
+                        ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
+                    }
                     conversationBackStack.clear()
                     viewModel.selectConversation(id)
                     scope.launch { drawerState.close() }
                 },
                 onNewChat = {
+                    val currentId = currentConv?.id
+                    if (!currentId.isNullOrBlank() && feedItems.isNotEmpty()) {
+                        ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
+                    }
                     conversationBackStack.clear()
                     viewModel.startNewChat()
                     scope.launch { drawerState.close() }
                 },
                 onDeleteConversation = { id ->
+                    ConversationScrollCache.clear(id)
                     conversationBackStack.removeAll { it.equals(id, ignoreCase = true) }
                     viewModel.deleteConversation(id)
                 },

@@ -170,3 +170,32 @@ object ChatFeedCache {
         cache.clear()
     }
 }
+
+@Immutable
+data class ConversationScrollPosition(
+    val index: Int,
+    val offset: Int,
+    val isNearBottom: Boolean
+)
+
+object ConversationScrollCache {
+    private val scrollPositions = ConcurrentHashMap<String, ConversationScrollPosition>()
+
+    fun save(convId: String, index: Int, offset: Int, isNearBottom: Boolean) {
+        if (convId.isBlank() || convId == "empty") return
+        scrollPositions[convId] = ConversationScrollPosition(index, offset, isNearBottom)
+    }
+
+    fun get(convId: String?): ConversationScrollPosition? {
+        if (convId.isNullOrBlank() || convId == "empty") return null
+        return scrollPositions[convId]
+    }
+
+    fun clear(convId: String) {
+        scrollPositions.remove(convId)
+    }
+
+    fun clearAll() {
+        scrollPositions.clear()
+    }
+}
