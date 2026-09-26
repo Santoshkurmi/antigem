@@ -88,6 +88,8 @@ class BrowserTabSession(
     var lastError by mutableStateOf<BrowserNetworkError?>(null)
     var isStalled by mutableStateOf(false)
     var isDevToolsEnabled by mutableStateOf(false)
+    var isDesktopMode by mutableStateOf(false)
+    var defaultUserAgent: String? = null
 
     // Circular buffers for real-time telemetry (capped to 300 entries each)
     val consoleLogs = ConcurrentLinkedDeque<BrowserConsoleMessage>()
@@ -176,6 +178,97 @@ class BrowserSessionManager private constructor() {
 
         private const val MAX_LOGS_PER_QUERY = 150
         private const val DEFAULT_TIMEOUT_MS = 15000L
+        const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+
+        /**
+         * Injects script to spoof Desktop screen width/height, platform, client hints, and desktop viewport meta tag.
+         * This prevents responsive sites (like YouTube, Google, Facebook, Twitter, Reddit) from falling back to mobile.
+         */
+        fun injectDesktopSpoofing(view: WebView?) {
+            val js = """
+            (function() {
+                try {
+                    // 1. Override screen dimensions to full desktop resolution
+                    var screenProps = {
+                        width: 1920,
+                        height: 1080,
+                        availWidth: 1920,
+                        availHeight: 1040,
+                        colorDepth: 24,
+                        pixelDepth: 24
+                    };
+                    for (var p in screenProps) {
+                        try {
+                            Object.defineProperty(window.screen, p, {
+                                get: (function(val) { return function() { return val; }; })(screenProps[p]),
+                                configurable: true
+                            });
+                        } catch(e) {}
+                    }
+
+                    // 2. Override navigator platform and touch points
+                    try {
+                        Object.defineProperty(navigator, 'platform', { get: function() { return 'Win32'; }, configurable: true });
+                    } catch(e) {}
+                    try {
+                        Object.defineProperty(navigator, 'maxTouchPoints', { get: function() { return 1; }, configurable: true });
+                    } catch(e) {}
+
+                    // 3. Override navigator.userAgentData (Chromium Client Hints)
+                    try {
+                        if (navigator.userAgentData) {
+                            Object.defineProperty(navigator, 'userAgentData', {
+                                get: function() {
+                                    return {
+                                        mobile: false,
+                                        platform: 'Windows',
+                                        brands: [
+                                            { brand: 'Chromium', version: '128' },
+                                            { brand: 'Google Chrome', version: '128' },
+                                            { brand: 'Not;A=Brand', version: '24' }
+                                        ],
+                                        getHighEntropyValues: function() {
+                                            return Promise.resolve({
+                                                architecture: 'x86',
+                                                bitness: '64',
+                                                mobile: false,
+                                                model: '',
+                                                platform: 'Windows',
+                                                platformVersion: '15.0.0'
+                                            });
+                                        }
+                                    };
+                                },
+                                configurable: true
+                            });
+                        }
+                    } catch(e) {}
+
+                    // 4. Override Viewport meta tag so responsive websites render in 1280px desktop layout
+                    function applyDesktopViewport() {
+                        try {
+                            var meta = document.querySelector('meta[name="viewport"]');
+                            if (!meta) {
+                                meta = document.createElement('meta');
+                                meta.name = 'viewport';
+                                (document.head || document.documentElement).appendChild(meta);
+                            }
+                            meta.setAttribute('content', 'width=1280, initial-scale=0.35, minimum-scale=0.1, maximum-scale=3.0, user-scalable=yes');
+                        } catch(e) {}
+                    }
+
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', applyDesktopViewport);
+                    } else {
+                        applyDesktopViewport();
+                    }
+                } catch(e) {}
+            })();
+            """.trimIndent()
+            try {
+                view?.evaluateJavascript(js, null)
+            } catch (_: Exception) {}
+        }
 
         /**
          * Formats raw user/agent input into a valid HTTP/HTTPS/File URL or search query.
@@ -475,8 +568,23 @@ class BrowserSessionManager private constructor() {
 
     fun loadUrlInTab(tab: BrowserTabSession, url: String, context: Context? = null) {
         val ctx = context ?: appContext
+        var effectiveUrl = url
+        if (tab.isDesktopMode) {
+            if (effectiveUrl.contains("://m.youtube.com")) {
+                effectiveUrl = effectiveUrl.replace("://m.youtube.com", "://www.youtube.com")
+                if (!effectiveUrl.contains("app=desktop")) {
+                    effectiveUrl += if (effectiveUrl.contains("?")) "&app=desktop" else "?app=desktop"
+                }
+            } else if (effectiveUrl.contains("://m.facebook.com")) {
+                effectiveUrl = effectiveUrl.replace("://m.facebook.com", "://www.facebook.com")
+            } else if (effectiveUrl.contains("://mobile.twitter.com")) {
+                effectiveUrl = effectiveUrl.replace("://mobile.twitter.com", "://twitter.com")
+            } else if (effectiveUrl.contains("://m.wikipedia.org")) {
+                effectiveUrl = effectiveUrl.replace("://m.wikipedia.org", "://en.wikipedia.org")
+            }
+        }
         tab.clearError()
-        tab.url = url
+        tab.url = effectiveUrl
         tab.isLoading = true
         tab.startLoadingWatchdog(mainHandler)
 
@@ -489,21 +597,91 @@ class BrowserSessionManager private constructor() {
                 }
 
                 try {
-                    wv.loadUrl(url)
+                    wv.loadUrl(effectiveUrl)
                 } catch (e: Throwable) {
                     Log.w(TAG, "WebView loadUrl failed on existing instance, recreating WebView...", e)
                     wv = createWebView(effectiveCtx, tab, isDark = true)
-                    wv.loadUrl(url)
+                    wv.loadUrl(effectiveUrl)
                 }
             } catch (e: Throwable) {
-                Log.e(TAG, "Fatal error loading URL: $url", e)
+                Log.e(TAG, "Fatal error loading URL: $effectiveUrl", e)
                 tab.cancelLoadingWatchdog(mainHandler)
                 tab.isLoading = false
                 tab.lastError = BrowserNetworkError(
-                    url = url,
+                    url = effectiveUrl,
                     errorCode = -999,
                     description = "Failed to load page: ${e.message ?: "Unknown WebView Error"}"
                 )
+            }
+        }
+    }
+
+    fun toggleDesktopMode(tab: BrowserTabSession?, context: Context? = null) {
+        val t = tab ?: getActiveTab() ?: return
+        setDesktopMode(t, !t.isDesktopMode, context)
+    }
+
+    fun setDesktopMode(tab: BrowserTabSession, enable: Boolean, context: Context? = null) {
+        tab.isDesktopMode = enable
+        mainHandler.post {
+            val effectiveCtx = context ?: appContext
+            val wv = tab.webView ?: run {
+                if (effectiveCtx != null) ensureWebViewAttached(effectiveCtx, tab, isDark = true) else null
+            } ?: return@post
+
+            if (tab.defaultUserAgent == null) {
+                tab.defaultUserAgent = wv.settings.userAgentString
+            }
+
+            if (enable) {
+                wv.settings.userAgentString = DESKTOP_USER_AGENT
+                wv.settings.useWideViewPort = true
+                wv.settings.loadWithOverviewMode = true
+                wv.settings.setSupportZoom(true)
+                wv.settings.builtInZoomControls = true
+                wv.settings.displayZoomControls = false
+            } else {
+                wv.settings.userAgentString = tab.defaultUserAgent ?: WebSettings.getDefaultUserAgent(wv.context)
+                wv.settings.useWideViewPort = true
+                wv.settings.loadWithOverviewMode = true
+            }
+
+            val currentUrl = tab.url
+            if (currentUrl.isNotBlank() && currentUrl != "about:blank") {
+                if (enable) {
+                    var targetUrl = currentUrl
+                    if (targetUrl.contains("://m.youtube.com")) {
+                        targetUrl = targetUrl.replace("://m.youtube.com", "://www.youtube.com")
+                        if (!targetUrl.contains("app=desktop")) {
+                            targetUrl += if (targetUrl.contains("?")) "&app=desktop" else "?app=desktop"
+                        }
+                    } else if (targetUrl.contains("://m.facebook.com")) {
+                        targetUrl = targetUrl.replace("://m.facebook.com", "://www.facebook.com")
+                    } else if (targetUrl.contains("://mobile.twitter.com")) {
+                        targetUrl = targetUrl.replace("://mobile.twitter.com", "://twitter.com")
+                    } else if (targetUrl.contains("://m.wikipedia.org")) {
+                        targetUrl = targetUrl.replace("://m.wikipedia.org", "://en.wikipedia.org")
+                    }
+
+                    if (targetUrl != currentUrl) {
+                        tab.url = targetUrl
+                        wv.loadUrl(targetUrl)
+                        return@post
+                    }
+                } else {
+                    if (currentUrl.contains("app=desktop")) {
+                        val cleanedUrl = currentUrl
+                            .replace("?app=desktop&", "?")
+                            .replace("?app=desktop", "")
+                            .replace("&app=desktop", "")
+                        if (cleanedUrl != currentUrl) {
+                            tab.url = cleanedUrl
+                            wv.loadUrl(cleanedUrl)
+                            return@post
+                        }
+                    }
+                }
+                wv.reload()
             }
         }
     }
@@ -569,6 +747,10 @@ class BrowserSessionManager private constructor() {
                 builtInZoomControls = true
                 displayZoomControls = false
                 mediaPlaybackRequiresUserGesture = false
+
+                if (tab.isDesktopMode) {
+                    userAgentString = DESKTOP_USER_AGENT
+                }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     isAlgorithmicDarkeningAllowed = isDark
@@ -659,6 +841,9 @@ class BrowserSessionManager private constructor() {
                     }
                     tab.canGoBack = view?.canGoBack() == true
                     tab.canGoForward = view?.canGoForward() == true
+                    if (tab.isDesktopMode) {
+                        injectDesktopSpoofing(view)
+                    }
                     injectMediaTracker(view)
                 }
 
@@ -671,6 +856,9 @@ class BrowserSessionManager private constructor() {
                     view?.title?.let { if (it.isNotBlank()) tab.title = it }
                     tab.canGoBack = view?.canGoBack() == true
                     tab.canGoForward = view?.canGoForward() == true
+                    if (tab.isDesktopMode) {
+                        injectDesktopSpoofing(view)
+                    }
                     if (tab.isDevToolsEnabled && view != null) {
                         ErudaHelper.inject(view, showImmediately = false)
                     }
@@ -679,6 +867,9 @@ class BrowserSessionManager private constructor() {
 
                 override fun onPageCommitVisible(view: WebView?, url: String?) {
                     super.onPageCommitVisible(view, url)
+                    if (tab.isDesktopMode) {
+                        injectDesktopSpoofing(view)
+                    }
                     injectMediaTracker(view)
                     if (url == null || url.startsWith("data:") || url.contains("chromewebdata") || tab.lastError != null) {
                         val color = if (isDark) "#EDE8DF" else "#181513"
@@ -802,6 +993,33 @@ class BrowserSessionManager private constructor() {
                     val uri = request?.url ?: return false
                     val scheme = uri.scheme?.lowercase() ?: return false
                     if (scheme == "http" || scheme == "https" || scheme == "file" || scheme == "about" || scheme == "data") {
+                        if (tab.isDesktopMode) {
+                            val host = uri.host?.lowercase() ?: ""
+                            if (host == "m.youtube.com") {
+                                var desktopUrl = uri.toString().replace("://m.youtube.com", "://www.youtube.com")
+                                if (!desktopUrl.contains("app=desktop")) {
+                                    desktopUrl += if (desktopUrl.contains("?")) "&app=desktop" else "?app=desktop"
+                                }
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            } else if (host == "m.facebook.com") {
+                                val desktopUrl = uri.toString().replace("://m.facebook.com", "://www.facebook.com")
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            } else if (host == "mobile.twitter.com") {
+                                val desktopUrl = uri.toString().replace("://mobile.twitter.com", "://twitter.com")
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            } else if (host == "m.wikipedia.org") {
+                                val desktopUrl = uri.toString().replace("://m.wikipedia.org", "://en.wikipedia.org")
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            }
+                        }
                         return false
                     }
                     return try {

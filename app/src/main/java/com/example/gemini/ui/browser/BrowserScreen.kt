@@ -433,7 +433,23 @@ fun BrowserScreen(
                             )
                         }
 
-                        // 5. Refresh / Stop Button
+                        // 5. Desktop / Mobile Mode Toggle Button
+                        val isDesktopMode = activeTab?.isDesktopMode == true
+                        IconButton(
+                            onClick = {
+                                sessionManager.toggleDesktopMode(activeTab, context)
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isDesktopMode) Icons.Default.DesktopWindows else Icons.Outlined.DesktopWindows,
+                                contentDescription = if (isDesktopMode) "Switch to Mobile View" else "Switch to Desktop View",
+                                tint = if (isDesktopMode) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = if (hasActivePage) 0.8f else 0.38f),
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+
+                        // 6. Refresh / Stop Button
                         IconButton(
                             onClick = {
                                 if (activeTab?.isLoading == true) {
