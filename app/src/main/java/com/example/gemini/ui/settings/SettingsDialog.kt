@@ -5151,7 +5151,7 @@ private fun AutomationSubScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val browserTools = listOf(
-                        "browser_open_url", "browser_screenshot", "browser_inspect_dom",
+                        "browser_open_url", "browser_set_view_mode", "browser_screenshot", "browser_inspect_dom",
                         "browser_interact", "browser_eval_js", "browser_get_console_logs",
                         "browser_list_tabs", "browser_switch_tab", "browser_close_tab"
                     )

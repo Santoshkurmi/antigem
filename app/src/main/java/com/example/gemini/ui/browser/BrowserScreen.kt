@@ -379,7 +379,7 @@ fun BrowserScreen(
                                         Box(contentAlignment = Alignment.CenterStart) {
                                             if (addressInput.isEmpty() && !isAddressFocused) {
                                                 Text(
-                                                    text = "Search or enter address...",
+                                                    text = "Search",
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                                     fontSize = 13.sp
                                                 )

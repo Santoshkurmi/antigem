@@ -273,7 +273,7 @@ class AndroidLocalBridgeServer private constructor() {
             // 1. Browser Open URL
             tools.put(JSONObject().apply {
                 put("name", "browser_open_url")
-                put("description", "Open a URL in the in-app WebView browser (supports localhost:port, http, https). Runs in background without closing chat.")
+                put("description", "Open a URL in the in-app WebView browser (supports localhost:port, http, https). Supports specifying desktop/web mode vs mobile mode directly. Runs in background without closing chat.")
                 put("inputSchema", JSONObject().apply {
                     put("type", "object")
                     put("properties", JSONObject().apply {
@@ -285,8 +285,39 @@ class AndroidLocalBridgeServer private constructor() {
                             put("type", "boolean")
                             put("description", "Whether to open in a new tab (default false)")
                         })
+                        put("desktop_mode", JSONObject().apply {
+                            put("type", "boolean")
+                            put("description", "Open in desktop/web view mode if true, or mobile mode if false. (Optional)")
+                        })
+                        put("mode", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "View mode: 'desktop' (or 'web') vs 'mobile'. (Optional)")
+                        })
                     })
                     put("required", JSONArray().apply { put("url") })
+                })
+            })
+
+            // 2. Browser Set View Mode (Desktop vs Mobile)
+            tools.put(JSONObject().apply {
+                put("name", "browser_set_view_mode")
+                put("description", "Toggle or set mobile vs desktop/web view mode for a browser tab. Configures desktop User-Agent, screen resolution spoofing, and wide viewport.")
+                put("inputSchema", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("tab_id", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Optional tab ID to change view mode for (defaults to active tab)")
+                        })
+                        put("desktop_mode", JSONObject().apply {
+                            put("type", "boolean")
+                            put("description", "Set to true for desktop/web view mode, false for mobile mode. If neither mode nor desktop_mode is provided, toggles current mode.")
+                        })
+                        put("mode", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Explicit view mode string: 'desktop' (or 'web') vs 'mobile'. If omitted and desktop_mode not provided, toggles current mode.")
+                        })
+                    })
                 })
             })
 
@@ -557,12 +588,46 @@ class AndroidLocalBridgeServer private constructor() {
                 "browser_open_url" -> {
                     val url = args.optString("url", "")
                     val newTab = args.optBoolean("new_tab", false)
-                    val tab = bManager.openUrl(url, newTab = newTab)
+                    val desktopMode = when {
+                        args.has("desktop_mode") -> args.optBoolean("desktop_mode")
+                        args.has("mode") -> {
+                            val m = args.optString("mode", "").lowercase()
+                            m == "desktop" || m == "web"
+                        }
+                        else -> null
+                    }
+                    val tab = bManager.openUrl(url, newTab = newTab, desktopMode = desktopMode)
                     bManager.waitForPageLoad(tab.id, 5000)
+                    val modeStr = if (tab.isDesktopMode) "desktop" else "mobile"
                     content.put(JSONObject().apply {
                         put("type", "text")
-                        put("text", "Opened $url in tab ${tab.id} ('${tab.title}')")
+                        put("text", "Opened $url in tab ${tab.id} ('${tab.title}') [viewMode: $modeStr]")
                     })
+                }
+                "browser_set_view_mode" -> {
+                    val tabId = args.optString("tab_id", "").ifBlank { null }
+                    val tab = bManager.getTab(tabId)
+                    if (tab == null) {
+                        content.put(JSONObject().apply {
+                            put("type", "text")
+                            put("text", "No active browser tab found")
+                        })
+                    } else {
+                        val enableDesktop = when {
+                            args.has("desktop_mode") -> args.optBoolean("desktop_mode")
+                            args.has("mode") -> {
+                                val m = args.optString("mode", "").lowercase()
+                                m == "desktop" || m == "web"
+                            }
+                            else -> !tab.isDesktopMode
+                        }
+                        bManager.setDesktopMode(tab, enableDesktop)
+                        val modeStr = if (enableDesktop) "desktop" else "mobile"
+                        content.put(JSONObject().apply {
+                            put("type", "text")
+                            put("text", "Switched tab ${tab.id} to $modeStr mode (URL: ${tab.url})")
+                        })
+                    }
                 }
                 "browser_list_tabs" -> {
                     val tabs = bManager.listTabsJson()

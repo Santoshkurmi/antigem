@@ -155,6 +155,8 @@ class BrowserTabSession(
         put("id", id)
         put("url", url)
         put("title", title)
+        put("isDesktopMode", isDesktopMode)
+        put("viewMode", if (isDesktopMode) "desktop" else "mobile")
         put("isLoading", isLoading)
         put("progress", progress)
         put("canGoBack", canGoBack)
@@ -244,7 +246,7 @@ class BrowserSessionManager private constructor() {
                         }
                     } catch(e) {}
 
-                    // 4. Override Viewport meta tag so responsive websites render in 1280px desktop layout
+                    // 4. Force 1280px desktop viewport width with pinch zoom-in and zoom-out fully enabled
                     function applyDesktopViewport() {
                         try {
                             var meta = document.querySelector('meta[name="viewport"]');
@@ -253,15 +255,14 @@ class BrowserSessionManager private constructor() {
                                 meta.name = 'viewport';
                                 (document.head || document.documentElement).appendChild(meta);
                             }
-                            meta.setAttribute('content', 'width=1280, initial-scale=0.35, minimum-scale=0.1, maximum-scale=3.0, user-scalable=yes');
+                            meta.setAttribute('content', 'width=1280, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes');
                         } catch(e) {}
                     }
 
                     if (document.readyState === 'loading') {
                         document.addEventListener('DOMContentLoaded', applyDesktopViewport);
-                    } else {
-                        applyDesktopViewport();
                     }
+                    applyDesktopViewport();
                 } catch(e) {}
             })();
             """.trimIndent()
@@ -462,12 +463,15 @@ class BrowserSessionManager private constructor() {
 
     fun getMainHandler(): Handler = mainHandler
 
-    fun addNewTab(url: String = "", title: String = "New Tab", activate: Boolean = true): BrowserTabSession {
+    fun addNewTab(url: String = "", title: String = "New Tab", activate: Boolean = true, desktopMode: Boolean? = null): BrowserTabSession {
         val formatted = if (url.isNotBlank()) formatUrl(url) else ""
         val newTab = BrowserTabSession(
             initialUrl = formatted,
             initialTitle = if (formatted.isNotBlank()) formatted else title
         )
+        if (desktopMode != null) {
+            newTab.isDesktopMode = desktopMode
+        }
         tabs.add(newTab)
         if (activate || activeTabId == null) {
             activeTabId = newTab.id
@@ -516,12 +520,15 @@ class BrowserSessionManager private constructor() {
     /**
      * Opens a URL in an existing tab or creates a new tab.
      */
-    fun openUrl(url: String, tabId: String? = null, newTab: Boolean = false): BrowserTabSession {
+    fun openUrl(url: String, tabId: String? = null, newTab: Boolean = false, desktopMode: Boolean? = null): BrowserTabSession {
         val formatted = formatUrl(url)
         val targetTab = if (newTab || tabs.isEmpty()) {
-            addNewTab(formatted, formatted, activate = true)
+            addNewTab(formatted, formatted, activate = true, desktopMode = desktopMode)
         } else {
-            val t = getTab(tabId) ?: addNewTab(formatted, formatted, activate = true)
+            val t = getTab(tabId) ?: addNewTab(formatted, formatted, activate = true, desktopMode = desktopMode)
+            if (desktopMode != null && t.isDesktopMode != desktopMode) {
+                setDesktopMode(t, desktopMode)
+            }
             t.url = formatted
             t.title = formatted
             loadUrlInTab(t, formatted)
