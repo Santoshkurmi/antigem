@@ -496,6 +496,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    val isFloatingDiagnosticsEnabled: StateFlow<Boolean> = authPrefs.isFloatingDiagnosticsEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingDiagnosticsEnabledSync())
+
+    fun setFloatingDiagnosticsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.saveFloatingDiagnosticsEnabled(enabled)
+        }
+    }
+
     private val _globalSecuritySettings = MutableStateFlow<AgyHubClient.GlobalUserSettings?>(null)
     val globalSecuritySettings: StateFlow<AgyHubClient.GlobalUserSettings?> = _globalSecuritySettings.asStateFlow()
 

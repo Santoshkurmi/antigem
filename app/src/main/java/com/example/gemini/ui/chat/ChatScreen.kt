@@ -206,6 +206,7 @@ fun ChatScreen(
     val floatingSwitcherOrientation by viewModel.floatingSwitcherOrientation.collectAsState()
     val floatingSwitcherItems by viewModel.floatingSwitcherItems.collectAsState()
     val floatingSwitcherAutoCollapseSec by viewModel.floatingSwitcherAutoCollapseSec.collectAsState()
+    val isFloatingDiagnosticsEnabled by viewModel.isFloatingDiagnosticsEnabled.collectAsState()
     val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
     val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
     val hubStatus by viewModel.hubStatus.collectAsState()
@@ -1965,6 +1966,8 @@ fun ChatScreen(
             onChangePermissionRuleDecision = { rawRule, newDecision -> viewModel.changeGlobalPermissionGrantDecision(rawRule, newDecision) },
             groupChatsByWorkspace = groupChatsByWorkspace,
             onToggleGroupChatsByWorkspace = { viewModel.setGroupChatsByWorkspace(it) },
+            isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
+            onToggleFloatingDiagnostics = { viewModel.setFloatingDiagnosticsEnabled(it) },
             onDismiss = { showSettingsDialog = false }
         )
     }

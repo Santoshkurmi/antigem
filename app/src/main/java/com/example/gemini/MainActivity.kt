@@ -32,10 +32,22 @@ enum class AppViewMode {
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        private var instanceRef: java.lang.ref.WeakReference<MainActivity>? = null
+
+        fun showToast(message: String) {
+            val activity = instanceRef?.get() ?: return
+            activity.runOnUiThread {
+                android.widget.Toast.makeText(activity, message, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private val chatViewModel: ChatViewModel by lazy { ChatViewModelHolder.get(application) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        instanceRef = java.lang.ref.WeakReference(this)
         enableEdgeToEdge()
 
         try {
@@ -71,6 +83,15 @@ class MainActivity : ComponentActivity() {
             val floatingSwitcherAutoCollapseSec by chatViewModel.floatingSwitcherAutoCollapseSec.collectAsState()
             val floatingSwitcherPosX by chatViewModel.floatingSwitcherPosX.collectAsState()
             val floatingSwitcherPosY by chatViewModel.floatingSwitcherPosY.collectAsState()
+            val isFloatingDiagnosticsEnabled by chatViewModel.isFloatingDiagnosticsEnabled.collectAsState()
+
+            LaunchedEffect(isFloatingDiagnosticsEnabled) {
+                if (isFloatingDiagnosticsEnabled) {
+                    com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.start()
+                } else {
+                    com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.stop()
+                }
+            }
 
             val context = androidx.compose.ui.platform.LocalContext.current
             val view = androidx.compose.ui.platform.LocalView.current
@@ -258,6 +279,15 @@ class MainActivity : ComponentActivity() {
 
                             // Floating Video Player Overlay for active background/in-app playback controls
                             com.example.gemini.ui.components.FloatingVideoPlayerOverlay()
+
+                            // Real-time floating live diagnostics overlay (JVM Threads, OkHttp queues, connections, lag)
+                            if (isFloatingDiagnosticsEnabled) {
+                                com.example.gemini.ui.components.FloatingDiagnosticsOverlay(
+                                    onDismiss = {
+                                        chatViewModel.setFloatingDiagnosticsEnabled(false)
+                                    }
+                                )
+                            }
                         }
                     }
                 }

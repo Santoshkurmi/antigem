@@ -66,6 +66,7 @@ class AuthPreferences(private val context: Context) {
         val FLOATING_SWITCHER_POS_Y = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_pos_y")
         val IS_BROWSER_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_browser_automation_enabled")
         val IS_TERMINAL_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_automation_enabled")
+        val IS_FLOATING_DIAGNOSTICS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_diagnostics_enabled")
         const val DEFAULT_HUB_URL = "http://127.0.0.1:8090"
         const val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:8080"
 
@@ -578,6 +579,16 @@ class AuthPreferences(private val context: Context) {
             it[FLOATING_SWITCHER_POS_X] = x
             it[FLOATING_SWITCHER_POS_Y] = y
         }
+    }
+
+    val isFloatingDiagnosticsEnabled: Flow<Boolean> = context.dataStore.data
+        .map { it[IS_FLOATING_DIAGNOSTICS_ENABLED] ?: false }
+
+    fun getFloatingDiagnosticsEnabledSync(): Boolean = syncPrefs.getBoolean("is_floating_diagnostics_enabled", false)
+
+    suspend fun saveFloatingDiagnosticsEnabled(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("is_floating_diagnostics_enabled", enabled).apply()
+        context.dataStore.edit { it[IS_FLOATING_DIAGNOSTICS_ENABLED] = enabled }
     }
 
     suspend fun clearAuth() {

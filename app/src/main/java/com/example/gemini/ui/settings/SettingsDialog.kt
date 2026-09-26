@@ -63,7 +63,8 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     SKILLS_PLUGINS("Skills & Plugins", "Agent capabilities, Google plugins, and extensions"),
     AUTOMATION("Automation & Device Tools", "Browser & Terminal AI agent permissions"),
     TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling"),
-    COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals")
+    COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
+    DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -191,6 +192,8 @@ fun SettingsDialog(
     onAddPermissionRule: (action: String, pattern: String, decision: String) -> Unit = { _, _, _ -> },
     onRemovePermissionRule: (rawRule: String) -> Unit = {},
     onChangePermissionRuleDecision: (rawRule: String, newDecision: String) -> Unit = { _, _ -> },
+    isFloatingDiagnosticsEnabled: Boolean = false,
+    onToggleFloatingDiagnostics: (Boolean) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -309,6 +312,7 @@ fun SettingsDialog(
                         isTerminalAutomationEnabled = isTerminalAutomationEnabled,
                         commandAutoExecutionPolicy = commandAutoExecutionPolicy,
                         commandSandboxEnabled = commandSandboxEnabled,
+                        isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onNavigate = { currentSection = it }
@@ -449,6 +453,13 @@ fun SettingsDialog(
                         onRemovePermissionRule = onRemovePermissionRule,
                         onChangePermissionRuleDecision = onChangePermissionRuleDecision
                     )
+
+                    SettingsSection.DIAGNOSTICS -> DiagnosticsSubScreen(
+                        isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
+                        onToggleFloatingDiagnostics = onToggleFloatingDiagnostics,
+                        cardBg = cardBg,
+                        cardBorder = cardBorder
+                    )
                 }
             }
         }
@@ -469,6 +480,7 @@ private fun MainSettingsMenu(
     isTerminalAutomationEnabled: Boolean,
     commandAutoExecutionPolicy: String,
     commandSandboxEnabled: Boolean,
+    isFloatingDiagnosticsEnabled: Boolean = false,
     cardBg: Color,
     cardBorder: BorderStroke,
     onNavigate: (SettingsSection) -> Unit
@@ -610,6 +622,21 @@ private fun MainSettingsMenu(
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.COMMANDS) }
+        )
+
+        // Section 6: Diagnostics & Performance
+        val diagBadge = if (isFloatingDiagnosticsEnabled) "HUD ON" else "HUD OFF"
+        val diagColor = if (isFloatingDiagnosticsEnabled) QuotaGreen else Color.Gray
+        SettingsCategoryCard(
+            icon = Icons.Outlined.Speed,
+            iconTint = if (isFloatingDiagnosticsEnabled) QuotaGreen else Color(0xFF00ACC1),
+            title = "Diagnostics & Performance",
+            subtitle = if (isFloatingDiagnosticsEnabled) "Floating live metrics HUD enabled" else "Live network connections, active streams & thread HUD",
+            badgeText = diagBadge,
+            badgeColor = diagColor,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.DIAGNOSTICS) }
         )
     }
 }
@@ -5290,6 +5317,252 @@ private fun AutomationSubScreen(
         }
     }
 }
+
+// ==========================================
+// SUB-SCREEN 8: DIAGNOSTICS & PERFORMANCE
+// ==========================================
+@Composable
+private fun DiagnosticsSubScreen(
+    isFloatingDiagnosticsEnabled: Boolean,
+    onToggleFloatingDiagnostics: (Boolean) -> Unit,
+    cardBg: Color,
+    cardBorder: BorderStroke
+) {
+    DisposableEffect(isFloatingDiagnosticsEnabled) {
+        com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.start()
+        onDispose {
+            if (!isFloatingDiagnosticsEnabled) {
+                com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.stop()
+            }
+        }
+    }
+
+    val snapshot by com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.snapshot.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Toggle Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = (if (isFloatingDiagnosticsEnabled) QuotaGreen else Color.Gray).copy(alpha = 0.12f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Speed,
+                                    contentDescription = null,
+                                    tint = if (isFloatingDiagnosticsEnabled) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Floating Diagnostics HUD",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (isFloatingDiagnosticsEnabled) QuotaGreen.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = if (isFloatingDiagnosticsEnabled) "VISIBLE" else "DISABLED",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isFloatingDiagnosticsEnabled) QuotaGreen else Color.Gray,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Live on-screen thread, queue & connection monitor",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isFloatingDiagnosticsEnabled,
+                        onCheckedChange = onToggleFloatingDiagnostics,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = QuotaGreen
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Displays a draggable, real-time floating status pill showing active JVM threads, running and queued gRPC/HTTP calls, connection pool socket counts, and main-thread IO latency. Tap the floating pill anytime to expand detailed metrics.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    lineHeight = 17.sp
+                )
+            }
+        }
+
+        // Live Snapshot Metric Preview Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Current Telemetry Snapshot",
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), thickness = 0.8.dp)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Active JVM Threads:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "${snapshot.activeJvmThreads} threads",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "AgyHub Stream / RPCs:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "Run=${snapshot.agyRunning} | Q=${snapshot.agyQueued}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (snapshot.agyQueued > 0) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "AgyHub Connection Pool:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "${snapshot.agyConns} sockets (${snapshot.agyIdleConns} idle)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "IDE Bridge Sockets:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "${snapshot.ideConns} sockets (${snapshot.ideIdleConns} idle)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Event Loop IO Latency:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = if (snapshot.ioLagMs >= 0) "${snapshot.ioLagMs} ms" else "ERR",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (snapshot.isLagging) Color(0xFFFF5252) else QuotaGreen
+                    )
+                }
+
+                if (snapshot.threadGroupSummary.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Thread Breakdown:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = snapshot.threadGroupSummary,
+                            fontSize = 10.5.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 
 
