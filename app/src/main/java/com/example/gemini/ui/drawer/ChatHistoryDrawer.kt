@@ -1141,7 +1141,7 @@ fun ChatHistoryDrawer(
                             }
                         }
                     }
-                } else {
+                } else if (authInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED) {
                     // Not logged in (UNAUTHENTICATED) -> Sign In button
                     FilledTonalButton(
                         onClick = onLogin,

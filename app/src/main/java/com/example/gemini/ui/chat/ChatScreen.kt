@@ -1159,9 +1159,8 @@ fun ChatScreen(
                     } else if (isExistingChat) {
                         com.example.gemini.ui.components.ConversationLoadingSkeleton()
                     } else if (messages.isEmpty()) {
-                        // Clean minimal empty state for true New Chat (NEVER SHOWS SKELETON LOADER)
-                        val isAuth = systemConnectionState.isAuth
                         val isCheckingAuth = isAuthBusy || agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING
+                        val isExplicitlyUnauthenticated = agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED
                         BoxWithConstraints(
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -1183,7 +1182,7 @@ fun ChatScreen(
 
                                 if (isCheckingAuth) {
                                     com.example.gemini.ui.components.NewChatCheckingAuthPromptCard()
-                                } else if (!isAuth || !agyAuthInfo.isLoggedIn) {
+                                } else if (isExplicitlyUnauthenticated && isNetworkConnected) {
                                     com.example.gemini.ui.components.NewChatSignInPromptCard(
                                         onSignInClick = { viewModel.loginToAgyHub(force = true) }
                                     )
