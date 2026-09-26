@@ -55,7 +55,7 @@ fun GitSourceControlView(
     var stagedExpanded by remember { mutableStateOf(true) }
     var changesExpanded by remember { mutableStateOf(true) }
     var untrackedExpanded by remember { mutableStateOf(true) }
-    var historyExpanded by remember { mutableStateOf(false) }
+    var historyExpanded by remember { mutableStateOf(true) }
 
     var showBranchMenu by remember { mutableStateOf(false) }
     var showNewBranchDialog by remember { mutableStateOf(false) }

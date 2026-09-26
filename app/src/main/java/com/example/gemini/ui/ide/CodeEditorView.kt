@@ -82,6 +82,16 @@ class CodeEditorView @JvmOverloads constructor(
         }
     }
 
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
+        if (ev != null) {
+            val edgeThreshold = 20 * resources.displayMetrics.density
+            if (ev.x > edgeThreshold) {
+                parent?.requestDisallowInterceptTouchEvent(true)
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     fun updateContentIfDifferent(content: String) {
         if (editor.text.toString() != content) {
             isSettingContentProgrammatically = true
