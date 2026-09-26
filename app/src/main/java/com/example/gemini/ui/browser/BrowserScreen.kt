@@ -209,41 +209,23 @@ fun BrowserScreen(
         }
     }
 
-    // Manage WebViews pause/resume without interrupting background AI tasks
+    // Manage WebViews pause/resume without interrupting background AI tasks or video playback
     LaunchedEffect(isVisible, activeTabId, tabs.size) {
         tabs.forEach { tab ->
             val wv = tab.webView ?: return@forEach
-            val isTabActiveAndVisible = isVisible && (tab.id == activeTabId)
-            if (isTabActiveAndVisible || tab.isBackgroundActive) {
-                wv.onResume()
-            } else {
-                wv.onPause()
-            }
+            wv.onResume()
         }
         val anyWebView = tabs.firstNotNullOfOrNull { it.webView }
-        if (isVisible || tabs.any { it.isBackgroundActive }) {
-            anyWebView?.resumeTimers()
-        } else {
-            anyWebView?.pauseTimers()
-        }
+        anyWebView?.resumeTimers()
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, isVisible, activeTabId) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_PAUSE,
-                Lifecycle.Event.ON_STOP -> {
-                    tabs.forEach { if (!it.isBackgroundActive) it.webView?.onPause() }
-                }
                 Lifecycle.Event.ON_RESUME -> {
                     tabs.forEach { tab ->
-                        val wv = tab.webView ?: return@forEach
-                        if ((isVisible && tab.id == activeTabId) || tab.isBackgroundActive) {
-                            wv.onResume()
-                        } else {
-                            wv.onPause()
-                        }
+                        tab.webView?.onResume()
                     }
                     tabs.firstNotNullOfOrNull { it.webView }?.resumeTimers()
                 }

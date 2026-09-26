@@ -517,6 +517,31 @@ class BrowserSessionManager private constructor() {
         return createWebView(context, tab, isDark)
     }
 
+    class BrowserMediaJsInterface(
+        private val tab: BrowserTabSession,
+        private val getWebView: () -> WebView?
+    ) {
+        @JavascriptInterface
+        fun onMediaState(state: Int, title: String, url: String, currentTimeMs: Long, durationMs: Long) {
+            val wv = getWebView() ?: return
+            val context = wv.context ?: return
+            com.example.gemini.data.media.YouTubeMediaSessionManager.onBrowserMediaState(
+                context = context,
+                webView = wv,
+                state = state,
+                title = title,
+                url = url,
+                currentTimeMs = currentTimeMs,
+                durationMs = durationMs
+            )
+        }
+
+        @JavascriptInterface
+        fun onTimeUpdate(currentTimeMs: Long, durationMs: Long) {
+            com.example.gemini.data.media.YouTubeMediaSessionManager.onBrowserTimeUpdate(currentTimeMs, durationMs)
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     fun createWebView(context: Context, tab: BrowserTabSession, isDark: Boolean): WebView {
         try {
@@ -527,7 +552,7 @@ class BrowserSessionManager private constructor() {
         } catch (_: Exception) {}
         tab.webView = null
 
-        val wv = WebView(context).apply {
+        val wv = com.example.gemini.data.media.YouTubeMediaSessionManager.KeepAliveWebView(context).apply {
             setBackgroundColor(if (isDark) 0xFF181513.toInt() else Color.WHITE)
             layoutParams = ViewGroup.LayoutParams(1080, 1920)
 
@@ -543,6 +568,7 @@ class BrowserSessionManager private constructor() {
                 setSupportZoom(true)
                 builtInZoomControls = true
                 displayZoomControls = false
+                mediaPlaybackRequiresUserGesture = false
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     isAlgorithmicDarkeningAllowed = isDark
@@ -551,6 +577,77 @@ class BrowserSessionManager private constructor() {
                     forceDark = if (isDark) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
                 }
             }
+
+            CookieManager.getInstance().setAcceptCookie(true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            }
+
+            fun injectMediaTracker(view: WebView?) {
+                val js = """
+                (function() {
+                  try {
+                    Object.defineProperty(document, 'hidden', { get: function() { return false; } });
+                    Object.defineProperty(document, 'visibilityState', { get: function() { return 'visible'; } });
+                    Object.defineProperty(document, 'webkitHidden', { get: function() { return false; } });
+                    Object.defineProperty(document, 'webkitVisibilityState', { get: function() { return 'visible'; } });
+                  } catch(e) {}
+                  ['visibilitychange', 'webkitvisibilitychange', 'blur', 'focusout', 'pagehide'].forEach(function(evt) {
+                    window.addEventListener(evt, function(e) { e.stopImmediatePropagation(); }, true);
+                    document.addEventListener(evt, function(e) { e.stopImmediatePropagation(); }, true);
+                  });
+
+                  if (window.__antiGemMediaInjected) return;
+                  window.__antiGemMediaInjected = true;
+
+                  function reportMedia(v, isPlay) {
+                    if (!window.AndroidBrowserMedia) return;
+                    var title = document.title || 'Browser Video';
+                    var dur = (v && v.duration && !isNaN(v.duration)) ? v.duration * 1000 : 0;
+                    var cur = (v && v.currentTime && !isNaN(v.currentTime)) ? v.currentTime * 1000 : 0;
+                    window.AndroidBrowserMedia.onMediaState(isPlay ? 1 : 2, title, window.location.href, cur, dur);
+                  }
+
+                  document.addEventListener('play', function(e) {
+                    if (e.target && e.target.tagName === 'VIDEO') {
+                      reportMedia(e.target, true);
+                    }
+                  }, true);
+
+                  document.addEventListener('pause', function(e) {
+                    if (e.target && e.target.tagName === 'VIDEO') {
+                      var anyPlaying = false;
+                      var vids = document.querySelectorAll('video');
+                      for (var i = 0; i < vids.length; i++) {
+                        if (!vids[i].paused && !vids[i].ended && vids[i].currentTime > 0) {
+                          anyPlaying = true; break;
+                        }
+                      }
+                      if (!anyPlaying) {
+                        reportMedia(e.target, false);
+                      }
+                    }
+                  }, true);
+
+                  document.addEventListener('timeupdate', function(e) {
+                    if (e.target && e.target.tagName === 'VIDEO' && !e.target.paused) {
+                      if (window.AndroidBrowserMedia) {
+                        var dur = (e.target.duration && !isNaN(e.target.duration)) ? e.target.duration * 1000 : 0;
+                        window.AndroidBrowserMedia.onTimeUpdate(e.target.currentTime * 1000, dur);
+                      }
+                    }
+                  }, true);
+                })();
+                """.trimIndent()
+                try {
+                    view?.evaluateJavascript(js, null)
+                } catch (_: Exception) {}
+            }
+
+            addJavascriptInterface(
+                BrowserMediaJsInterface(tab) { tab.webView },
+                "AndroidBrowserMedia"
+            )
 
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -562,6 +659,7 @@ class BrowserSessionManager private constructor() {
                     }
                     tab.canGoBack = view?.canGoBack() == true
                     tab.canGoForward = view?.canGoForward() == true
+                    injectMediaTracker(view)
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
@@ -576,10 +674,12 @@ class BrowserSessionManager private constructor() {
                     if (tab.isDevToolsEnabled && view != null) {
                         ErudaHelper.inject(view, showImmediately = false)
                     }
+                    injectMediaTracker(view)
                 }
 
                 override fun onPageCommitVisible(view: WebView?, url: String?) {
                     super.onPageCommitVisible(view, url)
+                    injectMediaTracker(view)
                     if (url == null || url.startsWith("data:") || url.contains("chromewebdata") || tab.lastError != null) {
                         val color = if (isDark) "#EDE8DF" else "#181513"
                         val bg = if (isDark) "#181513" else "#FAF6F0"

@@ -255,6 +255,9 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
+
+                            // Floating Video Player Overlay for active background/in-app playback controls
+                            com.example.gemini.ui.components.FloatingVideoPlayerOverlay()
                         }
                     }
                 }

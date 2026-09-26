@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -1325,6 +1326,7 @@ fun YouTubeVideoView(
     modifier: Modifier = Modifier
 ) {
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     val videoUrl = remember(video.videoId, video.originalUrl) {
         if (video.originalUrl.isNotBlank() && (video.originalUrl.contains("youtube.com") || video.originalUrl.contains("youtu.be"))) {
             video.originalUrl
@@ -1336,7 +1338,9 @@ fun YouTubeVideoView(
         video.customThumbnailUrl?.takeIf { it.isNotBlank() }
             ?: "https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg"
     }
-    var isPlaying by remember { mutableStateOf(false) }
+    var isPlaying by remember(video.videoId) {
+        mutableStateOf(com.example.gemini.data.media.YouTubeMediaSessionManager.isVideoActive(video.videoId))
+    }
     var customFullscreenView by remember { mutableStateOf<android.view.View?>(null) }
     var customViewCallback by remember { mutableStateOf<android.webkit.WebChromeClient.CustomViewCallback?>(null) }
 
@@ -1442,21 +1446,41 @@ fun YouTubeVideoView(
                     )
                 }
 
-                // Open in External App / Browser
-                IconButton(
-                    onClick = {
-                        try {
-                            uriHandler.openUri(videoUrl)
-                        } catch (_: Exception) {}
-                    },
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.OpenInNew,
-                        contentDescription = "Open in YouTube",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        modifier = Modifier.size(16.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isPlaying) {
+                        IconButton(
+                            onClick = {
+                                isPlaying = false
+                                com.example.gemini.data.media.YouTubeMediaSessionManager.release()
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Close Player",
+                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+
+                    // Open in External App / Browser
+                    IconButton(
+                        onClick = {
+                            try {
+                                uriHandler.openUri(videoUrl)
+                            } catch (_: Exception) {}
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.OpenInNew,
+                            contentDescription = "Open in YouTube",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
@@ -1516,83 +1540,46 @@ fun YouTubeVideoView(
                         }
                     }
                 } else {
-                    // Embedded YouTube WebView Player
-                    val embedHtml = remember(video.videoId) {
-                        """
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                          <style>
-                            * { margin: 0; padding: 0; box-sizing: border-box; background: #000; }
-                            html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-                            iframe { width: 100%; height: 100%; border: none; }
-                          </style>
-                        </head>
-                        <body>
-                          <iframe
-                            src="https://www.youtube-nocookie.com/embed/${video.videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-                            allowfullscreen>
-                          </iframe>
-                        </body>
-                        </html>
-                        """.trimIndent()
+                    DisposableEffect(video.videoId) {
+                        onDispose {
+                            com.example.gemini.data.media.YouTubeMediaSessionManager.parkActivePlayer(context)
+                        }
                     }
 
                     AndroidView(
                         factory = { ctx ->
-                            android.webkit.WebView(ctx).apply {
-                                layoutParams = android.view.ViewGroup.LayoutParams(
-                                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                                setBackgroundColor(android.graphics.Color.BLACK)
-                                isNestedScrollingEnabled = false
-                                isVerticalScrollBarEnabled = false
-                                isHorizontalScrollBarEnabled = false
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.mediaPlaybackRequiresUserGesture = false
-                                settings.loadWithOverviewMode = true
-                                settings.useWideViewPort = true
-                                setOnTouchListener { v, event ->
-                                    when (event.action) {
-                                        android.view.MotionEvent.ACTION_DOWN,
-                                        android.view.MotionEvent.ACTION_MOVE -> {
-                                            v.parent?.requestDisallowInterceptTouchEvent(true)
-                                        }
-                                        android.view.MotionEvent.ACTION_UP,
-                                        android.view.MotionEvent.ACTION_CANCEL -> {
-                                            v.parent?.requestDisallowInterceptTouchEvent(false)
-                                        }
-                                    }
-                                    false
+                            com.example.gemini.data.media.YouTubeMediaSessionManager.getOrCreatePlayer(
+                                context = ctx,
+                                video = video,
+                                onCustomView = { view, callback ->
+                                    (view.parent as? android.view.ViewGroup)?.removeView(view)
+                                    customFullscreenView = view
+                                    customViewCallback = callback
+                                },
+                                onHideCustomView = {
+                                    try {
+                                        customViewCallback?.onCustomViewHidden()
+                                    } catch (_: Exception) {}
+                                    customFullscreenView = null
+                                    customViewCallback = null
                                 }
-                                webChromeClient = object : android.webkit.WebChromeClient() {
-                                    override fun onShowCustomView(view: android.view.View, callback: CustomViewCallback) {
-                                        (view.parent as? android.view.ViewGroup)?.removeView(view)
-                                        customFullscreenView = view
-                                        customViewCallback = callback
-                                    }
-
-                                    override fun onHideCustomView() {
-                                        try {
-                                            customViewCallback?.onCustomViewHidden()
-                                        } catch (_: Exception) {}
-                                        customFullscreenView = null
-                                        customViewCallback = null
-                                    }
-                                }
-                                tag = embedHtml
-                                loadDataWithBaseURL("https://www.youtube-nocookie.com", embedHtml, "text/html", "UTF-8", null)
-                            }
+                            )
                         },
-                        update = { webView ->
-                            if (webView.tag != embedHtml) {
-                                webView.tag = embedHtml
-                                webView.loadDataWithBaseURL("https://www.youtube-nocookie.com", embedHtml, "text/html", "UTF-8", null)
-                            }
+                        update = { _ ->
+                            com.example.gemini.data.media.YouTubeMediaSessionManager.updateCallbacks(
+                                onCustomView = { view, callback ->
+                                    (view.parent as? android.view.ViewGroup)?.removeView(view)
+                                    customFullscreenView = view
+                                    customViewCallback = callback
+                                },
+                                onHideCustomView = {
+                                    try {
+                                        customViewCallback?.onCustomViewHidden()
+                                    } catch (_: Exception) {}
+                                    customFullscreenView = null
+                                    customViewCallback = null
+                                }
+                            )
                         },
                         modifier = Modifier.fillMaxSize()
                     )
