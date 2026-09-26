@@ -188,6 +188,7 @@ fun BrowserScreen(
     var topBarHeightPx by remember { mutableIntStateOf(0) }
     var showTabOverview by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
+    var showExitConfirmationDialog by remember { mutableStateOf(false) }
     var isControlsVisible by remember { mutableStateOf(true) }
 
     val context = LocalContext.current
@@ -286,22 +287,25 @@ fun BrowserScreen(
     }
 
     // Back button behavior:
+    // If exit dialog is shown -> dismiss it.
     // If address bar is focused -> clear focus.
     // If tab overview is shown -> dismiss overview.
     // If active tab WebView has history -> navigate back in history.
-    // If no history left -> switch/minimize back to Chat screen without destroying tab session.
+    // If no history left -> show exit confirmation dialog (Close Tab, Go to Chat, Stay Here)
     BackHandler(enabled = isVisible) {
-        if (isAddressFocused) {
+        if (showExitConfirmationDialog) {
+            showExitConfirmationDialog = false
+        } else if (isAddressFocused) {
             focusManager.clearFocus()
             keyboardController?.hide()
         } else if (showTabOverview) {
             showTabOverview = false
         } else if (canBrowserTabGoBack(activeTab?.webView)) {
             handleBrowserBack(activeTab?.webView) {
-                onClose()
+                showExitConfirmationDialog = true
             }
         } else {
-            onClose()
+            showExitConfirmationDialog = true
         }
     }
 
@@ -967,6 +971,70 @@ fun BrowserScreen(
                         keyboardController?.hide()
                     },
                     modifier = Modifier.padding(top = topBarHeightDp)
+                )
+            }
+
+            // Exit Confirmation Dialog (On back press when no history remains)
+            if (showExitConfirmationDialog) {
+                AlertDialog(
+                    onDismissRequest = { showExitConfirmationDialog = false },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = null,
+                            tint = ClaudeTerracotta,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    },
+                    title = {
+                        Text(
+                            text = "Leave Browser?",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "Do you want to close this tab, return to chat, or stay here?",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showExitConfirmationDialog = false
+                                onClose()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                        ) {
+                            Text("Go to Chat")
+                        }
+                    },
+                    dismissButton = {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(
+                                onClick = { showExitConfirmationDialog = false }
+                            ) {
+                                Text("Stay Here")
+                            }
+                            TextButton(
+                                onClick = {
+                                    showExitConfirmationDialog = false
+                                    activeTabId?.let { tabId -> closeTab(tabId) }
+                                    onClose()
+                                },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Text("Close Tab")
+                            }
+                        }
+                    }
                 )
             }
         }
