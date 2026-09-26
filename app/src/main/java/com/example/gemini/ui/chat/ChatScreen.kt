@@ -965,11 +965,21 @@ fun ChatScreen(
                             }
                         }
                         if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) || systemConnectionState !is com.example.gemini.data.remote.SystemConnectionState.Offline || hubStatus.status != "idle") {
+                            val isCheckingAuth = isAuthBusy || agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING
+                            val isUnauthenticated = !systemConnectionState.isAuth || agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED || (!agyAuthInfo.isLoggedIn && !isCheckingAuth)
+
                             val dotColor = when {
                                 serverStatus is com.example.gemini.data.local.LocalServerStatus.Stopping -> Color(0xFFF59E0B)
                                 systemConnectionState is com.example.gemini.data.remote.SystemConnectionState.Connected -> {
-                                    when ((systemConnectionState as com.example.gemini.data.remote.SystemConnectionState.Connected).hubStatus) {
-                                        "online" -> Color(0xFF22C55E) // Green: Hub is online & ready
+                                    val conn = systemConnectionState as com.example.gemini.data.remote.SystemConnectionState.Connected
+                                    when (conn.hubStatus) {
+                                        "online" -> {
+                                            when {
+                                                isCheckingAuth -> Color(0xFF3B82F6) // Blue: Hub active, checking/verifying auth
+                                                isUnauthenticated -> Color(0xFFA855F7) // Purple: Hub active, but user not logged in
+                                                else -> Color(0xFF22C55E) // Green: Hub active & user authenticated
+                                            }
+                                        }
                                         "starting", "idle" -> Color(0xFFF59E0B) // Yellow: Bridge online, Hub starting
                                         "error" -> Color(0xFFEF4444) // Red: Hub error
                                         "stopped" -> Color(0xFF9CA3AF) // Gray: Hub stopped
