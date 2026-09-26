@@ -1585,7 +1585,8 @@ private val INLINE_MARKDOWN_PATTERN: Pattern = Pattern.compile(
     "(\\*(?!\\s)(.+?)(?<!\\s)\\*)|" +                                                 // 39: Italic *text*
     "(_(?!\\s)([^_\\n]+?)(?<!\\s)_)|" +                                               // 41: Italic _text_
     "(<i>(.*?)</i>)|" +                                                               // 43: HTML italic <i>text</i>
-    "(<em>(.*?)</em>)",                                                               // 45: HTML em <em>text</em>
+    "(<em>(.*?)</em>)|" +                                                             // 45: HTML em <em>text</em>
+    "(<kbd>(.*?)</kbd>)",                                                             // 47: HTML kbd <kbd>text</kbd>
     Pattern.DOTALL or Pattern.CASE_INSENSITIVE
 )
 
@@ -2083,6 +2084,20 @@ private fun buildRichAnnotatedString(
             val content = fullMatch.replace(Regex("<[^>]+>"), "")
             builder.pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = Color.Gray))
             appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
+            builder.pop()
+        } else if (fullMatch.startsWith("<kbd", ignoreCase = true)) {
+            // HTML Keyboard Key <kbd>key</kbd>
+            val content = fullMatch.replace(Regex("<[^>]+>"), "").trim()
+            builder.pushStyle(
+                SpanStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    background = if (isDark) Color(0xFF2A2B36) else Color(0xFFE2E8F0),
+                    color = if (isDark) Color(0xFFF1F1F4) else Color(0xFF1E293B)
+                )
+            )
+            builder.append(" $content ")
             builder.pop()
         } else {
             builder.append(fullMatch)
