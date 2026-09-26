@@ -242,23 +242,35 @@ func (h *Handler) GitCommitHandler(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			log.Printf("[GitCommitHandler Panic] %v", rec)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("%v", rec)})
+			writeJSON(w, http.StatusOK, models.GitActionResult{
+				Success: false,
+				Error:   fmt.Sprintf("%v", rec),
+			})
 		}
 	}()
 
 	var req models.GitActionReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Message) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "commit message required"})
+		writeJSON(w, http.StatusOK, models.GitActionResult{
+			Success: false,
+			Error:   "commit message required",
+		})
 		return
 	}
 	projectDir := h.resolvePostProjectDir(req.Project)
 
 	if err := git.Commit(projectDir, req.Message); err != nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
+		writeJSON(w, http.StatusOK, models.GitActionResult{
+			Success: false,
+			Error:   err.Error(),
+		})
 		return
 	}
 	h.NotifyGitChanged(projectDir)
-	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
+	writeJSON(w, http.StatusOK, models.GitActionResult{
+		Success: true,
+		Output:  "Committed successfully",
+	})
 }
 
 func (h *Handler) GitPushHandler(w http.ResponseWriter, r *http.Request) {
