@@ -83,6 +83,7 @@ class BrowserTabSession(
     var progress by mutableStateOf(0)
     var canGoBack by mutableStateOf(false)
     var canGoForward by mutableStateOf(false)
+    var scrollY by mutableStateOf(0)
     var webView: WebView? = null
     var isBackgroundActive by mutableStateOf(true)
     var lastError by mutableStateOf<BrowserNetworkError?>(null)
@@ -90,12 +91,33 @@ class BrowserTabSession(
     var isDevToolsEnabled by mutableStateOf(false)
     var isDesktopMode by mutableStateOf(false)
     var defaultUserAgent: String? = null
+    var previewBitmap by mutableStateOf<Bitmap?>(null)
 
     // Circular buffers for real-time telemetry (capped to 300 entries each)
     val consoleLogs = ConcurrentLinkedDeque<BrowserConsoleMessage>()
     val networkErrors = ConcurrentLinkedDeque<BrowserNetworkError>()
 
     private var stallWatchdogRunnable: Runnable? = null
+
+    fun capturePreview() {
+        val wv = webView ?: return
+        try {
+            val w = wv.width
+            val h = wv.height
+            if (w > 0 && h > 0) {
+                val scale = 0.4f
+                val scaledW = (w * scale).toInt().coerceAtLeast(1)
+                val scaledH = (h * scale).toInt().coerceAtLeast(1)
+                val bitmap = Bitmap.createBitmap(scaledW, scaledH, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                canvas.scale(scale, scale)
+                wv.draw(canvas)
+                previewBitmap = bitmap
+            }
+        } catch (e: Throwable) {
+            Log.d("BrowserTabSession", "capturePreview skipped: ${e.message}")
+        }
+    }
 
     fun startLoadingWatchdog(handler: Handler, timeoutMs: Long = 15000L) {
         cancelLoadingWatchdog(handler)
@@ -423,6 +445,154 @@ class BrowserSessionManager private constructor() {
         }
     }
 
+    data class SpeedDialShortcut(
+        val id: String = java.util.UUID.randomUUID().toString(),
+        val title: String,
+        val url: String,
+        val iconUrl: String? = null
+    )
+
+    data class TypedHistoryItem(
+        val id: String = java.util.UUID.randomUUID().toString(),
+        val query: String,
+        val url: String,
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    private val defaultShortcuts = listOf(
+        SpeedDialShortcut(id = "google", title = "Google", url = "https://www.google.com"),
+        SpeedDialShortcut(id = "youtube", title = "YouTube", url = "https://www.youtube.com")
+    )
+
+    val shortcuts = mutableStateListOf<SpeedDialShortcut>().apply {
+        addAll(defaultShortcuts)
+    }
+
+    val typedHistory = mutableStateListOf<TypedHistoryItem>()
+
+    private var shortcutsLoaded = false
+    private var historyLoaded = false
+
+    fun loadShortcutsIfNeeded(context: Context) {
+        if (shortcutsLoaded) return
+        shortcutsLoaded = true
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_shortcuts", Context.MODE_PRIVATE)
+        val json = prefs.getString("shortcuts_json", null) ?: return
+        try {
+            val arr = JSONArray(json)
+            val list = mutableListOf<SpeedDialShortcut>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    SpeedDialShortcut(
+                        id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                        title = obj.getString("title"),
+                        url = obj.getString("url")
+                    )
+                )
+            }
+            if (list.isNotEmpty()) {
+                shortcuts.clear()
+                shortcuts.addAll(list)
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun loadHistoryIfNeeded(context: Context) {
+        if (historyLoaded) return
+        historyLoaded = true
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_history", Context.MODE_PRIVATE)
+        val json = prefs.getString("typed_history_json", null) ?: return
+        try {
+            val arr = JSONArray(json)
+            val list = mutableListOf<TypedHistoryItem>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    TypedHistoryItem(
+                        id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                        query = obj.getString("query"),
+                        url = obj.getString("url"),
+                        timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                    )
+                )
+            }
+            if (list.isNotEmpty()) {
+                typedHistory.clear()
+                typedHistory.addAll(list)
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun addHistory(context: Context, query: String, finalUrl: String) {
+        val trimmedQuery = query.trim()
+        val trimmedUrl = finalUrl.trim()
+        if (trimmedQuery.isBlank() || trimmedUrl.isBlank() || trimmedUrl == "about:blank") return
+
+        loadHistoryIfNeeded(context)
+        // Remove duplicate if already exists
+        typedHistory.removeAll { it.url.equals(trimmedUrl, ignoreCase = true) || it.query.equals(trimmedQuery, ignoreCase = true) }
+        typedHistory.add(0, TypedHistoryItem(query = trimmedQuery, url = trimmedUrl))
+        // Cap history to 50 most recent items
+        while (typedHistory.size > 50) {
+            typedHistory.removeAt(typedHistory.lastIndex)
+        }
+        saveHistory(context)
+    }
+
+    fun removeHistory(context: Context, id: String) {
+        typedHistory.removeAll { it.id == id }
+        saveHistory(context)
+    }
+
+    fun clearHistory(context: Context) {
+        typedHistory.clear()
+        saveHistory(context)
+    }
+
+    private fun saveHistory(context: Context) {
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_history", Context.MODE_PRIVATE)
+        try {
+            val arr = JSONArray()
+            typedHistory.forEach { item ->
+                arr.put(JSONObject().apply {
+                    put("id", item.id)
+                    put("query", item.query)
+                    put("url", item.url)
+                    put("timestamp", item.timestamp)
+                })
+            }
+            prefs.edit().putString("typed_history_json", arr.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun addShortcut(context: Context, title: String, url: String) {
+        val formatted = formatUrl(url)
+        val sc = SpeedDialShortcut(title = title, url = formatted)
+        shortcuts.add(sc)
+        saveShortcuts(context)
+    }
+
+    fun removeShortcut(context: Context, id: String) {
+        shortcuts.removeAll { it.id == id }
+        saveShortcuts(context)
+    }
+
+    private fun saveShortcuts(context: Context) {
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_shortcuts", Context.MODE_PRIVATE)
+        try {
+            val arr = JSONArray()
+            shortcuts.forEach { sc ->
+                arr.put(JSONObject().apply {
+                    put("id", sc.id)
+                    put("title", sc.title)
+                    put("url", sc.url)
+                })
+            }
+            prefs.edit().putString("shortcuts_json", arr.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
     private val mainHandler = Handler(Looper.getMainLooper())
 
     val tabs = mutableStateListOf<BrowserTabSession>().apply {
@@ -440,6 +610,7 @@ class BrowserSessionManager private constructor() {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        loadShortcutsIfNeeded(context)
     }
 
     fun getActiveTab(): BrowserTabSession? {
@@ -488,6 +659,25 @@ class BrowserSessionManager private constructor() {
         return true
     }
 
+    fun closeAllTabs() {
+        mainHandler.post {
+            tabs.forEach { tabToRemove ->
+                try {
+                    tabToRemove.webView?.onPause()
+                    tabToRemove.webView?.let { wv ->
+                        (wv.parent as? ViewGroup)?.removeView(wv)
+                        wv.destroy()
+                    }
+                    tabToRemove.webView = null
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error destroying WebView", e)
+                }
+            }
+        }
+        tabs.clear()
+        activeTabId = null
+    }
+
     fun closeTab(tabId: String): Boolean {
         val index = tabs.indexOfFirst { it.id == tabId }
         if (index == -1) return false
@@ -507,9 +697,7 @@ class BrowserSessionManager private constructor() {
         tabs.removeAt(index)
 
         if (tabs.isEmpty()) {
-            val fresh = BrowserTabSession(initialUrl = "", initialTitle = "New Tab")
-            tabs.add(fresh)
-            activeTabId = fresh.id
+            activeTabId = null
         } else if (activeTabId == tabId) {
             val nextIndex = (index - 1).coerceAtLeast(0)
             activeTabId = tabs[nextIndex].id
@@ -870,6 +1058,9 @@ class BrowserSessionManager private constructor() {
                         ErudaHelper.inject(view, showImmediately = false)
                     }
                     injectMediaTracker(view)
+                    view?.postDelayed({
+                        tab.capturePreview()
+                    }, 400)
                 }
 
                 override fun onPageCommitVisible(view: WebView?, url: String?) {
