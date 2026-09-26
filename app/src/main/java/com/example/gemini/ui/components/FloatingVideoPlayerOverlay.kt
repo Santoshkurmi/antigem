@@ -198,97 +198,98 @@ fun FloatingVideoPlayerOverlay(
                                 )
                             }
 
-                            // Collapse Button
-                            IconButton(
-                                onClick = { isExpanded = false },
-                                modifier = Modifier.size(24.dp)
+                            // Header actions: Collapse & Close
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Filled.ExpandLess,
-                                    contentDescription = "Collapse",
-                                    tint = contentColor.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                // Collapse Button
+                                IconButton(
+                                    onClick = { isExpanded = false },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.ExpandLess,
+                                        contentDescription = "Collapse",
+                                        tint = contentColor.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+
+                                // Close / Stop Playback Button
+                                IconButton(
+                                    onClick = {
+                                        isExpanded = false
+                                        YouTubeMediaSessionManager.release()
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Close,
+                                        contentDescription = "Stop & Close",
+                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.75f),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Controls Row: Play/Pause, Seek Back/Forward, Stop & Kill
+                        // Controls Row: Play/Pause, Seek Back/Forward
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                // Play / Pause Toggle
-                                FilledIconButton(
-                                    onClick = {
-                                        if (activeState.isPlaying) {
-                                            YouTubeMediaSessionManager.pause()
-                                        } else {
-                                            YouTubeMediaSessionManager.play()
-                                        }
-                                    },
-                                    colors = IconButtonDefaults.filledIconButtonColors(
-                                        containerColor = if (activeState.isPlaying) Color(0xFFFF0000) else ClaudeTerracotta
-                                    ),
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (activeState.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                        contentDescription = if (activeState.isPlaying) "Pause" else "Play",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(6.dp))
-
-                                // Seek -10s
-                                OutlinedButton(
-                                    onClick = {
-                                        val newPos = (activeState.positionMs - 10000L).coerceAtLeast(0L)
-                                        YouTubeMediaSessionManager.seekTo(newPos)
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                                    modifier = Modifier.height(28.dp)
-                                ) {
-                                    Text("-10s", fontSize = 11.sp)
-                                }
-
-                                Spacer(modifier = Modifier.width(4.dp))
-
-                                // Seek +10s
-                                OutlinedButton(
-                                    onClick = {
-                                        val newPos = (activeState.positionMs + 10000L).coerceAtMost(activeState.durationMs.coerceAtLeast(0L))
-                                        YouTubeMediaSessionManager.seekTo(newPos)
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                                    modifier = Modifier.height(28.dp)
-                                ) {
-                                    Text("+10s", fontSize = 11.sp)
-                                }
+                            // Seek -10s
+                            OutlinedButton(
+                                onClick = {
+                                    val newPos = (activeState.positionMs - 10000L).coerceAtLeast(0L)
+                                    YouTubeMediaSessionManager.seekTo(newPos)
+                                },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Text("-10s", fontSize = 11.sp)
                             }
 
-                            // Terminate / Kill Playback (Frees CPU & RAM)
-                            IconButton(
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            // Play / Pause Toggle
+                            FilledIconButton(
                                 onClick = {
-                                    isExpanded = false
-                                    YouTubeMediaSessionManager.release()
+                                    if (activeState.isPlaying) {
+                                        YouTubeMediaSessionManager.pause()
+                                    } else {
+                                        YouTubeMediaSessionManager.play()
+                                    }
                                 },
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Red.copy(alpha = 0.12f))
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = if (activeState.isPlaying) Color(0xFFFF0000) else ClaudeTerracotta
+                                ),
+                                modifier = Modifier.size(34.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Filled.Close,
-                                    contentDescription = "Stop & Kill Player",
-                                    tint = Color.Red,
-                                    modifier = Modifier.size(16.dp)
+                                    imageVector = if (activeState.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                    contentDescription = if (activeState.isPlaying) "Pause" else "Play",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
                                 )
+                            }
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            // Seek +10s
+                            OutlinedButton(
+                                onClick = {
+                                    val newPos = (activeState.positionMs + 10000L).coerceAtMost(activeState.durationMs.coerceAtLeast(0L))
+                                    YouTubeMediaSessionManager.seekTo(newPos)
+                                },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Text("+10s", fontSize = 11.sp)
                             }
                         }
                     }

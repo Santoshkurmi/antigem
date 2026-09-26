@@ -331,7 +331,6 @@ object YouTubeMediaSessionManager {
             firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
             var player;
-            var isUserPaused = false;
             function onYouTubeIframeAPIReady() {
               player = new YT.Player('player', {
                 videoId: '$videoId',
@@ -366,20 +365,10 @@ object YouTubeMediaSessionManager {
                 var state = event.data;
                 var currentTime = player.getCurrentTime();
                 var duration = player.getDuration();
-                if (state === 2 && !isUserPaused) {
-                  setTimeout(function() {
-                    try {
-                      if (!isUserPaused && player && player.getPlayerState && player.getPlayerState() === 2) {
-                        player.playVideo();
-                      }
-                    } catch(e) {}
-                  }, 50);
-                }
                 if (window.AndroidMedia) {
                   window.AndroidMedia.onPlayerStateChange(state, currentTime, duration);
                 }
                 if (state === 1) {
-                  isUserPaused = false;
                   startProgressTracker();
                 } else {
                   stopProgressTracker();
@@ -463,7 +452,7 @@ object YouTubeMediaSessionManager {
             if (isBrowserMedia) {
                 activeWebView?.evaluateJavascript("var v = document.querySelector('video'); if (v) { v.play(); }", null)
             } else {
-                activeWebView?.evaluateJavascript("isUserPaused = false; if (player && player.playVideo) { player.playVideo(); }", null)
+                activeWebView?.evaluateJavascript("if (player && player.playVideo) { player.playVideo(); }", null)
             }
         }
     }
@@ -473,7 +462,7 @@ object YouTubeMediaSessionManager {
             if (isBrowserMedia) {
                 activeWebView?.evaluateJavascript("var v = document.querySelector('video'); if (v) { v.pause(); }", null)
             } else {
-                activeWebView?.evaluateJavascript("isUserPaused = true; if (player && player.pauseVideo) { player.pauseVideo(); }", null)
+                activeWebView?.evaluateJavascript("if (player && player.pauseVideo) { player.pauseVideo(); }", null)
             }
         }
     }

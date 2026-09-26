@@ -1338,8 +1338,13 @@ fun YouTubeVideoView(
         video.customThumbnailUrl?.takeIf { it.isNotBlank() }
             ?: "https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg"
     }
-    var isPlaying by remember(video.videoId) {
-        mutableStateOf(com.example.gemini.data.media.YouTubeMediaSessionManager.isVideoActive(video.videoId))
+    val activePlayback by com.example.gemini.data.media.YouTubeMediaSessionManager.playbackState.collectAsState()
+    val isPlaying = activePlayback?.videoId == video.videoId
+    val onStartPlay: () -> Unit = {
+        com.example.gemini.data.media.YouTubeMediaSessionManager.getOrCreatePlayer(
+            context = context,
+            video = video
+        )
     }
     var customFullscreenView by remember { mutableStateOf<android.view.View?>(null) }
     var customViewCallback by remember { mutableStateOf<android.webkit.WebChromeClient.CustomViewCallback?>(null) }
@@ -1450,7 +1455,6 @@ fun YouTubeVideoView(
                     if (isPlaying) {
                         IconButton(
                             onClick = {
-                                isPlaying = false
                                 com.example.gemini.data.media.YouTubeMediaSessionManager.release()
                             },
                             modifier = Modifier.size(28.dp)
@@ -1504,7 +1508,7 @@ fun YouTubeVideoView(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
-                            .clickable { isPlaying = true }
+                            .clickable { onStartPlay() }
                     )
 
                     // Soft dark gradient overlay
@@ -1519,12 +1523,12 @@ fun YouTubeVideoView(
                                     )
                                 )
                             )
-                            .clickable { isPlaying = true }
+                            .clickable { onStartPlay() }
                     )
 
                     // Big Centered Play Button
                     Surface(
-                        onClick = { isPlaying = true },
+                        onClick = onStartPlay,
                         shape = RoundedCornerShape(18.dp),
                         color = Color(0xFFFF0000).copy(alpha = 0.92f),
                         shadowElevation = 6.dp,
