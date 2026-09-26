@@ -1337,6 +1337,58 @@ fun YouTubeVideoView(
             ?: "https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg"
     }
     var isPlaying by remember { mutableStateOf(false) }
+    var customFullscreenView by remember { mutableStateOf<android.view.View?>(null) }
+    var customViewCallback by remember { mutableStateOf<android.webkit.WebChromeClient.CustomViewCallback?>(null) }
+
+    if (customFullscreenView != null) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = {
+                try {
+                    customViewCallback?.onCustomViewHidden()
+                } catch (_: Exception) {}
+                customFullscreenView = null
+                customViewCallback = null
+            },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            val dialogView = androidx.compose.ui.platform.LocalView.current
+            DisposableEffect(dialogView) {
+                val window = (dialogView.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+                    ?: (dialogView.context as? android.app.Activity)?.window
+                if (window != null) {
+                    val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, dialogView)
+                    insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                    insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+                onDispose {
+                    if (window != null) {
+                        val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, dialogView)
+                        insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .safeDrawingPadding(),
+                contentAlignment = Alignment.Center
+            ) {
+                AndroidView(
+                    factory = { _ ->
+                        val v = customFullscreenView!!
+                        (v.parent as? android.view.ViewGroup)?.removeView(v)
+                        v
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
 
     Card(
         shape = RoundedCornerShape(14.dp),
@@ -1480,7 +1532,7 @@ fun YouTubeVideoView(
                         <body>
                           <iframe
                             src="https://www.youtube-nocookie.com/embed/${video.videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
                             allowfullscreen>
                           </iframe>
                         </body>
@@ -1504,7 +1556,34 @@ fun YouTubeVideoView(
                                 settings.mediaPlaybackRequiresUserGesture = false
                                 settings.loadWithOverviewMode = true
                                 settings.useWideViewPort = true
-                                webChromeClient = android.webkit.WebChromeClient()
+                                setOnTouchListener { v, event ->
+                                    when (event.action) {
+                                        android.view.MotionEvent.ACTION_DOWN,
+                                        android.view.MotionEvent.ACTION_MOVE -> {
+                                            v.parent?.requestDisallowInterceptTouchEvent(true)
+                                        }
+                                        android.view.MotionEvent.ACTION_UP,
+                                        android.view.MotionEvent.ACTION_CANCEL -> {
+                                            v.parent?.requestDisallowInterceptTouchEvent(false)
+                                        }
+                                    }
+                                    false
+                                }
+                                webChromeClient = object : android.webkit.WebChromeClient() {
+                                    override fun onShowCustomView(view: android.view.View, callback: CustomViewCallback) {
+                                        (view.parent as? android.view.ViewGroup)?.removeView(view)
+                                        customFullscreenView = view
+                                        customViewCallback = callback
+                                    }
+
+                                    override fun onHideCustomView() {
+                                        try {
+                                            customViewCallback?.onCustomViewHidden()
+                                        } catch (_: Exception) {}
+                                        customFullscreenView = null
+                                        customViewCallback = null
+                                    }
+                                }
                                 tag = embedHtml
                                 loadDataWithBaseURL("https://www.youtube-nocookie.com", embedHtml, "text/html", "UTF-8", null)
                             }
