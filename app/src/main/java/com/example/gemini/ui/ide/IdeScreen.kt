@@ -362,9 +362,14 @@ fun IdeScreen(
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
-                    }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
                 )
-            }
+            },
+            containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets.statusBars
         ) { paddingValues ->
             Box(
                 modifier = Modifier

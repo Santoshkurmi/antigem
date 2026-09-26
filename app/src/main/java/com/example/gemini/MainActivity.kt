@@ -13,6 +13,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.example.gemini.theme.GeminiTheme
@@ -83,7 +84,7 @@ class MainActivity : ComponentActivity() {
                         insetsController.isAppearanceLightStatusBars = false
                         insetsController.isAppearanceLightNavigationBars = false
                     } else {
-                        val bgArgb = if (useDarkTheme) android.graphics.Color.parseColor("#121212") else android.graphics.Color.WHITE
+                        val bgArgb = if (useDarkTheme) com.example.gemini.theme.ClaudeDarkBg.toArgb() else com.example.gemini.theme.ClaudeCream.toArgb()
                         window.statusBarColor = bgArgb
                         window.navigationBarColor = bgArgb
                         insetsController.isAppearanceLightStatusBars = !useDarkTheme
