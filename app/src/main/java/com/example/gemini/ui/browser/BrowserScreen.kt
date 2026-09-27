@@ -56,9 +56,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -185,7 +183,6 @@ fun BrowserScreen(
     var textFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     var isAddressFocused by remember { mutableStateOf(false) }
     var shouldSelectAllOnNextValueChange by remember { mutableStateOf(false) }
-    var topBarHeightPx by remember { mutableIntStateOf(0) }
     var showTabOverview by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showExitConfirmationDialog by remember { mutableStateOf(false) }
@@ -339,31 +336,7 @@ fun BrowserScreen(
         }
     }
 
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val maxHeaderOffsetPx = remember(density) { with(density) { 80.dp.toPx() } }
-    val maxFooterOffsetPx = remember(density) { with(density) { 80.dp.toPx() } }
-    var toolbarOffsetPx by remember { mutableFloatStateOf(0f) }
 
-    LaunchedEffect(isAddressFocused, showTabOverview, isHomePage) {
-        if (isAddressFocused || showTabOverview || isHomePage) {
-            toolbarOffsetPx = 0f
-        }
-    }
-
-    // Compose NestedScrollConnection for real-time interactive drag-to-collapse
-    val nestedScrollConnection = remember(maxHeaderOffsetPx) {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                val delta = available.y
-                val isHome = activeTab == null || activeTab.url.isBlank() || activeTab.url == "about:blank"
-                if (!isHome && !showTabOverview && !isAddressFocused) {
-                    val newOffset = (toolbarOffsetPx + delta).coerceIn(-maxHeaderOffsetPx, 0f)
-                    toolbarOffsetPx = newOffset
-                }
-                return Offset.Zero
-            }
-        }
-    }
 
     if (showTabOverview) {
         // Tab Overview Grid Screen (Screenshot 2)
@@ -395,24 +368,12 @@ fun BrowserScreen(
     }
 
     Scaffold(
-        modifier = modifier
-            .fillMaxSize()
-            .nestedScroll(nestedScrollConnection),
+        modifier = modifier.fillMaxSize(),
         containerColor = barBackgroundColor,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            // Top Header: Real-time GPU layer translation
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onGloballyPositioned { coords ->
-                        if (coords.size.height > 0) {
-                            topBarHeightPx = coords.size.height
-                        }
-                    }
-                    .graphicsLayer {
-                        translationY = toolbarOffsetPx
-                    },
+                modifier = Modifier.fillMaxWidth(),
                 color = barBackgroundColor,
                 shadowElevation = 2.dp,
                 border = if (!isDarkTheme) BorderStroke(0.5.dp, Color(0xFFE5E7EB)) else null
@@ -625,14 +586,8 @@ fun BrowserScreen(
             }
         },
         bottomBar = {
-            // Bottom Footer: Real-time GPU layer translation
-            val footerTranslationY = -toolbarOffsetPx * (maxFooterOffsetPx / maxHeaderOffsetPx)
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .graphicsLayer {
-                        translationY = footerTranslationY
-                    },
+                modifier = Modifier.fillMaxWidth(),
                 color = barBackgroundColor,
                 shadowElevation = 8.dp,
                 border = if (!isDarkTheme) BorderStroke(0.5.dp, Color(0xFFE5E7EB)) else null
@@ -801,13 +756,10 @@ fun BrowserScreen(
             }
         }
     ) { paddingValues ->
-        val topHeaderHeight = paddingValues.calculateTopPadding()
-        val density = androidx.compose.ui.platform.LocalDensity.current
-        val headerHeightPx = remember(density, topHeaderHeight) { with(density) { topHeaderHeight.toPx() } }
-
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(paddingValues)
                 .imePadding()
         ) {
             // Persistent WebViews in fixed full-screen overlay architecture
@@ -842,21 +794,8 @@ fun BrowserScreen(
                                     wv.settings.forceDark = if (isDarkTheme) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
                                 }
 
-                                // Continuous real-time scroll tracking
-                                wv.setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
+                                wv.setOnScrollChangeListener { _, _, scrollY, _, _ ->
                                     tab.scrollY = scrollY
-                                    val dy = scrollY - oldScrollY
-                                    val isHome = tab.url.isBlank() || tab.url == "about:blank"
-                                    if (isHome || showTabOverview || isAddressFocused) {
-                                        toolbarOffsetPx = 0f
-                                        return@setOnScrollChangeListener
-                                    }
-                                    if (scrollY <= 10) {
-                                        toolbarOffsetPx = 0f
-                                    } else {
-                                        val newOffset = (toolbarOffsetPx - dy.toFloat()).coerceIn(-maxHeaderOffsetPx, 0f)
-                                        toolbarOffsetPx = newOffset
-                                    }
                                 }
 
                                 if (isActive && isVisible && !isHomePage) {
@@ -874,21 +813,17 @@ fun BrowserScreen(
                 }
             }
 
-            // Progress Bar (Pinned right below header when visible, or top edge of screen when hidden)
+            // Progress Bar (Pinned right below header)
             val animatedProgress by animateFloatAsState(
                 targetValue = if (activeTab?.isLoading == true) (activeTab.progress / 100f).coerceIn(0.06f, 1f) else 0f,
                 label = "progress"
             )
 
-            val progressTranslationY = (headerHeightPx + toolbarOffsetPx).coerceAtLeast(0f)
-
             if (activeTab?.isLoading == true && animatedProgress > 0f) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .graphicsLayer {
-                            translationY = progressTranslationY
-                        }
+                        .align(Alignment.TopCenter)
                         .height(2.5.dp)
                 ) {
                     LinearProgressIndicator(
@@ -903,9 +838,7 @@ fun BrowserScreen(
             // Speed Dial Home View
             if (isHomePage) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     SpeedDialHomeView(
                         shortcuts = sessionManager.shortcuts,
@@ -944,9 +877,6 @@ fun BrowserScreen(
 
             // Search & Typed History Dropdown Overlay (Shown on search bar focus)
             if (isAddressFocused) {
-                val topBarHeightDp = with(density) {
-                    if (topBarHeightPx > 0) topBarHeightPx.toDp() else topHeaderHeight
-                }
                 SearchHistoryOverlay(
                     currentInput = textFieldValue.text,
                     historyItems = sessionManager.typedHistory,
@@ -969,8 +899,7 @@ fun BrowserScreen(
                     onDismiss = {
                         focusManager.clearFocus()
                         keyboardController?.hide()
-                    },
-                    modifier = Modifier.padding(top = topBarHeightDp)
+                    }
                 )
             }
 
