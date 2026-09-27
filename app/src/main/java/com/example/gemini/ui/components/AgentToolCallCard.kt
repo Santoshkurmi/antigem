@@ -301,11 +301,12 @@ fun AgentToolCallCard(
                 Spacer(modifier = Modifier.width(6.dp))
             }
 
-            // Duration in ms
+            // Duration
             if (toolCall.durationMs != null && toolCall.durationMs > 0) {
                 Text(
-                    text = "${toolCall.durationMs}ms",
+                    text = formatDuration(toolCall.durationMs),
                     fontSize = 10.5.sp,
+                    fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     modifier = Modifier.padding(horizontal = 4.dp)
                 )
@@ -508,6 +509,16 @@ fun AgentToolCallCard(
                             color = ClaudeTerracotta,
                             modifier = Modifier.weight(1f)
                         )
+
+                        if (toolCall.durationMs != null && toolCall.durationMs > 0) {
+                            Text(
+                                text = "⏱️ ${formatDuration(toolCall.durationMs)}",
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(horizontal = 6.dp)
+                            )
+                        }
 
                         IconButton(
                             onClick = {

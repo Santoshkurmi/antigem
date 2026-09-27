@@ -681,6 +681,20 @@ private fun WaitingDotsText(phrase: String) {
     )
 }
 
+fun formatDuration(durationMs: Long): String {
+    if (durationMs <= 0) return ""
+    val totalSeconds = (durationMs + 500) / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return when {
+        minutes > 0 && seconds > 0 -> "${minutes}m ${seconds}s"
+        minutes > 0 -> "${minutes}m"
+        durationMs < 1000 -> "${durationMs}ms"
+        totalSeconds < 10 -> String.format(Locale.US, "%.1fs", durationMs / 1000f)
+        else -> "${seconds}s"
+    }
+}
+
 private fun formatCompactTokens(count: Int): String {
     return when {
         count >= 1_000_000 -> String.format(Locale.US, "%.1fM", count / 1_000_000f).replace(".0M", "M")
@@ -735,9 +749,8 @@ fun TokenUsageTelemetryPill(
                 )
             }
             if (usage.durationMs > 0) {
-                val secStr = String.format(Locale.US, "%.1fs", usage.durationMs / 1000f)
                 Text(
-                    text = "⏱️ $secStr",
+                    text = "⏱️ ${formatDuration(usage.durationMs)}",
                     fontSize = 10.5.sp,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -383,29 +383,53 @@ class TrajectoryEngine {
         }
     }
 
+    private fun parseIsoToMillis(isoString: String?): Long? {
+        if (isoString.isNullOrBlank()) return null
+        return try {
+            java.time.Instant.parse(isoString).toEpochMilli()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     /**
      * Calculates the aggregated TokenUsage for a set of steps in a turn.
      * Only considers completed PLANNER_RESPONSE steps with valid modelUsage.
      */
     private fun computeTokenUsage(steps: Iterable<CortexStepDto>): TokenUsage? {
-        val plannerSteps = steps.filter {
+        val allStepsList = steps.toList()
+        val plannerSteps = allStepsList.filter {
             (it.type == CortexStepTypes.PLANNER_RESPONSE || it.type == "CORTEX_STEP_TYPE_PLANNER_RESPONSE") &&
             (it.status == CortexStepStatuses.DONE || it.status == "CORTEX_STEP_STATUS_DONE") &&
             it.metadata?.modelUsage != null
         }
-        if (plannerSteps.isEmpty()) return null
+
+        val startTimes = allStepsList.mapNotNull {
+            parseIsoToMillis(it.metadata?.startedAt) ?: parseIsoToMillis(it.metadata?.createdAt)
+        }
+        val endTimes = allStepsList.mapNotNull {
+            parseIsoToMillis(it.metadata?.completedAt) ?: parseIsoToMillis(it.metadata?.finishedGeneratingAt)
+        }
+        val durationMs = if (startTimes.isNotEmpty() && endTimes.isNotEmpty()) {
+            val start = startTimes.minOrNull() ?: 0L
+            val end = endTimes.maxOrNull() ?: 0L
+            if (end >= start) end - start else 0L
+        } else 0L
+
+        if (plannerSteps.isEmpty() && durationMs == 0L) return null
 
         val outputTokens = plannerSteps.sumOf { it.metadata?.modelUsage?.outputTokens?.toIntOrNull() ?: 0 }
         val promptTokens = plannerSteps.lastOrNull()?.metadata?.modelUsage?.inputTokens?.toIntOrNull() ?: 0
         val cachedTokens = plannerSteps.sumOf { it.metadata?.modelUsage?.cacheReadTokens?.toIntOrNull() ?: 0 }
 
-        if (outputTokens == 0 && promptTokens == 0 && cachedTokens == 0) return null
+        if (outputTokens == 0 && promptTokens == 0 && cachedTokens == 0 && durationMs == 0L) return null
 
         return TokenUsage(
             promptTokens = promptTokens,
             outputTokens = outputTokens,
             cachedTokens = cachedTokens,
-            totalTokens = promptTokens + outputTokens
+            totalTokens = promptTokens + outputTokens,
+            durationMs = durationMs
         )
     }
 
@@ -1063,6 +1087,12 @@ class TrajectoryEngine {
             } else "RUNNING"
         }
 
+        val startMs = parseIsoToMillis(step.metadata?.startedAt) ?: parseIsoToMillis(step.metadata?.createdAt)
+        val endMs = parseIsoToMillis(step.metadata?.completedAt) ?: parseIsoToMillis(step.metadata?.finishedGeneratingAt)
+        val toolDurationMs = if (startMs != null && endMs != null && endMs >= startMs) {
+            endMs - startMs
+        } else null
+
         return ToolCall(
             id = toolId,
             name = rawName,
@@ -1071,6 +1101,7 @@ class TrajectoryEngine {
             output = output,
             status = status,
             exitCode = exitCode,
+            durationMs = toolDurationMs,
             stepIndex = stepIndex,
             trajectoryId = trajectoryId,
             interactionType = step.requestedInteraction?.permission?.resource?.action ?: "permission"
