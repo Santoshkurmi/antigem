@@ -187,6 +187,11 @@ fun BrowserScreen(
     var showMoreMenu by remember { mutableStateOf(false) }
     var showExitConfirmationDialog by remember { mutableStateOf(false) }
     var isControlsVisible by remember { mutableStateOf(true) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val defaultMaxFooterOffsetPx = remember(density) { with(density) { 100.dp.toPx() } }
+    var footerHeightPx by remember { mutableFloatStateOf(0f) }
+    var footerOffsetPx by remember { mutableFloatStateOf(0f) }
+    var ignoreScrollUntilTouch by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
@@ -298,6 +303,8 @@ fun BrowserScreen(
         } else if (showTabOverview) {
             showTabOverview = false
         } else if (canBrowserTabGoBack(activeTab?.webView)) {
+            footerOffsetPx = 0f
+            ignoreScrollUntilTouch = true
             handleBrowserBack(activeTab?.webView) {
                 showExitConfirmationDialog = true
             }
@@ -337,6 +344,11 @@ fun BrowserScreen(
     }
 
 
+
+    LaunchedEffect(isAddressFocused, showTabOverview, isHomePage, activeTabId, activeTab?.url) {
+        footerOffsetPx = 0f
+        ignoreScrollUntilTouch = true
+    }
 
     if (showTabOverview) {
         // Tab Overview Grid Screen (Screenshot 2)
@@ -587,7 +599,16 @@ fun BrowserScreen(
         },
         bottomBar = {
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coords ->
+                        if (coords.size.height > 0) {
+                            footerHeightPx = coords.size.height.toFloat()
+                        }
+                    }
+                    .graphicsLayer {
+                        translationY = footerOffsetPx
+                    },
                 color = barBackgroundColor,
                 shadowElevation = 8.dp,
                 border = if (!isDarkTheme) BorderStroke(0.5.dp, Color(0xFFE5E7EB)) else null
@@ -607,6 +628,8 @@ fun BrowserScreen(
                     // 1. Back in WebView (<)
                     IconButton(
                         onClick = {
+                            footerOffsetPx = 0f
+                            ignoreScrollUntilTouch = true
                             handleBrowserBack(activeTab?.webView) {
                                 // If back history exhausted, navigate to home speed dial
                                 sessionManager.openUrl("about:blank", tabId = activeTabId, newTab = false)
@@ -627,6 +650,8 @@ fun BrowserScreen(
                     // 2. Forward in WebView (>)
                     IconButton(
                         onClick = {
+                            footerOffsetPx = 0f
+                            ignoreScrollUntilTouch = true
                             activeTab?.webView?.goForward()
                         },
                         enabled = canGoForward,
@@ -759,7 +784,8 @@ fun BrowserScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(top = paddingValues.calculateTopPadding())
+                .navigationBarsPadding()
                 .imePadding()
         ) {
             // Persistent WebViews in fixed full-screen overlay architecture
@@ -794,8 +820,30 @@ fun BrowserScreen(
                                     wv.settings.forceDark = if (isDarkTheme) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
                                 }
 
-                                wv.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+                                wv.setOnTouchListener { _, event ->
+                                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                                        ignoreScrollUntilTouch = false
+                                    }
+                                    false
+                                }
+
+                                wv.setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
                                     tab.scrollY = scrollY
+                                    val isHome = tab.url.isBlank() || tab.url == "about:blank"
+                                    if (isHome || showTabOverview || isAddressFocused) {
+                                        if (footerOffsetPx != 0f) footerOffsetPx = 0f
+                                        return@setOnScrollChangeListener
+                                    }
+                                    if (ignoreScrollUntilTouch) {
+                                        return@setOnScrollChangeListener
+                                    }
+                                    if (scrollY <= 10) {
+                                        footerOffsetPx = 0f
+                                    } else {
+                                        val dy = scrollY - oldScrollY
+                                        val maxOffset = if (footerHeightPx > 0f) footerHeightPx else defaultMaxFooterOffsetPx
+                                        footerOffsetPx = (footerOffsetPx + dy.toFloat()).coerceIn(0f, maxOffset)
+                                    }
                                 }
 
                                 if (isActive && isVisible && !isHomePage) {
@@ -838,7 +886,9 @@ fun BrowserScreen(
             // Speed Dial Home View
             if (isHomePage) {
                 Box(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = paddingValues.calculateBottomPadding())
                 ) {
                     SpeedDialHomeView(
                         shortcuts = sessionManager.shortcuts,
