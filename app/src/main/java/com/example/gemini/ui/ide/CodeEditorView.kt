@@ -55,6 +55,8 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     var onContentChangeListener: ((String) -> Unit)? = null
+    var onUndoRedoStateListener: ((canUndo: Boolean, canRedo: Boolean) -> Unit)? = null
+    var onSearchResultListener: ((matchCount: Int, currentIndex: Int) -> Unit)? = null
 
     var isWordWrapEnabled: Boolean
         get() = editor.isWordwrap
@@ -74,12 +76,93 @@ class CodeEditorView @JvmOverloads constructor(
 
         // Disable auto-completion popup hints
         editor.getComponent(EditorAutoCompletion::class.java).isEnabled = false
+        editor.searcher.setCyclicJumping(true)
 
         editor.subscribeEvent(ContentChangeEvent::class.java) { _, _ ->
             if (isSettingContentProgrammatically) return@subscribeEvent
             Log.d(TAG, "ContentChangeEvent: editorTextLen=${editor.text.length}")
             onContentChangeListener?.invoke(editor.text.toString())
+            onUndoRedoStateListener?.invoke(editor.canUndo(), editor.canRedo())
         }
+
+        editor.subscribeEvent(io.github.rosemoe.sora.event.PublishSearchResultEvent::class.java) { _, _ ->
+            val searcher = editor.searcher
+            if (searcher.hasQuery()) {
+                try {
+                    onSearchResultListener?.invoke(searcher.matchedPositionCount, searcher.currentMatchedPositionIndex)
+                } catch (_: Exception) {
+                    onSearchResultListener?.invoke(0, -1)
+                }
+            } else {
+                onSearchResultListener?.invoke(0, -1)
+            }
+        }
+    }
+
+    fun undo() {
+        if (editor.canUndo()) {
+            editor.undo()
+            onUndoRedoStateListener?.invoke(editor.canUndo(), editor.canRedo())
+        }
+    }
+
+    fun redo() {
+        if (editor.canRedo()) {
+            editor.redo()
+            onUndoRedoStateListener?.invoke(editor.canUndo(), editor.canRedo())
+        }
+    }
+
+    fun canUndo(): Boolean = editor.canUndo()
+    fun canRedo(): Boolean = editor.canRedo()
+
+    fun search(query: String, caseSensitive: Boolean = false) {
+        if (query.isEmpty()) {
+            stopSearch()
+        } else {
+            try {
+                val options = io.github.rosemoe.sora.widget.EditorSearcher.SearchOptions(
+                    io.github.rosemoe.sora.widget.EditorSearcher.SearchOptions.TYPE_NORMAL,
+                    !caseSensitive
+                )
+                editor.searcher.search(query, options)
+            } catch (e: Exception) {
+                Log.e(TAG, "Search error", e)
+                onSearchResultListener?.invoke(0, -1)
+            }
+        }
+    }
+
+    fun findNext() {
+        val searcher = editor.searcher
+        if (searcher.hasQuery()) {
+            try {
+                searcher.gotoNext()
+                onSearchResultListener?.invoke(searcher.matchedPositionCount, searcher.currentMatchedPositionIndex)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun findPrevious() {
+        val searcher = editor.searcher
+        if (searcher.hasQuery()) {
+            try {
+                searcher.gotoPrevious()
+                onSearchResultListener?.invoke(searcher.matchedPositionCount, searcher.currentMatchedPositionIndex)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun stopSearch() {
+        try {
+            if (editor.searcher.hasQuery()) {
+                editor.searcher.stopSearch()
+            }
+        } catch (_: Exception) {
+        }
+        onSearchResultListener?.invoke(0, -1)
     }
 
     override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {

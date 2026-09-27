@@ -8,10 +8,18 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import android.content.Context
+import android.view.inputmethod.InputMethodManager
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.WrapText
 import androidx.compose.material.icons.filled.*
@@ -82,7 +90,28 @@ fun IdeScreen(
     var tabToClose by remember { mutableStateOf<OpenTab?>(null) }
     var conflictDialogTab by remember { mutableStateOf<OpenTab?>(null) }
     var autoUpdateNotification by remember { mutableStateOf<String?>(null) }
+    var currentEditorView by remember { mutableStateOf<CodeEditorView?>(null) }
+    var canUndo by remember { mutableStateOf(false) }
+    var canRedo by remember { mutableStateOf(false) }
+    var showFindBar by remember { mutableStateOf(false) }
+    var findQuery by remember { mutableStateOf("") }
+    var isCaseSensitive by remember { mutableStateOf(false) }
+    var searchMatchCount by remember { mutableIntStateOf(0) }
+    var currentMatchIndex by remember { mutableIntStateOf(-1) }
     val tabListState = rememberLazyListState()
+
+    val findFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val composeView = LocalView.current
+
+    androidx.activity.compose.BackHandler(enabled = isVisible && showFindBar) {
+        showFindBar = false
+        findQuery = ""
+        currentEditorView?.stopSearch()
+        searchMatchCount = 0
+        currentMatchIndex = -1
+        keyboardController?.hide()
+    }
 
     // Auto-scroll active tab into view when activeTabPath or tabs change
     LaunchedEffect(activeTabPath, openTabs.size) {
@@ -278,13 +307,72 @@ fun IdeScreen(
                         }
                     },
                     actions = {
+                        val isTextFile = activeTab != null && (!isImageFile || (isSvgFile && showSvgSource))
+                        val isTextEditable = isTextFile && !activeTab.isReadOnly
+
                         // SVG Toggle Button (Graphic Preview <-> XML Source Code)
                         if (isSvgFile) {
-                            IconButton(onClick = { showSvgSource = !showSvgSource }) {
+                            IconButton(
+                                onClick = { showSvgSource = !showSvgSource },
+                                modifier = Modifier.size(36.dp)
+                            ) {
                                 Icon(
                                     imageVector = if (showSvgSource) Icons.Default.Image else Icons.Default.Code,
                                     contentDescription = if (showSvgSource) "Preview SVG Graphic" else "Edit SVG XML Source",
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        // Undo Button
+                        if (isTextFile) {
+                            IconButton(
+                                onClick = { currentEditorView?.undo() },
+                                enabled = canUndo && isTextEditable,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Undo,
+                                    contentDescription = "Undo",
+                                    tint = if (canUndo && isTextEditable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // Redo Button
+                            IconButton(
+                                onClick = { currentEditorView?.redo() },
+                                enabled = canRedo && isTextEditable,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Redo,
+                                    contentDescription = "Redo",
+                                    tint = if (canRedo && isTextEditable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // Find / Search in File Button
+                            IconButton(
+                                onClick = {
+                                    showFindBar = !showFindBar
+                                    if (!showFindBar) {
+                                        currentEditorView?.stopSearch()
+                                        findQuery = ""
+                                        searchMatchCount = 0
+                                        currentMatchIndex = -1
+                                        keyboardController?.hide()
+                                    }
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Find in file",
+                                    tint = if (showFindBar) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -317,23 +405,29 @@ fun IdeScreen(
                                         }
                                     }
                                 },
-                                enabled = activeTab.isModified
+                                enabled = activeTab.isModified,
+                                modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Save,
                                     contentDescription = "Save File",
-                                    tint = if (activeTab.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = if (activeTab.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
 
                         // Word Wrap Toggle Button
                         if (!isImageFile && !(isSvgFile && !showSvgSource)) {
-                            IconButton(onClick = { isWordWrap = !isWordWrap }) {
+                            IconButton(
+                                onClick = { isWordWrap = !isWordWrap },
+                                modifier = Modifier.size(36.dp)
+                            ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.WrapText,
                                     contentDescription = "Toggle Word Wrap",
-                                    tint = if (isWordWrap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    tint = if (isWordWrap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -345,21 +439,27 @@ fun IdeScreen(
                                 if (projPath.isNotBlank()) {
                                     onExecuteRunCommand("cd \"$projPath\" && (python3 main.py || node index.js || bash run.sh || ./gradlew run)")
                                 }
-                            }
+                            },
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = "Run",
-                                tint = Color(0xFF4CAF50)
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(22.dp)
                             )
                         }
 
                         // AI Chat Drawer Toggle Button
-                        IconButton(onClick = onNavigateToChat) {
+                        IconButton(
+                            onClick = onNavigateToChat,
+                            modifier = Modifier.size(36.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = "AI Chat",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     },
@@ -442,6 +542,197 @@ fun IdeScreen(
                                 )
                             }
                             Spacer(modifier = Modifier.width(1.dp))
+                        }
+                    }
+                }
+
+                // Interactive Find in File Bar
+                if (showFindBar && activeTab != null && !isImageFile && !(isSvgFile && !showSvgSource)) {
+                    LaunchedEffect(Unit) {
+                        currentEditorView?.editor?.clearFocus()
+                        currentEditorView?.clearFocus()
+                        composeView.requestFocus()
+                        for (i in 0 until 5) {
+                            delay(50)
+                            try {
+                                findFocusRequester.requestFocus()
+                                keyboardController?.show()
+                                break
+                            } catch (_: Exception) {}
+                        }
+                        try {
+                            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                            imm?.showSoftInput(composeView, InputMethodManager.SHOW_IMPLICIT)
+                        } catch (_: Exception) {}
+                    }
+                    Surface(
+                        color = Color(0xFF252526),
+                        shadowElevation = 4.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            // Search Input Box
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(34.dp)
+                                    .background(Color(0xFF3C3C3C), shape = RoundedCornerShape(4.dp))
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        findFocusRequester.requestFocus()
+                                        keyboardController?.show()
+                                    }
+                                    .padding(horizontal = 8.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    BasicTextField(
+                                        value = findQuery,
+                                        onValueChange = { newQuery ->
+                                            findQuery = newQuery
+                                            currentEditorView?.search(newQuery, isCaseSensitive)
+                                        },
+                                        textStyle = TextStyle(
+                                            color = Color.White,
+                                            fontSize = 13.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        ),
+                                        singleLine = true,
+                                        cursorBrush = SolidColor(Color(0xFF007ACC)),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .focusRequester(findFocusRequester),
+                                        decorationBox = { innerTextField ->
+                                            if (findQuery.isEmpty()) {
+                                                Text(
+                                                    text = "Find in file...",
+                                                    color = Color(0xFF888888),
+                                                    fontSize = 13.sp,
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                            }
+                                            innerTextField()
+                                        }
+                                    )
+                                    if (findQuery.isNotEmpty()) {
+                                        IconButton(
+                                            onClick = {
+                                                findQuery = ""
+                                                currentEditorView?.stopSearch()
+                                                searchMatchCount = 0
+                                                currentMatchIndex = -1
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Clear",
+                                                tint = Color.LightGray,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Match Count Indicator
+                            if (findQuery.isNotEmpty()) {
+                                val matchText = if (searchMatchCount > 0) {
+                                    "${if (currentMatchIndex >= 0) currentMatchIndex + 1 else 0}/$searchMatchCount"
+                                } else {
+                                    "0 matches"
+                                }
+                                Text(
+                                    text = matchText,
+                                    color = if (searchMatchCount > 0) Color.LightGray else Color(0xFFEF4444),
+                                    fontSize = 11.5.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+                            }
+
+                            // Previous Match
+                            IconButton(
+                                onClick = { currentEditorView?.findPrevious() },
+                                enabled = searchMatchCount > 0,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowUp,
+                                    contentDescription = "Previous Match",
+                                    tint = if (searchMatchCount > 0) Color.White else Color.DarkGray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            // Next Match
+                            IconButton(
+                                onClick = { currentEditorView?.findNext() },
+                                enabled = searchMatchCount > 0,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Next Match",
+                                    tint = if (searchMatchCount > 0) Color.White else Color.DarkGray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            // Case Sensitive Toggle
+                            IconButton(
+                                onClick = {
+                                    val newCase = !isCaseSensitive
+                                    isCaseSensitive = newCase
+                                    currentEditorView?.search(findQuery, newCase)
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Text(
+                                    text = "Aa",
+                                    color = if (isCaseSensitive) Color(0xFF007ACC) else Color.Gray,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+
+                            // Close Find Bar
+                            IconButton(
+                                onClick = {
+                                    showFindBar = false
+                                    findQuery = ""
+                                    currentEditorView?.stopSearch()
+                                    searchMatchCount = 0
+                                    currentMatchIndex = -1
+                                    keyboardController?.hide()
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close Find",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -635,16 +926,44 @@ fun IdeScreen(
                                                 TermuxDaemonManager.updateTabContent(activeTab.path, newText)
                                             }
                                         }
+                                        onUndoRedoStateListener = { u, r ->
+                                            canUndo = u
+                                            canRedo = r
+                                        }
+                                        onSearchResultListener = { count, idx ->
+                                            searchMatchCount = count
+                                            currentMatchIndex = idx
+                                        }
+                                        currentEditorView = this
                                     }
                                 },
                                 update = { view ->
+                                    currentEditorView = view
                                     view.isWordWrapEnabled = isWordWrap
                                     view.isReadOnly = activeTab.isReadOnly
                                     view.setFile(activeTab.name, activeTab.content)
+                                    canUndo = view.canUndo()
+                                    canRedo = view.canRedo()
                                     view.onContentChangeListener = { newText ->
                                         if (!activeTab.isReadOnly) {
                                             TermuxDaemonManager.updateTabContent(activeTab.path, newText)
                                         }
+                                    }
+                                    view.onUndoRedoStateListener = { u, r ->
+                                        canUndo = u
+                                        canRedo = r
+                                    }
+                                    view.onSearchResultListener = { count, idx ->
+                                        searchMatchCount = count
+                                        currentMatchIndex = idx
+                                    }
+                                    if (showFindBar && findQuery.isNotEmpty()) {
+                                        view.search(findQuery, isCaseSensitive)
+                                    }
+                                },
+                                onRelease = { view ->
+                                    if (currentEditorView == view) {
+                                        currentEditorView = null
                                     }
                                 },
                                 modifier = Modifier
