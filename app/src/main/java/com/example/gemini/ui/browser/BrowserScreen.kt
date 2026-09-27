@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.gemini.theme.ClaudeTerracotta
 import java.net.URLEncoder
 
@@ -808,9 +809,27 @@ fun BrowserScreen(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
-                                wv
+                                SwipeRefreshLayout(ctx).apply {
+                                    layoutParams = ViewGroup.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                    setColorSchemeColors(ClaudeTerracotta.toArgb(), 0xFFD97706.toInt())
+                                    setProgressBackgroundColorSchemeColor(if (isDarkTheme) 0xFF2A2826.toInt() else android.graphics.Color.WHITE)
+                                    setOnRefreshListener {
+                                        val currentWv = tab.webView ?: wv
+                                        currentWv.reload()
+                                    }
+                                    addView(wv)
+                                }
                             },
-                            update = { wv ->
+                            update = { swipeRefresh ->
+                                val wv = sessionManager.ensureWebViewAttached(swipeRefresh.context, tab, isDarkTheme)
+                                if (wv.parent != swipeRefresh) {
+                                    (wv.parent as? ViewGroup)?.removeView(wv)
+                                    swipeRefresh.removeAllViews()
+                                    swipeRefresh.addView(wv)
+                                }
                                 tab.webView = wv
                                 wv.setBackgroundColor(if (isDarkTheme) 0xFF141211.toInt() else android.graphics.Color.WHITE)
                                 @Suppress("DEPRECATION")
@@ -818,6 +837,15 @@ fun BrowserScreen(
                                     wv.settings.isAlgorithmicDarkeningAllowed = isDarkTheme
                                 } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                                     wv.settings.forceDark = if (isDarkTheme) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
+                                }
+
+                                swipeRefresh.setProgressBackgroundColorSchemeColor(if (isDarkTheme) 0xFF2A2826.toInt() else android.graphics.Color.WHITE)
+                                swipeRefresh.setColorSchemeColors(ClaudeTerracotta.toArgb(), 0xFFD97706.toInt())
+
+                                val isHome = tab.url.isBlank() || tab.url == "about:blank"
+                                swipeRefresh.isEnabled = !isHome && !showTabOverview && !isAddressFocused
+                                if (!swipeRefresh.isEnabled || !tab.isLoading) {
+                                    swipeRefresh.isRefreshing = false
                                 }
 
                                 wv.setOnTouchListener { _, event ->
@@ -829,8 +857,8 @@ fun BrowserScreen(
 
                                 wv.setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
                                     tab.scrollY = scrollY
-                                    val isHome = tab.url.isBlank() || tab.url == "about:blank"
-                                    if (isHome || showTabOverview || isAddressFocused) {
+                                    val isHomeNow = tab.url.isBlank() || tab.url == "about:blank"
+                                    if (isHomeNow || showTabOverview || isAddressFocused) {
                                         if (footerOffsetPx != 0f) footerOffsetPx = 0f
                                         return@setOnScrollChangeListener
                                     }
@@ -852,8 +880,8 @@ fun BrowserScreen(
                                     wv.onPause()
                                 }
                             },
-                            onRelease = { wv ->
-                                (wv.parent as? ViewGroup)?.removeView(wv)
+                            onRelease = { swipeRefresh ->
+                                swipeRefresh.removeAllViews()
                             },
                             modifier = Modifier.fillMaxSize()
                         )
