@@ -831,12 +831,12 @@ fun BrowserScreen(
                                     swipeRefresh.addView(wv)
                                 }
                                 tab.webView = wv
-                                wv.setBackgroundColor(if (isDarkTheme) 0xFF141211.toInt() else android.graphics.Color.WHITE)
+                                wv.setBackgroundColor(android.graphics.Color.WHITE)
                                 @Suppress("DEPRECATION")
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                                    wv.settings.isAlgorithmicDarkeningAllowed = isDarkTheme
+                                    wv.settings.isAlgorithmicDarkeningAllowed = false
                                 } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                    wv.settings.forceDark = if (isDarkTheme) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
+                                    wv.settings.forceDark = WebSettings.FORCE_DARK_OFF
                                 }
 
                                 swipeRefresh.setProgressBackgroundColorSchemeColor(if (isDarkTheme) 0xFF2A2826.toInt() else android.graphics.Color.WHITE)
@@ -932,25 +932,6 @@ fun BrowserScreen(
                         }
                     )
                 }
-            } else if (activeTab != null && (activeTab.lastError != null || activeTab.isStalled)) {
-                val currentTab = activeTab
-                BrowserDiagnosticOverlay(
-                    tab = currentTab,
-                    isDark = isDarkTheme,
-                    onReload = {
-                        currentTab.clearError()
-                        currentTab.isLoading = true
-                        currentTab.webView?.reload() ?: navigateToUrl(currentTab.url)
-                    },
-                    onSearchGoogle = {
-                        val currentUrl = currentTab.url
-                        val encoded = try { URLEncoder.encode(currentUrl, "UTF-8") } catch (_: Exception) { currentUrl }
-                        navigateToUrl("https://www.google.com/search?q=$encoded")
-                    },
-                    onDismiss = {
-                        currentTab.clearError()
-                    }
-                )
             }
 
             // Search & Typed History Dropdown Overlay (Shown on search bar focus)

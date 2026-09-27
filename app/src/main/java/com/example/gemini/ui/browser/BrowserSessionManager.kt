@@ -319,130 +319,6 @@ class BrowserSessionManager private constructor() {
             val encoded = try { URLEncoder.encode(trimmed, "UTF-8") } catch (_: Exception) { trimmed }
             return "https://www.google.com/search?q=$encoded"
         }
-
-        fun buildErrorHtml(failingUrl: String, errorDescription: String, isDark: Boolean): String {
-            val escapedUrl = android.text.TextUtils.htmlEncode(failingUrl)
-            val escapedError = android.text.TextUtils.htmlEncode(errorDescription)
-            val encodedUrl = try { URLEncoder.encode(failingUrl, "UTF-8") } catch (_: Exception) { failingUrl }
-            val bg = if (isDark) "#181513" else "#FAF6F0"
-            val cardBg = if (isDark) "#23201D" else "#FFFFFF"
-            val textPrimary = if (isDark) "#EDE8DF" else "#181513"
-            val textSecondary = if (isDark) "#B8B2A8" else "#525252"
-            val accent = if (isDark) "#D97706" else "#C86446"
-            val border = if (isDark) "#383430" else "#E5E7EB"
-            val codeBg = if (isDark) "#2C2825" else "#F3F4F6"
-
-            return """
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-                  <style>
-                    * { box-sizing: border-box; margin: 0; padding: 0; }
-                    body {
-                      padding: 32px 16px;
-                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                      background-color: $bg;
-                      color: $textPrimary;
-                      display: flex;
-                      flex-direction: column;
-                      align-items: center;
-                      justify-content: center;
-                      min-height: 90vh;
-                      text-align: center;
-                    }
-                    .card {
-                      background-color: $cardBg;
-                      border: 1px solid $border;
-                      border-radius: 18px;
-                      padding: 26px 20px;
-                      max-width: 400px;
-                      width: 100%;
-                      display: flex;
-                      flex-direction: column;
-                      align-items: center;
-                      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
-                    }
-                    .icon-circle {
-                      width: 58px;
-                      height: 58px;
-                      border-radius: 50%;
-                      background-color: rgba(200, 100, 70, 0.16);
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                      margin-bottom: 16px;
-                    }
-                    .icon-circle svg {
-                      width: 30px;
-                      height: 30px;
-                      fill: $accent;
-                    }
-                    h2 {
-                      font-size: 19px;
-                      font-weight: 700;
-                      margin-bottom: 8px;
-                      color: $textPrimary;
-                    }
-                    p {
-                      font-size: 14px;
-                      line-height: 1.55;
-                      color: $textSecondary;
-                      margin-bottom: 16px;
-                    }
-                    .url-box {
-                      background-color: $codeBg;
-                      border: 1px solid $border;
-                      padding: 10px 14px;
-                      border-radius: 10px;
-                      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-                      font-size: 12px;
-                      color: $textPrimary;
-                      word-break: break-all;
-                      margin-bottom: 20px;
-                      width: 100%;
-                      text-align: left;
-                    }
-                    .url-box small {
-                      display: block;
-                      margin-top: 6px;
-                      color: $textSecondary;
-                      font-size: 11.5px;
-                    }
-                    .btn-retry {
-                      background-color: $accent;
-                      color: #ffffff;
-                      border: none;
-                      padding: 12px 28px;
-                      font-size: 14px;
-                      font-weight: 600;
-                      border-radius: 10px;
-                      cursor: pointer;
-                      outline: none;
-                      box-shadow: 0 2px 8px rgba(200, 100, 70, 0.3);
-                    }
-                    .btn-retry:active {
-                      opacity: 0.85;
-                    }
-                  </style>
-                </head>
-                <body>
-                  <div class="card">
-                    <div class="icon-circle">
-                      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                    </div>
-                    <h2>Webpage not available</h2>
-                    <p>Could not connect to the server or network host.</p>
-                    <div class="url-box">
-                      <strong>URL:</strong> $escapedUrl
-                      <small><strong>Error:</strong> $escapedError</small>
-                    </div>
-                    <button class="btn-retry" onclick="window.location.href = decodeURIComponent('$encodedUrl');">Retry Connection</button>
-                  </div>
-                </body>
-                </html>
-            """.trimIndent()
-        }
     }
 
     data class SpeedDialShortcut(
@@ -926,7 +802,7 @@ class BrowserSessionManager private constructor() {
         tab.webView = null
 
         val wv = com.example.gemini.data.media.YouTubeMediaSessionManager.KeepAliveWebView(context).apply {
-            setBackgroundColor(if (isDark) 0xFF181513.toInt() else Color.WHITE)
+            setBackgroundColor(Color.WHITE)
             layoutParams = ViewGroup.LayoutParams(1080, 1920)
 
             settings.apply {
@@ -948,10 +824,10 @@ class BrowserSessionManager private constructor() {
                 }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    isAlgorithmicDarkeningAllowed = isDark
+                    isAlgorithmicDarkeningAllowed = false
                 } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     @Suppress("DEPRECATION")
-                    forceDark = if (isDark) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
+                    forceDark = WebSettings.FORCE_DARK_OFF
                 }
             }
 
@@ -1069,19 +945,10 @@ class BrowserSessionManager private constructor() {
                         injectDesktopSpoofing(view)
                     }
                     injectMediaTracker(view)
-                    if (url == null || url.startsWith("data:") || url.contains("chromewebdata") || tab.lastError != null) {
-                        val color = if (isDark) "#EDE8DF" else "#181513"
-                        val bg = if (isDark) "#181513" else "#FAF6F0"
-                        try {
-                            view?.evaluateJavascript(
-                                "(function(){ try { document.documentElement.style.backgroundColor='$bg'; if(document.body){ document.body.style.backgroundColor='$bg'; document.body.style.color='$color'; } var els=document.querySelectorAll('body, body *'); for(var i=0;i<els.length;i++){ els[i].style.color='$color'; } } catch(e){} })();",
-                                null
-                            )
-                        } catch (_: Exception) {}
-                    }
                 }
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                    super.onReceivedError(view, request, error)
                     val desc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         val descriptionStr = error?.description?.toString() ?: ""
                         if (descriptionStr.isNotBlank()) descriptionStr else "Network Error (${error?.errorCode})"
@@ -1100,19 +967,11 @@ class BrowserSessionManager private constructor() {
                         tab.cancelLoadingWatchdog(mainHandler)
                         tab.lastError = err
                         tab.isLoading = false
-                        try {
-                            val color = if (isDark) "#EDE8DF" else "#181513"
-                            val bg = if (isDark) "#181513" else "#FAF6F0"
-                            view?.evaluateJavascript(
-                                "(function(){ try { document.documentElement.style.backgroundColor='$bg'; if(document.body){ document.body.style.backgroundColor='$bg'; document.body.style.color='$color'; } var els=document.querySelectorAll('body, body *'); for(var i=0;i<els.length;i++){ els[i].style.color='$color'; } } catch(e){} })();",
-                                null
-                            )
-                            view?.loadDataWithBaseURL(null, buildErrorHtml(reqUrl, desc, isDark), "text/html", "UTF-8", null)
-                        } catch (_: Exception) {}
                     }
                 }
 
                 override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+                    super.onReceivedHttpError(view, request, errorResponse)
                     val reqUrl = request?.url?.toString() ?: tab.url
                     val status = errorResponse?.statusCode ?: 0
                     val reason = errorResponse?.reasonPhrase ?: "HTTP Error"
@@ -1129,9 +988,6 @@ class BrowserSessionManager private constructor() {
                         tab.cancelLoadingWatchdog(mainHandler)
                         tab.lastError = err
                         tab.isLoading = false
-                        try {
-                            view?.loadDataWithBaseURL(null, buildErrorHtml(reqUrl, "HTTP $status: $reason", isDark), "text/html", "UTF-8", null)
-                        } catch (_: Exception) {}
                     }
                 }
 
@@ -1162,10 +1018,7 @@ class BrowserSessionManager private constructor() {
                     tab.cancelLoadingWatchdog(mainHandler)
                     tab.lastError = err
                     tab.isLoading = false
-                    handler?.cancel()
-                    try {
-                        view?.loadDataWithBaseURL(null, buildErrorHtml(reqUrl, "SSL Warning: $primaryMsg", isDark), "text/html", "UTF-8", null)
-                    } catch (_: Exception) {}
+                    super.onReceivedSslError(view, handler, error)
                 }
 
                 override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
@@ -1181,10 +1034,7 @@ class BrowserSessionManager private constructor() {
                     tab.cancelLoadingWatchdog(mainHandler)
                     tab.lastError = err
                     tab.isLoading = false
-                    try {
-                        view?.loadDataWithBaseURL(null, buildErrorHtml(tab.url, msg, isDark), "text/html", "UTF-8", null)
-                    } catch (_: Exception) {}
-                    return true
+                    return super.onRenderProcessGone(view, detail)
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
