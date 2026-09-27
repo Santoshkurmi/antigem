@@ -76,7 +76,6 @@ fun LocalTerminalDialog(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocalTerminalContent(
     onClose: () -> Unit

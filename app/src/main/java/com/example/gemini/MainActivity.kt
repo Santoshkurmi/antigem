@@ -158,6 +158,7 @@ class MainActivity : ComponentActivity() {
                             currentViewMode = if (previousViewMode != currentViewMode && previousViewMode != AppViewMode.BROWSER) previousViewMode else AppViewMode.CHAT
                         }
 
+                        val terminalSessions by com.example.gemini.data.local.LocalTerminalManager.sessions.collectAsState()
                         var hasEverOpenedTerminal by remember { mutableStateOf(false) }
                         if (currentViewMode == AppViewMode.TERMINAL) {
                             hasEverOpenedTerminal = true
@@ -221,7 +222,7 @@ class MainActivity : ComponentActivity() {
                                         translationX = if (isVisible) 0f else 20000f
                                     }
                             ) {
-                                if (currentViewMode == AppViewMode.TERMINAL || hasEverOpenedTerminal) {
+                                if (currentViewMode == AppViewMode.TERMINAL || (hasEverOpenedTerminal && terminalSessions.isNotEmpty())) {
                                     com.example.gemini.ui.components.LocalTerminalContent(
                                         onClose = {
                                             currentViewMode = if (previousViewMode == AppViewMode.TERMINAL) AppViewMode.CHAT else previousViewMode
