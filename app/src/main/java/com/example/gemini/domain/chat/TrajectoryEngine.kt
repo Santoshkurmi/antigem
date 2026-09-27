@@ -412,7 +412,7 @@ class TrajectoryEngine {
         }
 
         val startTimes = allStepsList.mapNotNull {
-            parseIsoToMillis(it.metadata?.startedAt) ?: parseIsoToMillis(it.metadata?.createdAt)
+            parseIsoToMillis(it.metadata?.createdAt) ?: parseIsoToMillis(it.metadata?.startedAt)
         }
         val endTimes = allStepsList.mapNotNull {
             parseIsoToMillis(it.metadata?.completedAt) ?: parseIsoToMillis(it.metadata?.finishedGeneratingAt)
