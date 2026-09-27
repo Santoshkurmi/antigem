@@ -2532,8 +2532,9 @@ fun parseMarkdownBlocks(
             // -1. Sequential Agent Thought Block <!-- thought -->...<!-- /thought --> or <thought>
             val thoughtStartMatch = THOUGHT_START_REGEX.find(line)
             if (thoughtStartMatch != null) {
-                val isExplicitStreaming = !thoughtStartMatch.groupValues.getOrNull(1).isNullOrBlank()
-                val durationMs = thoughtStartMatch.groupValues.getOrNull(2)?.toLongOrNull()
+                val isExplicitStreaming = line.contains(":streaming", ignoreCase = true) || line.contains(" streaming", ignoreCase = true)
+                val durationMs = Regex("""(?:duration=|:)([0-9]+)""", RegexOption.IGNORE_CASE).find(line)?.groupValues?.getOrNull(1)?.toLongOrNull()
+                    ?: thoughtStartMatch.groupValues.getOrNull(2)?.toLongOrNull()
                 val thoughtLines = mutableListOf<String>()
 
                 if (line.contains("</thought>", ignoreCase = true) || line.contains("<!-- /thought -->", ignoreCase = true)) {

@@ -108,8 +108,7 @@ fun ThinkingAccordion(
                     color = ClaudeTerracotta
                 )
             } else {
-                val durationSeconds = durationMs?.let { String.format("%.1fs", it / 1000.0) } ?: ""
-                val title = if (durationSeconds.isNotEmpty()) "Thought for $durationSeconds" else "Thinking process"
+                val title = if (durationMs != null && durationMs > 0) "Thought for ${formatDuration(durationMs)}" else "Thinking process"
                 Text(
                     text = title,
                     fontSize = 12.5.sp,
@@ -159,14 +158,27 @@ fun ThinkingAccordion(
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                Text(
-                    text = thoughtText,
-                    fontFamily = FontFamily.SansSerif,
-                    fontSize = 12.sp,
-                    lineHeight = 17.5.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = thoughtText,
+                        fontFamily = FontFamily.SansSerif,
+                        fontSize = 12.sp,
+                        lineHeight = 17.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (!isStreaming && durationMs != null && durationMs > 0) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "⏱️ Thought for ${formatDuration(durationMs)}",
+                            fontSize = 11.5.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Medium,
+                            color = ClaudeTerracotta.copy(alpha = 0.9f)
+                        )
+                    }
+                }
             }
         }
     }

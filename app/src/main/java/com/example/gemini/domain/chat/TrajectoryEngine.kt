@@ -392,6 +392,13 @@ class TrajectoryEngine {
         }
     }
 
+    private fun parseProtobufDurationToMillis(durationStr: String?): Long? {
+        if (durationStr.isNullOrBlank()) return null
+        val rawSeconds = durationStr.trim().removeSuffix("s").removeSuffix("S")
+        val secondsDouble = rawSeconds.toDoubleOrNull() ?: return null
+        return (secondsDouble * 1000.0).toLong()
+    }
+
     /**
      * Calculates the aggregated TokenUsage for a set of steps in a turn.
      * Only considers completed PLANNER_RESPONSE steps with valid modelUsage.
@@ -590,7 +597,7 @@ class TrajectoryEngine {
                                 } else if (block.isStreaming) {
                                     contentParts.add("<!-- thought:streaming -->\nThinking...\n<!-- /thought -->")
                                 }
-                                if (block.durationMs != null) {
+                                if (block.durationMs != null && block.durationMs > 0) {
                                     maxDuration = maxOf(maxDuration ?: 0L, block.durationMs)
                                 }
                             }
@@ -692,13 +699,15 @@ class TrajectoryEngine {
         if (step.type == CortexStepTypes.PLANNER_RESPONSE || step.plannerResponse != null) {
             val thinking = step.plannerResponse?.thinking
             val response = step.plannerResponse?.response
+            val thinkingDurationMs = parseProtobufDurationToMillis(step.plannerResponse?.thinkingDuration)
+
             if (!thinking.isNullOrBlank()) {
-                blocks.add(TurnBlock.Thinking(stepIndex = stepIndex, thought = thinking, isStreaming = isStreaming))
+                blocks.add(TurnBlock.Thinking(stepIndex = stepIndex, thought = thinking, durationMs = thinkingDurationMs, isStreaming = isStreaming))
             }
             if (!response.isNullOrBlank()) {
                 blocks.add(TurnBlock.Text(stepIndex = stepIndex, markdown = response, isStreaming = isStreaming))
             } else if (thinking.isNullOrBlank() && (step.status == CortexStepStatuses.GENERATING || isStreaming)) {
-                blocks.add(TurnBlock.Thinking(stepIndex = stepIndex, thought = "", isStreaming = true))
+                blocks.add(TurnBlock.Thinking(stepIndex = stepIndex, thought = "", durationMs = thinkingDurationMs, isStreaming = true))
             }
             return
         }

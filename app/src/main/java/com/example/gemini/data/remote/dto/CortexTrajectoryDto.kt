@@ -219,6 +219,7 @@ data class CortexPlannerResponseDto(
     val thinking: String = "",                  // Full cumulative thinking text up to this chunk
     val modifiedResponse: String = "",
     val messageId: String = "",
+    val thinkingDuration: String = "",
     val stopReason: String = ""
 )
 
