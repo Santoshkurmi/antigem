@@ -86,65 +86,6 @@ import java.net.URLEncoder
  */
 typealias BrowserTab = BrowserTabSession
 
-private fun isBrowserUserUrl(url: String?): Boolean {
-    if (url.isNullOrBlank()) return false
-    val trimmed = url.trim()
-    if (trimmed == "about:blank" || trimmed.startsWith("about:", ignoreCase = true)) return false
-    if (trimmed.startsWith("data:", ignoreCase = true)) return false
-    if (trimmed.startsWith("javascript:", ignoreCase = true)) return false
-    return true
-}
-
-private fun getPreviousValidHistoryIndex(webView: WebView?): Int {
-    if (webView == null) return -1
-    val list = webView.copyBackForwardList()
-    val currentIndex = list.currentIndex
-    if (currentIndex <= 0) return -1
-
-    val currentItem = list.getItemAtIndex(currentIndex)
-    val currentUrl = currentItem?.url?.trim() ?: ""
-    val currentOrigUrl = currentItem?.originalUrl?.trim() ?: ""
-    val isCurrentError = !isBrowserUserUrl(currentUrl)
-
-    val startSearchIndex = if (isCurrentError) (currentIndex - 2) else (currentIndex - 1)
-    if (startSearchIndex < 0) return -1
-
-    for (i in startSearchIndex downTo 0) {
-        val item = list.getItemAtIndex(i) ?: continue
-        val itemUrl = item.url.trim()
-        val itemOrigUrl = item.originalUrl?.trim() ?: ""
-
-        val isValid = isBrowserUserUrl(itemUrl) || isBrowserUserUrl(itemOrigUrl)
-        if (!isValid) continue
-
-        if (isCurrentError || (itemUrl != currentUrl && itemOrigUrl != currentUrl && itemUrl != currentOrigUrl)) {
-            return i
-        }
-    }
-    return -1
-}
-
-fun canBrowserTabGoBack(webView: WebView?): Boolean {
-    return getPreviousValidHistoryIndex(webView) >= 0 || webView?.canGoBack() == true
-}
-
-fun handleBrowserBack(webView: WebView?, onExhausted: () -> Unit) {
-    if (webView == null) {
-        onExhausted()
-        return
-    }
-    val targetIndex = getPreviousValidHistoryIndex(webView)
-    if (targetIndex >= 0) {
-        val currentIndex = webView.copyBackForwardList().currentIndex
-        val steps = targetIndex - currentIndex
-        webView.goBackOrForward(steps)
-    } else if (webView.canGoBack()) {
-        webView.goBack()
-    } else {
-        onExhausted()
-    }
-}
-
 private fun formatBrowserUrl(input: String): String {
     val trimmed = input.trim()
     if (trimmed.isBlank()) return ""
@@ -186,7 +127,6 @@ fun BrowserScreen(
     var shouldSelectAllOnNextValueChange by remember { mutableStateOf(false) }
     var showTabOverview by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
-    var showExitConfirmationDialog by remember { mutableStateOf(false) }
     var isControlsVisible by remember { mutableStateOf(true) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val defaultMaxFooterOffsetPx = remember(density) { with(density) { 100.dp.toPx() } }
@@ -290,27 +230,21 @@ fun BrowserScreen(
     }
 
     // Back button behavior:
-    // If exit dialog is shown -> dismiss it.
     // If address bar is focused -> clear focus.
     // If tab overview is shown -> dismiss overview.
     // If active tab WebView has history -> navigate back in history.
-    // If no history left -> show exit confirmation dialog (Close Tab, Go to Chat, Stay Here)
     BackHandler(enabled = isVisible) {
-        if (showExitConfirmationDialog) {
-            showExitConfirmationDialog = false
-        } else if (isAddressFocused) {
+        if (isAddressFocused) {
             focusManager.clearFocus()
             keyboardController?.hide()
         } else if (showTabOverview) {
             showTabOverview = false
-        } else if (canBrowserTabGoBack(activeTab?.webView)) {
+        } else if (activeTab?.webView?.canGoBack() == true) {
             footerOffsetPx = 0f
             ignoreScrollUntilTouch = true
-            handleBrowserBack(activeTab?.webView) {
-                showExitConfirmationDialog = true
-            }
+            activeTab.webView?.goBack()
         } else {
-            showExitConfirmationDialog = true
+            onClose()
         }
     }
 
@@ -623,7 +557,7 @@ fun BrowserScreen(
                     horizontalArrangement = Arrangement.SpaceAround,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val canGoBack = canBrowserTabGoBack(activeTab?.webView)
+                    val canGoBack = activeTab?.webView?.canGoBack() == true
                     val canGoForward = activeTab?.webView?.canGoForward() == true
 
                     // 1. Back in WebView (<)
@@ -631,10 +565,8 @@ fun BrowserScreen(
                         onClick = {
                             footerOffsetPx = 0f
                             ignoreScrollUntilTouch = true
-                            handleBrowserBack(activeTab?.webView) {
-                                // If back history exhausted, navigate to home speed dial
-                                sessionManager.openUrl("about:blank", tabId = activeTabId, newTab = false)
-                                textFieldValue = TextFieldValue("")
+                            if (activeTab?.webView?.canGoBack() == true) {
+                                activeTab.webView?.goBack()
                             }
                         },
                         enabled = canGoBack,
@@ -653,7 +585,9 @@ fun BrowserScreen(
                         onClick = {
                             footerOffsetPx = 0f
                             ignoreScrollUntilTouch = true
-                            activeTab?.webView?.goForward()
+                            if (activeTab?.webView?.canGoForward() == true) {
+                                activeTab.webView?.goForward()
+                            }
                         },
                         enabled = canGoForward,
                         modifier = Modifier.size(44.dp)
@@ -958,70 +892,6 @@ fun BrowserScreen(
                     onDismiss = {
                         focusManager.clearFocus()
                         keyboardController?.hide()
-                    }
-                )
-            }
-
-            // Exit Confirmation Dialog (On back press when no history remains)
-            if (showExitConfirmationDialog) {
-                AlertDialog(
-                    onDismissRequest = { showExitConfirmationDialog = false },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.ExitToApp,
-                            contentDescription = null,
-                            tint = ClaudeTerracotta,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    },
-                    title = {
-                        Text(
-                            text = "Leave Browser?",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = "Do you want to close this tab, return to chat, or stay here?",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                showExitConfirmationDialog = false
-                                onClose()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                        ) {
-                            Text("Go to Chat")
-                        }
-                    },
-                    dismissButton = {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            TextButton(
-                                onClick = { showExitConfirmationDialog = false }
-                            ) {
-                                Text("Stay Here")
-                            }
-                            TextButton(
-                                onClick = {
-                                    showExitConfirmationDialog = false
-                                    activeTabId?.let { tabId -> closeTab(tabId) }
-                                    onClose()
-                                },
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
-                                )
-                            ) {
-                                Text("Close Tab")
-                            }
-                        }
                     }
                 )
             }

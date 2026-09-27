@@ -816,7 +816,10 @@ class BrowserSessionManager private constructor() {
                     tab.clearError()
                     tab.isLoading = true
                     tab.startLoadingWatchdog(mainHandler)
-                    if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("data:")) {
+                    if (url.isNullOrBlank() || url == "about:blank") {
+                        tab.url = ""
+                        tab.title = "New Tab"
+                    } else if (!url.startsWith("data:")) {
                         tab.url = url
                     }
                     tab.canGoBack = view?.canGoBack() == true
@@ -829,10 +832,17 @@ class BrowserSessionManager private constructor() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     tab.isLoading = false
                     tab.cancelLoadingWatchdog(mainHandler)
-                    if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("data:")) {
+                    if (url.isNullOrBlank() || url == "about:blank") {
+                        tab.url = ""
+                        tab.title = "New Tab"
+                    } else if (!url.startsWith("data:")) {
                         tab.url = url
                     }
-                    view?.title?.let { if (it.isNotBlank()) tab.title = it }
+                    view?.title?.let {
+                        if (it.isNotBlank() && tab.url.isNotBlank() && it != "about:blank") {
+                            tab.title = it
+                        }
+                    }
                     tab.canGoBack = view?.canGoBack() == true
                     tab.canGoForward = view?.canGoForward() == true
                     if (tab.isDesktopMode) {
@@ -1033,6 +1043,8 @@ class BrowserSessionManager private constructor() {
 
         if (tab.url.isNotBlank() && tab.url != "about:blank") {
             wv.loadUrl(tab.url)
+        } else {
+            wv.loadUrl("about:blank")
         }
         return wv
     }
