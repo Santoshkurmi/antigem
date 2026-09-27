@@ -3,6 +3,7 @@ package com.example.gemini.domain.chat
 import android.util.Log
 import com.example.gemini.data.remote.AgyHubClient
 import com.example.gemini.data.remote.dto.*
+import com.example.gemini.domain.model.ArtifactSnapshot
 import com.example.gemini.domain.model.ChatAttachment
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.ChatTurn
@@ -30,6 +31,9 @@ class TrajectoryEngine {
 
     private val _turns = MutableStateFlow<List<ChatTurn>>(emptyList())
     val turns: StateFlow<List<ChatTurn>> = _turns.asStateFlow()
+
+    private val _artifacts = MutableStateFlow<List<ArtifactSnapshot>>(emptyList())
+    val artifacts: StateFlow<List<ArtifactSnapshot>> = _artifacts.asStateFlow()
 
     // Tier 1: Immutable cache of finished turns (Turns 0 to N-1)
     private val completedTurns = mutableListOf<ChatTurn>()
@@ -74,6 +78,7 @@ class TrajectoryEngine {
         activeStepsMap.clear()
         pendingUserTurn = null
         _turns.value = emptyList()
+        _artifacts.value = emptyList()
     }
 
     /**
@@ -231,6 +236,39 @@ class TrajectoryEngine {
                     completedTurns.add(pending)
                 }
                 pendingUserTurn = null
+            }
+        }
+
+        val artifactUpdate = update?.mainTrajectoryUpdate?.artifactSnapshotsUpdate
+            ?: update?.artifactSnapshotsUpdate
+            ?: frame.mainTrajectoryUpdate?.artifactSnapshotsUpdate
+            ?: frame.artifactSnapshotsUpdate
+
+        if (artifactUpdate != null && artifactUpdate.artifactSnapshots.isNotEmpty()) {
+            val mapped = artifactUpdate.artifactSnapshots.map { dto ->
+                ArtifactSnapshot(
+                    name = dto.artifactName,
+                    absoluteUri = dto.artifactAbsoluteUri,
+                    lastEdited = dto.lastEdited,
+                    summary = dto.artifactMetadata?.effectiveSummary ?: "",
+                    requestFeedback = dto.artifactMetadata?.effectiveRequestFeedback == true,
+                    userFacing = dto.artifactMetadata?.effectiveUserFacing == true
+                )
+            }
+            if (mapped.isNotEmpty()) {
+                val current = _artifacts.value.toMutableList()
+                mapped.forEach { incoming ->
+                    val idx = current.indexOfFirst {
+                        (it.absoluteUri.isNotBlank() && it.absoluteUri == incoming.absoluteUri) ||
+                        (it.name.isNotBlank() && it.name == incoming.name)
+                    }
+                    if (idx >= 0) {
+                        current[idx] = incoming
+                    } else {
+                        current.add(incoming)
+                    }
+                }
+                _artifacts.value = current
             }
         }
 

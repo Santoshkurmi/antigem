@@ -105,6 +105,11 @@ import com.example.gemini.ui.components.ToolCallExpansionCache
 import com.example.gemini.ui.components.CodeBlockExpansionCache
 import com.example.gemini.ui.bubble.FloatingChatActivity
 import android.app.Activity
+import com.example.gemini.ui.drawer.ArtifactsDrawerContent
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
@@ -130,6 +135,7 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var showArtifactsDrawer by rememberSaveable { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -150,6 +156,7 @@ fun ChatScreen(
     val conversations by viewModel.conversations.collectAsState()
     val currentConv by viewModel.currentConversation.collectAsState()
     val messages by viewModel.messages.collectAsState()
+    val artifacts by viewModel.artifacts.collectAsState()
     val isStreaming by viewModel.isStreaming.collectAsState()
     val selectedModelId by viewModel.selectedModelId.collectAsState()
     val availableModels by viewModel.availableModels.collectAsState()
@@ -625,7 +632,11 @@ fun ChatScreen(
         }
     }
 
-    BackHandler(enabled = conversationBackStack.isNotEmpty() && !drawerState.isOpen && drawerState.targetValue != DrawerValue.Open) {
+    BackHandler(enabled = showArtifactsDrawer) {
+        showArtifactsDrawer = false
+    }
+
+    BackHandler(enabled = conversationBackStack.isNotEmpty() && !drawerState.isOpen && drawerState.targetValue != DrawerValue.Open && !showArtifactsDrawer) {
         navigateBackConversation()
     }
 
@@ -1330,7 +1341,9 @@ fun ChatScreen(
                                                 },
                                                 onViewRawPayload = { payloadJson ->
                                                     showRawPayloadDialog = payloadJson
-                                                }
+                                                },
+                                                onShowArtifacts = { showArtifactsDrawer = true },
+                                                artifactsCount = artifacts.size
                                             )
                                         }
                                         is ChatFeedItem.StreamingMessage -> {
@@ -1358,7 +1371,9 @@ fun ChatScreen(
                                                     viewModel.skipUserChoices(toolCall, msgId, responses)
                                                 },
                                                 summarizingModelName = summarizingModelName,
-                                                pendingQueuedUserMessage = pendingQueuedUserMessage
+                                                pendingQueuedUserMessage = pendingQueuedUserMessage,
+                                                onShowArtifacts = { showArtifactsDrawer = true },
+                                                artifactsCount = artifacts.size
                                             )
                                         }
                                         }
@@ -2286,9 +2301,61 @@ fun ChatScreen(
             )
         }
     }
+
+    // Right-side Artifacts Drawer Modal Overlay (Opened via topbar/message button, 0 gesture conflicts, standard LTR)
+    AnimatedVisibility(
+        visible = showArtifactsDrawer,
+        enter = fadeIn(animationSpec = tween(220)),
+        exit = fadeOut(animationSpec = tween(200)),
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(90000f)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.55f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { showArtifactsDrawer = false }
+        ) {
+            AnimatedVisibility(
+                visible = showArtifactsDrawer,
+                enter = slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(260, easing = FastOutSlowInEasing)
+                ),
+                exit = slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(220, easing = FastOutSlowInEasing)
+                ),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.85f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { /* Absorb clicks */ }
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 16.dp
+                ) {
+                    ArtifactsDrawerContent(
+                        artifacts = artifacts,
+                        onClose = { showArtifactsDrawer = false }
+                    )
+                }
+            }
+        }
+    }
+    } // End of ModalNavigationDrawer
     } // End of Box
     } // End of CompositionLocalProvider
-}
+
 
 enum class ChatToastType {
     SUCCESS,

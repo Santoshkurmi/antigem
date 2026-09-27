@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -64,6 +65,8 @@ fun MessageBubble(
     onUpdateSummary: ((String) -> Unit)? = null,
     onDeleteSummary: (() -> Unit)? = null,
     onViewRawPayload: ((String) -> Unit)? = null,
+    onShowArtifacts: (() -> Unit)? = null,
+    artifactsCount: Int = 0,
     summarizingModelName: String = "AI",
     pendingQueuedUserMessage: String? = null,
     modifier: Modifier = Modifier
@@ -309,6 +312,21 @@ fun MessageBubble(
                                     )
                                 }
                             }
+
+                            if (onShowArtifacts != null && artifactsCount > 0) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = onShowArtifacts,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Layers,
+                                        contentDescription = "View Artifacts ($artifactsCount)",
+                                        tint = ClaudeTerracotta,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
                         }
 
                         // Token & Cache Telemetry Badge (Always shown when metrics exist)
@@ -517,6 +535,8 @@ fun AssistantMessageFooter(
     isDevModeEnabled: Boolean = false,
     onRetry: (ChatMessage) -> Unit = {},
     onViewRawPayload: ((String) -> Unit)? = null,
+    onShowArtifacts: (() -> Unit)? = null,
+    artifactsCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -572,6 +592,21 @@ fun AssistantMessageFooter(
                         imageVector = Icons.Outlined.DataObject,
                         contentDescription = "View Raw Request Payload",
                         tint = Color(0xFF8BE9FD),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            if (onShowArtifacts != null && artifactsCount > 0) {
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = onShowArtifacts,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Layers,
+                        contentDescription = "View Artifacts ($artifactsCount)",
+                        tint = ClaudeTerracotta,
                         modifier = Modifier.size(16.dp)
                     )
                 }

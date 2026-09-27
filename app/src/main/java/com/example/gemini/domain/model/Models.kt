@@ -54,6 +54,16 @@ data class TokenUsage(
 )
 
 @Serializable
+data class ArtifactSnapshot(
+    val name: String = "",
+    val absoluteUri: String = "",
+    val lastEdited: String = "",
+    val summary: String = "",
+    val requestFeedback: Boolean = false,
+    val userFacing: Boolean = false
+)
+
+@Serializable
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val conversationId: String,

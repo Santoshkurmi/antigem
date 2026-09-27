@@ -70,6 +70,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
+    val artifacts: StateFlow<List<com.example.gemini.domain.model.ArtifactSnapshot>> = trajectoryEngine.artifacts
+
     val pendingApprovals: StateFlow<List<PendingToolApproval>> = _messages.map { msgs ->
         msgs.filter { it.role == com.example.gemini.domain.model.MessageRole.ASSISTANT }
             .flatMap { msg ->
