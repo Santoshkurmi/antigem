@@ -927,12 +927,50 @@ class TrajectoryEngine {
                     else -> meta?.toolSummary?.ifBlank { meta.toolAction.ifBlank { "ask_question" } } ?: "ask_question"
                 }
 
-                val questions = askQ?.questions ?: emptyList()
-                output = if (questions.isNotEmpty()) {
-                    questions.joinToString("\n\n") { q ->
-                        "${q.question}\n" + q.options.joinToString("\n") { "• $it" }
+                // 1. Extract answers from completedInteractions if user has responded
+                val completedResponses = step.completedInteractions
+                    .mapNotNull { it.response?.askQuestion?.responses }
+                    .flatten()
+                    .filter { it.question.isNotBlank() }
+
+                if (completedResponses.isNotEmpty()) {
+                    output = completedResponses.joinToString("\n\n") { resp ->
+                        val selectedIds = resp.selectedOptionIds.orEmpty()
+                        val matchedOpts = resp.options.filter { opt -> selectedIds.contains(opt.id) || selectedIds.contains(opt.text) || selectedIds.contains(opt.label) }
+                        val answerText = when {
+                            resp.skipped == true -> "Skipped"
+                            matchedOpts.isNotEmpty() -> matchedOpts.joinToString(", ") { it.text.ifBlank { it.label } }
+                            !resp.writeInResponse.isNullOrBlank() -> "Other: \"${resp.writeInResponse}\""
+                            selectedIds.isNotEmpty() -> selectedIds.joinToString(", ")
+                            else -> "Submitted"
+                        }
+                        "• ${resp.question}: $answerText"
                     }
-                } else ""
+                } else {
+                    // 2. Check if questions in payload contain selectedOptionIds
+                    val answeredQuestions = askQ?.questions?.filter { it.selectedOptionIds.isNotEmpty() || !it.writeInResponse.isNullOrBlank() || it.skipped } ?: emptyList()
+                    if (answeredQuestions.isNotEmpty()) {
+                        output = answeredQuestions.joinToString("\n\n") { q ->
+                            val matchedOpts = q.options.filter { opt -> q.selectedOptionIds.contains(opt.id) || q.selectedOptionIds.contains(opt.text) || q.selectedOptionIds.contains(opt.label) }
+                            val answerText = when {
+                                q.skipped -> "Skipped"
+                                matchedOpts.isNotEmpty() -> matchedOpts.joinToString(", ") { it.text.ifBlank { it.label } }
+                                !q.writeInResponse.isNullOrBlank() -> "Other: \"${q.writeInResponse}\""
+                                q.selectedOptionIds.isNotEmpty() -> q.selectedOptionIds.joinToString(", ")
+                                else -> "Submitted"
+                            }
+                            "• ${q.question}: $answerText"
+                        }
+                    } else {
+                        // 3. Fallback when still waiting for user input
+                        val questions = askQ?.questions ?: emptyList()
+                        output = if (questions.isNotEmpty()) {
+                            questions.joinToString("\n\n") { q ->
+                                "${q.question}\n" + q.options.joinToString("\n") { opt -> "• ${opt.text.ifBlank { opt.label }}" }
+                            }
+                        } else ""
+                    }
+                }
             }
             else -> {
                 // Unknown or custom tool:

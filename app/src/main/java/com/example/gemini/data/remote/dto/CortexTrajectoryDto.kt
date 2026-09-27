@@ -439,7 +439,10 @@ data class AskQuestionItemDto(
     val options: List<AskQuestionOptionDto> = emptyList(),
     val is_multi_select: Boolean = false,
     val isMultiSelect: Boolean = false,
-    val IsMultiSelect: Boolean = false
+    val IsMultiSelect: Boolean = false,
+    val selectedOptionIds: List<String> = emptyList(),
+    val writeInResponse: String? = null,
+    val skipped: Boolean = false
 )
 
 // ==========================================
