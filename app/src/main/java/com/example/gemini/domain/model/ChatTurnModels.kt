@@ -20,7 +20,8 @@ sealed interface ChatTurn {
     data class Assistant(
         val turnId: String,
         val blocks: List<TurnBlock>,
-        val isStreaming: Boolean = false
+        val isStreaming: Boolean = false,
+        val tokenUsage: TokenUsage? = null
     ) : ChatTurn {
         override val key: String get() = "assistant_turn_$turnId"
     }

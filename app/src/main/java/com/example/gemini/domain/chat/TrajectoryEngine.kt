@@ -10,6 +10,7 @@ import com.example.gemini.domain.model.ChatTurn
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.domain.model.ToolCall
 import com.example.gemini.domain.model.ToolType
+import com.example.gemini.domain.model.TokenUsage
 import com.example.gemini.domain.model.TurnBlock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -287,6 +288,7 @@ class TrajectoryEngine {
         pendingUserTurn = null
 
         var currentTurnBlocks = mutableListOf<TurnBlock>()
+        var currentTurnSteps = mutableListOf<CortexStepDto>()
         var lastUserStepArrayIndex = -1
         var hasUserInputStep = false
 
@@ -300,8 +302,10 @@ class TrajectoryEngine {
                 if (currentTurnBlocks.isNotEmpty()) {
                     val prevUserStepIdx = if (lastUserStepArrayIndex >= 0) (indices.getOrNull(lastUserStepArrayIndex) ?: lastUserStepArrayIndex) else -1
                     val turnId = "${conversationId}_${prevUserStepIdx + 1}"
-                    completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList()))
+                    val tokenUsage = computeTokenUsage(currentTurnSteps)
+                    completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), tokenUsage = tokenUsage))
                     currentTurnBlocks = mutableListOf()
+                    currentTurnSteps = mutableListOf()
                 }
 
                 // Add User turn
@@ -312,6 +316,7 @@ class TrajectoryEngine {
                 activeTurnStartStep = stepIndex + 1
             } else {
                 // Assistant step
+                currentTurnSteps.add(step)
                 extractStepBlocks(step, stepIndex, isStreaming = false, blocks = currentTurnBlocks)
             }
         }
@@ -334,7 +339,8 @@ class TrajectoryEngine {
         } else if (currentTurnBlocks.isNotEmpty()) {
             val lastUserStepIdx = if (lastUserStepArrayIndex >= 0) (indices.getOrNull(lastUserStepArrayIndex) ?: lastUserStepArrayIndex) else -1
             val turnId = "${conversationId}_${lastUserStepIdx + 1}"
-            completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), isStreaming = false))
+            val tokenUsage = computeTokenUsage(currentTurnSteps)
+            completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), isStreaming = false, tokenUsage = tokenUsage))
         }
     }
 
@@ -378,6 +384,32 @@ class TrajectoryEngine {
     }
 
     /**
+     * Calculates the aggregated TokenUsage for a set of steps in a turn.
+     * Only considers completed PLANNER_RESPONSE steps with valid modelUsage.
+     */
+    private fun computeTokenUsage(steps: Iterable<CortexStepDto>): TokenUsage? {
+        val plannerSteps = steps.filter {
+            (it.type == CortexStepTypes.PLANNER_RESPONSE || it.type == "CORTEX_STEP_TYPE_PLANNER_RESPONSE") &&
+            (it.status == CortexStepStatuses.DONE || it.status == "CORTEX_STEP_STATUS_DONE") &&
+            it.metadata?.modelUsage != null
+        }
+        if (plannerSteps.isEmpty()) return null
+
+        val outputTokens = plannerSteps.sumOf { it.metadata?.modelUsage?.outputTokens?.toIntOrNull() ?: 0 }
+        val promptTokens = plannerSteps.lastOrNull()?.metadata?.modelUsage?.inputTokens?.toIntOrNull() ?: 0
+        val cachedTokens = plannerSteps.sumOf { it.metadata?.modelUsage?.cacheReadTokens?.toIntOrNull() ?: 0 }
+
+        if (outputTokens == 0 && promptTokens == 0 && cachedTokens == 0) return null
+
+        return TokenUsage(
+            promptTokens = promptTokens,
+            outputTokens = outputTokens,
+            cachedTokens = cachedTokens,
+            totalTokens = promptTokens + outputTokens
+        )
+    }
+
+    /**
      * Moves the active turn into the completed turns cache when the turn finishes.
      */
     private fun finalizeActiveTurn() {
@@ -390,14 +422,15 @@ class TrajectoryEngine {
 
         if (blocks.isNotEmpty()) {
             val turnId = "${conversationId}_$activeTurnStartStep"
+            val tokenUsage = computeTokenUsage(activeStepsMap.values)
             val existingIndex = completedTurns.indexOfLast { it is ChatTurn.Assistant && it.turnId == turnId }
             if (existingIndex >= 0) {
                 val existingTurn = completedTurns[existingIndex] as ChatTurn.Assistant
                 val mergedBlocks = (existingTurn.blocks.filterNot { eb -> blocks.any { it.stepIndex == eb.stepIndex } } + blocks)
                     .sortedBy { it.stepIndex }
-                completedTurns[existingIndex] = existingTurn.copy(blocks = mergedBlocks, isStreaming = false)
+                completedTurns[existingIndex] = existingTurn.copy(blocks = mergedBlocks, isStreaming = false, tokenUsage = tokenUsage ?: existingTurn.tokenUsage)
             } else {
-                completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = blocks.toList(), isStreaming = false))
+                completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = blocks.toList(), isStreaming = false, tokenUsage = tokenUsage))
             }
         }
 
@@ -466,11 +499,13 @@ class TrajectoryEngine {
             activeBlocks.toList()
         }
 
+        val activeTokenUsage = computeTokenUsage(activeStepsMap.values)
         return if (finalBlocks.isNotEmpty() || (isRunning && !isWaitingInteraction)) {
             val activeTurn = ChatTurn.Assistant(
                 turnId = turnId,
                 blocks = finalBlocks,
-                isStreaming = isRunning && !isWaitingInteraction
+                isStreaming = isRunning && !isWaitingInteraction,
+                tokenUsage = activeTokenUsage
             )
             if (existingAssistantIdx >= 0) {
                 baseTurns.toMutableList().apply {
@@ -604,7 +639,8 @@ class TrajectoryEngine {
                             thoughtText = combinedThought,
                             thoughtDurationMs = maxDuration,
                             toolCalls = toolCalls,
-                            isStreaming = turn.isStreaming
+                            isStreaming = turn.isStreaming,
+                            tokenUsage = turn.tokenUsage
                         )
                     )
                 }

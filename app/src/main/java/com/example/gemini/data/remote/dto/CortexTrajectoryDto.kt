@@ -174,6 +174,8 @@ data class CortexModelUsageDto(
     val outputTokens: String = "0",
     val thinkingOutputTokens: String = "0",
     val responseOutputTokens: String = "0",
+    val cacheReadTokens: String = "0",
+    val cacheCreationTokens: String = "0",
     val apiProvider: String = "",
     val messageId: String = "",
     val responseId: String = ""

@@ -254,13 +254,25 @@ fun MessageBubble(
                     ModelTypingIndicator(modelId = modelId)
                 }
 
-                // Copy, Retry, Raw Payload and Token Telemetry for assistant responses
+                // Token Telemetry and Action Icons (Copy, Retry, Raw Payload, Artifacts)
                 if (!message.isStreaming && message.content.isNotEmpty()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 4.dp)
+                            .padding(top = 6.dp)
                     ) {
+                        // Token & Cache Telemetry Badge (Displayed just above action icons)
+                        if (message.tokenUsage != null) {
+                            val payloadToShow = message.rawContent ?: message.rawPayload
+                            TokenUsageTelemetryPill(
+                                usage = message.tokenUsage,
+                                onViewPayload = if (!payloadToShow.isNullOrBlank()) {
+                                    { onViewRawPayload?.invoke(payloadToShow) }
+                                } else null
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.Start,
@@ -327,18 +339,6 @@ fun MessageBubble(
                                     )
                                 }
                             }
-                        }
-
-                        // Token & Cache Telemetry Badge (Always shown when metrics exist)
-                        if (message.tokenUsage != null) {
-                            val payloadToShow = message.rawContent ?: message.rawPayload
-                            Spacer(modifier = Modifier.height(4.dp))
-                            TokenUsageTelemetryPill(
-                                usage = message.tokenUsage,
-                                onViewPayload = if (!payloadToShow.isNullOrBlank()) {
-                                    { onViewRawPayload?.invoke(payloadToShow) }
-                                } else null
-                            )
                         }
                     }
                 }
@@ -545,6 +545,18 @@ fun AssistantMessageFooter(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp)
     ) {
+        // Token & Cache Telemetry Badge (Displayed just above action icons)
+        if (message.tokenUsage != null) {
+            val payloadToShow = message.rawContent ?: message.rawPayload
+            TokenUsageTelemetryPill(
+                usage = message.tokenUsage,
+                onViewPayload = if (!payloadToShow.isNullOrBlank()) {
+                    { onViewRawPayload?.invoke(payloadToShow) }
+                } else null
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Start,
@@ -612,18 +624,6 @@ fun AssistantMessageFooter(
                 }
             }
         }
-
-        // Token & Cache Telemetry Badge (Always shown when metrics exist)
-        if (message.tokenUsage != null) {
-            val payloadToShow = message.rawContent ?: message.rawPayload
-            Spacer(modifier = Modifier.height(4.dp))
-            TokenUsageTelemetryPill(
-                usage = message.tokenUsage,
-                onViewPayload = if (!payloadToShow.isNullOrBlank()) {
-                    { onViewRawPayload?.invoke(payloadToShow) }
-                } else null
-            )
-        }
     }
 }
 
@@ -681,12 +681,19 @@ private fun WaitingDotsText(phrase: String) {
     )
 }
 
+private fun formatCompactTokens(count: Int): String {
+    return when {
+        count >= 1_000_000 -> String.format(Locale.US, "%.1fM", count / 1_000_000f).replace(".0M", "M")
+        count >= 1_000 -> String.format(Locale.US, "%.1fk", count / 1_000f).replace(".0k", "k")
+        else -> count.toString()
+    }
+}
+
 @Composable
 fun TokenUsageTelemetryPill(
     usage: com.example.gemini.domain.model.TokenUsage,
     onViewPayload: (() -> Unit)? = null
 ) {
-    val nf = NumberFormat.getNumberInstance(Locale.US)
     val cachePct = if (usage.promptTokens > 0 && usage.cachedTokens > 0) {
         ((usage.cachedTokens.toDouble() / (usage.promptTokens + usage.cachedTokens)) * 100).toInt().coerceIn(0, 100)
     } else 0
@@ -705,14 +712,14 @@ fun TokenUsageTelemetryPill(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
-                text = "📥 ${nf.format(usage.promptTokens)}",
+                text = "📥 ${formatCompactTokens(usage.promptTokens)}",
                 fontSize = 10.5.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Medium,
                 color = Color(0xFF64B5F6)
             )
             Text(
-                text = "📤 ${nf.format(usage.outputTokens)}",
+                text = "📤 ${formatCompactTokens(usage.outputTokens)}",
                 fontSize = 10.5.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Medium,
@@ -720,7 +727,7 @@ fun TokenUsageTelemetryPill(
             )
             if (usage.cachedTokens > 0) {
                 Text(
-                    text = "⚡ ${nf.format(usage.cachedTokens)} ($cachePct%)",
+                    text = "⚡ ${formatCompactTokens(usage.cachedTokens)} ($cachePct%)",
                     fontSize = 10.5.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Medium,
