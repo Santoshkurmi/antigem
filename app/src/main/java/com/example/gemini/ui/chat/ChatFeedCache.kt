@@ -31,7 +31,7 @@ object ChatFeedCache {
     val cache = ConcurrentHashMap<String, List<ChatFeedItem>>()
 
     fun getOrParse(msg: ChatMessage): List<ChatFeedItem> {
-        val cacheKey = "${msg.id}_${msg.content.hashCode()}_${msg.toolCalls.hashCode()}_${msg.thoughtText?.hashCode() ?: 0}"
+        val cacheKey = "${msg.id}_${msg.content.hashCode()}_${msg.toolCalls.hashCode()}_${msg.thoughtText?.hashCode() ?: 0}_${msg.tokenUsage?.hashCode() ?: 0}"
         val cached = cache[cacheKey]
         if (cached != null) return cached
 
@@ -44,8 +44,9 @@ object ChatFeedCache {
                 msgItems.add(ChatFeedItem.User(msg))
             }
             MessageRole.ASSISTANT -> {
+                val durTag = if (msg.thoughtDurationMs != null && msg.thoughtDurationMs > 0) ":${msg.thoughtDurationMs}" else ""
                 val contentToParse = if (!msg.thoughtText.isNullOrEmpty() && !msg.content.contains("<!-- thought") && !msg.content.contains("<thought")) {
-                    "<!-- thought -->\n${msg.thoughtText}\n<!-- /thought -->\n${msg.content}"
+                    "<!-- thought$durTag -->\n${msg.thoughtText}\n<!-- /thought -->\n${msg.content}"
                 } else {
                     msg.content
                 }
@@ -137,11 +138,12 @@ object ChatFeedCache {
                 val hasActiveRunningTool = msg.toolCalls.any {
                     it.status == "RUNNING" || it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE"
                 }
+                val durTag = if (msg.thoughtDurationMs != null && msg.thoughtDurationMs > 0) ":${msg.thoughtDurationMs}" else ""
                 val contentToParse = if (!msg.thoughtText.isNullOrEmpty() && !msg.content.contains("<!-- thought") && !msg.content.contains("<thought")) {
                     if (msg.content.isBlank()) {
-                        "<!-- thought -->\n${msg.thoughtText}"
+                        "<!-- thought:streaming$durTag -->\n${msg.thoughtText}"
                     } else {
-                        "<!-- thought -->\n${msg.thoughtText}\n<!-- /thought -->\n${msg.content}"
+                        "<!-- thought:streaming$durTag -->\n${msg.thoughtText}\n<!-- /thought -->\n${msg.content}"
                     }
                 } else {
                     msg.content

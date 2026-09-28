@@ -3,12 +3,14 @@ package com.example.gemini.domain.chat
 import android.util.Log
 import com.example.gemini.data.remote.AgyHubClient
 import com.example.gemini.data.remote.dto.*
+import com.example.gemini.domain.model.ArtifactSnapshot
 import com.example.gemini.domain.model.ChatAttachment
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.ChatTurn
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.domain.model.ToolCall
 import com.example.gemini.domain.model.ToolType
+import com.example.gemini.domain.model.TokenUsage
 import com.example.gemini.domain.model.TurnBlock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +32,9 @@ class TrajectoryEngine {
 
     private val _turns = MutableStateFlow<List<ChatTurn>>(emptyList())
     val turns: StateFlow<List<ChatTurn>> = _turns.asStateFlow()
+
+    private val _artifacts = MutableStateFlow<List<ArtifactSnapshot>>(emptyList())
+    val artifacts: StateFlow<List<ArtifactSnapshot>> = _artifacts.asStateFlow()
 
     // Tier 1: Immutable cache of finished turns (Turns 0 to N-1)
     private val completedTurns = mutableListOf<ChatTurn>()
@@ -74,6 +79,7 @@ class TrajectoryEngine {
         activeStepsMap.clear()
         pendingUserTurn = null
         _turns.value = emptyList()
+        _artifacts.value = emptyList()
     }
 
     /**
@@ -234,6 +240,39 @@ class TrajectoryEngine {
             }
         }
 
+        val artifactUpdate = update?.mainTrajectoryUpdate?.artifactSnapshotsUpdate
+            ?: update?.artifactSnapshotsUpdate
+            ?: frame.mainTrajectoryUpdate?.artifactSnapshotsUpdate
+            ?: frame.artifactSnapshotsUpdate
+
+        if (artifactUpdate != null && artifactUpdate.artifactSnapshots.isNotEmpty()) {
+            val mapped = artifactUpdate.artifactSnapshots.map { dto ->
+                ArtifactSnapshot(
+                    name = dto.artifactName,
+                    absoluteUri = dto.artifactAbsoluteUri,
+                    lastEdited = dto.lastEdited,
+                    summary = dto.artifactMetadata?.effectiveSummary ?: "",
+                    requestFeedback = dto.artifactMetadata?.effectiveRequestFeedback == true,
+                    userFacing = dto.artifactMetadata?.effectiveUserFacing == true
+                )
+            }
+            if (mapped.isNotEmpty()) {
+                val current = _artifacts.value.toMutableList()
+                mapped.forEach { incoming ->
+                    val idx = current.indexOfFirst {
+                        (it.absoluteUri.isNotBlank() && it.absoluteUri == incoming.absoluteUri) ||
+                        (it.name.isNotBlank() && it.name == incoming.name)
+                    }
+                    if (idx >= 0) {
+                        current[idx] = incoming
+                    } else {
+                        current.add(incoming)
+                    }
+                }
+                _artifacts.value = current
+            }
+        }
+
         val result = getTurns()
         _turns.value = result
         return result
@@ -249,6 +288,7 @@ class TrajectoryEngine {
         pendingUserTurn = null
 
         var currentTurnBlocks = mutableListOf<TurnBlock>()
+        var currentTurnSteps = mutableListOf<CortexStepDto>()
         var lastUserStepArrayIndex = -1
         var hasUserInputStep = false
 
@@ -262,8 +302,10 @@ class TrajectoryEngine {
                 if (currentTurnBlocks.isNotEmpty()) {
                     val prevUserStepIdx = if (lastUserStepArrayIndex >= 0) (indices.getOrNull(lastUserStepArrayIndex) ?: lastUserStepArrayIndex) else -1
                     val turnId = "${conversationId}_${prevUserStepIdx + 1}"
-                    completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList()))
+                    val tokenUsage = computeTokenUsage(currentTurnSteps)
+                    completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), tokenUsage = tokenUsage))
                     currentTurnBlocks = mutableListOf()
+                    currentTurnSteps = mutableListOf()
                 }
 
                 // Add User turn
@@ -274,6 +316,7 @@ class TrajectoryEngine {
                 activeTurnStartStep = stepIndex + 1
             } else {
                 // Assistant step
+                currentTurnSteps.add(step)
                 extractStepBlocks(step, stepIndex, isStreaming = false, blocks = currentTurnBlocks)
             }
         }
@@ -296,7 +339,8 @@ class TrajectoryEngine {
         } else if (currentTurnBlocks.isNotEmpty()) {
             val lastUserStepIdx = if (lastUserStepArrayIndex >= 0) (indices.getOrNull(lastUserStepArrayIndex) ?: lastUserStepArrayIndex) else -1
             val turnId = "${conversationId}_${lastUserStepIdx + 1}"
-            completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), isStreaming = false))
+            val tokenUsage = computeTokenUsage(currentTurnSteps)
+            completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), isStreaming = false, tokenUsage = tokenUsage))
         }
     }
 
@@ -339,6 +383,63 @@ class TrajectoryEngine {
         }
     }
 
+    private fun parseIsoToMillis(isoString: String?): Long? {
+        if (isoString.isNullOrBlank()) return null
+        return try {
+            java.time.Instant.parse(isoString).toEpochMilli()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun parseProtobufDurationToMillis(durationStr: String?): Long? {
+        if (durationStr.isNullOrBlank()) return null
+        val rawSeconds = durationStr.trim().removeSuffix("s").removeSuffix("S")
+        val secondsDouble = rawSeconds.toDoubleOrNull() ?: return null
+        return (secondsDouble * 1000.0).toLong()
+    }
+
+    /**
+     * Calculates the aggregated TokenUsage for a set of steps in a turn.
+     * Only considers completed PLANNER_RESPONSE steps with valid modelUsage.
+     */
+    private fun computeTokenUsage(steps: Iterable<CortexStepDto>): TokenUsage? {
+        val allStepsList = steps.toList()
+        val plannerSteps = allStepsList.filter {
+            (it.type == CortexStepTypes.PLANNER_RESPONSE || it.type == "CORTEX_STEP_TYPE_PLANNER_RESPONSE") &&
+            (it.status == CortexStepStatuses.DONE || it.status == "CORTEX_STEP_STATUS_DONE") &&
+            it.metadata?.modelUsage != null
+        }
+
+        val startTimes = allStepsList.mapNotNull {
+            parseIsoToMillis(it.metadata?.createdAt) ?: parseIsoToMillis(it.metadata?.startedAt)
+        }
+        val endTimes = allStepsList.mapNotNull {
+            parseIsoToMillis(it.metadata?.completedAt) ?: parseIsoToMillis(it.metadata?.finishedGeneratingAt)
+        }
+        val durationMs = if (startTimes.isNotEmpty() && endTimes.isNotEmpty()) {
+            val start = startTimes.minOrNull() ?: 0L
+            val end = endTimes.maxOrNull() ?: 0L
+            if (end >= start) end - start else 0L
+        } else 0L
+
+        if (plannerSteps.isEmpty() && durationMs == 0L) return null
+
+        val outputTokens = plannerSteps.sumOf { it.metadata?.modelUsage?.outputTokens?.toIntOrNull() ?: 0 }
+        val promptTokens = plannerSteps.lastOrNull()?.metadata?.modelUsage?.inputTokens?.toIntOrNull() ?: 0
+        val cachedTokens = plannerSteps.sumOf { it.metadata?.modelUsage?.cacheReadTokens?.toIntOrNull() ?: 0 }
+
+        if (outputTokens == 0 && promptTokens == 0 && cachedTokens == 0 && durationMs == 0L) return null
+
+        return TokenUsage(
+            promptTokens = promptTokens,
+            outputTokens = outputTokens,
+            cachedTokens = cachedTokens,
+            totalTokens = promptTokens + outputTokens,
+            durationMs = durationMs
+        )
+    }
+
     /**
      * Moves the active turn into the completed turns cache when the turn finishes.
      */
@@ -352,14 +453,15 @@ class TrajectoryEngine {
 
         if (blocks.isNotEmpty()) {
             val turnId = "${conversationId}_$activeTurnStartStep"
+            val tokenUsage = computeTokenUsage(activeStepsMap.values)
             val existingIndex = completedTurns.indexOfLast { it is ChatTurn.Assistant && it.turnId == turnId }
             if (existingIndex >= 0) {
                 val existingTurn = completedTurns[existingIndex] as ChatTurn.Assistant
                 val mergedBlocks = (existingTurn.blocks.filterNot { eb -> blocks.any { it.stepIndex == eb.stepIndex } } + blocks)
                     .sortedBy { it.stepIndex }
-                completedTurns[existingIndex] = existingTurn.copy(blocks = mergedBlocks, isStreaming = false)
+                completedTurns[existingIndex] = existingTurn.copy(blocks = mergedBlocks, isStreaming = false, tokenUsage = tokenUsage ?: existingTurn.tokenUsage)
             } else {
-                completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = blocks.toList(), isStreaming = false))
+                completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = blocks.toList(), isStreaming = false, tokenUsage = tokenUsage))
             }
         }
 
@@ -428,11 +530,13 @@ class TrajectoryEngine {
             activeBlocks.toList()
         }
 
+        val activeTokenUsage = computeTokenUsage(activeStepsMap.values)
         return if (finalBlocks.isNotEmpty() || (isRunning && !isWaitingInteraction)) {
             val activeTurn = ChatTurn.Assistant(
                 turnId = turnId,
                 blocks = finalBlocks,
-                isStreaming = isRunning && !isWaitingInteraction
+                isStreaming = isRunning && !isWaitingInteraction,
+                tokenUsage = activeTokenUsage
             )
             if (existingAssistantIdx >= 0) {
                 baseTurns.toMutableList().apply {
@@ -493,7 +597,7 @@ class TrajectoryEngine {
                                 } else if (block.isStreaming) {
                                     contentParts.add("<!-- thought:streaming -->\nThinking...\n<!-- /thought -->")
                                 }
-                                if (block.durationMs != null) {
+                                if (block.durationMs != null && block.durationMs > 0) {
                                     maxDuration = maxOf(maxDuration ?: 0L, block.durationMs)
                                 }
                             }
@@ -566,7 +670,8 @@ class TrajectoryEngine {
                             thoughtText = combinedThought,
                             thoughtDurationMs = maxDuration,
                             toolCalls = toolCalls,
-                            isStreaming = turn.isStreaming
+                            isStreaming = turn.isStreaming,
+                            tokenUsage = turn.tokenUsage
                         )
                     )
                 }
@@ -594,13 +699,15 @@ class TrajectoryEngine {
         if (step.type == CortexStepTypes.PLANNER_RESPONSE || step.plannerResponse != null) {
             val thinking = step.plannerResponse?.thinking
             val response = step.plannerResponse?.response
+            val thinkingDurationMs = parseProtobufDurationToMillis(step.plannerResponse?.thinkingDuration)
+
             if (!thinking.isNullOrBlank()) {
-                blocks.add(TurnBlock.Thinking(stepIndex = stepIndex, thought = thinking, isStreaming = isStreaming))
+                blocks.add(TurnBlock.Thinking(stepIndex = stepIndex, thought = thinking, durationMs = thinkingDurationMs, isStreaming = isStreaming))
             }
             if (!response.isNullOrBlank()) {
                 blocks.add(TurnBlock.Text(stepIndex = stepIndex, markdown = response, isStreaming = isStreaming))
             } else if (thinking.isNullOrBlank() && (step.status == CortexStepStatuses.GENERATING || isStreaming)) {
-                blocks.add(TurnBlock.Thinking(stepIndex = stepIndex, thought = "", isStreaming = true))
+                blocks.add(TurnBlock.Thinking(stepIndex = stepIndex, thought = "", durationMs = thinkingDurationMs, isStreaming = true))
             }
             return
         }
@@ -889,12 +996,50 @@ class TrajectoryEngine {
                     else -> meta?.toolSummary?.ifBlank { meta.toolAction.ifBlank { "ask_question" } } ?: "ask_question"
                 }
 
-                val questions = askQ?.questions ?: emptyList()
-                output = if (questions.isNotEmpty()) {
-                    questions.joinToString("\n\n") { q ->
-                        "${q.question}\n" + q.options.joinToString("\n") { "• $it" }
+                // 1. Extract answers from completedInteractions if user has responded
+                val completedResponses = step.completedInteractions
+                    .mapNotNull { it.response?.askQuestion?.responses }
+                    .flatten()
+                    .filter { it.question.isNotBlank() }
+
+                if (completedResponses.isNotEmpty()) {
+                    output = completedResponses.joinToString("\n\n") { resp ->
+                        val selectedIds = resp.selectedOptionIds.orEmpty()
+                        val matchedOpts = resp.options.filter { opt -> selectedIds.contains(opt.id) || selectedIds.contains(opt.text) || selectedIds.contains(opt.label) }
+                        val answerText = when {
+                            resp.skipped == true -> "Skipped"
+                            matchedOpts.isNotEmpty() -> matchedOpts.joinToString(", ") { it.text.ifBlank { it.label } }
+                            !resp.writeInResponse.isNullOrBlank() -> "Other: \"${resp.writeInResponse}\""
+                            selectedIds.isNotEmpty() -> selectedIds.joinToString(", ")
+                            else -> "Submitted"
+                        }
+                        "• ${resp.question}: $answerText"
                     }
-                } else ""
+                } else {
+                    // 2. Check if questions in payload contain selectedOptionIds
+                    val answeredQuestions = askQ?.questions?.filter { it.selectedOptionIds.isNotEmpty() || !it.writeInResponse.isNullOrBlank() || it.skipped } ?: emptyList()
+                    if (answeredQuestions.isNotEmpty()) {
+                        output = answeredQuestions.joinToString("\n\n") { q ->
+                            val matchedOpts = q.options.filter { opt -> q.selectedOptionIds.contains(opt.id) || q.selectedOptionIds.contains(opt.text) || q.selectedOptionIds.contains(opt.label) }
+                            val answerText = when {
+                                q.skipped -> "Skipped"
+                                matchedOpts.isNotEmpty() -> matchedOpts.joinToString(", ") { it.text.ifBlank { it.label } }
+                                !q.writeInResponse.isNullOrBlank() -> "Other: \"${q.writeInResponse}\""
+                                q.selectedOptionIds.isNotEmpty() -> q.selectedOptionIds.joinToString(", ")
+                                else -> "Submitted"
+                            }
+                            "• ${q.question}: $answerText"
+                        }
+                    } else {
+                        // 3. Fallback when still waiting for user input
+                        val questions = askQ?.questions ?: emptyList()
+                        output = if (questions.isNotEmpty()) {
+                            questions.joinToString("\n\n") { q ->
+                                "${q.question}\n" + q.options.joinToString("\n") { opt -> "• ${opt.text.ifBlank { opt.label }}" }
+                            }
+                        } else ""
+                    }
+                }
             }
             else -> {
                 // Unknown or custom tool:
@@ -951,6 +1096,12 @@ class TrajectoryEngine {
             } else "RUNNING"
         }
 
+        val startMs = parseIsoToMillis(step.metadata?.startedAt) ?: parseIsoToMillis(step.metadata?.createdAt)
+        val endMs = parseIsoToMillis(step.metadata?.completedAt) ?: parseIsoToMillis(step.metadata?.finishedGeneratingAt)
+        val toolDurationMs = if (startMs != null && endMs != null && endMs >= startMs) {
+            endMs - startMs
+        } else null
+
         return ToolCall(
             id = toolId,
             name = rawName,
@@ -959,6 +1110,7 @@ class TrajectoryEngine {
             output = output,
             status = status,
             exitCode = exitCode,
+            durationMs = toolDurationMs,
             stepIndex = stepIndex,
             trajectoryId = trajectoryId,
             interactionType = step.requestedInteraction?.permission?.resource?.action ?: "permission"

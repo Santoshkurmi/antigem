@@ -103,11 +103,13 @@ object IdeApiClient {
         get() = AuthPreferences.currentBridgeHttpUrl
         set(value) { AuthPreferences.currentBridgeHttpUrl = value }
 
-    private val client = OkHttpClient.Builder()
+    val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .writeTimeout(10, TimeUnit.SECONDS)
         .build()
+
+    private val client: OkHttpClient get() = okHttpClient
 
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 

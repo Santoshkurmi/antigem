@@ -171,14 +171,18 @@ data class CompletedInteractionDto(
 
 @Serializable
 data class CompletedInteractionRequestDto(
-    val permission: RequestedPermissionDto? = null
+    val permission: RequestedPermissionDto? = null,
+    val questionnaire: QuestionnaireDto? = null,
+    val askQuestion: AskQuestionInteractionDto? = null
 )
 
 @Serializable
 data class CompletedInteractionResponseDto(
     val trajectoryId: String = "",
     val stepIndex: Int = 0,
-    val permission: PermissionResolutionDto? = null
+    val permission: PermissionResolutionDto? = null,
+    val questionnaire: QuestionnaireResolutionDto? = null,
+    val askQuestion: AskQuestionInteractionDto? = null
 )
 
 object PermissionScopes {

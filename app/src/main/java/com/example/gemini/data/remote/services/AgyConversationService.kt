@@ -64,7 +64,9 @@ class AgyConversationService(
 
                         val summary = annTitle ?: rawSummary ?: "Conversation"
                         val lastModStr = obj.optString("lastModifiedTime", "")
-                        val isRunning = status.contains("RUNNING", ignoreCase = true)
+                        val notFullyIdle = obj.optBoolean("notFullyIdle", false)
+                        val hasActivity = obj.optBoolean("hasActivity", false)
+                        val isRunning = status == "CASCADE_RUN_STATUS_RUNNING" || status.contains("RUNNING", ignoreCase = true)
 
                         var lastModEpoch = System.currentTimeMillis()
                         if (lastModStr.isNotBlank()) {
@@ -103,6 +105,9 @@ class AgyConversationService(
                                 createdAt = lastModEpoch,
                                 updatedAt = lastModEpoch,
                                 isRunning = isRunning,
+                                notFullyIdle = notFullyIdle,
+                                hasActivity = hasActivity,
+                                runStatus = status.ifBlank { if (isRunning) "CASCADE_RUN_STATUS_RUNNING" else "CASCADE_RUN_STATUS_IDLE" },
                                 stepCount = stepCount,
                                 workspaceUri = wsUri,
                                 parentConversationId = parentCid,

@@ -76,7 +76,6 @@ fun LocalTerminalDialog(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocalTerminalContent(
     onClose: () -> Unit
@@ -137,32 +136,46 @@ fun LocalTerminalContent(
 
     val view = androidx.compose.ui.platform.LocalView.current
 
-    SideEffect {
+    val isDialog = (view.parent as? androidx.compose.ui.window.DialogWindowProvider) != null
+    DisposableEffect(Unit) {
         val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
             ?: (view.context as? android.app.Activity)?.window
         if (window != null) {
-            androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
-            androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
+            if (isDialog) {
+                androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+                androidx.core.view.WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
+            }
             window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
+        onDispose {}
     }
 
     val authPreferences = remember { AuthPreferences(context) }
-    val savedFontSize by authPreferences.terminalFontSize.collectAsState(initial = 14)
+    val initialFontSizeSp = remember { authPreferences.getTerminalFontSizeSync() }
+    val savedFontSize by authPreferences.terminalFontSize.collectAsState(initial = initialFontSizeSp)
     val savedCursorStyle by authPreferences.terminalCursorStyle.collectAsState(initial = "BAR")
     val savedBufferSize by authPreferences.terminalBufferSize.collectAsState(initial = 20000)
 
     val density = androidx.compose.ui.platform.LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
 
-    val baseTextSizePx = remember(savedFontSize, density) {
-        (savedFontSize * density.density).roundToInt().coerceIn(16, 60)
-    }
-
     val isExited by activeSession.isExited.collectAsState()
     val title by activeSession.title.collectAsState()
 
-    var terminalTextSize by remember(baseTextSizePx) { mutableIntStateOf(baseTextSizePx) }
+    var terminalTextSize by remember {
+        mutableIntStateOf((initialFontSizeSp * density.density).roundToInt().coerceIn(16, 60))
+    }
+
+    var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
+
+    LaunchedEffect(savedFontSize) {
+        val currentSp = (terminalTextSize / density.density).roundToInt()
+        if (currentSp != savedFontSize) {
+            val newPx = (savedFontSize * density.density).roundToInt().coerceIn(16, 60)
+            terminalTextSize = newPx
+            currentTerminalView?.setTextSize(newPx)
+        }
+    }
     var ctrlState by remember { mutableStateOf(ModifierState.OFF) }
     var altState by remember { mutableStateOf(ModifierState.OFF) }
     var isTabsMenuExpanded by remember { mutableStateOf(false) }
@@ -170,8 +183,6 @@ fun LocalTerminalContent(
 
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
-
-    var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
 
     LaunchedEffect(savedCursorStyle, savedBufferSize) {
         LocalTerminalManager.updatePreferences(savedCursorStyle, savedBufferSize)
@@ -261,13 +272,19 @@ fun LocalTerminalContent(
                                 val createClient: () -> TerminalViewClient = {
                                     object : TerminalViewClient {
                                         override fun onScale(scale: Float): Float {
-                                            if (scale < 0.9f || scale > 1.1f) {
+                                            if (scale < 0.92f || scale > 1.08f) {
                                                 val doIncrease = scale > 1.0f
                                                 val newSize = if (doIncrease) terminalTextSize + 1 else terminalTextSize - 1
                                                 if (newSize in 16..60) {
                                                     terminalTextSize = newSize
                                                     currentTerminalView?.setTextSize(terminalTextSize)
                                                     val newSp = (newSize / density.density).roundToInt().coerceIn(8, 28)
+                                                    authPreferences.saveTerminalPreferencesSync(
+                                                        fontSize = newSp,
+                                                        cursorStyle = savedCursorStyle,
+                                                        bufferSize = savedBufferSize,
+                                                        theme = "DEFAULT"
+                                                    )
                                                     coroutineScope.launch {
                                                         authPreferences.saveTerminalPreferences(
                                                             fontSize = newSp,

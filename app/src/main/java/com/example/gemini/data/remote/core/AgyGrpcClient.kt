@@ -5,9 +5,12 @@ import com.example.gemini.data.preferences.AuthPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -21,6 +24,11 @@ import java.util.concurrent.TimeUnit
  */
 class AgyGrpcClient(
     val okHttpClient: OkHttpClient = OkHttpClient.Builder()
+        .dispatcher(okhttp3.Dispatcher().apply {
+            maxRequests = 256
+            maxRequestsPerHost = 128
+        })
+        .connectionPool(okhttp3.ConnectionPool(32, 2, TimeUnit.MINUTES))
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS) // Indefinite read timeout for streaming
         .writeTimeout(30, TimeUnit.SECONDS)
@@ -173,8 +181,8 @@ class AgyGrpcClient(
         endpoint: String,
         jsonPayload: String = "{}",
         hubUrl: String = AuthPreferences.currentHubUrl,
-        headers: Map<String, String> = emptyMap()
-    ): Flow<String> = flow {
+        customHeaders: Map<String, String> = emptyMap()
+    ): Flow<String> = callbackFlow {
         val token = csrfManager.getCsrfToken(hubUrl)
         val base = hubUrl.trimEnd('/')
         val url = "$base/$SERVICE_LANGUAGE_SERVER/$endpoint"
@@ -187,60 +195,79 @@ class AgyGrpcClient(
             .header("X-Grpc-Web", "1")
             .header("User-Agent", "antiGem-Android-Native")
             .apply {
-                headers.forEach { (k, v) -> header(k, v) }
+                customHeaders.forEach { (k, v) -> header(k, v) }
                 if (token.isNotBlank()) {
                     header("x-codeium-csrf-token", token)
                 }
             }
         val req = reqBuilder.build()
 
-        Log.d("CHAT_OPEN_DEBUG", "🌐 [AgyGrpcClient.callStream] Request: endpoint=$endpoint, url=$url, payload=${jsonPayload.take(200)}")
         val call = okHttpClient.newCall(req)
-        currentCoroutineContext()[Job]?.invokeOnCompletion {
+        var activeResponse: okhttp3.Response? = null
+
+        val workerJob = launch(Dispatchers.IO) {
+            try {
+                val resp = call.execute()
+                activeResponse = resp
+
+                if (!resp.isSuccessful) {
+                    val err = resp.body?.string() ?: "HTTP ${resp.code}"
+                    resp.close()
+                    val isCsrfError = resp.code == 401 || resp.code == 403 || err.contains("csrf", ignoreCase = true)
+                    if (isCsrfError) {
+                        csrfManager.notifyCsrfExpired(hubUrl, endpoint)
+                    }
+                    Log.e(TAG, "callStream $endpoint failed: HTTP ${resp.code}")
+                    close(java.io.IOException("HTTP ${resp.code}: $err"))
+                    return@launch
+                }
+
+                val headerStatus = resp.header("grpc-status")?.toIntOrNull()
+                if (headerStatus != null && headerStatus != 0) {
+                    val msg = resp.header("grpc-message") ?: "gRPC status $headerStatus"
+                    resp.close()
+                    Log.e(TAG, "callStream $endpoint header error ($headerStatus): $msg")
+                    close(java.io.IOException("gRPC status $headerStatus: $msg"))
+                    return@launch
+                }
+
+                val bodyStream = resp.body?.byteStream()
+                if (bodyStream == null) {
+                    resp.close()
+                    close(java.io.IOException("Response body stream is null"))
+                    return@launch
+                }
+
+                resp.use {
+                    GrpcWebFrameCodec.readStreamFrames(bodyStream) { frameJson ->
+                        trySend(frameJson).isSuccess
+                    }
+                }
+                close()
+            } catch (e: Exception) {
+                if (e !is java.net.SocketException && !e.message.orEmpty()
+                        .contains("Socket closed", ignoreCase = true)
+                ) {
+                    Log.d(TAG, "callStream $endpoint stream ended: ${e.message}")
+                }
+                close(e)
+            } finally {
+                try {
+                    activeResponse?.close()
+                } catch (_: Exception) {
+                }
+            }
+        }
+
+        awaitClose {
             call.cancel()
-        }
-        val resp = call.execute()
-        Log.d("CHAT_OPEN_DEBUG", "🌐 [AgyGrpcClient.callStream] Response: code=${resp.code}, msg=${resp.message}, headers=${resp.headers}")
-        if (!resp.isSuccessful) {
-            val err = resp.body?.string() ?: "HTTP ${resp.code}"
-            resp.close()
-            val isCsrfError = resp.code == 401 || resp.code == 403 || err.contains("csrf", ignoreCase = true)
-            if (isCsrfError) {
-                csrfManager.notifyCsrfExpired(hubUrl, endpoint)
+            workerJob.cancel()
+            try {
+                activeResponse?.close()
+            } catch (_: Exception) {
             }
-            Log.e("CHAT_OPEN_DEBUG", "❌ [AgyGrpcClient.callStream] HTTP Error: code=${resp.code}, body=$err")
-            Log.e(TAG, "callStream $endpoint failed: HTTP ${resp.code}")
-            throw java.io.IOException("HTTP ${resp.code}: $err")
+            // com.example.gemini.MainActivity.showToast("🛑 Cancelled: $endpoint")
         }
-
-        val headerStatus = resp.header("grpc-status")?.toIntOrNull()
-        if (headerStatus != null && headerStatus != 0) {
-            val msg = resp.header("grpc-message") ?: "gRPC status $headerStatus"
-            resp.close()
-            Log.e("CHAT_OPEN_DEBUG", "❌ [AgyGrpcClient.callStream] Header gRPC Status Error: status=$headerStatus, msg=$msg")
-            Log.e(TAG, "callStream $endpoint header error ($headerStatus): $msg")
-            throw java.io.IOException("gRPC status $headerStatus: $msg")
-        }
-
-        val bodyStream = resp.body?.byteStream()
-        if (bodyStream == null) {
-            Log.e("CHAT_OPEN_DEBUG", "❌ [AgyGrpcClient.callStream] bodyStream is null")
-            resp.close()
-            throw java.io.IOException("Response body stream is null")
-        }
-
-        try {
-            GrpcWebFrameCodec.readStreamFrames(bodyStream) { frameJson ->
-                Log.d("CHAT_OPEN_DEBUG", "📦 [AgyGrpcClient.callStream] Received decoded frame (len=${frameJson.length})")
-                emit(frameJson)
-            }
-        } catch (e: Exception) {
-            Log.e("CHAT_OPEN_DEBUG", "❌ [AgyGrpcClient.callStream] Exception reading stream frames: ${e.message}", e)
-            throw e
-        } finally {
-            Log.d("CHAT_OPEN_DEBUG", "🏁 [AgyGrpcClient.callStream] Stream closed for $endpoint")
-            resp.close()
-        }
-    }.flowOn(Dispatchers.IO)
+    }
 }
 

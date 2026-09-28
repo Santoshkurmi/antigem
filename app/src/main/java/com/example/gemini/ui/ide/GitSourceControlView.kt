@@ -55,7 +55,7 @@ fun GitSourceControlView(
     var stagedExpanded by remember { mutableStateOf(true) }
     var changesExpanded by remember { mutableStateOf(true) }
     var untrackedExpanded by remember { mutableStateOf(true) }
-    var historyExpanded by remember { mutableStateOf(false) }
+    var historyExpanded by remember { mutableStateOf(true) }
 
     var showBranchMenu by remember { mutableStateOf(false) }
     var showNewBranchDialog by remember { mutableStateOf(false) }
@@ -93,9 +93,7 @@ fun GitSourceControlView(
             status = s
             if (s != null && s.isGitRepo) {
                 branches = GitApiClient.getBranches(projPath)
-                if (historyExpanded || commitLogs.isEmpty()) {
-                    commitLogs = GitApiClient.getLog(projPath, 20)
-                }
+                commitLogs = GitApiClient.getLog(projPath, 20)
             } else {
                 branches = emptyList()
                 commitLogs = emptyList()
@@ -1304,13 +1302,14 @@ fun GitSourceControlView(
                             if (status?.stagedFiles.isNullOrEmpty()) {
                                 GitApiClient.stage(projPath, emptyList())
                             }
-                            val ok = GitApiClient.commit(projPath, commitMessage.trim())
-                            if (ok) {
+                            val res = GitApiClient.commitDetailed(projPath, commitMessage.trim())
+                            if (res.success) {
                                 commitMessage = ""
                                 refreshGitData()
                                 Toast.makeText(context, "Committed successfully!", Toast.LENGTH_SHORT).show()
                             } else {
-                                Toast.makeText(context, "Commit failed", Toast.LENGTH_SHORT).show()
+                                val err = res.error.takeIf { it.isNotBlank() } ?: "Commit failed"
+                                Toast.makeText(context, err, Toast.LENGTH_LONG).show()
                             }
                             isOperating = false
                         }

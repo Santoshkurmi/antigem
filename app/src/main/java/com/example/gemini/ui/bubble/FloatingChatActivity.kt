@@ -214,7 +214,8 @@ fun FloatingChatWindow(
                                     translationX = if (isVisible) 0f else 20000f
                                 }
                         ) {
-                            if (currentViewMode == AppViewMode.TERMINAL || hasEverOpenedTerminal) {
+                            val terminalSessions by com.example.gemini.data.local.LocalTerminalManager.sessions.collectAsState()
+                            if (currentViewMode == AppViewMode.TERMINAL || (hasEverOpenedTerminal && terminalSessions.isNotEmpty())) {
                                 LocalTerminalContent(
                                     onClose = { currentViewMode = AppViewMode.CHAT }
                                 )

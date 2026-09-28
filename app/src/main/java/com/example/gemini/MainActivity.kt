@@ -13,6 +13,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.example.gemini.theme.GeminiTheme
@@ -31,10 +32,22 @@ enum class AppViewMode {
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        private var instanceRef: java.lang.ref.WeakReference<MainActivity>? = null
+
+        fun showToast(message: String) {
+            val activity = instanceRef?.get() ?: return
+            activity.runOnUiThread {
+                android.widget.Toast.makeText(activity, message, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private val chatViewModel: ChatViewModel by lazy { ChatViewModelHolder.get(application) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        instanceRef = java.lang.ref.WeakReference(this)
         enableEdgeToEdge()
 
         try {
@@ -64,7 +77,44 @@ class MainActivity : ComponentActivity() {
             var currentViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
             var previousViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
 
+            val isFloatingSwitcherEnabled by chatViewModel.isFloatingSwitcherEnabled.collectAsState()
+            val floatingSwitcherOrientation by chatViewModel.floatingSwitcherOrientation.collectAsState()
+            val floatingSwitcherItems by chatViewModel.floatingSwitcherItems.collectAsState()
+            val floatingSwitcherAutoCollapseSec by chatViewModel.floatingSwitcherAutoCollapseSec.collectAsState()
+            val floatingSwitcherPosX by chatViewModel.floatingSwitcherPosX.collectAsState()
+            val floatingSwitcherPosY by chatViewModel.floatingSwitcherPosY.collectAsState()
+            val isFloatingDiagnosticsEnabled by chatViewModel.isFloatingDiagnosticsEnabled.collectAsState()
+
+            LaunchedEffect(isFloatingDiagnosticsEnabled) {
+                if (isFloatingDiagnosticsEnabled) {
+                    com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.start()
+                } else {
+                    com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.stop()
+                }
+            }
+
             val context = androidx.compose.ui.platform.LocalContext.current
+            val view = androidx.compose.ui.platform.LocalView.current
+            DisposableEffect(currentViewMode, useDarkTheme) {
+                val window = (context as? android.app.Activity)?.window
+                if (window != null && !view.isInEditMode) {
+                    val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
+                    if (currentViewMode == AppViewMode.TERMINAL) {
+                        window.statusBarColor = android.graphics.Color.BLACK
+                        window.navigationBarColor = android.graphics.Color.BLACK
+                        insetsController.isAppearanceLightStatusBars = false
+                        insetsController.isAppearanceLightNavigationBars = false
+                    } else {
+                        val bgArgb = if (useDarkTheme) com.example.gemini.theme.ClaudeDarkBg.toArgb() else com.example.gemini.theme.ClaudeCream.toArgb()
+                        window.statusBarColor = bgArgb
+                        window.navigationBarColor = bgArgb
+                        insetsController.isAppearanceLightStatusBars = !useDarkTheme
+                        insetsController.isAppearanceLightNavigationBars = !useDarkTheme
+                    }
+                }
+                onDispose {}
+            }
+
             var showPermissionsDialog by remember {
                 mutableStateOf(!com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(context))
             }
@@ -105,7 +155,13 @@ class MainActivity : ComponentActivity() {
                         )
                     } else {
                         BackHandler(enabled = currentViewMode != AppViewMode.CHAT && currentViewMode != AppViewMode.BROWSER) {
-                            currentViewMode = AppViewMode.CHAT
+                            currentViewMode = if (previousViewMode != currentViewMode && previousViewMode != AppViewMode.BROWSER) previousViewMode else AppViewMode.CHAT
+                        }
+
+                        val terminalSessions by com.example.gemini.data.local.LocalTerminalManager.sessions.collectAsState()
+                        var hasEverOpenedTerminal by remember { mutableStateOf(false) }
+                        if (currentViewMode == AppViewMode.TERMINAL) {
+                            hasEverOpenedTerminal = true
                         }
 
                         Box(modifier = Modifier.fillMaxSize()) {
@@ -124,6 +180,10 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToIde = {
                                         previousViewMode = currentViewMode
                                         currentViewMode = AppViewMode.IDE
+                                    },
+                                    onNavigateToTerminal = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.TERMINAL
                                     },
                                     onNavigateToBrowser = {
                                         previousViewMode = currentViewMode
@@ -152,6 +212,25 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            // Persistent Terminal Screen (Retains terminal tmux sessions & state)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        val isVisible = currentViewMode == AppViewMode.TERMINAL
+                                        alpha = if (isVisible) 1f else 0f
+                                        translationX = if (isVisible) 0f else 20000f
+                                    }
+                            ) {
+                                if (currentViewMode == AppViewMode.TERMINAL || (hasEverOpenedTerminal && terminalSessions.isNotEmpty())) {
+                                    com.example.gemini.ui.components.LocalTerminalContent(
+                                        onClose = {
+                                            currentViewMode = if (previousViewMode == AppViewMode.TERMINAL) AppViewMode.CHAT else previousViewMode
+                                        }
+                                    )
+                                }
+                            }
+
                             // Persistent Web Preview Browser Screen (Retains open tabs, WebViews, state & navigation)
                             Box(
                                 modifier = Modifier
@@ -165,6 +244,49 @@ class MainActivity : ComponentActivity() {
                                 BrowserScreen(
                                     isVisible = currentViewMode == AppViewMode.BROWSER,
                                     onClose = { currentViewMode = if (previousViewMode == AppViewMode.BROWSER) AppViewMode.CHAT else previousViewMode }
+                                )
+                            }
+
+                            // Floating App Switcher Across Whole App (Renders on top of Chat, IDE, Terminal, Browser)
+                            if (isFloatingSwitcherEnabled) {
+                                com.example.gemini.ui.components.FloatingSwitcherWidget(
+                                    currentViewMode = currentViewMode,
+                                    orientation = floatingSwitcherOrientation,
+                                    items = floatingSwitcherItems,
+                                    autoCollapseTimeoutSec = floatingSwitcherAutoCollapseSec,
+                                    savedPosXRatio = floatingSwitcherPosX,
+                                    savedPosYRatio = floatingSwitcherPosY,
+                                    onNavigateToChat = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.CHAT
+                                    },
+                                    onNavigateToIde = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.IDE
+                                    },
+                                    onNavigateToBrowser = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.BROWSER
+                                    },
+                                    onNavigateToTerminal = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.TERMINAL
+                                    },
+                                    onPositionSaved = { x, y ->
+                                        chatViewModel.saveFloatingSwitcherPosition(x, y)
+                                    }
+                                )
+                            }
+
+                            // Floating Video Player Overlay for active background/in-app playback controls
+                            com.example.gemini.ui.components.FloatingVideoPlayerOverlay()
+
+                            // Real-time floating live diagnostics overlay (JVM Threads, OkHttp queues, connections, lag)
+                            if (isFloatingDiagnosticsEnabled) {
+                                com.example.gemini.ui.components.FloatingDiagnosticsOverlay(
+                                    onDismiss = {
+                                        chatViewModel.setFloatingDiagnosticsEnabled(false)
+                                    }
                                 )
                             }
                         }

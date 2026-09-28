@@ -15,6 +15,7 @@ data class AgyStreamFrameDto(
     val mainTrajectoryUpdate: AgyMainTrajectoryUpdateDto? = null,
     val stepsUpdate: AgyStepsUpdateDto? = null,
     val steps: List<CortexStepDto>? = null,
+    val artifactSnapshotsUpdate: ArtifactSnapshotsUpdateDto? = null,
     val lastStepError: CortexErrorDto? = null,
     val lastStepType: String = "",
     val conversationId: String = "",
@@ -34,6 +35,7 @@ data class AgyMainUpdateDto(
     val executorLoopStatus: String = "",
     val mainTrajectoryUpdate: AgyMainTrajectoryUpdateDto? = null,
     val stepsUpdate: AgyStepsUpdateDto? = null,
+    val artifactSnapshotsUpdate: ArtifactSnapshotsUpdateDto? = null,
     val lastStepError: CortexErrorDto? = null,
     val lastStepType: String = "",
     val fullyIdle: Boolean = false
@@ -42,12 +44,44 @@ data class AgyMainUpdateDto(
 @Serializable
 data class AgyMainTrajectoryUpdateDto(
     val stepsUpdate: AgyStepsUpdateDto? = null,
+    val artifactSnapshotsUpdate: ArtifactSnapshotsUpdateDto? = null,
     val trajectoryId: String = "",
     val lastStepError: CortexErrorDto? = null,
     val lastStepType: String = "",
     val generatorMetadatasUpdate: JsonObject? = null,
     val executorMetadatasUpdate: JsonObject? = null
 )
+
+@Serializable
+data class ArtifactSnapshotsUpdateDto(
+    val indices: List<Int> = emptyList(),
+    val artifactSnapshots: List<ArtifactSnapshotDto> = emptyList()
+)
+
+@Serializable
+data class ArtifactSnapshotDto(
+    val artifactName: String = "",
+    val artifactAbsoluteUri: String = "",
+    val lastEdited: String = "",
+    val artifactMetadata: ArtifactMetadataDto? = null
+)
+
+@Serializable
+data class ArtifactMetadataDto(
+    val summary: String? = null,
+    val updatedAt: String? = null,
+    val requestFeedback: Boolean = false,
+    val userFacing: Boolean = false,
+    @SerialName("Summary") val summaryPascal: String? = null,
+    @SerialName("UpdatedAt") val updatedAtPascal: String? = null,
+    @SerialName("RequestFeedback") val requestFeedbackPascal: Boolean? = null,
+    @SerialName("UserFacing") val userFacingPascal: Boolean? = null
+) {
+    val effectiveSummary: String get() = summary ?: summaryPascal ?: ""
+    val effectiveUpdatedAt: String get() = updatedAt ?: updatedAtPascal ?: ""
+    val effectiveRequestFeedback: Boolean get() = requestFeedback || (requestFeedbackPascal == true)
+    val effectiveUserFacing: Boolean get() = userFacing || (userFacingPascal == true)
+}
 
 @Serializable
 data class AgyStepsUpdateDto(
@@ -140,6 +174,8 @@ data class CortexModelUsageDto(
     val outputTokens: String = "0",
     val thinkingOutputTokens: String = "0",
     val responseOutputTokens: String = "0",
+    val cacheReadTokens: String = "0",
+    val cacheCreationTokens: String = "0",
     val apiProvider: String = "",
     val messageId: String = "",
     val responseId: String = ""
@@ -183,6 +219,7 @@ data class CortexPlannerResponseDto(
     val thinking: String = "",                  // Full cumulative thinking text up to this chunk
     val modifiedResponse: String = "",
     val messageId: String = "",
+    val thinkingDuration: String = "",
     val stopReason: String = ""
 )
 
@@ -405,7 +442,10 @@ data class AskQuestionItemDto(
     val options: List<AskQuestionOptionDto> = emptyList(),
     val is_multi_select: Boolean = false,
     val isMultiSelect: Boolean = false,
-    val IsMultiSelect: Boolean = false
+    val IsMultiSelect: Boolean = false,
+    val selectedOptionIds: List<String> = emptyList(),
+    val writeInResponse: String? = null,
+    val skipped: Boolean = false
 )
 
 // ==========================================
@@ -468,12 +508,6 @@ data class ReplacementChunkDto(
     val AllowMultiple: Boolean = false
 )
 
-@Serializable
-data class ArtifactMetadataDto(
-    val Summary: String = "",
-    val UserFacing: Boolean = false,
-    val RequestFeedback: Boolean = false
-)
 
 @Serializable
 data class ListDirArgsDto(

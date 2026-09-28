@@ -97,7 +97,11 @@ fun ChatHistoryDrawer(
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var showFullSearchDialog by remember { mutableStateOf(false) }
-    var instanceToTerminate by remember { mutableStateOf<Pair<com.example.gemini.data.remote.AgyActiveInstance, String>?>(null) }
+    var instanceToTerminate by remember {
+        mutableStateOf<Pair<com.example.gemini.data.remote.AgyActiveInstance, String>?>(
+            null
+        )
+    }
     var showProfileDialog by remember { mutableStateOf(false) }
     var showSigningInProgressDialog by remember { mutableStateOf(false) }
     var showExitConfirmDialog by remember { mutableStateOf(false) }
@@ -107,7 +111,7 @@ fun ChatHistoryDrawer(
         if (searchQuery.isBlank()) conversations
         else conversations.filter {
             it.title.contains(searchQuery, ignoreCase = true) ||
-            (it.subagentRole != null && it.subagentRole.contains(searchQuery, ignoreCase = true))
+                    (it.subagentRole != null && it.subagentRole.contains(searchQuery, ignoreCase = true))
         }
     }
 
@@ -118,8 +122,8 @@ fun ChatHistoryDrawer(
     val subagentsByParent = remember(filtered, allFilteredIds) {
         filtered.filter { conv ->
             conv.parentConversationId != null &&
-            conv.parentConversationId != conv.id &&
-            conv.parentConversationId in allFilteredIds
+                    conv.parentConversationId != conv.id &&
+                    conv.parentConversationId in allFilteredIds
         }.groupBy { it.parentConversationId!! }
     }
 
@@ -247,8 +251,8 @@ fun ChatHistoryDrawer(
             val visibleInfo = listState.layoutInfo.visibleItemsInfo
             val visibleItem = visibleInfo.firstOrNull { it.index == targetIndex }
             val isFullyVisible = visibleItem != null &&
-                visibleItem.offset >= listState.layoutInfo.viewportStartOffset &&
-                (visibleItem.offset + visibleItem.size) <= listState.layoutInfo.viewportEndOffset
+                    visibleItem.offset >= listState.layoutInfo.viewportStartOffset &&
+                    (visibleItem.offset + visibleItem.size) <= listState.layoutInfo.viewportEndOffset
 
             if (!isFullyVisible) {
                 val scrollPos = (targetIndex - 1).coerceAtLeast(0)
@@ -394,7 +398,7 @@ fun ChatHistoryDrawer(
             },
             title = {
                 Text(
-                    text = "Exit Antigravity?",
+                    text = "Exit AntiGem?",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -418,10 +422,12 @@ fun ChatHistoryDrawer(
                             Log.e("ChatHistoryDrawer", "Error stopping service", e)
                             try {
                                 com.example.gemini.data.local.LocalServerManager.forceKillAll()
-                            } catch (_: Exception) {}
+                            } catch (_: Exception) {
+                            }
                             try {
                                 com.example.gemini.data.local.LocalTerminalManager.closeAll()
-                            } catch (_: Exception) {}
+                            } catch (_: Exception) {
+                            }
                             (context as? android.app.Activity)?.finishAffinity()
                             android.os.Process.killProcess(android.os.Process.myPid())
                             kotlin.system.exitProcess(0)
@@ -482,7 +488,10 @@ fun ChatHistoryDrawer(
                         searchQuery = ""
                         isSearchActive = false
                         scope.launch {
-                            try { listState.scrollToItem(0) } catch (_: Exception) {}
+                            try {
+                                listState.scrollToItem(0)
+                            } catch (_: Exception) {
+                            }
                         }
                         onNewChat()
                     },
@@ -538,7 +547,9 @@ fun ChatHistoryDrawer(
                     onClick = { onToggleGroupByWorkspace(!groupByWorkspace) },
                     modifier = Modifier.size(36.dp),
                     shape = RoundedCornerShape(10.dp),
-                    color = if (groupByWorkspace) ClaudeTerracotta.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    color = if (groupByWorkspace) ClaudeTerracotta.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(
+                        alpha = 0.5f
+                    ),
                     border = BorderStroke(
                         1.dp,
                         if (groupByWorkspace) ClaudeTerracotta.copy(alpha = 0.45f)
@@ -549,7 +560,9 @@ fun ChatHistoryDrawer(
                         Icon(
                             imageVector = Icons.Default.Folder,
                             contentDescription = if (groupByWorkspace) "Disable Workspace Grouping" else "Group by Workspace",
-                            tint = if (groupByWorkspace) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            tint = if (groupByWorkspace) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = 0.8f
+                            ),
                             modifier = Modifier.size(17.dp)
                         )
                     }
@@ -566,7 +579,9 @@ fun ChatHistoryDrawer(
                     },
                     modifier = Modifier.size(36.dp),
                     shape = RoundedCornerShape(10.dp),
-                    color = if (isSearchActive || searchQuery.isNotBlank()) ClaudeTerracotta.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    color = if (isSearchActive || searchQuery.isNotBlank()) ClaudeTerracotta.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(
+                        alpha = 0.5f
+                    ),
                     border = BorderStroke(
                         1.dp,
                         if (isSearchActive || searchQuery.isNotBlank()) ClaudeTerracotta.copy(alpha = 0.45f)
@@ -577,7 +592,9 @@ fun ChatHistoryDrawer(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
-                            tint = if (isSearchActive || searchQuery.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            tint = if (isSearchActive || searchQuery.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = 0.8f
+                            ),
                             modifier = Modifier.size(17.dp)
                         )
                     }
@@ -610,7 +627,9 @@ fun ChatHistoryDrawer(
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = null,
-                                tint = if (searchQuery.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                tint = if (searchQuery.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                    alpha = 0.7f
+                                ),
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -703,7 +722,8 @@ fun ChatHistoryDrawer(
             Spacer(modifier = Modifier.height(10.dp))
 
             val isEngineConnecting = !isHubOnline && conversations.isEmpty()
-            val showSkeleton = (!hasReceivedInitialSync || isLoading) && conversations.isEmpty() && errorMessage.isNullOrBlank()
+            val showSkeleton =
+                (!hasReceivedInitialSync || isLoading) && conversations.isEmpty() && errorMessage.isNullOrBlank()
 
             Crossfade(
                 targetState = when {
@@ -722,9 +742,11 @@ fun ChatHistoryDrawer(
                     "engine_warming" -> {
                         DrawerEngineWarmingUpView()
                     }
+
                     "loading" -> {
                         SidebarChatListSkeleton()
                     }
+
                     "error" -> {
                         Column(
                             modifier = Modifier
@@ -757,6 +779,7 @@ fun ChatHistoryDrawer(
                             }
                         }
                     }
+
                     "empty" -> {
                         Box(
                             modifier = Modifier
@@ -771,38 +794,49 @@ fun ChatHistoryDrawer(
                             )
                         }
                     }
+
                     else -> {
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize()
                         ) {
                             if (!groupByWorkspace) {
-                                val visibleTree = buildVisibleChatTree(topLevelChats, subagentsByParent, expandedParentIds)
+                                val visibleTree =
+                                    buildVisibleChatTree(topLevelChats, subagentsByParent, expandedParentIds)
                                 items(visibleTree, key = { it.conv.id }) { item ->
                                     val conv = item.conv
                                     val isSelected = conv.id == currentConversationId
                                     val activeInst = activeInstances.find { it.conversationId == conv.id }
-                                    val isConvRunning = conv.isRunning || (conv.id == currentConversationId && isStreaming) || activeInst != null
+                                    val isActivelyRunning =
+                                        conv.isRunning || (conv.id == currentConversationId && isStreaming)
+                                    val isScheduledOrBackground =
+                                        !isActivelyRunning && (conv.notFullyIdle || conv.hasActivity || activeInst != null)
 
                                     ChatHistoryItemRow(
                                         conv = conv,
                                         isSelected = isSelected,
                                         activeInst = activeInst,
-                                        isConvRunning = isConvRunning,
+                                        isActivelyRunning = isActivelyRunning,
+                                        isScheduledOrBackground = isScheduledOrBackground,
                                         depth = item.depth,
-                                        displayName = if (item.depth > 0) conv.subagentRole?.takeIf { it.isNotBlank() } ?: conv.title else conv.title,
+                                        displayName = if (item.depth > 0) conv.subagentRole?.takeIf { it.isNotBlank() }
+                                            ?: conv.title else conv.title,
                                         subagents = item.subagents,
                                         isSubagentsExpanded = item.isExpanded,
                                         onToggleSubagents = if (item.subagents.isNotEmpty()) {
                                             {
-                                                expandedParentIds = if (item.isExpanded) expandedParentIds - conv.id else expandedParentIds + conv.id
+                                                expandedParentIds =
+                                                    if (item.isExpanded) expandedParentIds - conv.id else expandedParentIds + conv.id
                                             }
                                         } else null,
                                         onSelectConversation = {
                                             if (item.subagents.isNotEmpty()) {
                                                 expandedParentIds = expandedParentIds + conv.id
                                             }
-                                            Log.d("CHAT_OPEN_DEBUG", "📂 [Drawer] User clicked conversation: id=${conv.id}, title='${conv.title}'")
+                                            Log.d(
+                                                "CHAT_OPEN_DEBUG",
+                                                "📂 [Drawer] User clicked conversation: id=${conv.id}, title='${conv.title}'"
+                                            )
                                             onSelectConversation(conv.id)
                                         },
                                         onForkConversation = onForkConversation,
@@ -826,7 +860,8 @@ fun ChatHistoryDrawer(
                                                         Modifier
                                                             .clip(RoundedCornerShape(6.dp))
                                                             .clickable {
-                                                                expandedGroups = if (isExpanded) expandedGroups - groupName else expandedGroups + groupName
+                                                                expandedGroups =
+                                                                    if (isExpanded) expandedGroups - groupName else expandedGroups + groupName
                                                             }
                                                     } else Modifier
                                                 )
@@ -875,32 +910,42 @@ fun ChatHistoryDrawer(
                                         }
                                     }
 
-                                    val groupTree = buildVisibleChatTree(displayChats, subagentsByParent, expandedParentIds)
+                                    val groupTree =
+                                        buildVisibleChatTree(displayChats, subagentsByParent, expandedParentIds)
                                     items(groupTree, key = { it.conv.id }) { item ->
                                         val conv = item.conv
                                         val isSelected = conv.id == currentConversationId
                                         val activeInst = activeInstances.find { it.conversationId == conv.id }
-                                        val isConvRunning = conv.isRunning || (conv.id == currentConversationId && isStreaming) || activeInst != null
+                                        val isActivelyRunning =
+                                            conv.isRunning || (conv.id == currentConversationId && isStreaming)
+                                        val isScheduledOrBackground =
+                                            !isActivelyRunning && (conv.notFullyIdle || conv.hasActivity || activeInst != null)
 
                                         ChatHistoryItemRow(
                                             conv = conv,
                                             isSelected = isSelected,
                                             activeInst = activeInst,
-                                            isConvRunning = isConvRunning,
+                                            isActivelyRunning = isActivelyRunning,
+                                            isScheduledOrBackground = isScheduledOrBackground,
                                             depth = item.depth,
-                                            displayName = if (item.depth > 0) conv.subagentRole?.takeIf { it.isNotBlank() } ?: conv.title else conv.title,
+                                            displayName = if (item.depth > 0) conv.subagentRole?.takeIf { it.isNotBlank() }
+                                                ?: conv.title else conv.title,
                                             subagents = item.subagents,
                                             isSubagentsExpanded = item.isExpanded,
                                             onToggleSubagents = if (item.subagents.isNotEmpty()) {
                                                 {
-                                                    expandedParentIds = if (item.isExpanded) expandedParentIds - conv.id else expandedParentIds + conv.id
+                                                    expandedParentIds =
+                                                        if (item.isExpanded) expandedParentIds - conv.id else expandedParentIds + conv.id
                                                 }
                                             } else null,
                                             onSelectConversation = {
                                                 if (item.subagents.isNotEmpty()) {
                                                     expandedParentIds = expandedParentIds + conv.id
                                                 }
-                                                Log.d("CHAT_OPEN_DEBUG", "📂 [Drawer Compact] User clicked conversation: id=${conv.id}, title='${conv.title}'")
+                                                Log.d(
+                                                    "CHAT_OPEN_DEBUG",
+                                                    "📂 [Drawer Compact] User clicked conversation: id=${conv.id}, title='${conv.title}'"
+                                                )
                                                 onSelectConversation(conv.id)
                                             },
                                             onForkConversation = onForkConversation,
@@ -919,7 +964,8 @@ fun ChatHistoryDrawer(
                                                     .padding(start = 12.dp, top = 2.dp, bottom = 4.dp)
                                                     .clip(RoundedCornerShape(4.dp))
                                                     .clickable {
-                                                        expandedGroups = if (isExpanded) expandedGroups - groupName else expandedGroups + groupName
+                                                        expandedGroups =
+                                                            if (isExpanded) expandedGroups - groupName else expandedGroups + groupName
                                                     }
                                                     .padding(horizontal = 4.dp, vertical = 2.dp)
                                             ) {
@@ -1096,7 +1142,8 @@ fun ChatHistoryDrawer(
                                             .background(ClaudeTerracotta),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        val initial = authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+                                        val initial =
+                                            authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
                                         Text(
                                             text = initial,
                                             fontSize = 11.sp,
@@ -1112,7 +1159,8 @@ fun ChatHistoryDrawer(
                                             .background(ClaudeTerracotta),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        val initial = authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+                                        val initial =
+                                            authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
                                         Text(
                                             text = initial,
                                             fontSize = 11.sp,
@@ -1137,7 +1185,7 @@ fun ChatHistoryDrawer(
                             }
                         }
                     }
-                } else {
+                } else if (authInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED) {
                     // Not logged in (UNAUTHENTICATED) -> Sign In button
                     FilledTonalButton(
                         onClick = onLogin,
@@ -1248,7 +1296,8 @@ private fun ChatHistoryItemRow(
     conv: Conversation,
     isSelected: Boolean,
     activeInst: com.example.gemini.data.remote.AgyActiveInstance?,
-    isConvRunning: Boolean,
+    isActivelyRunning: Boolean,
+    isScheduledOrBackground: Boolean,
     depth: Int = 0,
     displayName: String = conv.title,
     subagents: List<Conversation> = emptyList(),
@@ -1261,6 +1310,11 @@ private fun ChatHistoryItemRow(
 ) {
     val isSubagent = depth > 0
     val startPadding = if (isSubagent) (12 + (depth * 14)).dp else 0.dp
+    val statusDotColor = when {
+        isActivelyRunning -> Color(0xFF4CAF50)
+        isScheduledOrBackground -> Color(0xFFFFB300)
+        else -> null
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1293,13 +1347,13 @@ private fun ChatHistoryItemRow(
                     tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.size(15.dp)
                 )
-                if (isConvRunning) {
+                if (statusDotColor != null) {
                     Box(
                         modifier = Modifier
                             .size(6.dp)
                             .align(Alignment.TopEnd)
                             .offset(x = 2.dp, y = (-2).dp)
-                            .background(Color(0xFF4CAF50), CircleShape)
+                            .background(statusDotColor, CircleShape)
                     )
                 }
             }
@@ -1312,13 +1366,13 @@ private fun ChatHistoryItemRow(
                     tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     modifier = Modifier.size(17.dp)
                 )
-                if (isConvRunning) {
+                if (statusDotColor != null) {
                     Box(
                         modifier = Modifier
                             .size(7.dp)
                             .align(Alignment.TopEnd)
                             .offset(x = 2.dp, y = (-2).dp)
-                            .background(Color(0xFF4CAF50), CircleShape)
+                            .background(statusDotColor, CircleShape)
                     )
                 }
             }
@@ -1347,8 +1401,13 @@ private fun ChatHistoryItemRow(
                 if (subagents.isNotEmpty()) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = if (isSubagentsExpanded) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                        border = BorderStroke(1.dp, if (isSubagentsExpanded) ClaudeTerracotta.copy(alpha = 0.4f) else Color.Transparent),
+                        color = if (isSubagentsExpanded) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(
+                            alpha = 0.7f
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSubagentsExpanded) ClaudeTerracotta.copy(alpha = 0.4f) else Color.Transparent
+                        ),
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .clickable { onToggleSubagents?.invoke() }
@@ -1417,12 +1476,12 @@ private fun ChatHistoryItemRow(
                 }
             }
             Spacer(modifier = Modifier.width(6.dp))
-        } else if (isConvRunning) {
+        } else if (statusDotColor != null) {
             Box(
                 modifier = Modifier
                     .padding(horizontal = 2.dp)
                     .size(7.dp)
-                    .background(Color(0xFF4CAF50), CircleShape)
+                    .background(statusDotColor, CircleShape)
             )
             Spacer(modifier = Modifier.width(4.dp))
         }
@@ -1547,9 +1606,9 @@ fun SearchChatsDialog(
 
             val matchesQuery = if (query.isBlank()) true else {
                 conv.title.contains(query, ignoreCase = true) ||
-                    (conv.subagentRole?.contains(query, ignoreCase = true) == true) ||
-                    (conv.summary?.contains(query, ignoreCase = true) == true) ||
-                    conv.modelId.contains(query, ignoreCase = true)
+                        (conv.subagentRole?.contains(query, ignoreCase = true) == true) ||
+                        (conv.summary?.contains(query, ignoreCase = true) == true) ||
+                        conv.modelId.contains(query, ignoreCase = true)
             }
 
             matchesTime && matchesWorkspace && matchesQuery
@@ -1633,7 +1692,12 @@ fun SearchChatsDialog(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    border = BorderStroke(1.5.dp, if (query.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    border = BorderStroke(
+                        1.5.dp,
+                        if (query.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.outlineVariant.copy(
+                            alpha = 0.3f
+                        )
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -1645,7 +1709,9 @@ fun SearchChatsDialog(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
-                            tint = if (query.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            tint = if (query.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = 0.6f
+                            ),
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -1702,8 +1768,15 @@ fun SearchChatsDialog(
                         val isSelected = selectedTimeFilter == timeLabel
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                            border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
+                            color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(
+                                alpha = 0.35f
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.outlineVariant.copy(
+                                    alpha = 0.2f
+                                )
+                            ),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable { selectedTimeFilter = timeLabel }
@@ -1712,7 +1785,9 @@ fun SearchChatsDialog(
                                 text = timeLabel,
                                 fontSize = 11.5.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(
+                                    alpha = 0.8f
+                                ),
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
                             )
                         }
@@ -1720,15 +1795,25 @@ fun SearchChatsDialog(
 
                     if (workspaces.size > 1) {
                         Spacer(modifier = Modifier.width(4.dp))
-                        Box(modifier = Modifier.size(width = 1.dp, height = 16.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)))
+                        Box(
+                            modifier = Modifier.size(width = 1.dp, height = 16.dp)
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
+                        )
                         Spacer(modifier = Modifier.width(4.dp))
 
                         workspaces.forEach { wsName ->
                             val isSelected = selectedWorkspaceFilter == wsName
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                                border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
+                                color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(
+                                    alpha = 0.35f
+                                ),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.outlineVariant.copy(
+                                        alpha = 0.2f
+                                    )
+                                ),
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable { selectedWorkspaceFilter = wsName }
@@ -1742,7 +1827,9 @@ fun SearchChatsDialog(
                                         Icon(
                                             imageVector = Icons.Default.Folder,
                                             contentDescription = null,
-                                            tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                            tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(
+                                                alpha = 0.6f
+                                            ),
                                             modifier = Modifier.size(12.dp)
                                         )
                                     }
@@ -1750,7 +1837,9 @@ fun SearchChatsDialog(
                                         text = wsName,
                                         fontSize = 11.5.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                        color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(
+                                            alpha = 0.8f
+                                        )
                                     )
                                 }
                             }
@@ -1811,13 +1900,23 @@ fun SearchChatsDialog(
                             val isSelected = conv.id == currentConversationId
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                                border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f)),
+                                color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant.copy(
+                                    alpha = 0.35f
+                                ),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) ClaudeTerracotta.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant.copy(
+                                        alpha = 0.15f
+                                    )
+                                ),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
                                     .clickable {
-                                        Log.d("CHAT_OPEN_DEBUG", "📂 [Drawer Dialog] User clicked: id=${conv.id}, title='${conv.title}'")
+                                        Log.d(
+                                            "CHAT_OPEN_DEBUG",
+                                            "📂 [Drawer Dialog] User clicked: id=${conv.id}, title='${conv.title}'"
+                                        )
                                         onSelectConversation(conv.id)
                                         onDismiss()
                                     }

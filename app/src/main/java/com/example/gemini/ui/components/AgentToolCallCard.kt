@@ -301,11 +301,12 @@ fun AgentToolCallCard(
                 Spacer(modifier = Modifier.width(6.dp))
             }
 
-            // Duration in ms
+            // Duration
             if (toolCall.durationMs != null && toolCall.durationMs > 0) {
                 Text(
-                    text = "${toolCall.durationMs}ms",
+                    text = formatDuration(toolCall.durationMs),
                     fontSize = 10.5.sp,
+                    fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     modifier = Modifier.padding(horizontal = 4.dp)
                 )
@@ -343,37 +344,9 @@ fun AgentToolCallCard(
             }
         }
 
-        // Always-visible Image Preview for Generate Image tool
-        if (isImageOutput) {
-            if (isRunning) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF090A10),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(13.dp),
-                            strokeWidth = 2.dp,
-                            color = ClaudeTerracotta
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Generating image with Gemini...",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            } else if (toolCall.output.isNotBlank() || isSuccess) {
-                val displayUri = resolvedImageUri.ifBlank { toolCall.output }
+        // Always-visible Image Preview for Generate Image tool (once generated)
+        if (isImageOutput && !isRunning && (toolCall.output.isNotBlank() || isSuccess)) {
+            val displayUri = resolvedImageUri.ifBlank { toolCall.output }
                 val coilData = remember(displayUri) {
                     val memKey = HubMediaResolver.normalizeKey(toolCall.output)
                     val cachedBytes = HubMediaResolver.getImageBytes(memKey)
@@ -490,7 +463,6 @@ fun AgentToolCallCard(
                     }
                 }
             }
-        }
 
         // Expanded Terminal / Tool Output
         AnimatedVisibility(
@@ -538,6 +510,16 @@ fun AgentToolCallCard(
                             modifier = Modifier.weight(1f)
                         )
 
+                        if (toolCall.durationMs != null && toolCall.durationMs > 0) {
+                            Text(
+                                text = "⏱️ ${formatDuration(toolCall.durationMs)}",
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(horizontal = 6.dp)
+                            )
+                        }
+
                         IconButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -564,6 +546,7 @@ fun AgentToolCallCard(
                             isRunning && isEditFile -> "Applying file modifications..."
                             isRunning && isListDir -> "Scanning directory..."
                             isRunning && (isFind || isGrep) -> "Searching..."
+                            isRunning && isGenImg -> "Generating image..."
                             isRunning && isMcp -> "Executing MCP tool..."
                             isRunning && isBash -> "Running in Termux..."
                             isRunning -> "Processing..."
@@ -572,6 +555,7 @@ fun AgentToolCallCard(
                             isEditFile -> "(File modification completed)"
                             isListDir -> "(Directory contents scanned)"
                             isFind || isGrep -> "(Search completed - no output)"
+                            isGenImg -> "(Image generation completed)"
                             isMcp -> "(MCP tool executed - no output)"
                             else -> "(No output returned)"
                         }

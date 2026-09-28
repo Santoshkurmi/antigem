@@ -292,7 +292,9 @@ object GitApiClient {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                response.isSuccessful
+                val bodyStr = response.body?.string().orEmpty()
+                val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                response.isSuccessful && json.optBoolean("success", false)
             }
         } catch (e: Exception) {
             Log.e(TAG, "checkoutBranch failed: ${e.message}")
@@ -313,7 +315,9 @@ object GitApiClient {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                response.isSuccessful
+                val bodyStr = response.body?.string().orEmpty()
+                val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                response.isSuccessful && json.optBoolean("success", false)
             }
         } catch (e: Exception) {
             Log.e(TAG, "stage failed: ${e.message}")
@@ -334,7 +338,9 @@ object GitApiClient {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                response.isSuccessful
+                val bodyStr = response.body?.string().orEmpty()
+                val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                response.isSuccessful && json.optBoolean("success", false)
             }
         } catch (e: Exception) {
             Log.e(TAG, "unstage failed: ${e.message}")
@@ -355,7 +361,9 @@ object GitApiClient {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                response.isSuccessful
+                val bodyStr = response.body?.string().orEmpty()
+                val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                response.isSuccessful && json.optBoolean("success", false)
             }
         } catch (e: Exception) {
             Log.e(TAG, "discard failed: ${e.message}")
@@ -363,7 +371,11 @@ object GitApiClient {
         }
     }
 
-    suspend fun commit(projectPath: String, message: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun commit(projectPath: String, message: String): Boolean {
+        return commitDetailed(projectPath, message).success
+    }
+
+    suspend fun commitDetailed(projectPath: String, message: String): GitActionResult = withContext(Dispatchers.IO) {
         try {
             val payload = JSONObject().apply {
                 put("project", projectPath)
@@ -376,11 +388,19 @@ object GitApiClient {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                response.isSuccessful
+                val bodyStr = response.body?.string().orEmpty()
+                val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                val isSuccess = response.isSuccessful && json.optBoolean("success", false)
+                val errorMsg = json.optString("error", if (!isSuccess) "Commit failed with HTTP ${response.code}" else "")
+                GitActionResult(
+                    success = isSuccess,
+                    output = json.optString("output", ""),
+                    error = errorMsg
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "commit failed: ${e.message}")
-            false
+            GitActionResult(success = false, error = e.message ?: "Commit network error")
         }
     }
 
@@ -457,7 +477,9 @@ object GitApiClient {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                response.isSuccessful
+                val bodyStr = response.body?.string().orEmpty()
+                val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                response.isSuccessful && json.optBoolean("success", false)
             }
         } catch (e: Exception) {
             Log.e(TAG, "stash failed: ${e.message}")
@@ -477,7 +499,9 @@ object GitApiClient {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                response.isSuccessful
+                val bodyStr = response.body?.string().orEmpty()
+                val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
+                response.isSuccessful && json.optBoolean("success", false)
             }
         } catch (e: Exception) {
             Log.e(TAG, "stashPop failed: ${e.message}")

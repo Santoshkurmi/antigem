@@ -58,8 +58,15 @@ class AuthPreferences(private val context: Context) {
         val GROUP_CHATS_BY_WORKSPACE = androidx.datastore.preferences.core.booleanPreferencesKey("group_chats_by_workspace")
         val IS_FLOATING_BUBBLE_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_bubble_enabled")
         val AUTO_SHOW_FLOATING_BUBBLE_ON_MINIMIZE = androidx.datastore.preferences.core.booleanPreferencesKey("auto_show_floating_bubble_on_minimize")
+        val IS_FLOATING_SWITCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_switcher_enabled")
+        val FLOATING_SWITCHER_ORIENTATION = stringPreferencesKey("floating_switcher_orientation")
+        val FLOATING_SWITCHER_ITEMS = stringPreferencesKey("floating_switcher_items")
+        val FLOATING_SWITCHER_AUTO_COLLAPSE_SEC = androidx.datastore.preferences.core.intPreferencesKey("floating_switcher_auto_collapse_sec")
+        val FLOATING_SWITCHER_POS_X = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_pos_x")
+        val FLOATING_SWITCHER_POS_Y = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_pos_y")
         val IS_BROWSER_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_browser_automation_enabled")
         val IS_TERMINAL_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_automation_enabled")
+        val IS_FLOATING_DIAGNOSTICS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_diagnostics_enabled")
         const val DEFAULT_HUB_URL = "http://127.0.0.1:8090"
         const val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:8080"
 
@@ -162,10 +169,39 @@ class AuthPreferences(private val context: Context) {
         }
         mode
     }
-    val terminalFontSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_FONT_SIZE] ?: 14 }
-    val terminalCursorStyle: Flow<String> = context.dataStore.data.map { it[TERMINAL_CURSOR_STYLE] ?: "BAR" }
-    val terminalBufferSize: Flow<Int> = context.dataStore.data.map { it[TERMINAL_BUFFER_SIZE] ?: 20000 }
-    val terminalTheme: Flow<String> = context.dataStore.data.map { it[TERMINAL_THEME] ?: "DEFAULT" }
+    fun getTerminalFontSizeSync(): Int = syncPrefs.getInt("terminal_font_size", 14)
+    fun getTerminalCursorStyleSync(): String = syncPrefs.getString("terminal_cursor_style", "BAR") ?: "BAR"
+    fun getTerminalBufferSizeSync(): Int = syncPrefs.getInt("terminal_buffer_size", 20000)
+    fun getTerminalThemeSync(): String = syncPrefs.getString("terminal_theme", "DEFAULT") ?: "DEFAULT"
+
+    val terminalFontSize: Flow<Int> = context.dataStore.data.map { prefs ->
+        val size = prefs[TERMINAL_FONT_SIZE] ?: 14
+        if (syncPrefs.getInt("terminal_font_size", 14) != size) {
+            syncPrefs.edit().putInt("terminal_font_size", size).apply()
+        }
+        size
+    }
+    val terminalCursorStyle: Flow<String> = context.dataStore.data.map { prefs ->
+        val style = prefs[TERMINAL_CURSOR_STYLE] ?: "BAR"
+        if (syncPrefs.getString("terminal_cursor_style", null) != style) {
+            syncPrefs.edit().putString("terminal_cursor_style", style).apply()
+        }
+        style
+    }
+    val terminalBufferSize: Flow<Int> = context.dataStore.data.map { prefs ->
+        val size = prefs[TERMINAL_BUFFER_SIZE] ?: 20000
+        if (syncPrefs.getInt("terminal_buffer_size", 20000) != size) {
+            syncPrefs.edit().putInt("terminal_buffer_size", size).apply()
+        }
+        size
+    }
+    val terminalTheme: Flow<String> = context.dataStore.data.map { prefs ->
+        val th = prefs[TERMINAL_THEME] ?: "DEFAULT"
+        if (syncPrefs.getString("terminal_theme", null) != th) {
+            syncPrefs.edit().putString("terminal_theme", th).apply()
+        }
+        th
+    }
 
     val termuxSshHost: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_HOST] ?: "127.0.0.1" }
     val termuxSshPort: Flow<Int> = context.dataStore.data.map { it[TERMUX_SSH_PORT]?.toIntOrNull() ?: 8022 }
@@ -396,7 +432,17 @@ class AuthPreferences(private val context: Context) {
         }
     }
 
+    fun saveTerminalPreferencesSync(fontSize: Int, cursorStyle: String = "BAR", bufferSize: Int = 20000, theme: String = "DEFAULT") {
+        syncPrefs.edit()
+            .putInt("terminal_font_size", fontSize)
+            .putString("terminal_cursor_style", cursorStyle)
+            .putInt("terminal_buffer_size", bufferSize)
+            .putString("terminal_theme", theme)
+            .apply()
+    }
+
     suspend fun saveTerminalPreferences(fontSize: Int, cursorStyle: String, bufferSize: Int, theme: String) {
+        saveTerminalPreferencesSync(fontSize, cursorStyle, bufferSize, theme)
         context.dataStore.edit { prefs ->
             prefs[TERMINAL_FONT_SIZE] = fontSize
             prefs[TERMINAL_CURSOR_STYLE] = cursorStyle
@@ -459,6 +505,90 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveAutoShowFloatingBubbleOnMinimize(enabled: Boolean) {
         syncPrefs.edit().putBoolean("auto_show_floating_bubble_on_minimize", enabled).apply()
         context.dataStore.edit { it[AUTO_SHOW_FLOATING_BUBBLE_ON_MINIMIZE] = enabled }
+    }
+
+    val isFloatingSwitcherEnabled: Flow<Boolean> = context.dataStore.data
+        .map { it[IS_FLOATING_SWITCHER_ENABLED] ?: true }
+
+    fun getFloatingSwitcherEnabledSync(): Boolean = syncPrefs.getBoolean("is_floating_switcher_enabled", true)
+
+    suspend fun saveFloatingSwitcherEnabled(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("is_floating_switcher_enabled", enabled).apply()
+        context.dataStore.edit { it[IS_FLOATING_SWITCHER_ENABLED] = enabled }
+    }
+
+    val floatingSwitcherOrientation: Flow<String> = context.dataStore.data
+        .map { it[FLOATING_SWITCHER_ORIENTATION] ?: "HORIZONTAL" }
+
+    fun getFloatingSwitcherOrientationSync(): String = syncPrefs.getString("floating_switcher_orientation", "HORIZONTAL") ?: "HORIZONTAL"
+
+    suspend fun saveFloatingSwitcherOrientation(orientation: String) {
+        syncPrefs.edit().putString("floating_switcher_orientation", orientation).apply()
+        context.dataStore.edit { it[FLOATING_SWITCHER_ORIENTATION] = orientation }
+    }
+
+    val floatingSwitcherItems: Flow<List<String>> = context.dataStore.data
+        .map {
+            val raw = it[FLOATING_SWITCHER_ITEMS] ?: "chat,ide,terminal,browser"
+            raw.split(",").map { s -> s.trim() }.filter { s -> s.isNotEmpty() }
+        }
+
+    fun getFloatingSwitcherItemsSync(): List<String> {
+        val raw = syncPrefs.getString("floating_switcher_items", "chat,ide,terminal,browser") ?: "chat,ide,terminal,browser"
+        return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
+    suspend fun saveFloatingSwitcherItems(items: List<String>) {
+        val raw = items.joinToString(",")
+        syncPrefs.edit().putString("floating_switcher_items", raw).apply()
+        context.dataStore.edit { it[FLOATING_SWITCHER_ITEMS] = raw }
+    }
+
+    val floatingSwitcherAutoCollapseSec: Flow<Int> = context.dataStore.data
+        .map { it[FLOATING_SWITCHER_AUTO_COLLAPSE_SEC] ?: 0 }
+
+    fun getFloatingSwitcherAutoCollapseSecSync(): Int = syncPrefs.getInt("floating_switcher_auto_collapse_sec", 0)
+
+    suspend fun saveFloatingSwitcherAutoCollapseSec(sec: Int) {
+        syncPrefs.edit().putInt("floating_switcher_auto_collapse_sec", sec).apply()
+        context.dataStore.edit { it[FLOATING_SWITCHER_AUTO_COLLAPSE_SEC] = sec }
+    }
+
+    val floatingSwitcherPosX: Flow<Float> = context.dataStore.data
+        .map { it[FLOATING_SWITCHER_POS_X] ?: 0.95f }
+
+    val floatingSwitcherPosY: Flow<Float> = context.dataStore.data
+        .map { it[FLOATING_SWITCHER_POS_Y] ?: 0.50f }
+
+    fun getFloatingSwitcherPositionSync(): Pair<Float, Float> {
+        val x = syncPrefs.getFloat("floating_switcher_pos_x", 0.95f)
+        val y = syncPrefs.getFloat("floating_switcher_pos_y", 0.50f)
+        return Pair(x, y)
+    }
+
+    fun saveFloatingSwitcherPositionSync(x: Float, y: Float) {
+        syncPrefs.edit()
+            .putFloat("floating_switcher_pos_x", x)
+            .putFloat("floating_switcher_pos_y", y)
+            .apply()
+    }
+
+    suspend fun saveFloatingSwitcherPosition(x: Float, y: Float) {
+        saveFloatingSwitcherPositionSync(x, y)
+        context.dataStore.edit {
+            it[FLOATING_SWITCHER_POS_X] = x
+            it[FLOATING_SWITCHER_POS_Y] = y
+        }
+    }
+
+    val isFloatingDiagnosticsEnabled: Flow<Boolean> = context.dataStore.data
+        .map { it[IS_FLOATING_DIAGNOSTICS_ENABLED] ?: false }
+
+    fun getFloatingDiagnosticsEnabledSync(): Boolean = syncPrefs.getBoolean("is_floating_diagnostics_enabled", false)
+
+    suspend fun saveFloatingDiagnosticsEnabled(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("is_floating_diagnostics_enabled", enabled).apply()
+        context.dataStore.edit { it[IS_FLOATING_DIAGNOSTICS_ENABLED] = enabled }
     }
 
     suspend fun clearAuth() {

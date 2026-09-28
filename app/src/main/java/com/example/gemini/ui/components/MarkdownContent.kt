@@ -31,14 +31,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.PriorityHigh
 import androidx.compose.material.icons.outlined.Report
 import androidx.compose.material.icons.outlined.Warning
@@ -52,6 +55,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import android.util.Log
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -74,6 +78,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -129,6 +134,13 @@ sealed class MarkdownBlock {
     data class InteractiveUi(val htmlCode: String, val title: String = "Interactive App") : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class Image(val alt: String, val url: String) : MarkdownBlock()
+    @androidx.compose.runtime.Immutable
+    data class YouTubeVideo(
+        val videoId: String,
+        val originalUrl: String,
+        val title: String? = null,
+        val customThumbnailUrl: String? = null
+    ) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class Details(val summary: String, val body: String, val defaultOpen: Boolean = false) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
@@ -187,6 +199,9 @@ fun MarkdownBlockView(
         }
         is MarkdownBlock.Image -> {
             MarkdownImageView(image = block, modifier = modifier)
+        }
+        is MarkdownBlock.YouTubeVideo -> {
+            YouTubeVideoView(video = block, modifier = modifier)
         }
         is MarkdownBlock.Details -> {
             MarkdownDetailsView(details = block, modifier = modifier)
@@ -1291,6 +1306,293 @@ fun MarkdownImageView(
     }
 }
 
+private val YOUTUBE_EXTRACT_REGEX = Regex(
+    """(?:https?://)?(?:www\.|m\.)?(?:youtube\.com/(?:watch\?(?:.*&)?v=|embed/|v/|shorts/)|youtu\.be/|img\.youtube\.com/vi/)([a-zA-Z0-9_-]{11})""",
+    RegexOption.IGNORE_CASE
+)
+
+fun extractYouTubeVideoId(url: String): String? {
+    val match = YOUTUBE_EXTRACT_REGEX.find(url)
+    return match?.groupValues?.getOrNull(1)
+}
+
+/**
+ * Embedded playable YouTube Video player card with 16:9 placeholder thumbnail,
+ * direct in-chat WebView iframe playback, and an open in YouTube app / browser button.
+ */
+@Composable
+fun YouTubeVideoView(
+    video: MarkdownBlock.YouTubeVideo,
+    modifier: Modifier = Modifier
+) {
+    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val videoUrl = remember(video.videoId, video.originalUrl) {
+        if (video.originalUrl.isNotBlank() && (video.originalUrl.contains("youtube.com") || video.originalUrl.contains("youtu.be"))) {
+            video.originalUrl
+        } else {
+            "https://www.youtube.com/watch?v=${video.videoId}"
+        }
+    }
+    val thumbnailUrl = remember(video.videoId, video.customThumbnailUrl) {
+        video.customThumbnailUrl?.takeIf { it.isNotBlank() }
+            ?: "https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg"
+    }
+    val activePlayback by com.example.gemini.data.media.YouTubeMediaSessionManager.playbackState.collectAsState()
+    val isPlaying = activePlayback?.videoId == video.videoId
+    val onStartPlay: () -> Unit = {
+        com.example.gemini.data.media.YouTubeMediaSessionManager.getOrCreatePlayer(
+            context = context,
+            video = video
+        )
+    }
+    var customFullscreenView by remember { mutableStateOf<android.view.View?>(null) }
+    var customViewCallback by remember { mutableStateOf<android.webkit.WebChromeClient.CustomViewCallback?>(null) }
+
+    if (customFullscreenView != null) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = {
+                try {
+                    customViewCallback?.onCustomViewHidden()
+                } catch (_: Exception) {}
+                customFullscreenView = null
+                customViewCallback = null
+            },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            val dialogView = androidx.compose.ui.platform.LocalView.current
+            DisposableEffect(dialogView) {
+                val window = (dialogView.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+                    ?: (dialogView.context as? android.app.Activity)?.window
+                if (window != null) {
+                    val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, dialogView)
+                    insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                    insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+                onDispose {
+                    if (window != null) {
+                        val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, dialogView)
+                        insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .safeDrawingPadding(),
+                contentAlignment = Alignment.Center
+            ) {
+                AndroidView(
+                    factory = { _ ->
+                        val v = customFullscreenView!!
+                        (v.parent as? android.view.ViewGroup)?.removeView(v)
+                        v
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        ),
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Header Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    // YouTube Red Icon
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFFF0000)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayArrow,
+                            contentDescription = "YouTube",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = video.title?.takeIf { it.isNotBlank() } ?: "YouTube Video",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isPlaying) {
+                        IconButton(
+                            onClick = {
+                                com.example.gemini.data.media.YouTubeMediaSessionManager.release()
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Close Player",
+                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+
+                    // Open in External App / Browser
+                    IconButton(
+                        onClick = {
+                            try {
+                                uriHandler.openUri(videoUrl)
+                            } catch (_: Exception) {}
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.OpenInNew,
+                            contentDescription = "Open in YouTube",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            // 16:9 Video Player / Thumbnail Area
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp))
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!isPlaying) {
+                    // Thumbnail Preview
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(thumbnailUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = video.title ?: "YouTube Video Thumbnail",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable { onStartPlay() }
+                    )
+
+                    // Soft dark gradient overlay
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.45f)
+                                    )
+                                )
+                            )
+                            .clickable { onStartPlay() }
+                    )
+
+                    // Big Centered Play Button
+                    Surface(
+                        onClick = onStartPlay,
+                        shape = RoundedCornerShape(18.dp),
+                        color = Color(0xFFFF0000).copy(alpha = 0.92f),
+                        shadowElevation = 6.dp,
+                        modifier = Modifier.size(width = 62.dp, height = 42.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Filled.PlayArrow,
+                                contentDescription = "Play Video",
+                                tint = Color.White,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+                } else {
+                    DisposableEffect(video.videoId) {
+                        onDispose {
+                            com.example.gemini.data.media.YouTubeMediaSessionManager.parkActivePlayer(context)
+                        }
+                    }
+
+                    AndroidView(
+                        factory = { ctx ->
+                            com.example.gemini.data.media.YouTubeMediaSessionManager.getOrCreatePlayer(
+                                context = ctx,
+                                video = video,
+                                onCustomView = { view, callback ->
+                                    (view.parent as? android.view.ViewGroup)?.removeView(view)
+                                    customFullscreenView = view
+                                    customViewCallback = callback
+                                },
+                                onHideCustomView = {
+                                    try {
+                                        customViewCallback?.onCustomViewHidden()
+                                    } catch (_: Exception) {}
+                                    customFullscreenView = null
+                                    customViewCallback = null
+                                }
+                            )
+                        },
+                        update = { _ ->
+                            com.example.gemini.data.media.YouTubeMediaSessionManager.updateCallbacks(
+                                onCustomView = { view, callback ->
+                                    (view.parent as? android.view.ViewGroup)?.removeView(view)
+                                    customFullscreenView = view
+                                    customViewCallback = callback
+                                },
+                                onHideCustomView = {
+                                    try {
+                                        customViewCallback?.onCustomViewHidden()
+                                    } catch (_: Exception) {}
+                                    customFullscreenView = null
+                                    customViewCallback = null
+                                }
+                            )
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+    }
+}
+
 /**
  * Native Jetpack Compose Table renderer with horizontal scrolling and styled borders.
  */
@@ -1585,7 +1887,8 @@ private val INLINE_MARKDOWN_PATTERN: Pattern = Pattern.compile(
     "(\\*(?!\\s)(.+?)(?<!\\s)\\*)|" +                                                 // 39: Italic *text*
     "(_(?!\\s)([^_\\n]+?)(?<!\\s)_)|" +                                               // 41: Italic _text_
     "(<i>(.*?)</i>)|" +                                                               // 43: HTML italic <i>text</i>
-    "(<em>(.*?)</em>)",                                                               // 45: HTML em <em>text</em>
+    "(<em>(.*?)</em>)|" +                                                             // 45: HTML em <em>text</em>
+    "(<kbd>(.*?)</kbd>)",                                                             // 47: HTML kbd <kbd>text</kbd>
     Pattern.DOTALL or Pattern.CASE_INSENSITIVE
 )
 
@@ -2084,6 +2387,20 @@ private fun buildRichAnnotatedString(
             builder.pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = Color.Gray))
             appendFormattedContent(builder, content, isDark, density, fileLinkHandler, inlineContentMap, depth)
             builder.pop()
+        } else if (fullMatch.startsWith("<kbd", ignoreCase = true)) {
+            // HTML Keyboard Key <kbd>key</kbd>
+            val content = fullMatch.replace(Regex("<[^>]+>"), "").trim()
+            builder.pushStyle(
+                SpanStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    background = if (isDark) Color(0xFF2A2B36) else Color(0xFFE2E8F0),
+                    color = if (isDark) Color(0xFFF1F1F4) else Color(0xFF1E293B)
+                )
+            )
+            builder.append(" $content ")
+            builder.pop()
         } else {
             builder.append(fullMatch)
         }
@@ -2215,8 +2532,9 @@ fun parseMarkdownBlocks(
             // -1. Sequential Agent Thought Block <!-- thought -->...<!-- /thought --> or <thought>
             val thoughtStartMatch = THOUGHT_START_REGEX.find(line)
             if (thoughtStartMatch != null) {
-                val isExplicitStreaming = !thoughtStartMatch.groupValues.getOrNull(1).isNullOrBlank()
-                val durationMs = thoughtStartMatch.groupValues.getOrNull(2)?.toLongOrNull()
+                val isExplicitStreaming = line.contains(":streaming", ignoreCase = true) || line.contains(" streaming", ignoreCase = true)
+                val durationMs = Regex("""(?:duration=|:)([0-9]+)""", RegexOption.IGNORE_CASE).find(line)?.groupValues?.getOrNull(1)?.toLongOrNull()
+                    ?: thoughtStartMatch.groupValues.getOrNull(2)?.toLongOrNull()
                 val thoughtLines = mutableListOf<String>()
 
                 if (line.contains("</thought>", ignoreCase = true) || line.contains("<!-- /thought -->", ignoreCase = true)) {
@@ -2443,12 +2761,47 @@ fun parseMarkdownBlocks(
             continue
         }
 
-        // 5. Standalone Markdown Images: ![alt](url)
-        val imageMatch = Regex("^\\s*!\\[(.*?)\\]\\(((?:https?://|file://|content://|data:image/)[^\\s)]+)\\)\\s*$", RegexOption.IGNORE_CASE).find(line)
+        // 5a. Linked Markdown Images: [![alt](imgUrl)](linkUrl)
+        val linkedImageMatch = Regex("""^\s*\[!\[(.*?)\]\((.*?)\)\]\((.*?)\)\s*$""", RegexOption.IGNORE_CASE).find(line)
+        if (linkedImageMatch != null) {
+            val alt = linkedImageMatch.groupValues[1]
+            val imgUrl = linkedImageMatch.groupValues[2]
+            val linkUrl = linkedImageMatch.groupValues[3]
+            val ytId = extractYouTubeVideoId(linkUrl) ?: extractYouTubeVideoId(imgUrl)
+            if (ytId != null) {
+                result.add(
+                    MarkdownBlock.YouTubeVideo(
+                        videoId = ytId,
+                        originalUrl = if (linkUrl.isNotBlank()) linkUrl else "https://www.youtube.com/watch?v=$ytId",
+                        title = alt.ifBlank { "YouTube Video" },
+                        customThumbnailUrl = imgUrl.takeIf { it.isNotBlank() }
+                    )
+                )
+            } else {
+                result.add(MarkdownBlock.Image(alt = alt, url = imgUrl))
+            }
+            i++
+            continue
+        }
+
+        // 5b. Standalone Markdown Images: ![alt](url)
+        val imageMatch = Regex("""^\s*!\[(.*?)\]\(((?:https?://|file://|content://|data:image/)[^\s)]+)\)\s*$""", RegexOption.IGNORE_CASE).find(line)
         if (imageMatch != null) {
             val alt = imageMatch.groupValues[1]
             val url = imageMatch.groupValues[2]
-            result.add(MarkdownBlock.Image(alt = alt, url = url))
+            val ytId = extractYouTubeVideoId(url)
+            if (ytId != null) {
+                result.add(
+                    MarkdownBlock.YouTubeVideo(
+                        videoId = ytId,
+                        originalUrl = if (url.contains("youtube.com/watch") || url.contains("youtu.be")) url else "https://www.youtube.com/watch?v=$ytId",
+                        title = alt.ifBlank { "YouTube Video" },
+                        customThumbnailUrl = if (url.contains("img.youtube.com")) url else null
+                    )
+                )
+            } else {
+                result.add(MarkdownBlock.Image(alt = alt, url = url))
+            }
             i++
             continue
         }

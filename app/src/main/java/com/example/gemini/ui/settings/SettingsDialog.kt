@@ -60,9 +60,11 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     APPEARANCE("Appearance & Theme", "Theme, dark mode, and chat font scaling"),
     SERVERS("Servers & Connectivity", "Configure AGY Hub and IDE Bridge endpoints"),
     MCP("MCP Servers", "Model Context Protocol tools & integrations"),
+    SKILLS_PLUGINS("Skills & Plugins", "Agent capabilities, Google plugins, and extensions"),
     AUTOMATION("Automation & Device Tools", "Browser & Terminal AI agent permissions"),
     TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling"),
-    COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals")
+    COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
+    DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -128,10 +130,42 @@ fun SettingsDialog(
     onToggleMcpServer: (String, Boolean) -> Unit = { _, _ -> },
     onSaveMcpServer: (com.example.gemini.domain.model.McpServerSpec, String?) -> Unit = { _, _ -> },
     onDeleteMcpServer: (String) -> Unit = {},
+    availableCascadePlugins: List<com.example.gemini.data.remote.dto.AvailableCascadePluginDto> = emptyList(),
+    isCascadePluginsLoading: Boolean = false,
+    installingCascadePluginId: String? = null,
+    onSearchCascadePlugins: (String) -> Unit = {},
+    onInstallCascadePlugin: (com.example.gemini.data.remote.dto.AvailableCascadePluginDto) -> Unit = {},
+    allSkills: List<com.example.gemini.data.remote.dto.SkillDefinitionDto> = emptyList(),
+    isSkillsLoading: Boolean = false,
+    skillsFilterScope: String = "GLOBAL",
+    onSetSkillsFilterScope: (String) -> Unit = {},
+    onRefreshSkills: () -> Unit = {},
+    installedPlugins: List<com.example.gemini.data.remote.dto.InstalledPluginDto> = emptyList(),
+    isInstalledPluginsLoading: Boolean = false,
+    onRefreshInstalledPlugins: () -> Unit = {},
+    googlePluginsCatalog: List<com.example.gemini.data.remote.dto.BuildWithGooglePluginItemDto> = emptyList(),
+    isGooglePluginsLoading: Boolean = false,
+    installingGooglePluginId: String? = null,
+    deletingPluginId: String? = null,
+    onRefreshGooglePlugins: () -> Unit = {},
+    onInstallGooglePlugin: (String, String) -> Unit = { _, _ -> },
+    onDeletePlugin: (String, String) -> Unit = { _, _ -> },
+    pluginActionStatusMessage: String? = null,
+    pluginActionErrorMessage: String? = null,
+    onClearPluginStatus: () -> Unit = {},
     isBrowserAutomationEnabled: Boolean = true,
     isTerminalAutomationEnabled: Boolean = true,
     onToggleBrowserAutomation: (Boolean) -> Unit = {},
     onToggleTerminalAutomation: (Boolean) -> Unit = {},
+    isFloatingSwitcherEnabled: Boolean = true,
+    floatingSwitcherOrientation: String = "HORIZONTAL",
+    floatingSwitcherItems: List<String> = listOf("chat", "ide", "terminal", "browser"),
+    floatingSwitcherAutoCollapseSec: Int = 0,
+    onToggleFloatingSwitcher: (Boolean) -> Unit = {},
+    onSetFloatingSwitcherOrientation: (String) -> Unit = {},
+    onSetFloatingSwitcherItems: (List<String>) -> Unit = {},
+    onSetFloatingSwitcherAutoCollapseSec: (Int) -> Unit = {},
+    onResetFloatingSwitcherPosition: () -> Unit = {},
     commandAutoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
     commandSandboxEnabled: Boolean = false,
     requireApprovalForFileEdits: Boolean = false,
@@ -158,6 +192,8 @@ fun SettingsDialog(
     onAddPermissionRule: (action: String, pattern: String, decision: String) -> Unit = { _, _, _ -> },
     onRemovePermissionRule: (rawRule: String) -> Unit = {},
     onChangePermissionRuleDecision: (rawRule: String, newDecision: String) -> Unit = { _, _ -> },
+    isFloatingDiagnosticsEnabled: Boolean = false,
+    onToggleFloatingDiagnostics: (Boolean) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -270,10 +306,13 @@ fun SettingsDialog(
                         isBridgeOnline = isBridgeOnline,
                         useSshTerminal = useSshTerminal,
                         mcpServers = mcpServers,
+                        allSkills = allSkills,
+                        installedPlugins = installedPlugins,
                         isBrowserAutomationEnabled = isBrowserAutomationEnabled,
                         isTerminalAutomationEnabled = isTerminalAutomationEnabled,
                         commandAutoExecutionPolicy = commandAutoExecutionPolicy,
                         commandSandboxEnabled = commandSandboxEnabled,
+                        isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onNavigate = { currentSection = it }
@@ -283,11 +322,20 @@ fun SettingsDialog(
                         themeMode = themeMode,
                         chatFontScale = chatFontScale,
                         groupChatsByWorkspace = groupChatsByWorkspace,
+                        isFloatingSwitcherEnabled = isFloatingSwitcherEnabled,
+                        floatingSwitcherOrientation = floatingSwitcherOrientation,
+                        floatingSwitcherItems = floatingSwitcherItems,
+                        floatingSwitcherAutoCollapseSec = floatingSwitcherAutoCollapseSec,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onSetThemeMode = onSetThemeMode,
                         onSetChatFontScale = onSetChatFontScale,
-                        onToggleGroupChatsByWorkspace = onToggleGroupChatsByWorkspace
+                        onToggleGroupChatsByWorkspace = onToggleGroupChatsByWorkspace,
+                        onToggleFloatingSwitcher = onToggleFloatingSwitcher,
+                        onSetFloatingSwitcherOrientation = onSetFloatingSwitcherOrientation,
+                        onSetFloatingSwitcherItems = onSetFloatingSwitcherItems,
+                        onSetFloatingSwitcherAutoCollapseSec = onSetFloatingSwitcherAutoCollapseSec,
+                        onResetFloatingSwitcherPosition = onResetFloatingSwitcherPosition
                     )
 
                     SettingsSection.SERVERS -> ServersSubScreen(
@@ -314,7 +362,35 @@ fun SettingsDialog(
                         onRefreshServer = onRefreshMcpServer,
                         onToggleServer = onToggleMcpServer,
                         onSaveServer = onSaveMcpServer,
-                        onDeleteServer = onDeleteMcpServer
+                        onDeleteServer = onDeleteMcpServer,
+                        availableCascadePlugins = availableCascadePlugins,
+                        isCascadePluginsLoading = isCascadePluginsLoading,
+                        installingCascadePluginId = installingCascadePluginId,
+                        onSearchCascadePlugins = onSearchCascadePlugins,
+                        onInstallCascadePlugin = onInstallCascadePlugin
+                    )
+
+                    SettingsSection.SKILLS_PLUGINS -> SkillsAndPluginsSubScreen(
+                        skills = allSkills,
+                        isSkillsLoading = isSkillsLoading,
+                        skillsFilterScope = skillsFilterScope,
+                        onSetSkillsFilterScope = onSetSkillsFilterScope,
+                        onRefreshSkills = onRefreshSkills,
+                        installedPlugins = installedPlugins,
+                        isInstalledPluginsLoading = isInstalledPluginsLoading,
+                        onRefreshInstalledPlugins = onRefreshInstalledPlugins,
+                        googlePlugins = googlePluginsCatalog,
+                        isGooglePluginsLoading = isGooglePluginsLoading,
+                        installingGooglePluginId = installingGooglePluginId,
+                        deletingPluginId = deletingPluginId,
+                        onRefreshGooglePlugins = onRefreshGooglePlugins,
+                        onInstallGooglePlugin = onInstallGooglePlugin,
+                        onDeletePlugin = onDeletePlugin,
+                        statusMessage = pluginActionStatusMessage,
+                        errorMessage = pluginActionErrorMessage,
+                        onClearStatus = onClearPluginStatus,
+                        cardBg = cardBg,
+                        cardBorder = cardBorder
                     )
 
                     SettingsSection.AUTOMATION -> AutomationSubScreen(
@@ -377,6 +453,13 @@ fun SettingsDialog(
                         onRemovePermissionRule = onRemovePermissionRule,
                         onChangePermissionRuleDecision = onChangePermissionRuleDecision
                     )
+
+                    SettingsSection.DIAGNOSTICS -> DiagnosticsSubScreen(
+                        isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
+                        onToggleFloatingDiagnostics = onToggleFloatingDiagnostics,
+                        cardBg = cardBg,
+                        cardBorder = cardBorder
+                    )
                 }
             }
         }
@@ -391,10 +474,13 @@ private fun MainSettingsMenu(
     isBridgeOnline: Boolean,
     useSshTerminal: Boolean,
     mcpServers: List<com.example.gemini.domain.model.McpServerState>,
+    allSkills: List<com.example.gemini.data.remote.dto.SkillDefinitionDto> = emptyList(),
+    installedPlugins: List<com.example.gemini.data.remote.dto.InstalledPluginDto> = emptyList(),
     isBrowserAutomationEnabled: Boolean,
     isTerminalAutomationEnabled: Boolean,
     commandAutoExecutionPolicy: String,
     commandSandboxEnabled: Boolean,
+    isFloatingDiagnosticsEnabled: Boolean = false,
     cardBg: Color,
     cardBorder: BorderStroke,
     onNavigate: (SettingsSection) -> Unit
@@ -466,6 +552,22 @@ private fun MainSettingsMenu(
             onClick = { onNavigate(SettingsSection.MCP) }
         )
 
+        // Section 3.5: Skills & Plugins
+        val totalSkillsCount = allSkills.size
+        val totalPluginsCount = installedPlugins.size
+        val skillsBadge = "$totalSkillsCount Skills • $totalPluginsCount Plugins"
+        SettingsCategoryCard(
+            icon = Icons.Outlined.AutoAwesome,
+            iconTint = GeminiBlue,
+            title = "Skills & Plugins",
+            subtitle = "Installed skills, Google plugins catalog, and markdown guides",
+            badgeText = skillsBadge,
+            badgeColor = GeminiBlue,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.SKILLS_PLUGINS) }
+        )
+
         // Section 4: Automation & Device Bridge
         val autoActiveCount = (if (isBrowserAutomationEnabled) 1 else 0) + (if (isTerminalAutomationEnabled) 1 else 0)
         val (autoBadge, autoColor) = when (autoActiveCount) {
@@ -520,6 +622,21 @@ private fun MainSettingsMenu(
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.COMMANDS) }
+        )
+
+        // Section 6: Diagnostics & Performance
+        val diagBadge = if (isFloatingDiagnosticsEnabled) "HUD ON" else "HUD OFF"
+        val diagColor = if (isFloatingDiagnosticsEnabled) QuotaGreen else Color.Gray
+        SettingsCategoryCard(
+            icon = Icons.Outlined.Speed,
+            iconTint = if (isFloatingDiagnosticsEnabled) QuotaGreen else Color(0xFF00ACC1),
+            title = "Diagnostics & Performance",
+            subtitle = if (isFloatingDiagnosticsEnabled) "Floating live metrics HUD enabled" else "Live network connections, active streams & thread HUD",
+            badgeText = diagBadge,
+            badgeColor = diagColor,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.DIAGNOSTICS) }
         )
     }
 }
@@ -620,11 +737,20 @@ private fun AppearanceSubScreen(
     themeMode: String,
     chatFontScale: Float,
     groupChatsByWorkspace: Boolean,
+    isFloatingSwitcherEnabled: Boolean,
+    floatingSwitcherOrientation: String,
+    floatingSwitcherItems: List<String>,
+    floatingSwitcherAutoCollapseSec: Int,
     cardBg: Color,
     cardBorder: BorderStroke,
     onSetThemeMode: (String) -> Unit,
     onSetChatFontScale: (Float) -> Unit,
-    onToggleGroupChatsByWorkspace: (Boolean) -> Unit
+    onToggleGroupChatsByWorkspace: (Boolean) -> Unit,
+    onToggleFloatingSwitcher: (Boolean) -> Unit,
+    onSetFloatingSwitcherOrientation: (String) -> Unit,
+    onSetFloatingSwitcherItems: (List<String>) -> Unit,
+    onSetFloatingSwitcherAutoCollapseSec: (Int) -> Unit,
+    onResetFloatingSwitcherPosition: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -880,6 +1006,276 @@ private fun AppearanceSubScreen(
                         checkedTrackColor = ClaudeTerracotta
                     )
                 )
+            }
+        }
+
+        // Floating App Switcher Card
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = cardBg,
+            border = cardBorder,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Floating App Switcher",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "A glassy floating pill across the whole app for instant switching between Chat, IDE, Terminal, and Browser",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = isFloatingSwitcherEnabled,
+                        onCheckedChange = onToggleFloatingSwitcher,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
+                    )
+                }
+
+                if (isFloatingSwitcherEnabled) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Layout Orientation Selector
+                    Text(
+                        text = "Layout Orientation",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val isVert = floatingSwitcherOrientation.equals("VERTICAL", ignoreCase = true)
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { onSetFloatingSwitcherOrientation("VERTICAL") },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isVert) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Outlined.ExpandLess, contentDescription = null, tint = if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Vertical", fontSize = 12.sp, fontWeight = if (isVert) FontWeight.Bold else FontWeight.Normal, color = if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { onSetFloatingSwitcherOrientation("HORIZONTAL") },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (!isVert) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Horizontal", fontSize = 12.sp, fontWeight = if (!isVert) FontWeight.Bold else FontWeight.Normal, color = if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Auto-Collapse Timeout Selector
+                    Text(
+                        text = "Auto-Collapse Timeout",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Automatically collapses into a small arrow handle after inactivity",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val timeouts = listOf(0 to "Never", 3 to "3s", 5 to "5s", 10 to "10s", 15 to "15s")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        timeouts.forEach { (sec, label) ->
+                            val isSelected = floatingSwitcherAutoCollapseSec == sec
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onSetFloatingSwitcherAutoCollapseSec(sec) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Customize Items Order & Visibility
+                    Text(
+                        text = "Customize Icons & Order",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    val allAvailable = listOf("chat", "ide", "terminal", "browser")
+                    val currentItems = floatingSwitcherItems.toMutableList()
+                    val displayedList = currentItems + allAvailable.filterNot { currentItems.contains(it) }
+
+                    displayedList.forEach { itemId ->
+                        val isEnabled = currentItems.contains(itemId)
+                        val itemLabel = when (itemId) {
+                            "chat" -> "Chat"
+                            "ide" -> "IDE (Code Editor)"
+                            "terminal" -> "Terminal"
+                            "browser" -> "Web Browser"
+                            else -> itemId
+                        }
+                        val itemIcon = when (itemId) {
+                            "chat" -> Icons.Outlined.ChatBubbleOutline
+                            "ide" -> Icons.Outlined.Code
+                            "terminal" -> Icons.Outlined.Terminal
+                            "browser" -> Icons.Outlined.Language
+                            else -> Icons.Outlined.ChatBubbleOutline
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                            border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = isEnabled,
+                                        onCheckedChange = { checked ->
+                                            val updated = if (checked) {
+                                                currentItems + itemId
+                                            } else {
+                                                if (currentItems.size > 1) currentItems.filter { it != itemId } else currentItems
+                                            }
+                                            onSetFloatingSwitcherItems(updated)
+                                        },
+                                        colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(itemIcon, contentDescription = null, tint = if (isEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = itemLabel,
+                                        fontSize = 12.sp,
+                                        color = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                                    )
+                                }
+
+                                if (isEnabled) {
+                                    val itemOrderIndex = currentItems.indexOf(itemId)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        IconButton(
+                                            onClick = {
+                                                if (itemOrderIndex > 0) {
+                                                    val copy = currentItems.toMutableList()
+                                                    val temp = copy[itemOrderIndex]
+                                                    copy[itemOrderIndex] = copy[itemOrderIndex - 1]
+                                                    copy[itemOrderIndex - 1] = temp
+                                                    onSetFloatingSwitcherItems(copy)
+                                                }
+                                            },
+                                            enabled = itemOrderIndex > 0,
+                                            modifier = Modifier.size(26.dp)
+                                        ) {
+                                            Icon(Icons.Outlined.ExpandLess, contentDescription = "Move Up", modifier = Modifier.size(16.dp))
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                if (itemOrderIndex < currentItems.size - 1) {
+                                                    val copy = currentItems.toMutableList()
+                                                    val temp = copy[itemOrderIndex]
+                                                    copy[itemOrderIndex] = copy[itemOrderIndex + 1]
+                                                    copy[itemOrderIndex + 1] = temp
+                                                    onSetFloatingSwitcherItems(copy)
+                                                }
+                                            },
+                                            enabled = itemOrderIndex < currentItems.size - 1,
+                                            modifier = Modifier.size(26.dp)
+                                        ) {
+                                            Icon(Icons.Outlined.ExpandMore, contentDescription = "Move Down", modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Reset Position Button
+                    OutlinedButton(
+                        onClick = onResetFloatingSwitcherPosition,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ClaudeTerracotta)
+                    ) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Reset Screen Position to Right-Center", fontSize = 12.sp)
+                    }
+                }
             }
         }
 
@@ -1322,9 +1718,15 @@ private fun McpSubScreen(
     onRefreshServer: (String) -> Unit,
     onToggleServer: (String, Boolean) -> Unit,
     onSaveServer: (com.example.gemini.domain.model.McpServerSpec, String?) -> Unit,
-    onDeleteServer: (String) -> Unit
+    onDeleteServer: (String) -> Unit,
+    availableCascadePlugins: List<com.example.gemini.data.remote.dto.AvailableCascadePluginDto> = emptyList(),
+    isCascadePluginsLoading: Boolean = false,
+    installingCascadePluginId: String? = null,
+    onSearchCascadePlugins: (String) -> Unit = {},
+    onInstallCascadePlugin: (com.example.gemini.data.remote.dto.AvailableCascadePluginDto) -> Unit = {}
 ) {
     var showDialog by remember { mutableStateOf(false) }
+    var showCascadeCatalogDialog by remember { mutableStateOf(false) }
     var serverToEdit by remember { mutableStateOf<com.example.gemini.domain.model.McpServerSpec?>(null) }
     var serverToDelete by remember { mutableStateOf<String?>(null) }
     var expandedTools by remember { mutableStateOf(setOf<String>()) }
@@ -1499,6 +1901,25 @@ private fun McpSubScreen(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Add Server", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
+                }
+
+                // Browse Cascade MCP Marketplace button
+                OutlinedButton(
+                    onClick = { showCascadeCatalogDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ClaudeTerracotta),
+                    border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.5f)),
+                    contentPadding = PaddingValues(vertical = 10.dp, horizontal = 12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Storefront,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = ClaudeTerracotta
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Browse MCP Catalog / Marketplace (1-Click)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = ClaudeTerracotta)
                 }
             }
         }
@@ -2174,6 +2595,19 @@ private fun McpSubScreen(
                 showDialog = false
                 serverToEdit = null
             }
+        )
+    }
+
+    // Cascade Marketplace Dialog
+    if (showCascadeCatalogDialog) {
+        CascadeMcpCatalogDialog(
+            availablePlugins = availableCascadePlugins,
+            isLoading = isCascadePluginsLoading,
+            installingPluginId = installingCascadePluginId,
+            existingServers = mcpServers,
+            onSearch = onSearchCascadePlugins,
+            onInstallPlugin = onInstallCascadePlugin,
+            onDismiss = { showCascadeCatalogDialog = false }
         )
     }
 }
@@ -4744,7 +5178,7 @@ private fun AutomationSubScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val browserTools = listOf(
-                        "browser_open_url", "browser_screenshot", "browser_inspect_dom",
+                        "browser_open_url", "browser_set_view_mode", "browser_screenshot", "browser_inspect_dom",
                         "browser_interact", "browser_eval_js", "browser_get_console_logs",
                         "browser_list_tabs", "browser_switch_tab", "browser_close_tab"
                     )
@@ -4883,6 +5317,252 @@ private fun AutomationSubScreen(
         }
     }
 }
+
+// ==========================================
+// SUB-SCREEN 8: DIAGNOSTICS & PERFORMANCE
+// ==========================================
+@Composable
+private fun DiagnosticsSubScreen(
+    isFloatingDiagnosticsEnabled: Boolean,
+    onToggleFloatingDiagnostics: (Boolean) -> Unit,
+    cardBg: Color,
+    cardBorder: BorderStroke
+) {
+    DisposableEffect(isFloatingDiagnosticsEnabled) {
+        com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.start()
+        onDispose {
+            if (!isFloatingDiagnosticsEnabled) {
+                com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.stop()
+            }
+        }
+    }
+
+    val snapshot by com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.snapshot.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Toggle Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = (if (isFloatingDiagnosticsEnabled) QuotaGreen else Color.Gray).copy(alpha = 0.12f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Speed,
+                                    contentDescription = null,
+                                    tint = if (isFloatingDiagnosticsEnabled) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Floating Diagnostics HUD",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (isFloatingDiagnosticsEnabled) QuotaGreen.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = if (isFloatingDiagnosticsEnabled) "VISIBLE" else "DISABLED",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isFloatingDiagnosticsEnabled) QuotaGreen else Color.Gray,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Live on-screen thread, queue & connection monitor",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isFloatingDiagnosticsEnabled,
+                        onCheckedChange = onToggleFloatingDiagnostics,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = QuotaGreen
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Displays a draggable, real-time floating status pill showing active JVM threads, running and queued gRPC/HTTP calls, connection pool socket counts, and main-thread IO latency. Tap the floating pill anytime to expand detailed metrics.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    lineHeight = 17.sp
+                )
+            }
+        }
+
+        // Live Snapshot Metric Preview Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Current Telemetry Snapshot",
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), thickness = 0.8.dp)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Active JVM Threads:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "${snapshot.activeJvmThreads} threads",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "AgyHub Stream / RPCs:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "Run=${snapshot.agyRunning} | Q=${snapshot.agyQueued}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (snapshot.agyQueued > 0) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "AgyHub Connection Pool:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "${snapshot.agyConns} sockets (${snapshot.agyIdleConns} idle)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "IDE Bridge Sockets:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "${snapshot.ideConns} sockets (${snapshot.ideIdleConns} idle)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Event Loop IO Latency:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = if (snapshot.ioLagMs >= 0) "${snapshot.ioLagMs} ms" else "ERR",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (snapshot.isLagging) Color(0xFFFF5252) else QuotaGreen
+                    )
+                }
+
+                if (snapshot.threadGroupSummary.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Thread Breakdown:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = snapshot.threadGroupSummary,
+                            fontSize = 10.5.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 
 

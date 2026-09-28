@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
+import android.view.WindowManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -104,6 +105,11 @@ import com.example.gemini.ui.components.ToolCallExpansionCache
 import com.example.gemini.ui.components.CodeBlockExpansionCache
 import com.example.gemini.ui.bubble.FloatingChatActivity
 import android.app.Activity
+import com.example.gemini.ui.drawer.ArtifactsDrawerContent
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
@@ -129,6 +135,7 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var showArtifactsDrawer by rememberSaveable { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -149,6 +156,7 @@ fun ChatScreen(
     val conversations by viewModel.conversations.collectAsState()
     val currentConv by viewModel.currentConversation.collectAsState()
     val messages by viewModel.messages.collectAsState()
+    val artifacts by viewModel.artifacts.collectAsState()
     val isStreaming by viewModel.isStreaming.collectAsState()
     val selectedModelId by viewModel.selectedModelId.collectAsState()
     val availableModels by viewModel.availableModels.collectAsState()
@@ -201,11 +209,29 @@ fun ChatScreen(
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
     val isBrowserAutomationEnabled by viewModel.isBrowserAutomationEnabled.collectAsState()
     val isTerminalAutomationEnabled by viewModel.isTerminalAutomationEnabled.collectAsState()
+    val isFloatingSwitcherEnabled by viewModel.isFloatingSwitcherEnabled.collectAsState()
+    val floatingSwitcherOrientation by viewModel.floatingSwitcherOrientation.collectAsState()
+    val floatingSwitcherItems by viewModel.floatingSwitcherItems.collectAsState()
+    val floatingSwitcherAutoCollapseSec by viewModel.floatingSwitcherAutoCollapseSec.collectAsState()
+    val isFloatingDiagnosticsEnabled by viewModel.isFloatingDiagnosticsEnabled.collectAsState()
     val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
     val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
     val hubStatus by viewModel.hubStatus.collectAsState()
     val systemConnectionState by viewModel.systemConnectionState.collectAsState()
     val isNetworkConnected by viewModel.isNetworkConnectedState.collectAsState()
+    val isAnyGenerationOrTaskActive by viewModel.isAnyGenerationOrTaskActive.collectAsState()
+
+    DisposableEffect(isAnyGenerationOrTaskActive) {
+        val window = (context as? Activity)?.window
+        if (isAnyGenerationOrTaskActive) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
 
     LaunchedEffect(drawerState.isOpen) {
         if (drawerState.isOpen) {
@@ -331,6 +357,25 @@ fun ChatScreen(
     val refreshingMcpServer by viewModel.refreshingMcpServer.collectAsState()
     val mcpErrorMessage by viewModel.mcpErrorMessage.collectAsState()
     val mcpStatusMessage by viewModel.mcpStatusMessage.collectAsState()
+
+    val availableCascadePlugins by viewModel.availableCascadePlugins.collectAsState()
+    val isCascadePluginsLoading by viewModel.isCascadePluginsLoading.collectAsState()
+    val installingCascadePluginId by viewModel.installingCascadePluginId.collectAsState()
+
+    val allSkills by viewModel.allSkills.collectAsState()
+    val isSkillsLoading by viewModel.isSkillsLoading.collectAsState()
+    val skillsFilterScope by viewModel.skillsFilterScope.collectAsState()
+
+    val installedPlugins by viewModel.installedPlugins.collectAsState()
+    val isInstalledPluginsLoading by viewModel.isInstalledPluginsLoading.collectAsState()
+
+    val googlePluginsCatalog by viewModel.googlePluginsCatalog.collectAsState()
+    val isGooglePluginsLoading by viewModel.isGooglePluginsLoading.collectAsState()
+    val installingGooglePluginId by viewModel.installingGooglePluginId.collectAsState()
+    val deletingPluginId by viewModel.deletingPluginId.collectAsState()
+
+    val pluginActionStatusMessage by viewModel.pluginActionStatusMessage.collectAsState()
+    val pluginActionErrorMessage by viewModel.pluginActionErrorMessage.collectAsState()
 
     var allSlashCommands by remember { mutableStateOf(com.example.gemini.data.remote.SlashCommandsCache.getCachedSync()) }
 
@@ -587,7 +632,11 @@ fun ChatScreen(
         }
     }
 
-    BackHandler(enabled = conversationBackStack.isNotEmpty() && !drawerState.isOpen && drawerState.targetValue != DrawerValue.Open) {
+    BackHandler(enabled = showArtifactsDrawer) {
+        showArtifactsDrawer = false
+    }
+
+    BackHandler(enabled = conversationBackStack.isNotEmpty() && !drawerState.isOpen && drawerState.targetValue != DrawerValue.Open && !showArtifactsDrawer) {
         navigateBackConversation()
     }
 
@@ -928,11 +977,21 @@ fun ChatScreen(
                             }
                         }
                         if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) || systemConnectionState !is com.example.gemini.data.remote.SystemConnectionState.Offline || hubStatus.status != "idle") {
+                            val isCheckingAuth = isAuthBusy || agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING
+                            val isUnauthenticated = !systemConnectionState.isAuth || agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED || (!agyAuthInfo.isLoggedIn && !isCheckingAuth)
+
                             val dotColor = when {
                                 serverStatus is com.example.gemini.data.local.LocalServerStatus.Stopping -> Color(0xFFF59E0B)
                                 systemConnectionState is com.example.gemini.data.remote.SystemConnectionState.Connected -> {
-                                    when ((systemConnectionState as com.example.gemini.data.remote.SystemConnectionState.Connected).hubStatus) {
-                                        "online" -> Color(0xFF22C55E) // Green: Hub is online & ready
+                                    val conn = systemConnectionState as com.example.gemini.data.remote.SystemConnectionState.Connected
+                                    when (conn.hubStatus) {
+                                        "online" -> {
+                                            when {
+                                                isCheckingAuth -> Color(0xFF3B82F6) // Blue: Hub active, checking/verifying auth
+                                                isUnauthenticated -> Color(0xFFA855F7) // Purple: Hub active, but user not logged in
+                                                else -> Color(0xFF22C55E) // Green: Hub active & user authenticated
+                                            }
+                                        }
                                         "starting", "idle" -> Color(0xFFF59E0B) // Yellow: Bridge online, Hub starting
                                         "error" -> Color(0xFFEF4444) // Red: Hub error
                                         "stopped" -> Color(0xFF9CA3AF) // Gray: Hub stopped
@@ -970,19 +1029,13 @@ fun ChatScreen(
                             )
                         }
                         IconButton(onClick = {
-                            if (isInFloatingWindow) {
+                            if (useSshTerminal || (isLocalToolsInstalled && isLocalToolsEnabled)) {
+                                onNavigateToTerminal()
+                            } else if (isLocalToolsInstalled) {
+                                viewModel.setLocalToolsEnabled(true)
                                 onNavigateToTerminal()
                             } else {
-                                if (useSshTerminal) {
-                                    showLocalTerminalDialog = true
-                                } else if (isLocalToolsInstalled && isLocalToolsEnabled) {
-                                    showLocalTerminalDialog = true
-                                } else if (isLocalToolsInstalled) {
-                                    viewModel.setLocalToolsEnabled(true)
-                                    showLocalTerminalDialog = true
-                                } else {
-                                    showLocalToolsInstallDialog = true
-                                }
+                                showLocalToolsInstallDialog = true
                             }
                         }) {
                             Icon(
@@ -1128,9 +1181,8 @@ fun ChatScreen(
                     } else if (isExistingChat) {
                         com.example.gemini.ui.components.ConversationLoadingSkeleton()
                     } else if (messages.isEmpty()) {
-                        // Clean minimal empty state for true New Chat (NEVER SHOWS SKELETON LOADER)
-                        val isAuth = systemConnectionState.isAuth
                         val isCheckingAuth = isAuthBusy || agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING
+                        val isExplicitlyUnauthenticated = agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED
                         BoxWithConstraints(
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -1152,7 +1204,7 @@ fun ChatScreen(
 
                                 if (isCheckingAuth) {
                                     com.example.gemini.ui.components.NewChatCheckingAuthPromptCard()
-                                } else if (!isAuth || !agyAuthInfo.isLoggedIn) {
+                                } else if (isExplicitlyUnauthenticated && isNetworkConnected) {
                                     com.example.gemini.ui.components.NewChatSignInPromptCard(
                                         onSignInClick = { viewModel.loginToAgyHub(force = true) }
                                     )
@@ -1289,7 +1341,9 @@ fun ChatScreen(
                                                 },
                                                 onViewRawPayload = { payloadJson ->
                                                     showRawPayloadDialog = payloadJson
-                                                }
+                                                },
+                                                onShowArtifacts = { showArtifactsDrawer = true },
+                                                artifactsCount = artifacts.size
                                             )
                                         }
                                         is ChatFeedItem.StreamingMessage -> {
@@ -1317,7 +1371,9 @@ fun ChatScreen(
                                                     viewModel.skipUserChoices(toolCall, msgId, responses)
                                                 },
                                                 summarizingModelName = summarizingModelName,
-                                                pendingQueuedUserMessage = pendingQueuedUserMessage
+                                                pendingQueuedUserMessage = pendingQueuedUserMessage,
+                                                onShowArtifacts = { showArtifactsDrawer = true },
+                                                artifactsCount = artifacts.size
                                             )
                                         }
                                         }
@@ -1844,7 +1900,7 @@ fun ChatScreen(
             onSaveSshSettings = { h, p, u, pass -> viewModel.saveSshSettings(h, p, u, pass) },
             onToggleLocalTools = { viewModel.setLocalToolsEnabled(it) },
             onInstallLocalTools = { showLocalToolsInstallDialog = true },
-            onOpenLocalTerminal = { showLocalTerminalDialog = true },
+            onOpenLocalTerminal = onNavigateToTerminal,
             onResetLocalTools = {
                 LocalEnvironmentManager.launchReset(context) {
                     viewModel.setLocalToolsEnabled(false)
@@ -1863,10 +1919,42 @@ fun ChatScreen(
             onToggleMcpServer = { name, enabled -> viewModel.toggleMcpServer(name, enabled) },
             onSaveMcpServer = { spec, rawJson -> viewModel.saveMcpServer(spec, rawJson) },
             onDeleteMcpServer = { name -> viewModel.deleteMcpServer(name) },
+            availableCascadePlugins = availableCascadePlugins,
+            isCascadePluginsLoading = isCascadePluginsLoading,
+            installingCascadePluginId = installingCascadePluginId,
+            onSearchCascadePlugins = { q -> viewModel.loadAvailableCascadePlugins(q) },
+            onInstallCascadePlugin = { p -> viewModel.installCascadeMcpPlugin(p) },
+            allSkills = allSkills,
+            isSkillsLoading = isSkillsLoading,
+            skillsFilterScope = skillsFilterScope,
+            onSetSkillsFilterScope = { s -> viewModel.setSkillsFilterScope(s) },
+            onRefreshSkills = { viewModel.loadAllSkills() },
+            installedPlugins = installedPlugins,
+            isInstalledPluginsLoading = isInstalledPluginsLoading,
+            onRefreshInstalledPlugins = { viewModel.loadAllInstalledPlugins() },
+            googlePluginsCatalog = googlePluginsCatalog,
+            isGooglePluginsLoading = isGooglePluginsLoading,
+            installingGooglePluginId = installingGooglePluginId,
+            deletingPluginId = deletingPluginId,
+            onRefreshGooglePlugins = { viewModel.loadGooglePluginsCatalog() },
+            onInstallGooglePlugin = { id, name -> viewModel.installGooglePlugin(id, name) },
+            onDeletePlugin = { id, name -> viewModel.deleteInstalledPlugin(id, name) },
+            pluginActionStatusMessage = pluginActionStatusMessage,
+            pluginActionErrorMessage = pluginActionErrorMessage,
+            onClearPluginStatus = { viewModel.clearPluginActionStatus() },
             isBrowserAutomationEnabled = isBrowserAutomationEnabled,
             isTerminalAutomationEnabled = isTerminalAutomationEnabled,
             onToggleBrowserAutomation = { viewModel.setBrowserAutomationEnabled(it) },
             onToggleTerminalAutomation = { viewModel.setTerminalAutomationEnabled(it) },
+            isFloatingSwitcherEnabled = isFloatingSwitcherEnabled,
+            floatingSwitcherOrientation = floatingSwitcherOrientation,
+            floatingSwitcherItems = floatingSwitcherItems,
+            floatingSwitcherAutoCollapseSec = floatingSwitcherAutoCollapseSec,
+            onToggleFloatingSwitcher = { viewModel.setFloatingSwitcherEnabled(it) },
+            onSetFloatingSwitcherOrientation = { viewModel.setFloatingSwitcherOrientation(it) },
+            onSetFloatingSwitcherItems = { viewModel.setFloatingSwitcherItems(it) },
+            onSetFloatingSwitcherAutoCollapseSec = { viewModel.setFloatingSwitcherAutoCollapseSec(it) },
+            onResetFloatingSwitcherPosition = { viewModel.resetFloatingSwitcherPosition() },
             commandAutoExecutionPolicy = commandAutoExecutionPolicy,
             commandSandboxEnabled = commandSandboxEnabled,
             requireApprovalForFileEdits = requireApprovalForFileEdits,
@@ -1893,6 +1981,8 @@ fun ChatScreen(
             onChangePermissionRuleDecision = { rawRule, newDecision -> viewModel.changeGlobalPermissionGrantDecision(rawRule, newDecision) },
             groupChatsByWorkspace = groupChatsByWorkspace,
             onToggleGroupChatsByWorkspace = { viewModel.setGroupChatsByWorkspace(it) },
+            isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
+            onToggleFloatingDiagnostics = { viewModel.setFloatingDiagnosticsEnabled(it) },
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -2085,7 +2175,7 @@ fun ChatScreen(
     if (showLocalToolsInstallDialog) {
         LocalToolsInstallDialog(
             authPreferences = viewModel.authPreferences,
-            onOpenTerminal = { showLocalTerminalDialog = true },
+            onOpenTerminal = onNavigateToTerminal,
             onDismiss = { showLocalToolsInstallDialog = false }
         )
     }
@@ -2211,9 +2301,61 @@ fun ChatScreen(
             )
         }
     }
+
+    // Right-side Artifacts Drawer Modal Overlay (Opened via topbar/message button, 0 gesture conflicts, standard LTR)
+    AnimatedVisibility(
+        visible = showArtifactsDrawer,
+        enter = fadeIn(animationSpec = tween(220)),
+        exit = fadeOut(animationSpec = tween(200)),
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(90000f)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.55f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { showArtifactsDrawer = false }
+        ) {
+            AnimatedVisibility(
+                visible = showArtifactsDrawer,
+                enter = slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(260, easing = FastOutSlowInEasing)
+                ),
+                exit = slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(220, easing = FastOutSlowInEasing)
+                ),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.85f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { /* Absorb clicks */ }
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 16.dp
+                ) {
+                    ArtifactsDrawerContent(
+                        artifacts = artifacts,
+                        onClose = { showArtifactsDrawer = false }
+                    )
+                }
+            }
+        }
+    }
+    } // End of ModalNavigationDrawer
     } // End of Box
     } // End of CompositionLocalProvider
-}
+
 
 enum class ChatToastType {
     SUCCESS,

@@ -59,6 +59,7 @@ class AgyHubClient {
     private val projectService = AgyProjectService.instance
     private val mcpService = AgyMcpService.instance
     private val audioService = AgyAudioService.instance
+    private val pluginService = AgyPluginService.instance
 
     val csrfEvents: SharedFlow<String>
         get() = csrfManager.csrfEvents
@@ -464,4 +465,47 @@ class AgyHubClient {
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> =
         audioService.endAudioSession(sessionId, hubUrl)
+
+    // ==================== PLUGINS & SKILLS & MARKETPLACE ====================
+
+    suspend fun getAvailableCascadePlugins(
+        os: String = "linux",
+        searchQuery: String = "",
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<List<com.example.gemini.data.remote.dto.AvailableCascadePluginDto>> =
+        pluginService.getAvailableCascadePlugins(os, searchQuery, hubUrl)
+
+    suspend fun installCascadePlugin(
+        plugin: com.example.gemini.data.remote.dto.AvailableCascadePluginDto,
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<Unit> =
+        pluginService.installCascadePlugin(plugin, hubUrl)
+
+    suspend fun getBuildWithGooglePlugins(
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<List<com.example.gemini.data.remote.dto.BuildWithGooglePluginItemDto>> =
+        pluginService.getBuildWithGooglePlugins(hubUrl)
+
+    suspend fun downloadBuildWithGooglePlugin(
+        pluginId: String,
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<String> =
+        pluginService.downloadBuildWithGooglePlugin(pluginId, hubUrl)
+
+    suspend fun deletePlugin(
+        pluginId: String,
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<String> =
+        pluginService.deletePlugin(pluginId, hubUrl)
+
+    suspend fun getAllPlugins(
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<List<com.example.gemini.data.remote.dto.InstalledPluginDto>> =
+        pluginService.getAllPlugins(hubUrl)
+
+    suspend fun getAllSkills(
+        workspaceUris: List<String> = emptyList(),
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<List<com.example.gemini.data.remote.dto.SkillDefinitionDto>> =
+        pluginService.getAllSkills(workspaceUris, hubUrl)
 }

@@ -83,16 +83,41 @@ class BrowserTabSession(
     var progress by mutableStateOf(0)
     var canGoBack by mutableStateOf(false)
     var canGoForward by mutableStateOf(false)
+    var scrollY by mutableStateOf(0)
     var webView: WebView? = null
     var isBackgroundActive by mutableStateOf(true)
     var lastError by mutableStateOf<BrowserNetworkError?>(null)
     var isStalled by mutableStateOf(false)
+    var isDevToolsEnabled by mutableStateOf(false)
+    var isDesktopMode by mutableStateOf(false)
+    var defaultUserAgent: String? = null
+    var previewBitmap by mutableStateOf<Bitmap?>(null)
 
     // Circular buffers for real-time telemetry (capped to 300 entries each)
     val consoleLogs = ConcurrentLinkedDeque<BrowserConsoleMessage>()
     val networkErrors = ConcurrentLinkedDeque<BrowserNetworkError>()
 
     private var stallWatchdogRunnable: Runnable? = null
+
+    fun capturePreview() {
+        val wv = webView ?: return
+        try {
+            val w = wv.width
+            val h = wv.height
+            if (w > 0 && h > 0) {
+                val scale = 0.4f
+                val scaledW = (w * scale).toInt().coerceAtLeast(1)
+                val scaledH = (h * scale).toInt().coerceAtLeast(1)
+                val bitmap = Bitmap.createBitmap(scaledW, scaledH, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                canvas.scale(scale, scale)
+                wv.draw(canvas)
+                previewBitmap = bitmap
+            }
+        } catch (e: Throwable) {
+            Log.d("BrowserTabSession", "capturePreview skipped: ${e.message}")
+        }
+    }
 
     fun startLoadingWatchdog(handler: Handler, timeoutMs: Long = 15000L) {
         cancelLoadingWatchdog(handler)
@@ -152,6 +177,8 @@ class BrowserTabSession(
         put("id", id)
         put("url", url)
         put("title", title)
+        put("isDesktopMode", isDesktopMode)
+        put("viewMode", if (isDesktopMode) "desktop" else "mobile")
         put("isLoading", isLoading)
         put("progress", progress)
         put("canGoBack", canGoBack)
@@ -175,6 +202,96 @@ class BrowserSessionManager private constructor() {
 
         private const val MAX_LOGS_PER_QUERY = 150
         private const val DEFAULT_TIMEOUT_MS = 15000L
+        const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+
+        /**
+         * Injects script to spoof Desktop screen width/height, platform, client hints, and desktop viewport meta tag.
+         * This prevents responsive sites (like YouTube, Google, Facebook, Twitter, Reddit) from falling back to mobile.
+         */
+        fun injectDesktopSpoofing(view: WebView?) {
+            val js = """
+            (function() {
+                try {
+                    // 1. Override screen dimensions to full desktop resolution
+                    var screenProps = {
+                        width: 1920,
+                        height: 1080,
+                        availWidth: 1920,
+                        availHeight: 1040,
+                        colorDepth: 24,
+                        pixelDepth: 24
+                    };
+                    for (var p in screenProps) {
+                        try {
+                            Object.defineProperty(window.screen, p, {
+                                get: (function(val) { return function() { return val; }; })(screenProps[p]),
+                                configurable: true
+                            });
+                        } catch(e) {}
+                    }
+
+                    // 2. Override navigator platform and touch points
+                    try {
+                        Object.defineProperty(navigator, 'platform', { get: function() { return 'Win32'; }, configurable: true });
+                    } catch(e) {}
+                    try {
+                        Object.defineProperty(navigator, 'maxTouchPoints', { get: function() { return 1; }, configurable: true });
+                    } catch(e) {}
+
+                    // 3. Override navigator.userAgentData (Chromium Client Hints)
+                    try {
+                        if (navigator.userAgentData) {
+                            Object.defineProperty(navigator, 'userAgentData', {
+                                get: function() {
+                                    return {
+                                        mobile: false,
+                                        platform: 'Windows',
+                                        brands: [
+                                            { brand: 'Chromium', version: '128' },
+                                            { brand: 'Google Chrome', version: '128' },
+                                            { brand: 'Not;A=Brand', version: '24' }
+                                        ],
+                                        getHighEntropyValues: function() {
+                                            return Promise.resolve({
+                                                architecture: 'x86',
+                                                bitness: '64',
+                                                mobile: false,
+                                                model: '',
+                                                platform: 'Windows',
+                                                platformVersion: '15.0.0'
+                                            });
+                                        }
+                                    };
+                                },
+                                configurable: true
+                            });
+                        }
+                    } catch(e) {}
+
+                    // 4. Force 1280px desktop viewport width with pinch zoom-in and zoom-out fully enabled
+                    function applyDesktopViewport() {
+                        try {
+                            var meta = document.querySelector('meta[name="viewport"]');
+                            if (!meta) {
+                                meta = document.createElement('meta');
+                                meta.name = 'viewport';
+                                (document.head || document.documentElement).appendChild(meta);
+                            }
+                            meta.setAttribute('content', 'width=1280, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes');
+                        } catch(e) {}
+                    }
+
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', applyDesktopViewport);
+                    }
+                    applyDesktopViewport();
+                } catch(e) {}
+            })();
+            """.trimIndent()
+            try {
+                view?.evaluateJavascript(js, null)
+            } catch (_: Exception) {}
+        }
 
         /**
          * Formats raw user/agent input into a valid HTTP/HTTPS/File URL or search query.
@@ -202,130 +319,154 @@ class BrowserSessionManager private constructor() {
             val encoded = try { URLEncoder.encode(trimmed, "UTF-8") } catch (_: Exception) { trimmed }
             return "https://www.google.com/search?q=$encoded"
         }
+    }
 
-        fun buildErrorHtml(failingUrl: String, errorDescription: String, isDark: Boolean): String {
-            val escapedUrl = android.text.TextUtils.htmlEncode(failingUrl)
-            val escapedError = android.text.TextUtils.htmlEncode(errorDescription)
-            val encodedUrl = try { URLEncoder.encode(failingUrl, "UTF-8") } catch (_: Exception) { failingUrl }
-            val bg = if (isDark) "#181513" else "#FAF6F0"
-            val cardBg = if (isDark) "#23201D" else "#FFFFFF"
-            val textPrimary = if (isDark) "#EDE8DF" else "#181513"
-            val textSecondary = if (isDark) "#B8B2A8" else "#525252"
-            val accent = if (isDark) "#D97706" else "#C86446"
-            val border = if (isDark) "#383430" else "#E5E7EB"
-            val codeBg = if (isDark) "#2C2825" else "#F3F4F6"
+    data class SpeedDialShortcut(
+        val id: String = java.util.UUID.randomUUID().toString(),
+        val title: String,
+        val url: String,
+        val iconUrl: String? = null
+    )
 
-            return """
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-                  <style>
-                    * { box-sizing: border-box; margin: 0; padding: 0; }
-                    body {
-                      padding: 32px 16px;
-                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                      background-color: $bg;
-                      color: $textPrimary;
-                      display: flex;
-                      flex-direction: column;
-                      align-items: center;
-                      justify-content: center;
-                      min-height: 90vh;
-                      text-align: center;
-                    }
-                    .card {
-                      background-color: $cardBg;
-                      border: 1px solid $border;
-                      border-radius: 18px;
-                      padding: 26px 20px;
-                      max-width: 400px;
-                      width: 100%;
-                      display: flex;
-                      flex-direction: column;
-                      align-items: center;
-                      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
-                    }
-                    .icon-circle {
-                      width: 58px;
-                      height: 58px;
-                      border-radius: 50%;
-                      background-color: rgba(200, 100, 70, 0.16);
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                      margin-bottom: 16px;
-                    }
-                    .icon-circle svg {
-                      width: 30px;
-                      height: 30px;
-                      fill: $accent;
-                    }
-                    h2 {
-                      font-size: 19px;
-                      font-weight: 700;
-                      margin-bottom: 8px;
-                      color: $textPrimary;
-                    }
-                    p {
-                      font-size: 14px;
-                      line-height: 1.55;
-                      color: $textSecondary;
-                      margin-bottom: 16px;
-                    }
-                    .url-box {
-                      background-color: $codeBg;
-                      border: 1px solid $border;
-                      padding: 10px 14px;
-                      border-radius: 10px;
-                      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-                      font-size: 12px;
-                      color: $textPrimary;
-                      word-break: break-all;
-                      margin-bottom: 20px;
-                      width: 100%;
-                      text-align: left;
-                    }
-                    .url-box small {
-                      display: block;
-                      margin-top: 6px;
-                      color: $textSecondary;
-                      font-size: 11.5px;
-                    }
-                    .btn-retry {
-                      background-color: $accent;
-                      color: #ffffff;
-                      border: none;
-                      padding: 12px 28px;
-                      font-size: 14px;
-                      font-weight: 600;
-                      border-radius: 10px;
-                      cursor: pointer;
-                      outline: none;
-                      box-shadow: 0 2px 8px rgba(200, 100, 70, 0.3);
-                    }
-                    .btn-retry:active {
-                      opacity: 0.85;
-                    }
-                  </style>
-                </head>
-                <body>
-                  <div class="card">
-                    <div class="icon-circle">
-                      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                    </div>
-                    <h2>Webpage not available</h2>
-                    <p>Could not connect to the server or network host.</p>
-                    <div class="url-box">
-                      <strong>URL:</strong> $escapedUrl
-                      <small><strong>Error:</strong> $escapedError</small>
-                    </div>
-                    <button class="btn-retry" onclick="window.location.href = decodeURIComponent('$encodedUrl');">Retry Connection</button>
-                  </div>
-                </body>
-                </html>
-            """.trimIndent()
+    data class TypedHistoryItem(
+        val id: String = java.util.UUID.randomUUID().toString(),
+        val query: String,
+        val url: String,
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    private val defaultShortcuts = listOf(
+        SpeedDialShortcut(id = "google", title = "Google", url = "https://www.google.com"),
+        SpeedDialShortcut(id = "youtube", title = "YouTube", url = "https://www.youtube.com")
+    )
+
+    val shortcuts = mutableStateListOf<SpeedDialShortcut>().apply {
+        addAll(defaultShortcuts)
+    }
+
+    val typedHistory = mutableStateListOf<TypedHistoryItem>()
+
+    private var shortcutsLoaded = false
+    private var historyLoaded = false
+
+    fun loadShortcutsIfNeeded(context: Context) {
+        if (shortcutsLoaded) return
+        shortcutsLoaded = true
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_shortcuts", Context.MODE_PRIVATE)
+        val json = prefs.getString("shortcuts_json", null) ?: return
+        try {
+            val arr = JSONArray(json)
+            val list = mutableListOf<SpeedDialShortcut>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    SpeedDialShortcut(
+                        id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                        title = obj.getString("title"),
+                        url = obj.getString("url")
+                    )
+                )
+            }
+            if (list.isNotEmpty()) {
+                shortcuts.clear()
+                shortcuts.addAll(list)
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun loadHistoryIfNeeded(context: Context) {
+        if (historyLoaded) return
+        historyLoaded = true
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_history", Context.MODE_PRIVATE)
+        val json = prefs.getString("typed_history_json", null) ?: return
+        try {
+            val arr = JSONArray(json)
+            val list = mutableListOf<TypedHistoryItem>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    TypedHistoryItem(
+                        id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                        query = obj.getString("query"),
+                        url = obj.getString("url"),
+                        timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                    )
+                )
+            }
+            if (list.isNotEmpty()) {
+                typedHistory.clear()
+                typedHistory.addAll(list)
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun addHistory(context: Context, query: String, finalUrl: String) {
+        val trimmedQuery = query.trim()
+        val trimmedUrl = finalUrl.trim()
+        if (trimmedQuery.isBlank() || trimmedUrl.isBlank() || trimmedUrl == "about:blank") return
+
+        loadHistoryIfNeeded(context)
+        // Remove duplicate if already exists
+        typedHistory.removeAll { it.url.equals(trimmedUrl, ignoreCase = true) || it.query.equals(trimmedQuery, ignoreCase = true) }
+        typedHistory.add(0, TypedHistoryItem(query = trimmedQuery, url = trimmedUrl))
+        // Cap history to 50 most recent items
+        while (typedHistory.size > 50) {
+            typedHistory.removeAt(typedHistory.lastIndex)
         }
+        saveHistory(context)
+    }
+
+    fun removeHistory(context: Context, id: String) {
+        typedHistory.removeAll { it.id == id }
+        saveHistory(context)
+    }
+
+    fun clearHistory(context: Context) {
+        typedHistory.clear()
+        saveHistory(context)
+    }
+
+    private fun saveHistory(context: Context) {
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_history", Context.MODE_PRIVATE)
+        try {
+            val arr = JSONArray()
+            typedHistory.forEach { item ->
+                arr.put(JSONObject().apply {
+                    put("id", item.id)
+                    put("query", item.query)
+                    put("url", item.url)
+                    put("timestamp", item.timestamp)
+                })
+            }
+            prefs.edit().putString("typed_history_json", arr.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun addShortcut(context: Context, title: String, url: String) {
+        val formatted = formatUrl(url)
+        val sc = SpeedDialShortcut(title = title, url = formatted)
+        shortcuts.add(sc)
+        saveShortcuts(context)
+    }
+
+    fun removeShortcut(context: Context, id: String) {
+        shortcuts.removeAll { it.id == id }
+        saveShortcuts(context)
+    }
+
+    private fun saveShortcuts(context: Context) {
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_shortcuts", Context.MODE_PRIVATE)
+        try {
+            val arr = JSONArray()
+            shortcuts.forEach { sc ->
+                arr.put(JSONObject().apply {
+                    put("id", sc.id)
+                    put("title", sc.title)
+                    put("url", sc.url)
+                })
+            }
+            prefs.edit().putString("shortcuts_json", arr.toString()).apply()
+        } catch (_: Exception) {}
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -345,6 +486,7 @@ class BrowserSessionManager private constructor() {
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        loadShortcutsIfNeeded(context)
     }
 
     fun getActiveTab(): BrowserTabSession? {
@@ -368,12 +510,15 @@ class BrowserSessionManager private constructor() {
 
     fun getMainHandler(): Handler = mainHandler
 
-    fun addNewTab(url: String = "", title: String = "New Tab", activate: Boolean = true): BrowserTabSession {
+    fun addNewTab(url: String = "", title: String = "New Tab", activate: Boolean = true, desktopMode: Boolean? = null): BrowserTabSession {
         val formatted = if (url.isNotBlank()) formatUrl(url) else ""
         val newTab = BrowserTabSession(
             initialUrl = formatted,
             initialTitle = if (formatted.isNotBlank()) formatted else title
         )
+        if (desktopMode != null) {
+            newTab.isDesktopMode = desktopMode
+        }
         tabs.add(newTab)
         if (activate || activeTabId == null) {
             activeTabId = newTab.id
@@ -388,6 +533,25 @@ class BrowserSessionManager private constructor() {
         val tab = tabs.find { it.id == tabId } ?: return false
         activeTabId = tab.id
         return true
+    }
+
+    fun closeAllTabs() {
+        mainHandler.post {
+            tabs.forEach { tabToRemove ->
+                try {
+                    tabToRemove.webView?.onPause()
+                    tabToRemove.webView?.let { wv ->
+                        (wv.parent as? ViewGroup)?.removeView(wv)
+                        wv.destroy()
+                    }
+                    tabToRemove.webView = null
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error destroying WebView", e)
+                }
+            }
+        }
+        tabs.clear()
+        activeTabId = null
     }
 
     fun closeTab(tabId: String): Boolean {
@@ -409,9 +573,7 @@ class BrowserSessionManager private constructor() {
         tabs.removeAt(index)
 
         if (tabs.isEmpty()) {
-            val fresh = BrowserTabSession(initialUrl = "", initialTitle = "New Tab")
-            tabs.add(fresh)
-            activeTabId = fresh.id
+            activeTabId = null
         } else if (activeTabId == tabId) {
             val nextIndex = (index - 1).coerceAtLeast(0)
             activeTabId = tabs[nextIndex].id
@@ -422,12 +584,15 @@ class BrowserSessionManager private constructor() {
     /**
      * Opens a URL in an existing tab or creates a new tab.
      */
-    fun openUrl(url: String, tabId: String? = null, newTab: Boolean = false): BrowserTabSession {
+    fun openUrl(url: String, tabId: String? = null, newTab: Boolean = false, desktopMode: Boolean? = null): BrowserTabSession {
         val formatted = formatUrl(url)
         val targetTab = if (newTab || tabs.isEmpty()) {
-            addNewTab(formatted, formatted, activate = true)
+            addNewTab(formatted, formatted, activate = true, desktopMode = desktopMode)
         } else {
-            val t = getTab(tabId) ?: addNewTab(formatted, formatted, activate = true)
+            val t = getTab(tabId) ?: addNewTab(formatted, formatted, activate = true, desktopMode = desktopMode)
+            if (desktopMode != null && t.isDesktopMode != desktopMode) {
+                setDesktopMode(t, desktopMode)
+            }
             t.url = formatted
             t.title = formatted
             loadUrlInTab(t, formatted)
@@ -474,8 +639,23 @@ class BrowserSessionManager private constructor() {
 
     fun loadUrlInTab(tab: BrowserTabSession, url: String, context: Context? = null) {
         val ctx = context ?: appContext
+        var effectiveUrl = url
+        if (tab.isDesktopMode) {
+            if (effectiveUrl.contains("://m.youtube.com")) {
+                effectiveUrl = effectiveUrl.replace("://m.youtube.com", "://www.youtube.com")
+                if (!effectiveUrl.contains("app=desktop")) {
+                    effectiveUrl += if (effectiveUrl.contains("?")) "&app=desktop" else "?app=desktop"
+                }
+            } else if (effectiveUrl.contains("://m.facebook.com")) {
+                effectiveUrl = effectiveUrl.replace("://m.facebook.com", "://www.facebook.com")
+            } else if (effectiveUrl.contains("://mobile.twitter.com")) {
+                effectiveUrl = effectiveUrl.replace("://mobile.twitter.com", "://twitter.com")
+            } else if (effectiveUrl.contains("://m.wikipedia.org")) {
+                effectiveUrl = effectiveUrl.replace("://m.wikipedia.org", "://en.wikipedia.org")
+            }
+        }
         tab.clearError()
-        tab.url = url
+        tab.url = effectiveUrl
         tab.isLoading = true
         tab.startLoadingWatchdog(mainHandler)
 
@@ -488,21 +668,91 @@ class BrowserSessionManager private constructor() {
                 }
 
                 try {
-                    wv.loadUrl(url)
+                    wv.loadUrl(effectiveUrl)
                 } catch (e: Throwable) {
                     Log.w(TAG, "WebView loadUrl failed on existing instance, recreating WebView...", e)
                     wv = createWebView(effectiveCtx, tab, isDark = true)
-                    wv.loadUrl(url)
+                    wv.loadUrl(effectiveUrl)
                 }
             } catch (e: Throwable) {
-                Log.e(TAG, "Fatal error loading URL: $url", e)
+                Log.e(TAG, "Fatal error loading URL: $effectiveUrl", e)
                 tab.cancelLoadingWatchdog(mainHandler)
                 tab.isLoading = false
                 tab.lastError = BrowserNetworkError(
-                    url = url,
+                    url = effectiveUrl,
                     errorCode = -999,
                     description = "Failed to load page: ${e.message ?: "Unknown WebView Error"}"
                 )
+            }
+        }
+    }
+
+    fun toggleDesktopMode(tab: BrowserTabSession?, context: Context? = null) {
+        val t = tab ?: getActiveTab() ?: return
+        setDesktopMode(t, !t.isDesktopMode, context)
+    }
+
+    fun setDesktopMode(tab: BrowserTabSession, enable: Boolean, context: Context? = null) {
+        tab.isDesktopMode = enable
+        mainHandler.post {
+            val effectiveCtx = context ?: appContext
+            val wv = tab.webView ?: run {
+                if (effectiveCtx != null) ensureWebViewAttached(effectiveCtx, tab, isDark = true) else null
+            } ?: return@post
+
+            if (tab.defaultUserAgent == null) {
+                tab.defaultUserAgent = wv.settings.userAgentString
+            }
+
+            if (enable) {
+                wv.settings.userAgentString = DESKTOP_USER_AGENT
+                wv.settings.useWideViewPort = true
+                wv.settings.loadWithOverviewMode = true
+                wv.settings.setSupportZoom(true)
+                wv.settings.builtInZoomControls = true
+                wv.settings.displayZoomControls = false
+            } else {
+                wv.settings.userAgentString = tab.defaultUserAgent ?: WebSettings.getDefaultUserAgent(wv.context)
+                wv.settings.useWideViewPort = true
+                wv.settings.loadWithOverviewMode = true
+            }
+
+            val currentUrl = tab.url
+            if (currentUrl.isNotBlank() && currentUrl != "about:blank") {
+                if (enable) {
+                    var targetUrl = currentUrl
+                    if (targetUrl.contains("://m.youtube.com")) {
+                        targetUrl = targetUrl.replace("://m.youtube.com", "://www.youtube.com")
+                        if (!targetUrl.contains("app=desktop")) {
+                            targetUrl += if (targetUrl.contains("?")) "&app=desktop" else "?app=desktop"
+                        }
+                    } else if (targetUrl.contains("://m.facebook.com")) {
+                        targetUrl = targetUrl.replace("://m.facebook.com", "://www.facebook.com")
+                    } else if (targetUrl.contains("://mobile.twitter.com")) {
+                        targetUrl = targetUrl.replace("://mobile.twitter.com", "://twitter.com")
+                    } else if (targetUrl.contains("://m.wikipedia.org")) {
+                        targetUrl = targetUrl.replace("://m.wikipedia.org", "://en.wikipedia.org")
+                    }
+
+                    if (targetUrl != currentUrl) {
+                        tab.url = targetUrl
+                        wv.loadUrl(targetUrl)
+                        return@post
+                    }
+                } else {
+                    if (currentUrl.contains("app=desktop")) {
+                        val cleanedUrl = currentUrl
+                            .replace("?app=desktop&", "?")
+                            .replace("?app=desktop", "")
+                            .replace("&app=desktop", "")
+                        if (cleanedUrl != currentUrl) {
+                            tab.url = cleanedUrl
+                            wv.loadUrl(cleanedUrl)
+                            return@post
+                        }
+                    }
+                }
+                wv.reload()
             }
         }
     }
@@ -527,7 +777,7 @@ class BrowserSessionManager private constructor() {
         tab.webView = null
 
         val wv = WebView(context).apply {
-            setBackgroundColor(if (isDark) 0xFF181513.toInt() else Color.WHITE)
+            setBackgroundColor(Color.WHITE)
             layoutParams = ViewGroup.LayoutParams(1080, 1920)
 
             settings.apply {
@@ -542,13 +792,23 @@ class BrowserSessionManager private constructor() {
                 setSupportZoom(true)
                 builtInZoomControls = true
                 displayZoomControls = false
+                mediaPlaybackRequiresUserGesture = false
+
+                if (tab.isDesktopMode) {
+                    userAgentString = DESKTOP_USER_AGENT
+                }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    isAlgorithmicDarkeningAllowed = isDark
+                    isAlgorithmicDarkeningAllowed = false
                 } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     @Suppress("DEPRECATION")
-                    forceDark = if (isDark) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
+                    forceDark = WebSettings.FORCE_DARK_OFF
                 }
+            }
+
+            CookieManager.getInstance().setAcceptCookie(true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
             }
 
             webViewClient = object : WebViewClient() {
@@ -556,39 +816,55 @@ class BrowserSessionManager private constructor() {
                     tab.clearError()
                     tab.isLoading = true
                     tab.startLoadingWatchdog(mainHandler)
-                    if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("data:")) {
+                    if (url.isNullOrBlank() || url == "about:blank") {
+                        tab.url = ""
+                        tab.title = "New Tab"
+                    } else if (!url.startsWith("data:")) {
                         tab.url = url
                     }
                     tab.canGoBack = view?.canGoBack() == true
                     tab.canGoForward = view?.canGoForward() == true
+                    if (tab.isDesktopMode) {
+                        injectDesktopSpoofing(view)
+                    }
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     tab.isLoading = false
                     tab.cancelLoadingWatchdog(mainHandler)
-                    if (!url.isNullOrBlank() && url != "about:blank" && !url.startsWith("data:")) {
+                    if (url.isNullOrBlank() || url == "about:blank") {
+                        tab.url = ""
+                        tab.title = "New Tab"
+                    } else if (!url.startsWith("data:")) {
                         tab.url = url
                     }
-                    view?.title?.let { if (it.isNotBlank()) tab.title = it }
+                    view?.title?.let {
+                        if (it.isNotBlank() && tab.url.isNotBlank() && it != "about:blank") {
+                            tab.title = it
+                        }
+                    }
                     tab.canGoBack = view?.canGoBack() == true
                     tab.canGoForward = view?.canGoForward() == true
+                    if (tab.isDesktopMode) {
+                        injectDesktopSpoofing(view)
+                    }
+                    if (tab.isDevToolsEnabled && view != null) {
+                        ErudaHelper.inject(view, showImmediately = false)
+                    }
+                    view?.postDelayed({
+                        tab.capturePreview()
+                    }, 400)
                 }
 
                 override fun onPageCommitVisible(view: WebView?, url: String?) {
                     super.onPageCommitVisible(view, url)
-                    if (url == null || url.startsWith("data:") || url.contains("chromewebdata") || tab.lastError != null) {
-                        val color = if (isDark) "#EDE8DF" else "#181513"
-                        val bg = if (isDark) "#181513" else "#FAF6F0"
-                        try {
-                            view?.evaluateJavascript(
-                                "(function(){ try { document.documentElement.style.backgroundColor='$bg'; if(document.body){ document.body.style.backgroundColor='$bg'; document.body.style.color='$color'; } var els=document.querySelectorAll('body, body *'); for(var i=0;i<els.length;i++){ els[i].style.color='$color'; } } catch(e){} })();",
-                                null
-                            )
-                        } catch (_: Exception) {}
+                    if (tab.isDesktopMode) {
+                        injectDesktopSpoofing(view)
                     }
                 }
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                    super.onReceivedError(view, request, error)
                     val desc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         val descriptionStr = error?.description?.toString() ?: ""
                         if (descriptionStr.isNotBlank()) descriptionStr else "Network Error (${error?.errorCode})"
@@ -607,19 +883,11 @@ class BrowserSessionManager private constructor() {
                         tab.cancelLoadingWatchdog(mainHandler)
                         tab.lastError = err
                         tab.isLoading = false
-                        try {
-                            val color = if (isDark) "#EDE8DF" else "#181513"
-                            val bg = if (isDark) "#181513" else "#FAF6F0"
-                            view?.evaluateJavascript(
-                                "(function(){ try { document.documentElement.style.backgroundColor='$bg'; if(document.body){ document.body.style.backgroundColor='$bg'; document.body.style.color='$color'; } var els=document.querySelectorAll('body, body *'); for(var i=0;i<els.length;i++){ els[i].style.color='$color'; } } catch(e){} })();",
-                                null
-                            )
-                            view?.loadDataWithBaseURL(null, buildErrorHtml(reqUrl, desc, isDark), "text/html", "UTF-8", null)
-                        } catch (_: Exception) {}
                     }
                 }
 
                 override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+                    super.onReceivedHttpError(view, request, errorResponse)
                     val reqUrl = request?.url?.toString() ?: tab.url
                     val status = errorResponse?.statusCode ?: 0
                     val reason = errorResponse?.reasonPhrase ?: "HTTP Error"
@@ -636,9 +904,6 @@ class BrowserSessionManager private constructor() {
                         tab.cancelLoadingWatchdog(mainHandler)
                         tab.lastError = err
                         tab.isLoading = false
-                        try {
-                            view?.loadDataWithBaseURL(null, buildErrorHtml(reqUrl, "HTTP $status: $reason", isDark), "text/html", "UTF-8", null)
-                        } catch (_: Exception) {}
                     }
                 }
 
@@ -669,10 +934,7 @@ class BrowserSessionManager private constructor() {
                     tab.cancelLoadingWatchdog(mainHandler)
                     tab.lastError = err
                     tab.isLoading = false
-                    handler?.cancel()
-                    try {
-                        view?.loadDataWithBaseURL(null, buildErrorHtml(reqUrl, "SSL Warning: $primaryMsg", isDark), "text/html", "UTF-8", null)
-                    } catch (_: Exception) {}
+                    super.onReceivedSslError(view, handler, error)
                 }
 
                 override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
@@ -688,16 +950,40 @@ class BrowserSessionManager private constructor() {
                     tab.cancelLoadingWatchdog(mainHandler)
                     tab.lastError = err
                     tab.isLoading = false
-                    try {
-                        view?.loadDataWithBaseURL(null, buildErrorHtml(tab.url, msg, isDark), "text/html", "UTF-8", null)
-                    } catch (_: Exception) {}
-                    return true
+                    return super.onRenderProcessGone(view, detail)
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val uri = request?.url ?: return false
                     val scheme = uri.scheme?.lowercase() ?: return false
                     if (scheme == "http" || scheme == "https" || scheme == "file" || scheme == "about" || scheme == "data") {
+                        if (tab.isDesktopMode) {
+                            val host = uri.host?.lowercase() ?: ""
+                            if (host == "m.youtube.com") {
+                                var desktopUrl = uri.toString().replace("://m.youtube.com", "://www.youtube.com")
+                                if (!desktopUrl.contains("app=desktop")) {
+                                    desktopUrl += if (desktopUrl.contains("?")) "&app=desktop" else "?app=desktop"
+                                }
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            } else if (host == "m.facebook.com") {
+                                val desktopUrl = uri.toString().replace("://m.facebook.com", "://www.facebook.com")
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            } else if (host == "mobile.twitter.com") {
+                                val desktopUrl = uri.toString().replace("://mobile.twitter.com", "://twitter.com")
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            } else if (host == "m.wikipedia.org") {
+                                val desktopUrl = uri.toString().replace("://m.wikipedia.org", "://en.wikipedia.org")
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            }
+                        }
                         return false
                     }
                     return try {
@@ -757,6 +1043,8 @@ class BrowserSessionManager private constructor() {
 
         if (tab.url.isNotBlank() && tab.url != "about:blank") {
             wv.loadUrl(tab.url)
+        } else {
+            wv.loadUrl("about:blank")
         }
         return wv
     }

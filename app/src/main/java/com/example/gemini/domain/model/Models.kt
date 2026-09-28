@@ -54,6 +54,16 @@ data class TokenUsage(
 )
 
 @Serializable
+data class ArtifactSnapshot(
+    val name: String = "",
+    val absoluteUri: String = "",
+    val lastEdited: String = "",
+    val summary: String = "",
+    val requestFeedback: Boolean = false,
+    val userFacing: Boolean = false
+)
+
+@Serializable
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val conversationId: String,
@@ -98,6 +108,9 @@ data class Conversation(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val isRunning: Boolean = false,
+    val notFullyIdle: Boolean = false,
+    val hasActivity: Boolean = false,
+    val runStatus: String = "CASCADE_RUN_STATUS_IDLE",
     val stepCount: Int = 0,
     val workspaceUri: String = "",
     val parentConversationId: String? = null,
