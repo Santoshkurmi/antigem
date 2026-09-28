@@ -203,47 +203,49 @@ class AgyModelService(
             if (!res.isSuccess) {
                 return@withContext Result.failure(res.exceptionOrNull() ?: Exception("Failed to retrieve quota summary"))
             }
-            val response = res.getOrThrow()
-            Log.d(TAG, "retrieveUserQuotaSummary response: $response")
+            val rawResponse = res.getOrThrow()
+            Log.d(TAG, "retrieveUserQuotaSummary response: $rawResponse")
+            val quotaResp = rawResponse.response
             val groupsList = mutableListOf<ModelQuotaGroup>()
 
-            for (grp in response.groups) {
-                val dispName = grp.display_name
-                val desc = grp.description
-                val buckets = grp.buckets
+            if (quotaResp != null) {
+                for (grp in quotaResp.groups) {
+                    val dispName = grp.display_name
+                    val desc = grp.description
+                    val buckets = grp.buckets
 
-                var fiveHourInfo: QuotaWindowInfo? = null
-                var weeklyInfo: QuotaWindowInfo? = null
+                    var fiveHourInfo: QuotaWindowInfo? = null
+                    var weeklyInfo: QuotaWindowInfo? = null
 
-                for (b in buckets) {
-                    val window = b.window
-                    val remFraction = b.remaining_fraction
-                    val remPct = String.format(Locale.US, "%.1f%%", remFraction * 100f)
-                    val usedPct = String.format(Locale.US, "%.1f%%", (1.0f - remFraction) * 100f)
-                    val resetTime = b.reset_time?.let { ts ->
-                        val epochMs = ts.seconds * 1000L + (ts.nanos / 1_000_000L)
-                        ISO_FORMAT.format(Date(epochMs))
+                    for (b in buckets) {
+                        val window = b.window
+                        val remFraction = b.remaining_fraction
+                        val remPct = String.format(Locale.US, "%.1f%%", remFraction * 100f)
+                        val usedPct = String.format(Locale.US, "%.1f%%", (1.0f - remFraction) * 100f)
+                        val resetTime = b.reset_time?.let { ts ->
+                            val epochMs = ts.seconds * 1000L + (ts.nanos / 1_000_000L)
+                            ISO_FORMAT.format(Date(epochMs))
+                        }
+                        val bDesc = b.description
+                        val countdown = formatQuotaResetCountdown(resetTime)
+
+                        val windowInfo = QuotaWindowInfo(
+                            window = window,
+                            displayName = b.display_name.ifBlank { window },
+                            remainingFraction = remFraction,
+                            remainingPct = remPct,
+                            usedPct = usedPct,
+                            resetTime = resetTime,
+                            countdown = countdown,
+                            description = bDesc
+                        )
+
+                        if (window.contains("5h", ignoreCase = true)) {
+                            fiveHourInfo = windowInfo
+                        } else if (window.contains("week", ignoreCase = true) || window.contains("7d", ignoreCase = true)) {
+                            weeklyInfo = windowInfo
+                        }
                     }
-                    val bDesc = b.description
-                    val countdown = formatQuotaResetCountdown(resetTime)
-
-                    val windowInfo = QuotaWindowInfo(
-                        window = window,
-                        displayName = b.display_name.ifBlank { window },
-                        remainingFraction = remFraction,
-                        remainingPct = remPct,
-                        usedPct = usedPct,
-                        resetTime = resetTime,
-                        countdown = countdown,
-                        description = bDesc
-                    )
-
-                    if (window.contains("5h", ignoreCase = true)) {
-                        fiveHourInfo = windowInfo
-                    } else if (window.contains("week", ignoreCase = true) || window.contains("7d", ignoreCase = true)) {
-                        weeklyInfo = windowInfo
-                    }
-                }
 
                 val gId = when {
                     dispName.contains("gemini", ignoreCase = true) -> "gemini"
@@ -251,15 +253,16 @@ class AgyModelService(
                     else -> dispName.lowercase().replace(" ", "_")
                 }
 
-                groupsList.add(
-                    ModelQuotaGroup(
-                        groupId = gId,
-                        groupName = dispName,
-                        description = desc,
-                        fiveHour = fiveHourInfo,
-                        weekly = weeklyInfo
+                    groupsList.add(
+                        ModelQuotaGroup(
+                            groupId = gId,
+                            groupName = dispName,
+                            description = desc,
+                            fiveHour = fiveHourInfo,
+                            weekly = weeklyInfo
+                        )
                     )
-                )
+                }
             }
 
             Result.success(
