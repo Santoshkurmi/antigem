@@ -17,6 +17,10 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
 
+import exa.language_server_pb.GetAvailableModelsRequest
+import exa.language_server_pb.Model
+import exa.language_server_pb.RetrieveUserQuotaSummaryRequest
+
 /**
  * Dedicated RPC service for AI models and user quota telemetry.
  */
@@ -97,46 +101,31 @@ class AgyModelService(
     }
 
     /**
-     * Fetches all available models from daemon via Unary Connect-RPC and maps them to AiModel.
+     * Fetches all available models from daemon via typed AgyLanguageService and maps them to AiModel.
      */
     suspend fun getAvailableModels(
         forceRefresh: Boolean = false,
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<List<AiModel>> = withContext(Dispatchers.IO) {
         try {
-            val payload = JSONObject().apply {
-                put("forceRefresh", forceRefresh)
-            }.toString()
-
-            val res = grpcClient.callUnary("GetAvailableModels", payload, hubUrl)
+            val req = GetAvailableModelsRequest(force_refresh = forceRefresh)
+            val res = AgyLanguageService.GetAvailableModels().executeSafely(req)
             if (!res.isSuccess) {
                 return@withContext Result.failure(res.exceptionOrNull() ?: Exception("Failed to fetch models"))
             }
-            val modelsJson = res.getOrThrow()
-            if (modelsJson.isBlank()) {
-                return@withContext Result.failure(Exception("Empty models response from server"))
-            }
+            val response = res.getOrThrow().response
+                ?: return@withContext Result.failure(Exception("Empty models response from server"))
 
-            val root = JSONObject(modelsJson)
-            val resp = root.optJSONObject("response") ?: root
-            val rawModels = resp.optJSONObject("models") ?: JSONObject()
-
-            val sorts = resp.optJSONArray("agentModelSorts")
-                ?: resp.optJSONArray("modelSorts")
-                ?: resp.optJSONArray("sorts")
-                ?: JSONArray()
+            val modelsMap = response.models.associate { it.key to it.value_ }
+            val sorts = response.agent_model_sorts.ifEmpty { response.battle_mode_model_sorts }
             val sortedIds = mutableListOf<String>()
-            for (i in 0 until sorts.length()) {
-                val sortObj = sorts.getJSONObject(i)
-                val groups = sortObj.optJSONArray("groups") ?: JSONArray()
-                for (j in 0 until groups.length()) {
-                    val grp = groups.getJSONObject(j)
-                    val modelIds = grp.optJSONArray("modelIds")
-                        ?: grp.optJSONArray("models")
-                        ?: JSONArray()
-                    for (k in 0 until modelIds.length()) {
-                        val mid = modelIds.getString(k)
-                        if (mid.isNotBlank() && !sortedIds.contains(mid)) sortedIds.add(mid)
+
+            for (sort in sorts) {
+                for (grp in sort.groups) {
+                    for (mid in grp.model_ids) {
+                        if (mid.isNotBlank() && !sortedIds.contains(mid)) {
+                            sortedIds.add(mid)
+                        }
                     }
                 }
             }
@@ -144,28 +133,28 @@ class AgyModelService(
             val keysToProcess = if (sortedIds.isNotEmpty()) {
                 sortedIds
             } else {
-                val allKeys = mutableListOf<String>()
-                val iter = rawModels.keys()
-                while (iter.hasNext()) {
-                    val k = iter.next()
-                    val details = rawModels.optJSONObject(k)
-                    if (details != null && !details.optBoolean("isInternal", false) && !details.optBoolean("disabled", false) && details.has("displayName")) {
-                        allKeys.add(k)
-                    }
+                response.models.mapNotNull { entry ->
+                    val details = entry.value_
+                    if (details != null && !details.is_internal && !details.disabled && details.display_name.isNotBlank()) {
+                        entry.key
+                    } else null
                 }
-                allKeys
             }
 
             val resultList = mutableListOf<AiModel>()
             for (key in keysToProcess) {
-                val details = rawModels.optJSONObject(key) ?: continue
-                if (details.optBoolean("disabled", false)) continue
-                if (details.optBoolean("isInternal", false)) continue
-                if (details.optBoolean("hideInModelPicker", false)) continue
+                val details = modelsMap[key] ?: continue
+                if (details.disabled) continue
+                if (details.is_internal) continue
 
-                val displayName = details.optString("displayName", key)
-                val modelEnum = details.optString("model", key)
-                val supportsThinking = details.optBoolean("supportsThinking", false)
+                val displayName = details.display_name.ifBlank { key }
+                val modelEnum = details.model
+                val modelEnumName = if (modelEnum != Model.MODEL_UNSPECIFIED) {
+                    modelEnum.name
+                } else {
+                    key
+                }
+                val supportsThinking = details.supports_thinking
 
                 var baseName = displayName
                 var tier: String? = null
@@ -182,11 +171,11 @@ class AgyModelService(
 
                 resultList.add(
                     AiModel(
-                        id = modelEnum,
+                        id = modelEnumName,
                         displayName = displayName,
                         family = family,
                         supportsThinking = supportsThinking,
-                        description = details.optString("description", ""),
+                        description = details.description,
                         key = key,
                         baseName = baseName,
                         tier = tier
@@ -203,78 +192,82 @@ class AgyModelService(
     }
 
     /**
-     * Fetches user quota summary (5-hour and weekly buckets) from RetrieveUserQuotaSummary
+     * Fetches user quota summary (5-hour and weekly buckets) from RetrieveUserQuotaSummary via typed AgyLanguageService
      */
     suspend fun retrieveUserQuotaSummary(
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<QuotaSummaryResponse> = withContext(Dispatchers.IO) {
         try {
-            val res = grpcClient.callUnary("RetrieveUserQuotaSummary", "{}", hubUrl)
-            res.map { body ->
-                val root = JSONObject(body)
-                val resp = root.optJSONObject("response") ?: root
-                val groupsArr = resp.optJSONArray("groups") ?: JSONArray()
-                val groupsList = mutableListOf<ModelQuotaGroup>()
+            val req = RetrieveUserQuotaSummaryRequest()
+            val res = AgyLanguageService.RetrieveUserQuotaSummary().executeSafely(req)
+            if (!res.isSuccess) {
+                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("Failed to retrieve quota summary"))
+            }
+            val response = res.getOrThrow()
+            Log.d(TAG, "retrieveUserQuotaSummary response: $response")
+            val groupsList = mutableListOf<ModelQuotaGroup>()
 
-                for (i in 0 until groupsArr.length()) {
-                    val grp = groupsArr.getJSONObject(i)
-                    val dispName = grp.optString("displayName", "")
-                    val desc = grp.optString("description", "")
-                    val buckets = grp.optJSONArray("buckets") ?: JSONArray()
+            for (grp in response.groups) {
+                val dispName = grp.display_name
+                val desc = grp.description
+                val buckets = grp.buckets
 
-                    var fiveHourInfo: QuotaWindowInfo? = null
-                    var weeklyInfo: QuotaWindowInfo? = null
+                var fiveHourInfo: QuotaWindowInfo? = null
+                var weeklyInfo: QuotaWindowInfo? = null
 
-                    for (j in 0 until buckets.length()) {
-                        val b = buckets.getJSONObject(j)
-                        val window = b.optString("window", "")
-                        val remFraction = b.optDouble("remainingFraction", 1.0).toFloat()
-                        val remPct = String.format(Locale.US, "%.1f%%", remFraction * 100f)
-                        val usedPct = String.format(Locale.US, "%.1f%%", (1.0f - remFraction) * 100f)
-                        val resetTime = b.optString("resetTime", "").takeIf { it.isNotBlank() }
-                        val bDesc = b.optString("description", "")
-                        val countdown = formatQuotaResetCountdown(resetTime)
-
-                        val windowInfo = QuotaWindowInfo(
-                            window = window,
-                            displayName = b.optString("displayName", window),
-                            remainingFraction = remFraction,
-                            remainingPct = remPct,
-                            usedPct = usedPct,
-                            resetTime = resetTime,
-                            countdown = countdown,
-                            description = bDesc
-                        )
-
-                        if (window.contains("5h", ignoreCase = true)) {
-                            fiveHourInfo = windowInfo
-                        } else if (window.contains("week", ignoreCase = true) || window.contains("7d", ignoreCase = true)) {
-                            weeklyInfo = windowInfo
-                        }
+                for (b in buckets) {
+                    val window = b.window
+                    val remFraction = b.remaining_fraction
+                    val remPct = String.format(Locale.US, "%.1f%%", remFraction * 100f)
+                    val usedPct = String.format(Locale.US, "%.1f%%", (1.0f - remFraction) * 100f)
+                    val resetTime = b.reset_time?.let { ts ->
+                        val epochMs = ts.seconds * 1000L + (ts.nanos / 1_000_000L)
+                        ISO_FORMAT.format(Date(epochMs))
                     }
+                    val bDesc = b.description
+                    val countdown = formatQuotaResetCountdown(resetTime)
 
-                    val gId = when {
-                        dispName.contains("gemini", ignoreCase = true) -> "gemini"
-                        dispName.contains("claude", ignoreCase = true) || dispName.contains("gpt", ignoreCase = true) -> "claude_gpt"
-                        else -> dispName.lowercase().replace(" ", "_")
-                    }
-
-                    groupsList.add(
-                        ModelQuotaGroup(
-                            groupId = gId,
-                            groupName = dispName,
-                            description = desc,
-                            fiveHour = fiveHourInfo,
-                            weekly = weeklyInfo
-                        )
+                    val windowInfo = QuotaWindowInfo(
+                        window = window,
+                        displayName = b.display_name.ifBlank { window },
+                        remainingFraction = remFraction,
+                        remainingPct = remPct,
+                        usedPct = usedPct,
+                        resetTime = resetTime,
+                        countdown = countdown,
+                        description = bDesc
                     )
+
+                    if (window.contains("5h", ignoreCase = true)) {
+                        fiveHourInfo = windowInfo
+                    } else if (window.contains("week", ignoreCase = true) || window.contains("7d", ignoreCase = true)) {
+                        weeklyInfo = windowInfo
+                    }
                 }
 
+                val gId = when {
+                    dispName.contains("gemini", ignoreCase = true) -> "gemini"
+                    dispName.contains("claude", ignoreCase = true) || dispName.contains("gpt", ignoreCase = true) -> "claude_gpt"
+                    else -> dispName.lowercase().replace(" ", "_")
+                }
+
+                groupsList.add(
+                    ModelQuotaGroup(
+                        groupId = gId,
+                        groupName = dispName,
+                        description = desc,
+                        fiveHour = fiveHourInfo,
+                        weekly = weeklyInfo
+                    )
+                )
+            }
+
+            Result.success(
                 QuotaSummaryResponse(
                     groups = groupsList,
                     lastUpdated = ISO_FORMAT.format(Date())
                 )
-            }
+            )
         } catch (e: Exception) {
             Log.e(TAG, "retrieveUserQuotaSummary failed: ${e.message}")
             Result.failure(e)
