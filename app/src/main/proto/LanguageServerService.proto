@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package exa.cortex_pb;
+package exa.language_server_pb;
 
 // Filtered subset for Android app compilation
 
