@@ -187,7 +187,7 @@ class AgyHubClient {
     suspend fun getCascadeTrajectorySteps(
         cascadeId: String,
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<String> =
+    ): Result<List<exa.language_server_pb.Step>> =
         conversationService.getCascadeTrajectorySteps(cascadeId, hubUrl)
 
     suspend fun revertLastUserMessage(

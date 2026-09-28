@@ -16,7 +16,14 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 import exa.language_server_pb.CascadeRunStatus
+import exa.language_server_pb.ClientTrajectoryVerbosity
+import exa.language_server_pb.CortexStepType
+import exa.language_server_pb.DeleteCascadeTrajectoryRequest
+import exa.language_server_pb.ForkConversationRequest
+import exa.language_server_pb.GetCascadeTrajectoryStepsRequest
 import exa.language_server_pb.JetboxSubscribeToSummariesRequest
+import exa.language_server_pb.RevertToCascadeStepRequest
+import exa.language_server_pb.Step
 
 /**
  * Dedicated RPC service for conversation lifecycle: summaries subscription, step counting,
@@ -120,25 +127,13 @@ class AgyConversationService(
      * Gets raw step count for a conversation
      */
     suspend fun getRawStepCount(cascadeId: String, hubUrl: String = AuthPreferences.currentHubUrl): Int = withContext(Dispatchers.IO) {
-        try {
-            val payload = JSONObject().apply {
-                put("cascade_id", cascadeId)
-                put("trajectory_verbosity", 2)
-            }.toString()
-
-            var count = 0
-            grpcClient.callStream("GetCascadeTrajectorySteps", payload, hubUrl).collect { frameJson ->
-                val json = JSONObject(frameJson)
-                val stepsArr = json.optJSONArray("steps")
-                if (stepsArr != null) {
-                    count = stepsArr.length()
-                }
-            }
-            count
-        } catch (e: Exception) {
-            Log.e(TAG, "getRawStepCount failed: ${e.message}")
-            0
-        }
+        val req = GetCascadeTrajectoryStepsRequest(
+            cascade_id = cascadeId,
+            trajectory_verbosity = ClientTrajectoryVerbosity.CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
+        )
+        AgyLanguageService.GetCascadeTrajectorySteps().executeSafely(req).map { res ->
+            res.steps.size
+        }.getOrDefault(0)
     }
 
     /**
@@ -149,27 +144,19 @@ class AgyConversationService(
         forkAtStepIndex: Int? = null,
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val rawCount = getRawStepCount(sourceCascadeId, hubUrl)
-            val targetStep = when {
-                forkAtStepIndex != null -> forkAtStepIndex.coerceIn(0, (rawCount - 1).coerceAtLeast(0))
-                rawCount > 0 -> rawCount - 1
-                else -> 0
-            }
+        val rawCount = getRawStepCount(sourceCascadeId, hubUrl)
+        val targetStep = when {
+            forkAtStepIndex != null -> forkAtStepIndex.coerceIn(0, (rawCount - 1).coerceAtLeast(0))
+            rawCount > 0 -> rawCount - 1
+            else -> 0
+        }
 
-            val payload = JSONObject().apply {
-                put("sourceCascadeId", sourceCascadeId)
-                put("forkAtStepIndex", targetStep)
-            }.toString()
-
-            val res = grpcClient.callUnary("ForkConversation", payload, hubUrl)
-            res.map { body ->
-                val json = JSONObject(body)
-                json.optString("newCascadeId", "")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "forkConversation failed: ${e.message}")
-            Result.failure(e)
+        val req = ForkConversationRequest(
+            source_cascade_id = sourceCascadeId,
+            fork_at_step_index = targetStep
+        )
+        AgyLanguageService.ForkConversation().executeSafely(req).map { res ->
+            res.new_cascade_id
         }
     }
 
@@ -180,29 +167,23 @@ class AgyConversationService(
         cascadeId: String,
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Boolean> = withContext(Dispatchers.IO) {
-        val payload = JSONObject().apply {
-            put("cascadeId", cascadeId)
-        }.toString()
-
-        grpcClient.callUnary("DeleteCascadeTrajectory", payload, hubUrl).map { true }
+        val req = DeleteCascadeTrajectoryRequest(cascade_id = cascadeId)
+        AgyLanguageService.DeleteCascadeTrajectory().executeSafely(req).map { true }
     }
 
     /**
-     * Loads raw trajectory steps for a conversation via Connect-RPC Unary
+     * Loads raw trajectory steps for a conversation via Wire typed RPC
      */
     suspend fun getCascadeTrajectorySteps(
         cascadeId: String,
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val payload = JSONObject().apply {
-                put("cascadeId", cascadeId)
-                put("trajectoryVerbosity", 2)
-            }.toString()
-            grpcClient.callUnary("GetCascadeTrajectorySteps", payload, hubUrl)
-        } catch (e: Exception) {
-            Log.e(TAG, "getCascadeTrajectorySteps failed: ${e.message}")
-            Result.failure(e)
+    ): Result<List<Step>> = withContext(Dispatchers.IO) {
+        val req = GetCascadeTrajectoryStepsRequest(
+            cascade_id = cascadeId,
+            trajectory_verbosity = ClientTrajectoryVerbosity.CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
+        )
+        AgyLanguageService.GetCascadeTrajectorySteps().executeSafely(req).map { res ->
+            res.steps
         }
     }
 
@@ -214,61 +195,31 @@ class AgyConversationService(
         modelEnum: String = "MODEL_PLACEHOLDER_M319",
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Int> = withContext(Dispatchers.IO) {
-        try {
-            val stepsRes = getCascadeTrajectorySteps(cascadeId, hubUrl)
-            if (!stepsRes.isSuccess) {
-                return@withContext Result.failure(stepsRes.exceptionOrNull() ?: Exception("Failed to get trajectory steps"))
-            }
-            val stepsJson = JSONObject(stepsRes.getOrThrow())
-            val stepsArr = stepsJson.optJSONArray("steps") ?: JSONArray()
-            var lastUserIdx = -1
-            for (i in (stepsArr.length() - 1) downTo 0) {
-                val st = stepsArr.optJSONObject(i) ?: continue
-                if (st.has("userInput") || st.optString("type") == "CORTEX_STEP_TYPE_USER_INPUT") {
-                    lastUserIdx = i
-                    break
-                }
-            }
-
-            if (lastUserIdx <= 0) {
-                deleteCascadeTrajectory(cascadeId, hubUrl)
-                return@withContext Result.success(-1)
-            }
-
-            val targetStep = (lastUserIdx - 1).coerceAtLeast(0)
-            val revertPayload = JSONObject().apply {
-                put("cascadeId", cascadeId)
-                put("stepIndex", targetStep)
-                put("overrideConfig", JSONObject().apply {
-                    put("plannerConfig", JSONObject().apply {
-                        put("toolConfig", JSONObject().apply {
-                            put("runCommand", JSONObject().apply {
-                                put("autoCommandConfig", JSONObject().apply {
-                                    put("autoExecutionPolicy", "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER")
-                                })
-                            })
-                            put("notifyUser", JSONObject())
-                        })
-                        put("requestedModel", JSONObject().apply {
-                            put("model", modelEnum)
-                        })
-                        put("knowledgeConfig", JSONObject())
-                        put("useAiCredits", false)
-                        put("supportsLatexRendering", true)
-                    })
-                    put("conversationHistoryConfig", JSONObject())
-                })
-            }.toString()
-
-            val revertRes = grpcClient.callUnary("RevertToCascadeStep", revertPayload, hubUrl)
-            if (!revertRes.isSuccess) {
-                return@withContext Result.failure(revertRes.exceptionOrNull() ?: Exception("RevertToCascadeStep failed"))
-            }
-            Result.success(targetStep)
-        } catch (e: Exception) {
-            Log.e(TAG, "revertLastUserMessage failed: ${e.message}")
-            Result.failure(e)
+        val stepsRes = getCascadeTrajectorySteps(cascadeId, hubUrl)
+        if (!stepsRes.isSuccess) {
+            return@withContext Result.failure(stepsRes.exceptionOrNull() ?: Exception("Failed to get trajectory steps"))
         }
+        val steps = stepsRes.getOrThrow()
+        var lastUserIdx = -1
+        for (i in (steps.size - 1) downTo 0) {
+            val st = steps[i]
+            if (st.type == CortexStepType.CORTEX_STEP_TYPE_USER_INPUT) {
+                lastUserIdx = i
+                break
+            }
+        }
+
+        if (lastUserIdx <= 0) {
+            deleteCascadeTrajectory(cascadeId, hubUrl)
+            return@withContext Result.success(-1)
+        }
+
+        val targetStep = (lastUserIdx - 1).coerceAtLeast(0)
+        val req = RevertToCascadeStepRequest(
+            cascade_id = cascadeId,
+            step_index = targetStep
+        )
+        AgyLanguageService.RevertToCascadeStep().executeSafely(req).map { targetStep }
     }
 }
 
