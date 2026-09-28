@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit
 object AgyOkHttpClient {
     val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .protocols(listOf(okhttp3.Protocol.H2_PRIOR_KNOWLEDGE))
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS) // Indefinite read timeout for streaming
             .writeTimeout(30, TimeUnit.SECONDS)

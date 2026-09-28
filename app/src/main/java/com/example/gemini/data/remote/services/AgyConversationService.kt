@@ -15,6 +15,9 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
+import exa.language_server_pb.CascadeRunStatus
+import exa.language_server_pb.JetboxSubscribeToSummariesRequest
+
 /**
  * Dedicated RPC service for conversation lifecycle: summaries subscription, step counting,
  * conversation forking, deletion, trajectory loading, and message reverting.
@@ -32,97 +35,83 @@ class AgyConversationService(
     }
 
     /**
-     * Subscribes to live conversation summary updates pushed by the AGY daemon.
+     * Subscribes to live conversation summary updates pushed by the AGY daemon via typed Wire LanguageServerService.
      */
     fun subscribeToSummaries(hubUrl: String = AuthPreferences.currentHubUrl): Flow<SummariesUpdate> = flow {
         if (!com.example.gemini.data.remote.AgyBridgeService.instance.awaitHubReady(timeoutMs = 10_000L)) {
             throw Exception("Antigravity Hub is not running")
         }
-        grpcClient.callStream("JetboxSubscribeToSummaries", "{}", hubUrl).collect { frameJson ->
+        AgyLanguageService.JetboxSubscribeToSummaries().asFlowSafely(JetboxSubscribeToSummariesRequest()).collect { response ->
             try {
-                val root = JSONObject(frameJson)
-                val updates = root.optJSONObject("updates")
-                if (updates != null) {
-                    val frameList = mutableListOf<Conversation>()
-                    val removedIds = mutableSetOf<String>()
-                    val keys = updates.keys()
-                    while (keys.hasNext()) {
-                        val cid = keys.next()
-                        val obj = updates.getJSONObject(cid)
-                        val annotations = obj.optJSONObject("annotations")
-                        val annTitle = annotations?.optString("title")?.takeIf { it.isNotBlank() }
-                        val rawSummary = obj.optString("summary", "").takeIf { it.isNotBlank() }
-                        val stepCount = obj.optInt("stepCount", 0)
-                        val status = obj.optString("status", "")
-                        val isDeleted = status.contains("DELETED", ignoreCase = true)
+                val frameList = mutableListOf<Conversation>()
+                val removedIds = response.deletes.toMutableSet()
 
-                        val hasContent = (annTitle != null || rawSummary != null || stepCount > 0) && !isDeleted
-                        if (!hasContent) {
-                            removedIds.add(cid)
-                            continue
-                        }
+                for (entry in response.updates) {
+                    val cid = entry.key
+                    val summaryObj = entry.value_ ?: continue
+                    val annotations = summaryObj.annotations
+                    val annTitle = annotations?.title?.takeIf { it.isNotBlank() }
+                    val rawSummary = summaryObj.summary.takeIf { it.isNotBlank() }
+                    val stepCount = summaryObj.step_count
+                    val status = summaryObj.status
+                    val isDeleted = status == CascadeRunStatus.CASCADE_RUN_STATUS_UNSPECIFIED && summaryObj.killed
 
-                        val summary = annTitle ?: rawSummary ?: "Conversation"
-                        val lastModStr = obj.optString("lastModifiedTime", "")
-                        val notFullyIdle = obj.optBoolean("notFullyIdle", false)
-                        val hasActivity = obj.optBoolean("hasActivity", false)
-                        val isRunning = status == "CASCADE_RUN_STATUS_RUNNING" || status.contains("RUNNING", ignoreCase = true)
-
-                        var lastModEpoch = System.currentTimeMillis()
-                        if (lastModStr.isNotBlank()) {
-                            try {
-                                val cleanIso = if (lastModStr.length > 19) lastModStr.substring(0, 19) else lastModStr
-                                lastModEpoch = ISO_FORMAT.parse(cleanIso)?.time ?: System.currentTimeMillis()
-                            } catch (e: Exception) {
-                                // Fallback to current time
-                            }
-                        }
-
-                        val metaObj = obj.optJSONObject("trajectoryMetadata")
-                        val parentCid = metaObj?.optString("parentConversationId")?.takeIf { it.isNotBlank() }
-                            ?: obj.optString("parentConversationId").takeIf { it.isNotBlank() }
-                        val subagentSpec = metaObj?.optJSONObject("subagentSpec")
-                            ?: obj.optJSONObject("subagentSpec")
-                        val subagentRole = subagentSpec?.optString("role")?.takeIf { it.isNotBlank() }
-                        val subagentTypeName = subagentSpec?.optString("typeName")?.takeIf { it.isNotBlank() }
-                        val nestingDepth = metaObj?.optInt("nestingDepth", 0)
-                            ?: obj.optInt("nestingDepth", 0)
-
-                        val wsUri = metaObj?.optJSONArray("workspaceUris")?.optString(0)
-                            ?.takeIf { it.isNotBlank() }
-                            ?: obj.optJSONArray("workspaces")?.optJSONObject(0)?.optString("workspaceFolderAbsoluteUri")
-                            ?.takeIf { it.isNotBlank() }
-                            ?: obj.optString("workspaceUri").takeIf { it.isNotBlank() }
-                            ?: ""
-
-                        frameList.add(
-                            Conversation(
-                                id = cid,
-                                title = summary,
-                                modelId = "",
-                                sessionId = cid,
-                                summary = summary,
-                                createdAt = lastModEpoch,
-                                updatedAt = lastModEpoch,
-                                isRunning = isRunning,
-                                notFullyIdle = notFullyIdle,
-                                hasActivity = hasActivity,
-                                runStatus = status.ifBlank { if (isRunning) "CASCADE_RUN_STATUS_RUNNING" else "CASCADE_RUN_STATUS_IDLE" },
-                                stepCount = stepCount,
-                                workspaceUri = wsUri,
-                                parentConversationId = parentCid,
-                                subagentRole = subagentRole,
-                                subagentTypeName = subagentTypeName,
-                                nestingDepth = nestingDepth
-                            )
-                        )
+                    val hasContent = (annTitle != null || rawSummary != null || stepCount > 0) && !isDeleted
+                    if (!hasContent) {
+                        removedIds.add(cid)
+                        continue
                     }
-                    emit(SummariesUpdate(frameList, removedIds))
-                } else {
-                    emit(SummariesUpdate(emptyList(), emptySet()))
+
+                    val summary = annTitle ?: rawSummary ?: "Conversation"
+                    val lastModEpoch = summaryObj.last_modified_time?.let { ts ->
+                        ts.seconds * 1000L + (ts.nanos / 1_000_000L)
+                    } ?: System.currentTimeMillis()
+
+                    val createdEpoch = summaryObj.created_time?.let { ts ->
+                        ts.seconds * 1000L + (ts.nanos / 1_000_000L)
+                    } ?: lastModEpoch
+
+                    val notFullyIdle = summaryObj.not_fully_idle
+                    val hasActivity = summaryObj.has_activity
+                    val isRunning = status == CascadeRunStatus.CASCADE_RUN_STATUS_RUNNING
+
+                    val metaObj = summaryObj.trajectory_metadata
+                    val parentCid = metaObj?.parent_conversation_id?.takeIf { it.isNotBlank() }
+                        ?: summaryObj.fork_parent_conversation_id.takeIf { it.isNotBlank() }
+                    val subagentSpec = metaObj?.subagent_spec
+                    val subagentRole = subagentSpec?.role?.takeIf { it.isNotBlank() }
+                    val subagentTypeName = subagentSpec?.type_name?.takeIf { it.isNotBlank() }
+                    val nestingDepth = metaObj?.nesting_depth ?: 0
+
+                    val wsUri = metaObj?.workspace_uris?.firstOrNull { it.isNotBlank() }
+                        ?: summaryObj.workspaces.firstOrNull()?.workspace_folder_absolute_uri?.takeIf { it.isNotBlank() }
+                        ?: ""
+
+                    frameList.add(
+                        Conversation(
+                            id = cid,
+                            title = summary,
+                            modelId = "",
+                            sessionId = cid,
+                            summary = summary,
+                            createdAt = createdEpoch,
+                            updatedAt = lastModEpoch,
+                            isRunning = isRunning,
+                            notFullyIdle = notFullyIdle,
+                            hasActivity = hasActivity,
+                            runStatus = status.name,
+                            stepCount = stepCount,
+                            workspaceUri = wsUri,
+                            parentConversationId = parentCid,
+                            subagentRole = subagentRole,
+                            subagentTypeName = subagentTypeName,
+                            nestingDepth = nestingDepth
+                        )
+                    )
                 }
+                emit(SummariesUpdate(frameList, removedIds))
             } catch (e: Exception) {
-                Log.e(TAG, "Error parsing conversation updates: ${e.message}")
+                Log.e(TAG, "Error processing conversation updates: ${e.message}", e)
             }
         }
     }.flowOn(Dispatchers.IO)
