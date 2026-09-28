@@ -487,23 +487,21 @@ fun UserMessageBubble(
                     )
                 }
 
-                // Edit Prompt (ONLY shown for the last user message)
-                if (isLastUserMessage) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    IconButton(
-                        onClick = {
-                            onEdit(message)
-                            showUserActions = false
-                        },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Edit,
-                            contentDescription = "Undo and edit prompt",
-                            tint = ClaudeTerracotta,
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
+                // Edit Prompt
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = {
+                        onEdit(message)
+                        showUserActions = false
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = "Undo and edit prompt",
+                        tint = ClaudeTerracotta,
+                        modifier = Modifier.size(15.dp)
+                    )
                 }
 
                 val payloadToShow = message.rawContent ?: message.rawPayload

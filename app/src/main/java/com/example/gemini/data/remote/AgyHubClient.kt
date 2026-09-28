@@ -190,9 +190,17 @@ class AgyHubClient {
     ): Result<List<exa.language_server_pb.Step>> =
         conversationService.getCascadeTrajectorySteps(cascadeId, hubUrl)
 
+    suspend fun revertUserMessage(
+        cascadeId: String,
+        modelEnum: String = "",
+        targetStepIndex: Int? = null,
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<Int> =
+        conversationService.revertUserMessage(cascadeId, modelEnum, targetStepIndex, hubUrl)
+
     suspend fun revertLastUserMessage(
         cascadeId: String,
-        modelEnum: String = "MODEL_PLACEHOLDER_M319",
+        modelEnum: String = "",
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Int> =
         conversationService.revertLastUserMessage(cascadeId, modelEnum, hubUrl)

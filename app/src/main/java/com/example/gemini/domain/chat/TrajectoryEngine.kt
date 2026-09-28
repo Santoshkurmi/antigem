@@ -3,6 +3,7 @@ package com.example.gemini.domain.chat
 import android.util.Log
 import com.example.gemini.domain.model.ArtifactSnapshot
 import com.example.gemini.domain.model.ChatAttachment
+import com.example.gemini.domain.model.ChoiceQuestionnaire
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.ChatTurn
 import com.example.gemini.domain.model.MessageRole
@@ -208,7 +209,10 @@ class TrajectoryEngine {
         val isIdle = daemonIdle && (pendingUserTurn == null)
 
         val hasPendingInteraction = activeStepsMap.any { (stepIdx, step) ->
-            val isAskChoice = step.metadata?.tool_call?.name == "ask_question" || step.generic?.args?.any { it.key == "ask_question" } == true || step.ask_question != null
+            val isAskChoice = step.metadata?.tool_call?.name == "ask_question" ||
+                    step.generic?.args?.any { it.key == "ask_question" } == true ||
+                    step.ask_question != null ||
+                    step.requested_interaction?.ask_question != null
             val isWaiting = step.status == CortexStepStatus.CORTEX_STEP_STATUS_WAITING || step.requested_interaction != null ||
                     (isAskChoice && step.status != CortexStepStatus.CORTEX_STEP_STATUS_DONE && step.status != CortexStepStatus.CORTEX_STEP_STATUS_CANCELED && step.status != CortexStepStatus.CORTEX_STEP_STATUS_ERROR)
             isWaiting && !userRespondedStepIndices.contains(stepIdx)
@@ -475,7 +479,10 @@ class TrajectoryEngine {
                     step.status == CortexStepStatus.CORTEX_STEP_STATUS_GENERATING ||
                     step.status == CortexStepStatus.CORTEX_STEP_STATUS_QUEUED
 
-            val isAskChoice = step.metadata?.tool_call?.name == "ask_question" || step.generic?.args?.any { it.key == "ask_question" } == true || step.ask_question != null
+            val isAskChoice = step.metadata?.tool_call?.name == "ask_question" ||
+                    step.generic?.args?.any { it.key == "ask_question" } == true ||
+                    step.ask_question != null ||
+                    step.requested_interaction?.ask_question != null
             val isWaiting = step.status == CortexStepStatus.CORTEX_STEP_STATUS_WAITING || step.requested_interaction != null ||
                     (isAskChoice && step.status != CortexStepStatus.CORTEX_STEP_STATUS_DONE && step.status != CortexStepStatus.CORTEX_STEP_STATUS_CANCELED && step.status != CortexStepStatus.CORTEX_STEP_STATUS_ERROR)
 
@@ -672,14 +679,25 @@ class TrajectoryEngine {
             return
         }
 
-        if (step.type == CortexStepType.CORTEX_STEP_TYPE_SYSTEM_MESSAGE && step.system_message != null) {
-            blocks.add(
-                TurnBlock.SystemNotice(
-                    stepIndex = stepIndex,
-                    title = step.system_message.render_info?.title ?: "System",
-                    content = step.system_message.message
+        if (step.type == CortexStepType.CORTEX_STEP_TYPE_SYSTEM_MESSAGE || step.system_message != null) {
+            val sysMsg = step.system_message
+            val msgText = sysMsg?.message?.takeIf { it.isNotBlank() } ?: ""
+            val renderTitle = sysMsg?.render_info?.title?.takeIf { it.isNotBlank() } ?: "System"
+            val isHidden = sysMsg?.render_info?.hidden == true || sysMsg?.agent_message?.hide_from_user == true
+
+            val isBackgroundStopNotice = msgText.contains("subagents and background tasks have been stopped", ignoreCase = true) ||
+                    msgText.contains("server restart", ignoreCase = true) ||
+                    msgText.contains("stopped due to server restart", ignoreCase = true)
+
+            if (!isHidden && !isBackgroundStopNotice && msgText.isNotBlank()) {
+                blocks.add(
+                    TurnBlock.SystemNotice(
+                        stepIndex = stepIndex,
+                        title = renderTitle,
+                        content = msgText
+                    )
                 )
-            )
+            }
             return
         }
 
@@ -749,7 +767,7 @@ class TrajectoryEngine {
                 step.read_url_content != null -> "read_url"
                 step.generate_image != null -> "generate_image"
                 step.mcp_tool != null -> "call_mcp_tool"
-                step.ask_question != null -> "ask_question"
+                step.ask_question != null || step.requested_interaction?.ask_question != null -> "ask_question"
                 else -> meta?.tool_summary?.takeIf { it.isNotBlank() } ?: "unknown_tool"
             }
 
@@ -786,6 +804,7 @@ class TrajectoryEngine {
         var command = ""
         var output = ""
         var exitCode: Int? = null
+        var questionnaire: ChoiceQuestionnaire? = null
 
         when (rawName) {
             "run_command", "bash", "terminal" -> {
@@ -941,6 +960,22 @@ class TrajectoryEngine {
                     ?: ""
             }
             "ask_choices", "ask_question", "user_choice" -> {
+                val askQuestions = askQ?.questions?.takeIf { it.isNotEmpty() }
+                    ?: step.requested_interaction?.ask_question?.questions?.takeIf { it.isNotEmpty() }
+
+                val titleText = meta?.tool_action?.takeIf { it.isNotBlank() }
+                    ?: meta?.tool_summary?.takeIf { it.isNotBlank() }
+                    ?: "Questionnaire"
+
+                if (askQuestions != null && askQuestions.isNotEmpty()) {
+                    questionnaire = ChoiceQuestionnaire.fromProto(
+                        title = titleText,
+                        questions = askQuestions,
+                        description = meta?.tool_action?.takeIf { it != titleText }
+                    )
+                }
+                command = titleText
+
                 val completedResponses = step.completed_interactions
                     .mapNotNull { it.response?.ask_question?.responses }
                     .flatten()
@@ -959,8 +994,8 @@ class TrajectoryEngine {
                         }
                         "• ${resp.question}: $answerText"
                     }
-                } else if (askQ != null && askQ.questions.isNotEmpty()) {
-                    val answeredQuestions = askQ.questions.filter { it.selected_option_ids.isNotEmpty() || it.write_in_response.isNotBlank() || it.skipped }
+                } else if (askQuestions != null && askQuestions.isNotEmpty()) {
+                    val answeredQuestions = askQuestions.filter { it.selected_option_ids.isNotEmpty() || it.write_in_response.isNotBlank() || it.skipped }
                     if (answeredQuestions.isNotEmpty()) {
                         output = answeredQuestions.joinToString("\n\n") { q ->
                             val matchedOpts = q.options.filter { opt -> q.selected_option_ids.contains(opt.id) || q.selected_option_ids.contains(opt.text) }
@@ -974,7 +1009,7 @@ class TrajectoryEngine {
                             "• ${q.question}: $answerText"
                         }
                     } else {
-                        output = askQ.questions.joinToString("\n\n") { q ->
+                        output = askQuestions.joinToString("\n\n") { q ->
                             "${q.question}\n" + q.options.joinToString("\n") { opt -> "• ${opt.text}" }
                         }
                     }
@@ -1049,7 +1084,8 @@ class TrajectoryEngine {
             durationMs = toolDurationMs,
             stepIndex = stepIndex,
             trajectoryId = trajectoryId,
-            interactionType = "permission"
+            interactionType = "permission",
+            questionnaire = questionnaire
         )
     }
 

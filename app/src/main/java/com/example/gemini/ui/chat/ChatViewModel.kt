@@ -2105,17 +2105,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         val targetMsg = current[index]
         if (targetMsg.role == MessageRole.USER) {
-            val isLastUserMsg = index >= current.indexOfLast { it.role == MessageRole.USER }
-            if (isLastUserMsg) {
-                // Truncate following assistant responses and re-stream
-                val truncated = current.take(index + 1)
-                _messages.value = truncated
-                viewModelScope.launch {
-                    executeStream(conv, truncated)
-                }
-            } else {
-                // Resend previous prompt as a fresh new user message
-                sendMessage(targetMsg.content)
+            // Truncate following assistant responses and re-stream
+            val truncated = current.take(index + 1)
+            _messages.value = truncated
+            viewModelScope.launch {
+                executeStream(conv, truncated)
             }
         } else {
             // Assistant response retry: truncate this response and re-execute
@@ -2134,17 +2128,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (index < 0) return null
 
         val targetMsg = current[index]
-        val isLastUserMsg = index >= current.indexOfLast { it.role == MessageRole.USER }
-
-        if (isLastUserMsg) {
-            val truncated = current.take(index)
-            _messages.value = truncated
-        }
+        val truncated = current.take(index)
+        _messages.value = truncated
         return targetMsg.content
     }
 
     /**
-     * Reverts the last user message: restores prompt text and attachments to the input box,
+     * Reverts a user message: restores prompt text and attachments to the input box,
      * immediately prunes it from the local UI, and sends an undo RPC to the AGY hub daemon.
      */
     fun revertAndEditLastUserMessage(targetMsg: ChatMessage, onRestored: (String) -> Unit) {
@@ -2199,7 +2189,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val hubUrl = AuthPreferences.currentHubUrl
             val modelEnum = com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
-            val res = agyHubClient.revertLastUserMessage(conv.id, modelEnum, hubUrl)
+            val res = agyHubClient.revertUserMessage(conv.id, modelEnum, targetMsg.stepIndex, hubUrl)
             if (res.isSuccess) {
                 val targetStep = res.getOrThrow()
                 if (targetStep < 0) {
@@ -2216,7 +2206,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } else {
-                android.util.Log.w("ChatViewModel", "revertLastUserMessage failed on hub: ${res.exceptionOrNull()?.message}")
+                android.util.Log.w("ChatViewModel", "revertUserMessage failed on hub: ${res.exceptionOrNull()?.message}")
                 if (!isFirstUserMsg) {
                     withContext(Dispatchers.Main) {
                         startPersistentStream(conv.id)
@@ -3109,7 +3099,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val actualResponses = if (responses.isNotEmpty()) {
                     responses
                 } else {
-                    val questionnaire = com.example.gemini.domain.model.ChoiceQuestionnaire.parse(toolCall.command)
+                    val questionnaire = toolCall.questionnaire
                     questionnaire?.questions?.map { q ->
                         com.example.gemini.data.remote.dto.AskQuestionResponseItemDto(
                             question = q.prompt,

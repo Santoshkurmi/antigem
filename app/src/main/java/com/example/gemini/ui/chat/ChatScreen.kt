@@ -1270,11 +1270,10 @@ fun ChatScreen(
                                         }
                                         is ChatFeedItem.User -> {
                                             val msgIndex = messages.indexOfFirst { it.id == feedItem.message.id }
-                                            val isLastUserMsg = messages.indexOfLast { it.role == MessageRole.USER } == msgIndex
-                                            val willDeleteOutput = isLastUserMsg && msgIndex < messages.lastIndex
+                                            val willDeleteOutput = msgIndex < messages.lastIndex
                                             UserMessageBubble(
                                                 message = feedItem.message,
-                                                isLastUserMessage = isLastUserMsg,
+                                                isLastUserMessage = true,
                                                 isDevModeEnabled = isDevModeEnabled,
                                                 onEdit = { targetMsg ->
                                                     if (willDeleteOutput) {

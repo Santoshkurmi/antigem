@@ -37,9 +37,7 @@ fun ChoiceQuestionnaireCard(
     onCancel: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val questionnaire = remember(toolCall.command) {
-        ChoiceQuestionnaire.parse(toolCall.command)
-    }
+    val questionnaire = toolCall.questionnaire
 
     val isCompleted = toolCall.status == "SUCCESS" || toolCall.status == "COMPLETED" || toolCall.status == "DONE"
 

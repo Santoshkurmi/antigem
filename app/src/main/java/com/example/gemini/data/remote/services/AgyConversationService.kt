@@ -15,6 +15,8 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
+import exa.language_server_pb.CascadeConfig
+import exa.language_server_pb.CascadePlannerConfig
 import exa.language_server_pb.CascadeRunStatus
 import exa.language_server_pb.ClientTrajectoryVerbosity
 import exa.language_server_pb.CortexStepType
@@ -22,6 +24,8 @@ import exa.language_server_pb.DeleteCascadeTrajectoryRequest
 import exa.language_server_pb.ForkConversationRequest
 import exa.language_server_pb.GetCascadeTrajectoryStepsRequest
 import exa.language_server_pb.JetboxSubscribeToSummariesRequest
+import exa.language_server_pb.Model
+import exa.language_server_pb.ModelOrAlias
 import exa.language_server_pb.RevertToCascadeStepRequest
 import exa.language_server_pb.Step
 
@@ -48,93 +52,95 @@ class AgyConversationService(
         if (!com.example.gemini.data.remote.AgyBridgeService.instance.awaitHubReady(timeoutMs = 10_000L)) {
             throw Exception("Antigravity Hub is not running")
         }
-        AgyLanguageService.JetboxSubscribeToSummaries().asFlowSafely(JetboxSubscribeToSummariesRequest()).collect { response ->
-            try {
-                val frameList = mutableListOf<Conversation>()
-                val removedIds = response.deletes.toMutableSet()
+        AgyLanguageService.JetboxSubscribeToSummaries().asFlowSafely(JetboxSubscribeToSummariesRequest())
+            .collect { response ->
+                try {
+                    val frameList = mutableListOf<Conversation>()
+                    val removedIds = response.deletes.toMutableSet()
 
-                for (entry in response.updates) {
-                    val cid = entry.key
-                    val summaryObj = entry.value_ ?: continue
-                    val annotations = summaryObj.annotations
-                    val annTitle = annotations?.title?.takeIf { it.isNotBlank() }
-                    val rawSummary = summaryObj.summary.takeIf { it.isNotBlank() }
-                    val stepCount = summaryObj.step_count
-                    val status = summaryObj.status
-                    val isDeleted = status == CascadeRunStatus.CASCADE_RUN_STATUS_UNSPECIFIED && summaryObj.killed
+                    for (entry in response.updates) {
+                        val cid = entry.key
+                        val summaryObj = entry.value_ ?: continue
+                        val annotations = summaryObj.annotations
+                        val annTitle = annotations?.title?.takeIf { it.isNotBlank() }
+                        val rawSummary = summaryObj.summary.takeIf { it.isNotBlank() }
+                        val stepCount = summaryObj.step_count
+                        val status = summaryObj.status
+                        val isDeleted = status == CascadeRunStatus.CASCADE_RUN_STATUS_UNSPECIFIED && summaryObj.killed
 
-                    val hasContent = (annTitle != null || rawSummary != null || stepCount > 0) && !isDeleted
-                    if (!hasContent) {
-                        removedIds.add(cid)
-                        continue
-                    }
+                        val hasContent = (annTitle != null || rawSummary != null || stepCount > 0) && !isDeleted
+                        if (!hasContent) {
+                            removedIds.add(cid)
+                            continue
+                        }
 
-                    val summary = annTitle ?: rawSummary ?: "Conversation"
-                    val lastModEpoch = summaryObj.last_modified_time?.let { ts ->
-                        ts.seconds * 1000L + (ts.nanos / 1_000_000L)
-                    } ?: System.currentTimeMillis()
+                        val summary = annTitle ?: rawSummary ?: "Conversation"
+                        val lastModEpoch = summaryObj.last_modified_time?.let { ts ->
+                            ts.seconds * 1000L + (ts.nanos / 1_000_000L)
+                        } ?: System.currentTimeMillis()
 
-                    val createdEpoch = summaryObj.created_time?.let { ts ->
-                        ts.seconds * 1000L + (ts.nanos / 1_000_000L)
-                    } ?: lastModEpoch
+                        val createdEpoch = summaryObj.created_time?.let { ts ->
+                            ts.seconds * 1000L + (ts.nanos / 1_000_000L)
+                        } ?: lastModEpoch
 
-                    val notFullyIdle = summaryObj.not_fully_idle
-                    val hasActivity = summaryObj.has_activity
-                    val isRunning = status == CascadeRunStatus.CASCADE_RUN_STATUS_RUNNING
+                        val notFullyIdle = summaryObj.not_fully_idle
+                        val hasActivity = summaryObj.has_activity
+                        val isRunning = status == CascadeRunStatus.CASCADE_RUN_STATUS_RUNNING
 
-                    val metaObj = summaryObj.trajectory_metadata
-                    val parentCid = metaObj?.parent_conversation_id?.takeIf { it.isNotBlank() }
-                        ?: summaryObj.fork_parent_conversation_id.takeIf { it.isNotBlank() }
-                    val subagentSpec = metaObj?.subagent_spec
-                    val subagentRole = subagentSpec?.role?.takeIf { it.isNotBlank() }
-                    val subagentTypeName = subagentSpec?.type_name?.takeIf { it.isNotBlank() }
-                    val nestingDepth = metaObj?.nesting_depth ?: 0
+                        val metaObj = summaryObj.trajectory_metadata
+                        val parentCid = metaObj?.parent_conversation_id?.takeIf { it.isNotBlank() }
+                            ?: summaryObj.fork_parent_conversation_id.takeIf { it.isNotBlank() }
+                        val subagentSpec = metaObj?.subagent_spec
+                        val subagentRole = subagentSpec?.role?.takeIf { it.isNotBlank() }
+                        val subagentTypeName = subagentSpec?.type_name?.takeIf { it.isNotBlank() }
+                        val nestingDepth = metaObj?.nesting_depth ?: 0
 
-                    val wsUri = metaObj?.workspace_uris?.firstOrNull { it.isNotBlank() }
-                        ?: summaryObj.workspaces.firstOrNull()?.workspace_folder_absolute_uri?.takeIf { it.isNotBlank() }
-                        ?: ""
+                        val wsUri = metaObj?.workspace_uris?.firstOrNull { it.isNotBlank() }
+                            ?: summaryObj.workspaces.firstOrNull()?.workspace_folder_absolute_uri?.takeIf { it.isNotBlank() }
+                            ?: ""
 
-                    frameList.add(
-                        Conversation(
-                            id = cid,
-                            title = summary,
-                            modelId = "",
-                            sessionId = cid,
-                            summary = summary,
-                            createdAt = createdEpoch,
-                            updatedAt = lastModEpoch,
-                            isRunning = isRunning,
-                            notFullyIdle = notFullyIdle,
-                            hasActivity = hasActivity,
-                            runStatus = status.name,
-                            stepCount = stepCount,
-                            workspaceUri = wsUri,
-                            parentConversationId = parentCid,
-                            subagentRole = subagentRole,
-                            subagentTypeName = subagentTypeName,
-                            nestingDepth = nestingDepth
+                        frameList.add(
+                            Conversation(
+                                id = cid,
+                                title = summary,
+                                modelId = "",
+                                sessionId = cid,
+                                summary = summary,
+                                createdAt = createdEpoch,
+                                updatedAt = lastModEpoch,
+                                isRunning = isRunning,
+                                notFullyIdle = notFullyIdle,
+                                hasActivity = hasActivity,
+                                runStatus = status.name,
+                                stepCount = stepCount,
+                                workspaceUri = wsUri,
+                                parentConversationId = parentCid,
+                                subagentRole = subagentRole,
+                                subagentTypeName = subagentTypeName,
+                                nestingDepth = nestingDepth
+                            )
                         )
-                    )
+                    }
+                    emit(SummariesUpdate(frameList, removedIds))
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing conversation updates: ${e.message}", e)
                 }
-                emit(SummariesUpdate(frameList, removedIds))
-            } catch (e: Exception) {
-                Log.e(TAG, "Error processing conversation updates: ${e.message}", e)
             }
-        }
     }.flowOn(Dispatchers.IO)
 
     /**
      * Gets raw step count for a conversation
      */
-    suspend fun getRawStepCount(cascadeId: String, hubUrl: String = AuthPreferences.currentHubUrl): Int = withContext(Dispatchers.IO) {
-        val req = GetCascadeTrajectoryStepsRequest(
-            cascade_id = cascadeId,
-            trajectory_verbosity = ClientTrajectoryVerbosity.CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
-        )
-        AgyLanguageService.GetCascadeTrajectorySteps().executeSafely(req).map { res ->
-            res.steps.size
-        }.getOrDefault(0)
-    }
+    suspend fun getRawStepCount(cascadeId: String, hubUrl: String = AuthPreferences.currentHubUrl): Int =
+        withContext(Dispatchers.IO) {
+            val req = GetCascadeTrajectoryStepsRequest(
+                cascade_id = cascadeId,
+                trajectory_verbosity = ClientTrajectoryVerbosity.CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
+            )
+            AgyLanguageService.GetCascadeTrajectorySteps().executeSafely(req).map { res ->
+                res.steps.size
+            }.getOrDefault(0)
+        }
 
     /**
      * Forks conversation up to the specified stepIndex (or latest step if null)
@@ -187,39 +193,74 @@ class AgyConversationService(
         }
     }
 
+    private fun toModelProto(name: String?): Model? {
+        if (name.isNullOrBlank()) return null
+        return try {
+            Model.valueOf(name)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     /**
-     * Reverts the entire last user message turn on the AGY hub daemon trajectory.
+     * Reverts a user message turn on the AGY hub daemon trajectory.
+     * If [targetStepIndex] is provided, reverts to the step before that user message.
+     * If [targetStepIndex] is null, reverts to the step before the last user message.
      */
-    suspend fun revertLastUserMessage(
+    suspend fun revertUserMessage(
         cascadeId: String,
-        modelEnum: String = "MODEL_PLACEHOLDER_M319",
+        modelEnum: String = "",
+        targetStepIndex: Int? = null,
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Int> = withContext(Dispatchers.IO) {
-        val stepsRes = getCascadeTrajectorySteps(cascadeId, hubUrl)
-        if (!stepsRes.isSuccess) {
-            return@withContext Result.failure(stepsRes.exceptionOrNull() ?: Exception("Failed to get trajectory steps"))
-        }
-        val steps = stepsRes.getOrThrow()
-        var lastUserIdx = -1
-        for (i in (steps.size - 1) downTo 0) {
-            val st = steps[i]
-            if (st.type == CortexStepType.CORTEX_STEP_TYPE_USER_INPUT) {
-                lastUserIdx = i
-                break
+        val resolvedModelStr = com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(modelEnum)
+        val modelProto = toModelProto(resolvedModelStr)
+
+        val targetStep = if (targetStepIndex != null) {
+            if (targetStepIndex <= 0) {
+                deleteCascadeTrajectory(cascadeId, hubUrl)
+                return@withContext Result.success(-1)
             }
+            (targetStepIndex - 1).coerceAtLeast(0)
+        } else {
+            val stepsRes = getCascadeTrajectorySteps(cascadeId, hubUrl)
+            if (!stepsRes.isSuccess) {
+                return@withContext Result.failure(stepsRes.exceptionOrNull() ?: Exception("Failed to get trajectory steps"))
+            }
+            val steps = stepsRes.getOrThrow()
+            var lastUserIdx = -1
+            for (i in (steps.size - 1) downTo 0) {
+                val st = steps[i]
+                if (st.type == CortexStepType.CORTEX_STEP_TYPE_USER_INPUT || st.user_input != null) {
+                    lastUserIdx = i
+                    break
+                }
+            }
+
+            if (lastUserIdx <= 0) {
+                deleteCascadeTrajectory(cascadeId, hubUrl)
+                return@withContext Result.success(-1)
+            }
+            (lastUserIdx - 1).coerceAtLeast(0)
         }
 
-        if (lastUserIdx <= 0) {
-            deleteCascadeTrajectory(cascadeId, hubUrl)
-            return@withContext Result.success(-1)
-        }
-
-        val targetStep = (lastUserIdx - 1).coerceAtLeast(0)
         val req = RevertToCascadeStepRequest(
             cascade_id = cascadeId,
-            step_index = targetStep
+            step_index = targetStep,
+            conversation_only = true,
+            override_config = CascadeConfig(
+                planner_config = CascadePlannerConfig(
+                    requested_model = ModelOrAlias(model = modelProto ?: Model.MODEL_UNSPECIFIED)
+                )
+            )
         )
         AgyLanguageService.RevertToCascadeStep().executeSafely(req).map { targetStep }
     }
+
+    suspend fun revertLastUserMessage(
+        cascadeId: String,
+        modelEnum: String = "",
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<Int> = revertUserMessage(cascadeId, modelEnum, null, hubUrl)
 }
 

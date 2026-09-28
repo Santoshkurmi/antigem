@@ -21,24 +21,35 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
+import exa.language_server_pb.ApprovalInteraction
+import exa.language_server_pb.AskQuestionEntry
+import exa.language_server_pb.AskQuestionInteraction
+import exa.language_server_pb.AskQuestionOption
 import exa.language_server_pb.AutoCommandConfig
 import exa.language_server_pb.BuiltinAgentConfig
 import exa.language_server_pb.CancelCascadeInvocationRequest
 import exa.language_server_pb.CancelCascadeStepsRequest
+import exa.language_server_pb.CascadeBrowserActionInteraction
 import exa.language_server_pb.CascadeCommandsAutoExecution
 import exa.language_server_pb.CascadeConfig
 import exa.language_server_pb.CascadeExecutorConfig
+import exa.language_server_pb.CascadeMcpInteraction
 import exa.language_server_pb.CascadePlannerConfig
+import exa.language_server_pb.CascadeReadUrlContentInteraction
 import exa.language_server_pb.CascadeToolConfig
+import exa.language_server_pb.CascadeUserInteraction
 import exa.language_server_pb.ConversationHistoryConfig
 import exa.language_server_pb.CortexTrajectorySource
 import exa.language_server_pb.CustomAgentSpec
 import exa.language_server_pb.DefaultAgentConfig
+import exa.language_server_pb.HandleCascadeUserInteractionRequest
 import exa.language_server_pb.Media
 import exa.language_server_pb.MessageDeliveryStrategy
 import exa.language_server_pb.Model
 import exa.language_server_pb.ModelOrAlias
 import exa.language_server_pb.NotifyUserConfig
+import exa.language_server_pb.PermissionInteraction
+import exa.language_server_pb.PermissionScope
 import exa.language_server_pb.ProjectEnvironmentConfig
 import exa.language_server_pb.ResolveOutstandingStepsRequest
 import exa.language_server_pb.RunCommandToolConfig
@@ -247,91 +258,64 @@ class AgyChatService(
         userDenyInstruction: String = "",
         interactionType: String = "permission",
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<Unit> {
-        val scopeStr = when (scope.uppercase()) {
-            "PERMISSION_SCOPE_ONCE", "ONCE" -> "PERMISSION_SCOPE_ONCE"
-            "PERMISSION_SCOPE_CONVERSATION", "CONVERSATION" -> "PERMISSION_SCOPE_CONVERSATION"
-            "PERMISSION_SCOPE_WORKSPACE", "WORKSPACE", "PERMISSION_SCOPE_PROJECT", "PROJECT" -> "PERMISSION_SCOPE_PROJECT"
-            "PERMISSION_SCOPE_GLOBAL", "GLOBAL", "PERMISSION_SCOPE_PERMANENT" -> "PERMISSION_SCOPE_PERMANENT"
-            else -> if (scope.startsWith("PERMISSION_SCOPE_")) scope else "PERMISSION_SCOPE_ONCE"
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val permScope = when (scope.uppercase()) {
+            "PERMISSION_SCOPE_CONVERSATION", "CONVERSATION" -> PermissionScope.PERMISSION_SCOPE_CONVERSATION
+            "PERMISSION_SCOPE_WORKSPACE", "WORKSPACE", "PERMISSION_SCOPE_PROJECT", "PROJECT" -> PermissionScope.PERMISSION_SCOPE_PROJECT
+            "PERMISSION_SCOPE_GLOBAL", "GLOBAL", "PERMISSION_SCOPE_PERMANENT" -> PermissionScope.PERMISSION_SCOPE_GLOBAL
+            else -> PermissionScope.PERMISSION_SCOPE_ONCE
         }
 
-        fun makeNestedPayload(type: String): String {
-            return JSONObject().apply {
-                put("cascadeId", cascadeId)
-                put("interaction", JSONObject().apply {
-                    if (trajectoryId.isNotBlank()) {
-                        put("trajectoryId", trajectoryId)
-                    }
-                    put("stepIndex", stepIndex)
-                    when (type) {
-                        "mcp" -> {
-                            put("mcp", JSONObject().apply {
-                                put("confirm", allow)
-                            })
-                        }
-                        "approvalInteraction" -> {
-                            put("approvalInteraction", JSONObject().apply {
-                                put("confirm", allow)
-                            })
-                        }
-                        "readUrlContent" -> {
-                            put("readUrlContent", JSONObject().apply {
-                                put("confirm", allow)
-                            })
-                        }
-                        "browserAction" -> {
-                            put("browserAction", JSONObject().apply {
-                                put("confirm", allow)
-                            })
-                        }
-                        else -> {
-                            put("permission", JSONObject().apply {
-                                put("allow", allow)
-                                if (allow) {
-                                    put("scope", scopeStr)
-                                } else {
-                                    put("userDenyInstruction", userDenyInstruction.ifBlank { "User rejected this command." })
-                                }
-                            })
-                        }
-                    }
-                })
-            }.toString()
+        val interaction = when (interactionType.lowercase()) {
+            "mcp" -> CascadeUserInteraction(
+                trajectory_id = trajectoryId,
+                step_index = stepIndex,
+                mcp = CascadeMcpInteraction(confirm = allow)
+            )
+            "approvalinteraction", "approval_interaction" -> CascadeUserInteraction(
+                trajectory_id = trajectoryId,
+                step_index = stepIndex,
+                approval_interaction = ApprovalInteraction(confirm = allow)
+            )
+            "readurlcontent", "read_url_content" -> CascadeUserInteraction(
+                trajectory_id = trajectoryId,
+                step_index = stepIndex,
+                read_url_content = CascadeReadUrlContentInteraction(confirm = allow)
+            )
+            "browseraction", "browser_action" -> CascadeUserInteraction(
+                trajectory_id = trajectoryId,
+                step_index = stepIndex,
+                browser_action = CascadeBrowserActionInteraction(confirm = allow)
+            )
+            else -> CascadeUserInteraction(
+                trajectory_id = trajectoryId,
+                step_index = stepIndex,
+                permission = PermissionInteraction(
+                    allow = allow,
+                    scope = if (allow) permScope else PermissionScope.PERMISSION_SCOPE_ONCE,
+                    user_deny_instruction = if (!allow) userDenyInstruction.ifBlank { "User rejected this command." } else ""
+                )
+            )
         }
 
-        val primaryTypes = listOf("permission", interactionType, "mcp", "approvalInteraction").distinct()
-        var lastErr: Throwable? = null
+        val req = HandleCascadeUserInteractionRequest(
+            cascade_id = cascadeId,
+            interaction = interaction
+        )
 
-        for (pType in primaryTypes) {
-            val payload = makeNestedPayload(pType)
-
-            // Strategy A: Connect-RPC application/json unary call
-            val unaryRes = grpcClient.callUnary("HandleCascadeUserInteraction", payload, hubUrl)
-            if (unaryRes.isSuccess) {
-                Log.d(TAG, "handleCascadeUserInteraction succeeded via Connect-RPC (type=$pType)")
-                return Result.success(Unit)
-            } else {
-                lastErr = unaryRes.exceptionOrNull()
-            }
-
-            // Strategy B: gRPC-Web application/grpc-web+json framed call
-            val grpcRes = grpcClient.executeGrpcWebCall("HandleCascadeUserInteraction", payload, hubUrl)
-            if (grpcRes.isSuccess) {
-                Log.d(TAG, "handleCascadeUserInteraction succeeded via gRPC-Web (type=$pType)")
-                return Result.success(Unit)
-            } else {
-                lastErr = grpcRes.exceptionOrNull()
-            }
+        val result = AgyLanguageService.HandleCascadeUserInteraction().executeSafely(req).map { }
+        if (result.isSuccess) {
+            Log.d(TAG, "handleCascadeUserInteraction succeeded via typed AgyLanguageService (type=$interactionType)")
+            return@withContext result
         }
 
         // Recovery Strategy: ResolveOutstandingSteps if allow is true
         if (allow) {
             val resolveRes = resolveOutstandingSteps(cascadeId, hubUrl)
-            if (resolveRes.isSuccess) return resolveRes
+            if (resolveRes.isSuccess) return@withContext resolveRes
         }
 
-        return Result.failure(lastErr ?: Exception("HandleCascadeUserInteraction failed across all payload formats"))
+        result
     }
 
     /**
@@ -343,37 +327,39 @@ class AgyChatService(
         trajectoryId: String = "",
         responses: List<AskQuestionResponseItemDto>,
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<Unit> {
-        val req = HandleCascadeUserInteractionRequestDto(
-            cascadeId = cascadeId,
-            interaction = CascadeInteractionPayloadDto(
-                trajectoryId = trajectoryId,
-                stepIndex = stepIndex,
-                askQuestion = AskQuestionInteractionDto(
-                    responses = responses
-                )
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val entries = responses.map { item ->
+            AskQuestionEntry(
+                question = item.question,
+                options = item.options.map { opt ->
+                    AskQuestionOption(
+                        id = opt.id,
+                        text = opt.text.ifBlank { opt.label }
+                    )
+                },
+                is_multi_select = item.isMultiSelect ?: false,
+                selected_option_ids = item.selectedOptionIds ?: emptyList(),
+                write_in_response = item.writeInResponse ?: "",
+                skipped = item.skipped ?: false
+            )
+        }
+
+        val allSkipped = responses.isNotEmpty() && responses.all { it.skipped == true }
+        val interaction = CascadeUserInteraction(
+            trajectory_id = trajectoryId,
+            step_index = stepIndex,
+            ask_question = AskQuestionInteraction(
+                responses = entries,
+                cancelled = allSkipped
             )
         )
-        val payload = jsonParser.encodeToString(HandleCascadeUserInteractionRequestDto.serializer(), req)
-        Log.d(TAG, "handleAskQuestionInteraction payload: $payload")
 
-        // Strategy A: Connect-RPC unary call
-        val unaryRes = grpcClient.callUnary("HandleCascadeUserInteraction", payload, hubUrl)
-        if (unaryRes.isSuccess) {
-            Log.d(TAG, "handleAskQuestionInteraction succeeded via Connect-RPC")
-            return Result.success(Unit)
-        }
+        val req = HandleCascadeUserInteractionRequest(
+            cascade_id = cascadeId,
+            interaction = interaction
+        )
 
-        // Strategy B: gRPC-Web framed call
-        val grpcRes = grpcClient.executeGrpcWebCall("HandleCascadeUserInteraction", payload, hubUrl)
-        if (grpcRes.isSuccess) {
-            Log.d(TAG, "handleAskQuestionInteraction succeeded via gRPC-Web")
-            return Result.success(Unit)
-        }
-
-        val err = unaryRes.exceptionOrNull() ?: grpcRes.exceptionOrNull() ?: Exception("HandleCascadeUserInteraction failed")
-        Log.e(TAG, "handleAskQuestionInteraction failed", err)
-        return Result.failure(err)
+        AgyLanguageService.HandleCascadeUserInteraction().executeSafely(req).map { }
     }
 
     /**
