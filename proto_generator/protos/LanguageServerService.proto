@@ -1,9 +1,6 @@
 syntax = "proto3";
 
-package exa.cortex_pb;
-
-option java_package = "com.exa.cortex_pb";
-option java_multiple_files = true;
+package exa.language_server_pb;
 
 // ==========================================================================
 // Service: LanguageServerService (317 Methods)

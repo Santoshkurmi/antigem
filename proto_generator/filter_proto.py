@@ -12,7 +12,7 @@ APP_PROTO_DIR = BASE_DIR.parent / "app" / "src" / "main" / "proto"
 
 PRIMITIVE_TYPES = {
     "double", "float", "int32", "int64", "uint32", "uint64", "sint32", "sint64",
-    "fixed32", "fixed64", "sfixed32", "sfixed64", "bool", "string", "bytes", "Any"
+    "fixed32", "fixed64", "sfixed32", "sfixed64", "bool", "string", "bytes"
 }
 
 def clean_type_name(t: str) -> str:
