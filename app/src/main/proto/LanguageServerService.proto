@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package exa.language_server_pb;
+package exa.cortex_pb;
 
 // Filtered subset for Android app compilation
 
@@ -5616,12 +5616,6 @@ message StaticMediaProcessing {
   Duration start_offset = 1;
   Duration end_offset = 2;
   double fps = 3;
-}
-
-message Status {
-  int32 code = 1;
-  string message = 2;
-  repeated Any details = 3;
 }
 
 message Step {

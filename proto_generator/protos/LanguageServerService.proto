@@ -6886,7 +6886,7 @@ message LoadCodeAssistResponse {
   UserTier current_tier = 1;
   repeated UserTier allowed_tiers = 2;
   string cloudaicompanion_project = 3;
-  Status project_validation_error = 4;
+  RpcStatus project_validation_error = 4;
   repeated IneligibleTier ineligible_tiers = 5;
   bool gcp_managed = 6;
   string manage_subscription_uri = 7;
@@ -7608,7 +7608,7 @@ message Operation {
   string name = 1;
   Any metadata = 2;
   bool done = 3;
-  Status error = 4;
+  RpcStatus error = 4;
   Any response = 5;
 }
 
@@ -9326,7 +9326,7 @@ message StaticMediaProcessing {
   double fps = 3;
 }
 
-message Status {
+message RpcStatus {
   int32 code = 1;
   string message = 2;
   repeated Any details = 3;
