@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package exa.remoting;
+
+option java_package = "com.exa.remoting";
+option java_multiple_files = true;
+
+// ==========================================================================
+// Service: RemotingService (7 Methods)
+// Source: third_party/jetski/remoting_pb/remoting.proto
+// ==========================================================================
+
+service RemotingService {
+  rpc ConnectRemote (ConnectRemoteRequest) returns (stream ConnectRemoteResponse);
+  rpc RespondToPrompt (RespondToPromptRequest) returns (RespondToPromptResponse);
+  rpc DisconnectRemote (DisconnectRemoteRequest) returns (DisconnectRemoteResponse);
+  rpc SaveRemote (SaveRemoteRequest) returns (SaveRemoteResponse);
+  rpc DeleteRemote (DeleteRemoteRequest) returns (DeleteRemoteResponse);
+  rpc ListRemotes (ListRemotesRequest) returns (ListRemotesResponse);
+  rpc ListConnectedRemotes (ListConnectedRemotesRequest) returns (ListConnectedRemotesResponse);
+}
+
+// ==========================================================================
+// Messages & Structs
+// ==========================================================================
+
+message Any {
+  string type_url = 1;
+  bytes value = 2;
+}
+
+message ConnectRemoteRequest {
+  string remote_multi_hop = 1;
+}
+
+message ConnectRemoteResponse {
+  RemoteConnectionPrompt prompt = 1;
+  Status status = 2;
+  string remote_id = 3;
+}
+
+message DeleteRemoteRequest {
+  string remote_id = 1;
+}
+
+message DeleteRemoteResponse {
+}
+
+message DisconnectRemoteRequest {
+  string remote_id = 1;
+}
+
+message DisconnectRemoteResponse {
+}
+
+message ListConnectedRemotesRequest {
+}
+
+message ListConnectedRemotesResponse {
+  repeated RemotesEntry remotes = 1;
+}
+
+message ListRemotesRequest {
+  bool include_autodetected = 1;
+  bool include_saved = 2;
+}
+
+message ListRemotesResponse {
+  repeated RemoteDescriptor remotes = 1;
+}
+
+message RemoteConnectionPrompt {
+  string message = 1;
+  bool is_secret = 2;
+}
+
+message RemoteDescriptor {
+  string remote_multi_hop = 1;
+  string name = 2;
+  string description = 3;
+  string type = 4;
+}
+
+message RemotesEntry {
+  string key = 1;
+  RemoteDescriptor value = 2;
+}
+
+message RespondToPromptRequest {
+  string remote_id = 1;
+  string response = 2;
+}
+
+message RespondToPromptResponse {
+}
+
+message SaveRemoteRequest {
+  RemoteDescriptor descriptor = 1;
+}
+
+message SaveRemoteResponse {
+}
+
+message Status {
+  int32 code = 1;
+  string message = 2;
+  repeated Any details = 3;
+}
+

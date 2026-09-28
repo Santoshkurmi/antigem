@@ -2,6 +2,7 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.wire)
 }
 
 android {
@@ -160,9 +161,23 @@ dependencies {
   androidTestImplementation(libs.androidx.test.runner)
   androidTestImplementation(libs.androidx.test.espresso.core)
 
+  // Wire Protobuf & gRPC runtime
+  implementation(libs.wire.runtime)
+  implementation(libs.wire.grpc.client)
+
   // Navigation
   implementation(libs.androidx.navigation3.ui)
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+}
+
+wire {
+  sourcePath {
+    srcDir("src/main/proto")
+  }
+  kotlin {
+    rpcRole = "client"
+    rpcCallStyle = "suspending"
+  }
 }
 

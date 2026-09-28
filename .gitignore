@@ -27,5 +27,11 @@ gemini-server
 *.test
 termux-daemon/daemon
 termux-daemon/server
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
 
-
+# Proto Generator Large JSON Schemas
+proto_generator/*.json
