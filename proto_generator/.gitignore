@@ -1,0 +1,22 @@
+# Dependencies & Build
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+dist/
+build/
+.gradle/
+*.class
+*.apk
+*.aab
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.tmp
+*.log

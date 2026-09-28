@@ -141,42 +141,60 @@ class ProtoRegistry:
         for e in enums:
             full_e_name = f"{prefix}.{e['name']}"
             self.enums[full_e_name] = e
-            self.enums[f".{e['name']}"] = e
+            if f".{e['name']}" not in self.enums:
+                self.enums[f".{e['name']}"] = e
         for m in messages:
             self._register_message(prefix, m)
 
     def _register_message(self, prefix, msg):
         full_m_name = f"{prefix}.{msg['name']}"
         self.messages[full_m_name] = msg
-        self.messages[f".{msg['name']}"] = msg
+        if f".{msg['name']}" not in self.messages:
+            self.messages[f".{msg['name']}"] = msg
         for nested in msg.get('nested_types', []):
             self._register_message(full_m_name, nested)
         for nested_enum in msg.get('enum_types', []):
             self.enums[f"{full_m_name}.{nested_enum['name']}"] = nested_enum
-            self.enums[f".{nested_enum['name']}"] = nested_enum
+            if f".{nested_enum['name']}" not in self.enums:
+                self.enums[f".{nested_enum['name']}"] = nested_enum
 
-    def find_type(self, type_name, expected_kind=None):
-        if not type_name: return None, None
+    def find_type(self, type_name, s_pkg="exa.cortex_pb", expected_kind=None):
+        if not type_name: return None, None, type_name
         lookup = type_name if type_name.startswith('.') else f".{type_name}"
         short = lookup.split('.')[-1]
 
+        candidates = [
+            lookup,
+            lookup.replace(".exa.language_server_pb.", ".exa.cortex_pb."),
+            lookup.replace(".exa.cortex_pb.", ".exa.language_server_pb."),
+            f".{s_pkg}.{short}",
+            f".exa.cortex_pb.{short}",
+            f".exa.language_server_pb.{short}",
+            f".exa.codeium_common_pb.{short}",
+            f".exa.extension_server_pb.{short}",
+            f".exa.remoting.{short}",
+        ]
+
         if expected_kind in ("enum", 14):
-            if lookup in self.enums: return "enum", self.enums[lookup]
-            if f".{short}" in self.enums: return "enum", self.enums[f".{short}"]
-            for k in self.enums:
-                if k.endswith(f".{short}"): return "enum", self.enums[k]
+            for c in candidates:
+                if c in self.enums: return "enum", self.enums[c], c
+            if f".{short}" in self.enums: return "enum", self.enums[f".{short}"], f".{short}"
+            for k, v in self.enums.items():
+                if k.endswith(f".{short}"): return "enum", v, k
 
         if expected_kind in ("message", 11):
-            if lookup in self.messages: return "message", self.messages[lookup]
-            if f".{short}" in self.messages: return "message", self.messages[f".{short}"]
-            for k in self.messages:
-                if k.endswith(f".{short}"): return "message", self.messages[k]
+            for c in candidates:
+                if c in self.messages: return "message", self.messages[c], c
+            if f".{short}" in self.messages: return "message", self.messages[f".{short}"], f".{short}"
+            for k, v in self.messages.items():
+                if k.endswith(f".{short}"): return "message", v, k
 
-        if lookup in self.messages: return "message", self.messages[lookup]
-        if lookup in self.enums: return "enum", self.enums[lookup]
-        if f".{short}" in self.messages: return "message", self.messages[f".{short}"]
-        if f".{short}" in self.enums: return "enum", self.enums[f".{short}"]
-        return None, None
+        for c in candidates:
+            if c in self.messages: return "message", self.messages[c], c
+            if c in self.enums: return "enum", self.enums[c], c
+        if f".{short}" in self.messages: return "message", self.messages[f".{short}"], f".{short}"
+        if f".{short}" in self.enums: return "enum", self.enums[f".{short}"], f".{short}"
+        return None, None, type_name
 
 def scan_all_descriptors(binary_path="/data/data/com.termux/files/usr/bin/agy.va39"):
     with open(binary_path, "rb") as f: data = f.read()
@@ -217,52 +235,71 @@ def generate_per_service_protos(output_dir="/data/data/com.termux/files/home/pro
     for s_key in sorted(target_service_keys):
         s_info = registry.services[s_key]
         service_name = s_info["service"]
+        s_pkg = s_info["package"] or "exa.local_grpc"
         
         # Use exact route package name for gRPC client compatibility
-        package_name = SERVICE_PACKAGE_MAP.get(service_name, s_info["package"] or "exa.local_grpc")
+        package_name = SERVICE_PACKAGE_MAP.get(service_name, s_pkg)
 
         needed_types = deque()
         for m in s_info["methods"]:
             if m["input_type"]: needed_types.append((m["input_type"], "message"))
             if m["output_type"]: needed_types.append((m["output_type"], "message"))
 
-        rendered_messages = {}
-        rendered_enums = {}
-        processed_types = set()
+        resolved_messages = {}
+        resolved_enums = {}
+        short_to_full = {}
+        type_name_map = {}
+        processed = set()
 
         while needed_types:
-            t_name, expected_kind = needed_types.popleft()
-            if not t_name or (t_name, expected_kind) in processed_types: continue
-            processed_types.add((t_name, expected_kind))
+            full_name, expected_kind = needed_types.popleft()
+            if not full_name or (full_name, expected_kind) in processed: continue
+            processed.add((full_name, expected_kind))
 
-            kind, descriptor = registry.find_type(t_name, expected_kind)
-            if not kind:
-                short_name = t_name.split('.')[-1]
+            kind, desc, matched_full_name = registry.find_type(full_name, s_pkg, expected_kind)
+            if not kind or not desc:
+                short_name = full_name.split('.')[-1]
                 if expected_kind == "enum":
-                    rendered_enums[short_name] = {"name": short_name, "values": [{"name": f"{short_name.upper()}_UNSPECIFIED", "number": 0}]}
+                    desc = {"name": short_name, "values": [{"name": f"{short_name.upper()}_UNSPECIFIED", "number": 0}]}
+                    kind = "enum"
                 else:
-                    rendered_messages[short_name] = {"name": short_name, "fields": []}
-                continue
+                    desc = {"name": short_name, "fields": []}
+                    kind = "message"
+                matched_full_name = full_name
+
+            orig_short = desc["name"]
+            if orig_short not in short_to_full:
+                short_to_full[orig_short] = matched_full_name
+                unique_name = orig_short
+            elif short_to_full[orig_short] == matched_full_name:
+                unique_name = orig_short
+            else:
+                # Collision across packages! Disambiguate with package prefix
+                pkg_parts = [p for p in matched_full_name.split(".")[:-1] if p and p not in ["exa", "cortex_pb", "language_server_pb", "extension_server_pb", "remoting"]]
+                prefix = "".join([p.capitalize() for p in pkg_parts])
+                unique_name = f"{prefix}_{orig_short}" if prefix else f"Internal_{orig_short}"
+                if unique_name in short_to_full and short_to_full[unique_name] != matched_full_name:
+                    unique_name = matched_full_name.replace(".", "_").strip("_")
+                short_to_full[unique_name] = matched_full_name
+
+            type_name_map[full_name] = unique_name
+            type_name_map[matched_full_name] = unique_name
+            type_name_map[full_name.lstrip(".")] = unique_name
+            type_name_map[matched_full_name.lstrip(".")] = unique_name
 
             if kind == "enum":
-                rendered_enums[descriptor["name"]] = descriptor
-            elif kind == "message":
-                rendered_messages[descriptor["name"]] = descriptor
-                for f in descriptor["fields"]:
-                    if f["type_name"]:
+                resolved_enums[matched_full_name] = desc
+            else:
+                resolved_messages[matched_full_name] = desc
+                for f in desc.get("fields", []):
+                    if f.get("type_name"):
                         child_kind = "enum" if f["type"] == 14 else "message"
                         needed_types.append((f["type_name"], child_kind))
 
-        # Handle Name Collisions between Message and Enum in same file (e.g. Status)
-        collisions = set(rendered_messages.keys()).intersection(set(rendered_enums.keys()))
-        enum_rename_map = {}
-        for col in collisions:
-            # Rename Enum to <Name>Enum
-            new_enum_name = f"{col}Enum"
-            enum_rename_map[col] = new_enum_name
-            orig_enum = rendered_enums.pop(col)
-            orig_enum["name"] = new_enum_name
-            rendered_enums[new_enum_name] = orig_enum
+        colls = set([type_name_map[fn] for fn in resolved_messages]).intersection(set([type_name_map[fn] for fn in resolved_enums]))
+        enum_rename = {}
+        for c in colls:
+            enum_rename[c] = f"{c}Enum"
 
         # Write service file
         proto_file_path = os.path.join(output_dir, f"{service_name}.proto")
@@ -279,62 +316,73 @@ def generate_per_service_protos(output_dir="/data/data/com.termux/files/home/pro
             for m in s_info["methods"]:
                 cs = "stream " if m["client_streaming"] else ""
                 ss = "stream " if m["server_streaming"] else ""
-                in_t = m["input_type"].split('.')[-1]
-                out_t = m["output_type"].split('.')[-1]
+                in_lookup = m["input_type"]
+                out_lookup = m["output_type"]
+                in_t = type_name_map.get(in_lookup, type_name_map.get(in_lookup.lstrip("."), in_lookup.split('.')[-1]))
+                out_t = type_name_map.get(out_lookup, type_name_map.get(out_lookup.lstrip("."), out_lookup.split('.')[-1]))
                 f.write(f'  rpc {m["name"]} ({cs}{in_t}) returns ({ss}{out_t});\n')
             f.write('}\n\n')
 
             # Enums
-            if rendered_enums:
+            if resolved_enums:
                 f.write('// ==========================================================================\n')
                 f.write('// Enumerations\n')
                 f.write('// ==========================================================================\n\n')
-                for e_name in sorted(rendered_enums.keys()):
-                    e = rendered_enums[e_name]
-                    f.write(f'enum {e["name"]} {{\n')
-                    for v in e["values"]:
+                written_enums = set()
+                for fn in sorted(resolved_enums.keys(), key=lambda x: type_name_map[x]):
+                    e_name = type_name_map[fn]
+                    if e_name in enum_rename:
+                        e_name = enum_rename[e_name]
+                    if e_name in written_enums: continue
+                    written_enums.add(e_name)
+                    e = resolved_enums[fn]
+                    f.write(f'enum {e_name} {{\n')
+                    for v in sorted(e["values"], key=lambda x: x["number"]):
                         f.write(f'  {v["name"]} = {v["number"]};\n')
                     f.write('}\n\n')
 
             # Messages
-            if rendered_messages:
+            if resolved_messages:
                 f.write('// ==========================================================================\n')
                 f.write('// Messages & Structs\n')
                 f.write('// ==========================================================================\n\n')
-                for m_name in sorted(rendered_messages.keys()):
-                    m = rendered_messages[m_name]
-                    f.write(f'message {m["name"]} {{\n')
-                    for field in m["fields"]:
+                written_msgs = set()
+                for fn in sorted(resolved_messages.keys(), key=lambda x: type_name_map[x]):
+                    m_name = type_name_map[fn]
+                    if m_name in written_msgs: continue
+                    written_msgs.add(m_name)
+                    m = resolved_messages[fn]
+                    f.write(f'message {m_name} {{\n')
+                    for field in sorted(m["fields"], key=lambda x: x["number"]):
                         lbl = "repeated " if field["label"] == 3 else ""
-                        t_str = field["type_name"]
-                        if not t_str:
-                            t_str = TYPE_MAP.get(field["type"], "string")
+                        if field["type_name"]:
+                            fn_lookup = field["type_name"]
+                            t_str = type_name_map.get(fn_lookup, type_name_map.get(fn_lookup.lstrip("."), fn_lookup.split('.')[-1]))
+                            if field["type"] == 14 and t_str in enum_rename:
+                                t_str = enum_rename[t_str]
                         else:
-                            st = t_str.split('.')[-1]
-                            # check if field references a renamed enum
-                            if field["type"] == 14 and st in enum_rename_map:
-                                t_str = enum_rename_map[st]
-                            else:
-                                t_str = st
+                            t_str = TYPE_MAP.get(field["type"], "string")
                         f.write(f'  {lbl}{t_str} {field["name"]} = {field["number"]};\n')
                     f.write('}\n\n')
 
         # Validation Check
-        all_defined = set(rendered_messages.keys()).union(set(rendered_enums.keys()))
+        all_defined = set([type_name_map[fn] for fn in resolved_messages]).union(set([enum_rename.get(type_name_map[fn], type_name_map[fn]) for fn in resolved_enums]))
         primitive_types = set(TYPE_MAP.values())
         errors = []
-        for m_name, m in rendered_messages.items():
+        for full_name, m in resolved_messages.items():
+            m_name = type_name_map[full_name]
             for field in m["fields"]:
                 if field["type_name"]:
-                    st = field["type_name"].split('.')[-1]
-                    if field["type"] == 14 and st in enum_rename_map:
-                        st = enum_rename_map[st]
+                    fn_lookup = field["type_name"]
+                    st = type_name_map.get(fn_lookup, type_name_map.get(fn_lookup.lstrip("."), fn_lookup.split('.')[-1]))
+                    if field["type"] == 14 and st in enum_rename:
+                        st = enum_rename[st]
                     if st not in all_defined and st not in primitive_types:
                         errors.append(f"In message '{m_name}', field '{field['name']}' references undefined type '{st}'")
 
         status_str = "✅ 100% Validated (0 errors)" if not errors else f"⚠️ {len(errors)} warnings"
-        collision_str = f", Resolved {len(collisions)} Collisions" if collisions else ""
-        print(f"Generated: {service_name}.proto -> {len(s_info['methods'])} RPCs, {len(rendered_messages)} Messages, {len(rendered_enums)} Enums{collision_str} [{status_str}]")
+        collision_str = f", Resolved {len(colls)} Collisions" if colls else ""
+        print(f"Generated: {service_name}.proto -> {len(s_info['methods'])} RPCs, {len(resolved_messages)} Messages, {len(resolved_enums)} Enums{collision_str} [{status_str}]")
 
     print(f"\nAll service proto files updated in: {output_dir}")
 
