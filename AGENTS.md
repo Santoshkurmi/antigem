@@ -65,5 +65,6 @@ suspend fun streamUpdates(cascadeId: String) {
 - **Answer Questions First**: When the user asks a question, points out an issue, or argues a design point, ALWAYS answer and explain directly to the user in text first.
 - **Do Not Stealth-Edit Files**: Never start modifying code in silence instead of answering the user's question or addressing their direct feedback.
 - **Format Parity**: Both JSON and binary gRPC return the exact same protobuf schema and fields from the daemon; never assume or claim they return different keys or formats.
+- **Protobuf Schema Source of Truth**: If you need to know API request/response types, message structures, or field names, ALWAYS inspect the `.proto` files in `app/src/main/proto/` directly instead of inspecting generated Kotlin files in build directories.
 - **Kotlin Type Inference**: Do not define unnecessary explicit types when Kotlin can infer types automatically. Rely on Kotlin's type inference and keep code concise unless explicit types are strictly required by the compiler.
 - **Only do what user has told you to do**: Never touch a single line that user has not told to do, if user said to do Task X then do that nothing else not even add a signle extra space somewhere, if need such things to chagne mroe than user has asked for, alwasy explain user that you want to do this too.
