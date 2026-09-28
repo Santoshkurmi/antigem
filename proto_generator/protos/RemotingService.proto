@@ -2,12 +2,9 @@ syntax = "proto3";
 
 package exa.remoting;
 
-option java_package = "com.exa.remoting";
-option java_multiple_files = true;
-
 // ==========================================================================
 // Service: RemotingService (7 Methods)
-// Source: third_party/jetski/remoting_pb/remoting.proto
+// Target Route: /exa.remoting.RemotingService/<Method>
 // ==========================================================================
 
 service RemotingService {

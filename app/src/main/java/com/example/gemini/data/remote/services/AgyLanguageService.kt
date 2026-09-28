@@ -19,16 +19,24 @@ import kotlinx.coroutines.flow.flowOn
 import java.io.IOException
 
 /**
- * Direct typed entrypoint for Antigravity LanguageServerService gRPC APIs.
- * Automatically connects to the active Hub URL using the shared OkHttpClient connection pool.
+ * Single shared typed entrypoint for Antigravity LanguageServerService gRPC APIs.
+ * Connects to the active Hub URL using the shared OkHttpClient connection pool.
  */
-val AgyLanguageService: LanguageServerServiceClient
-    get() = GrpcLanguageServerServiceClient(
+val AgyLanguageService: LanguageServerServiceClient by lazy {
+    val hubUrl = AuthPreferences.currentHubUrl.ifBlank { AuthPreferences.DEFAULT_HUB_URL }
+    val normalizedUrl = if (!hubUrl.startsWith("http://") && !hubUrl.startsWith("https://")) {
+        "http://$hubUrl"
+    } else {
+        hubUrl
+    }.trimEnd('/')
+
+    GrpcLanguageServerServiceClient(
         GrpcClient.Builder()
             .client(AgyOkHttpClient.client)
-            .baseUrl(AuthPreferences.currentHubUrl.trimEnd('/'))
+            .baseUrl(normalizedUrl)
             .build()
     )
+}
 
 /**
  * Domain error model for AGY Language Server gRPC calls.

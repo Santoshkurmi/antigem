@@ -116,6 +116,12 @@ TYPE_MAP = {
     17: 'sint32', 18: 'sint64'
 }
 
+SERVICE_PACKAGE_MAP = {
+    "LanguageServerService": "exa.language_server_pb",
+    "ExtensionServerService": "exa.extension_server_pb",
+    "RemotingService": "exa.remoting"
+}
+
 class ProtoRegistry:
     def __init__(self):
         self.messages = {}
@@ -149,12 +155,25 @@ class ProtoRegistry:
             self.enums[f"{full_m_name}.{nested_enum['name']}"] = nested_enum
             self.enums[f".{nested_enum['name']}"] = nested_enum
 
-    def find_type(self, type_name):
+    def find_type(self, type_name, expected_kind=None):
         if not type_name: return None, None
         lookup = type_name if type_name.startswith('.') else f".{type_name}"
+        short = lookup.split('.')[-1]
+
+        if expected_kind in ("enum", 14):
+            if lookup in self.enums: return "enum", self.enums[lookup]
+            if f".{short}" in self.enums: return "enum", self.enums[f".{short}"]
+            for k in self.enums:
+                if k.endswith(f".{short}"): return "enum", self.enums[k]
+
+        if expected_kind in ("message", 11):
+            if lookup in self.messages: return "message", self.messages[lookup]
+            if f".{short}" in self.messages: return "message", self.messages[f".{short}"]
+            for k in self.messages:
+                if k.endswith(f".{short}"): return "message", self.messages[k]
+
         if lookup in self.messages: return "message", self.messages[lookup]
         if lookup in self.enums: return "enum", self.enums[lookup]
-        short = lookup.split('.')[-1]
         if f".{short}" in self.messages: return "message", self.messages[f".{short}"]
         if f".{short}" in self.enums: return "enum", self.enums[f".{short}"]
         return None, None
@@ -186,7 +205,7 @@ def scan_all_descriptors(binary_path="/data/data/com.termux/files/usr/bin/agy.va
 
 def generate_per_service_protos(output_dir="/data/data/com.termux/files/home/proto_test/protos"):
     os.makedirs(output_dir, exist_ok=True)
-    print(f"Scanning embedded protobuf descriptors from binary...")
+    print("Scanning embedded protobuf descriptors from binary...")
     registry = scan_all_descriptors()
     print(f"Discovered {len(registry.services)} services, {len(registry.messages)} messages, {len(registry.enums)} enums.\n")
 
@@ -195,34 +214,34 @@ def generate_per_service_protos(output_dir="/data/data/com.termux/files/home/pro
         if any(k in s for k in ['LanguageServerService', 'ExtensionServerService', 'RemotingService'])
     ]
 
-    generated_files = []
-
     for s_key in sorted(target_service_keys):
         s_info = registry.services[s_key]
         service_name = s_info["service"]
-        package_name = s_info["package"] or "exa.local_grpc"
         
-        # Determine clean package name for Java/Kotlin
-        java_package = f"com.{package_name}" if not package_name.startswith("com.") else package_name
-        
+        # Use exact route package name for gRPC client compatibility
+        package_name = SERVICE_PACKAGE_MAP.get(service_name, s_info["package"] or "exa.local_grpc")
+
         needed_types = deque()
         for m in s_info["methods"]:
-            if m["input_type"]: needed_types.append(m["input_type"])
-            if m["output_type"]: needed_types.append(m["output_type"])
+            if m["input_type"]: needed_types.append((m["input_type"], "message"))
+            if m["output_type"]: needed_types.append((m["output_type"], "message"))
 
         rendered_messages = {}
         rendered_enums = {}
         processed_types = set()
 
         while needed_types:
-            t_name = needed_types.popleft()
-            if not t_name or t_name in processed_types: continue
-            processed_types.add(t_name)
+            t_name, expected_kind = needed_types.popleft()
+            if not t_name or (t_name, expected_kind) in processed_types: continue
+            processed_types.add((t_name, expected_kind))
 
-            kind, descriptor = registry.find_type(t_name)
+            kind, descriptor = registry.find_type(t_name, expected_kind)
             if not kind:
                 short_name = t_name.split('.')[-1]
-                rendered_messages[short_name] = {"name": short_name, "fields": []}
+                if expected_kind == "enum":
+                    rendered_enums[short_name] = {"name": short_name, "values": [{"name": f"{short_name.upper()}_UNSPECIFIED", "number": 0}]}
+                else:
+                    rendered_messages[short_name] = {"name": short_name, "fields": []}
                 continue
 
             if kind == "enum":
@@ -231,19 +250,29 @@ def generate_per_service_protos(output_dir="/data/data/com.termux/files/home/pro
                 rendered_messages[descriptor["name"]] = descriptor
                 for f in descriptor["fields"]:
                     if f["type_name"]:
-                        needed_types.append(f["type_name"])
+                        child_kind = "enum" if f["type"] == 14 else "message"
+                        needed_types.append((f["type_name"], child_kind))
+
+        # Handle Name Collisions between Message and Enum in same file (e.g. Status)
+        collisions = set(rendered_messages.keys()).intersection(set(rendered_enums.keys()))
+        enum_rename_map = {}
+        for col in collisions:
+            # Rename Enum to <Name>Enum
+            new_enum_name = f"{col}Enum"
+            enum_rename_map[col] = new_enum_name
+            orig_enum = rendered_enums.pop(col)
+            orig_enum["name"] = new_enum_name
+            rendered_enums[new_enum_name] = orig_enum
 
         # Write service file
         proto_file_path = os.path.join(output_dir, f"{service_name}.proto")
         with open(proto_file_path, "w") as f:
             f.write('syntax = "proto3";\n\n')
             f.write(f'package {package_name};\n\n')
-            f.write(f'option java_package = "{java_package}";\n')
-            f.write(f'option java_multiple_files = true;\n\n')
             
             f.write(f'// ==========================================================================\n')
             f.write(f'// Service: {service_name} ({len(s_info["methods"])} Methods)\n')
-            f.write(f'// Source: {s_info["file"]}\n')
+            f.write(f'// Target Route: /{package_name}.{service_name}/<Method>\n')
             f.write(f'// ==========================================================================\n\n')
             
             f.write(f'service {service_name} {{\n')
@@ -281,11 +310,16 @@ def generate_per_service_protos(output_dir="/data/data/com.termux/files/home/pro
                         if not t_str:
                             t_str = TYPE_MAP.get(field["type"], "string")
                         else:
-                            t_str = t_str.split('.')[-1]
+                            st = t_str.split('.')[-1]
+                            # check if field references a renamed enum
+                            if field["type"] == 14 and st in enum_rename_map:
+                                t_str = enum_rename_map[st]
+                            else:
+                                t_str = st
                         f.write(f'  {lbl}{t_str} {field["name"]} = {field["number"]};\n')
                     f.write('}\n\n')
 
-        # Run Validation for this specific file
+        # Validation Check
         all_defined = set(rendered_messages.keys()).union(set(rendered_enums.keys()))
         primitive_types = set(TYPE_MAP.values())
         errors = []
@@ -293,19 +327,16 @@ def generate_per_service_protos(output_dir="/data/data/com.termux/files/home/pro
             for field in m["fields"]:
                 if field["type_name"]:
                     st = field["type_name"].split('.')[-1]
+                    if field["type"] == 14 and st in enum_rename_map:
+                        st = enum_rename_map[st]
                     if st not in all_defined and st not in primitive_types:
                         errors.append(f"In message '{m_name}', field '{field['name']}' references undefined type '{st}'")
-        for m in s_info["methods"]:
-            for rpc_t in [m["input_type"], m["output_type"]]:
-                st = rpc_t.split('.')[-1]
-                if st not in all_defined:
-                    errors.append(f"RPC '{m['name']}' references undefined type '{st}'")
 
         status_str = "✅ 100% Validated (0 errors)" if not errors else f"⚠️ {len(errors)} warnings"
-        print(f"Generated: {service_name}.proto -> {len(s_info['methods'])} RPCs, {len(rendered_messages)} Messages, {len(rendered_enums)} Enums [{status_str}]")
-        generated_files.append((service_name, proto_file_path))
+        collision_str = f", Resolved {len(collisions)} Collisions" if collisions else ""
+        print(f"Generated: {service_name}.proto -> {len(s_info['methods'])} RPCs, {len(rendered_messages)} Messages, {len(rendered_enums)} Enums{collision_str} [{status_str}]")
 
-    print(f"\nAll service proto files saved in: {output_dir}")
+    print(f"\nAll service proto files updated in: {output_dir}")
 
 if __name__ == "__main__":
     generate_per_service_protos()

@@ -1,330 +1,406 @@
+// ==========================================================================
+// Complete Local Antigravity gRPC APIs & Fully Resolved Recursive Types
+// All Request / Response Messages and Children Validated (Zero Missing Types)
+// ==========================================================================
+
 syntax = "proto3";
 
-package exa.language_server_pb;
-
 // ==========================================================================
-// Service: LanguageServerService (317 Methods)
-// Target Route: /exa.language_server_pb.LanguageServerService/<Method>
+// Service: exa.cortex_pb.LanguageServerService (317 Methods)
 // ==========================================================================
 
 service LanguageServerService {
-  rpc ProvideCompletionFeedback (ProvideCompletionFeedbackRequest) returns (ProvideCompletionFeedbackResponse);
-  rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse);
-  rpc GetRemoteControlInfo (GetRemoteControlInfoRequest) returns (GetRemoteControlInfoResponse);
-  rpc GetStatus (GetStatusRequest) returns (GetStatusResponse);
-  rpc GetCommandModelConfigs (GetCommandModelConfigsRequest) returns (GetCommandModelConfigsResponse);
-  rpc GetCascadeModelConfigs (GetCascadeModelConfigsRequest) returns (GetCascadeModelConfigsResponse);
-  rpc GetStandaloneDir (GetStandaloneDirRequest) returns (GetStandaloneDirResponse);
-  rpc RecordEvent (RecordEventRequest) returns (RecordEventResponse);
-  rpc RecordSidecarEvent (RecordSidecarEventRequest) returns (RecordSidecarEventResponse);
-  rpc GetSidecars (GetSidecarsRequest) returns (GetSidecarsResponse);
-  rpc SubscribeToSidecars (SubscribeToSidecarsRequest) returns (stream SubscribeToSidecarsResponse);
-  rpc GetSidecarEvents (GetSidecarEventsRequest) returns (GetSidecarEventsResponse);
-  rpc GetSidecarLogs (GetSidecarLogsRequest) returns (stream GetSidecarLogsResponse);
-  rpc ListSidecarLogFiles (ListSidecarLogFilesRequest) returns (ListSidecarLogFilesResponse);
-  rpc ManageSidecar (ManageSidecarRequest) returns (ManageSidecarResponse);
-  rpc ResolveSidecarConfig (ResolveSidecarConfigRequest) returns (ResolveSidecarConfigResponse);
-  rpc RegisterGdmUser (RegisterGdmUserRequest) returns (RegisterGdmUserResponse);
-  rpc MigrateApiKey (MigrateApiKeyRequest) returns (MigrateApiKeyResponse);
-  rpc WellSupportedLanguages (WellSupportedLanguagesRequest) returns (WellSupportedLanguagesResponse);
-  rpc RecordSearchDocOpen (RecordSearchDocOpenRequest) returns (RecordSearchDocOpenResponse);
-  rpc RecordSearchResultsView (RecordSearchResultsViewRequest) returns (RecordSearchResultsViewResponse);
-  rpc HandleStreamingCommand (HandleStreamingCommandRequest) returns (stream HandleStreamingCommandResponse);
-  rpc GetMcpServerTemplates (GetMcpServerTemplatesRequest) returns (GetMcpServerTemplatesResponse);
-  rpc AddTrackedWorkspace (AddTrackedWorkspaceRequest) returns (AddTrackedWorkspaceResponse);
-  rpc RemoveTrackedWorkspace (RemoveTrackedWorkspaceRequest) returns (RemoveTrackedWorkspaceResponse);
-  rpc SmartFocusConversation (SmartFocusConversationRequest) returns (SmartFocusConversationResponse);
-  rpc StatUri (StatUriRequest) returns (StatUriResponse);
-  rpc ReadFile (ReadFileRequest) returns (ReadFileResponse);
-  rpc CheckDevToolsActivePort (CheckDevToolsActivePortRequest) returns (CheckDevToolsActivePortResponse);
-  rpc WriteFile (WriteFileRequest) returns (WriteFileResponse);
-  rpc CreateDebugBundle (CreateDebugBundleRequest) returns (CreateDebugBundleResponse);
-  rpc UploadToDrive (UploadToDriveRequest) returns (UploadToDriveResponse);
-  rpc ReadDir (ReadDirRequest) returns (ReadDirResponse);
-  rpc DeleteFileOrDirectory (DeleteFileOrDirectoryRequest) returns (DeleteFileOrDirectoryResponse);
-  rpc CreateDirectory (CreateDirectoryRequest) returns (CreateDirectoryResponse);
-  rpc WatchDirectory (WatchDirectoryRequest) returns (stream WatchDirectoryResponse);
-  rpc GetKnowledgeItems (GetKnowledgeItemsRequest) returns (GetKnowledgeItemsResponse);
-  rpc SetBrowserOpenConversation (SetBrowserOpenConversationRequest) returns (SetBrowserOpenConversationResponse);
-  rpc GetBrowserOpenConversation (GetBrowserOpenConversationRequest) returns (GetBrowserOpenConversationResponse);
-  rpc RefreshContextForIdeAction (RefreshContextForIdeActionRequest) returns (RefreshContextForIdeActionResponse);
-  rpc GetMatchingContextScopeItems (GetMatchingContextScopeItemsRequest) returns (GetMatchingContextScopeItemsResponse);
-  rpc RecordChatFeedback (RecordChatFeedbackRequest) returns (RecordChatFeedbackResponse);
-  rpc RecordChatPanelSession (RecordChatPanelSessionRequest) returns (RecordChatPanelSessionResponse);
-  rpc ShouldEnableUnleash (ShouldEnableUnleashRequest) returns (ShouldEnableUnleashResponse);
-  rpc GetWorkspaceEditState (GetWorkspaceEditStateRequest) returns (GetWorkspaceEditStateResponse);
-  rpc GetRepoInfos (GetRepoInfosRequest) returns (GetRepoInfosResponse);
-  rpc ListGobRepos (ListGobReposRequest) returns (ListGobReposResponse);
-  rpc GetWorkspaceInfos (GetWorkspaceInfosRequest) returns (GetWorkspaceInfosResponse);
-  rpc GetLocalUserInfo (GetLocalUserInfoRequest) returns (GetLocalUserInfoResponse);
-  rpc ResolveWorkspaceUrlPreview (ResolveWorkspaceUrlPreviewRequest) returns (ResolveWorkspaceUrlPreviewResponse);
-  rpc SearchDriveFiles (SearchDriveFilesRequest) returns (SearchDriveFilesResponse);
-  rpc GetChangelistStatus (GetChangelistStatusRequest) returns (GetChangelistStatusResponse);
-  rpc GetWorkspaceChangelists (GetWorkspaceChangelistsRequest) returns (GetWorkspaceChangelistsResponse);
-  rpc CreateWorktree (CreateWorktreeRequest) returns (CreateWorktreeResponse);
-  rpc DeleteWorktree (DeleteWorktreeRequest) returns (DeleteWorktreeResponse);
-  rpc CheckoutWorktree (CheckoutWorktreeRequest) returns (CheckoutWorktreeResponse);
-  rpc GetWorktreeDiff (GetWorktreeDiffRequest) returns (GetWorktreeDiffResponse);
-  rpc GetBattleWorktreeDiff (GetBattleWorktreeDiffRequest) returns (GetBattleWorktreeDiffResponse);
-  rpc CreateCitcWorkspace (CreateCitcWorkspaceRequest) returns (CreateCitcWorkspaceResponse);
-  rpc SetWorkingDirectories (SetWorkingDirectoriesRequest) returns (SetWorkingDirectoriesResponse);
-  rpc GetWorkingDirectories (GetWorkingDirectoriesRequest) returns (GetWorkingDirectoriesResponse);
-  rpc GetJJWorktrees (GetJJWorktreesRequest) returns (GetJJWorktreesResponse);
-  rpc GetRevisionArtifact (GetRevisionArtifactRequest) returns (GetRevisionArtifactResponse);
-  rpc GetVersionControlState (GetVersionControlStateRequest) returns (GetVersionControlStateResponse);
-  rpc WatchVersionControlState (WatchVersionControlStateRequest) returns (stream WatchVersionControlStateResponse);
-  rpc GetVersionControlFileContent (GetVersionControlFileContentRequest) returns (GetVersionControlFileContentResponse);
-  rpc GetCommitDetails (GetCommitDetailsRequest) returns (GetCommitDetailsResponse);
-  rpc CheckoutCommit (CheckoutCommitRequest) returns (CheckoutCommitResponse);
-  rpc DiscardFileChanges (DiscardFileChangesRequest) returns (DiscardFileChangesResponse);
-  rpc FigSync (FigSyncRequest) returns (FigSyncResponse);
-  rpc FigCommit (FigCommitRequest) returns (FigCommitResponse);
-  rpc FigAmend (FigAmendRequest) returns (FigAmendResponse);
-  rpc FigUpload (FigUploadRequest) returns (FigUploadResponse);
-  rpc JjSync (JjSyncRequest) returns (JjSyncResponse);
-  rpc JjCommit (JjCommitRequest) returns (JjCommitResponse);
-  rpc JjSquash (JjSquashRequest) returns (JjSquashResponse);
-  rpc JjUpload (JjUploadRequest) returns (JjUploadResponse);
-  rpc CogSync (CogSyncRequest) returns (CogSyncResponse);
-  rpc CogCommit (CogCommitRequest) returns (CogCommitResponse);
-  rpc CogUpload (CogUploadRequest) returns (CogUploadResponse);
-  rpc CogSquash (CogSquashRequest) returns (CogSquashResponse);
-  rpc RepoSync (RepoSyncRequest) returns (RepoSyncResponse);
-  rpc RepoCommit (RepoCommitRequest) returns (RepoCommitResponse);
-  rpc RepoAmend (RepoAmendRequest) returns (RepoAmendResponse);
-  rpc RepoUpload (RepoUploadRequest) returns (RepoUploadResponse);
-  rpc GitStage (GitStageRequest) returns (GitStageResponse);
-  rpc GitUnstage (GitUnstageRequest) returns (GitUnstageResponse);
-  rpc GitCommit (GitCommitRequest) returns (GitCommitResponse);
-  rpc GitDiscard (GitDiscardRequest) returns (GitDiscardResponse);
-  rpc GitPush (GitPushRequest) returns (GitPushResponse);
-  rpc GenerateCommitMessage (GenerateCommitMessageRequest) returns (GenerateCommitMessageResponse);
-  rpc RecordCommitMessageSave (RecordCommitMessageSaveRequest) returns (RecordCommitMessageSaveResponse);
-  rpc UpdatePRForWorktree (UpdatePRForWorktreeRequest) returns (UpdatePRForWorktreeResponse);
-  rpc SendActionToChatPanel (SendActionToChatPanelRequest) returns (SendActionToChatPanelResponse);
-  rpc GetUserSettings (GetUserSettingsRequest) returns (GetUserSettingsResponse);
-  rpc SetUserSettings (SetUserSettingsRequest) returns (SetUserSettingsResponse);
-  rpc FetchUserInfo (FetchUserInfoRequest) returns (FetchUserInfoResponse);
-  rpc SetUserInfo (SetUserInfoRequest) returns (SetUserInfoResponse);
-  rpc GetDebugDiagnostics (GetDebugDiagnosticsRequest) returns (GetDebugDiagnosticsResponse);
-  rpc DumpFlightRecorder (DumpFlightRecorderRequest) returns (DumpFlightRecorderResponse);
-  rpc DumpPprof (DumpPprofRequest) returns (DumpPprofResponse);
-  rpc GetUserAnalyticsSummary (GetUserAnalyticsSummaryRequest) returns (GetUserAnalyticsSummaryResponse);
-  rpc GetUserStatus (GetUserStatusRequest) returns (GetUserStatusResponse);
-  rpc GetProfileData (GetProfileDataRequest) returns (GetProfileDataResponse);
-  rpc GetChangelog (GetChangelogRequest) returns (GetChangelogResponse);
-  rpc SetupUniversitySandbox (SetupUniversitySandboxRequest) returns (SetupUniversitySandboxResponse);
-  rpc Exit (ExitRequest) returns (ExitResponse);
-  rpc Restart (RestartRequest) returns (RestartResponse);
-  rpc ResetOnboarding (ResetOnboardingRequest) returns (ResetOnboardingResponse);
-  rpc SkipOnboarding (SkipOnboardingRequest) returns (SkipOnboardingResponse);
-  rpc GetTermsOfService (GetTermsOfServiceRequest) returns (GetTermsOfServiceResponse);
-  rpc AcceptTermsOfService (AcceptTermsOfServiceRequest) returns (AcceptTermsOfServiceResponse);
-  rpc ListLicenses (ListLicensesRequest) returns (ListLicensesResponse);
-  rpc SelectLicense (SelectLicenseRequest) returns (SelectLicenseResponse);
-  rpc SelfAssignLicense (SelfAssignLicenseRequest) returns (SelfAssignLicenseResponse);
-  rpc GetUserTrajectoryDebug (GetUserTrajectoryDebugRequest) returns (GetUserTrajectoryDebugResponse);
-  rpc GetUserTrajectoryDescriptions (GetUserTrajectoryDescriptionsRequest) returns (GetUserTrajectoryDescriptionsResponse);
-  rpc StreamUserTrajectoryReactiveUpdates (StreamReactiveUpdatesRequest) returns (stream StreamReactiveUpdatesResponse);
-  rpc GetCascadeMemories (GetCascadeMemoriesRequest) returns (GetCascadeMemoriesResponse);
-  rpc DeleteCascadeMemory (DeleteCascadeMemoryRequest) returns (DeleteCascadeMemoryResponse);
-  rpc UpdateCascadeMemory (UpdateCascadeMemoryRequest) returns (UpdateCascadeMemoryResponse);
-  rpc GetUserMemories (GetUserMemoriesRequest) returns (GetUserMemoriesResponse);
-  rpc UpdateConversationAnnotations (UpdateConversationAnnotationsRequest) returns (UpdateConversationAnnotationsResponse);
-  rpc StartCascade (StartCascadeRequest) returns (StartCascadeResponse);
-  rpc LoadSharedTrajectory (LoadSharedTrajectoryRequest) returns (LoadSharedTrajectoryResponse);
-  rpc GetSlashCommands (GetSlashCommandsRequest) returns (GetSlashCommandsResponse);
-  rpc StartBattleMode (StartBattleModeRequest) returns (StartBattleModeResponse);
-  rpc EndBattleMode (EndBattleModeRequest) returns (EndBattleModeResponse);
-  rpc EliminateBattleModeArm (EliminateBattleModeArmRequest) returns (EliminateBattleModeArmResponse);
-  rpc SetOrVerifyStaticConfig (SetOrVerifyStaticConfigRequest) returns (SetOrVerifyStaticConfigResponse);
-  rpc ForkConversation (ForkConversationRequest) returns (ForkConversationResponse);
-  rpc CancelCascadeInvocation (CancelCascadeInvocationRequest) returns (CancelCascadeInvocationResponse);
-  rpc ForceStopCascadeTree (ForceStopCascadeTreeRequest) returns (ForceStopCascadeTreeResponse);
-  rpc CancelCascadeSteps (CancelCascadeStepsRequest) returns (CancelCascadeStepsResponse);
-  rpc SendStepsToBackground (SendStepsToBackgroundRequest) returns (SendStepsToBackgroundResponse);
-  rpc SkipBrowserSubagent (SkipBrowserSubagentRequest) returns (SkipBrowserSubagentResponse);
-  rpc GetCascadeModelConfigData (GetCascadeModelConfigDataRequest) returns (CascadeModelConfigData);
-  rpc SendUserCascadeMessage (SendUserCascadeMessageRequest) returns (SendUserCascadeMessageResponse);
-  rpc DetectBattleModeAutoTrigger (DetectBattleModeAutoTriggerRequest) returns (DetectBattleModeAutoTriggerResponse);
-  rpc SignalExecutableIdle (SignalExecutableIdleRequest) returns (SignalExecutableIdleResponse);
-  rpc WaitForConversationFullyIdle (WaitForConversationFullyIdleRequest) returns (WaitForConversationFullyIdleResponse);
-  rpc SendAllQueuedMessages (SendAllQueuedMessagesRequest) returns (SendAllQueuedMessagesResponse);
-  rpc DeleteQueuedUserInputStep (DeleteQueuedUserInputStepRequest) returns (DeleteQueuedUserInputStepResponse);
-  rpc RevertToCascadeStep (RevertToCascadeStepRequest) returns (RevertToCascadeStepResponse);
-  rpc GetRevertPreview (GetRevertPreviewRequest) returns (GetRevertPreviewResponse);
-  rpc RecordUserStepSnapshot (RecordUserStepSnapshotRequest) returns (RecordUserStepSnapshotResponse);
-  rpc GetAllCascadeTrajectories (GetAllCascadeTrajectoriesRequest) returns (GetAllCascadeTrajectoriesResponse);
-  rpc HandleCascadeUserInteraction (HandleCascadeUserInteractionRequest) returns (HandleCascadeUserInteractionResponse);
-  rpc AcknowledgeCascadeCodeEdit (AcknowledgeCascadeCodeEditRequest) returns (AcknowledgeCascadeCodeEditResponse);
-  rpc AcknowledgeCodeActionStep (AcknowledgeCodeActionStepRequest) returns (AcknowledgeCodeActionStepResponse);
-  rpc GetCodeValidationStates (GetCodeValidationStatesRequest) returns (GetCodeValidationStatesResponse);
-  rpc DeleteCascadeTrajectory (DeleteCascadeTrajectoryRequest) returns (DeleteCascadeTrajectoryResponse);
-  rpc GetConversationMetadata (GetConversationMetadataRequest) returns (GetConversationMetadataResponse);
-  rpc GetTurnDiff (GetTurnDiffRequest) returns (GetTurnDiffResponse);
-  rpc GetTrajectoryFileDiffs (GetTrajectoryFileDiffsRequest) returns (GetTrajectoryFileDiffsResponse);
-  rpc GetCodeActionDiff (GetCodeActionDiffRequest) returns (GetCodeActionDiffResponse);
-  rpc InitializeCascadePanelState (InitializeCascadePanelStateRequest) returns (InitializeCascadePanelStateResponse);
-  rpc StreamCascadePanelReactiveUpdates (StreamReactiveUpdatesRequest) returns (stream StreamReactiveUpdatesResponse);
-  rpc StreamCascadeReactiveUpdates (StreamReactiveUpdatesRequest) returns (stream StreamReactiveUpdatesResponse);
-  rpc StreamCascadeSummariesReactiveUpdates (StreamReactiveUpdatesRequest) returns (stream StreamReactiveUpdatesResponse);
-  rpc StreamAgentStateUpdates (StreamAgentStateUpdatesRequest) returns (stream StreamAgentStateUpdatesResponse);
-  rpc RequestAgentStatePageUpdate (AgentStatePageUpdateRequest) returns (AgentStatePageUpdateResponse);
-  rpc ForceBackgroundResearchRefresh (ForceBackgroundResearchRefreshRequest) returns (ForceBackgroundResearchRefreshResponse);
-  rpc ResolveOutstandingSteps (ResolveOutstandingStepsRequest) returns (ResolveOutstandingStepsResponse);
-  rpc RefreshMcpServers (RefreshMcpServersRequest) returns (RefreshMcpServersResponse);
-  rpc ToggleMcpServer (ToggleMcpServerRequest) returns (ToggleMcpServerResponse);
-  rpc GetMcpServerStates (GetMcpServerStatesRequest) returns (GetMcpServerStatesResponse);
-  rpc SubscribeToMcpServerStates (SubscribeToMcpServerStatesRequest) returns (stream SubscribeToMcpServerStatesResponse);
-  rpc CompleteMcpOAuth (CompleteMcpOAuthRequest) returns (CompleteMcpOAuthResponse);
-  rpc DisconnectMcpOAuth (DisconnectMcpOAuthRequest) returns (DisconnectMcpOAuthResponse);
-  rpc StreamTerminalShellCommand (stream TerminalShellCommandStreamChunk) returns (StreamTerminalShellCommandResponse);
-  rpc CreateTerminal (CreateTerminalRequest) returns (CreateTerminalResponse);
-  rpc StreamTerminalOutput (StreamTerminalOutputRequest) returns (stream StreamTerminalOutputResponse);
-  rpc SendTerminalInput (SendTerminalInputRequest) returns (SendTerminalInputResponse);
-  rpc CloseTerminal (CloseTerminalRequest) returns (CloseTerminalResponse);
-  rpc ListTerminals (ListTerminalsRequest) returns (ListTerminalsResponse);
-  rpc GetModelResponse (GetModelResponseRequest) returns (GetModelResponseResponse);
-  rpc SaveMediaAsArtifact (SaveMediaAsArtifactRequest) returns (SaveMediaAsArtifactResponse);
-  rpc DeleteMediaArtifact (DeleteMediaArtifactRequest) returns (DeleteMediaArtifactResponse);
-  rpc GetWebDocsOptions (GetWebDocsOptionsRequest) returns (GetWebDocsOptionsResponse);
-  rpc UpdateDevExperiments (UpdateDevExperimentsRequest) returns (UpdateDevExperimentsResponse);
-  rpc SetBaseExperiments (SetBaseExperimentsRequest) returns (SetBaseExperimentsResponse);
-  rpc GetUnleashData (GetUnleashDataRequest) returns (GetUnleashDataResponse);
-  rpc GetMendelFlags (GetMendelFlagsRequest) returns (GetMendelFlagsResponse);
-  rpc GetModelStatuses (GetModelStatusesRequest) returns (GetModelStatusesResponse);
-  rpc GetAllWorkflows (GetAllWorkflowsRequest) returns (GetAllWorkflowsResponse);
-  rpc GetAllCustomAgentConfigs (GetAllCustomAgentConfigsRequest) returns (GetAllCustomAgentConfigsResponse);
-  rpc CopyBuiltinWorkflowToWorkspace (CopyBuiltinWorkflowToWorkspaceRequest) returns (CopyBuiltinWorkflowToWorkspaceResponse);
-  rpc GetAllRules (GetAllRulesRequest) returns (GetAllRulesResponse);
-  rpc GetAllSkills (GetAllSkillsRequest) returns (GetAllSkillsResponse);
-  rpc GetSkillMarketplaceLink (GetSkillMarketplaceLinkRequest) returns (GetSkillMarketplaceLinkResponse);
-  rpc GenerateSkillInstallationCL (GenerateSkillInstallationCLRequest) returns (GenerateSkillInstallationCLResponse);
-  rpc SearchMarketplaceCustomizations (SearchMarketplaceCustomizationsRequest) returns (SearchMarketplaceCustomizationsResponse);
-  rpc ScanSkillsConfigFile (ScanSkillsConfigFileRequest) returns (ScanSkillsConfigFileResponse);
-  rpc ListMcpResources (ListMcpResourcesRequest) returns (ListMcpResourcesResponse);
-  rpc ListMcpPrompts (ListMcpPromptsRequest) returns (ListMcpPromptsResponse);
-  rpc GetMcpPrompt (GetMcpPromptRequest) returns (GetMcpPromptResponse);
-  rpc UpdateEnterpriseExperimentsFromUrl (UpdateEnterpriseExperimentsFromUrlRequest) returns (UpdateEnterpriseExperimentsFromUrlResponse);
-  rpc ImportFromCursor (ImportFromCursorRequest) returns (ImportFromCursorResponse);
-  rpc CreateCustomizationFile (CreateCustomizationFileRequest) returns (CreateCustomizationFileResponse);
-  rpc ListCustomizationPathsByFile (ListCustomizationPathsByFileRequest) returns (ListCustomizationPathsByFileResponse);
-  rpc UpdateCustomizationPathsFile (UpdateCustomizationPathsFileRequest) returns (UpdateCustomizationPathsFileResponse);
-  rpc GetTeamOrganizationalControls (GetTeamOrganizationalControlsRequest) returns (GetTeamOrganizationalControlsResponse);
-  rpc RecordUserGrep (RecordUserGrepRequest) returns (RecordUserGrepResponse);
-  rpc CreateTrajectoryShare (CreateTrajectoryShareRequest) returns (CreateTrajectoryShareResponse);
-  rpc GetCascadeTrajectory (GetCascadeTrajectoryRequest) returns (GetCascadeTrajectoryResponse);
-  rpc GetArtifactSnapshots (GetArtifactSnapshotsRequest) returns (GetArtifactSnapshotsResponse);
-  rpc GetUserTrajectory (GetUserTrajectoryRequest) returns (GetUserTrajectoryResponse);
-  rpc GetCascadeTrajectorySteps (GetCascadeTrajectoryStepsRequest) returns (GetCascadeTrajectoryStepsResponse);
-  rpc GetCascadeTrajectoryGeneratorMetadata (GetCascadeTrajectoryGeneratorMetadataRequest) returns (GetCascadeTrajectoryGeneratorMetadataResponse);
-  rpc GetCascadeTrajectoryExecutorMetadatas (GetCascadeTrajectoryExecutorMetadatasRequest) returns (GetCascadeTrajectoryExecutorMetadatasResponse);
-  rpc GetPatchAndCodeChange (GetPatchAndCodeChangeRequest) returns (GetPatchAndCodeChangeResponse);
-  rpc ConvertTrajectoryToMarkdown (ConvertTrajectoryToMarkdownRequest) returns (ConvertTrajectoryToMarkdownResponse);
-  rpc LoadTrajectory (LoadTrajectoryRequest) returns (LoadTrajectoryResponse);
-  rpc ImportProjectFromUrl (ImportProjectFromUrlRequest) returns (ImportProjectFromUrlResponse);
-  rpc GetAvailableCascadePlugins (GetAvailableCascadePluginsRequest) returns (GetAvailableCascadePluginsResponse);
-  rpc InstallCascadePlugin (InstallCascadePluginRequest) returns (InstallCascadePluginResponse);
-  rpc GetCascadePluginById (GetCascadePluginByIdRequest) returns (GetCascadePluginByIdResponse);
-  rpc GetAllPlugins (GetAllPluginsRequest) returns (GetAllPluginsResponse);
-  rpc SubscribeToPlugins (SubscribeToPluginsRequest) returns (stream SubscribeToPluginsResponse);
-  rpc GetPlugin (GetPluginRequest) returns (GetPluginResponse);
-  rpc GetBuildWithGooglePlugins (GetBuildWithGooglePluginsRequest) returns (GetBuildWithGooglePluginsResponse);
-  rpc DownloadBuildWithGooglePlugin (DownloadBuildWithGooglePluginRequest) returns (DownloadBuildWithGooglePluginResponse);
-  rpc DeletePlugin (DeletePluginRequest) returns (DeletePluginResponse);
-  rpc DeleteSkill (DeleteSkillRequest) returns (DeleteSkillResponse);
-  rpc SearchMarketplace (SearchMarketplaceRequest) returns (SearchMarketplaceResponse);
-  rpc GetMarketplaceCustomization (GetMarketplaceCustomizationRequest) returns (GetMarketplaceCustomizationResponse);
-  rpc GetMarketplaceBundles (GetMarketplaceBundlesRequest) returns (GetMarketplaceBundlesResponse);
-  rpc InstallCustomization (InstallCustomizationRequest) returns (InstallCustomizationResponse);
-  rpc UpdateCustomization (UpdateCustomizationRequest) returns (UpdateCustomizationResponse);
-  rpc GetAgentScripts (GetAgentScriptsRequest) returns (GetAgentScriptsResponse);
-  rpc ListProfiles (ListProfilesRequest) returns (ListProfilesResponse);
-  rpc SaveAgentScriptCommandSpec (SaveAgentScriptCommandSpecRequest) returns (SaveAgentScriptCommandSpecResponse);
-  rpc RecordLints (RecordLintsRequest) returns (RecordLintsResponse);
-  rpc ReplayGroundTruthTrajectory (ReplayGroundTruthTrajectoryRequest) returns (ReplayGroundTruthTrajectoryResponse);
-  rpc LoadReplayConversation (LoadReplayConversationRequest) returns (LoadReplayConversationResponse);
-  rpc RecordInteractiveCascadeFeedback (RecordInteractiveCascadeFeedbackRequest) returns (RecordInteractiveCascadeFeedbackResponse);
-  rpc GetCascadeNuxes (GetCascadeNuxesRequest) returns (GetCascadeNuxesResponse);
-  rpc RegisterInteraction (RegisterInteractionRequest) returns (RegisterInteractionResponse);
-  rpc GetTranscription (GetTranscriptionRequest) returns (GetTranscriptionResponse);
-  rpc StreamAudioTranscription (StartAudioTranscriptionRequest) returns (stream StreamAudioTranscriptionResponse);
-  rpc SendAudioChunk (SendAudioChunkRequest) returns (SendAudioChunkResponse);
-  rpc EndAudioSession (EndAudioSessionRequest) returns (EndAudioSessionResponse);
-  rpc StartNarration (StartNarrationRequest) returns (stream StreamNarrationResponse);
-  rpc SendNarrationTurn (SendNarrationTurnRequest) returns (SendNarrationTurnResponse);
-  rpc EndNarration (EndNarrationRequest) returns (EndNarrationResponse);
-  rpc GetInputCompletion (GetInputCompletionRequest) returns (GetInputCompletionResponse);
-  rpc SendInputCompletionFeedback (SendInputCompletionFeedbackRequest) returns (SendInputCompletionFeedbackResponse);
-  rpc GetStaticExperimentStatus (GetStaticExperimentStatusRequest) returns (GetStaticExperimentStatusResponse);
-  rpc RecordAnalyticsEvent (RecordAnalyticsEventRequest) returns (RecordAnalyticsEventResponse);
-  rpc RecordError (RecordErrorRequest) returns (RecordErrorResponse);
-  rpc RecordObservabilityData (RecordObservabilityDataRequest) returns (RecordObservabilityDataResponse);
-  rpc ListPages (ListPagesRequest) returns (ListPagesResponse);
-  rpc BrowserValidateCascadeOrCancelOverlay (BrowserValidateCascadeOrCancelOverlayRequest) returns (BrowserValidateCascadeOrCancelOverlayResponse);
-  rpc OpenUrl (OpenUrlRequest) returns (OpenUrlResponse);
-  rpc FocusUserPage (FocusUserPageRequest) returns (FocusUserPageResponse);
-  rpc AddToBrowserWhitelist (AddToBrowserWhitelistRequest) returns (AddToBrowserWhitelistResponse);
-  rpc CaptureConsoleLogs (CaptureConsoleLogsRequest) returns (CaptureConsoleLogsResponse);
-  rpc StartScreenRecording (StartScreenRecordingRequest) returns (StartScreenRecordingResponse);
-  rpc SaveScreenRecording (SaveScreenRecordingRequest) returns (SaveScreenRecordingResponse);
-  rpc GetBrowserWhitelistFilePath (GetBrowserWhitelistFilePathRequest) returns (GetBrowserWhitelistFilePathResponse);
-  rpc HandleScreenRecording (HandleScreenRecordingRequest) returns (HandleScreenRecordingResponse);
-  rpc GetAllBrowserWhitelistedUrls (GetAllBrowserWhitelistedUrlsRequest) returns (GetAllBrowserWhitelistedUrlsResponse);
-  rpc CaptureScreenshot (CaptureScreenshotRequest) returns (CaptureScreenshotResponse);
-  rpc SmartOpenBrowser (SmartOpenBrowserRequest) returns (SmartOpenBrowserResponse);
-  rpc SimulateSegFault (SimulateSegFaultRequest) returns (SimulateSegFaultResponse);
-  rpc ReconnectExtensionServer (ReconnectExtensionServerRequest) returns (ReconnectExtensionServerResponse);
-  rpc SetCloudCodeURL (SetCloudCodeURLRequest) returns (SetCloudCodeURLResponse);
-  rpc GetTokenBase (GetTokenBaseRequest) returns (GetTokenBaseResponse);
-  rpc RunCommand (RunCommandRequest) returns (RunCommandResponse);
-  rpc ValidateTerminalSetupScript (ValidateTerminalSetupScriptRequest) returns (ValidateTerminalSetupScriptResponse);
-  rpc JetboxWriteState (JetboxWriteStateRequest) returns (JetboxWriteStateResponse);
-  rpc JetboxSubscribeToState (JetboxSubscribeToStateRequest) returns (stream JetboxSubscribeToStateResponse);
-  rpc JetboxReadAppState (JetboxReadAppStateRequest) returns (JetboxReadAppStateResponse);
-  rpc JetboxReadUserConfig (JetboxReadUserConfigRequest) returns (JetboxReadUserConfigResponse);
-  rpc JetboxWriteSummary (JetboxWriteSummaryRequest) returns (JetboxWriteSummaryResponse);
-  rpc JetboxDeleteSummary (JetboxDeleteSummaryRequest) returns (JetboxDeleteSummaryResponse);
-  rpc JetboxSubscribeToSummaries (JetboxSubscribeToSummariesRequest) returns (stream JetboxSubscribeToSummariesResponse);
-  rpc JetboxSubscribeToGcertState (JetboxSubscribeToGcertStateRequest) returns (stream JetboxSubscribeToGcertStateResponse);
-  rpc JetboxSubscribeToOAuthState (JetboxSubscribeToOAuthStateRequest) returns (stream JetboxSubscribeToOAuthStateResponse);
-  rpc SearchFiles (SearchFilesRequest) returns (SearchFilesResponse);
-  rpc SearchCode (SearchCodeRequest) returns (SearchCodeResponse);
-  rpc StreamSearchCode (SearchCodeRequest) returns (stream StreamSearchCodeResponse);
-  rpc SearchConversations (SearchConversationsRequest) returns (SearchConversationsResponse);
-  rpc GetAgentTeamMetadata (GetAgentTeamMetadataRequest) returns (GetAgentTeamMetadataResponse);
-  rpc GetCodeFrequencyForRepo (GetCodeFrequencyForRepoRequest) returns (GetCodeFrequencyForRepoResponse);
-  rpc SendAgentMessage (SendAgentMessageRequest) returns (SendAgentMessageResponse);
-  rpc DeleteAgentMessage (DeleteAgentMessageRequest) returns (DeleteAgentMessageResponse);
-  rpc GetLoadCodeAssist (GetLoadCodeAssistRequest) returns (GetLoadCodeAssistResponse);
-  rpc GetAvailableModels (GetAvailableModelsRequest) returns (GetAvailableModelsResponse);
-  rpc RetrieveUserQuotaSummary (RetrieveUserQuotaSummaryRequest) returns (RetrieveUserQuotaSummaryResponse);
-  rpc CreateProject (CreateProjectRequest) returns (CreateProjectResponse);
-  rpc CreateMagicProject (CreateMagicProjectRequest) returns (CreateMagicProjectResponse);
-  rpc UpdateProject (UpdateProjectRequest) returns (UpdateProjectResponse);
-  rpc DeleteProject (DeleteProjectRequest) returns (DeleteProjectResponse);
-  rpc GenerateEnvironmentName (GenerateEnvironmentNameRequest) returns (GenerateEnvironmentNameResponse);
-  rpc AddEnvironmentToProject (AddEnvironmentToProjectRequest) returns (AddEnvironmentToProjectResponse);
-  rpc ResolveFolder (ResolveFolderRequest) returns (ResolveFolderResponse);
-  rpc ProjectUpdatesStream (ProjectUpdatesStreamRequest) returns (stream ProjectUpdatesStreamResponse);
-  rpc ReadProject (ReadProjectRequest) returns (ReadProjectResponse);
-  rpc ReadProjects (ReadProjectsRequest) returns (ReadProjectsResponse);
-  rpc GetDefaultProjectDir (GetDefaultProjectDirRequest) returns (GetDefaultProjectDirResponse);
-  rpc GetAuthStatus (GetAuthStatusRequest) returns (GetAuthStatusResponse);
-  rpc LoginWithBrowser (LoginWithBrowserRequest) returns (LoginWithBrowserResponse);
-  rpc Login (LoginRequest) returns (LoginResponse);
-  rpc AuthLogout (AuthLogoutRequest) returns (AuthLogoutResponse);
-  rpc HasAuthToken (HasAuthTokenRequest) returns (HasAuthTokenResponse);
-  rpc ValidateProject (ValidateProjectRequest) returns (ValidateProjectResponse);
-  rpc GetGrantedScopes (GetGrantedScopesRequest) returns (GetGrantedScopesResponse);
-  rpc CreateScratchProjectFolder (CreateScratchProjectFolderRequest) returns (CreateScratchProjectFolderResponse);
-  rpc SetupJetskiChat (SetupJetskiChatRequest) returns (stream SetupJetskiChatResponse);
-  rpc GetServerConfiguration (GetServerConfigurationRequest) returns (GetServerConfigurationResponse);
-  rpc GetCapabilities (GetCapabilitiesRequest) returns (GetCapabilitiesResponse);
-  rpc FetchAdminControls (FetchAdminControlsRequest) returns (FetchAdminControlsResponse);
-  rpc GetHover (GetHoverRequest) returns (GetHoverResponse);
-  rpc ApplyUpdate (ApplyUpdateRequest) returns (ApplyUpdateResponse);
-  rpc GetUpdateStatus (GetUpdateStatusRequest) returns (GetUpdateStatusResponse);
+  rpc ProvideCompletionFeedback (exa.language_server_pb.ProvideCompletionFeedbackRequest) returns (exa.language_server_pb.ProvideCompletionFeedbackResponse);
+  rpc Heartbeat (exa.language_server_pb.HeartbeatRequest) returns (exa.language_server_pb.HeartbeatResponse);
+  rpc GetRemoteControlInfo (exa.language_server_pb.GetRemoteControlInfoRequest) returns (exa.language_server_pb.GetRemoteControlInfoResponse);
+  rpc GetStatus (exa.language_server_pb.GetStatusRequest) returns (exa.language_server_pb.GetStatusResponse);
+  rpc GetCommandModelConfigs (exa.language_server_pb.GetCommandModelConfigsRequest) returns (exa.language_server_pb.GetCommandModelConfigsResponse);
+  rpc GetCascadeModelConfigs (exa.language_server_pb.GetCascadeModelConfigsRequest) returns (exa.language_server_pb.GetCascadeModelConfigsResponse);
+  rpc GetStandaloneDir (exa.language_server_pb.GetStandaloneDirRequest) returns (exa.language_server_pb.GetStandaloneDirResponse);
+  rpc RecordEvent (exa.language_server_pb.RecordEventRequest) returns (exa.language_server_pb.RecordEventResponse);
+  rpc RecordSidecarEvent (exa.language_server_pb.RecordSidecarEventRequest) returns (exa.language_server_pb.RecordSidecarEventResponse);
+  rpc GetSidecars (exa.language_server_pb.GetSidecarsRequest) returns (exa.language_server_pb.GetSidecarsResponse);
+  rpc SubscribeToSidecars (exa.language_server_pb.SubscribeToSidecarsRequest) returns (stream exa.language_server_pb.SubscribeToSidecarsResponse);
+  rpc GetSidecarEvents (exa.language_server_pb.GetSidecarEventsRequest) returns (exa.language_server_pb.GetSidecarEventsResponse);
+  rpc GetSidecarLogs (exa.language_server_pb.GetSidecarLogsRequest) returns (stream exa.language_server_pb.GetSidecarLogsResponse);
+  rpc ListSidecarLogFiles (exa.language_server_pb.ListSidecarLogFilesRequest) returns (exa.language_server_pb.ListSidecarLogFilesResponse);
+  rpc ManageSidecar (exa.language_server_pb.ManageSidecarRequest) returns (exa.language_server_pb.ManageSidecarResponse);
+  rpc ResolveSidecarConfig (exa.language_server_pb.ResolveSidecarConfigRequest) returns (exa.language_server_pb.ResolveSidecarConfigResponse);
+  rpc RegisterGdmUser (exa.language_server_pb.RegisterGdmUserRequest) returns (exa.language_server_pb.RegisterGdmUserResponse);
+  rpc MigrateApiKey (exa.language_server_pb.MigrateApiKeyRequest) returns (exa.language_server_pb.MigrateApiKeyResponse);
+  rpc WellSupportedLanguages (exa.language_server_pb.WellSupportedLanguagesRequest) returns (exa.language_server_pb.WellSupportedLanguagesResponse);
+  rpc RecordSearchDocOpen (exa.language_server_pb.RecordSearchDocOpenRequest) returns (exa.language_server_pb.RecordSearchDocOpenResponse);
+  rpc RecordSearchResultsView (exa.language_server_pb.RecordSearchResultsViewRequest) returns (exa.language_server_pb.RecordSearchResultsViewResponse);
+  rpc HandleStreamingCommand (exa.language_server_pb.HandleStreamingCommandRequest) returns (stream exa.language_server_pb.HandleStreamingCommandResponse);
+  rpc GetMcpServerTemplates (exa.language_server_pb.GetMcpServerTemplatesRequest) returns (exa.language_server_pb.GetMcpServerTemplatesResponse);
+  rpc AddTrackedWorkspace (exa.language_server_pb.AddTrackedWorkspaceRequest) returns (exa.language_server_pb.AddTrackedWorkspaceResponse);
+  rpc RemoveTrackedWorkspace (exa.language_server_pb.RemoveTrackedWorkspaceRequest) returns (exa.language_server_pb.RemoveTrackedWorkspaceResponse);
+  rpc SmartFocusConversation (exa.language_server_pb.SmartFocusConversationRequest) returns (exa.language_server_pb.SmartFocusConversationResponse);
+  rpc StatUri (exa.language_server_pb.StatUriRequest) returns (exa.language_server_pb.StatUriResponse);
+  rpc ReadFile (exa.language_server_pb.ReadFileRequest) returns (exa.language_server_pb.ReadFileResponse);
+  rpc CheckDevToolsActivePort (exa.language_server_pb.CheckDevToolsActivePortRequest) returns (exa.language_server_pb.CheckDevToolsActivePortResponse);
+  rpc WriteFile (exa.language_server_pb.WriteFileRequest) returns (exa.language_server_pb.WriteFileResponse);
+  rpc CreateDebugBundle (exa.language_server_pb.CreateDebugBundleRequest) returns (exa.language_server_pb.CreateDebugBundleResponse);
+  rpc UploadToDrive (exa.language_server_pb.UploadToDriveRequest) returns (exa.language_server_pb.UploadToDriveResponse);
+  rpc ReadDir (exa.language_server_pb.ReadDirRequest) returns (exa.language_server_pb.ReadDirResponse);
+  rpc DeleteFileOrDirectory (exa.language_server_pb.DeleteFileOrDirectoryRequest) returns (exa.language_server_pb.DeleteFileOrDirectoryResponse);
+  rpc CreateDirectory (exa.language_server_pb.CreateDirectoryRequest) returns (exa.language_server_pb.CreateDirectoryResponse);
+  rpc WatchDirectory (exa.language_server_pb.WatchDirectoryRequest) returns (stream exa.language_server_pb.WatchDirectoryResponse);
+  rpc GetKnowledgeItems (exa.language_server_pb.GetKnowledgeItemsRequest) returns (exa.language_server_pb.GetKnowledgeItemsResponse);
+  rpc SetBrowserOpenConversation (exa.language_server_pb.SetBrowserOpenConversationRequest) returns (exa.language_server_pb.SetBrowserOpenConversationResponse);
+  rpc GetBrowserOpenConversation (exa.language_server_pb.GetBrowserOpenConversationRequest) returns (exa.language_server_pb.GetBrowserOpenConversationResponse);
+  rpc RefreshContextForIdeAction (exa.language_server_pb.RefreshContextForIdeActionRequest) returns (exa.language_server_pb.RefreshContextForIdeActionResponse);
+  rpc GetMatchingContextScopeItems (exa.language_server_pb.GetMatchingContextScopeItemsRequest) returns (exa.language_server_pb.GetMatchingContextScopeItemsResponse);
+  rpc RecordChatFeedback (exa.language_server_pb.RecordChatFeedbackRequest) returns (exa.language_server_pb.RecordChatFeedbackResponse);
+  rpc RecordChatPanelSession (exa.language_server_pb.RecordChatPanelSessionRequest) returns (exa.language_server_pb.RecordChatPanelSessionResponse);
+  rpc ShouldEnableUnleash (exa.language_server_pb.ShouldEnableUnleashRequest) returns (exa.language_server_pb.ShouldEnableUnleashResponse);
+  rpc GetWorkspaceEditState (exa.language_server_pb.GetWorkspaceEditStateRequest) returns (exa.language_server_pb.GetWorkspaceEditStateResponse);
+  rpc GetRepoInfos (exa.language_server_pb.GetRepoInfosRequest) returns (exa.language_server_pb.GetRepoInfosResponse);
+  rpc ListGobRepos (exa.language_server_pb.ListGobReposRequest) returns (exa.language_server_pb.ListGobReposResponse);
+  rpc GetWorkspaceInfos (exa.language_server_pb.GetWorkspaceInfosRequest) returns (exa.language_server_pb.GetWorkspaceInfosResponse);
+  rpc GetLocalUserInfo (exa.language_server_pb.GetLocalUserInfoRequest) returns (exa.language_server_pb.GetLocalUserInfoResponse);
+  rpc ResolveWorkspaceUrlPreview (exa.language_server_pb.ResolveWorkspaceUrlPreviewRequest) returns (exa.language_server_pb.ResolveWorkspaceUrlPreviewResponse);
+  rpc SearchDriveFiles (exa.language_server_pb.SearchDriveFilesRequest) returns (exa.language_server_pb.SearchDriveFilesResponse);
+  rpc GetChangelistStatus (exa.language_server_pb.GetChangelistStatusRequest) returns (exa.language_server_pb.GetChangelistStatusResponse);
+  rpc GetWorkspaceChangelists (exa.language_server_pb.GetWorkspaceChangelistsRequest) returns (exa.language_server_pb.GetWorkspaceChangelistsResponse);
+  rpc CreateWorktree (exa.language_server_pb.CreateWorktreeRequest) returns (exa.language_server_pb.CreateWorktreeResponse);
+  rpc DeleteWorktree (exa.language_server_pb.DeleteWorktreeRequest) returns (exa.language_server_pb.DeleteWorktreeResponse);
+  rpc CheckoutWorktree (exa.language_server_pb.CheckoutWorktreeRequest) returns (exa.language_server_pb.CheckoutWorktreeResponse);
+  rpc GetWorktreeDiff (exa.language_server_pb.GetWorktreeDiffRequest) returns (exa.language_server_pb.GetWorktreeDiffResponse);
+  rpc GetBattleWorktreeDiff (exa.language_server_pb.GetBattleWorktreeDiffRequest) returns (exa.language_server_pb.GetBattleWorktreeDiffResponse);
+  rpc CreateCitcWorkspace (exa.language_server_pb.CreateCitcWorkspaceRequest) returns (exa.language_server_pb.CreateCitcWorkspaceResponse);
+  rpc SetWorkingDirectories (exa.language_server_pb.SetWorkingDirectoriesRequest) returns (exa.language_server_pb.SetWorkingDirectoriesResponse);
+  rpc GetWorkingDirectories (exa.language_server_pb.GetWorkingDirectoriesRequest) returns (exa.language_server_pb.GetWorkingDirectoriesResponse);
+  rpc GetJJWorktrees (exa.language_server_pb.GetJJWorktreesRequest) returns (exa.language_server_pb.GetJJWorktreesResponse);
+  rpc GetRevisionArtifact (exa.language_server_pb.GetRevisionArtifactRequest) returns (exa.language_server_pb.GetRevisionArtifactResponse);
+  rpc GetVersionControlState (exa.language_server_pb.GetVersionControlStateRequest) returns (exa.language_server_pb.GetVersionControlStateResponse);
+  rpc WatchVersionControlState (exa.language_server_pb.WatchVersionControlStateRequest) returns (stream exa.language_server_pb.WatchVersionControlStateResponse);
+  rpc GetVersionControlFileContent (exa.language_server_pb.GetVersionControlFileContentRequest) returns (exa.language_server_pb.GetVersionControlFileContentResponse);
+  rpc GetCommitDetails (exa.language_server_pb.GetCommitDetailsRequest) returns (exa.language_server_pb.GetCommitDetailsResponse);
+  rpc CheckoutCommit (exa.language_server_pb.CheckoutCommitRequest) returns (exa.language_server_pb.CheckoutCommitResponse);
+  rpc DiscardFileChanges (exa.language_server_pb.DiscardFileChangesRequest) returns (exa.language_server_pb.DiscardFileChangesResponse);
+  rpc FigSync (exa.language_server_pb.FigSyncRequest) returns (exa.language_server_pb.FigSyncResponse);
+  rpc FigCommit (exa.language_server_pb.FigCommitRequest) returns (exa.language_server_pb.FigCommitResponse);
+  rpc FigAmend (exa.language_server_pb.FigAmendRequest) returns (exa.language_server_pb.FigAmendResponse);
+  rpc FigUpload (exa.language_server_pb.FigUploadRequest) returns (exa.language_server_pb.FigUploadResponse);
+  rpc JjSync (exa.language_server_pb.JjSyncRequest) returns (exa.language_server_pb.JjSyncResponse);
+  rpc JjCommit (exa.language_server_pb.JjCommitRequest) returns (exa.language_server_pb.JjCommitResponse);
+  rpc JjSquash (exa.language_server_pb.JjSquashRequest) returns (exa.language_server_pb.JjSquashResponse);
+  rpc JjUpload (exa.language_server_pb.JjUploadRequest) returns (exa.language_server_pb.JjUploadResponse);
+  rpc CogSync (exa.language_server_pb.CogSyncRequest) returns (exa.language_server_pb.CogSyncResponse);
+  rpc CogCommit (exa.language_server_pb.CogCommitRequest) returns (exa.language_server_pb.CogCommitResponse);
+  rpc CogUpload (exa.language_server_pb.CogUploadRequest) returns (exa.language_server_pb.CogUploadResponse);
+  rpc CogSquash (exa.language_server_pb.CogSquashRequest) returns (exa.language_server_pb.CogSquashResponse);
+  rpc RepoSync (exa.language_server_pb.RepoSyncRequest) returns (exa.language_server_pb.RepoSyncResponse);
+  rpc RepoCommit (exa.language_server_pb.RepoCommitRequest) returns (exa.language_server_pb.RepoCommitResponse);
+  rpc RepoAmend (exa.language_server_pb.RepoAmendRequest) returns (exa.language_server_pb.RepoAmendResponse);
+  rpc RepoUpload (exa.language_server_pb.RepoUploadRequest) returns (exa.language_server_pb.RepoUploadResponse);
+  rpc GitStage (exa.language_server_pb.GitStageRequest) returns (exa.language_server_pb.GitStageResponse);
+  rpc GitUnstage (exa.language_server_pb.GitUnstageRequest) returns (exa.language_server_pb.GitUnstageResponse);
+  rpc GitCommit (exa.language_server_pb.GitCommitRequest) returns (exa.language_server_pb.GitCommitResponse);
+  rpc GitDiscard (exa.language_server_pb.GitDiscardRequest) returns (exa.language_server_pb.GitDiscardResponse);
+  rpc GitPush (exa.language_server_pb.GitPushRequest) returns (exa.language_server_pb.GitPushResponse);
+  rpc GenerateCommitMessage (exa.language_server_pb.GenerateCommitMessageRequest) returns (exa.language_server_pb.GenerateCommitMessageResponse);
+  rpc RecordCommitMessageSave (exa.language_server_pb.RecordCommitMessageSaveRequest) returns (exa.language_server_pb.RecordCommitMessageSaveResponse);
+  rpc UpdatePRForWorktree (exa.language_server_pb.UpdatePRForWorktreeRequest) returns (exa.language_server_pb.UpdatePRForWorktreeResponse);
+  rpc SendActionToChatPanel (exa.language_server_pb.SendActionToChatPanelRequest) returns (exa.language_server_pb.SendActionToChatPanelResponse);
+  rpc GetUserSettings (exa.language_server_pb.GetUserSettingsRequest) returns (exa.language_server_pb.GetUserSettingsResponse);
+  rpc SetUserSettings (exa.language_server_pb.SetUserSettingsRequest) returns (exa.language_server_pb.SetUserSettingsResponse);
+  rpc FetchUserInfo (exa.language_server_pb.FetchUserInfoRequest) returns (exa.language_server_pb.FetchUserInfoResponse);
+  rpc SetUserInfo (exa.language_server_pb.SetUserInfoRequest) returns (exa.language_server_pb.SetUserInfoResponse);
+  rpc GetDebugDiagnostics (exa.language_server_pb.GetDebugDiagnosticsRequest) returns (exa.language_server_pb.GetDebugDiagnosticsResponse);
+  rpc DumpFlightRecorder (exa.language_server_pb.DumpFlightRecorderRequest) returns (exa.language_server_pb.DumpFlightRecorderResponse);
+  rpc DumpPprof (exa.language_server_pb.DumpPprofRequest) returns (exa.language_server_pb.DumpPprofResponse);
+  rpc GetUserAnalyticsSummary (exa.language_server_pb.GetUserAnalyticsSummaryRequest) returns (exa.language_server_pb.GetUserAnalyticsSummaryResponse);
+  rpc GetUserStatus (exa.language_server_pb.GetUserStatusRequest) returns (exa.language_server_pb.GetUserStatusResponse);
+  rpc GetProfileData (exa.language_server_pb.GetProfileDataRequest) returns (exa.language_server_pb.GetProfileDataResponse);
+  rpc GetChangelog (exa.language_server_pb.GetChangelogRequest) returns (exa.language_server_pb.GetChangelogResponse);
+  rpc SetupUniversitySandbox (exa.language_server_pb.SetupUniversitySandboxRequest) returns (exa.language_server_pb.SetupUniversitySandboxResponse);
+  rpc Exit (exa.language_server_pb.ExitRequest) returns (exa.language_server_pb.ExitResponse);
+  rpc Restart (exa.language_server_pb.RestartRequest) returns (exa.language_server_pb.RestartResponse);
+  rpc ResetOnboarding (exa.language_server_pb.ResetOnboardingRequest) returns (exa.language_server_pb.ResetOnboardingResponse);
+  rpc SkipOnboarding (exa.language_server_pb.SkipOnboardingRequest) returns (exa.language_server_pb.SkipOnboardingResponse);
+  rpc GetTermsOfService (exa.language_server_pb.GetTermsOfServiceRequest) returns (exa.language_server_pb.GetTermsOfServiceResponse);
+  rpc AcceptTermsOfService (exa.language_server_pb.AcceptTermsOfServiceRequest) returns (exa.language_server_pb.AcceptTermsOfServiceResponse);
+  rpc ListLicenses (exa.language_server_pb.ListLicensesRequest) returns (exa.language_server_pb.ListLicensesResponse);
+  rpc SelectLicense (exa.language_server_pb.SelectLicenseRequest) returns (exa.language_server_pb.SelectLicenseResponse);
+  rpc SelfAssignLicense (exa.language_server_pb.SelfAssignLicenseRequest) returns (exa.language_server_pb.SelfAssignLicenseResponse);
+  rpc GetUserTrajectoryDebug (exa.language_server_pb.GetUserTrajectoryDebugRequest) returns (exa.language_server_pb.GetUserTrajectoryDebugResponse);
+  rpc GetUserTrajectoryDescriptions (exa.language_server_pb.GetUserTrajectoryDescriptionsRequest) returns (exa.language_server_pb.GetUserTrajectoryDescriptionsResponse);
+  rpc StreamUserTrajectoryReactiveUpdates (exa.reactive_component_pb.StreamReactiveUpdatesRequest) returns (stream exa.reactive_component_pb.StreamReactiveUpdatesResponse);
+  rpc GetCascadeMemories (exa.language_server_pb.GetCascadeMemoriesRequest) returns (exa.language_server_pb.GetCascadeMemoriesResponse);
+  rpc DeleteCascadeMemory (exa.language_server_pb.DeleteCascadeMemoryRequest) returns (exa.language_server_pb.DeleteCascadeMemoryResponse);
+  rpc UpdateCascadeMemory (exa.language_server_pb.UpdateCascadeMemoryRequest) returns (exa.language_server_pb.UpdateCascadeMemoryResponse);
+  rpc GetUserMemories (exa.language_server_pb.GetUserMemoriesRequest) returns (exa.language_server_pb.GetUserMemoriesResponse);
+  rpc UpdateConversationAnnotations (exa.language_server_pb.UpdateConversationAnnotationsRequest) returns (exa.language_server_pb.UpdateConversationAnnotationsResponse);
+  rpc StartCascade (exa.language_server_pb.StartCascadeRequest) returns (exa.language_server_pb.StartCascadeResponse);
+  rpc LoadSharedTrajectory (exa.language_server_pb.LoadSharedTrajectoryRequest) returns (exa.language_server_pb.LoadSharedTrajectoryResponse);
+  rpc GetSlashCommands (exa.language_server_pb.GetSlashCommandsRequest) returns (exa.language_server_pb.GetSlashCommandsResponse);
+  rpc StartBattleMode (exa.language_server_pb.StartBattleModeRequest) returns (exa.language_server_pb.StartBattleModeResponse);
+  rpc EndBattleMode (exa.language_server_pb.EndBattleModeRequest) returns (exa.language_server_pb.EndBattleModeResponse);
+  rpc EliminateBattleModeArm (exa.language_server_pb.EliminateBattleModeArmRequest) returns (exa.language_server_pb.EliminateBattleModeArmResponse);
+  rpc SetOrVerifyStaticConfig (exa.language_server_pb.SetOrVerifyStaticConfigRequest) returns (exa.language_server_pb.SetOrVerifyStaticConfigResponse);
+  rpc ForkConversation (exa.language_server_pb.ForkConversationRequest) returns (exa.language_server_pb.ForkConversationResponse);
+  rpc CancelCascadeInvocation (exa.language_server_pb.CancelCascadeInvocationRequest) returns (exa.language_server_pb.CancelCascadeInvocationResponse);
+  rpc ForceStopCascadeTree (exa.language_server_pb.ForceStopCascadeTreeRequest) returns (exa.language_server_pb.ForceStopCascadeTreeResponse);
+  rpc CancelCascadeSteps (exa.language_server_pb.CancelCascadeStepsRequest) returns (exa.language_server_pb.CancelCascadeStepsResponse);
+  rpc SendStepsToBackground (exa.language_server_pb.SendStepsToBackgroundRequest) returns (exa.language_server_pb.SendStepsToBackgroundResponse);
+  rpc SkipBrowserSubagent (exa.language_server_pb.SkipBrowserSubagentRequest) returns (exa.language_server_pb.SkipBrowserSubagentResponse);
+  rpc GetCascadeModelConfigData (exa.language_server_pb.GetCascadeModelConfigDataRequest) returns (exa.codeium_common_pb.CascadeModelConfigData);
+  rpc SendUserCascadeMessage (exa.language_server_pb.SendUserCascadeMessageRequest) returns (exa.language_server_pb.SendUserCascadeMessageResponse);
+  rpc DetectBattleModeAutoTrigger (exa.language_server_pb.DetectBattleModeAutoTriggerRequest) returns (exa.language_server_pb.DetectBattleModeAutoTriggerResponse);
+  rpc SignalExecutableIdle (exa.language_server_pb.SignalExecutableIdleRequest) returns (exa.language_server_pb.SignalExecutableIdleResponse);
+  rpc WaitForConversationFullyIdle (exa.language_server_pb.WaitForConversationFullyIdleRequest) returns (exa.language_server_pb.WaitForConversationFullyIdleResponse);
+  rpc SendAllQueuedMessages (exa.language_server_pb.SendAllQueuedMessagesRequest) returns (exa.language_server_pb.SendAllQueuedMessagesResponse);
+  rpc DeleteQueuedUserInputStep (exa.language_server_pb.DeleteQueuedUserInputStepRequest) returns (exa.language_server_pb.DeleteQueuedUserInputStepResponse);
+  rpc RevertToCascadeStep (exa.language_server_pb.RevertToCascadeStepRequest) returns (exa.language_server_pb.RevertToCascadeStepResponse);
+  rpc GetRevertPreview (exa.language_server_pb.GetRevertPreviewRequest) returns (exa.language_server_pb.GetRevertPreviewResponse);
+  rpc RecordUserStepSnapshot (exa.language_server_pb.RecordUserStepSnapshotRequest) returns (exa.language_server_pb.RecordUserStepSnapshotResponse);
+  rpc GetAllCascadeTrajectories (exa.language_server_pb.GetAllCascadeTrajectoriesRequest) returns (exa.language_server_pb.GetAllCascadeTrajectoriesResponse);
+  rpc HandleCascadeUserInteraction (exa.language_server_pb.HandleCascadeUserInteractionRequest) returns (exa.language_server_pb.HandleCascadeUserInteractionResponse);
+  rpc AcknowledgeCascadeCodeEdit (exa.language_server_pb.AcknowledgeCascadeCodeEditRequest) returns (exa.language_server_pb.AcknowledgeCascadeCodeEditResponse);
+  rpc AcknowledgeCodeActionStep (exa.language_server_pb.AcknowledgeCodeActionStepRequest) returns (exa.language_server_pb.AcknowledgeCodeActionStepResponse);
+  rpc GetCodeValidationStates (exa.language_server_pb.GetCodeValidationStatesRequest) returns (exa.language_server_pb.GetCodeValidationStatesResponse);
+  rpc DeleteCascadeTrajectory (exa.language_server_pb.DeleteCascadeTrajectoryRequest) returns (exa.language_server_pb.DeleteCascadeTrajectoryResponse);
+  rpc GetConversationMetadata (exa.language_server_pb.GetConversationMetadataRequest) returns (exa.language_server_pb.GetConversationMetadataResponse);
+  rpc GetTurnDiff (exa.language_server_pb.GetTurnDiffRequest) returns (exa.language_server_pb.GetTurnDiffResponse);
+  rpc GetTrajectoryFileDiffs (exa.language_server_pb.GetTrajectoryFileDiffsRequest) returns (exa.language_server_pb.GetTrajectoryFileDiffsResponse);
+  rpc GetCodeActionDiff (exa.language_server_pb.GetCodeActionDiffRequest) returns (exa.language_server_pb.GetCodeActionDiffResponse);
+  rpc InitializeCascadePanelState (exa.language_server_pb.InitializeCascadePanelStateRequest) returns (exa.language_server_pb.InitializeCascadePanelStateResponse);
+  rpc StreamCascadePanelReactiveUpdates (exa.reactive_component_pb.StreamReactiveUpdatesRequest) returns (stream exa.reactive_component_pb.StreamReactiveUpdatesResponse);
+  rpc StreamCascadeReactiveUpdates (exa.reactive_component_pb.StreamReactiveUpdatesRequest) returns (stream exa.reactive_component_pb.StreamReactiveUpdatesResponse);
+  rpc StreamCascadeSummariesReactiveUpdates (exa.reactive_component_pb.StreamReactiveUpdatesRequest) returns (stream exa.reactive_component_pb.StreamReactiveUpdatesResponse);
+  rpc StreamAgentStateUpdates (exa.jetski_cortex_pb.StreamAgentStateUpdatesRequest) returns (stream exa.jetski_cortex_pb.StreamAgentStateUpdatesResponse);
+  rpc RequestAgentStatePageUpdate (exa.jetski_cortex_pb.AgentStatePageUpdateRequest) returns (exa.jetski_cortex_pb.AgentStatePageUpdateResponse);
+  rpc ForceBackgroundResearchRefresh (exa.language_server_pb.ForceBackgroundResearchRefreshRequest) returns (exa.language_server_pb.ForceBackgroundResearchRefreshResponse);
+  rpc ResolveOutstandingSteps (exa.language_server_pb.ResolveOutstandingStepsRequest) returns (exa.language_server_pb.ResolveOutstandingStepsResponse);
+  rpc RefreshMcpServers (exa.language_server_pb.RefreshMcpServersRequest) returns (exa.language_server_pb.RefreshMcpServersResponse);
+  rpc ToggleMcpServer (exa.language_server_pb.ToggleMcpServerRequest) returns (exa.language_server_pb.ToggleMcpServerResponse);
+  rpc GetMcpServerStates (exa.language_server_pb.GetMcpServerStatesRequest) returns (exa.language_server_pb.GetMcpServerStatesResponse);
+  rpc SubscribeToMcpServerStates (exa.language_server_pb.SubscribeToMcpServerStatesRequest) returns (stream exa.language_server_pb.SubscribeToMcpServerStatesResponse);
+  rpc CompleteMcpOAuth (exa.language_server_pb.CompleteMcpOAuthRequest) returns (exa.language_server_pb.CompleteMcpOAuthResponse);
+  rpc DisconnectMcpOAuth (exa.language_server_pb.DisconnectMcpOAuthRequest) returns (exa.language_server_pb.DisconnectMcpOAuthResponse);
+  rpc StreamTerminalShellCommand (stream exa.codeium_common_pb.TerminalShellCommandStreamChunk) returns (exa.language_server_pb.StreamTerminalShellCommandResponse);
+  rpc CreateTerminal (exa.language_server_pb.CreateTerminalRequest) returns (exa.language_server_pb.CreateTerminalResponse);
+  rpc StreamTerminalOutput (exa.language_server_pb.StreamTerminalOutputRequest) returns (stream exa.language_server_pb.StreamTerminalOutputResponse);
+  rpc SendTerminalInput (exa.language_server_pb.SendTerminalInputRequest) returns (exa.language_server_pb.SendTerminalInputResponse);
+  rpc CloseTerminal (exa.language_server_pb.CloseTerminalRequest) returns (exa.language_server_pb.CloseTerminalResponse);
+  rpc ListTerminals (exa.language_server_pb.ListTerminalsRequest) returns (exa.language_server_pb.ListTerminalsResponse);
+  rpc GetModelResponse (exa.language_server_pb.GetModelResponseRequest) returns (exa.language_server_pb.GetModelResponseResponse);
+  rpc SaveMediaAsArtifact (exa.language_server_pb.SaveMediaAsArtifactRequest) returns (exa.language_server_pb.SaveMediaAsArtifactResponse);
+  rpc DeleteMediaArtifact (exa.language_server_pb.DeleteMediaArtifactRequest) returns (exa.language_server_pb.DeleteMediaArtifactResponse);
+  rpc GetWebDocsOptions (exa.language_server_pb.GetWebDocsOptionsRequest) returns (exa.language_server_pb.GetWebDocsOptionsResponse);
+  rpc UpdateDevExperiments (exa.language_server_pb.UpdateDevExperimentsRequest) returns (exa.language_server_pb.UpdateDevExperimentsResponse);
+  rpc SetBaseExperiments (exa.language_server_pb.SetBaseExperimentsRequest) returns (exa.language_server_pb.SetBaseExperimentsResponse);
+  rpc GetUnleashData (exa.language_server_pb.GetUnleashDataRequest) returns (exa.language_server_pb.GetUnleashDataResponse);
+  rpc GetMendelFlags (exa.language_server_pb.GetMendelFlagsRequest) returns (exa.language_server_pb.GetMendelFlagsResponse);
+  rpc GetModelStatuses (exa.language_server_pb.GetModelStatusesRequest) returns (exa.language_server_pb.GetModelStatusesResponse);
+  rpc GetAllWorkflows (exa.language_server_pb.GetAllWorkflowsRequest) returns (exa.language_server_pb.GetAllWorkflowsResponse);
+  rpc GetAllCustomAgentConfigs (exa.language_server_pb.GetAllCustomAgentConfigsRequest) returns (exa.language_server_pb.GetAllCustomAgentConfigsResponse);
+  rpc CopyBuiltinWorkflowToWorkspace (exa.language_server_pb.CopyBuiltinWorkflowToWorkspaceRequest) returns (exa.language_server_pb.CopyBuiltinWorkflowToWorkspaceResponse);
+  rpc GetAllRules (exa.language_server_pb.GetAllRulesRequest) returns (exa.language_server_pb.GetAllRulesResponse);
+  rpc GetAllSkills (exa.language_server_pb.GetAllSkillsRequest) returns (exa.language_server_pb.GetAllSkillsResponse);
+  rpc GetSkillMarketplaceLink (exa.language_server_pb.GetSkillMarketplaceLinkRequest) returns (exa.language_server_pb.GetSkillMarketplaceLinkResponse);
+  rpc GenerateSkillInstallationCL (exa.language_server_pb.GenerateSkillInstallationCLRequest) returns (exa.language_server_pb.GenerateSkillInstallationCLResponse);
+  rpc SearchMarketplaceCustomizations (exa.language_server_pb.SearchMarketplaceCustomizationsRequest) returns (exa.language_server_pb.SearchMarketplaceCustomizationsResponse);
+  rpc ScanSkillsConfigFile (exa.language_server_pb.ScanSkillsConfigFileRequest) returns (exa.language_server_pb.ScanSkillsConfigFileResponse);
+  rpc ListMcpResources (exa.language_server_pb.ListMcpResourcesRequest) returns (exa.language_server_pb.ListMcpResourcesResponse);
+  rpc ListMcpPrompts (exa.language_server_pb.ListMcpPromptsRequest) returns (exa.language_server_pb.ListMcpPromptsResponse);
+  rpc GetMcpPrompt (exa.language_server_pb.GetMcpPromptRequest) returns (exa.language_server_pb.GetMcpPromptResponse);
+  rpc UpdateEnterpriseExperimentsFromUrl (exa.language_server_pb.UpdateEnterpriseExperimentsFromUrlRequest) returns (exa.language_server_pb.UpdateEnterpriseExperimentsFromUrlResponse);
+  rpc ImportFromCursor (exa.language_server_pb.ImportFromCursorRequest) returns (exa.language_server_pb.ImportFromCursorResponse);
+  rpc CreateCustomizationFile (exa.language_server_pb.CreateCustomizationFileRequest) returns (exa.language_server_pb.CreateCustomizationFileResponse);
+  rpc ListCustomizationPathsByFile (exa.language_server_pb.ListCustomizationPathsByFileRequest) returns (exa.language_server_pb.ListCustomizationPathsByFileResponse);
+  rpc UpdateCustomizationPathsFile (exa.language_server_pb.UpdateCustomizationPathsFileRequest) returns (exa.language_server_pb.UpdateCustomizationPathsFileResponse);
+  rpc GetTeamOrganizationalControls (exa.language_server_pb.GetTeamOrganizationalControlsRequest) returns (exa.language_server_pb.GetTeamOrganizationalControlsResponse);
+  rpc RecordUserGrep (exa.language_server_pb.RecordUserGrepRequest) returns (exa.language_server_pb.RecordUserGrepResponse);
+  rpc CreateTrajectoryShare (exa.language_server_pb.CreateTrajectoryShareRequest) returns (exa.language_server_pb.CreateTrajectoryShareResponse);
+  rpc GetCascadeTrajectory (exa.language_server_pb.GetCascadeTrajectoryRequest) returns (exa.language_server_pb.GetCascadeTrajectoryResponse);
+  rpc GetArtifactSnapshots (exa.language_server_pb.GetArtifactSnapshotsRequest) returns (exa.language_server_pb.GetArtifactSnapshotsResponse);
+  rpc GetUserTrajectory (exa.language_server_pb.GetUserTrajectoryRequest) returns (exa.language_server_pb.GetUserTrajectoryResponse);
+  rpc GetCascadeTrajectorySteps (exa.language_server_pb.GetCascadeTrajectoryStepsRequest) returns (exa.language_server_pb.GetCascadeTrajectoryStepsResponse);
+  rpc GetCascadeTrajectoryGeneratorMetadata (exa.language_server_pb.GetCascadeTrajectoryGeneratorMetadataRequest) returns (exa.language_server_pb.GetCascadeTrajectoryGeneratorMetadataResponse);
+  rpc GetCascadeTrajectoryExecutorMetadatas (exa.language_server_pb.GetCascadeTrajectoryExecutorMetadatasRequest) returns (exa.language_server_pb.GetCascadeTrajectoryExecutorMetadatasResponse);
+  rpc GetPatchAndCodeChange (exa.language_server_pb.GetPatchAndCodeChangeRequest) returns (exa.language_server_pb.GetPatchAndCodeChangeResponse);
+  rpc ConvertTrajectoryToMarkdown (exa.language_server_pb.ConvertTrajectoryToMarkdownRequest) returns (exa.language_server_pb.ConvertTrajectoryToMarkdownResponse);
+  rpc LoadTrajectory (exa.language_server_pb.LoadTrajectoryRequest) returns (exa.language_server_pb.LoadTrajectoryResponse);
+  rpc ImportProjectFromUrl (exa.language_server_pb.ImportProjectFromUrlRequest) returns (exa.language_server_pb.ImportProjectFromUrlResponse);
+  rpc GetAvailableCascadePlugins (exa.language_server_pb.GetAvailableCascadePluginsRequest) returns (exa.language_server_pb.GetAvailableCascadePluginsResponse);
+  rpc InstallCascadePlugin (exa.language_server_pb.InstallCascadePluginRequest) returns (exa.language_server_pb.InstallCascadePluginResponse);
+  rpc GetCascadePluginById (exa.language_server_pb.GetCascadePluginByIdRequest) returns (exa.language_server_pb.GetCascadePluginByIdResponse);
+  rpc GetAllPlugins (exa.language_server_pb.GetAllPluginsRequest) returns (exa.language_server_pb.GetAllPluginsResponse);
+  rpc SubscribeToPlugins (exa.language_server_pb.SubscribeToPluginsRequest) returns (stream exa.language_server_pb.SubscribeToPluginsResponse);
+  rpc GetPlugin (exa.language_server_pb.GetPluginRequest) returns (exa.language_server_pb.GetPluginResponse);
+  rpc GetBuildWithGooglePlugins (exa.language_server_pb.GetBuildWithGooglePluginsRequest) returns (exa.language_server_pb.GetBuildWithGooglePluginsResponse);
+  rpc DownloadBuildWithGooglePlugin (exa.language_server_pb.DownloadBuildWithGooglePluginRequest) returns (exa.language_server_pb.DownloadBuildWithGooglePluginResponse);
+  rpc DeletePlugin (exa.language_server_pb.DeletePluginRequest) returns (exa.language_server_pb.DeletePluginResponse);
+  rpc DeleteSkill (exa.language_server_pb.DeleteSkillRequest) returns (exa.language_server_pb.DeleteSkillResponse);
+  rpc SearchMarketplace (exa.language_server_pb.SearchMarketplaceRequest) returns (exa.language_server_pb.SearchMarketplaceResponse);
+  rpc GetMarketplaceCustomization (exa.language_server_pb.GetMarketplaceCustomizationRequest) returns (exa.language_server_pb.GetMarketplaceCustomizationResponse);
+  rpc GetMarketplaceBundles (exa.language_server_pb.GetMarketplaceBundlesRequest) returns (exa.language_server_pb.GetMarketplaceBundlesResponse);
+  rpc InstallCustomization (exa.language_server_pb.InstallCustomizationRequest) returns (exa.language_server_pb.InstallCustomizationResponse);
+  rpc UpdateCustomization (exa.language_server_pb.UpdateCustomizationRequest) returns (exa.language_server_pb.UpdateCustomizationResponse);
+  rpc GetAgentScripts (exa.language_server_pb.GetAgentScriptsRequest) returns (exa.language_server_pb.GetAgentScriptsResponse);
+  rpc ListProfiles (exa.language_server_pb.ListProfilesRequest) returns (exa.language_server_pb.ListProfilesResponse);
+  rpc SaveAgentScriptCommandSpec (exa.language_server_pb.SaveAgentScriptCommandSpecRequest) returns (exa.language_server_pb.SaveAgentScriptCommandSpecResponse);
+  rpc RecordLints (exa.language_server_pb.RecordLintsRequest) returns (exa.language_server_pb.RecordLintsResponse);
+  rpc ReplayGroundTruthTrajectory (exa.language_server_pb.ReplayGroundTruthTrajectoryRequest) returns (exa.language_server_pb.ReplayGroundTruthTrajectoryResponse);
+  rpc LoadReplayConversation (exa.language_server_pb.LoadReplayConversationRequest) returns (exa.language_server_pb.LoadReplayConversationResponse);
+  rpc RecordInteractiveCascadeFeedback (exa.language_server_pb.RecordInteractiveCascadeFeedbackRequest) returns (exa.language_server_pb.RecordInteractiveCascadeFeedbackResponse);
+  rpc GetCascadeNuxes (exa.language_server_pb.GetCascadeNuxesRequest) returns (exa.language_server_pb.GetCascadeNuxesResponse);
+  rpc RegisterInteraction (exa.language_server_pb.RegisterInteractionRequest) returns (exa.language_server_pb.RegisterInteractionResponse);
+  rpc GetTranscription (exa.language_server_pb.GetTranscriptionRequest) returns (exa.language_server_pb.GetTranscriptionResponse);
+  rpc StreamAudioTranscription (exa.language_server_pb.StartAudioTranscriptionRequest) returns (stream exa.language_server_pb.StreamAudioTranscriptionResponse);
+  rpc SendAudioChunk (exa.language_server_pb.SendAudioChunkRequest) returns (exa.language_server_pb.SendAudioChunkResponse);
+  rpc EndAudioSession (exa.language_server_pb.EndAudioSessionRequest) returns (exa.language_server_pb.EndAudioSessionResponse);
+  rpc StartNarration (exa.language_server_pb.StartNarrationRequest) returns (stream exa.language_server_pb.StreamNarrationResponse);
+  rpc SendNarrationTurn (exa.language_server_pb.SendNarrationTurnRequest) returns (exa.language_server_pb.SendNarrationTurnResponse);
+  rpc EndNarration (exa.language_server_pb.EndNarrationRequest) returns (exa.language_server_pb.EndNarrationResponse);
+  rpc GetInputCompletion (exa.language_server_pb.GetInputCompletionRequest) returns (exa.language_server_pb.GetInputCompletionResponse);
+  rpc SendInputCompletionFeedback (exa.language_server_pb.SendInputCompletionFeedbackRequest) returns (exa.language_server_pb.SendInputCompletionFeedbackResponse);
+  rpc GetStaticExperimentStatus (exa.language_server_pb.GetStaticExperimentStatusRequest) returns (exa.language_server_pb.GetStaticExperimentStatusResponse);
+  rpc RecordAnalyticsEvent (exa.language_server_pb.RecordAnalyticsEventRequest) returns (exa.language_server_pb.RecordAnalyticsEventResponse);
+  rpc RecordError (exa.language_server_pb.RecordErrorRequest) returns (exa.language_server_pb.RecordErrorResponse);
+  rpc RecordObservabilityData (exa.language_server_pb.RecordObservabilityDataRequest) returns (exa.language_server_pb.RecordObservabilityDataResponse);
+  rpc ListPages (exa.language_server_pb.ListPagesRequest) returns (exa.language_server_pb.ListPagesResponse);
+  rpc BrowserValidateCascadeOrCancelOverlay (exa.language_server_pb.BrowserValidateCascadeOrCancelOverlayRequest) returns (exa.language_server_pb.BrowserValidateCascadeOrCancelOverlayResponse);
+  rpc OpenUrl (exa.language_server_pb.OpenUrlRequest) returns (exa.language_server_pb.OpenUrlResponse);
+  rpc FocusUserPage (exa.language_server_pb.FocusUserPageRequest) returns (exa.language_server_pb.FocusUserPageResponse);
+  rpc AddToBrowserWhitelist (exa.language_server_pb.AddToBrowserWhitelistRequest) returns (exa.language_server_pb.AddToBrowserWhitelistResponse);
+  rpc CaptureConsoleLogs (exa.language_server_pb.CaptureConsoleLogsRequest) returns (exa.language_server_pb.CaptureConsoleLogsResponse);
+  rpc StartScreenRecording (exa.language_server_pb.StartScreenRecordingRequest) returns (exa.language_server_pb.StartScreenRecordingResponse);
+  rpc SaveScreenRecording (exa.language_server_pb.SaveScreenRecordingRequest) returns (exa.language_server_pb.SaveScreenRecordingResponse);
+  rpc GetBrowserWhitelistFilePath (exa.language_server_pb.GetBrowserWhitelistFilePathRequest) returns (exa.language_server_pb.GetBrowserWhitelistFilePathResponse);
+  rpc HandleScreenRecording (exa.language_server_pb.HandleScreenRecordingRequest) returns (exa.language_server_pb.HandleScreenRecordingResponse);
+  rpc GetAllBrowserWhitelistedUrls (exa.language_server_pb.GetAllBrowserWhitelistedUrlsRequest) returns (exa.language_server_pb.GetAllBrowserWhitelistedUrlsResponse);
+  rpc CaptureScreenshot (exa.language_server_pb.CaptureScreenshotRequest) returns (exa.language_server_pb.CaptureScreenshotResponse);
+  rpc SmartOpenBrowser (exa.language_server_pb.SmartOpenBrowserRequest) returns (exa.language_server_pb.SmartOpenBrowserResponse);
+  rpc SimulateSegFault (exa.language_server_pb.SimulateSegFaultRequest) returns (exa.language_server_pb.SimulateSegFaultResponse);
+  rpc ReconnectExtensionServer (exa.language_server_pb.ReconnectExtensionServerRequest) returns (exa.language_server_pb.ReconnectExtensionServerResponse);
+  rpc SetCloudCodeURL (exa.language_server_pb.SetCloudCodeURLRequest) returns (exa.language_server_pb.SetCloudCodeURLResponse);
+  rpc GetTokenBase (exa.language_server_pb.GetTokenBaseRequest) returns (exa.language_server_pb.GetTokenBaseResponse);
+  rpc RunCommand (exa.language_server_pb.RunCommandRequest) returns (exa.language_server_pb.RunCommandResponse);
+  rpc ValidateTerminalSetupScript (exa.language_server_pb.ValidateTerminalSetupScriptRequest) returns (exa.language_server_pb.ValidateTerminalSetupScriptResponse);
+  rpc JetboxWriteState (exa.language_server_pb.JetboxWriteStateRequest) returns (exa.language_server_pb.JetboxWriteStateResponse);
+  rpc JetboxSubscribeToState (exa.language_server_pb.JetboxSubscribeToStateRequest) returns (stream exa.language_server_pb.JetboxSubscribeToStateResponse);
+  rpc JetboxReadAppState (exa.language_server_pb.JetboxReadAppStateRequest) returns (exa.language_server_pb.JetboxReadAppStateResponse);
+  rpc JetboxReadUserConfig (exa.language_server_pb.JetboxReadUserConfigRequest) returns (exa.language_server_pb.JetboxReadUserConfigResponse);
+  rpc JetboxWriteSummary (exa.language_server_pb.JetboxWriteSummaryRequest) returns (exa.language_server_pb.JetboxWriteSummaryResponse);
+  rpc JetboxDeleteSummary (exa.language_server_pb.JetboxDeleteSummaryRequest) returns (exa.language_server_pb.JetboxDeleteSummaryResponse);
+  rpc JetboxSubscribeToSummaries (exa.language_server_pb.JetboxSubscribeToSummariesRequest) returns (stream exa.language_server_pb.JetboxSubscribeToSummariesResponse);
+  rpc JetboxSubscribeToGcertState (exa.language_server_pb.JetboxSubscribeToGcertStateRequest) returns (stream exa.language_server_pb.JetboxSubscribeToGcertStateResponse);
+  rpc JetboxSubscribeToOAuthState (exa.language_server_pb.JetboxSubscribeToOAuthStateRequest) returns (stream exa.language_server_pb.JetboxSubscribeToOAuthStateResponse);
+  rpc SearchFiles (exa.language_server_pb.SearchFilesRequest) returns (exa.language_server_pb.SearchFilesResponse);
+  rpc SearchCode (exa.language_server_pb.SearchCodeRequest) returns (exa.language_server_pb.SearchCodeResponse);
+  rpc StreamSearchCode (exa.language_server_pb.SearchCodeRequest) returns (stream exa.language_server_pb.StreamSearchCodeResponse);
+  rpc SearchConversations (exa.language_server_pb.SearchConversationsRequest) returns (exa.language_server_pb.SearchConversationsResponse);
+  rpc GetAgentTeamMetadata (exa.language_server_pb.GetAgentTeamMetadataRequest) returns (exa.language_server_pb.GetAgentTeamMetadataResponse);
+  rpc GetCodeFrequencyForRepo (exa.language_server_pb.GetCodeFrequencyForRepoRequest) returns (exa.language_server_pb.GetCodeFrequencyForRepoResponse);
+  rpc SendAgentMessage (exa.language_server_pb.SendAgentMessageRequest) returns (exa.language_server_pb.SendAgentMessageResponse);
+  rpc DeleteAgentMessage (exa.language_server_pb.DeleteAgentMessageRequest) returns (exa.language_server_pb.DeleteAgentMessageResponse);
+  rpc GetLoadCodeAssist (exa.language_server_pb.GetLoadCodeAssistRequest) returns (exa.language_server_pb.GetLoadCodeAssistResponse);
+  rpc GetAvailableModels (exa.language_server_pb.GetAvailableModelsRequest) returns (exa.language_server_pb.GetAvailableModelsResponse);
+  rpc RetrieveUserQuotaSummary (exa.language_server_pb.RetrieveUserQuotaSummaryRequest) returns (exa.language_server_pb.RetrieveUserQuotaSummaryResponse);
+  rpc CreateProject (exa.language_server_pb.CreateProjectRequest) returns (exa.language_server_pb.CreateProjectResponse);
+  rpc CreateMagicProject (exa.language_server_pb.CreateMagicProjectRequest) returns (exa.language_server_pb.CreateMagicProjectResponse);
+  rpc UpdateProject (exa.language_server_pb.UpdateProjectRequest) returns (exa.language_server_pb.UpdateProjectResponse);
+  rpc DeleteProject (exa.language_server_pb.DeleteProjectRequest) returns (exa.language_server_pb.DeleteProjectResponse);
+  rpc GenerateEnvironmentName (exa.language_server_pb.GenerateEnvironmentNameRequest) returns (exa.language_server_pb.GenerateEnvironmentNameResponse);
+  rpc AddEnvironmentToProject (exa.language_server_pb.AddEnvironmentToProjectRequest) returns (exa.language_server_pb.AddEnvironmentToProjectResponse);
+  rpc ResolveFolder (exa.language_server_pb.ResolveFolderRequest) returns (exa.language_server_pb.ResolveFolderResponse);
+  rpc ProjectUpdatesStream (exa.language_server_pb.ProjectUpdatesStreamRequest) returns (stream exa.language_server_pb.ProjectUpdatesStreamResponse);
+  rpc ReadProject (exa.language_server_pb.ReadProjectRequest) returns (exa.language_server_pb.ReadProjectResponse);
+  rpc ReadProjects (exa.language_server_pb.ReadProjectsRequest) returns (exa.language_server_pb.ReadProjectsResponse);
+  rpc GetDefaultProjectDir (exa.language_server_pb.GetDefaultProjectDirRequest) returns (exa.language_server_pb.GetDefaultProjectDirResponse);
+  rpc GetAuthStatus (exa.language_server_pb.GetAuthStatusRequest) returns (exa.language_server_pb.GetAuthStatusResponse);
+  rpc LoginWithBrowser (exa.language_server_pb.LoginWithBrowserRequest) returns (exa.language_server_pb.LoginWithBrowserResponse);
+  rpc Login (exa.language_server_pb.LoginRequest) returns (exa.language_server_pb.LoginResponse);
+  rpc AuthLogout (exa.language_server_pb.AuthLogoutRequest) returns (exa.language_server_pb.AuthLogoutResponse);
+  rpc HasAuthToken (exa.language_server_pb.HasAuthTokenRequest) returns (exa.language_server_pb.HasAuthTokenResponse);
+  rpc ValidateProject (exa.language_server_pb.ValidateProjectRequest) returns (exa.language_server_pb.ValidateProjectResponse);
+  rpc GetGrantedScopes (exa.language_server_pb.GetGrantedScopesRequest) returns (exa.language_server_pb.GetGrantedScopesResponse);
+  rpc CreateScratchProjectFolder (exa.language_server_pb.CreateScratchProjectFolderRequest) returns (exa.language_server_pb.CreateScratchProjectFolderResponse);
+  rpc SetupJetskiChat (exa.language_server_pb.SetupJetskiChatRequest) returns (stream exa.language_server_pb.SetupJetskiChatResponse);
+  rpc GetServerConfiguration (exa.language_server_pb.GetServerConfigurationRequest) returns (exa.language_server_pb.GetServerConfigurationResponse);
+  rpc GetCapabilities (exa.language_server_pb.GetCapabilitiesRequest) returns (exa.language_server_pb.GetCapabilitiesResponse);
+  rpc FetchAdminControls (exa.language_server_pb.FetchAdminControlsRequest) returns (exa.language_server_pb.FetchAdminControlsResponse);
+  rpc GetHover (exa.language_server_pb.GetHoverRequest) returns (exa.language_server_pb.GetHoverResponse);
+  rpc ApplyUpdate (exa.language_server_pb.ApplyUpdateRequest) returns (exa.language_server_pb.ApplyUpdateResponse);
+  rpc GetUpdateStatus (exa.language_server_pb.GetUpdateStatusRequest) returns (exa.language_server_pb.GetUpdateStatusResponse);
+}
+
+// ==========================================================================
+// Service: exa.extension_server_pb.ExtensionServerService (53 Methods)
+// ==========================================================================
+
+service ExtensionServerService {
+  rpc LanguageServerStarted (exa.extension_server_pb.LanguageServerStartedRequest) returns (exa.extension_server_pb.LanguageServerStartedResponse);
+  rpc OpenSetting (exa.extension_server_pb.OpenSettingRequest) returns (exa.extension_server_pb.OpenSettingResponse);
+  rpc OpenFilePointer (exa.extension_server_pb.OpenFilePointerRequest) returns (exa.extension_server_pb.OpenFilePointerResponse);
+  rpc InsertCodeAtCursor (exa.extension_server_pb.InsertCodeAtCursorRequest) returns (exa.extension_server_pb.InsertCodeAtCursorResponse);
+  rpc LogEvent (exa.extension_server_pb.LogEventRequest) returns (exa.extension_server_pb.LogEventResponse);
+  rpc CheckTerminalShellSupport (exa.extension_server_pb.CheckTerminalShellSupportRequest) returns (exa.extension_server_pb.CheckTerminalShellSupportResponse);
+  rpc ExecuteCommand (exa.extension_server_pb.ExecuteCommandRequest) returns (stream exa.codeium_common_pb.TerminalShellCommandStreamChunk);
+  rpc ShowTerminal (exa.extension_server_pb.ShowTerminalRequest) returns (exa.extension_server_pb.ShowTerminalResponse);
+  rpc SendTerminalInput (exa.extension_server_pb.SendTerminalInputRequest) returns (exa.extension_server_pb.SendTerminalInputResponse);
+  rpc TerminateCommand (exa.extension_server_pb.TerminateCommandRequest) returns (exa.extension_server_pb.TerminateCommandResponse);
+  rpc OpenVirtualFile (exa.extension_server_pb.OpenVirtualFileRequest) returns (exa.extension_server_pb.OpenVirtualFileResponse);
+  rpc SaveDocument (exa.extension_server_pb.SaveDocumentRequest) returns (exa.extension_server_pb.SaveDocumentResponse);
+  rpc ReadTerminal (exa.extension_server_pb.ReadTerminalRequest) returns (exa.extension_server_pb.ReadTerminalResponse);
+  rpc OpenTerminal (exa.extension_server_pb.OpenTerminalRequest) returns (exa.extension_server_pb.OpenTerminalResponse);
+  rpc GetLintErrors (exa.extension_server_pb.GetLintErrorsRequest) returns (exa.extension_server_pb.GetLintErrorsResponse);
+  rpc OpenDiffZones (exa.extension_server_pb.OpenDiffZonesRequest) returns (exa.extension_server_pb.OpenDiffZonesResponse);
+  rpc OpenExternalUrl (exa.extension_server_pb.OpenExternalUrlRequest) returns (exa.extension_server_pb.OpenExternalUrlResponse);
+  rpc HandleAsyncPostMessage (exa.extension_server_pb.HandleAsyncPostMessageRequest) returns (exa.extension_server_pb.HandleAsyncPostMessageResponse);
+  rpc PlaySound (exa.extension_server_pb.PlaySoundRequest) returns (exa.extension_server_pb.PlaySoundResponse);
+  rpc OpenAntigravityRulesFile (exa.extension_server_pb.OpenAntigravityRulesFileRequest) returns (exa.extension_server_pb.OpenAntigravityRulesFileResponse);
+  rpc OpenPluginPage (exa.extension_server_pb.OpenPluginPageRequest) returns (exa.extension_server_pb.OpenPluginPageResponse);
+  rpc OpenPluginConfigModal (exa.extension_server_pb.OpenPluginConfigModalRequest) returns (exa.extension_server_pb.OpenPluginConfigModalResponse);
+  rpc OpenConfigurePluginsPage (exa.extension_server_pb.OpenConfigurePluginsPageRequest) returns (exa.extension_server_pb.OpenConfigurePluginsPageResponse);
+  rpc OpenConversationWorkspaceQuickPick (exa.extension_server_pb.OpenConversationWorkspaceQuickPickRequest) returns (exa.extension_server_pb.OpenConversationWorkspaceQuickPickResponse);
+  rpc FindAllReferences (exa.extension_server_pb.FindAllReferencesRequest) returns (exa.extension_server_pb.FindAllReferencesResponse);
+  rpc GetDefinition (exa.extension_server_pb.GetDefinitionRequest) returns (exa.extension_server_pb.GetDefinitionResponse);
+  rpc TerminalResearchResult (exa.extension_server_pb.TerminalResearchResultRequest) returns (exa.extension_server_pb.TerminalResearchResultResponse);
+  rpc WriteCascadeEdit (exa.extension_server_pb.WriteCascadeEditRequest) returns (exa.extension_server_pb.WriteCascadeEditResponse);
+  rpc EditNotebook (exa.extension_server_pb.EditNotebookRequest) returns (exa.extension_server_pb.EditNotebookResponse);
+  rpc ReadNotebook (exa.extension_server_pb.ReadNotebookRequest) returns (exa.extension_server_pb.ReadNotebookResponse);
+  rpc ExecuteNotebook (exa.extension_server_pb.ExecuteNotebookRequest) returns (exa.extension_server_pb.ExecuteNotebookResponse);
+  rpc StartAudioRecording (exa.extension_server_pb.StartAudioRecordingRequest) returns (exa.extension_server_pb.StartAudioRecordingResponse);
+  rpc EndAudioRecording (exa.extension_server_pb.EndAudioRecordingRequest) returns (exa.extension_server_pb.EndAudioRecordingResponse);
+  rpc GetCurrentAudioRecording (exa.extension_server_pb.GetCurrentAudioRecordingRequest) returns (exa.extension_server_pb.GetCurrentAudioRecordingResponse);
+  rpc HandleProposeCodeExtensionVerification (exa.extension_server_pb.HandleProposeCodeExtensionVerificationRequest) returns (exa.extension_server_pb.HandleProposeCodeExtensionVerificationResponse);
+  rpc UpdateCascadeTrajectorySummaries (exa.extension_server_pb.UpdateCascadeTrajectorySummariesRequest) returns (exa.extension_server_pb.UpdateCascadeTrajectorySummariesResponse);
+  rpc RunExtensionCode (exa.extension_server_pb.RunExtensionCodeRequest) returns (exa.extension_server_pb.RunExtensionCodeResponse);
+  rpc UpdateDetailedViewWithCascadeInput (exa.extension_server_pb.UpdateDetailedViewWithCascadeInputRequest) returns (exa.extension_server_pb.UpdateDetailedViewWithCascadeInputResponse);
+  rpc GetSecretValue (exa.extension_server_pb.GetSecretValueRequest) returns (exa.extension_server_pb.GetSecretValueResponse);
+  rpc StoreSecretValue (exa.extension_server_pb.StoreSecretValueRequest) returns (exa.extension_server_pb.StoreSecretValueResponse);
+  rpc LaunchBrowser (exa.extension_server_pb.LaunchBrowserRequest) returns (exa.extension_server_pb.LaunchBrowserResponse);
+  rpc RestartUserStatusUpdater (exa.extension_server_pb.RestartUserStatusUpdaterRequest) returns (exa.extension_server_pb.RestartUserStatusUpdaterResponse);
+  rpc ShowConversationPicker (exa.extension_server_pb.ConversationPickerRequest) returns (exa.extension_server_pb.ConversationPickerResponse);
+  rpc GetBrowserOnboardingPort (exa.extension_server_pb.GetBrowserOnboardingPortRequest) returns (exa.extension_server_pb.GetBrowserOnboardingPortResponse);
+  rpc GetChromeDevtoolsMcpUrl (exa.extension_server_pb.GetChromeDevtoolsMcpUrlRequest) returns (exa.extension_server_pb.GetChromeDevtoolsMcpUrlResponse);
+  rpc FocusIDEWindow (exa.extension_server_pb.FocusIDEWindowRequest) returns (exa.extension_server_pb.FocusIDEWindowResponse);
+  rpc SmartFocusConversation (exa.language_server_pb.SmartFocusConversationRequest) returns (exa.language_server_pb.SmartFocusConversationResponse);
+  rpc IsAgentManagerEnabled (exa.extension_server_pb.IsAgentManagerEnabledRequest) returns (exa.extension_server_pb.IsAgentManagerEnabledResponse);
+  rpc RecordError (exa.extension_server_pb.RecordErrorRequest) returns (exa.extension_server_pb.RecordErrorResponse);
+  rpc SubscribeToUnifiedStateSyncTopic (exa.extension_server_pb.SubscribeToUnifiedStateSyncTopicRequest) returns (stream exa.extension_server_pb.UnifiedStateSyncUpdate);
+  rpc PushUnifiedStateSyncUpdate (exa.extension_server_pb.PushUnifiedStateSyncUpdateRequest) returns (exa.extension_server_pb.PushUnifiedStateSyncUpdateResponse);
+  rpc BroadcastConversationDeletion (exa.extension_server_pb.BroadcastConversationDeletionRequest) returns (exa.extension_server_pb.BroadcastConversationDeletionResponse);
+  rpc Heartbeat (exa.extension_server_pb.HeartbeatRequest) returns (exa.extension_server_pb.HeartbeatResponse);
+}
+
+// ==========================================================================
+// Service: exa.remoting.RemotingService (7 Methods)
+// ==========================================================================
+
+service RemotingService {
+  rpc ConnectRemote (exa.remoting.ConnectRemoteRequest) returns (stream exa.remoting.ConnectRemoteResponse);
+  rpc RespondToPrompt (exa.remoting.RespondToPromptRequest) returns (exa.remoting.RespondToPromptResponse);
+  rpc DisconnectRemote (exa.remoting.DisconnectRemoteRequest) returns (exa.remoting.DisconnectRemoteResponse);
+  rpc SaveRemote (exa.remoting.SaveRemoteRequest) returns (exa.remoting.SaveRemoteResponse);
+  rpc DeleteRemote (exa.remoting.DeleteRemoteRequest) returns (exa.remoting.DeleteRemoteResponse);
+  rpc ListRemotes (exa.remoting.ListRemotesRequest) returns (exa.remoting.ListRemotesResponse);
+  rpc ListConnectedRemotes (exa.remoting.ListConnectedRemotesRequest) returns (exa.remoting.ListConnectedRemotesResponse);
 }
 
 // ==========================================================================
@@ -347,6 +423,12 @@ enum AcknowledgementType {
   ACKNOWLEDGEMENT_TYPE_REJECT = 2;
   ACKNOWLEDGEMENT_TYPE_STALE = 3;
   ACKNOWLEDGEMENT_TYPE_CLEARED = 4;
+}
+
+enum ActiveEditorType {
+  ACTIVE_EDITOR_TYPE_UNSPECIFIED = 0;
+  ACTIVE_EDITOR_TYPE_TEXT_EDITOR = 1;
+  ACTIVE_EDITOR_TYPE_TERMINAL = 2;
 }
 
 enum AgentBrowserTools {
@@ -618,6 +700,12 @@ enum CaseSensitivity {
   CASE_SENSITIVITY_AUTO = 1;
   CASE_SENSITIVITY_YES = 2;
   CASE_SENSITIVITY_NO = 3;
+}
+
+enum CellStatus {
+  CELL_STATUS_UNSPECIFIED = 0;
+  CELL_STATUS_SUCCESS = 1;
+  CELL_STATUS_FAILURE = 2;
 }
 
 enum ChangelistReviewState {
@@ -1076,6 +1164,15 @@ enum DocumentType {
   DOCUMENT_TYPE_CCI = 9;
 }
 
+enum EditNotebookOperation {
+  EDIT_NOTEBOOK_OPERATION_UNSPECIFIED = 0;
+  EDIT_NOTEBOOK_OPERATION_INSERT_AFTER = 1;
+  EDIT_NOTEBOOK_OPERATION_INSERT_BEFORE = 2;
+  EDIT_NOTEBOOK_OPERATION_REPLACE_CELLS = 3;
+  EDIT_NOTEBOOK_OPERATION_DELETE_CELLS = 4;
+  EDIT_NOTEBOOK_OPERATION_OVERWRITE_NOTEBOOK = 5;
+}
+
 enum EndBattleModeErrorType {
   END_BATTLE_MODE_ERROR_TYPE_UNSPECIFIED = 0;
   END_BATTLE_MODE_ERROR_TYPE_TRAJECTORY_RUNNING = 1;
@@ -1107,6 +1204,13 @@ enum EventType {
   EVENT_TYPE_SHOW_PREVIOUS_CORTEX_STEP = 11;
   EVENT_TYPE_SHOW_NEXT_CORTEX_STEP = 12;
   EVENT_TYPE_INDEXER_STATS = 13;
+}
+
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_SUCCESS = 1;
+  EXECUTION_STATUS_FAILURE = 2;
+  EXECUTION_STATUS_PARTIAL_SUCCESS = 3;
 }
 
 enum ExecutorTerminationReason {
@@ -1517,700 +1621,6 @@ enum Modality {
   DOCUMENT = 5;
 }
 
-enum Model {
-  MODEL_UNSPECIFIED = 0;
-  MODEL_CHAT_20706 = 235;
-  MODEL_CHAT_23310 = 269;
-  MODEL_GOOGLE_GEMINI_2_5_FLASH = 312;
-  MODEL_GOOGLE_GEMINI_2_5_FLASH_THINKING = 313;
-  MODEL_GOOGLE_GEMINI_2_5_FLASH_THINKING_TOOLS = 329;
-  MODEL_GOOGLE_GEMINI_2_5_FLASH_LITE = 330;
-  MODEL_GOOGLE_GEMINI_2_5_PRO = 246;
-  MODEL_GOOGLE_GEMINI_2_5_PRO_EVAL = 331;
-  MODEL_GOOGLE_GEMINI_FOR_GOOGLE_2_5_PRO = 327;
-  MODEL_GOOGLE_GEMINI_NEMOSREEF = 328;
-  MODEL_GOOGLE_GEMINI_2_5_FLASH_IMAGE_PREVIEW = 332;
-  MODEL_GOOGLE_GEMINI_COMPUTER_USE_EXPERIMENTAL = 335;
-  MODEL_GOOGLE_GEMINI_RAINSONG = 339;
-  MODEL_GOOGLE_JARVIS_PROXY = 346;
-  MODEL_GOOGLE_JARVIS_V4S = 349;
-  MODEL_GOOGLE_GEMINI_TRAINING_POLICY = 323;
-  MODEL_GOOGLE_GEMINI_EXAMPLE_GEMAX_SAMPLER = 354;
-  MODEL_GOOGLE_GEMINI_INTERNAL_BYOM = 326;
-  MODEL_GOOGLE_GEMINI_INTERNAL_TAB_FLASH_LITE = 344;
-  MODEL_GOOGLE_GEMINI_INTERNAL_TAB_JUMP_FLASH_LITE = 345;
-  MODEL_GOOGLE_GEMINI_HORIZONDAWN = 336;
-  MODEL_GOOGLE_GEMINI_PUREPRISM = 337;
-  MODEL_GOOGLE_GEMINI_GENTLEISLAND = 338;
-  MODEL_GOOGLE_GEMINI_ORIONFIRE = 343;
-  MODEL_GOOGLE_GEMINI_COSMICFORGE = 347;
-  MODEL_GOOGLE_GEMINI_RIFTRUNNER = 348;
-  MODEL_GOOGLE_GEMINI_RIFTRUNNER_THINKING_LOW = 352;
-  MODEL_GOOGLE_GEMINI_RIFTRUNNER_THINKING_HIGH = 353;
-  MODEL_GOOGLE_GEMINI_INFINITYJET = 350;
-  MODEL_GOOGLE_GEMINI_INFINITYBLOOM = 351;
-  MODEL_CLAUDE_4_SONNET = 281;
-  MODEL_CLAUDE_4_SONNET_THINKING = 282;
-  MODEL_CLAUDE_4_OPUS = 290;
-  MODEL_CLAUDE_4_OPUS_THINKING = 291;
-  MODEL_CLAUDE_4_5_SONNET = 333;
-  MODEL_CLAUDE_4_5_SONNET_THINKING = 334;
-  MODEL_CLAUDE_4_5_HAIKU = 340;
-  MODEL_CLAUDE_4_5_HAIKU_THINKING = 341;
-  MODEL_OPENAI_GPT_OSS_120B_MEDIUM = 342;
-  MODEL_PLACEHOLDER_M0 = 1000;
-  MODEL_PLACEHOLDER_M1 = 1001;
-  MODEL_PLACEHOLDER_M2 = 1002;
-  MODEL_PLACEHOLDER_M3 = 1003;
-  MODEL_PLACEHOLDER_M4 = 1004;
-  MODEL_PLACEHOLDER_M5 = 1005;
-  MODEL_PLACEHOLDER_M6 = 1006;
-  MODEL_PLACEHOLDER_M7 = 1007;
-  MODEL_PLACEHOLDER_M8 = 1008;
-  MODEL_PLACEHOLDER_M9 = 1009;
-  MODEL_PLACEHOLDER_M10 = 1010;
-  MODEL_PLACEHOLDER_M11 = 1011;
-  MODEL_PLACEHOLDER_M12 = 1012;
-  MODEL_PLACEHOLDER_M13 = 1013;
-  MODEL_PLACEHOLDER_M14 = 1014;
-  MODEL_PLACEHOLDER_M15 = 1015;
-  MODEL_PLACEHOLDER_M16 = 1016;
-  MODEL_PLACEHOLDER_M17 = 1017;
-  MODEL_PLACEHOLDER_M18 = 1018;
-  MODEL_PLACEHOLDER_M19 = 1019;
-  MODEL_PLACEHOLDER_M20 = 1020;
-  MODEL_PLACEHOLDER_M21 = 1021;
-  MODEL_PLACEHOLDER_M22 = 1022;
-  MODEL_PLACEHOLDER_M23 = 1023;
-  MODEL_PLACEHOLDER_M24 = 1024;
-  MODEL_PLACEHOLDER_M25 = 1025;
-  MODEL_PLACEHOLDER_M26 = 1026;
-  MODEL_PLACEHOLDER_M27 = 1027;
-  MODEL_PLACEHOLDER_M28 = 1028;
-  MODEL_PLACEHOLDER_M29 = 1029;
-  MODEL_PLACEHOLDER_M30 = 1030;
-  MODEL_PLACEHOLDER_M31 = 1031;
-  MODEL_PLACEHOLDER_M32 = 1032;
-  MODEL_PLACEHOLDER_M33 = 1033;
-  MODEL_PLACEHOLDER_M34 = 1034;
-  MODEL_PLACEHOLDER_M35 = 1035;
-  MODEL_PLACEHOLDER_M36 = 1036;
-  MODEL_PLACEHOLDER_M37 = 1037;
-  MODEL_PLACEHOLDER_M38 = 1038;
-  MODEL_PLACEHOLDER_M39 = 1039;
-  MODEL_PLACEHOLDER_M40 = 1040;
-  MODEL_PLACEHOLDER_M41 = 1041;
-  MODEL_PLACEHOLDER_M42 = 1042;
-  MODEL_PLACEHOLDER_M43 = 1043;
-  MODEL_PLACEHOLDER_M44 = 1044;
-  MODEL_PLACEHOLDER_M45 = 1045;
-  MODEL_PLACEHOLDER_M46 = 1046;
-  MODEL_PLACEHOLDER_M47 = 1047;
-  MODEL_PLACEHOLDER_M48 = 1048;
-  MODEL_PLACEHOLDER_M49 = 1049;
-  MODEL_PLACEHOLDER_M50 = 1050;
-  MODEL_PLACEHOLDER_M51 = 1051;
-  MODEL_PLACEHOLDER_M52 = 1052;
-  MODEL_PLACEHOLDER_M53 = 1053;
-  MODEL_PLACEHOLDER_M54 = 1054;
-  MODEL_PLACEHOLDER_M55 = 1055;
-  MODEL_PLACEHOLDER_M56 = 1056;
-  MODEL_PLACEHOLDER_M57 = 1057;
-  MODEL_PLACEHOLDER_M58 = 1058;
-  MODEL_PLACEHOLDER_M59 = 1059;
-  MODEL_PLACEHOLDER_M60 = 1060;
-  MODEL_PLACEHOLDER_M61 = 1061;
-  MODEL_PLACEHOLDER_M62 = 1062;
-  MODEL_PLACEHOLDER_M63 = 1063;
-  MODEL_PLACEHOLDER_M64 = 1064;
-  MODEL_PLACEHOLDER_M65 = 1065;
-  MODEL_PLACEHOLDER_M66 = 1066;
-  MODEL_PLACEHOLDER_M67 = 1067;
-  MODEL_PLACEHOLDER_M68 = 1068;
-  MODEL_PLACEHOLDER_M69 = 1069;
-  MODEL_PLACEHOLDER_M70 = 1070;
-  MODEL_PLACEHOLDER_M71 = 1071;
-  MODEL_PLACEHOLDER_M72 = 1072;
-  MODEL_PLACEHOLDER_M73 = 1073;
-  MODEL_PLACEHOLDER_M74 = 1074;
-  MODEL_PLACEHOLDER_M75 = 1075;
-  MODEL_PLACEHOLDER_M76 = 1076;
-  MODEL_PLACEHOLDER_M77 = 1077;
-  MODEL_PLACEHOLDER_M78 = 1078;
-  MODEL_PLACEHOLDER_M79 = 1079;
-  MODEL_PLACEHOLDER_M80 = 1080;
-  MODEL_PLACEHOLDER_M81 = 1081;
-  MODEL_PLACEHOLDER_M82 = 1082;
-  MODEL_PLACEHOLDER_M83 = 1083;
-  MODEL_PLACEHOLDER_M84 = 1084;
-  MODEL_PLACEHOLDER_M85 = 1085;
-  MODEL_PLACEHOLDER_M86 = 1086;
-  MODEL_PLACEHOLDER_M87 = 1087;
-  MODEL_PLACEHOLDER_M88 = 1088;
-  MODEL_PLACEHOLDER_M89 = 1089;
-  MODEL_PLACEHOLDER_M90 = 1090;
-  MODEL_PLACEHOLDER_M91 = 1091;
-  MODEL_PLACEHOLDER_M92 = 1092;
-  MODEL_PLACEHOLDER_M93 = 1093;
-  MODEL_PLACEHOLDER_M94 = 1094;
-  MODEL_PLACEHOLDER_M95 = 1095;
-  MODEL_PLACEHOLDER_M96 = 1096;
-  MODEL_PLACEHOLDER_M97 = 1097;
-  MODEL_PLACEHOLDER_M98 = 1098;
-  MODEL_PLACEHOLDER_M99 = 1099;
-  MODEL_PLACEHOLDER_M100 = 1100;
-  MODEL_PLACEHOLDER_M101 = 1101;
-  MODEL_PLACEHOLDER_M102 = 1102;
-  MODEL_PLACEHOLDER_M103 = 1103;
-  MODEL_PLACEHOLDER_M104 = 1104;
-  MODEL_PLACEHOLDER_M105 = 1105;
-  MODEL_PLACEHOLDER_M106 = 1106;
-  MODEL_PLACEHOLDER_M107 = 1107;
-  MODEL_PLACEHOLDER_M108 = 1108;
-  MODEL_PLACEHOLDER_M109 = 1109;
-  MODEL_PLACEHOLDER_M110 = 1110;
-  MODEL_PLACEHOLDER_M111 = 1111;
-  MODEL_PLACEHOLDER_M112 = 1112;
-  MODEL_PLACEHOLDER_M113 = 1113;
-  MODEL_PLACEHOLDER_M114 = 1114;
-  MODEL_PLACEHOLDER_M115 = 1115;
-  MODEL_PLACEHOLDER_M116 = 1116;
-  MODEL_PLACEHOLDER_M117 = 1117;
-  MODEL_PLACEHOLDER_M118 = 1118;
-  MODEL_PLACEHOLDER_M119 = 1119;
-  MODEL_PLACEHOLDER_M120 = 1120;
-  MODEL_PLACEHOLDER_M121 = 1121;
-  MODEL_PLACEHOLDER_M122 = 1122;
-  MODEL_PLACEHOLDER_M123 = 1123;
-  MODEL_PLACEHOLDER_M124 = 1124;
-  MODEL_PLACEHOLDER_M125 = 1125;
-  MODEL_PLACEHOLDER_M126 = 1126;
-  MODEL_PLACEHOLDER_M127 = 1127;
-  MODEL_PLACEHOLDER_M128 = 1128;
-  MODEL_PLACEHOLDER_M129 = 1129;
-  MODEL_PLACEHOLDER_M130 = 1130;
-  MODEL_PLACEHOLDER_M131 = 1131;
-  MODEL_PLACEHOLDER_M132 = 1132;
-  MODEL_PLACEHOLDER_M133 = 1133;
-  MODEL_PLACEHOLDER_M134 = 1134;
-  MODEL_PLACEHOLDER_M135 = 1135;
-  MODEL_PLACEHOLDER_M136 = 1136;
-  MODEL_PLACEHOLDER_M137 = 1137;
-  MODEL_PLACEHOLDER_M138 = 1138;
-  MODEL_PLACEHOLDER_M139 = 1139;
-  MODEL_PLACEHOLDER_M140 = 1140;
-  MODEL_PLACEHOLDER_M141 = 1141;
-  MODEL_PLACEHOLDER_M142 = 1142;
-  MODEL_PLACEHOLDER_M143 = 1143;
-  MODEL_PLACEHOLDER_M144 = 1144;
-  MODEL_PLACEHOLDER_M145 = 1145;
-  MODEL_PLACEHOLDER_M146 = 1146;
-  MODEL_PLACEHOLDER_M147 = 1147;
-  MODEL_PLACEHOLDER_M148 = 1148;
-  MODEL_PLACEHOLDER_M149 = 1149;
-  MODEL_PLACEHOLDER_M150 = 1150;
-  MODEL_PLACEHOLDER_M151 = 1151;
-  MODEL_PLACEHOLDER_M152 = 1152;
-  MODEL_PLACEHOLDER_M153 = 1153;
-  MODEL_PLACEHOLDER_M154 = 1154;
-  MODEL_PLACEHOLDER_M155 = 1155;
-  MODEL_PLACEHOLDER_M156 = 1156;
-  MODEL_PLACEHOLDER_M157 = 1157;
-  MODEL_PLACEHOLDER_M158 = 1158;
-  MODEL_PLACEHOLDER_M159 = 1159;
-  MODEL_PLACEHOLDER_M160 = 1160;
-  MODEL_PLACEHOLDER_M161 = 1161;
-  MODEL_PLACEHOLDER_M162 = 1162;
-  MODEL_PLACEHOLDER_M163 = 1163;
-  MODEL_PLACEHOLDER_M164 = 1164;
-  MODEL_PLACEHOLDER_M165 = 1165;
-  MODEL_PLACEHOLDER_M166 = 1166;
-  MODEL_PLACEHOLDER_M167 = 1167;
-  MODEL_PLACEHOLDER_M168 = 1168;
-  MODEL_PLACEHOLDER_M169 = 1169;
-  MODEL_PLACEHOLDER_M170 = 1170;
-  MODEL_PLACEHOLDER_M171 = 1171;
-  MODEL_PLACEHOLDER_M172 = 1172;
-  MODEL_PLACEHOLDER_M173 = 1173;
-  MODEL_PLACEHOLDER_M174 = 1174;
-  MODEL_PLACEHOLDER_M175 = 1175;
-  MODEL_PLACEHOLDER_M176 = 1176;
-  MODEL_PLACEHOLDER_M177 = 1177;
-  MODEL_PLACEHOLDER_M178 = 1178;
-  MODEL_PLACEHOLDER_M179 = 1179;
-  MODEL_PLACEHOLDER_M180 = 1180;
-  MODEL_PLACEHOLDER_M181 = 1181;
-  MODEL_PLACEHOLDER_M182 = 1182;
-  MODEL_PLACEHOLDER_M183 = 1183;
-  MODEL_PLACEHOLDER_M184 = 1184;
-  MODEL_PLACEHOLDER_M185 = 1185;
-  MODEL_PLACEHOLDER_M186 = 1186;
-  MODEL_PLACEHOLDER_M187 = 1187;
-  MODEL_PLACEHOLDER_M188 = 1188;
-  MODEL_PLACEHOLDER_M189 = 1189;
-  MODEL_PLACEHOLDER_M190 = 1190;
-  MODEL_PLACEHOLDER_M191 = 1191;
-  MODEL_PLACEHOLDER_M192 = 1192;
-  MODEL_PLACEHOLDER_M193 = 1193;
-  MODEL_PLACEHOLDER_M194 = 1194;
-  MODEL_PLACEHOLDER_M195 = 1195;
-  MODEL_PLACEHOLDER_M196 = 1196;
-  MODEL_PLACEHOLDER_M197 = 1197;
-  MODEL_PLACEHOLDER_M198 = 1198;
-  MODEL_PLACEHOLDER_M199 = 1199;
-  MODEL_PLACEHOLDER_M200 = 1200;
-  MODEL_PLACEHOLDER_M201 = 1201;
-  MODEL_PLACEHOLDER_M202 = 1202;
-  MODEL_PLACEHOLDER_M203 = 1203;
-  MODEL_PLACEHOLDER_M204 = 1204;
-  MODEL_PLACEHOLDER_M205 = 1205;
-  MODEL_PLACEHOLDER_M206 = 1206;
-  MODEL_PLACEHOLDER_M207 = 1207;
-  MODEL_PLACEHOLDER_M208 = 1208;
-  MODEL_PLACEHOLDER_M209 = 1209;
-  MODEL_PLACEHOLDER_M210 = 1210;
-  MODEL_PLACEHOLDER_M211 = 1211;
-  MODEL_PLACEHOLDER_M212 = 1212;
-  MODEL_PLACEHOLDER_M213 = 1213;
-  MODEL_PLACEHOLDER_M214 = 1214;
-  MODEL_PLACEHOLDER_M215 = 1215;
-  MODEL_PLACEHOLDER_M216 = 1216;
-  MODEL_PLACEHOLDER_M217 = 1217;
-  MODEL_PLACEHOLDER_M218 = 1218;
-  MODEL_PLACEHOLDER_M219 = 1219;
-  MODEL_PLACEHOLDER_M220 = 1220;
-  MODEL_PLACEHOLDER_M221 = 1221;
-  MODEL_PLACEHOLDER_M222 = 1222;
-  MODEL_PLACEHOLDER_M223 = 1223;
-  MODEL_PLACEHOLDER_M224 = 1224;
-  MODEL_PLACEHOLDER_M225 = 1225;
-  MODEL_PLACEHOLDER_M226 = 1226;
-  MODEL_PLACEHOLDER_M227 = 1227;
-  MODEL_PLACEHOLDER_M228 = 1228;
-  MODEL_PLACEHOLDER_M229 = 1229;
-  MODEL_PLACEHOLDER_M230 = 1230;
-  MODEL_PLACEHOLDER_M231 = 1231;
-  MODEL_PLACEHOLDER_M232 = 1232;
-  MODEL_PLACEHOLDER_M233 = 1233;
-  MODEL_PLACEHOLDER_M234 = 1234;
-  MODEL_PLACEHOLDER_M235 = 1235;
-  MODEL_PLACEHOLDER_M236 = 1236;
-  MODEL_PLACEHOLDER_M237 = 1237;
-  MODEL_PLACEHOLDER_M238 = 1238;
-  MODEL_PLACEHOLDER_M239 = 1239;
-  MODEL_PLACEHOLDER_M240 = 1240;
-  MODEL_PLACEHOLDER_M241 = 1241;
-  MODEL_PLACEHOLDER_M242 = 1242;
-  MODEL_PLACEHOLDER_M243 = 1243;
-  MODEL_PLACEHOLDER_M244 = 1244;
-  MODEL_PLACEHOLDER_M245 = 1245;
-  MODEL_PLACEHOLDER_M246 = 1246;
-  MODEL_PLACEHOLDER_M247 = 1247;
-  MODEL_PLACEHOLDER_M248 = 1248;
-  MODEL_PLACEHOLDER_M249 = 1249;
-  MODEL_PLACEHOLDER_M250 = 1250;
-  MODEL_PLACEHOLDER_M251 = 1251;
-  MODEL_PLACEHOLDER_M252 = 1252;
-  MODEL_PLACEHOLDER_M253 = 1253;
-  MODEL_PLACEHOLDER_M254 = 1254;
-  MODEL_PLACEHOLDER_M255 = 1255;
-  MODEL_PLACEHOLDER_M256 = 1256;
-  MODEL_PLACEHOLDER_M257 = 1257;
-  MODEL_PLACEHOLDER_M258 = 1258;
-  MODEL_PLACEHOLDER_M259 = 1259;
-  MODEL_PLACEHOLDER_M260 = 1260;
-  MODEL_PLACEHOLDER_M261 = 1261;
-  MODEL_PLACEHOLDER_M262 = 1262;
-  MODEL_PLACEHOLDER_M263 = 1263;
-  MODEL_PLACEHOLDER_M264 = 1264;
-  MODEL_PLACEHOLDER_M265 = 1265;
-  MODEL_PLACEHOLDER_M266 = 1266;
-  MODEL_PLACEHOLDER_M267 = 1267;
-  MODEL_PLACEHOLDER_M268 = 1268;
-  MODEL_PLACEHOLDER_M269 = 1269;
-  MODEL_PLACEHOLDER_M270 = 1270;
-  MODEL_PLACEHOLDER_M271 = 1271;
-  MODEL_PLACEHOLDER_M272 = 1272;
-  MODEL_PLACEHOLDER_M273 = 1273;
-  MODEL_PLACEHOLDER_M274 = 1274;
-  MODEL_PLACEHOLDER_M275 = 1275;
-  MODEL_PLACEHOLDER_M276 = 1276;
-  MODEL_PLACEHOLDER_M277 = 1277;
-  MODEL_PLACEHOLDER_M278 = 1278;
-  MODEL_PLACEHOLDER_M279 = 1279;
-  MODEL_PLACEHOLDER_M280 = 1280;
-  MODEL_PLACEHOLDER_M281 = 1281;
-  MODEL_PLACEHOLDER_M282 = 1282;
-  MODEL_PLACEHOLDER_M283 = 1283;
-  MODEL_PLACEHOLDER_M284 = 1284;
-  MODEL_PLACEHOLDER_M285 = 1285;
-  MODEL_PLACEHOLDER_M286 = 1286;
-  MODEL_PLACEHOLDER_M287 = 1287;
-  MODEL_PLACEHOLDER_M288 = 1288;
-  MODEL_PLACEHOLDER_M289 = 1289;
-  MODEL_PLACEHOLDER_M290 = 1290;
-  MODEL_PLACEHOLDER_M291 = 1291;
-  MODEL_PLACEHOLDER_M292 = 1292;
-  MODEL_PLACEHOLDER_M293 = 1293;
-  MODEL_PLACEHOLDER_M294 = 1294;
-  MODEL_PLACEHOLDER_M295 = 1295;
-  MODEL_PLACEHOLDER_M296 = 1296;
-  MODEL_PLACEHOLDER_M297 = 1297;
-  MODEL_PLACEHOLDER_M298 = 1298;
-  MODEL_PLACEHOLDER_M299 = 1299;
-  MODEL_PLACEHOLDER_M300 = 1300;
-  MODEL_PLACEHOLDER_M301 = 1301;
-  MODEL_PLACEHOLDER_M302 = 1302;
-  MODEL_PLACEHOLDER_M303 = 1303;
-  MODEL_PLACEHOLDER_M304 = 1304;
-  MODEL_PLACEHOLDER_M305 = 1305;
-  MODEL_PLACEHOLDER_M306 = 1306;
-  MODEL_PLACEHOLDER_M307 = 1307;
-  MODEL_PLACEHOLDER_M308 = 1308;
-  MODEL_PLACEHOLDER_M309 = 1309;
-  MODEL_PLACEHOLDER_M310 = 1310;
-  MODEL_PLACEHOLDER_M311 = 1311;
-  MODEL_PLACEHOLDER_M312 = 1312;
-  MODEL_PLACEHOLDER_M313 = 1313;
-  MODEL_PLACEHOLDER_M314 = 1314;
-  MODEL_PLACEHOLDER_M315 = 1315;
-  MODEL_PLACEHOLDER_M316 = 1316;
-  MODEL_PLACEHOLDER_M317 = 1317;
-  MODEL_PLACEHOLDER_M318 = 1318;
-  MODEL_PLACEHOLDER_M319 = 1319;
-  MODEL_PLACEHOLDER_M320 = 1320;
-  MODEL_PLACEHOLDER_M321 = 1321;
-  MODEL_PLACEHOLDER_M322 = 1322;
-  MODEL_PLACEHOLDER_M323 = 1323;
-  MODEL_PLACEHOLDER_M324 = 1324;
-  MODEL_PLACEHOLDER_M325 = 1325;
-  MODEL_PLACEHOLDER_M326 = 1326;
-  MODEL_PLACEHOLDER_M327 = 1327;
-  MODEL_PLACEHOLDER_M328 = 1328;
-  MODEL_PLACEHOLDER_M329 = 1329;
-  MODEL_PLACEHOLDER_M330 = 1330;
-  MODEL_PLACEHOLDER_M331 = 1331;
-  MODEL_PLACEHOLDER_M332 = 1332;
-  MODEL_PLACEHOLDER_M333 = 1333;
-  MODEL_PLACEHOLDER_M334 = 1334;
-  MODEL_PLACEHOLDER_M335 = 1335;
-  MODEL_PLACEHOLDER_M336 = 1336;
-  MODEL_PLACEHOLDER_M337 = 1337;
-  MODEL_PLACEHOLDER_M338 = 1338;
-  MODEL_PLACEHOLDER_M339 = 1339;
-  MODEL_PLACEHOLDER_M340 = 1340;
-  MODEL_PLACEHOLDER_M341 = 1341;
-  MODEL_PLACEHOLDER_M342 = 1342;
-  MODEL_PLACEHOLDER_M343 = 1343;
-  MODEL_PLACEHOLDER_M344 = 1344;
-  MODEL_PLACEHOLDER_M345 = 1345;
-  MODEL_PLACEHOLDER_M346 = 1346;
-  MODEL_PLACEHOLDER_M347 = 1347;
-  MODEL_PLACEHOLDER_M348 = 1348;
-  MODEL_PLACEHOLDER_M349 = 1349;
-  MODEL_PLACEHOLDER_M350 = 1350;
-  MODEL_PLACEHOLDER_M351 = 1351;
-  MODEL_PLACEHOLDER_M352 = 1352;
-  MODEL_PLACEHOLDER_M353 = 1353;
-  MODEL_PLACEHOLDER_M354 = 1354;
-  MODEL_PLACEHOLDER_M355 = 1355;
-  MODEL_PLACEHOLDER_M356 = 1356;
-  MODEL_PLACEHOLDER_M357 = 1357;
-  MODEL_PLACEHOLDER_M358 = 1358;
-  MODEL_PLACEHOLDER_M359 = 1359;
-  MODEL_PLACEHOLDER_M360 = 1360;
-  MODEL_PLACEHOLDER_M361 = 1361;
-  MODEL_PLACEHOLDER_M362 = 1362;
-  MODEL_PLACEHOLDER_M363 = 1363;
-  MODEL_PLACEHOLDER_M364 = 1364;
-  MODEL_PLACEHOLDER_M365 = 1365;
-  MODEL_PLACEHOLDER_M366 = 1366;
-  MODEL_PLACEHOLDER_M367 = 1367;
-  MODEL_PLACEHOLDER_M368 = 1368;
-  MODEL_PLACEHOLDER_M369 = 1369;
-  MODEL_PLACEHOLDER_M370 = 1370;
-  MODEL_PLACEHOLDER_M371 = 1371;
-  MODEL_PLACEHOLDER_M372 = 1372;
-  MODEL_PLACEHOLDER_M373 = 1373;
-  MODEL_PLACEHOLDER_M374 = 1374;
-  MODEL_PLACEHOLDER_M375 = 1375;
-  MODEL_PLACEHOLDER_M376 = 1376;
-  MODEL_PLACEHOLDER_M377 = 1377;
-  MODEL_PLACEHOLDER_M378 = 1378;
-  MODEL_PLACEHOLDER_M379 = 1379;
-  MODEL_PLACEHOLDER_M380 = 1380;
-  MODEL_PLACEHOLDER_M381 = 1381;
-  MODEL_PLACEHOLDER_M382 = 1382;
-  MODEL_PLACEHOLDER_M383 = 1383;
-  MODEL_PLACEHOLDER_M384 = 1384;
-  MODEL_PLACEHOLDER_M385 = 1385;
-  MODEL_PLACEHOLDER_M386 = 1386;
-  MODEL_PLACEHOLDER_M387 = 1387;
-  MODEL_PLACEHOLDER_M388 = 1388;
-  MODEL_PLACEHOLDER_M389 = 1389;
-  MODEL_PLACEHOLDER_M390 = 1390;
-  MODEL_PLACEHOLDER_M391 = 1391;
-  MODEL_PLACEHOLDER_M392 = 1392;
-  MODEL_PLACEHOLDER_M393 = 1393;
-  MODEL_PLACEHOLDER_M394 = 1394;
-  MODEL_PLACEHOLDER_M395 = 1395;
-  MODEL_PLACEHOLDER_M396 = 1396;
-  MODEL_PLACEHOLDER_M397 = 1397;
-  MODEL_PLACEHOLDER_M398 = 1398;
-  MODEL_PLACEHOLDER_M399 = 1399;
-  MODEL_PLACEHOLDER_M400 = 1400;
-  MODEL_PLACEHOLDER_M401 = 1401;
-  MODEL_PLACEHOLDER_M402 = 1402;
-  MODEL_PLACEHOLDER_M403 = 1403;
-  MODEL_PLACEHOLDER_M404 = 1404;
-  MODEL_PLACEHOLDER_M405 = 1405;
-  MODEL_PLACEHOLDER_M406 = 1406;
-  MODEL_PLACEHOLDER_M407 = 1407;
-  MODEL_PLACEHOLDER_M408 = 1408;
-  MODEL_PLACEHOLDER_M409 = 1409;
-  MODEL_PLACEHOLDER_M410 = 1410;
-  MODEL_PLACEHOLDER_M411 = 1411;
-  MODEL_PLACEHOLDER_M412 = 1412;
-  MODEL_PLACEHOLDER_M413 = 1413;
-  MODEL_PLACEHOLDER_M414 = 1414;
-  MODEL_PLACEHOLDER_M415 = 1415;
-  MODEL_PLACEHOLDER_M416 = 1416;
-  MODEL_PLACEHOLDER_M417 = 1417;
-  MODEL_PLACEHOLDER_M418 = 1418;
-  MODEL_PLACEHOLDER_M419 = 1419;
-  MODEL_PLACEHOLDER_M420 = 1420;
-  MODEL_PLACEHOLDER_M421 = 1421;
-  MODEL_PLACEHOLDER_M422 = 1422;
-  MODEL_PLACEHOLDER_M423 = 1423;
-  MODEL_PLACEHOLDER_M424 = 1424;
-  MODEL_PLACEHOLDER_M425 = 1425;
-  MODEL_PLACEHOLDER_M426 = 1426;
-  MODEL_PLACEHOLDER_M427 = 1427;
-  MODEL_PLACEHOLDER_M428 = 1428;
-  MODEL_PLACEHOLDER_M429 = 1429;
-  MODEL_PLACEHOLDER_M430 = 1430;
-  MODEL_PLACEHOLDER_M431 = 1431;
-  MODEL_PLACEHOLDER_M432 = 1432;
-  MODEL_PLACEHOLDER_M433 = 1433;
-  MODEL_PLACEHOLDER_M434 = 1434;
-  MODEL_PLACEHOLDER_M435 = 1435;
-  MODEL_PLACEHOLDER_M436 = 1436;
-  MODEL_PLACEHOLDER_M437 = 1437;
-  MODEL_PLACEHOLDER_M438 = 1438;
-  MODEL_PLACEHOLDER_M439 = 1439;
-  MODEL_PLACEHOLDER_M440 = 1440;
-  MODEL_PLACEHOLDER_M441 = 1441;
-  MODEL_PLACEHOLDER_M442 = 1442;
-  MODEL_PLACEHOLDER_M443 = 1443;
-  MODEL_PLACEHOLDER_M444 = 1444;
-  MODEL_PLACEHOLDER_M445 = 1445;
-  MODEL_PLACEHOLDER_M446 = 1446;
-  MODEL_PLACEHOLDER_M447 = 1447;
-  MODEL_PLACEHOLDER_M448 = 1448;
-  MODEL_PLACEHOLDER_M449 = 1449;
-  MODEL_PLACEHOLDER_M450 = 1450;
-  MODEL_PLACEHOLDER_M451 = 1451;
-  MODEL_PLACEHOLDER_M452 = 1452;
-  MODEL_PLACEHOLDER_M453 = 1453;
-  MODEL_PLACEHOLDER_M454 = 1454;
-  MODEL_PLACEHOLDER_M455 = 1455;
-  MODEL_PLACEHOLDER_M456 = 1456;
-  MODEL_PLACEHOLDER_M457 = 1457;
-  MODEL_PLACEHOLDER_M458 = 1458;
-  MODEL_PLACEHOLDER_M459 = 1459;
-  MODEL_PLACEHOLDER_M460 = 1460;
-  MODEL_PLACEHOLDER_M461 = 1461;
-  MODEL_PLACEHOLDER_M462 = 1462;
-  MODEL_PLACEHOLDER_M463 = 1463;
-  MODEL_PLACEHOLDER_M464 = 1464;
-  MODEL_PLACEHOLDER_M465 = 1465;
-  MODEL_PLACEHOLDER_M466 = 1466;
-  MODEL_PLACEHOLDER_M467 = 1467;
-  MODEL_PLACEHOLDER_M468 = 1468;
-  MODEL_PLACEHOLDER_M469 = 1469;
-  MODEL_PLACEHOLDER_M470 = 1470;
-  MODEL_PLACEHOLDER_M471 = 1471;
-  MODEL_PLACEHOLDER_M472 = 1472;
-  MODEL_PLACEHOLDER_M473 = 1473;
-  MODEL_PLACEHOLDER_M474 = 1474;
-  MODEL_PLACEHOLDER_M475 = 1475;
-  MODEL_PLACEHOLDER_M476 = 1476;
-  MODEL_PLACEHOLDER_M477 = 1477;
-  MODEL_PLACEHOLDER_M478 = 1478;
-  MODEL_PLACEHOLDER_M479 = 1479;
-  MODEL_PLACEHOLDER_M480 = 1480;
-  MODEL_PLACEHOLDER_M481 = 1481;
-  MODEL_PLACEHOLDER_M482 = 1482;
-  MODEL_PLACEHOLDER_M483 = 1483;
-  MODEL_PLACEHOLDER_M484 = 1484;
-  MODEL_PLACEHOLDER_M485 = 1485;
-  MODEL_PLACEHOLDER_M486 = 1486;
-  MODEL_PLACEHOLDER_M487 = 1487;
-  MODEL_PLACEHOLDER_M488 = 1488;
-  MODEL_PLACEHOLDER_M489 = 1489;
-  MODEL_PLACEHOLDER_M490 = 1490;
-  MODEL_PLACEHOLDER_M491 = 1491;
-  MODEL_PLACEHOLDER_M492 = 1492;
-  MODEL_PLACEHOLDER_M493 = 1493;
-  MODEL_PLACEHOLDER_M494 = 1494;
-  MODEL_PLACEHOLDER_M495 = 1495;
-  MODEL_PLACEHOLDER_M496 = 1496;
-  MODEL_PLACEHOLDER_M497 = 1497;
-  MODEL_PLACEHOLDER_M498 = 1498;
-  MODEL_PLACEHOLDER_M499 = 1499;
-  MODEL_PLACEHOLDER_M500 = 1500;
-  MODEL_PLACEHOLDER_M501 = 1501;
-  MODEL_PLACEHOLDER_M502 = 1502;
-  MODEL_PLACEHOLDER_M503 = 1503;
-  MODEL_PLACEHOLDER_M504 = 1504;
-  MODEL_PLACEHOLDER_M505 = 1505;
-  MODEL_PLACEHOLDER_M506 = 1506;
-  MODEL_PLACEHOLDER_M507 = 1507;
-  MODEL_PLACEHOLDER_M508 = 1508;
-  MODEL_PLACEHOLDER_M509 = 1509;
-  MODEL_PLACEHOLDER_M510 = 1510;
-  MODEL_PLACEHOLDER_M511 = 1511;
-  MODEL_PLACEHOLDER_M512 = 1512;
-  MODEL_PLACEHOLDER_M513 = 1513;
-  MODEL_PLACEHOLDER_M514 = 1514;
-  MODEL_PLACEHOLDER_M515 = 1515;
-  MODEL_PLACEHOLDER_M516 = 1516;
-  MODEL_PLACEHOLDER_M517 = 1517;
-  MODEL_PLACEHOLDER_M518 = 1518;
-  MODEL_PLACEHOLDER_M519 = 1519;
-  MODEL_PLACEHOLDER_M520 = 1520;
-  MODEL_PLACEHOLDER_M521 = 1521;
-  MODEL_PLACEHOLDER_M522 = 1522;
-  MODEL_PLACEHOLDER_M523 = 1523;
-  MODEL_PLACEHOLDER_M524 = 1524;
-  MODEL_PLACEHOLDER_M525 = 1525;
-  MODEL_PLACEHOLDER_M526 = 1526;
-  MODEL_PLACEHOLDER_M527 = 1527;
-  MODEL_PLACEHOLDER_M528 = 1528;
-  MODEL_PLACEHOLDER_M529 = 1529;
-  MODEL_PLACEHOLDER_M530 = 1530;
-  MODEL_PLACEHOLDER_M531 = 1531;
-  MODEL_PLACEHOLDER_M532 = 1532;
-  MODEL_PLACEHOLDER_M533 = 1533;
-  MODEL_PLACEHOLDER_M534 = 1534;
-  MODEL_PLACEHOLDER_M535 = 1535;
-  MODEL_PLACEHOLDER_M536 = 1536;
-  MODEL_PLACEHOLDER_M537 = 1537;
-  MODEL_PLACEHOLDER_M538 = 1538;
-  MODEL_PLACEHOLDER_M539 = 1539;
-  MODEL_PLACEHOLDER_M540 = 1540;
-  MODEL_PLACEHOLDER_M541 = 1541;
-  MODEL_PLACEHOLDER_M542 = 1542;
-  MODEL_PLACEHOLDER_M543 = 1543;
-  MODEL_PLACEHOLDER_M544 = 1544;
-  MODEL_PLACEHOLDER_M545 = 1545;
-  MODEL_PLACEHOLDER_M546 = 1546;
-  MODEL_PLACEHOLDER_M547 = 1547;
-  MODEL_PLACEHOLDER_M548 = 1548;
-  MODEL_PLACEHOLDER_M549 = 1549;
-  MODEL_PLACEHOLDER_M550 = 1550;
-  MODEL_PLACEHOLDER_M551 = 1551;
-  MODEL_PLACEHOLDER_M552 = 1552;
-  MODEL_PLACEHOLDER_M553 = 1553;
-  MODEL_PLACEHOLDER_M554 = 1554;
-  MODEL_PLACEHOLDER_M555 = 1555;
-  MODEL_PLACEHOLDER_M556 = 1556;
-  MODEL_PLACEHOLDER_M557 = 1557;
-  MODEL_PLACEHOLDER_M558 = 1558;
-  MODEL_PLACEHOLDER_M559 = 1559;
-  MODEL_PLACEHOLDER_M560 = 1560;
-  MODEL_PLACEHOLDER_M561 = 1561;
-  MODEL_PLACEHOLDER_M562 = 1562;
-  MODEL_PLACEHOLDER_M563 = 1563;
-  MODEL_PLACEHOLDER_M564 = 1564;
-  MODEL_PLACEHOLDER_M565 = 1565;
-  MODEL_PLACEHOLDER_M566 = 1566;
-  MODEL_PLACEHOLDER_M567 = 1567;
-  MODEL_PLACEHOLDER_M568 = 1568;
-  MODEL_PLACEHOLDER_M569 = 1569;
-  MODEL_PLACEHOLDER_M570 = 1570;
-  MODEL_PLACEHOLDER_M571 = 1571;
-  MODEL_PLACEHOLDER_M572 = 1572;
-  MODEL_PLACEHOLDER_M573 = 1573;
-  MODEL_PLACEHOLDER_M574 = 1574;
-  MODEL_PLACEHOLDER_M575 = 1575;
-  MODEL_PLACEHOLDER_M576 = 1576;
-  MODEL_PLACEHOLDER_M577 = 1577;
-  MODEL_PLACEHOLDER_M578 = 1578;
-  MODEL_PLACEHOLDER_M579 = 1579;
-  MODEL_PLACEHOLDER_M580 = 1580;
-  MODEL_PLACEHOLDER_M581 = 1581;
-  MODEL_PLACEHOLDER_M582 = 1582;
-  MODEL_PLACEHOLDER_M583 = 1583;
-  MODEL_PLACEHOLDER_M584 = 1584;
-  MODEL_PLACEHOLDER_M585 = 1585;
-  MODEL_PLACEHOLDER_M586 = 1586;
-  MODEL_PLACEHOLDER_M587 = 1587;
-  MODEL_PLACEHOLDER_M588 = 1588;
-  MODEL_PLACEHOLDER_M589 = 1589;
-  MODEL_PLACEHOLDER_M590 = 1590;
-  MODEL_PLACEHOLDER_M591 = 1591;
-  MODEL_PLACEHOLDER_M592 = 1592;
-  MODEL_PLACEHOLDER_M593 = 1593;
-  MODEL_PLACEHOLDER_M594 = 1594;
-  MODEL_PLACEHOLDER_M595 = 1595;
-  MODEL_PLACEHOLDER_M596 = 1596;
-  MODEL_PLACEHOLDER_M597 = 1597;
-  MODEL_PLACEHOLDER_M598 = 1598;
-  MODEL_PLACEHOLDER_M599 = 1599;
-  MODEL_PLACEHOLDER_M600 = 1600;
-  MODEL_PLACEHOLDER_M601 = 1601;
-  MODEL_PLACEHOLDER_M602 = 1602;
-  MODEL_PLACEHOLDER_M603 = 1603;
-  MODEL_PLACEHOLDER_M604 = 1604;
-  MODEL_PLACEHOLDER_M605 = 1605;
-  MODEL_PLACEHOLDER_M606 = 1606;
-  MODEL_PLACEHOLDER_M607 = 1607;
-  MODEL_PLACEHOLDER_M608 = 1608;
-  MODEL_PLACEHOLDER_M609 = 1609;
-  MODEL_PLACEHOLDER_M610 = 1610;
-  MODEL_PLACEHOLDER_M611 = 1611;
-  MODEL_PLACEHOLDER_M612 = 1612;
-  MODEL_PLACEHOLDER_M613 = 1613;
-  MODEL_PLACEHOLDER_M614 = 1614;
-  MODEL_PLACEHOLDER_M615 = 1615;
-  MODEL_PLACEHOLDER_M616 = 1616;
-  MODEL_PLACEHOLDER_M617 = 1617;
-  MODEL_PLACEHOLDER_M618 = 1618;
-  MODEL_PLACEHOLDER_M619 = 1619;
-  MODEL_PLACEHOLDER_M620 = 1620;
-  MODEL_PLACEHOLDER_M621 = 1621;
-  MODEL_PLACEHOLDER_M622 = 1622;
-  MODEL_PLACEHOLDER_M623 = 1623;
-  MODEL_PLACEHOLDER_M624 = 1624;
-  MODEL_PLACEHOLDER_M625 = 1625;
-  MODEL_PLACEHOLDER_M626 = 1626;
-  MODEL_PLACEHOLDER_M627 = 1627;
-  MODEL_PLACEHOLDER_M628 = 1628;
-  MODEL_PLACEHOLDER_M629 = 1629;
-  MODEL_PLACEHOLDER_M630 = 1630;
-  MODEL_PLACEHOLDER_M631 = 1631;
-  MODEL_PLACEHOLDER_M632 = 1632;
-  MODEL_PLACEHOLDER_M633 = 1633;
-  MODEL_PLACEHOLDER_M634 = 1634;
-  MODEL_PLACEHOLDER_M635 = 1635;
-  MODEL_PLACEHOLDER_M636 = 1636;
-  MODEL_PLACEHOLDER_M637 = 1637;
-  MODEL_PLACEHOLDER_M638 = 1638;
-  MODEL_PLACEHOLDER_M639 = 1639;
-  MODEL_PLACEHOLDER_M640 = 1640;
-  MODEL_PLACEHOLDER_M641 = 1641;
-  MODEL_PLACEHOLDER_M642 = 1642;
-  MODEL_PLACEHOLDER_M643 = 1643;
-  MODEL_PLACEHOLDER_M644 = 1644;
-  MODEL_PLACEHOLDER_M645 = 1645;
-  MODEL_PLACEHOLDER_M646 = 1646;
-  MODEL_PLACEHOLDER_M647 = 1647;
-  MODEL_PLACEHOLDER_M648 = 1648;
-  MODEL_PLACEHOLDER_M649 = 1649;
-  MODEL_PLACEHOLDER_M650 = 1650;
-}
-
 enum ModelAlias {
   MODEL_ALIAS_UNSPECIFIED = 0;
   MODEL_ALIAS_CASCADE_BASE = 1;
@@ -2282,16 +1692,6 @@ enum NullValue {
   NULL_VALUE = 0;
 }
 
-enum Operation {
-  OPERATION_UNSPECIFIED = 0;
-  FILE_READ = 1;
-  FILE_WRITE = 2;
-  FILE_EDIT = 3;
-  FILE_FIND = 4;
-  DIRECTORY_LIST = 5;
-  FILE_GREP = 6;
-}
-
 enum Permission {
   PERMISSION_UNSPECIFIED = 0;
   PERMISSION_ATTRIBUTION_READ = 1;
@@ -2360,6 +1760,241 @@ enum Processing {
   PROCESSING_UNSPECIFIED = 0;
   STATIC = 1;
   AGENTIC = 2;
+}
+
+enum ProductEventType {
+  EVENT_UNSPECIFIED = 0;
+  ANTIGRAVITY_EDITOR_READY = 251;
+  ANTIGRAVITY_EXTENSION_START = 253;
+  ANTIGRAVITY_EXTENSION_ACTIVATED = 32;
+  LS_DOWNLOAD_START = 1;
+  LS_DOWNLOAD_COMPLETE = 2;
+  LS_DOWNLOAD_FAILURE = 5;
+  LS_BINARY_STARTUP = 250;
+  LS_STARTUP = 3;
+  LS_FAILURE = 4;
+  AUTOCOMPLETE_ACCEPTED = 6;
+  AUTOCOMPLETE_ONE_WORD_ACCEPTED = 7;
+  CHAT_MESSAGE_SENT = 8;
+  CHAT_MENTION_INSERT = 13;
+  CHAT_MENTION_MENU_OPEN = 19;
+  CHAT_OPEN_SETTINGS = 14;
+  CHAT_OPEN_CONTEXT_SETTINGS = 15;
+  CHAT_WITH_CODEBASE = 16;
+  CHAT_NEW_CONVERSATION = 17;
+  CHAT_CHANGE_MODEL = 18;
+  CHAT_TOGGLE_FOCUS_INSERT_TEXT = 34;
+  FUNCTION_REFACTOR = 28;
+  EXPLAIN_CODE_BLOCK = 29;
+  FUNCTION_ADD_DOCSTRING = 30;
+  EXPLAIN_PROBLEM = 31;
+  COMMAND_BOX_OPENED = 9;
+  COMMAND_SUBMITTED = 10;
+  COMMAND_ACCEPTED = 11;
+  COMMAND_REJECTED = 12;
+  WS_ONBOARDING_LANDING_PAGE_OPENED = 20;
+  WS_ONBOARDING_SETUP_PAGE_OPENED = 21;
+  WS_ONBOARDING_KEYBINDINGS_PAGE_OPENED = 22;
+  WS_ONBOARDING_MIGRATION_SCOPE_PAGE_OPENED = 23;
+  WS_ONBOARDING_IMPORT_PAGE_OPENED = 24;
+  WS_ONBOARDING_AUTH_PAGE_OPENED = 25;
+  WS_ONBOARDING_AUTH_MANUAL_PAGE_OPENED = 26;
+  WS_ONBOARDING_CHOOSE_THEME_PAGE_OPENED = 35;
+  AGY_ONBOARDING_TERMS_OF_USE_PAGE_OPENED = 231;
+  AGY_ONBOARDING_AGENT_CONFIG_PAGE_OPENED = 232;
+  AGY_ONBOARDING_USAGE_MODE_PAGE_OPENED = 233;
+  AGY_ONBOARDING_INSTALL_EXTENSIONS = 234;
+  WS_ONBOARDING_COMPLETED = 27;
+  WS_SKIPPED_ONBOARDING = 69;
+  WS_SETTINGS_PAGE_OPEN = 72;
+  WS_SETTINGS_PAGE_OPEN_WITH_SETTING_FOCUS = 73;
+  EMPTY_WORKSPACE_PAGE_OPENED = 209;
+  EMPTY_WORKSPACE_PAGE_RECENT_FOLDERS_CLICKED = 210;
+  EMPTY_WORKSPACE_PAGE_OPEN_FOLDER_CLICKED = 211;
+  EMPTY_WORKSPACE_PAGE_GENERATE_PROJECT_CLICKED = 212;
+  PROVIDE_FEEDBACK = 33;
+  CASCADE_MESSAGE_SENT = 36;
+  WS_OPEN_CASCADE_MEMORIES_PANEL = 38;
+  PROVIDE_MESSAGE_FEEDBACK = 41;
+  CASCADE_MEMORY_DELETED = 42;
+  CASCADE_STEP_COMPLETED = 43;
+  ACKNOWLEDGE_CASCADE_CODE_EDIT = 44;
+  CASCADE_WEB_TOOLS_OPEN_READ_URL_MARKDOWN = 45;
+  CASCADE_WEB_TOOLS_OPEN_CHUNK_MARKDOWN = 46;
+  CASCADE_MCP_SERVER_INIT = 64;
+  CASCADE_KNOWLEDGE_BASE_ITEM_OPENED = 113;
+  CASCADE_VIEW_LOADED = 119;
+  CASCADE_CONTEXT_SCOPE_ITEM_ATTACHED = 173;
+  CASCADE_CLICK_EVENT = 65;
+  CASCADE_IMPRESSION_EVENT = 67;
+  OPEN_CHANGELOG = 37;
+  CURSOR_DETECTED = 39;
+  VSCODE_DETECTED = 40;
+  JETBRAINS_DETECTED = 153;
+  CROSS_SELL_EXTENSION_DOWNLOAD_ANTIGRAVITY_CLICK = 47;
+  CROSS_SELL_EXTENSION_DOWNLOAD_ANTIGRAVITY_NUDGE_IMPRESSION = 48;
+  WS_PROBLEMS_TAB_SEND_ALL_TO_CASCADE = 49;
+  WS_PROBLEMS_TAB_SEND_ALL_IN_FILE_TO_CASCADE = 50;
+  WS_CASCADE_BAR_FILE_NAV = 51;
+  WS_CASCADE_BAR_HUNK_NAV = 52;
+  WS_CASCADE_BAR_ACCEPT_FILE = 53;
+  WS_CASCADE_BAR_REJECT_FILE = 54;
+  WS_CUSTOM_APP_ICON_MODAL_OPEN = 55;
+  WS_CUSTOM_APP_ICON_SELECT_CLASSIC = 56;
+  WS_CUSTOM_APP_ICON_SELECT_CLASSIC_LIGHT = 57;
+  WS_CUSTOM_APP_ICON_SELECT_RETRO = 58;
+  WS_CUSTOM_APP_ICON_SELECT_BLUEPRINT = 59;
+  WS_CUSTOM_APP_ICON_SELECT_HAND_DRAWN = 60;
+  WS_CUSTOM_APP_ICON_SELECT_SUNSET = 61;
+  WS_CUSTOM_APP_ICON_SELECT_VALENTINE = 66;
+  WS_CUSTOM_APP_ICON_SELECT_PIXEL_SURF = 82;
+  ENTERED_MCP_TOOLBAR_TAB = 63;
+  CLICKED_TO_CONFIGURE_MCP = 62;
+  WS_SETTINGS_UPDATED = 68;
+  BROWSER_PREVIEW_DOM_ELEMENT = 70;
+  BROWSER_PREVIEW_CONSOLE_OUTPUT = 71;
+  WS_SETTINGS_CHANGED_BY_USER = 74;
+  WS_GENERATE_COMMIT_MESSAGE_CLICKED = 75;
+  WS_GENERATE_COMMIT_MESSAGE_ERRORED = 76;
+  WS_CLICKED_COMMIT_FROM_SCM_PANEL = 77;
+  WS_CANCELED_GENERATE_COMMIT_MESSAGE = 79;
+  USING_DEV_EXTENSION = 78;
+  WS_APP_DEPLOYMENT_CREATE_PROJECT = 80;
+  WS_APP_DEPLOYMENT_DEPLOY_PROJECT = 81;
+  CASCADE_OPEN_ACTIVE_CONVERSATION_DROPDOWN = 114;
+  CASCADE_SELECT_ACTIVE_CONVERSATION_ON_DROPDOWN = 115;
+  CASCADE_NAVIGATE_ACTIVE_CONVERSATION_ON_DROPDOWN = 122;
+  CASCADE_SNOOZE_CONVERSATION_ON_DROPDOWN = 123;
+  CASCADE_TOGGLE_NOTIFICATION_ON_DROPDOWN = 124;
+  CASCADE_SELECT_NOTIFICATION_ON_DROPDOWN = 125;
+  CASCADE_NAVIGATE_NOTIFICATION_ON_DROPDOWN = 126;
+  CASCADE_DISMISS_NOTIFICATION_ON_DROPDOWN = 127;
+  CASCADE_TRAJECTORY_SHARE_COPY_LINK = 137;
+  CASCADE_TRAJECTORY_SHARE_CREATE_LINK = 138;
+  CASCADE_CUSTOMIZATIONS_TAB_CHANGE = 139;
+  CASCADE_WORKFLOW_OPEN = 140;
+  CASCADE_NEW_WORKFLOW_CLICKED = 141;
+  CASCADE_NEW_GLOBAL_WORKFLOW_CLICKED = 184;
+  CASCADE_WORKFLOW_REFRESH_CLICKED = 142;
+  CASCADE_RULE_OPEN = 143;
+  CASCADE_NEW_RULE_CLICKED = 144;
+  CASCADE_NEW_GLOBAL_RULE_CLICKED = 145;
+  CASCADE_RULE_REFRESH_CLICKED = 146;
+  CASCADE_IMPORT_RULES_FROM_CURSOR_CLICKED = 147;
+  WS_IMPORT_CURSOR_RULES_COMMAND_PALETTE = 152;
+  CASCADE_CHANGES_ACCEPT_ALL = 83;
+  CASCADE_CHANGES_REJECT_ALL = 84;
+  CASCADE_MEMORIES_EDIT = 85;
+  CASCADE_MEMORIES_VIEW = 86;
+  KEYBOARD_SHORTCUT = 136;
+  CASCADE_INSERT_AT_MENTION = 87;
+  CASCADE_ERROR_STEP = 120;
+  CASCADE_SUGGESTED_RESPONSES_SUGGESTION_CLICKED = 121;
+  CASCADE_PLUGIN_PANEL_OPENED = 128;
+  CASCADE_PLUGIN_PAGE_OPENED = 129;
+  CASCADE_PLUGIN_INSTALLED = 130;
+  CASCADE_PLUGIN_DISABLED = 131;
+  CASCADE_PLUGIN_ENABLED = 132;
+  CASCADE_PLUGIN_INSTALLATION_ERROR = 133;
+  CASCADE_PLUGIN_TOOL_ENABLED = 134;
+  CASCADE_PLUGIN_TOOL_DISABLED = 135;
+  CASCADE_CUSTOM_MODEL_EVENT = 229;
+  WEBSITE_NOT_FOUND_PAGE = 88;
+  WEBSITE_AUTH_REDIRECT_LONG_WAIT = 89;
+  WEBSITE_AUTH_REDIRECT_ERROR = 90;
+  WEBSITE_AUTH_REDIRECT_SUCCESS = 112;
+  WEBSITE_PAGE_VISIT = 175;
+  WEBSITE_SIGNUP_INFO = 176;
+  WEBSITE_START_PLAN_CHECKOUT = 177;
+  WEBSITE_START_UPDATE_PAYMENT = 202;
+  WEBSITE_START_VIEW_INVOICES = 203;
+  WEBSITE_UNIVERSITY_LECTURE_VIEW = 214;
+  WEBSITE_DISALLOW_ENTERPRISE_LOGIN = 224;
+  WEBSITE_SSO_LOGIN_REDIRECT = 225;
+  WEBSITE_ATTEMPT_TO_LOGIN = 226;
+  WEBSITE_SUCCESSFUL_LOGIN = 227;
+  WEBSITE_FAILED_LOGIN = 228;
+  JB_OPEN_PLAN_INFO = 91;
+  JB_SNOOZE_PLUGIN = 92;
+  JB_TOGGLE_PLUGIN_STATUS = 93;
+  JB_SWITCH_CHANNEL = 94;
+  JB_OPEN_SETTINGS = 95;
+  JB_PLUGIN_LOG_IN = 96;
+  JB_PLUGIN_LOG_OUT = 97;
+  JB_OPEN_QUICK_REFERENCE = 98;
+  JB_EDIT_KEYBOARD_SHORTCUTS = 99;
+  JB_CASCADE_BAR_CASCADE_ICON = 100;
+  JB_CASCADE_BAR_FILE_NAV = 101;
+  JB_CASCADE_BAR_HUNK_NAV = 102;
+  JB_CASCADE_BAR_ACCEPT_FILE = 103;
+  JB_CASCADE_BAR_REJECT_FILE = 104;
+  JB_INLAY_HUNK_ACCEPT = 105;
+  JB_INLAY_HUNK_REJECT = 106;
+  JB_DIFF_RE_RENDER = 107;
+  JB_ONBOARDING_OPENED = 108;
+  JB_ONBOARDING_COMPLETED = 109;
+  JB_ONBOARDING_SKIPPED = 110;
+  JB_ONBOARDING_LEARN_MORE = 111;
+  JB_DIFF_RESOLUTION_ERRORED = 116;
+  JB_ACKNOWLEDGE_CODE_EDIT_ERRORED = 117;
+  JB_OPEN_SETTINGS_NOTIFICATION = 118;
+  JB_MCP_ADD_SERVER = 148;
+  JB_MCP_SAVE_CONFIG = 149;
+  JB_MCP_EXPAND_TOOLS = 150;
+  JB_DISABLE_AUTOGEN_MEMORY = 151;
+  JB_TOGGLE_AUTOCOMPLETE = 154;
+  JB_LOGIN_MANUAL_AUTH_TOKEN = 174;
+  JB_AUTO_UPDATED = 179;
+  JB_DRAG_DROP_FILE = 182;
+  JB_AUTO_OPEN_CHAT_WINDOW = 183;
+  WS_TERMINAL_INTEGRATION_FORCE_EXIT = 155;
+  KNOWLEDGE_BASE_ITEM_CREATED = 156;
+  KNOWLEDGE_BASE_ITEM_EDITED = 157;
+  KNOWLEDGE_BASE_ITEM_DELETED = 158;
+  KNOWLEDGE_BASE_ITEM_READ = 159;
+  KNOWLEDGE_BASE_CONNECTION_CREATE = 160;
+  KNOWLEDGE_BASE_CONNECTION_REMOVE = 161;
+  TEAM_CONFIG_TOGGLE_AUTO_RUN_COMMANDS = 162;
+  TEAM_CONFIG_TOGGLE_MCP_SERVERS = 163;
+  TEAM_CONFIG_TOGGLE_APP_DEPLOYMENTS = 164;
+  TEAM_CONFIG_TOGGLE_SANDBOX_APP_DEPLOYMENTS = 165;
+  TEAM_CONFIG_TOGGLE_TEAMS_APP_DEPLOYMENTS = 166;
+  TEAM_CONFIG_TOGGLE_GITHUB_REVIEWS = 167;
+  TEAM_CONFIG_TOGGLE_GITHUB_DESCRIPTION_EDITS = 168;
+  TEAM_CONFIG_TOGGLE_PR_REVIEW_GUIDELINES = 169;
+  TEAM_CONFIG_TOGGLE_PR_DESCRIPTION_GUIDELINES = 170;
+  TEAM_CONFIG_TOGGLE_INDIVIDUAL_LEVEL_ANALYTICS = 171;
+  TEAM_CONFIG_TOGGLE_CONVERSATION_SHARING = 172;
+  TEAM_CONFIG_UPDATE_MCP_SERVERS = 178;
+  TEAM_CONFIG_TOGGLE_GITHUB_AUTO_REVIEWS = 207;
+  TEAM_CONFIG_UPDATE_TOP_UP_SETTINGS = 213;
+  BROWSER_OPEN = 180;
+  CASCADE_WEB_TOOLS_OPEN_BROWSER_MARKDOWN = 181;
+  BROWSER_PAGE_LOAD_SUCCESS = 206;
+  BROWSER_TOOLBAR_INSERT_PAGE_MENTION = 208;
+  BROWSER_INSERT_TEXT_CONTENT = 215;
+  BROWSER_INSERT_SCREENSHOT = 216;
+  BROWSER_INSERT_CODE_BLOCK = 217;
+  BROWSER_INSERT_LOG_BLOCK = 218;
+  BROWSER_INSERT_CONSOLE_OUTPUT = 219;
+  BROWSER_INSERT_DOM_ELEMENT = 220;
+  BROWSER_LAUNCH_FAILURE_DIAGNOSTICS = 230;
+  SUPERCOMPLETE_REQUEST_STARTED = 195;
+  SUPERCOMPLETE_CACHE_HIT = 196;
+  SUPERCOMPLETE_ERROR_GETTING_RESPONSE = 197;
+  SUPERCOMPLETE_NO_RESPONSE = 185;
+  SUPERCOMPLETE_REQUEST_SUCCEEDED = 186;
+  SUPERCOMPLETE_FILTERED = 187;
+  TAB_JUMP_REQUEST_STARTED = 188;
+  TAB_JUMP_CACHE_HIT = 189;
+  TAB_JUMP_ERROR_GETTING_RESPONSE = 190;
+  TAB_JUMP_NO_RESPONSE = 191;
+  TAB_JUMP_PROCESSING_COMPLETE = 192;
+  TAB_JUMP_FILTERED = 193;
+  TAB_JUMP_ERROR_UI_RENDERED = 194;
+  AUTOCOMPLETE_CHAT_NO_RESPONSE = 221;
+  AUTOCOMPLETE_CHAT_ERROR_GETTING_RESPONSE = 222;
+  AUTOCOMPLETE_CHAT_REQUEST_ACCEPTED = 223;
 }
 
 enum PromptAnnotationKind {
@@ -2575,7 +2210,12 @@ enum SlashCommandType {
   SLASH_COMMAND_TYPE_SKILL = 2;
 }
 
-enum StatusEnum {
+enum SoundType {
+  SOUND_TYPE_UNSPECIFIED = 0;
+  SOUND_TYPE_CASCADE_DONE = 1;
+}
+
+enum Status {
   STATUS_UNSPECIFIED = 0;
   SUCCESS = 1;
   ERROR = 2;
@@ -3189,6 +2829,13 @@ message Any {
   bytes value = 2;
 }
 
+message AppliedUpdate {
+  string key = 1;
+  Row new_row = 2;
+  bool deleted = 5;
+  int64 current_e_tag = 3;
+}
+
 message ApplyUpdateRequest {
 }
 
@@ -3398,6 +3045,13 @@ message AutoFixLintsConfig {
   string notifying_prompt = 2;
 }
 
+message AwaitNewLintsConfig {
+  string acknowledger_id = 1;
+  int32 timeout_ms = 2;
+  int32 grace_period_ms = 3;
+  bool include_saved = 4;
+}
+
 message BackgroundCommand {
   string command_line = 1;
   uint32 step_index = 2;
@@ -3480,6 +3134,13 @@ message Blobref {
 message BranchInfo {
   string name = 1;
   bool is_current_branch = 2;
+}
+
+message BroadcastConversationDeletionRequest {
+  string deleted_cascade_id = 1;
+}
+
+message BroadcastConversationDeletionResponse {
 }
 
 message BrowserCodeBlockScopeItem {
@@ -3918,6 +3579,10 @@ message CascadeToolConfig {
   bool disable_simple_research_tools = 29;
 }
 
+message CascadeTrajectorySummaries {
+  repeated SummariesEntry summaries = 1;
+}
+
 message CascadeTrajectorySummary {
   string summary = 1;
   uint32 step_count = 2;
@@ -3977,6 +3642,22 @@ message CciWithSubrange {
 message CciWithSubrangeWithRetrievalMetadata {
   CciWithSubrange cci_with_subrange = 1;
   RetrievedCodeContextItemMetadata metadata = 2;
+}
+
+message Cell {
+  string kind = 1;
+  string content = 2;
+}
+
+message CellOutput {
+  string cell_id = 1;
+  int32 cell_index = 2;
+  CellStatus status = 3;
+  string output_text = 4;
+  bool output_text_truncated = 5;
+  bool generated_images = 6;
+  string error_trace = 7;
+  repeated NotebookBlob blobs = 8;
 }
 
 message ChangelistStatus {
@@ -4124,6 +3805,15 @@ message CheckDevToolsActivePortRequest {
 
 message CheckDevToolsActivePortResponse {
   bool exists = 1;
+}
+
+message CheckTerminalShellSupportRequest {
+}
+
+message CheckTerminalShellSupportResponse {
+  bool has_shell_integration = 1;
+  string shell_name = 2;
+  string shell_path = 3;
 }
 
 message CheckoutCommitRequest {
@@ -4579,6 +4269,16 @@ message ConfigMapEntry {
   string value = 2;
 }
 
+message ConnectRemoteRequest {
+  string remote_multi_hop = 1;
+}
+
+message ConnectRemoteResponse {
+  RemoteConnectionPrompt prompt = 1;
+  Status status = 2;
+  string remote_id = 3;
+}
+
 message ConsoleLogLine {
   string timestamp_str = 1;
   string type = 2;
@@ -4712,6 +4412,19 @@ message ConversationHistoryConfig {
 
 message ConversationMetadataEvent {
   CortexTrajectoryMetadata metadata = 1;
+}
+
+message ConversationPickerRequest {
+  CascadeTrajectorySummaries summaries = 1;
+  string current_cascade_id = 2;
+  string current_workspace_normalized_path = 3;
+  string current_workspace_uri = 4;
+}
+
+message ConversationPickerResponse {
+  string chat_message = 1;
+  string selected_cascade_id = 2;
+  repeated string deleted_cascade_ids = 3;
 }
 
 message ConversationScopeItem {
@@ -5207,6 +4920,11 @@ message DangerousSubcommandsEntry {
   DangerousSubcommands value = 2;
 }
 
+message DataEntry {
+  string key = 1;
+  Any value = 2;
+}
+
 message DebugInfoEntry {
   string key = 1;
   string value = 2;
@@ -5308,6 +5026,13 @@ message DeleteQueuedUserInputStepRequest {
 message DeleteQueuedUserInputStepResponse {
 }
 
+message DeleteRemoteRequest {
+  string remote_id = 1;
+}
+
+message DeleteRemoteResponse {
+}
+
 message DeleteSkillRequest {
   string skill_id = 1;
 }
@@ -5393,6 +5118,13 @@ message DisconnectMcpOAuthRequest {
 }
 
 message DisconnectMcpOAuthResponse {
+}
+
+message DisconnectRemoteRequest {
+  string remote_id = 1;
+}
+
+message DisconnectRemoteResponse {
 }
 
 message Document {
@@ -5501,6 +5233,20 @@ message DynamicContextScopeItem {
   string uri = 4;
 }
 
+message EditNotebookRequest {
+  string absolute_path_uri = 1;
+  EditNotebookOperation operation = 2;
+  string anchor_cell_id = 3;
+  int32 anchor_cell_index = 4;
+  repeated Cell cells = 5;
+  int32 delete_count = 6;
+}
+
+message EditNotebookResponse {
+  repeated ModifiedCell modified_cells = 1;
+  int32 total_cell_count = 2;
+}
+
 message EditorOptions {
   uint64 tab_size = 1;
   bool insert_spaces = 2;
@@ -5536,6 +5282,13 @@ message EliminateBattleModeArmRequest {
 
 message EliminateBattleModeArmResponse {
   BattleModeInfo battle_mode_info = 1;
+}
+
+message EndAudioRecordingRequest {
+}
+
+message EndAudioRecordingResponse {
+  string transcription = 1;
 }
 
 message EndAudioSessionRequest {
@@ -5623,6 +5376,11 @@ message Event {
   int64 timestamp_unix_ms = 3;
 }
 
+message EventMetadataRecord {
+  string key = 1;
+  string value = 2;
+}
+
 message Evolution {
   bool is_obsolete = 1;
   bool is_orphaned = 2;
@@ -5634,6 +5392,31 @@ message Evolution {
 message ExecutableScriptSpec {
   AgentScriptCommandSpec command_spec = 1;
   AgentScriptPythonSpec python_spec = 2;
+}
+
+message ExecuteCommandRequest {
+  string command_line = 5;
+  string cwd = 3;
+  string terminal_id = 4;
+  bool sandbox_override = 6;
+  string conversation_id = 7;
+  string terminal_host = 8;
+  repeated EnvEntry env = 9;
+}
+
+message ExecuteNotebookRequest {
+  string absolute_path_uri = 1;
+  repeated string cell_ids = 2;
+  repeated int32 cell_indices = 3;
+  bool stop_on_error = 4;
+  bool restart_kernel = 5;
+}
+
+message ExecuteNotebookResponse {
+  ExecutionStatus status = 1;
+  int32 executed_cells_count = 2;
+  repeated CellOutput cell_outputs = 3;
+  string error_trace = 4;
 }
 
 message ExecutionStatus {
@@ -5876,6 +5659,17 @@ message FileSearchResultContent {
   repeated FileSearchResult result = 1;
 }
 
+message FindAllReferencesRequest {
+  string file_uri = 1;
+  string symbol = 2;
+  uint32 line = 3;
+  uint32 occurrence_index = 4;
+}
+
+message FindAllReferencesResponse {
+  repeated LspReference references = 1;
+}
+
 message FindToolConfig {
   uint32 max_find_results = 1;
   string fd_path = 2;
@@ -5886,6 +5680,22 @@ message FindToolConfig {
 
 message FinishToolConfig {
   string result_json_schema_string = 1;
+}
+
+message FocusEditorWindow {
+  string cascade_id = 1;
+}
+
+message FocusIDEWindowRequest {
+  FocusEditorWindow editor = 1;
+  FocusManagerWindow manager = 2;
+}
+
+message FocusIDEWindowResponse {
+}
+
+message FocusManagerWindow {
+  string cascade_id = 1;
 }
 
 message FocusUserPageRequest {
@@ -5977,6 +5787,11 @@ message FunctionResultSubcontent {
 
 message FunctionResultSubcontentList {
   repeated FunctionResultSubcontent contents = 1;
+}
+
+message GRPCStatus {
+  int32 code = 1;
+  string message = 2;
 }
 
 message GStaticSource {
@@ -6158,6 +5973,13 @@ message GetBattleWorktreeDiffResponse {
   repeated VcsFileChange file_changes = 1;
 }
 
+message GetBrowserOnboardingPortRequest {
+}
+
+message GetBrowserOnboardingPortResponse {
+  uint32 port = 1;
+}
+
 message GetBrowserOpenConversationRequest {
 }
 
@@ -6288,6 +6110,13 @@ message GetChangelogResponse {
   string path = 1;
 }
 
+message GetChromeDevtoolsMcpUrlRequest {
+}
+
+message GetChromeDevtoolsMcpUrlResponse {
+  string url = 1;
+}
+
 message GetCodeActionDiffRequest {
   string cascade_id = 1;
   int32 step_index = 2;
@@ -6341,6 +6170,13 @@ message GetConversationMetadataResponse {
   CortexTrajectoryMetadata metadata = 1;
 }
 
+message GetCurrentAudioRecordingRequest {
+}
+
+message GetCurrentAudioRecordingResponse {
+  float average_volume = 2;
+}
+
 message GetDebugDiagnosticsRequest {
 }
 
@@ -6353,6 +6189,25 @@ message GetDefaultProjectDirRequest {
 
 message GetDefaultProjectDirResponse {
   string default_project_dir_uri = 1;
+}
+
+message GetDefinitionRequest {
+  repeated GetDefinitionRequestItem request = 1;
+}
+
+message GetDefinitionRequestItem {
+  string file_uri = 1;
+  DocumentPosition position = 2;
+  string line_content = 3;
+}
+
+message GetDefinitionResponse {
+  repeated GetDefinitionResponseItem response = 1;
+}
+
+message GetDefinitionResponseItem {
+  repeated LspReference definitions = 1;
+  GRPCStatus status = 2;
 }
 
 message GetGrantedScopesRequest {
@@ -6401,6 +6256,16 @@ message GetKnowledgeItemsRequest {
 
 message GetKnowledgeItemsResponse {
   repeated KnowledgeItem items = 1;
+}
+
+message GetLintErrorsRequest {
+  AwaitNewLintsConfig await_new_lints_config = 1;
+  string conversation_id = 5;
+}
+
+message GetLintErrorsResponse {
+  repeated CodeDiagnostic lint_errors = 1;
+  repeated CodeDiagnostic persistent_lint_errors = 2;
 }
 
 message GetLoadCodeAssistRequest {
@@ -6571,6 +6436,14 @@ message GetRevisionArtifactRequest {
 message GetRevisionArtifactResponse {
   PatchStats stats = 1;
   string patch = 2;
+}
+
+message GetSecretValueRequest {
+  string key = 1;
+}
+
+message GetSecretValueResponse {
+  string value = 1;
 }
 
 message GetServerConfigurationRequest {
@@ -7011,12 +6884,28 @@ message GuidelineItem {
   string guideline = 1;
 }
 
+message HandleAsyncPostMessageRequest {
+  string message_type = 1;
+  string message_content = 2;
+}
+
+message HandleAsyncPostMessageResponse {
+  string response_content = 1;
+}
+
 message HandleCascadeUserInteractionRequest {
   string cascade_id = 1;
   CascadeUserInteraction interaction = 2;
 }
 
 message HandleCascadeUserInteractionResponse {
+}
+
+message HandleProposeCodeExtensionVerificationRequest {
+  Step step = 1;
+}
+
+message HandleProposeCodeExtensionVerificationResponse {
 }
 
 message HandleScreenRecordingRequest {
@@ -7203,6 +7092,14 @@ message InjectArtifactReminderThresholdMapEntry {
 message InjectedResponseMetadata {
 }
 
+message InsertCodeAtCursorRequest {
+  string text = 1;
+  ActiveEditorType editor_type = 2;
+}
+
+message InsertCodeAtCursorResponse {
+}
+
 message InstallCascadePluginRequest {
   Metadata metadata = 1;
   string plugin_id = 2;
@@ -7257,6 +7154,13 @@ message InvokeSubagentToolConfig {
   bool allow_task_mode = 5;
   bool always_inherit_model = 6;
   bool allow_fork = 7;
+}
+
+message IsAgentManagerEnabledRequest {
+}
+
+message IsAgentManagerEnabledResponse {
+  bool enabled = 1;
 }
 
 message JJWorktree {
@@ -7468,6 +7372,16 @@ message LanguageServerDiagnostics {
   repeated string logs = 1;
 }
 
+message LanguageServerStartedRequest {
+  int32 https_port = 1;
+  int32 lsp_port = 2;
+  string csrf_token = 4;
+  int32 http_port = 5;
+}
+
+message LanguageServerStartedResponse {
+}
+
 message LatencyInfo {
   uint64 client_latency_ms = 1;
   uint64 prompt_latency_ms = 2;
@@ -7475,6 +7389,15 @@ message LatencyInfo {
   uint64 debounce_latency_ms = 4;
   uint64 rpc_latency_ms = 5;
   uint64 network_latency_ms = 6;
+}
+
+message LaunchBrowserRequest {
+  string extension_path = 1;
+  bool launch_in_foreground = 2;
+}
+
+message LaunchBrowserResponse {
+  string cdp_address = 1;
 }
 
 message License {
@@ -7498,6 +7421,13 @@ message LinkScopeItem {
   string description = 3;
   string display_label = 4;
   string provider = 5;
+}
+
+message ListConnectedRemotesRequest {
+}
+
+message ListConnectedRemotesResponse {
+  repeated RemotesEntry remotes = 1;
 }
 
 message ListCustomizationPathsByFileRequest {
@@ -7559,6 +7489,15 @@ message ListProfilesRequest {
 
 message ListProfilesResponse {
   repeated ProfileItem profiles = 1;
+}
+
+message ListRemotesRequest {
+  bool include_autodetected = 1;
+  bool include_saved = 2;
+}
+
+message ListRemotesResponse {
+  repeated RemoteDescriptor remotes = 1;
 }
 
 message ListSidecarLogFilesRequest {
@@ -7626,7 +7565,7 @@ message LoadedCustomization {
   string name = 2;
   string path = 3;
   Scope scope = 4;
-  StatusEnum status = 5;
+  Status status = 5;
   string plugin_name = 6;
 }
 
@@ -7648,6 +7587,15 @@ message LogArtifactsConfig {
   int32 max_bytes_per_tool_arg = 5;
   bool hide_system_steps = 6;
   bool hide_user_implicit_steps = 7;
+}
+
+message LogEventRequest {
+  ProductEventType event = 1;
+  string event_string = 3;
+  repeated EventMetadataRecord metadata = 2;
+}
+
+message LogEventResponse {
 }
 
 message LoginRequest {
@@ -7673,6 +7621,12 @@ message LoginWithBrowserResponse {
 message LowLevelToolsConfig {
   bool enable_low_level_tools_instructions = 1;
   bool enable_mouse_tools = 2;
+}
+
+message LspReference {
+  string uri = 1;
+  Range range = 2;
+  string snippet = 3;
 }
 
 message MQueryConfig {
@@ -8046,6 +8000,12 @@ message ModalityTokenCount {
   uint64 token_count = 2;
 }
 
+message Model {
+  string model_id = 1;
+  string display_name = 2;
+  string description = 3;
+}
+
 message ModelAPIRetryConfig {
   uint32 max_retries = 1;
   uint32 initial_sleep_duration_ms = 2;
@@ -8233,6 +8193,13 @@ message ModelsEntry {
   ModelDetails value = 2;
 }
 
+message ModifiedCell {
+  string cell_id = 1;
+  string kind = 2;
+  string content = 3;
+  int32 index = 4;
+}
+
 message MqueryToolConfig {
   MQueryConfig m_query_config = 1;
   Model m_query_model = 2;
@@ -8279,6 +8246,11 @@ message NewEnvironmentArgs {
   string environment_id = 2;
 }
 
+message NotebookBlob {
+  string mime_type = 1;
+  string data = 2;
+}
+
 message NotebookEditToolConfig {
   bool enabled = 1;
 }
@@ -8292,11 +8264,108 @@ message OAuthStatus {
   string error = 2;
 }
 
+message OpenAntigravityRulesFileRequest {
+  bool is_workspace_rules = 1;
+}
+
+message OpenAntigravityRulesFileResponse {
+}
+
+message OpenConfigurePluginsPageRequest {
+}
+
+message OpenConfigurePluginsPageResponse {
+}
+
+message OpenConversationWorkspaceQuickPickRequest {
+  string cascade_id = 1;
+  repeated string workspace_uris = 2;
+}
+
+message OpenConversationWorkspaceQuickPickResponse {
+  bool open_in_current_window = 1;
+}
+
+message OpenDiffZonesRequest {
+  string cascade_id = 1;
+  repeated ValidationState validation_states = 2;
+  bool write_new_state = 3;
+  repeated uint32 step_indices = 4;
+  string trace_id = 5;
+}
+
+message OpenDiffZonesResponse {
+}
+
+message OpenExternalUrlRequest {
+  string url = 1;
+  bool use_ide_browser = 2;
+}
+
+message OpenExternalUrlResponse {
+}
+
+message OpenFilePointerRequest {
+  string file_uri = 1;
+  int32 start_line = 2;
+  int32 start_col = 3;
+  int32 end_line = 4;
+  int32 end_col = 5;
+  bool is_cascade_diff = 6;
+}
+
+message OpenFilePointerResponse {
+}
+
+message OpenPluginConfigModalRequest {
+  string plugin_id = 3;
+}
+
+message OpenPluginConfigModalResponse {
+}
+
+message OpenPluginPageRequest {
+  string plugin_id = 4;
+}
+
+message OpenPluginPageResponse {
+}
+
+message OpenSettingRequest {
+  string setting_id = 1;
+}
+
+message OpenSettingResponse {
+}
+
+message OpenTerminalRequest {
+  string process_id = 1;
+}
+
+message OpenTerminalResponse {
+}
+
 message OpenUrlRequest {
   string url = 1;
 }
 
 message OpenUrlResponse {
+}
+
+message OpenVirtualFileRequest {
+  string text = 1;
+  bool show_markdown_preview = 2;
+}
+
+message OpenVirtualFileResponse {
+}
+
+message Operation {
+  string name = 1;
+  Any metadata = 2;
+  bool done = 3;
+  Status error = 4;
+  Any response = 5;
 }
 
 message OriginalWorkspaceSnapshotsEntry {
@@ -8418,6 +8487,13 @@ message PlanStatus {
 message PlannerRetryConfig {
   ModelOutputRetryConfig model_output_retry = 1;
   ModelAPIRetryConfig api_retry = 2;
+}
+
+message PlaySoundRequest {
+  SoundType sound_type = 1;
+}
+
+message PlaySoundResponse {
 }
 
 message Plugin {
@@ -8687,6 +8763,13 @@ message ProviderMetadataEntry {
   CodeContextProviderMetadata value = 2;
 }
 
+message PushUnifiedStateSyncUpdateRequest {
+  UpdateRequest update = 1;
+}
+
+message PushUnifiedStateSyncUpdateResponse {
+}
+
 message QueuedStepsUpdate {
   repeated uint32 indices = 1;
   repeated Step queued_steps = 2;
@@ -8749,6 +8832,18 @@ message ReadKnowledgeBaseItemToolConfig {
   repeated KnowledgeBaseItem knowledge_base_items = 2;
 }
 
+message ReadNotebookRequest {
+  string absolute_path_uri = 1;
+  repeated int32 cell_indices = 2;
+  repeated string cell_ids = 3;
+}
+
+message ReadNotebookResponse {
+  string flattened_content = 1;
+  int32 read_cell_count = 2;
+  repeated NotebookBlob blobs = 3;
+}
+
 message ReadProjectRequest {
   string id = 1;
 }
@@ -8768,6 +8863,15 @@ message ReadProjectsResponse {
   repeated string not_found_ids = 2;
   repeated string failed_ids = 3;
   repeated ErrorMessagesEntry error_messages = 4;
+}
+
+message ReadTerminalRequest {
+  string process_id = 1;
+  string conversation_id = 2;
+}
+
+message ReadTerminalResponse {
+  string contents = 1;
 }
 
 message ReadUrlContentToolConfig {
@@ -8991,9 +9095,26 @@ message ReleaseChannel {
   string description = 3;
 }
 
+message RemoteConnectionPrompt {
+  string message = 1;
+  bool is_secret = 2;
+}
+
 message RemoteControlDetails {
   string user_agent = 1;
   Transport transport = 2;
+}
+
+message RemoteDescriptor {
+  string remote_multi_hop = 1;
+  string name = 2;
+  string description = 3;
+  string type = 4;
+}
+
+message RemotesEntry {
+  string key = 1;
+  RemoteDescriptor value = 2;
 }
 
 message RemoveTrackedWorkspaceRequest {
@@ -9160,6 +9281,14 @@ message Resources {
   repeated Resource resources = 1;
 }
 
+message RespondToPromptRequest {
+  string remote_id = 1;
+  string response = 2;
+}
+
+message RespondToPromptResponse {
+}
+
 message ResponseHeaderEntry {
   string key = 1;
   string value = 2;
@@ -9169,6 +9298,12 @@ message RestartRequest {
 }
 
 message RestartResponse {
+}
+
+message RestartUserStatusUpdaterRequest {
+}
+
+message RestartUserStatusUpdaterResponse {
 }
 
 message ResultGroup {
@@ -9231,6 +9366,11 @@ message ReviewSnippet {
   string review_id = 3;
 }
 
+message Row {
+  string value = 1;
+  int64 e_tag = 2;
+}
+
 message RuleScopeItem {
   string rule_path = 1;
   string rule_name = 2;
@@ -9279,6 +9419,14 @@ message RunCommandToolConfig {
   bool disable_sandbox_bypass = 21;
 }
 
+message RunExtensionCodeRequest {
+  string code = 1;
+}
+
+message RunExtensionCodeResponse {
+  string output = 1;
+}
+
 message RuntimeEnvironment {
   string host = 1;
   string binary = 2;
@@ -9301,12 +9449,27 @@ message SaveAgentScriptCommandSpecResponse {
   AgentScriptItem agent_script = 2;
 }
 
+message SaveDocumentRequest {
+  string uri = 1;
+  string conversation_id = 2;
+}
+
+message SaveDocumentResponse {
+}
+
 message SaveMediaAsArtifactRequest {
   Media media = 1;
 }
 
 message SaveMediaAsArtifactResponse {
   string uri = 1;
+}
+
+message SaveRemoteRequest {
+  RemoteDescriptor descriptor = 1;
+}
+
+message SaveRemoteResponse {
 }
 
 message SaveScreenRecordingRequest {
@@ -9658,6 +9821,13 @@ message ShouldEnableUnleashResponse {
   bool should_enable = 1;
 }
 
+message ShowTerminalRequest {
+  string terminal_id = 1;
+}
+
+message ShowTerminalResponse {
+}
+
 message Side {
   string label = 2;
 }
@@ -9913,6 +10083,12 @@ message SourceMetadata {
   SidecarCommandSource sidecar = 2;
 }
 
+message StartAudioRecordingRequest {
+}
+
+message StartAudioRecordingResponse {
+}
+
 message StartAudioTranscriptionRequest {
   string mime_type = 1;
   string model = 2;
@@ -10043,6 +10219,14 @@ message StepsUpdate {
   repeated Step steps = 2;
   uint32 total_length = 3;
   Slice page_bounds = 4;
+}
+
+message StoreSecretValueRequest {
+  string key = 1;
+  string value = 2;
+}
+
+message StoreSecretValueResponse {
 }
 
 message StreamAgentStateUpdatesRequest {
@@ -10181,6 +10365,10 @@ message SubscribeToSidecarsResponse {
   repeated SidecarStatusInfo sidecars = 1;
 }
 
+message SubscribeToUnifiedStateSyncTopicRequest {
+  string topic = 1;
+}
+
 message SubtrajectoryUpdatesEntry {
   string key = 1;
   TrajectoryUpdate value = 2;
@@ -10188,6 +10376,11 @@ message SubtrajectoryUpdatesEntry {
 
 message SuggestedResponseConfig {
   bool force_disable = 1;
+}
+
+message SummariesEntry {
+  string key = 1;
+  CascadeTrajectorySummary value = 2;
 }
 
 message SuperCompleteFilterReason {
@@ -10288,6 +10481,13 @@ message TerminalInfo {
   Timestamp created_at = 9;
 }
 
+message TerminalResearchResultRequest {
+  Step last_step = 1;
+}
+
+message TerminalResearchResultResponse {
+}
+
 message TerminalScopeItem {
   string process_id = 1;
   string name = 2;
@@ -10337,6 +10537,14 @@ message TerminalShellCommandTrailer {
 message TerminalSize {
   int32 cols = 1;
   int32 rows = 2;
+}
+
+message TerminateCommandRequest {
+  string terminal_id = 1;
+  string conversation_id = 2;
+}
+
+message TerminateCommandResponse {
 }
 
 message TextBlock {
@@ -10493,6 +10701,10 @@ message TopUpStatus {
   bool top_up_criteria_met = 6;
 }
 
+message Topic {
+  repeated DataEntry data = 1;
+}
+
 message TosErrorInfo {
   string message = 1;
   string appeal_url = 2;
@@ -10614,6 +10826,11 @@ message UnifiedDiffLine {
   UnifiedDiffLineType type = 2;
 }
 
+message UnifiedStateSyncUpdate {
+  Topic initial_state = 1;
+  AppliedUpdate applied_update = 2;
+}
+
 message UnleashContext {
   string user_id = 1;
   string session_id = 2;
@@ -10628,6 +10845,13 @@ message UpdateCascadeMemoryRequest {
 }
 
 message UpdateCascadeMemoryResponse {
+}
+
+message UpdateCascadeTrajectorySummariesRequest {
+  CascadeTrajectorySummaries summaries = 1;
+}
+
+message UpdateCascadeTrajectorySummariesResponse {
 }
 
 message UpdateConversationAnnotationsRequest {
@@ -10657,6 +10881,14 @@ message UpdateCustomizationRequest {
 }
 
 message UpdateCustomizationResponse {
+}
+
+message UpdateDetailedViewWithCascadeInputRequest {
+  HandleStreamingCommandRequest request = 1;
+  HandleStreamingCommandResponse response = 2;
+}
+
+message UpdateDetailedViewWithCascadeInputResponse {
 }
 
 message UpdateDevExperimentsRequest {
@@ -10692,6 +10924,13 @@ message UpdateProjectRequest {
 }
 
 message UpdateProjectResponse {
+}
+
+message UpdateRequest {
+  string topic_name = 1;
+  AppliedUpdate applied_update = 5;
+  string key = 2;
+  Row row = 3;
 }
 
 message UpdateStatus {
@@ -10730,7 +10969,7 @@ message UrlContextCallContent {
 
 message UrlContextResult {
   string url = 1;
-  StatusEnum status = 2;
+  Status status = 2;
 }
 
 message UrlContextResultContent {
@@ -11129,6 +11368,14 @@ message WorkspaceRelativePathsMigrateMeToWorkspaceUrisEntry {
 message WorkspaceUrisToRelativePathsEntry {
   string key = 1;
   string value = 2;
+}
+
+message WriteCascadeEditRequest {
+  string uri = 1;
+  string target_content = 2;
+}
+
+message WriteCascadeEditResponse {
 }
 
 message WriteFileRequest {

@@ -227,11 +227,6 @@ class AgyHubClient {
     ): Result<Unit> =
         chatService.sendUserPrompt(cascadeId, text, modelEnum, thinkingBudget, autoExecutionPolicy, media, hubUrl)
 
-    suspend fun sendUserCascadeMessage(
-        payloadJson: String,
-        hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<Unit> =
-        chatService.sendUserCascadeMessage(payloadJson, hubUrl)
 
     fun streamAgentStateUpdates(
         cascadeId: String,

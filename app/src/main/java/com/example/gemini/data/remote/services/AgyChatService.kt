@@ -21,6 +21,33 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
+import exa.language_server_pb.AutoCommandConfig
+import exa.language_server_pb.BuiltinAgentConfig
+import exa.language_server_pb.CancelCascadeInvocationRequest
+import exa.language_server_pb.CancelCascadeStepsRequest
+import exa.language_server_pb.CascadeCommandsAutoExecution
+import exa.language_server_pb.CascadeConfig
+import exa.language_server_pb.CascadeExecutorConfig
+import exa.language_server_pb.CascadePlannerConfig
+import exa.language_server_pb.CascadeToolConfig
+import exa.language_server_pb.ConversationHistoryConfig
+import exa.language_server_pb.CortexTrajectorySource
+import exa.language_server_pb.CustomAgentSpec
+import exa.language_server_pb.DefaultAgentConfig
+import exa.language_server_pb.Media
+import exa.language_server_pb.MessageDeliveryStrategy
+import exa.language_server_pb.Model
+import exa.language_server_pb.ModelOrAlias
+import exa.language_server_pb.NotifyUserConfig
+import exa.language_server_pb.ProjectEnvironmentConfig
+import exa.language_server_pb.ResolveOutstandingStepsRequest
+import exa.language_server_pb.RunCommandToolConfig
+import exa.language_server_pb.SendUserCascadeMessageRequest
+import exa.language_server_pb.StartCascadeRequest
+import exa.language_server_pb.TextOrScopeItem
+import okio.ByteString
+import okio.ByteString.Companion.decodeBase64
+
 /**
  * Dedicated RPC service for chat sessions: starting cascades, sending prompts, streaming state frames,
  * canceling invocations/steps, handling interactive approvals, and resolving blocking steps.
@@ -40,8 +67,17 @@ class AgyChatService(
         }
     }
 
+    private fun toModelProto(name: String?): Model? {
+        if (name.isNullOrBlank()) return null
+        return try {
+            Model.valueOf(name)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     /**
-     * Starts a new conversation session on the daemon.
+     * Starts a new conversation session on the daemon via typed AgyLanguageService.
      */
     suspend fun startCascade(
         cascadeId: String = UUID.randomUUID().toString(),
@@ -50,30 +86,26 @@ class AgyChatService(
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
         val cid = cascadeId
-        val resolvedModel = resolveModelEnum(modelEnum)
+        val resolvedModelStr = resolveModelEnum(modelEnum)
+        val modelProto = toModelProto(resolvedModelStr)
         val normalizedUri = if (workspaceUri.isNotBlank()) {
             if (workspaceUri.startsWith("file://")) workspaceUri else "file://$workspaceUri"
         } else ""
-        val payload = JSONObject().apply {
-            put("source", "CORTEX_TRAJECTORY_SOURCE_CASCADE_CLIENT")
-            put("cascadeId", cid)
-            put("requestedModel", resolvedModel)
-            if (normalizedUri.isNotBlank()) {
-                put("workspaceUris", JSONArray().put(normalizedUri))
-                put("overrideWorkspaceUris", JSONArray().put(normalizedUri))
-            } else {
-                put("projectEnvConfig", JSONObject().apply {
-                    put("projectId", "outside-of-project")
-                    put("defaultProjectEnvironment", JSONObject())
-                })
-            }
-        }.toString()
 
-        grpcClient.executeGrpcWebCall("StartCascade", payload, hubUrl).map { cid }
+        val req = StartCascadeRequest(
+            cascade_id = cid,
+            source = CortexTrajectorySource.CORTEX_TRAJECTORY_SOURCE_CASCADE_CLIENT,
+            requested_model = modelProto ?: Model.MODEL_UNSPECIFIED,
+            workspace_uris = if (normalizedUri.isNotBlank()) listOf(normalizedUri) else emptyList(),
+            override_workspace_uris = if (normalizedUri.isNotBlank()) listOf(normalizedUri) else emptyList(),
+            project_env_config = if (normalizedUri.isBlank()) ProjectEnvironmentConfig(project_id = "outside-of-project") else null
+        )
+
+        AgyLanguageService.StartCascade().executeSafely(req).map { cid }
     }
 
     /**
-     * Constructs and sends the full prompt message payload to SendUserCascadeMessage.
+     * Constructs and sends the full prompt message payload via typed AgyLanguageService.
      */
     suspend fun sendUserPrompt(
         cascadeId: String,
@@ -84,77 +116,77 @@ class AgyChatService(
         media: List<AgyMediaItem> = emptyList(),
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        val resolvedModel = resolveModelEnum(modelEnum)
+        val resolvedModelStr = resolveModelEnum(modelEnum)
+        val modelProto = toModelProto(resolvedModelStr)
         val promptText = if (text.isNotBlank()) text else if (media.isNotEmpty()) (media.firstOrNull()?.description ?: "Voice note") else ""
-        val payload = JSONObject().apply {
-            put("cascadeId", cascadeId)
-            put("items", JSONArray().put(JSONObject().put("text", promptText)))
-            if (media.isNotEmpty()) {
-                val mediaArr = JSONArray()
-                for (m in media) {
-                    val isImageOrAudio = m.mimeType.startsWith("image/") || m.mimeType.startsWith("audio/")
-                    mediaArr.put(JSONObject().apply {
-                        put("mimeType", m.mimeType)
-                        put("inlineData", if (isImageOrAudio) m.base64 else "")
-                        if (m.durationSeconds > 0) {
-                            put("durationSeconds", m.durationSeconds)
-                        }
-                        put("description", m.description)
-                        if (!m.uri.isNullOrBlank()) {
-                            put("uri", m.uri)
-                        }
-                        if (isImageOrAudio && !m.thumbnail.isNullOrBlank()) {
-                            put("thumbnail", m.thumbnail)
-                        }
-                    })
-                }
-                put("media", mediaArr)
-            }
-            put("cascadeConfig", JSONObject().apply {
-                put("plannerConfig", JSONObject().apply {
-                    put("toolConfig", JSONObject().apply {
-                        put("runCommand", JSONObject().apply {
-                            put("autoCommandConfig", JSONObject().apply {
-                                put("autoExecutionPolicy", autoExecutionPolicy)
-                            })
-                        })
-                        put("notifyUser", JSONObject())
-                    })
-                    put("requestedModel", JSONObject().apply {
-                        put("model", resolvedModel)
-                    })
-                    put("supportsThinking", thinkingBudget > 0)
-                    put("thinkingBudget", thinkingBudget)
-                    put("knowledgeConfig", JSONObject())
-                    put("useAiCredits", false)
-                    put("supportsLatexRendering", true)
-                })
-                put("executorConfig", JSONObject().apply {
-                    put("useCoreDirect", true)
-                })
-                put("conversationHistoryConfig", JSONObject())
-            })
-            put("customAgentSpec", JSONObject().apply {
-                put("builtinAgent", JSONObject().apply {
-                    put("defaultAgent", JSONObject().apply {
-                        put("isGoogle", false)
-                        put("isInteractive", true)
-                    })
-                })
-            })
-            put("deliveryStrategy", "MESSAGE_DELIVERY_STRATEGY_WHEN_IDLE")
-        }.toString()
 
-        sendUserCascadeMessage(payload, hubUrl)
+        val autoPolicyVal = when (autoExecutionPolicy) {
+            "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER" -> CascadeCommandsAutoExecution.CASCADE_COMMANDS_AUTO_EXECUTION_EAGER
+            "CASCADE_COMMANDS_AUTO_EXECUTION_AUTO" -> CascadeCommandsAutoExecution.CASCADE_COMMANDS_AUTO_EXECUTION_AUTO
+            "CASCADE_COMMANDS_AUTO_EXECUTION_OFF" -> CascadeCommandsAutoExecution.CASCADE_COMMANDS_AUTO_EXECUTION_OFF
+            "CASCADE_COMMANDS_AUTO_EXECUTION_PROCEED_IN_SANDBOX" -> CascadeCommandsAutoExecution.CASCADE_COMMANDS_AUTO_EXECUTION_PROCEED_IN_SANDBOX
+            else -> CascadeCommandsAutoExecution.CASCADE_COMMANDS_AUTO_EXECUTION_EAGER
+        }
+
+        val mediaItems = media.map { m ->
+            val isImageOrAudio = m.mimeType.startsWith("image/") || m.mimeType.startsWith("audio/")
+            val rawBytes = if (isImageOrAudio && m.base64.isNotBlank()) {
+                m.base64.decodeBase64() ?: ByteString.EMPTY
+            } else ByteString.EMPTY
+
+            Media(
+                mime_type = m.mimeType,
+                inline_data = rawBytes,
+                duration_seconds = if (m.durationSeconds > 0) m.durationSeconds.toFloat() else 0f,
+                description = m.description,
+                uri = m.uri ?: ""
+            )
+        }
+
+        val req = SendUserCascadeMessageRequest(
+            cascade_id = cascadeId,
+            items = listOf(TextOrScopeItem(text = promptText)),
+            media = mediaItems,
+            cascade_config = CascadeConfig(
+                planner_config = CascadePlannerConfig(
+                    tool_config = CascadeToolConfig(
+                        run_command = RunCommandToolConfig(
+                            auto_command_config = AutoCommandConfig(
+                                auto_execution_policy = autoPolicyVal
+                            )
+                        ),
+                        notify_user = NotifyUserConfig()
+                    ),
+                    requested_model = if (modelProto != null) ModelOrAlias(model = modelProto) else null,
+                    use_ai_credits = false,
+                    supports_latex_rendering = true
+                ),
+                executor_config = CascadeExecutorConfig(use_core_direct = true),
+                conversation_history_config = ConversationHistoryConfig()
+            ),
+            custom_agent_spec = CustomAgentSpec(
+                builtin_agent = BuiltinAgentConfig(
+                    default_agent = DefaultAgentConfig(
+                        is_google = false,
+                        is_interactive = true
+                    )
+                )
+            ),
+            delivery_strategy = MessageDeliveryStrategy.MESSAGE_DELIVERY_STRATEGY_WHEN_IDLE
+        )
+
+        AgyLanguageService.SendUserCascadeMessage().executeSafely(req).map { }
     }
 
     /**
-     * Sends user prompt to SendUserCascadeMessage
+     * Direct typed passthrough for SendUserCascadeMessage
      */
     suspend fun sendUserCascadeMessage(
-        payloadJson: String,
+        request: SendUserCascadeMessageRequest,
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<Unit> = grpcClient.executeGrpcWebCall("SendUserCascadeMessage", payloadJson, hubUrl).map { }
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        AgyLanguageService.SendUserCascadeMessage().executeSafely(request).map { }
+    }
 
     /**
      * Streams real-time updates for an active conversation via StreamAgentStateUpdates
@@ -206,17 +238,18 @@ class AgyChatService(
     }.flowOn(Dispatchers.IO)
 
     /**
-     * Cancels / aborts running generation or commands
+     * Cancels / aborts running generation or commands via typed AgyLanguageService
      */
     suspend fun cancelCascadeInvocation(
         cascadeId: String,
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<Unit> {
-        val payload = JSONObject().apply {
-            put("cascadeId", cascadeId)
-            put("killBackgroundTasks", true)
-        }.toString()
-        return grpcClient.executeGrpcWebCall("CancelCascadeInvocation", payload, hubUrl).map { }
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        AgyLanguageService.CancelCascadeInvocation().executeSafely(
+            CancelCascadeInvocationRequest(
+                cascade_id = cascadeId,
+                kill_background_tasks = true
+            )
+        ).map { }
     }
 
     /**
@@ -226,13 +259,13 @@ class AgyChatService(
         cascadeId: String,
         stepIndices: List<Int>,
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<Unit> {
-        val reqDto = CancelCascadeStepsRequestDto(
-            cascadeId = cascadeId,
-            stepIndices = stepIndices
-        )
-        val payload = jsonParser.encodeToString(CancelCascadeStepsRequestDto.serializer(), reqDto)
-        return grpcClient.executeGrpcWebCall("CancelCascadeSteps", payload, hubUrl).map { }
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        AgyLanguageService.CancelCascadeSteps().executeSafely(
+            CancelCascadeStepsRequest(
+                cascade_id = cascadeId,
+                step_indices = stepIndices
+            )
+        ).map { }
     }
 
     /**
@@ -377,16 +410,15 @@ class AgyChatService(
     }
 
     /**
-     * Resolves all outstanding or blocking steps in a cascade
+     * Resolves all outstanding or blocking steps in a cascade via typed AgyLanguageService
      */
     suspend fun resolveOutstandingSteps(
         cascadeId: String,
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<Unit> {
-        val payload = JSONObject().apply {
-            put("cascadeId", cascadeId)
-        }.toString()
-        return grpcClient.executeGrpcWebCall("ResolveOutstandingSteps", payload, hubUrl).map { }
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        AgyLanguageService.ResolveOutstandingSteps().executeSafely(
+            ResolveOutstandingStepsRequest(cascade_id = cascadeId)
+        ).map { }
     }
 }
 
