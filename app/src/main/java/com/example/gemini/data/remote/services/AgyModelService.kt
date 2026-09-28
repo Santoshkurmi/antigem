@@ -2,7 +2,7 @@ package com.example.gemini.data.remote.services
 
 import android.util.Log
 import com.example.gemini.data.preferences.AuthPreferences
-import com.example.gemini.data.remote.core.AgyGrpcClient
+
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ModelFamily
 import com.example.gemini.domain.model.ModelQuotaGroup
@@ -24,9 +24,7 @@ import exa.language_server_pb.RetrieveUserQuotaSummaryRequest
 /**
  * Dedicated RPC service for AI models and user quota telemetry.
  */
-class AgyModelService(
-    private val grpcClient: AgyGrpcClient = AgyGrpcClient.instance
-) {
+class AgyModelService {
     companion object {
         private const val TAG = "AgyModelService"
         val instance by lazy { AgyModelService() }

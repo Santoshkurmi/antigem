@@ -5,20 +5,40 @@ import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.AgyHubClient.GlobalPermissionGrants
 import com.example.gemini.data.remote.AgyHubClient.GlobalUserSettings
 import com.example.gemini.data.remote.AgyHubClient.ProjectItem
-import com.example.gemini.data.remote.core.AgyGrpcClient
+import exa.language_server_pb.AgentPermissionPreset
+import exa.language_server_pb.AgentSettingPolicy
+import exa.language_server_pb.ArtifactReviewMode
+import exa.language_server_pb.CascadeCommandsAutoExecution
+import exa.language_server_pb.DeleteMediaArtifactRequest
+import exa.language_server_pb.GetAllSkillsRequest
+import exa.language_server_pb.JetboxSubscribeToStateRequest
+import exa.language_server_pb.JetboxWriteStateRequest
+import exa.language_server_pb.Jetbox_state_pb_UserSettings
+import exa.language_server_pb.Media
+import exa.language_server_pb.PermissionGrants
+import exa.language_server_pb.PermissionGrantsConfig
+import exa.language_server_pb.Project
+import exa.language_server_pb.ProjectSettings
+import exa.language_server_pb.ProjectUpdatesStreamRequest
+import exa.language_server_pb.ReadFileRequest
+import exa.language_server_pb.ReadProjectsRequest
+import exa.language_server_pb.Resource
+import exa.language_server_pb.Resources
+import exa.language_server_pb.SaveMediaAsArtifactRequest
+import exa.language_server_pb.UpdateProjectRequest
+import exa.language_server_pb.UserConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.coroutines.withTimeoutOrNull
+import okio.ByteString
+import okio.ByteString.Companion.decodeBase64
 
 /**
  * Dedicated RPC service for workspace projects, global user settings, file reading, and media artifacts.
+ * Uses typed Square Wire AgyLanguageService gRPC client.
  */
-class AgyProjectService(
-    private val grpcClient: AgyGrpcClient = AgyGrpcClient.instance
-) {
+class AgyProjectService {
     data class SkillItem(
         val name: String,
         val description: String,
@@ -36,36 +56,19 @@ class AgyProjectService(
      * Fetches all registered skills directly from AGY Hub via GetAllSkills RPC.
      */
     suspend fun fetchAllSkills(hubUrl: String = AuthPreferences.currentHubUrl): Result<List<SkillItem>> = withContext(Dispatchers.IO) {
-        try {
-            val res = grpcClient.callUnary("GetAllSkills", "{}", hubUrl)
-            if (!res.isSuccess) {
-                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("GetAllSkills failed"))
+        val req = GetAllSkillsRequest()
+        AgyLanguageService.GetAllSkills().executeSafely(req).map { res ->
+            res.skills.mapNotNull { spec ->
+                if (spec.name.isNotBlank()) {
+                    SkillItem(
+                        name = spec.name,
+                        description = spec.description,
+                        path = spec.path,
+                        pluginName = spec.plugin_name.takeIf { it.isNotBlank() },
+                        content = spec.content
+                    )
+                } else null
             }
-            val jsonStr = res.getOrThrow()
-            val json = JSONObject(jsonStr)
-            val skillsArr = json.optJSONArray("skills") ?: JSONArray()
-            val list = mutableListOf<SkillItem>()
-            for (i in 0 until skillsArr.length()) {
-                val obj = skillsArr.getJSONObject(i)
-                val name = obj.optString("name", "")
-                val desc = obj.optString("description", "")
-                val path = obj.optString("path", "")
-                val pluginName = obj.optString("pluginName", "").takeIf { it.isNotBlank() }
-                val content = obj.optString("content", "")
-                if (name.isNotBlank()) {
-                    list.add(SkillItem(
-                        name = name,
-                        description = desc,
-                        path = path,
-                        pluginName = pluginName,
-                        content = content
-                    ))
-                }
-            }
-            Result.success(list)
-        } catch (e: Exception) {
-            Log.e(TAG, "fetchAllSkills failed: ${e.message}")
-            Result.failure(e)
         }
     }
 
@@ -77,26 +80,14 @@ class AgyProjectService(
         uri: String,
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val formattedUri = if (uri.startsWith("file://") || uri.startsWith("http://") || uri.startsWith("https://")) {
-                uri
-            } else {
-                "file://$uri"
-            }
-            val payload = JSONObject().apply {
-                put("uri", formattedUri)
-            }.toString()
-            val res = grpcClient.callUnary("ReadFile", payload, hubUrl)
-            if (!res.isSuccess) {
-                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("ReadFile failed"))
-            }
-            val jsonStr = res.getOrThrow()
-            val json = JSONObject(jsonStr)
-            val content = json.optString("content", json.optString("data", ""))
-            Result.success(content)
-        } catch (e: Exception) {
-            Log.e(TAG, "readFileAsBase64 failed for $uri: ${e.message}")
-            Result.failure(e)
+        val formattedUri = if (uri.startsWith("file://") || uri.startsWith("http://") || uri.startsWith("https://")) {
+            uri
+        } else {
+            "file://$uri"
+        }
+        val req = ReadFileRequest(uri = formattedUri)
+        AgyLanguageService.ReadFile().executeSafely(req).map { res ->
+            res.content.base64()
         }
     }
 
@@ -110,28 +101,18 @@ class AgyProjectService(
         thumbnailBase64: String = "",
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val payload = JSONObject().apply {
-                put("media", JSONObject().apply {
-                    put("mimeType", mimeType)
-                    put("inlineData", base64Data)
-                    put("description", description)
-                    if (thumbnailBase64.isNotBlank()) {
-                        put("thumbnail", thumbnailBase64)
-                    }
-                })
-            }.toString()
-
-            val res = grpcClient.callUnary("SaveMediaAsArtifact", payload, hubUrl)
-            if (!res.isSuccess) {
-                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("SaveMediaAsArtifact failed"))
-            }
-            val json = JSONObject(res.getOrThrow())
-            val uri = json.optString("uri", json.optString("path", ""))
-            Result.success(uri)
-        } catch (e: Exception) {
-            Log.e(TAG, "saveMediaAsArtifact failed: ${e.message}")
-            Result.failure(e)
+        val rawBytes = base64Data.decodeBase64() ?: ByteString.EMPTY
+        val thumbBytes = if (thumbnailBase64.isNotBlank()) thumbnailBase64.decodeBase64() ?: ByteString.EMPTY else ByteString.EMPTY
+        val req = SaveMediaAsArtifactRequest(
+            media = Media(
+                mime_type = mimeType,
+                inline_data = rawBytes,
+                description = description,
+                thumbnail = thumbBytes
+            )
+        )
+        AgyLanguageService.SaveMediaAsArtifact().executeSafely(req).map { res ->
+            res.uri
         }
     }
 
@@ -142,14 +123,8 @@ class AgyProjectService(
         uri: String,
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            val payload = JSONObject().apply {
-                put("uri", uri)
-            }.toString()
-            grpcClient.callUnary("DeleteMediaArtifact", payload, hubUrl).map { }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+        val req = DeleteMediaArtifactRequest(uri = uri)
+        AgyLanguageService.DeleteMediaArtifact().executeSafely(req).map { }
     }
 
     /**
@@ -158,70 +133,30 @@ class AgyProjectService(
      */
     suspend fun fetchGlobalUserSettings(hubUrl: String = AuthPreferences.currentHubUrl): Result<GlobalUserSettings> = withContext(Dispatchers.IO) {
         try {
-            val token = grpcClient.csrfManager.getCsrfToken(hubUrl)
-            val base = hubUrl.trimEnd('/')
-            val url = "$base/exa.language_server_pb.LanguageServerService/JetboxSubscribeToState"
-            val frameBytes = com.example.gemini.data.remote.core.GrpcWebFrameCodec.encodeDataFrame("{}")
-            val req = Request.Builder()
-                .url(url)
-                .post(frameBytes.toRequestBody(AgyGrpcClient.GRPC_WEB_MEDIA_TYPE))
-                .header("Content-Type", "application/grpc-web+json")
-                .header("X-Grpc-Web", "1")
-                .apply {
-                    if (token.isNotBlank()) {
-                        header("x-codeium-csrf-token", token)
-                    }
-                }
-                .build()
+            val update = withTimeoutOrNull(5000L) {
+                AgyLanguageService.JetboxSubscribeToState()
+                    .asFlowSafely(JetboxSubscribeToStateRequest())
+                    .firstOrNull()
+            } ?: return@withContext Result.failure(Exception("JetboxSubscribeToState timeout"))
 
-            grpcClient.okHttpClient.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    return@withContext Result.failure(Exception("JetboxSubscribeToState failed: HTTP ${resp.code}"))
-                }
-                val stream = resp.body?.byteStream() ?: return@withContext Result.failure(Exception("Empty response body"))
-                val header = ByteArray(5)
-                var read = 0
-                while (read < 5) {
-                    val r = stream.read(header, read, 5 - read)
-                    if (r == -1) break
-                    read += r
-                }
-                if (read < 5) return@withContext Result.failure(Exception("Incomplete gRPC header"))
-                val len = ((header[1].toInt() and 0xFF) shl 24) or
-                        ((header[2].toInt() and 0xFF) shl 16) or
-                        ((header[3].toInt() and 0xFF) shl 8) or
-                        (header[4].toInt() and 0xFF)
-                if (len <= 0) return@withContext Result.failure(Exception("Invalid payload length: $len"))
-                val payloadBytes = ByteArray(len)
-                var payloadRead = 0
-                while (payloadRead < len) {
-                    val r = stream.read(payloadBytes, payloadRead, len - payloadRead)
-                    if (r == -1) break
-                    payloadRead += r
-                }
-                val jsonStr = String(payloadBytes, Charsets.UTF_8)
-                val json = JSONObject(jsonStr)
-                val userSettings = json.optJSONObject("userConfig")?.optJSONObject("userSettings")
-                val autoExec = userSettings?.optString("autoExecutionPolicy", "CASCADE_COMMANDS_AUTO_EXECUTION_OFF") ?: "CASCADE_COMMANDS_AUTO_EXECUTION_OFF"
-                val fileAccess = userSettings?.optString("nonWorkspaceFileAccessPolicy", "AGENT_SETTING_POLICY_ASK") ?: "AGENT_SETTING_POLICY_ASK"
-                val artifactReview = userSettings?.optString("artifactReviewMode", "ARTIFACT_REVIEW_MODE_ALWAYS") ?: "ARTIFACT_REVIEW_MODE_ALWAYS"
-                val sandbox = userSettings?.optBoolean("enableTerminalSandbox", false) ?: false
+            val userSettings = update.user_config?.user_settings ?: update.state?.user_settings
 
-                val grantsObj = userSettings?.optJSONObject("globalPermissionGrants")
-                val allowList = mutableListOf<String>()
-                grantsObj?.optJSONArray("allow")?.let { arr ->
-                    for (i in 0 until arr.length()) allowList.add(arr.getString(i))
-                }
-                val denyList = mutableListOf<String>()
-                grantsObj?.optJSONArray("deny")?.let { arr ->
-                    for (i in 0 until arr.length()) denyList.add(arr.getString(i))
-                }
-                val askList = mutableListOf<String>()
-                grantsObj?.optJSONArray("ask")?.let { arr ->
-                    for (i in 0 until arr.length()) askList.add(arr.getString(i))
-                }
+            val autoExec = userSettings?.auto_execution_policy?.name ?: "CASCADE_COMMANDS_AUTO_EXECUTION_OFF"
+            val fileAccess = if (userSettings?.allow_agent_access_non_workspace_files == true) {
+                "AGENT_SETTING_POLICY_ALLOW"
+            } else {
+                "AGENT_SETTING_POLICY_ASK"
+            }
+            val artifactReview = userSettings?.artifact_review_mode?.name ?: "ARTIFACT_REVIEW_MODE_ALWAYS"
+            val sandbox = userSettings?.enable_terminal_sandbox ?: false
 
-                Result.success(GlobalUserSettings(
+            val grants = userSettings?.global_permission_grants
+            val allowList = grants?.allow ?: emptyList()
+            val denyList = grants?.deny ?: emptyList()
+            val askList = grants?.ask ?: emptyList()
+
+            Result.success(
+                GlobalUserSettings(
                     autoExecutionPolicy = autoExec,
                     nonWorkspaceFileAccessPolicy = fileAccess,
                     artifactReviewMode = artifactReview,
@@ -231,8 +166,8 @@ class AgyProjectService(
                         deny = denyList,
                         ask = askList
                     )
-                ))
-            }
+                )
+            )
         } catch (e: Exception) {
             Log.e(TAG, "fetchGlobalUserSettings failed: ${e.message}")
             Result.failure(e)
@@ -249,25 +184,31 @@ class AgyProjectService(
         enableTerminalSandbox: Boolean? = null,
         globalPermissionGrants: GlobalPermissionGrants? = null,
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<Unit> {
-        val payload = JSONObject().apply {
-            put("userConfig", JSONObject().apply {
-                put("userSettings", JSONObject().apply {
-                    autoExecutionPolicy?.let { put("autoExecutionPolicy", it) }
-                    nonWorkspaceFileAccessPolicy?.let { put("nonWorkspaceFileAccessPolicy", it) }
-                    artifactReviewMode?.let { put("artifactReviewMode", it) }
-                    enableTerminalSandbox?.let { put("enableTerminalSandbox", it) }
-                    globalPermissionGrants?.let { grants ->
-                        put("globalPermissionGrants", JSONObject().apply {
-                            put("allow", JSONArray(grants.allow))
-                            put("deny", JSONArray(grants.deny))
-                            put("ask", JSONArray(grants.ask))
-                        })
-                    }
-                })
-            })
-        }.toString()
-        return grpcClient.executeGrpcWebCall("JetboxWriteState", payload, hubUrl).map { }
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val autoExecEnum = autoExecutionPolicy?.let { safeValueOf<CascadeCommandsAutoExecution>(it) }
+        val artifactReviewEnum = artifactReviewMode?.let { safeValueOf<ArtifactReviewMode>(it) }
+        val allowNonWorkspace = nonWorkspaceFileAccessPolicy?.let { it == "AGENT_SETTING_POLICY_ALLOW" }
+
+        val grantsConfig = globalPermissionGrants?.let {
+            PermissionGrantsConfig(
+                allow = it.allow,
+                deny = it.deny,
+                ask = it.ask
+            )
+        }
+
+        val userSettings = Jetbox_state_pb_UserSettings(
+            auto_execution_policy = autoExecEnum ?: CascadeCommandsAutoExecution.CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED,
+            artifact_review_mode = artifactReviewEnum ?: ArtifactReviewMode.ARTIFACT_REVIEW_MODE_UNSPECIFIED,
+            allow_agent_access_non_workspace_files = allowNonWorkspace ?: false,
+            enable_terminal_sandbox = enableTerminalSandbox ?: false,
+            global_permission_grants = grantsConfig
+        )
+
+        val req = JetboxWriteStateRequest(
+            user_config = UserConfig(user_settings = userSettings)
+        )
+        AgyLanguageService.JetboxWriteState().executeSafely(req).map { }
     }
 
     /**
@@ -275,96 +216,43 @@ class AgyProjectService(
      */
     suspend fun fetchAllProjects(hubUrl: String = AuthPreferences.currentHubUrl): Result<List<ProjectItem>> = withContext(Dispatchers.IO) {
         try {
-            val token = grpcClient.csrfManager.getCsrfToken(hubUrl)
-            val base = hubUrl.trimEnd('/')
-            val streamUrl = "$base/exa.language_server_pb.LanguageServerService/ProjectUpdatesStream"
-            val frameBytes = com.example.gemini.data.remote.core.GrpcWebFrameCodec.encodeDataFrame("{}")
-            val req = Request.Builder()
-                .url(streamUrl)
-                .post(frameBytes.toRequestBody(AgyGrpcClient.GRPC_WEB_MEDIA_TYPE))
-                .header("Content-Type", "application/grpc-web+json")
-                .header("X-Grpc-Web", "1")
-                .apply {
-                    if (token.isNotBlank()) {
-                        header("x-codeium-csrf-token", token)
-                    }
-                }
-                .build()
-
-            val projectIds = mutableListOf<String>()
-            grpcClient.okHttpClient.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) {
-                    val stream = resp.body?.byteStream()
-                    if (stream != null) {
-                        val header = ByteArray(5)
-                        var read = 0
-                        while (read < 5) {
-                            val r = stream.read(header, read, 5 - read)
-                            if (r == -1) break
-                            read += r
-                        }
-                        if (read == 5) {
-                            val len = ((header[1].toInt() and 0xFF) shl 24) or
-                                    ((header[2].toInt() and 0xFF) shl 16) or
-                                    ((header[3].toInt() and 0xFF) shl 8) or
-                                    (header[4].toInt() and 0xFF)
-                            if (len > 0) {
-                                val payloadBytes = ByteArray(len)
-                                var payloadRead = 0
-                                while (payloadRead < len) {
-                                    val r = stream.read(payloadBytes, payloadRead, len - payloadRead)
-                                    if (r == -1) break
-                                    payloadRead += r
-                                }
-                                val jsonStr = String(payloadBytes, Charsets.UTF_8)
-                                val obj = JSONObject(jsonStr)
-                                val list = obj.optJSONObject("projectList")?.optJSONArray("projectIds")
-                                if (list != null) {
-                                    for (i in 0 until list.length()) {
-                                        projectIds.add(list.getString(i))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+            val update = withTimeoutOrNull(5000L) {
+                AgyLanguageService.ProjectUpdatesStream()
+                    .asFlowSafely(ProjectUpdatesStreamRequest())
+                    .firstOrNull()
             }
 
-            if (projectIds.isEmpty()) {
-                projectIds.addAll(listOf("default-cli-project", "outside-of-project"))
-            }
+            val projectIds = update?.project_list?.project_ids?.ifEmpty {
+                listOf("default-cli-project", "outside-of-project")
+            } ?: listOf("default-cli-project", "outside-of-project")
 
-            val readPayload = JSONObject().apply {
-                put("ids", JSONArray(projectIds))
-            }.toString()
-
-            val readRes = grpcClient.executeGrpcWebCall("ReadProjects", readPayload, hubUrl)
+            val req = ReadProjectsRequest(ids = projectIds)
+            val readRes = AgyLanguageService.ReadProjects().executeSafely(req)
             if (readRes.isFailure) {
                 return@withContext Result.failure(readRes.exceptionOrNull() ?: Exception("ReadProjects failed"))
             }
 
-            val resObj = readRes.getOrNull()?.frames?.firstOrNull()?.let { JSONObject(it) } ?: JSONObject()
-            val projectsArr = resObj.optJSONArray("projects") ?: JSONArray()
-            val items = mutableListOf<ProjectItem>()
-
-            for (i in 0 until projectsArr.length()) {
-                val p = projectsArr.getJSONObject(i)
-                val pid = p.optString("id", "")
-                val name = p.optString("name", pid)
-                val settings = p.optJSONObject("settings")
-                val autoExec = settings?.optString("autoExecutionPolicy", "")?.takeIf { it.isNotBlank() }
-                val fileAccess = settings?.optString("fileAccessPolicy", "")?.takeIf { it.isNotBlank() }
-                val artifactReview = settings?.optString("artifactReviewMode", "")?.takeIf { it.isNotBlank() }
-                val sandbox = if (settings?.has("sandboxMode") == true) settings.optBoolean("sandboxMode") else null
+            val projects = readRes.getOrThrow().projects
+            val items = projects.map { p ->
+                val pid = p.id
+                val name = p.name.ifBlank { pid }
+                val settings = p.settings
+                val autoExec = settings?.auto_execution_policy?.name?.takeIf {
+                    it.isNotBlank() && it != "CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED"
+                }
+                val fileAccess = settings?.file_access_policy?.name?.takeIf {
+                    it.isNotBlank() && it != "AGENT_SETTING_POLICY_UNSPECIFIED"
+                }
+                val artifactReview = settings?.artifact_review_mode?.name?.takeIf {
+                    it.isNotBlank() && it != "ARTIFACT_REVIEW_MODE_UNSPECIFIED"
+                }
+                val sandbox = settings?.sandbox_mode
 
                 val isInheriting = settings == null || (
-                    (autoExec == null || autoExec == "CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED" || autoExec.isBlank()) &&
-                    (fileAccess == null || fileAccess == "AGENT_SETTING_POLICY_UNSPECIFIED" || fileAccess.isBlank()) &&
-                    (artifactReview == null || artifactReview == "ARTIFACT_REVIEW_MODE_UNSPECIFIED" || artifactReview.isBlank()) &&
-                    sandbox == null
+                    autoExec == null && fileAccess == null && artifactReview == null && sandbox == null
                 )
 
-                items.add(ProjectItem(
+                ProjectItem(
                     id = pid,
                     name = name,
                     autoExecutionPolicy = autoExec,
@@ -372,7 +260,7 @@ class AgyProjectService(
                     artifactReviewMode = artifactReview,
                     sandboxMode = sandbox,
                     isInheritingGlobal = isInheriting
-                ))
+                )
             }
 
             Result.success(items)
@@ -395,42 +283,41 @@ class AgyProjectService(
         sandboxMode: Boolean? = null,
         inheritGlobal: Boolean = false,
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<Unit> {
-        val payload = JSONObject().apply {
-            put("project", JSONObject().apply {
-                put("id", projectId)
-                if (projectName.isNotBlank()) {
-                    put("name", projectName)
-                }
-                if (folderUris.isNotEmpty()) {
-                    put("projectResources", JSONObject().apply {
-                        val resArr = JSONArray()
-                        for (f in folderUris) {
-                            val norm = if (f.startsWith("file://")) f else "file://$f"
-                            resArr.put(JSONObject().put("folderUri", norm))
-                        }
-                        put("resources", resArr)
-                    })
-                } else {
-                    put("projectResources", JSONObject())
-                }
-                put("permissionGrants", JSONObject().apply {
-                    put("permissionGrants", JSONObject().apply {
-                        put("allow", JSONArray().put("read_url(example.com)"))
-                    })
-                })
-                if (inheritGlobal) {
-                    put("settings", JSONObject())
-                } else {
-                    put("settings", JSONObject().apply {
-                        autoExecutionPolicy?.let { put("autoExecutionPolicy", it) }
-                        fileAccessPolicy?.let { put("fileAccessPolicy", it) }
-                        artifactReviewMode?.let { put("artifactReviewMode", it) }
-                        sandboxMode?.let { put("sandboxMode", it) }
-                    })
-                }
-            })
-        }.toString()
-        return grpcClient.executeGrpcWebCall("UpdateProject", payload, hubUrl).map { }
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val autoExecEnum = autoExecutionPolicy?.let { safeValueOf<CascadeCommandsAutoExecution>(it) }
+        val fileAccessEnum = fileAccessPolicy?.let { safeValueOf<AgentSettingPolicy>(it) }
+        val artifactReviewEnum = artifactReviewMode?.let { safeValueOf<ArtifactReviewMode>(it) }
+
+        val resList = folderUris.map { f ->
+            val norm = if (f.startsWith("file://")) f else "file://$f"
+            Resource(folder_uri = norm)
+        }
+
+        val projectSettings = if (inheritGlobal) {
+            null
+        } else {
+            ProjectSettings(
+                auto_execution_policy = autoExecEnum ?: CascadeCommandsAutoExecution.CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED,
+                file_access_policy = fileAccessEnum ?: AgentSettingPolicy.AGENT_SETTING_POLICY_UNSPECIFIED,
+                artifact_review_mode = artifactReviewEnum ?: ArtifactReviewMode.ARTIFACT_REVIEW_MODE_UNSPECIFIED,
+                sandbox_mode = sandboxMode ?: false
+            )
+        }
+
+        val project = Project(
+            id = projectId,
+            name = projectName,
+            project_resources = if (resList.isNotEmpty()) Resources(resources = resList) else null,
+            permission_grants = PermissionGrants(
+                permission_grants = PermissionGrantsConfig(allow = listOf("read_url(example.com)"))
+            ),
+            settings = projectSettings
+        )
+
+        val req = UpdateProjectRequest(project = project)
+        AgyLanguageService.UpdateProject().executeSafely(req).map { }
     }
+
+    private inline fun <reified T : Enum<T>> safeValueOf(name: String): T? =
+        try { enumValueOf<T>(name) } catch (_: Exception) { null }
 }

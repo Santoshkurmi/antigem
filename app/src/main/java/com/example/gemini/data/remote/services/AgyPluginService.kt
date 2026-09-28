@@ -3,31 +3,33 @@ package com.example.gemini.data.remote.services
 import android.util.Base64
 import android.util.Log
 import com.example.gemini.data.preferences.AuthPreferences
-import com.example.gemini.data.remote.core.AgyGrpcClient
 import com.example.gemini.data.remote.dto.*
+import exa.language_server_pb.DeletePluginRequest
+import exa.language_server_pb.DownloadBuildWithGooglePluginRequest
+import exa.language_server_pb.GetAllPluginsRequest
+import exa.language_server_pb.GetAllSkillsRequest
+import exa.language_server_pb.GetAvailableCascadePluginsRequest
+import exa.language_server_pb.GetBuildWithGooglePluginsRequest
+import exa.language_server_pb.Metadata
+import exa.language_server_pb.WriteFileRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
+import okio.ByteString
+import okio.ByteString.Companion.decodeBase64
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
  * Service for Google Plugins, Cascade Marketplace, Skills, and MCP auto-configuration.
+ * Uses typed Square Wire AgyLanguageService gRPC client.
  */
 class AgyPluginService(
-    private val grpcClient: AgyGrpcClient = AgyGrpcClient.instance,
     private val projectService: AgyProjectService = AgyProjectService.instance,
     private val mcpService: AgyMcpService = AgyMcpService.instance
 ) {
     companion object {
         private const val TAG = "AgyPluginService"
         val instance by lazy { AgyPluginService() }
-
-        private val jsonParser = Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-            coerceInputValues = true
-        }
     }
 
     /**
@@ -38,23 +40,52 @@ class AgyPluginService(
         searchQuery: String = "",
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<List<AvailableCascadePluginDto>> = withContext(Dispatchers.IO) {
-        try {
-            val payload = JSONObject().apply {
-                put("os", os)
-                if (searchQuery.isNotBlank()) {
-                    put("searchQuery", searchQuery)
+        val req = GetAvailableCascadePluginsRequest(
+            os = os,
+            search_query = searchQuery,
+            metadata = Metadata()
+        )
+        AgyLanguageService.GetAvailableCascadePlugins().executeSafely(req).map { res ->
+            res.plugins.map { p ->
+                val localDto = p.local?.let { loc ->
+                    CascadePluginLocalDto(
+                        commands = loc.commands.mapNotNull { cmdEntry ->
+                            val cmdVal = cmdEntry.value_ ?: return@mapNotNull null
+                            cmdEntry.key to CascadePluginCommandWrapperDto(
+                                template = cmdVal.template?.let { t ->
+                                    CascadePluginCommandTemplateDto(
+                                        command = t.command,
+                                        args = t.args,
+                                        env = t.env.associate { it.key to it.value_ }
+                                    )
+                                }
+                            )
+                        }.toMap()
+                    )
                 }
-            }.toString()
 
-            val res = grpcClient.callUnary("GetAvailableCascadePlugins", payload, hubUrl)
-            if (!res.isSuccess) {
-                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("GetAvailableCascadePlugins failed"))
+                val remoteDto = p.remote?.let { rem ->
+                    CascadePluginRemoteDto(
+                        template = rem.template?.let { t ->
+                            CascadePluginRemoteTemplateDto(
+                                serverUrl = t.server_url,
+                                authProviderType = t.auth_provider_type
+                            )
+                        }
+                    )
+                }
+
+                AvailableCascadePluginDto(
+                    id = p.id,
+                    title = p.title,
+                    description = p.description,
+                    link = p.link,
+                    readme = p.readme,
+                    trustLevel = p.trust_level,
+                    local = localDto,
+                    remote = remoteDto
+                )
             }
-            val parsed = jsonParser.decodeFromString<GetAvailableCascadePluginsResponseDto>(res.getOrThrow())
-            Result.success(parsed.plugins)
-        } catch (e: Exception) {
-            Log.e(TAG, "getAvailableCascadePlugins failed: ${e.message}", e)
-            Result.failure(e)
         }
     }
 
@@ -226,16 +257,59 @@ class AgyPluginService(
     suspend fun getBuildWithGooglePlugins(
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<List<BuildWithGooglePluginItemDto>> = withContext(Dispatchers.IO) {
-        try {
-            val res = grpcClient.callUnary("GetBuildWithGooglePlugins", "{}", hubUrl)
-            if (!res.isSuccess) {
-                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("GetBuildWithGooglePlugins failed"))
+        val req = GetBuildWithGooglePluginsRequest()
+        AgyLanguageService.GetBuildWithGooglePlugins().executeSafely(req).map { res ->
+            res.plugins.map { item ->
+                val pluginDto = item.plugin?.let { p ->
+                    val localDto = p.local?.let { loc ->
+                        PluginLocalConfigDto(
+                            commands = loc.commands.mapNotNull { cmdEntry ->
+                                val cmdVal = cmdEntry.value_ ?: return@mapNotNull null
+                                cmdEntry.key to PluginCommandSpecDto(
+                                    commandTemplate = cmdVal.command_template?.let { t ->
+                                        PluginCommandTemplateDto(
+                                            command = t.command,
+                                            args = t.args,
+                                            env = t.env.associate { it.key to it.value_ }
+                                        )
+                                    },
+                                    variables = cmdVal.variables.map { v ->
+                                        PluginConfigVariableDto(
+                                            name = v.name,
+                                            title = v.title,
+                                            description = v.description
+                                        )
+                                    }
+                                )
+                            }.toMap()
+                        )
+                    }
+
+                    val remoteDto = p.remote?.let { rem ->
+                        PluginRemoteConfigDto(
+                            remoteTemplate = rem.remote_template?.let { t ->
+                                PluginRemoteTemplateDto(serverUrl = t.server_url)
+                            }
+                        )
+                    }
+
+                    BuildWithGooglePluginDto(
+                        name = p.name,
+                        uid = p.uid,
+                        description = p.description,
+                        trustLevel = p.trust_level,
+                        local = localDto,
+                        remote = remoteDto
+                    )
+                }
+
+                BuildWithGooglePluginItemDto(
+                    plugin = pluginDto,
+                    gstatic = item.gstatic?.let { GstaticLinkDto(link = it.link) },
+                    versionShas = item.version_shas.associate { it.key to it.value_ },
+                    visibility = item.visibility.name
+                )
             }
-            val parsed = jsonParser.decodeFromString<GetBuildWithGooglePluginsResponseDto>(res.getOrThrow())
-            Result.success(parsed.plugins)
-        } catch (e: Exception) {
-            Log.e(TAG, "getBuildWithGooglePlugins failed: ${e.message}", e)
-            Result.failure(e)
         }
     }
 
@@ -246,26 +320,14 @@ class AgyPluginService(
         pluginId: String,
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val payload = JSONObject().apply {
-                put("pluginId", pluginId)
-            }.toString()
-
-            val res = grpcClient.callUnary("DownloadBuildWithGooglePlugin", payload, hubUrl)
-            if (!res.isSuccess) {
-                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("DownloadBuildWithGooglePlugin failed"))
-            }
-            val parsed = jsonParser.decodeFromString<DownloadBuildWithGooglePluginResponseDto>(res.getOrThrow())
-            if (parsed.success) {
-                // Refresh MCP servers in case plugin bundle bundled MCP configurations
+        val req = DownloadBuildWithGooglePluginRequest(plugin_id = pluginId)
+        AgyLanguageService.DownloadBuildWithGooglePlugin().executeSafely(req).map { res ->
+            if (res.success) {
                 mcpService.refreshMcpServers(hubUrl)
-                Result.success(parsed.message.ifBlank { "Plugin installed successfully" })
+                res.message.ifBlank { "Plugin installed successfully" }
             } else {
-                Result.failure(Exception(parsed.message.ifBlank { "Download failed" }))
+                throw Exception(res.message.ifBlank { "Download failed" })
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "downloadBuildWithGooglePlugin failed: ${e.message}", e)
-            Result.failure(e)
         }
     }
 
@@ -276,25 +338,14 @@ class AgyPluginService(
         pluginId: String,
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val payload = JSONObject().apply {
-                put("pluginId", pluginId)
-            }.toString()
-
-            val res = grpcClient.callUnary("DeletePlugin", payload, hubUrl)
-            if (!res.isSuccess) {
-                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("DeletePlugin failed"))
-            }
-            val parsed = jsonParser.decodeFromString<DeletePluginResponseDto>(res.getOrThrow())
-            if (parsed.success) {
+        val req = DeletePluginRequest(plugin_id = pluginId)
+        AgyLanguageService.DeletePlugin().executeSafely(req).map { res ->
+            if (res.success) {
                 mcpService.refreshMcpServers(hubUrl)
-                Result.success(parsed.message.ifBlank { "Plugin deleted successfully" })
+                res.message.ifBlank { "Plugin deleted successfully" }
             } else {
-                Result.failure(Exception(parsed.message.ifBlank { "Delete failed" }))
+                throw Exception(res.message.ifBlank { "Delete failed" })
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "deletePlugin failed: ${e.message}", e)
-            Result.failure(e)
         }
     }
 
@@ -304,13 +355,30 @@ class AgyPluginService(
     suspend fun getAllPlugins(
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<List<InstalledPluginDto>> = withContext(Dispatchers.IO) {
-        try {
-            val res = grpcClient.callUnary("GetAllPlugins", "{}", hubUrl)
-            if (!res.isSuccess) {
-                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("GetAllPlugins failed"))
+        val req = GetAllPluginsRequest()
+        AgyLanguageService.GetAllPlugins().executeSafely(req).map { res ->
+            val list = res.plugins.map { p ->
+                val skillsList = p.skills.map { s ->
+                    InstalledSkillDto(
+                        name = s.name,
+                        description = s.description,
+                        path = s.path,
+                        content = s.content,
+                        baseDir = s.base_dir
+                    )
+                }
+
+                InstalledPluginDto(
+                    name = p.name,
+                    displayName = p.name,
+                    description = p.description,
+                    path = p.path,
+                    isGlobal = p.is_global,
+                    skills = skillsList
+                )
             }
-            val parsed = jsonParser.decodeFromString<GetAllPluginsResponseDto>(res.getOrThrow())
-            val globalPlugin = parsed.plugins.firstOrNull { it.isGlobal && it.path.isNotBlank() }
+
+            val globalPlugin = list.firstOrNull { it.isGlobal && it.path.isNotBlank() }
             if (globalPlugin != null) {
                 val p = globalPlugin.path
                 val idx = p.indexOf("/plugins/")
@@ -320,10 +388,8 @@ class AgyPluginService(
                     cachedGlobalConfigUri = "$formatted/mcp_config.json"
                 }
             }
-            Result.success(parsed.plugins)
-        } catch (e: Exception) {
-            Log.e(TAG, "getAllPlugins failed: ${e.message}", e)
-            Result.failure(e)
+
+            list
         }
     }
 
@@ -334,21 +400,25 @@ class AgyPluginService(
         workspaceUris: List<String> = emptyList(),
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<List<SkillDefinitionDto>> = withContext(Dispatchers.IO) {
-        try {
-            val payload = if (workspaceUris.isNotEmpty()) {
-                val arr = JSONArray()
-                workspaceUris.forEach { arr.put(it) }
-                JSONObject().put("workspaceUris", arr).toString()
-            } else {
-                "{}"
+        val req = GetAllSkillsRequest(workspace_uris = workspaceUris)
+        AgyLanguageService.GetAllSkills().executeSafely(req).map { res ->
+            val list = res.skills.map { s ->
+                SkillDefinitionDto(
+                    path = s.path,
+                    name = s.name,
+                    displayName = s.display_name.ifBlank { s.name },
+                    description = s.description,
+                    content = s.content,
+                    isBuiltin = s.is_builtin,
+                    pluginName = s.plugin_name.takeIf { it.isNotBlank() },
+                    logo = s.logo.takeIf { it.isNotBlank() },
+                    baseDir = s.base_dir,
+                    discoveredIn = s.discovered_in,
+                    discoveryCategory = s.discovery_category.name
+                )
             }
 
-            val res = grpcClient.callUnary("GetAllSkills", payload, hubUrl)
-            if (!res.isSuccess) {
-                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("GetAllSkills failed"))
-            }
-            val parsed = jsonParser.decodeFromString<GetAllSkillsResponseDto>(res.getOrThrow())
-            val globalSkill = parsed.skills.firstOrNull { it.path.contains("/.gemini/") }
+            val globalSkill = list.firstOrNull { it.path.contains("/.gemini/") }
             if (globalSkill != null && cachedGlobalConfigUri == null) {
                 val p = globalSkill.path
                 val idx = p.indexOf("/.gemini/")
@@ -358,10 +428,8 @@ class AgyPluginService(
                     cachedGlobalConfigUri = "$formatted/config/mcp_config.json"
                 }
             }
-            Result.success(parsed.skills)
-        } catch (e: Exception) {
-            Log.e(TAG, "getAllSkills failed: ${e.message}", e)
-            Result.failure(e)
+
+            list
         }
     }
 
@@ -374,26 +442,17 @@ class AgyPluginService(
         overwrite: Boolean = true,
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            val formattedUri = if (uri.startsWith("file://") || uri.startsWith("http://") || uri.startsWith("https://")) {
-                uri
-            } else {
-                "file://$uri"
-            }
-            val payload = JSONObject().apply {
-                put("uri", formattedUri)
-                put("content", base64Content)
-                put("overwrite", overwrite)
-            }.toString()
-
-            val res = grpcClient.callUnary("WriteFile", payload, hubUrl)
-            if (!res.isSuccess) {
-                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("WriteFile failed"))
-            }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Log.e(TAG, "writeFile failed for $uri: ${e.message}", e)
-            Result.failure(e)
+        val formattedUri = if (uri.startsWith("file://") || uri.startsWith("http://") || uri.startsWith("https://")) {
+            uri
+        } else {
+            "file://$uri"
         }
+        val bytes = base64Content.decodeBase64() ?: ByteString.EMPTY
+        val req = WriteFileRequest(
+            uri = formattedUri,
+            content = bytes,
+            overwrite = overwrite
+        )
+        AgyLanguageService.WriteFile().executeSafely(req).map { }
     }
 }

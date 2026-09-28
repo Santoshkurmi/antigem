@@ -1083,19 +1083,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             val hubUrl = AuthPreferences.currentHubUrl
-            val bridgeUrl = AuthPreferences.currentBridgeHttpUrl
-            var res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
+            var res = agyHubClient.fetchDetailedAuthInfo(hubUrl)
 
             // If failed on non-manual check during startup/connection phase, retry shortly
             if (res.isFailure && !userInitiated) {
                 delay(800)
                 if (isNetworkConnected()) {
-                    res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
+                    res = agyHubClient.fetchDetailedAuthInfo(hubUrl)
                 }
                 if (res.isFailure) {
                     delay(1500)
                     if (isNetworkConnected()) {
-                        res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
+                        res = agyHubClient.fetchDetailedAuthInfo(hubUrl)
                     }
                 }
             }
@@ -1139,10 +1138,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             val hubUrl = AuthPreferences.currentHubUrl
-            val bridgeUrl = AuthPreferences.currentBridgeHttpUrl
 
             // Pre-check: if user is already authenticated, finish immediately!
-            val preCheck = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
+            val preCheck = agyHubClient.fetchDetailedAuthInfo(hubUrl)
             if (preCheck.isSuccess && preCheck.getOrThrow().isLoggedIn) {
                 val authed = preCheck.getOrThrow()
                 _agyAuthInfo.value = authed
@@ -1156,24 +1154,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             _authFeedbackMessage.tryEmit("Initiating sign-in with Antigravity...")
 
-            // 1. Poll for login URL and poll for successful auth completion concurrently every 800ms
+            // 1. Poll for successful auth completion concurrently every 800ms
             loginPollJob = launch {
                 val startTime = System.currentTimeMillis()
-                var urlFound = false
                 while (isActive && System.currentTimeMillis() - startTime < 120_000) {
                     delay(800)
 
-                    // Check if bridge detected a login URL
-                    if (!urlFound) {
-                        val detectedUrl = agyHubClient.fetchLoginUrl(bridgeUrl)
-                        if (!detectedUrl.isNullOrBlank()) {
-                            urlFound = true
-                            _pendingLoginUrl.value = detectedUrl
-                        }
-                    }
-
                     if (isNetworkConnected()) {
-                        val res = agyHubClient.fetchDetailedAuthInfo(hubUrl, bridgeUrl)
+                        val res = agyHubClient.fetchDetailedAuthInfo(hubUrl)
                         if (res.isSuccess && res.getOrThrow().isLoggedIn) {
                             val authed = res.getOrThrow()
                             _agyAuthInfo.value = authed
@@ -1190,13 +1178,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _isAuthBusy.value = false
             }
 
-            // 2. Kick off login on hub & bridge in parallel (Login RPC is blocking on daemon)
+            // 2. Kick off login RPC on daemon (Login RPC opens browser / triggers auth flow)
             launch {
-                try {
-                    agyHubClient.startBridgeLogin(bridgeUrl)
-                } catch (e: Exception) {
-                    android.util.Log.d("ChatViewModel", "Bridge start-login: ${e.message}")
-                }
                 try {
                     agyHubClient.login(hubUrl)
                 } catch (e: Exception) {

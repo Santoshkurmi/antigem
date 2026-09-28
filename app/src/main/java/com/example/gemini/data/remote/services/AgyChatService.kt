@@ -4,7 +4,7 @@ import android.util.Log
 import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.AgyHubClient.AgyMediaItem
 import com.example.gemini.data.remote.AgyHubClient.Companion.resolveModelEnum
-import com.example.gemini.data.remote.core.AgyGrpcClient
+
 import com.example.gemini.data.remote.dto.AgyStreamFrameDto
 import com.example.gemini.data.remote.dto.AskQuestionInteractionDto
 import com.example.gemini.data.remote.dto.AskQuestionResponseItemDto
@@ -63,9 +63,7 @@ import okio.ByteString.Companion.decodeBase64
  * Dedicated RPC service for chat sessions: starting cascades, sending prompts, streaming state frames,
  * canceling invocations/steps, handling interactive approvals, and resolving blocking steps.
  */
-class AgyChatService(
-    private val grpcClient: AgyGrpcClient = AgyGrpcClient.instance
-) {
+class AgyChatService {
     companion object {
         private const val TAG = "AgyChatService"
         val instance by lazy { AgyChatService() }

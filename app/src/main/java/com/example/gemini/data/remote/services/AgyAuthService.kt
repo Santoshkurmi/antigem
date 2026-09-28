@@ -4,96 +4,60 @@ import android.util.Log
 import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.AgyHubClient.AgyAuthInfo
 import com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus
-import com.example.gemini.data.remote.core.AgyGrpcClient
+import exa.language_server_pb.AuthLogoutRequest
+import exa.language_server_pb.GetAuthStatusRequest
+import exa.language_server_pb.GetLocalUserInfoRequest
+import exa.language_server_pb.GetUserStatusRequest
+import exa.language_server_pb.LoginRequest
+import exa.language_server_pb.Metadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
 
 /**
- * Dedicated RPC & HTTP service for authentication, OAuth status, and detailed user profile queries.
+ * Dedicated RPC service for authentication, OAuth status, and detailed user profile queries.
+ * Uses typed Square Wire AgyLanguageService gRPC client.
  */
-class AgyAuthService(
-    private val grpcClient: AgyGrpcClient = AgyGrpcClient.instance
-) {
+class AgyAuthService {
     companion object {
         private const val TAG = "AgyAuthService"
         val instance by lazy { AgyAuthService() }
     }
 
-    suspend fun login(hubUrl: String = AuthPreferences.currentHubUrl): Result<Unit> =
-        grpcClient.callUnary("Login", JSONObject().apply { put("isGcpTos", false) }.toString(), hubUrl).map { }
-
-    suspend fun authLogout(hubUrl: String = AuthPreferences.currentHubUrl): Result<Unit> =
-        grpcClient.callUnary("AuthLogout", "{}", hubUrl).map { }
-
-    suspend fun fetchLoginUrl(bridgeHttpUrl: String = AuthPreferences.currentBridgeHttpUrl): String? = withContext(Dispatchers.IO) {
-        try {
-            val req = Request.Builder()
-                .url("${bridgeHttpUrl.trimEnd('/')}/api/auth/login-url")
-                .get()
-                .build()
-            grpcClient.okHttpClient.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) {
-                    val json = JSONObject(resp.body?.string() ?: "{}")
-                    val url = json.optString("loginUrl", "")
-                    if (url.isNotBlank()) url else null
-                } else null
-            }
-        } catch (_: Exception) {
-            null
-        }
+    suspend fun login(hubUrl: String = AuthPreferences.currentHubUrl): Result<Unit> = withContext(Dispatchers.IO) {
+        val req = LoginRequest(is_gcp_tos = false)
+        AgyLanguageService.Login().executeSafely(req).map { }
     }
 
-    suspend fun startBridgeLogin(bridgeHttpUrl: String = AuthPreferences.currentBridgeHttpUrl): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val req = Request.Builder()
-                .url("${bridgeHttpUrl.trimEnd('/')}/api/auth/start-login")
-                .post("{}".toRequestBody(AgyGrpcClient.JSON_MEDIA_TYPE))
-                .build()
-            grpcClient.okHttpClient.newCall(req).execute().use { resp ->
-                resp.isSuccessful
-            }
-        } catch (_: Exception) {
-            false
-        }
+    suspend fun authLogout(hubUrl: String = AuthPreferences.currentHubUrl): Result<Unit> = withContext(Dispatchers.IO) {
+        val req = AuthLogoutRequest()
+        AgyLanguageService.AuthLogout().executeSafely(req).map { }
     }
 
     suspend fun getAuthStatus(hubUrl: String = AuthPreferences.currentHubUrl): Result<Boolean> = withContext(Dispatchers.IO) {
-        grpcClient.callUnary("GetAuthStatus", "{}", hubUrl).map { body ->
-            try {
-                val json = JSONObject(body)
-                val authResult = json.optJSONObject("authResult") ?: json
-                authResult.optBoolean("hasValidAuth", false)
-            } catch (e: Exception) {
-                false
-            }
+        val req = GetAuthStatusRequest()
+        AgyLanguageService.GetAuthStatus().executeSafely(req).map { res ->
+            res.auth_result?.has_valid_auth == true
         }
     }
 
     suspend fun getLocalUserInfo(hubUrl: String = AuthPreferences.currentHubUrl): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
-        grpcClient.callUnary("GetLocalUserInfo", "{}", hubUrl).map { body ->
-            val json = JSONObject(body)
-            val username = json.optString("username", "")
-            val homeDir = json.optString("homeDirUri", "")
-            username to homeDir
+        val req = GetLocalUserInfoRequest()
+        AgyLanguageService.GetLocalUserInfo().executeSafely(req).map { res ->
+            res.username to res.home_dir_uri
         }
     }
 
     suspend fun fetchDetailedAuthInfo(
-        hubUrl: String = AuthPreferences.currentHubUrl,
-        bridgeHttpUrl: String = AuthPreferences.currentBridgeHttpUrl
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<AgyAuthInfo> = withContext(Dispatchers.IO) {
         try {
-            val authResultCall = grpcClient.callUnary("GetAuthStatus", "{\"metadata\":{}}", hubUrl)
-            if (authResultCall.isFailure) {
-                return@withContext Result.failure(authResultCall.exceptionOrNull() ?: Exception("Failed to query GetAuthStatus"))
+            val authStatusRes = AgyLanguageService.GetAuthStatus().executeSafely(GetAuthStatusRequest())
+            if (authStatusRes.isFailure) {
+                return@withContext Result.failure(authStatusRes.exceptionOrNull() ?: Exception("Failed to query GetAuthStatus"))
             }
-            val authBody = authResultCall.getOrThrow()
-            val authJson = JSONObject(authBody)
-            val authResult = authJson.optJSONObject("authResult")
-            val hasValidAuth = authResult?.optBoolean("hasValidAuth", false) ?: false
+
+            val authResult = authStatusRes.getOrThrow().auth_result
+            val hasValidAuth = authResult?.has_valid_auth == true
 
             if (!hasValidAuth) {
                 return@withContext Result.success(
@@ -104,13 +68,7 @@ class AgyAuthService(
                 )
             }
 
-            val scopesList = mutableListOf<String>()
-            val scopesArr = authResult?.optJSONArray("grantedScopes")
-            if (scopesArr != null) {
-                for (i in 0 until scopesArr.length()) {
-                    scopesList.add(scopesArr.getString(i))
-                }
-            }
+            val scopesList = authResult.granted_scopes
 
             var fullName = ""
             var email = ""
@@ -127,55 +85,42 @@ class AgyAuthService(
             var upgradeText = ""
             var profilePic: String? = null
 
-            // Directly query AGY LanguageServerService/GetUserStatus with {"metadata":{}}
             try {
-                val statusBody = grpcClient.callUnary("GetUserStatus", "{\"metadata\":{}}", hubUrl).getOrNull() ?: "{}"
-                val statusJson = JSONObject(statusBody)
-                val userStatus = statusJson.optJSONObject("userStatus")
+                val userStatusRes = AgyLanguageService.GetUserStatus().executeSafely(GetUserStatusRequest(metadata = Metadata()))
+                val userStatus = userStatusRes.getOrNull()?.user_status
                 if (userStatus != null) {
-                    val nameFromStatus = userStatus.optString("name", "").takeIf { it.isNotBlank() && it != "null" }
-                    val emailFromStatus = userStatus.optString("email", "").takeIf { it.isNotBlank() && it != "null" }
-                    val picFromStatus = userStatus.optString("profilePictureUrl", "").takeIf { it.isNotBlank() && it != "null" }
+                    val nameFromStatus = userStatus.name.takeIf { it.isNotBlank() && it != "null" }
+                    val emailFromStatus = userStatus.email.takeIf { it.isNotBlank() && it != "null" }
+                    val picFromStatus = userStatus.profile_picture_url.takeIf { it.isNotBlank() && it != "null" }
                     if (!nameFromStatus.isNullOrBlank()) fullName = nameFromStatus
                     if (!emailFromStatus.isNullOrBlank()) email = emailFromStatus
                     if (!picFromStatus.isNullOrBlank()) profilePic = picFromStatus
 
-                    val tierObj = userStatus.optJSONObject("userTier")
+                    val tierObj = userStatus.user_tier
                     if (tierObj != null) {
-                        userTier = tierObj.optString("name", tierObj.optString("description", ""))
-                        userTierId = tierObj.optString("id", "")
-                        userTierDesc = tierObj.optString("description", "")
-                        upgradeUri = tierObj.optString("upgradeSubscriptionUri", "")
-                        upgradeText = tierObj.optString("upgradeSubscriptionText", "")
+                        userTier = tierObj.name.ifBlank { tierObj.description }
+                        userTierId = tierObj.id
+                        userTierDesc = tierObj.description
+                        upgradeUri = tierObj.upgrade_subscription_uri
+                        upgradeText = tierObj.upgrade_subscription_text
                     }
 
-                    val planStatus = userStatus.optJSONObject("planStatus")
+                    val planStatus = userStatus.plan_status
                     if (planStatus != null) {
-                        if (planStatus.has("availablePromptCredits")) {
-                            availablePromptCredits = planStatus.optLong("availablePromptCredits")
-                        }
-                        if (planStatus.has("availableFlowCredits")) {
-                            availableFlowCredits = planStatus.optLong("availableFlowCredits")
-                        }
+                        availablePromptCredits = planStatus.available_prompt_credits.toLong()
+                        availableFlowCredits = planStatus.available_flow_credits.toLong()
 
-                        val planInfo = planStatus.optJSONObject("planInfo")
+                        val planInfo = planStatus.plan_info ?: userStatus.plan_info
                         if (planInfo != null) {
-                            planName = planInfo.optString("planName", "")
-                            teamsTier = planInfo.optString("teamsTier", "")
-                            if (planInfo.has("monthlyPromptCredits")) {
-                                monthlyPromptCredits = planInfo.optLong("monthlyPromptCredits")
-                            }
-                            if (planInfo.has("monthlyFlowCredits")) {
-                                monthlyFlowCredits = planInfo.optLong("monthlyFlowCredits")
-                            }
+                            planName = planInfo.plan_name
+                            teamsTier = planInfo.teams_tier.name
                         }
                     }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "GetUserStatus parse error: ${e.message}")
+                Log.w(TAG, "GetUserStatus error: ${e.message}")
             }
 
-            // Local user info fallback for username and homeDir
             var localUsername = ""
             var localHomeDir = ""
             try {
@@ -216,4 +161,3 @@ class AgyAuthService(
         }
     }
 }
-

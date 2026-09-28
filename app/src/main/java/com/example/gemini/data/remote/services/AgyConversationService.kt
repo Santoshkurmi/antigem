@@ -3,7 +3,7 @@ package com.example.gemini.data.remote.services
 import android.util.Log
 import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.AgyHubClient.SummariesUpdate
-import com.example.gemini.data.remote.core.AgyGrpcClient
+
 import com.example.gemini.domain.model.Conversation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -33,9 +33,7 @@ import exa.language_server_pb.Step
  * Dedicated RPC service for conversation lifecycle: summaries subscription, step counting,
  * conversation forking, deletion, trajectory loading, and message reverting.
  */
-class AgyConversationService(
-    private val grpcClient: AgyGrpcClient = AgyGrpcClient.instance
-) {
+class AgyConversationService {
     companion object {
         private const val TAG = "AgyConversationService"
         val instance by lazy { AgyConversationService() }

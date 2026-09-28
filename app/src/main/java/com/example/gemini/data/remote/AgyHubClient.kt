@@ -2,8 +2,6 @@ package com.example.gemini.data.remote
 
 import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.core.AgyCsrfManager
-import com.example.gemini.data.remote.core.AgyGrpcClient
-import com.example.gemini.data.remote.core.GrpcWebFrameCodec
 import com.example.gemini.data.remote.dto.AgyStreamFrameDto
 import com.example.gemini.data.remote.services.*
 import com.example.gemini.domain.chat.TrajectoryParser
@@ -51,7 +49,6 @@ class AgyHubClient {
     // ==================== CORE DELEGATES ====================
 
     private val csrfManager = AgyCsrfManager.instance
-    private val grpcClient = AgyGrpcClient.instance
     private val authService = AgyAuthService.instance
     private val conversationService = AgyConversationService.instance
     private val chatService = AgyChatService.instance
@@ -72,34 +69,6 @@ class AgyHubClient {
     fun clearCsrfToken() {
         csrfManager.clearToken()
     }
-
-    fun encodeFrame(payload: ByteArray): ByteArray =
-        GrpcWebFrameCodec.encodeDataFrame(payload)
-
-    fun encodeFrame(jsonStr: String): ByteArray =
-        GrpcWebFrameCodec.encodeDataFrame(jsonStr)
-
-    suspend fun callUnary(
-        endpoint: String,
-        jsonBody: String = "{}",
-        hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<String> = grpcClient.callUnary(endpoint, jsonBody, hubUrl)
-
-    fun callStream(
-        endpoint: String,
-        jsonPayload: String = "{}",
-        hubUrl: String = AuthPreferences.currentHubUrl,
-        headers: Map<String, String> = emptyMap()
-    ): Flow<String> = grpcClient.callStream(endpoint, jsonPayload, hubUrl, headers)
-
-    typealias GrpcResult = GrpcWebFrameCodec.GrpcResult
-
-    suspend fun executeGrpcWebCall(
-        endpoint: String,
-        payloadJson: String,
-        hubUrl: String = AuthPreferences.currentHubUrl
-    ): Result<GrpcWebFrameCodec.GrpcResult> =
-        grpcClient.executeGrpcWebCall(endpoint, payloadJson, hubUrl)
 
     // ==================== AUTHENTICATION & USER PROFILE ====================
 
@@ -140,12 +109,6 @@ class AgyHubClient {
     suspend fun authLogout(hubUrl: String = AuthPreferences.currentHubUrl): Result<Unit> =
         authService.authLogout(hubUrl)
 
-    suspend fun fetchLoginUrl(bridgeHttpUrl: String = AuthPreferences.currentBridgeHttpUrl): String? =
-        authService.fetchLoginUrl(bridgeHttpUrl)
-
-    suspend fun startBridgeLogin(bridgeHttpUrl: String = AuthPreferences.currentBridgeHttpUrl): Boolean =
-        authService.startBridgeLogin(bridgeHttpUrl)
-
     suspend fun getAuthStatus(hubUrl: String = AuthPreferences.currentHubUrl): Result<Boolean> =
         authService.getAuthStatus(hubUrl)
 
@@ -153,10 +116,9 @@ class AgyHubClient {
         authService.getLocalUserInfo(hubUrl)
 
     suspend fun fetchDetailedAuthInfo(
-        hubUrl: String = AuthPreferences.currentHubUrl,
-        bridgeHttpUrl: String = AuthPreferences.currentBridgeHttpUrl
+        hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<AgyAuthInfo> =
-        authService.fetchDetailedAuthInfo(hubUrl, bridgeHttpUrl)
+        authService.fetchDetailedAuthInfo(hubUrl)
 
     // ==================== CONVERSATION MANAGEMENT ====================
 
