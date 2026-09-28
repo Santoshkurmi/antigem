@@ -1753,18 +1753,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             while (activeStreamConversationId == conversationId) {
                 try {
                     _isServerOnline.value = true
-                    agyHubClient.streamAgentStateFrames(conversationId, hubUrl).collect { frame ->
+                    agyHubClient.streamAgentStateUpdates(conversationId, hubUrl).collect { resp ->
                         if (activeStreamConversationId != conversationId) {
                             Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel Stream] Dropping frame for inactive conversation (active=$activeStreamConversationId vs frame=$conversationId)")
                             return@collect
                         }
 
-                        val statusStr = frame.status.ifBlank { frame.update?.status ?: "" }
-                        val stepsCount = frame.steps?.size ?: frame.update?.stepsUpdate?.steps?.size ?: frame.update?.mainTrajectoryUpdate?.stepsUpdate?.steps?.size ?: 0
+                        val update = resp.update
+                        val statusStr = update?.status?.name ?: ""
+                        val stepsCount = update?.main_trajectory_update?.steps_update?.steps?.size ?: 0
                         Log.d("CHAT_OPEN_DEBUG", "📥 [ChatViewModel Stream Frame] convId=$conversationId, isFirstChunk=$isFirstChunk, status=$statusStr, stepsCount=$stepsCount")
                         isFirstChunk = false
-                        val turns = trajectoryEngine.ingestFrame(frame)
+                        val turns = if (update != null) trajectoryEngine.ingestAgentStateUpdate(update) else emptyList()
                         val msgs = trajectoryEngine.toChatMessages(conversationId)
+
 
                         withContext(Dispatchers.Main) {
                             if (activeStreamConversationId != conversationId) return@withContext

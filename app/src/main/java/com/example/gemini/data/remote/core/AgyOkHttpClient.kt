@@ -1,16 +1,26 @@
 package com.example.gemini.data.remote.core
 
 import com.example.gemini.data.preferences.AuthPreferences
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 /**
  * Shared singleton OkHttpClient provider for gRPC-Web and Wire transport.
- * Configured with timeouts, indefinite stream reading, and dynamic CSRF token evaluation.
+ * Configured with high multiplexing dispatcher, connection pooling, timeouts, and dynamic CSRF token evaluation.
  */
 object AgyOkHttpClient {
     val client: OkHttpClient by lazy {
+        val dispatcher = Dispatcher().apply {
+            maxRequests = 256
+            maxRequestsPerHost = 256
+        }
+        val connectionPool = ConnectionPool(32, 5, TimeUnit.MINUTES)
+
         OkHttpClient.Builder()
+            .dispatcher(dispatcher)
+            .connectionPool(connectionPool)
             .protocols(listOf(okhttp3.Protocol.H2_PRIOR_KNOWLEDGE))
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS) // Indefinite read timeout for streaming

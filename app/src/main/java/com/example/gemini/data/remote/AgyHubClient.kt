@@ -231,14 +231,9 @@ class AgyHubClient {
     fun streamAgentStateUpdates(
         cascadeId: String,
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Flow<String> =
+    ): Flow<exa.language_server_pb.StreamAgentStateUpdatesResponse> =
         chatService.streamAgentStateUpdates(cascadeId, hubUrl)
 
-    fun streamAgentStateFrames(
-        cascadeId: String,
-        hubUrl: String = AuthPreferences.currentHubUrl
-    ): Flow<AgyStreamFrameDto> =
-        chatService.streamAgentStateFrames(cascadeId, hubUrl)
 
     suspend fun cancelCascadeInvocation(
         cascadeId: String,

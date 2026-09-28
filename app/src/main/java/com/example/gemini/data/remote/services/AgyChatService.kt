@@ -189,53 +189,20 @@ class AgyChatService(
     }
 
     /**
-     * Streams real-time updates for an active conversation via StreamAgentStateUpdates
+     * Streams real-time updates for an active conversation via StreamAgentStateUpdates using typed AgyLanguageService.
      */
     fun streamAgentStateUpdates(
         cascadeId: String,
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Flow<String> = flow {
-        val payload = JSONObject().apply {
-            put("conversationId", cascadeId)
-            put("cascadeId", cascadeId)
-            put("subscriberId", UUID.randomUUID().toString())
-            put("trajectoryVerbosity", 2)
-        }.toString()
-        grpcClient.callStream("StreamAgentStateUpdates", payload, hubUrl).collect { frame ->
-            emit(frame)
-        }
-    }.flowOn(Dispatchers.IO)
+    ): Flow<exa.language_server_pb.StreamAgentStateUpdatesResponse> {
+        val req = exa.language_server_pb.StreamAgentStateUpdatesRequest(
+            conversation_id = cascadeId,
+            subscriber_id = UUID.randomUUID().toString(),
+            trajectory_verbosity = exa.language_server_pb.ClientTrajectoryVerbosity.CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_PROD_UI
+        )
+        return AgyLanguageService.StreamAgentStateUpdates().asFlowSafely(req)
+    }
 
-    /**
-     * Streams real-time updates parsed as AgyStreamFrameDto.
-     */
-    fun streamAgentStateFrames(
-        cascadeId: String,
-        hubUrl: String = AuthPreferences.currentHubUrl
-    ): Flow<AgyStreamFrameDto> = flow {
-        val payload = JSONObject().apply {
-            put("conversationId", cascadeId)
-            put("cascadeId", cascadeId)
-            put("subscriberId", UUID.randomUUID().toString())
-            put("trajectoryVerbosity", 2)
-        }.toString()
-        val customHeaders = mapOf("x-conversation-id" to cascadeId)
-        Log.d("CHAT_OPEN_DEBUG", "📡 [AgyChatService] Connecting to StreamAgentStateUpdates for cascadeId=$cascadeId, hubUrl=$hubUrl")
-
-        grpcClient.callStream("StreamAgentStateUpdates", payload, hubUrl, customHeaders).collect { frameJson ->
-            Log.d("CHAT_OPEN_DEBUG", "📦 [AgyChatService] Received raw stream frame (len=${frameJson.length}): ${frameJson.take(300)}")
-            val frame = try {
-                jsonParser.decodeFromString<AgyStreamFrameDto>(frameJson)
-            } catch (e: Exception) {
-                Log.e("CHAT_OPEN_DEBUG", "❌ [AgyChatService] JSON DECODE ERROR for frame (len=${frameJson.length}): ${frameJson.take(500)}", e)
-                throw IllegalStateException("JSON decoding error: ${e.message}", e)
-            }
-            val statusStr = frame.status.ifBlank { frame.update?.status ?: "" }
-            val stepsCount = frame.steps?.size ?: frame.update?.stepsUpdate?.steps?.size ?: frame.update?.mainTrajectoryUpdate?.stepsUpdate?.steps?.size ?: 0
-            Log.d("CHAT_OPEN_DEBUG", "✅ [AgyChatService] Successfully decoded AgyStreamFrameDto: status=$statusStr, stepsCount=$stepsCount")
-            emit(frame)
-        }
-    }.flowOn(Dispatchers.IO)
 
     /**
      * Cancels / aborts running generation or commands via typed AgyLanguageService

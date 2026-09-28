@@ -1,30 +1,33 @@
 package com.example.gemini.domain.chat
 
 import android.util.Log
-import com.example.gemini.data.remote.AgyHubClient
-import com.example.gemini.data.remote.dto.*
 import com.example.gemini.domain.model.ArtifactSnapshot
 import com.example.gemini.domain.model.ChatAttachment
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.ChatTurn
 import com.example.gemini.domain.model.MessageRole
+import com.example.gemini.domain.model.TokenUsage
 import com.example.gemini.domain.model.ToolCall
 import com.example.gemini.domain.model.ToolType
-import com.example.gemini.domain.model.TokenUsage
 import com.example.gemini.domain.model.TurnBlock
+import exa.language_server_pb.AgentStateUpdate
+import exa.language_server_pb.CascadeRunStatus
+import exa.language_server_pb.CortexStepErrorMessage
+import exa.language_server_pb.CortexStepStatus
+import exa.language_server_pb.CortexStepType
+import exa.language_server_pb.CortexStepUserInput
+import exa.language_server_pb.Duration
+import exa.language_server_pb.Step
+import exa.language_server_pb.Timestamp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Deterministic State Engine for AGY Hub Conversations.
  *
- * Replaces all regex scraping, HTML comment markers (<!-- tool_call:... -->),
- * and uncoordinated maps with a two-tier turn cache:
+ * Consumes type-safe Square Wire Protobuf models (AgentStateUpdate, Step, etc.)
+ * with a two-tier turn cache:
  * 1. Completed historical turns (immutable, zero re-parsing on live updates).
  * 2. Active turn steps (sparse stepIndex map, O(1) cumulative replacement).
  */
@@ -40,7 +43,7 @@ class TrajectoryEngine {
     private val completedTurns = mutableListOf<ChatTurn>()
 
     // Tier 2: Sparse step map for the active turn currently receiving live chunks
-    private val activeStepsMap = LinkedHashMap<Int, CortexStepDto>()
+    private val activeStepsMap = LinkedHashMap<Int, Step>()
 
     val userRespondedStepIndices = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
 
@@ -123,56 +126,47 @@ class TrajectoryEngine {
     fun optimisticUpdateStepStatus(stepIndex: Int, status: String, output: String? = null) {
         val existing = activeStepsMap[stepIndex]
         if (existing != null) {
+            val protoStatus = when (status.uppercase()) {
+                "DONE", "SUCCESS" -> CortexStepStatus.CORTEX_STEP_STATUS_DONE
+                "RUNNING" -> CortexStepStatus.CORTEX_STEP_STATUS_RUNNING
+                "ERROR", "FAILED" -> CortexStepStatus.CORTEX_STEP_STATUS_ERROR
+                "WAITING", "PENDING_APPROVAL", "AWAITING_CHOICE" -> CortexStepStatus.CORTEX_STEP_STATUS_WAITING
+                "CANCELED", "REJECTED", "TERMINATED" -> CortexStepStatus.CORTEX_STEP_STATUS_CANCELED
+                else -> CortexStepStatus.CORTEX_STEP_STATUS_UNSPECIFIED
+            }
             val updated = existing.copy(
-                status = status,
-                generic = if (output != null) {
-                    val curGen = existing.generic
-                    curGen?.copy(
-                        result = curGen.result?.copy(
-                            payload = kotlinx.serialization.json.buildJsonObject {
-                                put("output", kotlinx.serialization.json.JsonPrimitive(output))
-                            }
-                        )
-                    ) ?: curGen
-                } else existing.generic,
-                runCommand = if (output != null) {
-                    existing.runCommand?.copy(output = output) ?: existing.runCommand
-                } else existing.runCommand
+                status = protoStatus,
+                run_command = if (output != null) existing.run_command?.copy(stdout = output) ?: existing.run_command else existing.run_command
             )
             activeStepsMap[stepIndex] = updated
             _turns.value = getTurns()
         }
     }
 
-    fun ingestFrame(frame: AgyStreamFrameDto): List<ChatTurn> {
-        val update = frame.update
-        val convId = update?.conversationId?.takeIf { it.isNotBlank() }
-            ?: frame.conversationId.takeIf { it.isNotBlank() }
-        val trajId = update?.trajectoryId?.takeIf { it.isNotBlank() }
-            ?: frame.trajectoryId.takeIf { it.isNotBlank() }
-        val status = update?.status?.takeIf { it.isNotBlank() }
-            ?: frame.status
+    /**
+     * Ingests typed protobuf updates directly from Square Wire StreamAgentStateUpdates.
+     */
+    fun ingestAgentStateUpdate(update: AgentStateUpdate): List<ChatTurn> {
+        val convId = update.conversation_id.takeIf { it.isNotBlank() }
+        val trajId = update.trajectory_id.takeIf { it.isNotBlank() }
+        val status = update.status
 
         if (!convId.isNullOrBlank()) conversationId = convId
         if (!trajId.isNullOrBlank()) trajectoryId = trajId
 
-        val daemonRunning = status == CascadeRunStatuses.RUNNING
-        val daemonIdle = status == CascadeRunStatuses.IDLE || update?.fullyIdle == true || frame.fullyIdle
+        val daemonRunning = status == CascadeRunStatus.CASCADE_RUN_STATUS_RUNNING
+        val daemonIdle = status == CascadeRunStatus.CASCADE_RUN_STATUS_IDLE || update.fully_idle
 
-        val stepsUpdate = update?.mainTrajectoryUpdate?.stepsUpdate
-            ?: update?.stepsUpdate
-            ?: frame.mainTrajectoryUpdate?.stepsUpdate
-            ?: frame.stepsUpdate
+        val stepsUpdate = update.main_trajectory_update?.steps_update
 
-        val effectiveSteps = stepsUpdate?.steps ?: frame.steps
-        val effectiveIndices = stepsUpdate?.indices ?: effectiveSteps?.indices?.toList() ?: emptyList()
-        val totalLength = stepsUpdate?.totalLength ?: effectiveSteps?.size ?: 0
+        val effectiveSteps = stepsUpdate?.steps ?: emptyList()
+        val effectiveIndices = stepsUpdate?.indices ?: effectiveSteps.indices.toList()
+        val totalLength = stepsUpdate?.total_length ?: effectiveSteps.size
 
-        Log.d("CHAT_OPEN_DEBUG", "⚙️ [TrajectoryEngine.ingestFrame] convId=$conversationId, trajId=$trajectoryId, status=$status, stepsCount=${effectiveSteps?.size ?: 0}, indicesPreview=${effectiveIndices.take(10)}")
+        Log.d("CHAT_OPEN_DEBUG", "⚙️ [TrajectoryEngine.ingestAgentStateUpdate] convId=$conversationId, trajId=$trajectoryId, status=$status, stepsCount=${effectiveSteps.size}")
 
-        if (!effectiveSteps.isNullOrEmpty()) {
+        if (effectiveSteps.isNotEmpty()) {
             val isInitialFullSync = (effectiveIndices.firstOrNull() == 0) || (completedTurns.isEmpty() && activeStepsMap.isEmpty())
-            Log.d("CHAT_OPEN_DEBUG", "⚙️ [TrajectoryEngine.ingestFrame] isInitialFullSync=$isInitialFullSync (indices.first=${effectiveIndices.firstOrNull()}, completedTurns=${completedTurns.size}, activeSteps=${activeStepsMap.size})")
             if (isInitialFullSync) {
                 ingestInitialFullSync(effectiveIndices, effectiveSteps, daemonRunning)
             } else {
@@ -180,56 +174,47 @@ class TrajectoryEngine {
             }
         }
 
-        val frameLastStepError = update?.mainTrajectoryUpdate?.lastStepError
-            ?: update?.lastStepError
-            ?: frame.mainTrajectoryUpdate?.lastStepError
-            ?: frame.lastStepError
+        val frameLastStepError = update.main_trajectory_update?.last_step_error
 
         if (frameLastStepError != null) {
             val errStepIdx = activeStepsMap.keys.maxOrNull() ?: activeTurnStartStep
             val existingStep = activeStepsMap[errStepIdx]
-            if (existingStep != null && (existingStep.errorMessage != null || existingStep.error != null)) {
-                // Enrich existing error step with fullError if missing
-                val curErr = existingStep.errorMessage?.error ?: existingStep.error
+            if (existingStep != null && (existingStep.error_message != null || existingStep.error != null)) {
+                val curErr = existingStep.error_message?.error ?: existingStep.error
                 val baseErr = curErr ?: frameLastStepError
                 val enrichedErr = baseErr.copy(
-                    fullError = if (curErr?.fullError.isNullOrBlank()) frameLastStepError.fullError else curErr.fullError,
-                    shortError = if (curErr?.shortError.isNullOrBlank()) frameLastStepError.shortError else curErr.shortError,
-                    userErrorMessage = if (curErr?.userErrorMessage.isNullOrBlank()) frameLastStepError.userErrorMessage else curErr.userErrorMessage,
-                    errorCode = curErr?.errorCode ?: frameLastStepError.errorCode,
-                    errorId = if (curErr?.errorId.isNullOrBlank()) frameLastStepError.errorId else curErr.errorId
+                    full_error = if (curErr?.full_error.isNullOrBlank()) frameLastStepError.full_error else curErr?.full_error ?: "",
+                    short_error = if (curErr?.short_error.isNullOrBlank()) frameLastStepError.short_error else curErr?.short_error ?: "",
+                    user_error_message = if (curErr?.user_error_message.isNullOrBlank()) frameLastStepError.user_error_message else curErr?.user_error_message ?: "",
+                    error_code = curErr?.error_code ?: frameLastStepError.error_code,
+                    error_id = if (curErr?.error_id.isNullOrBlank()) frameLastStepError.error_id else curErr?.error_id ?: ""
                 )
                 activeStepsMap[errStepIdx] = existingStep.copy(
-                    errorMessage = CortexErrorMessageDto(error = enrichedErr, shouldShowUser = true),
+                    error_message = CortexStepErrorMessage(error = enrichedErr, should_show_user = true),
                     error = enrichedErr
                 )
-            } else if (activeStepsMap.none { (_, s) -> s.errorMessage != null || s.error != null || s.type.contains("ERROR", ignoreCase = true) }) {
-                // Add error step if not already present in active turn
-                val newErrorStep = CortexStepDto(
-                    type = "CORTEX_STEP_TYPE_ERROR_MESSAGE",
-                    status = CortexStepStatuses.DONE,
-                    errorMessage = CortexErrorMessageDto(error = frameLastStepError, shouldShowUser = true),
+            } else if (activeStepsMap.none { (_, s) -> s.error_message != null || s.error != null || s.type == CortexStepType.CORTEX_STEP_TYPE_ERROR_MESSAGE }) {
+                val newErrorStep = Step(
+                    type = CortexStepType.CORTEX_STEP_TYPE_ERROR_MESSAGE,
+                    status = CortexStepStatus.CORTEX_STEP_STATUS_DONE,
+                    error_message = CortexStepErrorMessage(error = frameLastStepError, should_show_user = true),
                     error = frameLastStepError
                 )
                 activeStepsMap[errStepIdx] = newErrorStep
             }
         }
 
-        // If a user prompt was optimistically submitted and is in flight to daemon,
-        // keep isRunning = true until daemon actually acknowledges or finishes.
         isRunning = daemonRunning || (pendingUserTurn != null)
         val isIdle = daemonIdle && (pendingUserTurn == null)
 
         val hasPendingInteraction = activeStepsMap.any { (stepIdx, step) ->
-            val isAskChoice = step.metadata?.toolCall?.name == "ask_question" || step.generic?.name == "ask_question" || step.type == CortexStepTypes.ASK_QUESTION
-            val isWaiting = step.status == CortexStepStatuses.WAITING || step.requestedInteraction != null ||
-                    (isAskChoice && step.status != CortexStepStatuses.DONE && step.status != CortexStepStatuses.CANCELED && step.status != CortexStepStatuses.ERROR)
+            val isAskChoice = step.metadata?.tool_call?.name == "ask_question" || step.generic?.args?.any { it.key == "ask_question" } == true || step.ask_question != null
+            val isWaiting = step.status == CortexStepStatus.CORTEX_STEP_STATUS_WAITING || step.requested_interaction != null ||
+                    (isAskChoice && step.status != CortexStepStatus.CORTEX_STEP_STATUS_DONE && step.status != CortexStepStatus.CORTEX_STEP_STATUS_CANCELED && step.status != CortexStepStatus.CORTEX_STEP_STATUS_ERROR)
             isWaiting && !userRespondedStepIndices.contains(stepIdx)
         }
         isWaitingInteraction = hasPendingInteraction
 
-        // If the cascade entered IDLE status and no tool is waiting for permission,
-        // promote pendingUserTurn only if daemon never emitted a user input step and completedTurns doesn't have it
         if (isIdle && !isWaitingInteraction && !isRunning) {
             pendingUserTurn?.let { pending ->
                 val alreadyPresent = completedTurns.any { it is ChatTurn.User && it.stepIndex == pending.stepIndex }
@@ -240,20 +225,16 @@ class TrajectoryEngine {
             }
         }
 
-        val artifactUpdate = update?.mainTrajectoryUpdate?.artifactSnapshotsUpdate
-            ?: update?.artifactSnapshotsUpdate
-            ?: frame.mainTrajectoryUpdate?.artifactSnapshotsUpdate
-            ?: frame.artifactSnapshotsUpdate
-
-        if (artifactUpdate != null && artifactUpdate.artifactSnapshots.isNotEmpty()) {
-            val mapped = artifactUpdate.artifactSnapshots.map { dto ->
+        val artifactUpdate = update.artifact_snapshots_update
+        if (artifactUpdate != null && artifactUpdate.artifact_snapshots.isNotEmpty()) {
+            val mapped = artifactUpdate.artifact_snapshots.map { snap ->
                 ArtifactSnapshot(
-                    name = dto.artifactName,
-                    absoluteUri = dto.artifactAbsoluteUri,
-                    lastEdited = dto.lastEdited,
-                    summary = dto.artifactMetadata?.effectiveSummary ?: "",
-                    requestFeedback = dto.artifactMetadata?.effectiveRequestFeedback == true,
-                    userFacing = dto.artifactMetadata?.effectiveUserFacing == true
+                    name = snap.artifact_name,
+                    absoluteUri = snap.artifact_absolute_uri,
+                    lastEdited = snap.last_edited?.let { "${it.seconds}" } ?: "",
+                    summary = snap.artifact_metadata?.summary ?: "",
+                    requestFeedback = snap.artifact_metadata?.request_feedback == true,
+                    userFacing = snap.artifact_metadata?.user_facing == true
                 )
             }
             if (mapped.isNotEmpty()) {
@@ -281,14 +262,14 @@ class TrajectoryEngine {
     /**
      * Parses Chunk 0 (the complete historical trajectory) into completed turns.
      */
-    private fun ingestInitialFullSync(indices: List<Int>, steps: List<CortexStepDto>, cascadeRunning: Boolean) {
+    private fun ingestInitialFullSync(indices: List<Int>, steps: List<Step>, cascadeRunning: Boolean) {
         val savedPending = pendingUserTurn
         completedTurns.clear()
         activeStepsMap.clear()
         pendingUserTurn = null
 
         var currentTurnBlocks = mutableListOf<TurnBlock>()
-        var currentTurnSteps = mutableListOf<CortexStepDto>()
+        var currentTurnSteps = mutableListOf<Step>()
         var lastUserStepArrayIndex = -1
         var hasUserInputStep = false
 
@@ -296,9 +277,8 @@ class TrajectoryEngine {
             val stepIndex = indices.getOrNull(i) ?: i
             val step = steps[i]
 
-            if (step.type == CortexStepTypes.USER_INPUT || step.userInput != null) {
+            if (step.type == CortexStepType.CORTEX_STEP_TYPE_USER_INPUT || step.user_input != null) {
                 hasUserInputStep = true
-                // If an assistant turn was building, flush it to completedTurns
                 if (currentTurnBlocks.isNotEmpty()) {
                     val prevUserStepIdx = if (lastUserStepArrayIndex >= 0) (indices.getOrNull(lastUserStepArrayIndex) ?: lastUserStepArrayIndex) else -1
                     val turnId = "${conversationId}_${prevUserStepIdx + 1}"
@@ -308,14 +288,12 @@ class TrajectoryEngine {
                     currentTurnSteps = mutableListOf()
                 }
 
-                // Add User turn
-                val userText = extractUserText(step.userInput)
-                val attachments = extractUserAttachments(step.userInput, stepIndex)
+                val userText = extractUserText(step.user_input)
+                val attachments = extractUserAttachments(step.user_input, stepIndex)
                 completedTurns.add(ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments))
                 lastUserStepArrayIndex = i
                 activeTurnStartStep = stepIndex + 1
             } else {
-                // Assistant step
                 currentTurnSteps.add(step)
                 extractStepBlocks(step, stepIndex, isStreaming = false, blocks = currentTurnBlocks)
             }
@@ -325,12 +303,10 @@ class TrajectoryEngine {
             pendingUserTurn = savedPending
         }
 
-        // If the conversation is currently running or waiting, the trailing assistant steps belong in activeStepsMap
         val hasActiveWork = cascadeRunning || currentTurnBlocks.any {
             it is TurnBlock.Permission || (it is TurnBlock.Tool && it.toolCall.status == "PENDING_APPROVAL")
         }
         if (hasActiveWork && currentTurnBlocks.isNotEmpty()) {
-            // Keep trailing blocks in activeStepsMap for live updates
             val startIdx = if (lastUserStepArrayIndex >= 0) lastUserStepArrayIndex + 1 else 0
             for (i in startIdx until steps.size) {
                 val stepIndex = indices.getOrNull(i) ?: i
@@ -348,8 +324,7 @@ class TrajectoryEngine {
      * Ingests live incremental deltas (Chunks 1..N).
      * Only touches activeStepsMap. Completed past turns are NEVER re-parsed.
      */
-    private fun ingestIncrementalDeltas(indices: List<Int>, steps: List<CortexStepDto>, totalLength: Int) {
-        // Rollback / Undo check: if totalLength decreased, drop rolled-back steps
+    private fun ingestIncrementalDeltas(indices: List<Int>, steps: List<Step>, totalLength: Int) {
         if (totalLength in 1..activeStepsMap.size) {
             activeStepsMap.keys.retainAll { it < totalLength }
         }
@@ -358,13 +333,12 @@ class TrajectoryEngine {
             val stepIndex = indices.getOrNull(i) ?: (activeTurnStartStep + i)
             val step = steps[i]
 
-            if (step.type == CortexStepTypes.USER_INPUT || step.userInput != null) {
-                // A new prompt was sent by the user!
+            if (step.type == CortexStepType.CORTEX_STEP_TYPE_USER_INPUT || step.user_input != null) {
                 finalizeActiveTurn()
                 pendingUserTurn = null
 
-                val userText = extractUserText(step.userInput)
-                val attachments = extractUserAttachments(step.userInput, stepIndex)
+                val userText = extractUserText(step.user_input)
+                val attachments = extractUserAttachments(step.user_input, stepIndex)
                 val userTurn = ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments)
                 val existingIdx = completedTurns.indexOfFirst { it is ChatTurn.User && it.stepIndex == stepIndex }
                 if (existingIdx >= 0) {
@@ -376,46 +350,38 @@ class TrajectoryEngine {
                 activeTurnStartStep = stepIndex + 1
                 activeStepsMap.clear()
             } else {
-                // Live assistant step (Tool, Thinking, Response, System notice)
-                // Overwrite with latest cumulative state for this stepIndex:
                 activeStepsMap[stepIndex] = step
             }
         }
     }
 
-    private fun parseIsoToMillis(isoString: String?): Long? {
-        if (isoString.isNullOrBlank()) return null
-        return try {
-            java.time.Instant.parse(isoString).toEpochMilli()
-        } catch (_: Exception) {
-            null
-        }
+    private fun parseTimestampToMillis(ts: Timestamp?): Long? {
+        if (ts == null) return null
+        return (ts.seconds * 1000L) + (ts.nanos / 1_000_000L)
     }
 
-    private fun parseProtobufDurationToMillis(durationStr: String?): Long? {
-        if (durationStr.isNullOrBlank()) return null
-        val rawSeconds = durationStr.trim().removeSuffix("s").removeSuffix("S")
-        val secondsDouble = rawSeconds.toDoubleOrNull() ?: return null
-        return (secondsDouble * 1000.0).toLong()
+    private fun parseDurationToMillis(duration: Duration?): Long? {
+        if (duration == null) return null
+        return (duration.seconds * 1000L) + (duration.nanos / 1_000_000L)
     }
 
     /**
      * Calculates the aggregated TokenUsage for a set of steps in a turn.
      * Only considers completed PLANNER_RESPONSE steps with valid modelUsage.
      */
-    private fun computeTokenUsage(steps: Iterable<CortexStepDto>): TokenUsage? {
+    private fun computeTokenUsage(steps: Iterable<Step>): TokenUsage? {
         val allStepsList = steps.toList()
         val plannerSteps = allStepsList.filter {
-            (it.type == CortexStepTypes.PLANNER_RESPONSE || it.type == "CORTEX_STEP_TYPE_PLANNER_RESPONSE") &&
-            (it.status == CortexStepStatuses.DONE || it.status == "CORTEX_STEP_STATUS_DONE") &&
-            it.metadata?.modelUsage != null
+            it.type == CortexStepType.CORTEX_STEP_TYPE_PLANNER_RESPONSE &&
+            it.status == CortexStepStatus.CORTEX_STEP_STATUS_DONE &&
+            it.metadata?.model_usage != null
         }
 
         val startTimes = allStepsList.mapNotNull {
-            parseIsoToMillis(it.metadata?.createdAt) ?: parseIsoToMillis(it.metadata?.startedAt)
+            parseTimestampToMillis(it.metadata?.created_at) ?: parseTimestampToMillis(it.metadata?.started_at)
         }
         val endTimes = allStepsList.mapNotNull {
-            parseIsoToMillis(it.metadata?.completedAt) ?: parseIsoToMillis(it.metadata?.finishedGeneratingAt)
+            parseTimestampToMillis(it.metadata?.completed_at) ?: parseTimestampToMillis(it.metadata?.finished_generating_at)
         }
         val durationMs = if (startTimes.isNotEmpty() && endTimes.isNotEmpty()) {
             val start = startTimes.minOrNull() ?: 0L
@@ -425,9 +391,9 @@ class TrajectoryEngine {
 
         if (plannerSteps.isEmpty() && durationMs == 0L) return null
 
-        val outputTokens = plannerSteps.sumOf { it.metadata?.modelUsage?.outputTokens?.toIntOrNull() ?: 0 }
-        val promptTokens = plannerSteps.lastOrNull()?.metadata?.modelUsage?.inputTokens?.toIntOrNull() ?: 0
-        val cachedTokens = plannerSteps.sumOf { it.metadata?.modelUsage?.cacheReadTokens?.toIntOrNull() ?: 0 }
+        val outputTokens = plannerSteps.sumOf { (it.metadata?.model_usage?.output_tokens ?: 0L).toInt() }
+        val promptTokens = (plannerSteps.lastOrNull()?.metadata?.model_usage?.input_tokens ?: 0L).toInt()
+        val cachedTokens = plannerSteps.sumOf { (it.metadata?.model_usage?.cache_read_tokens ?: 0L).toInt() }
 
         if (outputTokens == 0 && promptTokens == 0 && cachedTokens == 0 && durationMs == 0L) return null
 
@@ -504,14 +470,14 @@ class TrajectoryEngine {
         var waitingFound = false
 
         for ((stepIndex, step) in activeStepsMap.toSortedMap()) {
-            val isStepRunning = step.status == CortexStepStatuses.RUNNING ||
-                    step.status == CortexStepStatuses.PENDING ||
-                    step.status == CortexStepStatuses.GENERATING ||
-                    step.status == CortexStepStatuses.QUEUED
+            val isStepRunning = step.status == CortexStepStatus.CORTEX_STEP_STATUS_RUNNING ||
+                    step.status == CortexStepStatus.CORTEX_STEP_STATUS_PENDING ||
+                    step.status == CortexStepStatus.CORTEX_STEP_STATUS_GENERATING ||
+                    step.status == CortexStepStatus.CORTEX_STEP_STATUS_QUEUED
 
-            val isAskChoice = step.metadata?.toolCall?.name == "ask_question" || step.generic?.name == "ask_question" || step.type == CortexStepTypes.ASK_QUESTION
-            val isWaiting = step.status == CortexStepStatuses.WAITING || step.requestedInteraction != null ||
-                    (isAskChoice && step.status != CortexStepStatuses.DONE && step.status != CortexStepStatuses.CANCELED && step.status != CortexStepStatuses.ERROR)
+            val isAskChoice = step.metadata?.tool_call?.name == "ask_question" || step.generic?.args?.any { it.key == "ask_question" } == true || step.ask_question != null
+            val isWaiting = step.status == CortexStepStatus.CORTEX_STEP_STATUS_WAITING || step.requested_interaction != null ||
+                    (isAskChoice && step.status != CortexStepStatus.CORTEX_STEP_STATUS_DONE && step.status != CortexStepStatus.CORTEX_STEP_STATUS_CANCELED && step.status != CortexStepStatus.CORTEX_STEP_STATUS_ERROR)
 
             if (isWaiting && !userRespondedStepIndices.contains(stepIndex)) {
                 waitingFound = true
@@ -552,7 +518,6 @@ class TrajectoryEngine {
 
     /**
      * Converts current turns to [ChatMessage]s for UI consumption.
-     * Preserves exact step sequence, inline tool markers, thoughts, and attachments.
      */
     fun toChatMessages(convId: String = conversationId): List<ChatMessage> {
         val currentTurns = getTurns()
@@ -631,15 +596,12 @@ class TrajectoryEngine {
                                 }
                             }
                             is TurnBlock.ErrorNotice -> {
-                                val errJson = kotlinx.serialization.json.buildJsonObject {
-                                    put("title", kotlinx.serialization.json.JsonPrimitive(block.title))
-                                    put("userMessage", kotlinx.serialization.json.JsonPrimitive(block.userMessage))
-                                    put("shortError", kotlinx.serialization.json.JsonPrimitive(block.shortError))
-                                    put("fullError", kotlinx.serialization.json.JsonPrimitive(block.fullError))
-                                    if (block.errorCode != null) put("errorCode", kotlinx.serialization.json.JsonPrimitive(block.errorCode))
-                                    if (block.errorId.isNotBlank()) put("errorId", kotlinx.serialization.json.JsonPrimitive(block.errorId))
-                                    if (block.rawJson.isNotBlank()) put("rawJson", kotlinx.serialization.json.JsonPrimitive(block.rawJson))
-                                }.toString()
+                                val errJson = buildString {
+                                    append("{\"title\":\"${block.title}\",\"userMessage\":\"${block.userMessage}\",\"shortError\":\"${block.shortError}\",\"fullError\":\"${block.fullError}\"")
+                                    if (block.errorCode != null) append(",\"errorCode\":${block.errorCode}")
+                                    if (block.errorId.isNotBlank()) append(",\"errorId\":\"${block.errorId}\"")
+                                    append("}")
+                                }
                                 contentParts.add("<!-- error:${block.stepIndex} -->\n$errJson\n<!-- /error -->")
                             }
                             is TurnBlock.SystemNotice -> {
@@ -682,67 +644,59 @@ class TrajectoryEngine {
     }
 
     /**
-     * Extracts blocks strictly in-order from a single CortexStepDto.
+     * Extracts blocks strictly in-order from a single Step protobuf message.
      */
     private fun extractStepBlocks(
-        step: CortexStepDto,
+        step: Step,
         stepIndex: Int,
         isStreaming: Boolean,
         blocks: MutableList<TurnBlock>
     ) {
-        // 1. User Input (handled as ChatTurn.User, skip here)
-        if (step.type == CortexStepTypes.USER_INPUT || step.userInput != null) {
+        if (step.type == CortexStepType.CORTEX_STEP_TYPE_USER_INPUT || step.user_input != null) {
             return
         }
 
-        // 2. Planner Response (Thinking + Response)
-        if (step.type == CortexStepTypes.PLANNER_RESPONSE || step.plannerResponse != null) {
-            val thinking = step.plannerResponse?.thinking
-            val response = step.plannerResponse?.response
-            val thinkingDurationMs = parseProtobufDurationToMillis(step.plannerResponse?.thinkingDuration)
+        if (step.type == CortexStepType.CORTEX_STEP_TYPE_PLANNER_RESPONSE || step.planner_response != null) {
+            val thinking = step.planner_response?.thinking
+            val response = step.planner_response?.response
+            val thinkingDurationMs = parseDurationToMillis(step.planner_response?.thinking_duration)
 
             if (!thinking.isNullOrBlank()) {
                 blocks.add(TurnBlock.Thinking(stepIndex = stepIndex, thought = thinking, durationMs = thinkingDurationMs, isStreaming = isStreaming))
             }
             if (!response.isNullOrBlank()) {
                 blocks.add(TurnBlock.Text(stepIndex = stepIndex, markdown = response, isStreaming = isStreaming))
-            } else if (thinking.isNullOrBlank() && (step.status == CortexStepStatuses.GENERATING || isStreaming)) {
+            } else if (thinking.isNullOrBlank() && (step.status == CortexStepStatus.CORTEX_STEP_STATUS_GENERATING || isStreaming)) {
                 blocks.add(TurnBlock.Thinking(stepIndex = stepIndex, thought = "", durationMs = thinkingDurationMs, isStreaming = true))
             }
             return
         }
 
-        // 3. System Messages
-        if (step.type == CortexStepTypes.SYSTEM_MESSAGE && step.systemMessage != null) {
+        if (step.type == CortexStepType.CORTEX_STEP_TYPE_SYSTEM_MESSAGE && step.system_message != null) {
             blocks.add(
                 TurnBlock.SystemNotice(
                     stepIndex = stepIndex,
-                    title = step.systemMessage.title,
-                    content = step.systemMessage.content
+                    title = step.system_message.render_info?.title ?: "System",
+                    content = step.system_message.message
                 )
             )
             return
         }
 
-        // 4. Error messages and notices
-        val stepError = step.errorMessage?.error ?: step.error
-        val isErrorType = step.type == CortexStepTypes.ERROR_MESSAGE ||
-                step.type == "CORTEX_STEP_TYPE_ERROR_MESSAGE" ||
-                step.type.contains("ERROR", ignoreCase = true) ||
-                step.status == CortexStepStatuses.ERROR ||
-                step.errorMessage != null ||
+        val stepError = step.error_message?.error ?: step.error
+        val isErrorType = step.type == CortexStepType.CORTEX_STEP_TYPE_ERROR_MESSAGE ||
+                step.status == CortexStepStatus.CORTEX_STEP_STATUS_ERROR ||
+                step.error_message != null ||
                 step.error != null
 
         if (isErrorType) {
-            val userMsg = stepError?.userErrorMessage?.takeIf { it.isNotBlank() }
-                ?: if (step.type.contains("AUTH", ignoreCase = true)) "Authentication Required" else "Agent Execution Error"
-            val shortErr = stepError?.shortError?.takeIf { it.isNotBlank() }
-                ?: stepError?.message?.takeIf { it.isNotBlank() }
-                ?: stepError?.modelErrorMessage?.takeIf { it.isNotBlank() }
+            val userMsg = stepError?.user_error_message?.takeIf { it.isNotBlank() } ?: "Agent Execution Error"
+            val shortErr = stepError?.short_error?.takeIf { it.isNotBlank() }
+                ?: stepError?.model_error_message?.takeIf { it.isNotBlank() }
                 ?: ""
-            val fullErr = stepError?.fullError?.takeIf { it.isNotBlank() } ?: ""
-            val code = stepError?.errorCode ?: stepError?.code
-            val errId = stepError?.errorId ?: ""
+            val fullErr = stepError?.full_error?.takeIf { it.isNotBlank() } ?: ""
+            val code = stepError?.error_code
+            val errId = stepError?.error_id ?: ""
 
             val title = when {
                 shortErr.contains("auth", ignoreCase = true) || userMsg.contains("auth", ignoreCase = true) -> "Authentication Required"
@@ -767,31 +721,37 @@ class TrajectoryEngine {
             return
         }
 
-        // 5. Tool / Step execution (including those waiting for permission approval)
         val toolCall = extractToolCallFromStep(step, stepIndex)
         if (toolCall != null) {
             blocks.add(TurnBlock.Tool(stepIndex = stepIndex, toolCall = toolCall))
-        } else if (step.status == CortexStepStatuses.WAITING || step.requestedInteraction != null) {
-            // Standalone permission request without an associated tool call
-            step.requestedInteraction?.let { req ->
-                blocks.add(TurnBlock.Permission(stepIndex = stepIndex, trajectoryId = trajectoryId, interaction = req))
-            }
         }
     }
 
     /**
-     * Extracts a domain ToolCall from a typed CortexStepDto without regex,
-     * surfacing rich details, file content/diffs, terminal stdout, and full payloads.
+     * Extracts a domain ToolCall from a typed Step protobuf model without regex.
      */
-    private fun extractToolCallFromStep(step: CortexStepDto, stepIndex: Int): ToolCall? {
+    private fun extractToolCallFromStep(step: Step, stepIndex: Int): ToolCall? {
         val meta = step.metadata
-        val tcMeta = meta?.toolCall
+        val tcMeta = meta?.tool_call
+
+        val argsMap: Map<String, String> = step.generic?.args?.associate { (it.key) to (it.value_) } ?: emptyMap()
 
         val rawName = tcMeta?.name?.takeIf { it.isNotBlank() }
-            ?: step.generic?.name?.takeIf { it.isNotBlank() }
-            ?: step.type.removePrefix("CORTEX_STEP_TYPE_").lowercase().takeIf { it.isNotBlank() && it != "generic" }
-            ?: meta?.toolSummary?.takeIf { it.isNotBlank() }
-            ?: "unknown_tool"
+            ?: when {
+                step.run_command != null -> "run_command"
+                step.view_file != null -> "view_file"
+                step.code_action != null -> "code_action"
+                step.write_to_file != null -> "write_to_file"
+                step.list_directory != null -> "list_dir"
+                step.grep_search != null -> "grep_search"
+                step.find != null -> "find"
+                step.search_web != null -> "search_web"
+                step.read_url_content != null -> "read_url"
+                step.generate_image != null -> "generate_image"
+                step.mcp_tool != null -> "call_mcp_tool"
+                step.ask_question != null -> "ask_question"
+                else -> meta?.tool_summary?.takeIf { it.isNotBlank() } ?: "unknown_tool"
+            }
 
         val toolType = when (rawName) {
             "run_command", "bash", "terminal" -> ToolType.BASH
@@ -809,25 +769,19 @@ class TrajectoryEngine {
         }
 
         val toolId = stepIndex.toString()
-        val args = step.generic?.args
-        val rawPayload = step.generic?.result?.payload
-        val fullOutputUri = step.generic?.result?.fullOutputUri
+        val fullOutputUri = step.generic?.result?.full_output_uri
 
-        val genericPayload: GenericPayloadDto? = try {
-            rawPayload?.let { AgyHubClient.agyJson.decodeFromJsonElement<GenericPayloadDto>(it) }
-        } catch (_: Exception) { null }
-
-        val runCmd = genericPayload?.runCommand ?: step.runCommand
-        val codeAct = genericPayload?.codeAction ?: step.codeAction
-        val viewF = genericPayload?.viewFile ?: step.viewFile
-        val listDir = genericPayload?.listDirectory ?: step.listDirectory
-        val searchW = genericPayload?.searchWeb ?: step.searchWeb
-        val grepS = genericPayload?.grepSearch ?: step.grepSearch
-        val findF = genericPayload?.find ?: step.find
-        val readUrl = genericPayload?.readUrlContent ?: step.readUrlContent
-        val genImg = genericPayload?.generateImage ?: step.generateImage
-        val mcp = genericPayload?.mcpTool ?: step.mcpTool
-        val askQ = genericPayload?.askQuestion ?: step.askQuestion
+        val runCmd = step.run_command
+        val codeAct = step.code_action
+        val viewF = step.view_file
+        val listDir = step.list_directory
+        val searchW = step.search_web
+        val grepS = step.grep_search
+        val findF = step.find
+        val readUrl = step.read_url_content
+        val genImg = step.generate_image
+        val mcp = step.mcp_tool
+        val askQ = step.ask_question
 
         var command = ""
         var output = ""
@@ -835,269 +789,251 @@ class TrajectoryEngine {
 
         when (rawName) {
             "run_command", "bash", "terminal" -> {
-                command = runCmd?.commandLine?.takeIf { it.isNotBlank() }
-                    ?: runCmd?.proposedCommandLine?.takeIf { it.isNotBlank() }
-                    ?: args?.get("CommandLine")?.jsonPrimitive?.contentOrNull
-                    ?: meta?.toolSummary?.takeIf { it.isNotBlank() }
+                val cmd = runCmd?.command_line?.takeIf { it.isNotBlank() }
+                    ?: runCmd?.proposed_command_line?.takeIf { it.isNotBlank() }
+                    ?: argsMap["CommandLine"]
+                    ?: meta?.tool_summary?.takeIf { it.isNotBlank() }
                     ?: "run_command"
-                output = runCmd?.combinedOutput?.full?.takeIf { it.isNotBlank() }
-                    ?: runCmd?.output
-                    ?: fullOutputUri?.let { "[Output stored at $it]" }
-                    ?: ""
-                exitCode = runCmd?.exitCode
+                command = cmd
+                output = runCmd?.combined_output?.full?.takeIf { it.isNotBlank() }
+                    ?: runCmd?.stdout ?: ""
+                exitCode = runCmd?.exit_code
             }
             "view_file" -> {
-                val rawPath = (args?.get("AbsolutePath")?.jsonPrimitive?.contentOrNull
-                    ?: viewF?.absolutePathUri?.takeIf { it.isNotBlank() }
-                    ?: viewF?.absolutePath?.takeIf { it.isNotBlank() }
-                    ?: viewF?.fileUri ?: "").removePrefix("file://")
+                val rawPath = (argsMap["AbsolutePath"]
+                    ?: viewF?.absolute_path_uri
+                    ?: "").removePrefix("file://")
                 val fileName = rawPath.substringAfterLast('/').ifBlank { rawPath }
-                val startLine = args?.get("StartLine")?.jsonPrimitive?.intOrNull ?: viewF?.startLine
-                val endLine = args?.get("EndLine")?.jsonPrimitive?.intOrNull ?: viewF?.endLine
+                val startLine = argsMap["StartLine"]?.toIntOrNull() ?: viewF?.start_line
+                val endLine = argsMap["EndLine"]?.toIntOrNull() ?: viewF?.end_line
                 val lineRange = if (startLine != null && endLine != null) " (lines $startLine-$endLine)"
                     else if (endLine != null) " (lines 1-$endLine)"
                     else ""
-                command = if (fileName.isNotBlank()) "$fileName$lineRange" else meta?.toolSummary?.ifBlank { "view_file" } ?: "view_file"
+                command = if (fileName.isNotBlank()) "$fileName$lineRange" else if (meta?.tool_summary?.isNotBlank() == true) meta.tool_summary else "view_file"
                 output = viewF?.content?.takeIf { it.isNotBlank() }
                     ?: fullOutputUri?.let { "[File content at $it]" }
                     ?: ""
             }
             "write_to_file" -> {
-                val rawPath = (args?.get("TargetFile")?.jsonPrimitive?.contentOrNull
-                    ?: codeAct?.uri?.takeIf { it.isNotBlank() }
-                    ?: codeAct?.absolutePathUri ?: "").removePrefix("file://")
+                val rawPath = (argsMap["TargetFile"]
+                    ?: codeAct?.action_spec?.create_file?.path?.absolute_uri
+                    ?: codeAct?.action_result?.edit?.absolute_uri
+                    ?: "").removePrefix("file://")
                 val fileName = rawPath.substringAfterLast('/').ifBlank { rawPath }
-                val codeContent = args?.get("CodeContent")?.jsonPrimitive?.contentOrNull ?: ""
-                val diff = codeAct?.diff?.takeIf { it.isNotBlank() } ?: codeAct?.patch?.takeIf { it.isNotBlank() }
-                command = if (fileName.isNotBlank()) fileName else meta?.toolSummary?.ifBlank { "write_to_file" } ?: "write_to_file"
-                output = diff ?: codeContent
+                val codeContent = argsMap["CodeContent"] ?: ""
+                val diff = codeAct?.action_result?.edit?.diff?.unified_diff?.lines?.joinToString("\n") { it.text }
+                command = if (fileName.isNotBlank()) fileName else if (meta?.tool_summary?.isNotBlank() == true) meta.tool_summary else "write_to_file"
+                output = if (!diff.isNullOrBlank()) diff else codeContent
             }
             "replace_file_content" -> {
-                val rawPath = (args?.get("TargetFile")?.jsonPrimitive?.contentOrNull
-                    ?: codeAct?.uri?.takeIf { it.isNotBlank() }
-                    ?: codeAct?.absolutePathUri ?: "").removePrefix("file://")
+                val rawPath = (argsMap["TargetFile"]
+                    ?: codeAct?.action_spec?.command?.file_?.absolute_uri
+                    ?: codeAct?.action_result?.edit?.absolute_uri
+                    ?: "").removePrefix("file://")
                 val fileName = rawPath.substringAfterLast('/').ifBlank { rawPath }
-                val startLine = args?.get("StartLine")?.jsonPrimitive?.intOrNull
-                val endLine = args?.get("EndLine")?.jsonPrimitive?.intOrNull
+                val startLine = argsMap["StartLine"]?.toIntOrNull() ?: codeAct?.action_spec?.command?.line_range?.start_line
+                val endLine = argsMap["EndLine"]?.toIntOrNull() ?: codeAct?.action_spec?.command?.line_range?.end_line
                 val lineRange = if (startLine != null && endLine != null) " (lines $startLine-$endLine)" else ""
-                command = if (fileName.isNotBlank()) "$fileName$lineRange" else meta?.toolSummary?.ifBlank { "replace_file_content" } ?: "replace_file_content"
-                val diff = codeAct?.diff?.takeIf { it.isNotBlank() } ?: codeAct?.patch?.takeIf { it.isNotBlank() }
-                output = diff ?: run {
-                    val target = args?.get("TargetContent")?.jsonPrimitive?.contentOrNull ?: ""
-                    val replacement = args?.get("ReplacementContent")?.jsonPrimitive?.contentOrNull ?: ""
+                command = if (fileName.isNotBlank()) "$fileName$lineRange" else if (meta?.tool_summary?.isNotBlank() == true) meta.tool_summary else "replace_file_content"
+                val diff = codeAct?.action_result?.edit?.diff?.unified_diff?.lines?.joinToString("\n") { it.text }
+                output = if (!diff.isNullOrBlank()) diff else run {
+                    val target = argsMap["TargetContent"] ?: ""
+                    val replacement = argsMap["ReplacementContent"] ?: ""
                     if (target.isNotBlank() || replacement.isNotBlank()) {
                         "--- Target (${startLine ?: 1}-${endLine ?: "?"}):\n$target\n\n+++ Replacement:\n$replacement"
                     } else ""
                 }
             }
             "multi_replace_file_content" -> {
-                val rawPath = (args?.get("TargetFile")?.jsonPrimitive?.contentOrNull
-                    ?: codeAct?.uri?.takeIf { it.isNotBlank() }
-                    ?: codeAct?.absolutePathUri ?: "").removePrefix("file://")
+                val rawPath = (argsMap["TargetFile"]
+                    ?: codeAct?.action_spec?.command?.file_?.absolute_uri
+                    ?: codeAct?.action_result?.edit?.absolute_uri
+                    ?: "").removePrefix("file://")
                 val fileName = rawPath.substringAfterLast('/').ifBlank { rawPath }
-                command = if (fileName.isNotBlank()) "$fileName (multi-replace)" else meta?.toolSummary?.ifBlank { "multi_replace_file_content" } ?: "multi_replace_file_content"
-                val diff = codeAct?.diff?.takeIf { it.isNotBlank() } ?: codeAct?.patch?.takeIf { it.isNotBlank() }
-                output = diff ?: (args?.get("ReplacementChunks")?.toString() ?: "")
+                command = if (fileName.isNotBlank()) "$fileName (multi-replace)" else if (meta?.tool_summary?.isNotBlank() == true) meta.tool_summary else "multi_replace_file_content"
+                val diff = codeAct?.action_result?.edit?.diff?.unified_diff?.lines?.joinToString("\n") { it.text }
+                output = if (!diff.isNullOrBlank()) diff else (argsMap["ReplacementChunks"] ?: "")
             }
             "list_dir" -> {
-                val rawDir = (args?.get("DirectoryPath")?.jsonPrimitive?.contentOrNull
-                    ?: listDir?.directoryPathUri?.takeIf { it.isNotBlank() }
-                    ?: listDir?.directoryPath ?: "").removePrefix("file://")
+                val rawDir = (argsMap["DirectoryPath"]
+                    ?: listDir?.directory_path_uri
+                    ?: "").removePrefix("file://")
                 val dirName = rawDir.substringAfterLast('/').ifBlank { rawDir }
-                command = if (dirName.isNotBlank()) dirName else meta?.toolSummary?.ifBlank { "list_dir" } ?: "list_dir"
+                command = if (dirName.isNotBlank()) dirName else if (meta?.tool_summary?.isNotBlank() == true) meta.tool_summary else "list_dir"
                 output = if (listDir != null && listDir.results.isNotEmpty()) {
                     listDir.results.joinToString("\n") { entry ->
-                        val icon = if (entry.isDir) "📁" else "📄"
-                        val size = if (entry.sizeBytes.isNotBlank() && entry.sizeBytes != "0") " (${entry.sizeBytes} B)" else ""
+                        val icon = if (entry.is_dir) "📁" else "📄"
+                        val size = if (entry.size_bytes > 0L) " (${entry.size_bytes} B)" else ""
                         "$icon ${entry.name}$size"
                     }
-                } else {
-                    listDir?.output ?: ""
-                }
+                } else if (listDir != null && listDir.children.isNotEmpty()) {
+                    listDir.children.joinToString("\n") { "📄 $it" }
+                } else ""
             }
             "grep_search" -> {
-                val query = args?.get("Query")?.jsonPrimitive?.contentOrNull ?: grepS?.query ?: ""
-                val searchPath = (args?.get("SearchPath")?.jsonPrimitive?.contentOrNull
-                    ?: grepS?.searchPathUri?.takeIf { it.isNotBlank() }
-                    ?: grepS?.searchPath ?: "").removePrefix("file://")
+                val query = argsMap["Query"] ?: grepS?.query ?: ""
+                val searchPath = (argsMap["SearchPath"]
+                    ?: grepS?.search_path_uri
+                    ?: "").removePrefix("file://")
                 val pathDisplay = searchPath.substringAfterLast('/').ifBlank { searchPath }
                 command = if (query.isNotBlank() && pathDisplay.isNotBlank()) "\"$query\" in $pathDisplay"
-                    else query.ifBlank { meta?.toolSummary?.ifBlank { "grep_search" } ?: "grep_search" }
+                    else if (query.isNotBlank()) query
+                    else if (meta?.tool_summary?.isNotBlank() == true) meta.tool_summary
+                    else "grep_search"
                 output = if (grepS != null && grepS.results.isNotEmpty()) {
-                    grepS.results.joinToString("\n") { "${it.fileName}:${it.lineNumber}: ${it.lineContent}" }
-                } else if (grepS != null && grepS.matchedLines.isNotEmpty()) {
-                    grepS.matchedLines.joinToString("\n")
+                    grepS.results.joinToString("\n") { "${it.relative_path.ifBlank { it.absolute_path }}:${it.line_number}: ${it.content}" }
                 } else {
-                    grepS?.commandRun ?: ""
+                    grepS?.raw_output ?: grepS?.command_run ?: ""
                 }
             }
             "find", "find_by_name" -> {
-                val pattern = args?.get("Pattern")?.jsonPrimitive?.contentOrNull ?: findF?.pattern ?: "*"
-                val dir = (args?.get("SearchDirectory")?.jsonPrimitive?.contentOrNull ?: findF?.searchDirectory ?: "").removePrefix("file://").substringAfterLast('/')
+                val pattern = argsMap["Pattern"] ?: findF?.pattern ?: "*"
+                val dir = (argsMap["SearchDirectory"] ?: findF?.search_directory ?: "").removePrefix("file://").substringAfterLast('/')
                 command = if (dir.isNotBlank()) "$pattern in $dir" else "find $pattern"
-                output = if (findF != null && findF.matchedUris.isNotEmpty()) {
-                    findF.matchedUris.joinToString("\n")
-                } else {
-                    findF?.truncatedOutput?.takeIf { it.isNotBlank() } ?: findF?.output ?: ""
-                }
+                output = findF?.truncated_output?.takeIf { it.isNotBlank() } ?: findF?.raw_output ?: findF?.command_run ?: ""
             }
             "search_web" -> {
-                val query = args?.get("query")?.jsonPrimitive?.contentOrNull ?: searchW?.query ?: ""
-                command = query.ifBlank { meta?.toolSummary?.ifBlank { "search_web" } ?: "search_web" }
+                val query = argsMap["query"] ?: searchW?.query ?: ""
+                val metaSummary = meta?.tool_summary ?: ""
+                command = if (query.isNotBlank()) query else if (metaSummary.isNotBlank()) metaSummary else "search_web"
                 output = buildString {
-                    if (!searchW?.summary.isNullOrBlank()) {
+                    if (searchW != null && searchW.summary.isNotBlank()) {
                         append(searchW.summary)
                     }
-                    if (searchW != null && searchW.results.isNotEmpty()) {
+                    if (searchW != null && searchW.web_documents.isNotEmpty()) {
                         if (isNotEmpty()) append("\n\n")
-                        searchW.results.forEach { r ->
-                            append("• ${r.title} (${r.url})\n  ${r.snippet}\n")
+                        searchW.web_documents.forEach { r ->
+                            append("• ${r.title} (${r.url})\n  ${r.summary.ifBlank { r.text }}\n")
                         }
                     }
-                }.ifBlank { searchW?.output ?: "" }
+                }
             }
             "read_url", "read_url_content" -> {
-                val url = args?.get("Url")?.jsonPrimitive?.contentOrNull ?: readUrl?.url ?: ""
-                command = url.ifBlank { meta?.toolSummary?.ifBlank { "read_url" } ?: "read_url" }
-                output = readUrl?.markdown?.takeIf { it.isNotBlank() } ?: readUrl?.content ?: ""
+                val url = argsMap["Url"] ?: readUrl?.url ?: ""
+                val metaSummary = meta?.tool_summary ?: ""
+                command = if (url.isNotBlank()) url else if (metaSummary.isNotBlank()) metaSummary else "read_url"
+                output = readUrl?.web_document?.text?.takeIf { it.isNotBlank() } ?: readUrl?.web_document?.summary ?: ""
             }
             "generate_image" -> {
-                val prompt = args?.get("Prompt")?.jsonPrimitive?.contentOrNull ?: genImg?.prompt ?: ""
-                command = prompt.ifBlank { meta?.toolSummary?.ifBlank { "generate_image" } ?: "generate_image" }
-                output = if (!genImg?.generatedMedia?.inlineData.isNullOrBlank()) {
-                    "data:${genImg.generatedMedia.mimeType.ifBlank { "image/jpeg" }};base64,${genImg.generatedMedia.inlineData}"
+                val prompt = argsMap["Prompt"] ?: genImg?.prompt ?: ""
+                val metaSummary = meta?.tool_summary ?: ""
+                command = if (prompt.isNotBlank()) prompt else if (metaSummary.isNotBlank()) metaSummary else "generate_image"
+                output = if (genImg?.generated_media?.inline_data != null) {
+                    val base64 = genImg.generated_media.inline_data.base64()
+                    val mime = genImg.generated_media.mime_type.takeIf { it.isNotBlank() } ?: "image/jpeg"
+                    "data:$mime;base64,$base64"
+                } else if (genImg?.generated_image?.base64_data != null && genImg.generated_image.base64_data.isNotBlank()) {
+                    val mime = genImg.generated_image.mime_type.takeIf { it.isNotBlank() } ?: "image/jpeg"
+                    "data:$mime;base64,${genImg.generated_image.base64_data}"
                 } else {
-                    genImg?.imageUri?.takeIf { it.isNotBlank() }
-                        ?: genImg?.uri?.takeIf { it.isNotBlank() }
-                        ?: genImg?.generatedMedia?.uri
+                    genImg?.generated_image?.uri?.takeIf { it.isNotBlank() }
+                        ?: genImg?.generated_media?.uri
                         ?: ""
                 }
             }
             "call_mcp_tool" -> {
-                val sName = args?.get("ServerName")?.jsonPrimitive?.contentOrNull ?: mcp?.serverName ?: ""
-                val tName = args?.get("ToolName")?.jsonPrimitive?.contentOrNull ?: mcp?.toolName ?: ""
-                command = if (sName.isNotBlank() && tName.isNotBlank()) "$sName / $tName" else tName.ifBlank { meta?.toolSummary?.ifBlank { "call_mcp_tool" } ?: "call_mcp_tool" }
-                output = mcp?.resultString?.takeIf { it.isNotBlank() }
-                    ?: mcp?.result?.toString()
-                    ?: mcp?.response?.toString()
-                    ?: mcp?.output?.toString()
-                    ?: mcp?.error?.takeIf { it.isNotBlank() }?.let { "Error: $it" }
+                val sName = argsMap["ServerName"] ?: mcp?.server_name ?: ""
+                val tName = argsMap["ToolName"] ?: mcp?.tool_call?.name ?: ""
+                val metaSummary = meta?.tool_summary ?: ""
+                command = if (sName.isNotBlank() && tName.isNotBlank()) "$sName / $tName" else if (tName.isNotBlank()) tName else if (metaSummary.isNotBlank()) metaSummary else "call_mcp_tool"
+                output = mcp?.result_string?.takeIf { it.isNotBlank() }
+                    ?: mcp?.result_uri?.let { "[Result at $it]" }
                     ?: ""
             }
             "ask_choices", "ask_question", "user_choice" -> {
-                val argsJsonStr = args?.toString()
-                val askQJson = if (askQ != null) {
-                    try { AgyHubClient.agyJson.encodeToString(AskQuestionResultDto.serializer(), askQ) } catch (_: Exception) { null }
-                } else null
-
-                command = when {
-                    !argsJsonStr.isNullOrBlank() && argsJsonStr != "{}" -> argsJsonStr
-                    !askQJson.isNullOrBlank() -> askQJson
-                    else -> meta?.toolSummary?.ifBlank { meta.toolAction.ifBlank { "ask_question" } } ?: "ask_question"
-                }
-
-                // 1. Extract answers from completedInteractions if user has responded
-                val completedResponses = step.completedInteractions
-                    .mapNotNull { it.response?.askQuestion?.responses }
+                val completedResponses = step.completed_interactions
+                    .mapNotNull { it.response?.ask_question?.responses }
                     .flatten()
                     .filter { it.question.isNotBlank() }
 
                 if (completedResponses.isNotEmpty()) {
                     output = completedResponses.joinToString("\n\n") { resp ->
-                        val selectedIds = resp.selectedOptionIds.orEmpty()
-                        val matchedOpts = resp.options.filter { opt -> selectedIds.contains(opt.id) || selectedIds.contains(opt.text) || selectedIds.contains(opt.label) }
+                        val selectedIds = resp.selected_option_ids
+                        val matchedOpts = resp.options.filter { opt -> selectedIds.contains(opt.id) || selectedIds.contains(opt.text) }
                         val answerText = when {
-                            resp.skipped == true -> "Skipped"
-                            matchedOpts.isNotEmpty() -> matchedOpts.joinToString(", ") { it.text.ifBlank { it.label } }
-                            !resp.writeInResponse.isNullOrBlank() -> "Other: \"${resp.writeInResponse}\""
+                            resp.skipped -> "Skipped"
+                            matchedOpts.isNotEmpty() -> matchedOpts.joinToString(", ") { it.text }
+                            resp.write_in_response.isNotBlank() -> "Other: \"${resp.write_in_response}\""
                             selectedIds.isNotEmpty() -> selectedIds.joinToString(", ")
                             else -> "Submitted"
                         }
                         "• ${resp.question}: $answerText"
                     }
-                } else {
-                    // 2. Check if questions in payload contain selectedOptionIds
-                    val answeredQuestions = askQ?.questions?.filter { it.selectedOptionIds.isNotEmpty() || !it.writeInResponse.isNullOrBlank() || it.skipped } ?: emptyList()
+                } else if (askQ != null && askQ.questions.isNotEmpty()) {
+                    val answeredQuestions = askQ.questions.filter { it.selected_option_ids.isNotEmpty() || it.write_in_response.isNotBlank() || it.skipped }
                     if (answeredQuestions.isNotEmpty()) {
                         output = answeredQuestions.joinToString("\n\n") { q ->
-                            val matchedOpts = q.options.filter { opt -> q.selectedOptionIds.contains(opt.id) || q.selectedOptionIds.contains(opt.text) || q.selectedOptionIds.contains(opt.label) }
+                            val matchedOpts = q.options.filter { opt -> q.selected_option_ids.contains(opt.id) || q.selected_option_ids.contains(opt.text) }
                             val answerText = when {
                                 q.skipped -> "Skipped"
-                                matchedOpts.isNotEmpty() -> matchedOpts.joinToString(", ") { it.text.ifBlank { it.label } }
-                                !q.writeInResponse.isNullOrBlank() -> "Other: \"${q.writeInResponse}\""
-                                q.selectedOptionIds.isNotEmpty() -> q.selectedOptionIds.joinToString(", ")
+                                matchedOpts.isNotEmpty() -> matchedOpts.joinToString(", ") { it.text }
+                                q.write_in_response.isNotBlank() -> "Other: \"${q.write_in_response}\""
+                                q.selected_option_ids.isNotEmpty() -> q.selected_option_ids.joinToString(", ")
                                 else -> "Submitted"
                             }
                             "• ${q.question}: $answerText"
                         }
                     } else {
-                        // 3. Fallback when still waiting for user input
-                        val questions = askQ?.questions ?: emptyList()
-                        output = if (questions.isNotEmpty()) {
-                            questions.joinToString("\n\n") { q ->
-                                "${q.question}\n" + q.options.joinToString("\n") { opt -> "• ${opt.text.ifBlank { opt.label }}" }
-                            }
-                        } else ""
+                        output = askQ.questions.joinToString("\n\n") { q ->
+                            "${q.question}\n" + q.options.joinToString("\n") { opt -> "• ${opt.text}" }
+                        }
                     }
                 }
             }
             else -> {
-                // Unknown or custom tool:
-                command = meta?.toolAction?.takeIf { it.isNotBlank() }
-                    ?: meta?.toolSummary?.takeIf { it.isNotBlank() }
+                command = meta?.tool_action?.takeIf { it.isNotBlank() }
+                    ?: meta?.tool_summary?.takeIf { it.isNotBlank() }
                     ?: rawName
-                output = rawPayload?.toString() ?: fullOutputUri?.let { "[Output at $it]" } ?: ""
+                output = fullOutputUri?.let { "[Output at $it]" } ?: ""
             }
         }
 
         if (command.isBlank()) {
-            command = meta?.toolAction?.ifBlank { meta.toolSummary.ifBlank { rawName } } ?: rawName
-        }
-        if (output.isBlank() && rawPayload != null) {
-            output = rawPayload.toString()
+            command = meta?.tool_action?.ifBlank { meta.tool_summary.ifBlank { rawName } } ?: rawName
         }
 
         val status = when (step.status) {
-            CortexStepStatuses.DONE -> {
+            CortexStepStatus.CORTEX_STEP_STATUS_DONE -> {
                 userRespondedStepIndices.remove(stepIndex)
                 "SUCCESS"
             }
-            CortexStepStatuses.ERROR -> {
+            CortexStepStatus.CORTEX_STEP_STATUS_ERROR -> {
                 userRespondedStepIndices.remove(stepIndex)
                 "FAILED"
             }
-            CortexStepStatuses.CANCELED -> {
+            CortexStepStatus.CORTEX_STEP_STATUS_CANCELED -> {
                 userRespondedStepIndices.remove(stepIndex)
                 when {
                     output.contains("rejected", ignoreCase = true) -> "REJECTED"
                     output.contains("terminated", ignoreCase = true) || output.contains("stopped", ignoreCase = true) -> "TERMINATED"
-                    step.requestedInteraction != null -> "REJECTED"
+                    step.requested_interaction != null -> "REJECTED"
                     else -> "TERMINATED"
                 }
             }
-            CortexStepStatuses.WAITING -> {
+            CortexStepStatus.CORTEX_STEP_STATUS_WAITING -> {
                 if (toolType == ToolType.ASK_CHOICE) {
                     if (userRespondedStepIndices.contains(stepIndex)) "RUNNING" else "AWAITING_CHOICE"
                 } else {
                     if (userRespondedStepIndices.contains(stepIndex)) "RUNNING" else "PENDING_APPROVAL"
                 }
             }
-            CortexStepStatuses.RUNNING,
-            CortexStepStatuses.PENDING,
-            CortexStepStatuses.GENERATING -> {
+            CortexStepStatus.CORTEX_STEP_STATUS_RUNNING,
+            CortexStepStatus.CORTEX_STEP_STATUS_PENDING,
+            CortexStepStatus.CORTEX_STEP_STATUS_GENERATING,
+            CortexStepStatus.CORTEX_STEP_STATUS_QUEUED -> {
                 if (toolType == ToolType.ASK_CHOICE && !userRespondedStepIndices.contains(stepIndex)) {
                     "AWAITING_CHOICE"
                 } else {
                     "RUNNING"
                 }
             }
-            else -> if (step.requestedInteraction != null || toolType == ToolType.ASK_CHOICE) {
+            else -> if (step.requested_interaction != null || toolType == ToolType.ASK_CHOICE) {
                 if (userRespondedStepIndices.contains(stepIndex)) "RUNNING" else if (toolType == ToolType.ASK_CHOICE) "AWAITING_CHOICE" else "PENDING_APPROVAL"
             } else "RUNNING"
         }
 
-        val startMs = parseIsoToMillis(step.metadata?.startedAt) ?: parseIsoToMillis(step.metadata?.createdAt)
-        val endMs = parseIsoToMillis(step.metadata?.completedAt) ?: parseIsoToMillis(step.metadata?.finishedGeneratingAt)
+        val startMs = parseTimestampToMillis(step.metadata?.started_at) ?: parseTimestampToMillis(step.metadata?.created_at)
+        val endMs = parseTimestampToMillis(step.metadata?.completed_at) ?: parseTimestampToMillis(step.metadata?.finished_generating_at)
         val toolDurationMs = if (startMs != null && endMs != null && endMs >= startMs) {
             endMs - startMs
         } else null
@@ -1113,39 +1049,36 @@ class TrajectoryEngine {
             durationMs = toolDurationMs,
             stepIndex = stepIndex,
             trajectoryId = trajectoryId,
-            interactionType = step.requestedInteraction?.permission?.resource?.action ?: "permission"
+            interactionType = "permission"
         )
     }
 
-    private fun extractUserText(userInput: CortexUserInputDto?): String {
+    private fun extractUserText(userInput: CortexStepUserInput?): String {
         if (userInput == null) return ""
-        val direct = userInput.userResponse.ifBlank { userInput.content }
+        val direct = userInput.user_response.takeIf { it.isNotBlank() }
+            ?: userInput.query.takeIf { it.isNotBlank() }
+            ?: ""
         if (direct.isNotBlank()) return direct
         val itemsText = userInput.items.mapNotNull { it.text.takeIf { t -> t.isNotBlank() } }.joinToString("\n")
         return itemsText
     }
 
-    private fun extractUserAttachments(userInput: CortexUserInputDto?, stepIndex: Int): List<ChatAttachment> {
+    private fun extractUserAttachments(userInput: CortexStepUserInput?, stepIndex: Int): List<ChatAttachment> {
         if (userInput == null) return emptyList()
         val list = mutableListOf<ChatAttachment>()
-        val allMedia = mutableListOf<MediaAttachmentDto>()
-        allMedia.addAll(userInput.media)
-        userInput.items.forEach { item ->
-            item.media?.let { allMedia.add(it) }
-        }
 
-        allMedia.forEachIndexed { idx, media ->
-            val resolvedMime = media.mimeType.ifBlank { media.mime_type }
-            val cleanUri = if (media.uri.startsWith("file://")) media.uri.removePrefix("file://") else media.uri
-            val base64Data = media.inlineData.ifBlank { media.data }
+        userInput.media.forEachIndexed { idx, media ->
+            val resolvedMime = media.mime_type
+            val cleanUri = (media.uri).removePrefix("file://")
+            val base64Data = if (media.inline_data != null) media.inline_data.base64() else ""
             if (resolvedMime.isBlank() && cleanUri.isBlank() && base64Data.isBlank()) {
                 return@forEachIndexed
             }
             val isAud = resolvedMime.startsWith("audio/") || cleanUri.endsWith(".m4a", true) || cleanUri.endsWith(".mp3", true) || cleanUri.endsWith(".wav", true) || cleanUri.endsWith(".ogg", true)
             val isImg = resolvedMime.startsWith("image/") || cleanUri.endsWith(".png", true) || cleanUri.endsWith(".jpg", true) || cleanUri.endsWith(".jpeg", true) || cleanUri.endsWith(".webp", true) || cleanUri.endsWith(".gif", true) || cleanUri.endsWith(".svg", true)
-            val dur = if (media.durationSeconds > 0) media.durationSeconds else media.duration_seconds
+            val dur = (media.duration_seconds).toInt()
             val resolvedName = when {
-                media.name.isNotBlank() && !media.name.startsWith("attachment_") -> media.name
+                media.display_name.isNotBlank() && !media.display_name.startsWith("attachment_") -> media.display_name
                 media.description.isNotBlank() -> media.description
                 isAud -> if (dur > 0) {
                     val mins = dur / 60
@@ -1164,10 +1097,31 @@ class TrajectoryEngine {
                     isAudio = isAud,
                     durationSeconds = dur,
                     mimeType = resolvedMime.ifBlank { if (isAud) "audio/mp4" else if (isImg) "image/jpeg" else "" },
-                    base64 = if (base64Data.isNotBlank() && !base64Data.startsWith("http") && !base64Data.startsWith("file://")) base64Data else null
+                    base64 = if (base64Data.isNotBlank()) base64Data else null
                 )
             )
         }
+
+        userInput.images.forEachIndexed { idx, img ->
+            val cleanUri = (img.uri).removePrefix("file://")
+            val base64Data = img.base64_data
+            if (cleanUri.isNotBlank() || base64Data.isNotBlank()) {
+                val mime = img.mime_type.takeIf { it.isNotBlank() } ?: "image/jpeg"
+                list.add(
+                    ChatAttachment(
+                        id = "att_${stepIndex}_img_$idx",
+                        name = img.caption.takeIf { it.isNotBlank() } ?: "Image",
+                        path = cleanUri,
+                        isImage = true,
+                        isAudio = false,
+                        durationSeconds = 0,
+                        mimeType = mime,
+                        base64 = if (base64Data.isNotBlank()) base64Data else null
+                    )
+                )
+            }
+        }
+
         return list
     }
 }

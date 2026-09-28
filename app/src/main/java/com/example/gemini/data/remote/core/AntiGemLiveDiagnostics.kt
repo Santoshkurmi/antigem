@@ -83,8 +83,8 @@ object AntiGemLiveDiagnostics {
             }
         }
 
-        val agyDisp = AgyGrpcClient.instance.okHttpClient.dispatcher
-        val agyPool = AgyGrpcClient.instance.okHttpClient.connectionPool
+        val agyDisp = AgyOkHttpClient.client.dispatcher
+        val agyPool = AgyOkHttpClient.client.connectionPool
 
         val ideDisp = IdeApiClient.okHttpClient.dispatcher
         val idePool = IdeApiClient.okHttpClient.connectionPool

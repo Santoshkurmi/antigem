@@ -90,18 +90,23 @@ suspend fun <Req : Any, Resp : Any> GrpcCall<Req, Resp>.executeSafely(
 fun <Req : Any, Resp : Any> GrpcStreamingCall<Req, Resp>.asFlowSafely(
     request: Req
 ): Flow<Resp> = callbackFlow {
+    val reqStr = request.toString().take(120)
+    android.util.Log.d("CHAT_OPEN_DEBUG", "🌐 [AgyLanguageService.asFlowSafely] Stream initiated. Request: $reqStr")
     val (requestChannel, responseChannel) = executeIn(this)
     try {
         requestChannel.send(request)
         requestChannel.close()
+        android.util.Log.d("CHAT_OPEN_DEBUG", "🌐 [AgyLanguageService.asFlowSafely] Request sent to channel. Awaiting response frames...")
 
         for (message in responseChannel) {
             trySend(message)
         }
         channel.close()
     } catch (e: CancellationException) {
+        android.util.Log.d("CHAT_OPEN_DEBUG", "⚠️ [AgyLanguageService.asFlowSafely] Stream cancelled: ${e.message}")
         throw e
     } catch (e: GrpcException) {
+        android.util.Log.e("CHAT_OPEN_DEBUG", "❌ [AgyLanguageService.asFlowSafely] GrpcException: status=${e.grpcStatus}, msg=${e.grpcMessage}", e)
         val err = when (e.grpcStatus) {
             GrpcStatus.UNAUTHENTICATED -> AgyRpcError.Unauthenticated(e.grpcMessage ?: "Unauthenticated")
             GrpcStatus.UNAVAILABLE -> AgyRpcError.DaemonOffline("AGY Hub is offline or unreachable.", e)
@@ -109,12 +114,20 @@ fun <Req : Any, Resp : Any> GrpcStreamingCall<Req, Resp>.asFlowSafely(
         }
         channel.close(err)
     } catch (e: IOException) {
+        android.util.Log.e("CHAT_OPEN_DEBUG", "❌ [AgyLanguageService.asFlowSafely] IOException: ${e.message}", e)
         channel.close(AgyRpcError.DaemonOffline("Stream connection broken: ${e.message}", e))
     } catch (e: Throwable) {
+        android.util.Log.e("CHAT_OPEN_DEBUG", "❌ [AgyLanguageService.asFlowSafely] Throwable: ${e.message}", e)
         channel.close(AgyRpcError.Unknown(e.message ?: "Stream error", e))
+    } finally {
+        responseChannel.cancel()
+        requestChannel.close()
     }
 
     awaitClose {
+        android.util.Log.d("CHAT_OPEN_DEBUG", "🔒 [AgyLanguageService.asFlowSafely] awaitClose invoked, cancelling channel.")
+        responseChannel.cancel()
+        requestChannel.close()
         cancel()
     }
 }.flowOn(Dispatchers.IO)
