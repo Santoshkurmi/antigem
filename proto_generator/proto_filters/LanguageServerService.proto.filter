@@ -1,0 +1,108 @@
+# ==============================================================================
+# Filter for LanguageServerService.proto
+# Comprehensive list of all RPC methods utilized across the Gemini Android App
+# Lines starting with '#' and blank lines are ignored.
+# ==============================================================================
+
+# Core, Lifecycle & Status
+Heartbeat
+GetStatus
+GetRemoteControlInfo
+GetStandaloneDir
+RecordEvent
+
+# Authentication & User State
+Login
+AuthLogout
+GetAuthStatus
+GetLocalUserInfo
+GetUserStatus
+GetUserSettings
+SetUserSettings
+RetrieveUserQuotaSummary
+
+# Models & Configurations
+GetCommandModelConfigs
+GetCascadeModelConfigs
+GetAvailableModels
+
+# Chat & Cascade Agent Execution
+StartCascade
+SendUserCascadeMessage
+CancelCascadeInvocation
+CancelCascadeSteps
+StreamAgentStateUpdates
+HandleCascadeUserInteraction
+ResolveOutstandingSteps
+RecordChatFeedback
+InitializeCascadePanelState
+SmartFocusConversation
+StreamCascadeReactiveUpdates
+StreamCascadePanelReactiveUpdates
+StreamCascadeSummariesReactiveUpdates
+
+# Conversation & Trajectory Management
+JetboxSubscribeToSummaries
+GetCascadeTrajectorySteps
+ForkConversation
+DeleteCascadeTrajectory
+RevertToCascadeStep
+GetTrajectoryFileDiffs
+GetCodeActionDiff
+
+# Filesystem & Workspace
+ReadFile
+WriteFile
+ReadDir
+DeleteFileOrDirectory
+CreateDirectory
+StatUri
+SearchFiles
+GetWorkspaceInfos
+GetRepoInfos
+GetWorkspaceEditState
+
+# Projects & Jetbox State Sync
+CreateProject
+ReadProject
+ReadProjects
+UpdateProject
+DeleteProject
+ProjectUpdatesStream
+JetboxSubscribeToState
+JetboxWriteState
+SaveMediaAsArtifact
+DeleteMediaArtifact
+
+# Terminal & Remote Shell (Optional / Daemon Terminal)
+StreamTerminalShellCommand
+StreamTerminalOutput
+CreateTerminal
+SendTerminalInput
+CloseTerminal
+ListTerminals
+RunCommand
+
+# MCP (Model Context Protocol) & Skills
+GetAllSkills
+GetSlashCommands
+GetMcpServerStates
+RefreshMcpServers
+ToggleMcpServer
+SubscribeToMcpServerStates
+GetMcpServerTemplates
+CompleteMcpOAuth
+DisconnectMcpOAuth
+
+# Plugins & Marketplace
+GetAvailableCascadePlugins
+GetAllPlugins
+GetBuildWithGooglePlugins
+DownloadBuildWithGooglePlugin
+DeletePlugin
+
+# Audio Recording & Transcription
+GetTranscription
+StreamAudioTranscription
+SendAudioChunk
+EndAudioSession

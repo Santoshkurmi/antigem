@@ -2,13 +2,10 @@ syntax = "proto3";
 
 package exa.language_server_pb;
 
-// ==========================================================================
-// Service: LanguageServerService (317 Methods)
-// Source: third_party/jetski/cortex_pb/cortex.proto
-// ==========================================================================
+// Filtered subset for Android app compilation
 
+// Service: LanguageServerService (81 Methods)
 service LanguageServerService {
-  rpc ProvideCompletionFeedback (ProvideCompletionFeedbackRequest) returns (ProvideCompletionFeedbackResponse);
   rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse);
   rpc GetRemoteControlInfo (GetRemoteControlInfoRequest) returns (GetRemoteControlInfoResponse);
   rpc GetStatus (GetStatusRequest) returns (GetStatusResponse);
@@ -16,152 +13,31 @@ service LanguageServerService {
   rpc GetCascadeModelConfigs (GetCascadeModelConfigsRequest) returns (GetCascadeModelConfigsResponse);
   rpc GetStandaloneDir (GetStandaloneDirRequest) returns (GetStandaloneDirResponse);
   rpc RecordEvent (RecordEventRequest) returns (RecordEventResponse);
-  rpc RecordSidecarEvent (RecordSidecarEventRequest) returns (RecordSidecarEventResponse);
-  rpc GetSidecars (GetSidecarsRequest) returns (GetSidecarsResponse);
-  rpc SubscribeToSidecars (SubscribeToSidecarsRequest) returns (stream SubscribeToSidecarsResponse);
-  rpc GetSidecarEvents (GetSidecarEventsRequest) returns (GetSidecarEventsResponse);
-  rpc GetSidecarLogs (GetSidecarLogsRequest) returns (stream GetSidecarLogsResponse);
-  rpc ListSidecarLogFiles (ListSidecarLogFilesRequest) returns (ListSidecarLogFilesResponse);
-  rpc ManageSidecar (ManageSidecarRequest) returns (ManageSidecarResponse);
-  rpc ResolveSidecarConfig (ResolveSidecarConfigRequest) returns (ResolveSidecarConfigResponse);
-  rpc RegisterGdmUser (RegisterGdmUserRequest) returns (RegisterGdmUserResponse);
-  rpc MigrateApiKey (MigrateApiKeyRequest) returns (MigrateApiKeyResponse);
-  rpc WellSupportedLanguages (WellSupportedLanguagesRequest) returns (WellSupportedLanguagesResponse);
-  rpc RecordSearchDocOpen (RecordSearchDocOpenRequest) returns (RecordSearchDocOpenResponse);
-  rpc RecordSearchResultsView (RecordSearchResultsViewRequest) returns (RecordSearchResultsViewResponse);
-  rpc HandleStreamingCommand (HandleStreamingCommandRequest) returns (stream HandleStreamingCommandResponse);
   rpc GetMcpServerTemplates (GetMcpServerTemplatesRequest) returns (GetMcpServerTemplatesResponse);
-  rpc AddTrackedWorkspace (AddTrackedWorkspaceRequest) returns (AddTrackedWorkspaceResponse);
-  rpc RemoveTrackedWorkspace (RemoveTrackedWorkspaceRequest) returns (RemoveTrackedWorkspaceResponse);
   rpc SmartFocusConversation (SmartFocusConversationRequest) returns (SmartFocusConversationResponse);
   rpc StatUri (StatUriRequest) returns (StatUriResponse);
   rpc ReadFile (ReadFileRequest) returns (ReadFileResponse);
-  rpc CheckDevToolsActivePort (CheckDevToolsActivePortRequest) returns (CheckDevToolsActivePortResponse);
   rpc WriteFile (WriteFileRequest) returns (WriteFileResponse);
-  rpc CreateDebugBundle (CreateDebugBundleRequest) returns (CreateDebugBundleResponse);
-  rpc UploadToDrive (UploadToDriveRequest) returns (UploadToDriveResponse);
   rpc ReadDir (ReadDirRequest) returns (ReadDirResponse);
   rpc DeleteFileOrDirectory (DeleteFileOrDirectoryRequest) returns (DeleteFileOrDirectoryResponse);
   rpc CreateDirectory (CreateDirectoryRequest) returns (CreateDirectoryResponse);
-  rpc WatchDirectory (WatchDirectoryRequest) returns (stream WatchDirectoryResponse);
-  rpc GetKnowledgeItems (GetKnowledgeItemsRequest) returns (GetKnowledgeItemsResponse);
-  rpc SetBrowserOpenConversation (SetBrowserOpenConversationRequest) returns (SetBrowserOpenConversationResponse);
-  rpc GetBrowserOpenConversation (GetBrowserOpenConversationRequest) returns (GetBrowserOpenConversationResponse);
-  rpc RefreshContextForIdeAction (RefreshContextForIdeActionRequest) returns (RefreshContextForIdeActionResponse);
-  rpc GetMatchingContextScopeItems (GetMatchingContextScopeItemsRequest) returns (GetMatchingContextScopeItemsResponse);
   rpc RecordChatFeedback (RecordChatFeedbackRequest) returns (RecordChatFeedbackResponse);
-  rpc RecordChatPanelSession (RecordChatPanelSessionRequest) returns (RecordChatPanelSessionResponse);
-  rpc ShouldEnableUnleash (ShouldEnableUnleashRequest) returns (ShouldEnableUnleashResponse);
   rpc GetWorkspaceEditState (GetWorkspaceEditStateRequest) returns (GetWorkspaceEditStateResponse);
   rpc GetRepoInfos (GetRepoInfosRequest) returns (GetRepoInfosResponse);
-  rpc ListGobRepos (ListGobReposRequest) returns (ListGobReposResponse);
   rpc GetWorkspaceInfos (GetWorkspaceInfosRequest) returns (GetWorkspaceInfosResponse);
   rpc GetLocalUserInfo (GetLocalUserInfoRequest) returns (GetLocalUserInfoResponse);
-  rpc ResolveWorkspaceUrlPreview (ResolveWorkspaceUrlPreviewRequest) returns (ResolveWorkspaceUrlPreviewResponse);
-  rpc SearchDriveFiles (SearchDriveFilesRequest) returns (SearchDriveFilesResponse);
-  rpc GetChangelistStatus (GetChangelistStatusRequest) returns (GetChangelistStatusResponse);
-  rpc GetWorkspaceChangelists (GetWorkspaceChangelistsRequest) returns (GetWorkspaceChangelistsResponse);
-  rpc CreateWorktree (CreateWorktreeRequest) returns (CreateWorktreeResponse);
-  rpc DeleteWorktree (DeleteWorktreeRequest) returns (DeleteWorktreeResponse);
-  rpc CheckoutWorktree (CheckoutWorktreeRequest) returns (CheckoutWorktreeResponse);
-  rpc GetWorktreeDiff (GetWorktreeDiffRequest) returns (GetWorktreeDiffResponse);
-  rpc GetBattleWorktreeDiff (GetBattleWorktreeDiffRequest) returns (GetBattleWorktreeDiffResponse);
-  rpc CreateCitcWorkspace (CreateCitcWorkspaceRequest) returns (CreateCitcWorkspaceResponse);
-  rpc SetWorkingDirectories (SetWorkingDirectoriesRequest) returns (SetWorkingDirectoriesResponse);
-  rpc GetWorkingDirectories (GetWorkingDirectoriesRequest) returns (GetWorkingDirectoriesResponse);
-  rpc GetJJWorktrees (GetJJWorktreesRequest) returns (GetJJWorktreesResponse);
-  rpc GetRevisionArtifact (GetRevisionArtifactRequest) returns (GetRevisionArtifactResponse);
-  rpc GetVersionControlState (GetVersionControlStateRequest) returns (GetVersionControlStateResponse);
-  rpc WatchVersionControlState (WatchVersionControlStateRequest) returns (stream WatchVersionControlStateResponse);
-  rpc GetVersionControlFileContent (GetVersionControlFileContentRequest) returns (GetVersionControlFileContentResponse);
-  rpc GetCommitDetails (GetCommitDetailsRequest) returns (GetCommitDetailsResponse);
-  rpc CheckoutCommit (CheckoutCommitRequest) returns (CheckoutCommitResponse);
-  rpc DiscardFileChanges (DiscardFileChangesRequest) returns (DiscardFileChangesResponse);
-  rpc FigSync (FigSyncRequest) returns (FigSyncResponse);
-  rpc FigCommit (FigCommitRequest) returns (FigCommitResponse);
-  rpc FigAmend (FigAmendRequest) returns (FigAmendResponse);
-  rpc FigUpload (FigUploadRequest) returns (FigUploadResponse);
-  rpc JjSync (JjSyncRequest) returns (JjSyncResponse);
-  rpc JjCommit (JjCommitRequest) returns (JjCommitResponse);
-  rpc JjSquash (JjSquashRequest) returns (JjSquashResponse);
-  rpc JjUpload (JjUploadRequest) returns (JjUploadResponse);
-  rpc CogSync (CogSyncRequest) returns (CogSyncResponse);
-  rpc CogCommit (CogCommitRequest) returns (CogCommitResponse);
-  rpc CogUpload (CogUploadRequest) returns (CogUploadResponse);
-  rpc CogSquash (CogSquashRequest) returns (CogSquashResponse);
-  rpc RepoSync (RepoSyncRequest) returns (RepoSyncResponse);
-  rpc RepoCommit (RepoCommitRequest) returns (RepoCommitResponse);
-  rpc RepoAmend (RepoAmendRequest) returns (RepoAmendResponse);
-  rpc RepoUpload (RepoUploadRequest) returns (RepoUploadResponse);
-  rpc GitStage (GitStageRequest) returns (GitStageResponse);
-  rpc GitUnstage (GitUnstageRequest) returns (GitUnstageResponse);
-  rpc GitCommit (GitCommitRequest) returns (GitCommitResponse);
-  rpc GitDiscard (GitDiscardRequest) returns (GitDiscardResponse);
-  rpc GitPush (GitPushRequest) returns (GitPushResponse);
-  rpc GenerateCommitMessage (GenerateCommitMessageRequest) returns (GenerateCommitMessageResponse);
-  rpc RecordCommitMessageSave (RecordCommitMessageSaveRequest) returns (RecordCommitMessageSaveResponse);
-  rpc UpdatePRForWorktree (UpdatePRForWorktreeRequest) returns (UpdatePRForWorktreeResponse);
-  rpc SendActionToChatPanel (SendActionToChatPanelRequest) returns (SendActionToChatPanelResponse);
   rpc GetUserSettings (GetUserSettingsRequest) returns (GetUserSettingsResponse);
   rpc SetUserSettings (SetUserSettingsRequest) returns (SetUserSettingsResponse);
-  rpc FetchUserInfo (FetchUserInfoRequest) returns (FetchUserInfoResponse);
-  rpc SetUserInfo (SetUserInfoRequest) returns (SetUserInfoResponse);
-  rpc GetDebugDiagnostics (GetDebugDiagnosticsRequest) returns (GetDebugDiagnosticsResponse);
-  rpc DumpFlightRecorder (DumpFlightRecorderRequest) returns (DumpFlightRecorderResponse);
-  rpc DumpPprof (DumpPprofRequest) returns (DumpPprofResponse);
-  rpc GetUserAnalyticsSummary (GetUserAnalyticsSummaryRequest) returns (GetUserAnalyticsSummaryResponse);
   rpc GetUserStatus (GetUserStatusRequest) returns (GetUserStatusResponse);
-  rpc GetProfileData (GetProfileDataRequest) returns (GetProfileDataResponse);
-  rpc GetChangelog (GetChangelogRequest) returns (GetChangelogResponse);
-  rpc SetupUniversitySandbox (SetupUniversitySandboxRequest) returns (SetupUniversitySandboxResponse);
-  rpc Exit (ExitRequest) returns (ExitResponse);
-  rpc Restart (RestartRequest) returns (RestartResponse);
-  rpc ResetOnboarding (ResetOnboardingRequest) returns (ResetOnboardingResponse);
-  rpc SkipOnboarding (SkipOnboardingRequest) returns (SkipOnboardingResponse);
-  rpc GetTermsOfService (GetTermsOfServiceRequest) returns (GetTermsOfServiceResponse);
-  rpc AcceptTermsOfService (AcceptTermsOfServiceRequest) returns (AcceptTermsOfServiceResponse);
-  rpc ListLicenses (ListLicensesRequest) returns (ListLicensesResponse);
-  rpc SelectLicense (SelectLicenseRequest) returns (SelectLicenseResponse);
-  rpc SelfAssignLicense (SelfAssignLicenseRequest) returns (SelfAssignLicenseResponse);
-  rpc GetUserTrajectoryDebug (GetUserTrajectoryDebugRequest) returns (GetUserTrajectoryDebugResponse);
-  rpc GetUserTrajectoryDescriptions (GetUserTrajectoryDescriptionsRequest) returns (GetUserTrajectoryDescriptionsResponse);
-  rpc StreamUserTrajectoryReactiveUpdates (StreamReactiveUpdatesRequest) returns (stream StreamReactiveUpdatesResponse);
-  rpc GetCascadeMemories (GetCascadeMemoriesRequest) returns (GetCascadeMemoriesResponse);
-  rpc DeleteCascadeMemory (DeleteCascadeMemoryRequest) returns (DeleteCascadeMemoryResponse);
-  rpc UpdateCascadeMemory (UpdateCascadeMemoryRequest) returns (UpdateCascadeMemoryResponse);
-  rpc GetUserMemories (GetUserMemoriesRequest) returns (GetUserMemoriesResponse);
-  rpc UpdateConversationAnnotations (UpdateConversationAnnotationsRequest) returns (UpdateConversationAnnotationsResponse);
   rpc StartCascade (StartCascadeRequest) returns (StartCascadeResponse);
-  rpc LoadSharedTrajectory (LoadSharedTrajectoryRequest) returns (LoadSharedTrajectoryResponse);
   rpc GetSlashCommands (GetSlashCommandsRequest) returns (GetSlashCommandsResponse);
-  rpc StartBattleMode (StartBattleModeRequest) returns (StartBattleModeResponse);
-  rpc EndBattleMode (EndBattleModeRequest) returns (EndBattleModeResponse);
-  rpc EliminateBattleModeArm (EliminateBattleModeArmRequest) returns (EliminateBattleModeArmResponse);
-  rpc SetOrVerifyStaticConfig (SetOrVerifyStaticConfigRequest) returns (SetOrVerifyStaticConfigResponse);
   rpc ForkConversation (ForkConversationRequest) returns (ForkConversationResponse);
   rpc CancelCascadeInvocation (CancelCascadeInvocationRequest) returns (CancelCascadeInvocationResponse);
-  rpc ForceStopCascadeTree (ForceStopCascadeTreeRequest) returns (ForceStopCascadeTreeResponse);
   rpc CancelCascadeSteps (CancelCascadeStepsRequest) returns (CancelCascadeStepsResponse);
-  rpc SendStepsToBackground (SendStepsToBackgroundRequest) returns (SendStepsToBackgroundResponse);
-  rpc SkipBrowserSubagent (SkipBrowserSubagentRequest) returns (SkipBrowserSubagentResponse);
-  rpc GetCascadeModelConfigData (GetCascadeModelConfigDataRequest) returns (CascadeModelConfigData);
   rpc SendUserCascadeMessage (SendUserCascadeMessageRequest) returns (SendUserCascadeMessageResponse);
-  rpc DetectBattleModeAutoTrigger (DetectBattleModeAutoTriggerRequest) returns (DetectBattleModeAutoTriggerResponse);
-  rpc SignalExecutableIdle (SignalExecutableIdleRequest) returns (SignalExecutableIdleResponse);
-  rpc WaitForConversationFullyIdle (WaitForConversationFullyIdleRequest) returns (WaitForConversationFullyIdleResponse);
-  rpc SendAllQueuedMessages (SendAllQueuedMessagesRequest) returns (SendAllQueuedMessagesResponse);
-  rpc DeleteQueuedUserInputStep (DeleteQueuedUserInputStepRequest) returns (DeleteQueuedUserInputStepResponse);
   rpc RevertToCascadeStep (RevertToCascadeStepRequest) returns (RevertToCascadeStepResponse);
-  rpc GetRevertPreview (GetRevertPreviewRequest) returns (GetRevertPreviewResponse);
-  rpc RecordUserStepSnapshot (RecordUserStepSnapshotRequest) returns (RecordUserStepSnapshotResponse);
-  rpc GetAllCascadeTrajectories (GetAllCascadeTrajectoriesRequest) returns (GetAllCascadeTrajectoriesResponse);
   rpc HandleCascadeUserInteraction (HandleCascadeUserInteractionRequest) returns (HandleCascadeUserInteractionResponse);
-  rpc AcknowledgeCascadeCodeEdit (AcknowledgeCascadeCodeEditRequest) returns (AcknowledgeCascadeCodeEditResponse);
-  rpc AcknowledgeCodeActionStep (AcknowledgeCodeActionStepRequest) returns (AcknowledgeCodeActionStepResponse);
-  rpc GetCodeValidationStates (GetCodeValidationStatesRequest) returns (GetCodeValidationStatesResponse);
   rpc DeleteCascadeTrajectory (DeleteCascadeTrajectoryRequest) returns (DeleteCascadeTrajectoryResponse);
-  rpc GetConversationMetadata (GetConversationMetadataRequest) returns (GetConversationMetadataResponse);
-  rpc GetTurnDiff (GetTurnDiffRequest) returns (GetTurnDiffResponse);
   rpc GetTrajectoryFileDiffs (GetTrajectoryFileDiffsRequest) returns (GetTrajectoryFileDiffsResponse);
   rpc GetCodeActionDiff (GetCodeActionDiffRequest) returns (GetCodeActionDiffResponse);
   rpc InitializeCascadePanelState (InitializeCascadePanelStateRequest) returns (InitializeCascadePanelStateResponse);
@@ -169,8 +45,6 @@ service LanguageServerService {
   rpc StreamCascadeReactiveUpdates (StreamReactiveUpdatesRequest) returns (stream StreamReactiveUpdatesResponse);
   rpc StreamCascadeSummariesReactiveUpdates (StreamReactiveUpdatesRequest) returns (stream StreamReactiveUpdatesResponse);
   rpc StreamAgentStateUpdates (StreamAgentStateUpdatesRequest) returns (stream StreamAgentStateUpdatesResponse);
-  rpc RequestAgentStatePageUpdate (AgentStatePageUpdateRequest) returns (AgentStatePageUpdateResponse);
-  rpc ForceBackgroundResearchRefresh (ForceBackgroundResearchRefreshRequest) returns (ForceBackgroundResearchRefreshResponse);
   rpc ResolveOutstandingSteps (ResolveOutstandingStepsRequest) returns (ResolveOutstandingStepsResponse);
   rpc RefreshMcpServers (RefreshMcpServersRequest) returns (RefreshMcpServersResponse);
   rpc ToggleMcpServer (ToggleMcpServerRequest) returns (ToggleMcpServerResponse);
@@ -184,147 +58,35 @@ service LanguageServerService {
   rpc SendTerminalInput (SendTerminalInputRequest) returns (SendTerminalInputResponse);
   rpc CloseTerminal (CloseTerminalRequest) returns (CloseTerminalResponse);
   rpc ListTerminals (ListTerminalsRequest) returns (ListTerminalsResponse);
-  rpc GetModelResponse (GetModelResponseRequest) returns (GetModelResponseResponse);
   rpc SaveMediaAsArtifact (SaveMediaAsArtifactRequest) returns (SaveMediaAsArtifactResponse);
   rpc DeleteMediaArtifact (DeleteMediaArtifactRequest) returns (DeleteMediaArtifactResponse);
-  rpc GetWebDocsOptions (GetWebDocsOptionsRequest) returns (GetWebDocsOptionsResponse);
-  rpc UpdateDevExperiments (UpdateDevExperimentsRequest) returns (UpdateDevExperimentsResponse);
-  rpc SetBaseExperiments (SetBaseExperimentsRequest) returns (SetBaseExperimentsResponse);
-  rpc GetUnleashData (GetUnleashDataRequest) returns (GetUnleashDataResponse);
-  rpc GetMendelFlags (GetMendelFlagsRequest) returns (GetMendelFlagsResponse);
-  rpc GetModelStatuses (GetModelStatusesRequest) returns (GetModelStatusesResponse);
-  rpc GetAllWorkflows (GetAllWorkflowsRequest) returns (GetAllWorkflowsResponse);
-  rpc GetAllCustomAgentConfigs (GetAllCustomAgentConfigsRequest) returns (GetAllCustomAgentConfigsResponse);
-  rpc CopyBuiltinWorkflowToWorkspace (CopyBuiltinWorkflowToWorkspaceRequest) returns (CopyBuiltinWorkflowToWorkspaceResponse);
-  rpc GetAllRules (GetAllRulesRequest) returns (GetAllRulesResponse);
   rpc GetAllSkills (GetAllSkillsRequest) returns (GetAllSkillsResponse);
-  rpc GetSkillMarketplaceLink (GetSkillMarketplaceLinkRequest) returns (GetSkillMarketplaceLinkResponse);
-  rpc GenerateSkillInstallationCL (GenerateSkillInstallationCLRequest) returns (GenerateSkillInstallationCLResponse);
-  rpc SearchMarketplaceCustomizations (SearchMarketplaceCustomizationsRequest) returns (SearchMarketplaceCustomizationsResponse);
-  rpc ScanSkillsConfigFile (ScanSkillsConfigFileRequest) returns (ScanSkillsConfigFileResponse);
-  rpc ListMcpResources (ListMcpResourcesRequest) returns (ListMcpResourcesResponse);
-  rpc ListMcpPrompts (ListMcpPromptsRequest) returns (ListMcpPromptsResponse);
-  rpc GetMcpPrompt (GetMcpPromptRequest) returns (GetMcpPromptResponse);
-  rpc UpdateEnterpriseExperimentsFromUrl (UpdateEnterpriseExperimentsFromUrlRequest) returns (UpdateEnterpriseExperimentsFromUrlResponse);
-  rpc ImportFromCursor (ImportFromCursorRequest) returns (ImportFromCursorResponse);
-  rpc CreateCustomizationFile (CreateCustomizationFileRequest) returns (CreateCustomizationFileResponse);
-  rpc ListCustomizationPathsByFile (ListCustomizationPathsByFileRequest) returns (ListCustomizationPathsByFileResponse);
-  rpc UpdateCustomizationPathsFile (UpdateCustomizationPathsFileRequest) returns (UpdateCustomizationPathsFileResponse);
-  rpc GetTeamOrganizationalControls (GetTeamOrganizationalControlsRequest) returns (GetTeamOrganizationalControlsResponse);
-  rpc RecordUserGrep (RecordUserGrepRequest) returns (RecordUserGrepResponse);
-  rpc CreateTrajectoryShare (CreateTrajectoryShareRequest) returns (CreateTrajectoryShareResponse);
-  rpc GetCascadeTrajectory (GetCascadeTrajectoryRequest) returns (GetCascadeTrajectoryResponse);
-  rpc GetArtifactSnapshots (GetArtifactSnapshotsRequest) returns (GetArtifactSnapshotsResponse);
-  rpc GetUserTrajectory (GetUserTrajectoryRequest) returns (GetUserTrajectoryResponse);
   rpc GetCascadeTrajectorySteps (GetCascadeTrajectoryStepsRequest) returns (GetCascadeTrajectoryStepsResponse);
-  rpc GetCascadeTrajectoryGeneratorMetadata (GetCascadeTrajectoryGeneratorMetadataRequest) returns (GetCascadeTrajectoryGeneratorMetadataResponse);
-  rpc GetCascadeTrajectoryExecutorMetadatas (GetCascadeTrajectoryExecutorMetadatasRequest) returns (GetCascadeTrajectoryExecutorMetadatasResponse);
-  rpc GetPatchAndCodeChange (GetPatchAndCodeChangeRequest) returns (GetPatchAndCodeChangeResponse);
-  rpc ConvertTrajectoryToMarkdown (ConvertTrajectoryToMarkdownRequest) returns (ConvertTrajectoryToMarkdownResponse);
-  rpc LoadTrajectory (LoadTrajectoryRequest) returns (LoadTrajectoryResponse);
-  rpc ImportProjectFromUrl (ImportProjectFromUrlRequest) returns (ImportProjectFromUrlResponse);
   rpc GetAvailableCascadePlugins (GetAvailableCascadePluginsRequest) returns (GetAvailableCascadePluginsResponse);
-  rpc InstallCascadePlugin (InstallCascadePluginRequest) returns (InstallCascadePluginResponse);
-  rpc GetCascadePluginById (GetCascadePluginByIdRequest) returns (GetCascadePluginByIdResponse);
   rpc GetAllPlugins (GetAllPluginsRequest) returns (GetAllPluginsResponse);
-  rpc SubscribeToPlugins (SubscribeToPluginsRequest) returns (stream SubscribeToPluginsResponse);
-  rpc GetPlugin (GetPluginRequest) returns (GetPluginResponse);
   rpc GetBuildWithGooglePlugins (GetBuildWithGooglePluginsRequest) returns (GetBuildWithGooglePluginsResponse);
   rpc DownloadBuildWithGooglePlugin (DownloadBuildWithGooglePluginRequest) returns (DownloadBuildWithGooglePluginResponse);
   rpc DeletePlugin (DeletePluginRequest) returns (DeletePluginResponse);
-  rpc DeleteSkill (DeleteSkillRequest) returns (DeleteSkillResponse);
-  rpc SearchMarketplace (SearchMarketplaceRequest) returns (SearchMarketplaceResponse);
-  rpc GetMarketplaceCustomization (GetMarketplaceCustomizationRequest) returns (GetMarketplaceCustomizationResponse);
-  rpc GetMarketplaceBundles (GetMarketplaceBundlesRequest) returns (GetMarketplaceBundlesResponse);
-  rpc InstallCustomization (InstallCustomizationRequest) returns (InstallCustomizationResponse);
-  rpc UpdateCustomization (UpdateCustomizationRequest) returns (UpdateCustomizationResponse);
-  rpc GetAgentScripts (GetAgentScriptsRequest) returns (GetAgentScriptsResponse);
-  rpc ListProfiles (ListProfilesRequest) returns (ListProfilesResponse);
-  rpc SaveAgentScriptCommandSpec (SaveAgentScriptCommandSpecRequest) returns (SaveAgentScriptCommandSpecResponse);
-  rpc RecordLints (RecordLintsRequest) returns (RecordLintsResponse);
-  rpc ReplayGroundTruthTrajectory (ReplayGroundTruthTrajectoryRequest) returns (ReplayGroundTruthTrajectoryResponse);
-  rpc LoadReplayConversation (LoadReplayConversationRequest) returns (LoadReplayConversationResponse);
-  rpc RecordInteractiveCascadeFeedback (RecordInteractiveCascadeFeedbackRequest) returns (RecordInteractiveCascadeFeedbackResponse);
-  rpc GetCascadeNuxes (GetCascadeNuxesRequest) returns (GetCascadeNuxesResponse);
-  rpc RegisterInteraction (RegisterInteractionRequest) returns (RegisterInteractionResponse);
   rpc GetTranscription (GetTranscriptionRequest) returns (GetTranscriptionResponse);
   rpc StreamAudioTranscription (StartAudioTranscriptionRequest) returns (stream StreamAudioTranscriptionResponse);
   rpc SendAudioChunk (SendAudioChunkRequest) returns (SendAudioChunkResponse);
   rpc EndAudioSession (EndAudioSessionRequest) returns (EndAudioSessionResponse);
-  rpc StartNarration (StartNarrationRequest) returns (stream StreamNarrationResponse);
-  rpc SendNarrationTurn (SendNarrationTurnRequest) returns (SendNarrationTurnResponse);
-  rpc EndNarration (EndNarrationRequest) returns (EndNarrationResponse);
-  rpc GetInputCompletion (GetInputCompletionRequest) returns (GetInputCompletionResponse);
-  rpc SendInputCompletionFeedback (SendInputCompletionFeedbackRequest) returns (SendInputCompletionFeedbackResponse);
-  rpc GetStaticExperimentStatus (GetStaticExperimentStatusRequest) returns (GetStaticExperimentStatusResponse);
-  rpc RecordAnalyticsEvent (RecordAnalyticsEventRequest) returns (RecordAnalyticsEventResponse);
-  rpc RecordError (RecordErrorRequest) returns (RecordErrorResponse);
-  rpc RecordObservabilityData (RecordObservabilityDataRequest) returns (RecordObservabilityDataResponse);
-  rpc ListPages (ListPagesRequest) returns (ListPagesResponse);
-  rpc BrowserValidateCascadeOrCancelOverlay (BrowserValidateCascadeOrCancelOverlayRequest) returns (BrowserValidateCascadeOrCancelOverlayResponse);
-  rpc OpenUrl (OpenUrlRequest) returns (OpenUrlResponse);
-  rpc FocusUserPage (FocusUserPageRequest) returns (FocusUserPageResponse);
-  rpc AddToBrowserWhitelist (AddToBrowserWhitelistRequest) returns (AddToBrowserWhitelistResponse);
-  rpc CaptureConsoleLogs (CaptureConsoleLogsRequest) returns (CaptureConsoleLogsResponse);
-  rpc StartScreenRecording (StartScreenRecordingRequest) returns (StartScreenRecordingResponse);
-  rpc SaveScreenRecording (SaveScreenRecordingRequest) returns (SaveScreenRecordingResponse);
-  rpc GetBrowserWhitelistFilePath (GetBrowserWhitelistFilePathRequest) returns (GetBrowserWhitelistFilePathResponse);
-  rpc HandleScreenRecording (HandleScreenRecordingRequest) returns (HandleScreenRecordingResponse);
-  rpc GetAllBrowserWhitelistedUrls (GetAllBrowserWhitelistedUrlsRequest) returns (GetAllBrowserWhitelistedUrlsResponse);
-  rpc CaptureScreenshot (CaptureScreenshotRequest) returns (CaptureScreenshotResponse);
-  rpc SmartOpenBrowser (SmartOpenBrowserRequest) returns (SmartOpenBrowserResponse);
-  rpc SimulateSegFault (SimulateSegFaultRequest) returns (SimulateSegFaultResponse);
-  rpc ReconnectExtensionServer (ReconnectExtensionServerRequest) returns (ReconnectExtensionServerResponse);
-  rpc SetCloudCodeURL (SetCloudCodeURLRequest) returns (SetCloudCodeURLResponse);
-  rpc GetTokenBase (GetTokenBaseRequest) returns (GetTokenBaseResponse);
   rpc RunCommand (RunCommandRequest) returns (RunCommandResponse);
-  rpc ValidateTerminalSetupScript (ValidateTerminalSetupScriptRequest) returns (ValidateTerminalSetupScriptResponse);
   rpc JetboxWriteState (JetboxWriteStateRequest) returns (JetboxWriteStateResponse);
   rpc JetboxSubscribeToState (JetboxSubscribeToStateRequest) returns (stream JetboxSubscribeToStateResponse);
-  rpc JetboxReadAppState (JetboxReadAppStateRequest) returns (JetboxReadAppStateResponse);
-  rpc JetboxReadUserConfig (JetboxReadUserConfigRequest) returns (JetboxReadUserConfigResponse);
-  rpc JetboxWriteSummary (JetboxWriteSummaryRequest) returns (JetboxWriteSummaryResponse);
-  rpc JetboxDeleteSummary (JetboxDeleteSummaryRequest) returns (JetboxDeleteSummaryResponse);
   rpc JetboxSubscribeToSummaries (JetboxSubscribeToSummariesRequest) returns (stream JetboxSubscribeToSummariesResponse);
-  rpc JetboxSubscribeToGcertState (JetboxSubscribeToGcertStateRequest) returns (stream JetboxSubscribeToGcertStateResponse);
-  rpc JetboxSubscribeToOAuthState (JetboxSubscribeToOAuthStateRequest) returns (stream JetboxSubscribeToOAuthStateResponse);
   rpc SearchFiles (SearchFilesRequest) returns (SearchFilesResponse);
-  rpc SearchCode (SearchCodeRequest) returns (SearchCodeResponse);
-  rpc StreamSearchCode (SearchCodeRequest) returns (stream StreamSearchCodeResponse);
-  rpc SearchConversations (SearchConversationsRequest) returns (SearchConversationsResponse);
-  rpc GetAgentTeamMetadata (GetAgentTeamMetadataRequest) returns (GetAgentTeamMetadataResponse);
-  rpc GetCodeFrequencyForRepo (GetCodeFrequencyForRepoRequest) returns (GetCodeFrequencyForRepoResponse);
-  rpc SendAgentMessage (SendAgentMessageRequest) returns (SendAgentMessageResponse);
-  rpc DeleteAgentMessage (DeleteAgentMessageRequest) returns (DeleteAgentMessageResponse);
-  rpc GetLoadCodeAssist (GetLoadCodeAssistRequest) returns (GetLoadCodeAssistResponse);
   rpc GetAvailableModels (GetAvailableModelsRequest) returns (GetAvailableModelsResponse);
   rpc RetrieveUserQuotaSummary (RetrieveUserQuotaSummaryRequest) returns (RetrieveUserQuotaSummaryResponse);
   rpc CreateProject (CreateProjectRequest) returns (CreateProjectResponse);
-  rpc CreateMagicProject (CreateMagicProjectRequest) returns (CreateMagicProjectResponse);
   rpc UpdateProject (UpdateProjectRequest) returns (UpdateProjectResponse);
   rpc DeleteProject (DeleteProjectRequest) returns (DeleteProjectResponse);
-  rpc GenerateEnvironmentName (GenerateEnvironmentNameRequest) returns (GenerateEnvironmentNameResponse);
-  rpc AddEnvironmentToProject (AddEnvironmentToProjectRequest) returns (AddEnvironmentToProjectResponse);
-  rpc ResolveFolder (ResolveFolderRequest) returns (ResolveFolderResponse);
   rpc ProjectUpdatesStream (ProjectUpdatesStreamRequest) returns (stream ProjectUpdatesStreamResponse);
   rpc ReadProject (ReadProjectRequest) returns (ReadProjectResponse);
   rpc ReadProjects (ReadProjectsRequest) returns (ReadProjectsResponse);
-  rpc GetDefaultProjectDir (GetDefaultProjectDirRequest) returns (GetDefaultProjectDirResponse);
   rpc GetAuthStatus (GetAuthStatusRequest) returns (GetAuthStatusResponse);
-  rpc LoginWithBrowser (LoginWithBrowserRequest) returns (LoginWithBrowserResponse);
   rpc Login (LoginRequest) returns (LoginResponse);
   rpc AuthLogout (AuthLogoutRequest) returns (AuthLogoutResponse);
-  rpc HasAuthToken (HasAuthTokenRequest) returns (HasAuthTokenResponse);
-  rpc ValidateProject (ValidateProjectRequest) returns (ValidateProjectResponse);
-  rpc GetGrantedScopes (GetGrantedScopesRequest) returns (GetGrantedScopesResponse);
-  rpc CreateScratchProjectFolder (CreateScratchProjectFolderRequest) returns (CreateScratchProjectFolderResponse);
-  rpc SetupJetskiChat (SetupJetskiChatRequest) returns (stream SetupJetskiChatResponse);
-  rpc GetServerConfiguration (GetServerConfigurationRequest) returns (GetServerConfigurationResponse);
-  rpc GetCapabilities (GetCapabilitiesRequest) returns (GetCapabilitiesResponse);
-  rpc FetchAdminControls (FetchAdminControlsRequest) returns (FetchAdminControlsResponse);
-  rpc GetHover (GetHoverRequest) returns (GetHoverResponse);
-  rpc ApplyUpdate (ApplyUpdateRequest) returns (ApplyUpdateResponse);
-  rpc GetUpdateStatus (GetUpdateStatusRequest) returns (GetUpdateStatusResponse);
 }
 
 // ==========================================================================
@@ -339,20 +101,6 @@ enum APIProvider {
   API_PROVIDER_ANTHROPIC_VERTEX = 26;
   API_PROVIDER_GOOGLE_EVERGREEN = 30;
   API_PROVIDER_OPENAI_VERTEX = 31;
-}
-
-enum AcknowledgementType {
-  ACKNOWLEDGEMENT_TYPE_UNSPECIFIED = 0;
-  ACKNOWLEDGEMENT_TYPE_ACCEPT = 1;
-  ACKNOWLEDGEMENT_TYPE_REJECT = 2;
-  ACKNOWLEDGEMENT_TYPE_STALE = 3;
-  ACKNOWLEDGEMENT_TYPE_CLEARED = 4;
-}
-
-enum AgentBrowserTools {
-  AGENT_BROWSER_TOOLS_UNSPECIFIED = 0;
-  AGENT_BROWSER_TOOLS_ENABLED = 1;
-  AGENT_BROWSER_TOOLS_DISABLED = 2;
 }
 
 enum AgentEnvironment {
@@ -393,12 +141,6 @@ enum AgentSettingPolicy {
   AGENT_SETTING_POLICY_DENY = 3;
 }
 
-enum AnnotationsConfig {
-  ANNOTATIONS_CONFIG_UNSPECIFIED = 0;
-  ANNOTATIONS_CONFIG_ENABLED = 1;
-  ANNOTATIONS_CONFIG_DISABLED = 2;
-}
-
 enum ArtifactApprovalStatus {
   ARTIFACT_APPROVAL_STATUS_UNSPECIFIED = 0;
   ARTIFACT_APPROVAL_STATUS_APPROVED = 1;
@@ -436,12 +178,6 @@ enum AuthMode {
   AUTH_MODE_ENTERPRISE_GATEWAY = 5;
 }
 
-enum AutoContinueOnMaxGeneratorInvocations {
-  AUTO_CONTINUE_ON_MAX_GENERATOR_INVOCATIONS_UNSPECIFIED = 0;
-  AUTO_CONTINUE_ON_MAX_GENERATOR_INVOCATIONS_ENABLED = 1;
-  AUTO_CONTINUE_ON_MAX_GENERATOR_INVOCATIONS_DISABLED = 2;
-}
-
 enum AutoInteractionBehavior {
   AUTO_INTERACTION_BEHAVIOR_UNSPECIFIED = 0;
   AUTO_INTERACTION_BEHAVIOR_ALLOW_ALL = 1;
@@ -458,13 +194,6 @@ enum AutoRunDecision {
   AUTO_RUN_DECISION_MODEL_DENY = 6;
   AUTO_RUN_DECISION_DEFAULT_ALLOW = 7;
   AUTO_RUN_DECISION_DEFAULT_DENY = 8;
-}
-
-enum AutocompleteSpeed {
-  AUTOCOMPLETE_SPEED_UNSPECIFIED = 0;
-  AUTOCOMPLETE_SPEED_SLOW = 1;
-  AUTOCOMPLETE_SPEED_DEFAULT = 2;
-  AUTOCOMPLETE_SPEED_FAST = 3;
 }
 
 enum BattleEndType {
@@ -532,106 +261,12 @@ enum CascadeCommandsAutoExecution {
   CASCADE_COMMANDS_AUTO_EXECUTION_PROCEED_IN_SANDBOX = 4;
 }
 
-enum CascadeInputAutocomplete {
-  CASCADE_INPUT_AUTOCOMPLETE_UNSPECIFIED = 0;
-  CASCADE_INPUT_AUTOCOMPLETE_ENABLED = 1;
-  CASCADE_INPUT_AUTOCOMPLETE_DISABLED = 2;
-}
-
-enum CascadeNUXIcon {
-  CASCADE_NUX_ICON_UNSPECIFIED = 0;
-  CASCADE_NUX_ICON_WEB_SEARCH = 1;
-  CASCADE_NUX_ICON_ANTIGRAVITY_BROWSER = 2;
-}
-
-enum CascadeNUXInteractionType {
-  CASCADE_NUX_INTERACTION_TYPE_UNSPECIFIED = 0;
-  CASCADE_NUX_INTERACTION_TYPE_DISMISSED = 1;
-  CASCADE_NUX_INTERACTION_TYPE_ACCEPTED = 2;
-}
-
-enum CascadeNUXLocation {
-  CASCADE_NUX_LOCATION_UNSPECIFIED = 0;
-  CASCADE_NUX_LOCATION_CASCADE_INPUT = 1;
-  CASCADE_NUX_LOCATION_MODEL_SELECTOR = 2;
-  CASCADE_NUX_LOCATION_RULES_TAB = 4;
-  CASCADE_NUX_LOCATION_REVERT_STEP = 6;
-  CASCADE_NUX_LOCATION_PLAN_MODE = 7;
-  CASCADE_NUX_LOCATION_WRITE_CHAT_MODE = 8;
-  CASCADE_NUX_LOCATION_TOOLBAR = 9;
-  CASCADE_NUX_LOCATION_MANAGER_BOTTOM_LEFT = 10;
-  CASCADE_NUX_LOCATION_ARTIFACT_VIEW_BOTTOM_LEFT = 11;
-  CASCADE_NUX_LOCATION_CHAT_PANEL_BANNER = 12;
-  CASCADE_NUX_LOCATION_ALWAYS_MOUNTED = 13;
-  CASCADE_NUX_LOCATION_UI_PLUGINS = 14;
-  CASCADE_NUX_LOCATION_TERMINAL_TAB = 15;
-}
-
-enum CascadeNUXTrigger {
-  CASCADE_NUX_TRIGGER_UNSPECIFIED = 0;
-  CASCADE_NUX_TRIGGER_PRODUCED_CODE_DIFF = 1;
-  CASCADE_NUX_TRIGGER_OPEN_BROWSER_URL = 3;
-  CASCADE_NUX_TRIGGER_WEB_SEARCH = 4;
-  CASCADE_NUX_TRIGGER_MANAGER_POSTONBOARDING_COMPLETE = 5;
-  CASCADE_NUX_TRIGGER_MANAGER_ARTIFACT_CREATED = 6;
-  CASCADE_NUX_TRIGGER_MANAGER_ARTIFACT_OPENED = 7;
-  CASCADE_NUX_TRIGGER_MANAGER_FILE_OPENED = 8;
-  CASCADE_NUX_TRIGGER_MANAGER_CONVERSATION_AVAILABLE = 10;
-  CASCADE_NUX_TRIGGER_MANAGER_PROJECT_CREATED = 11;
-  CASCADE_NUX_TRIGGER_MANAGER_PROJECT_ENVIRONMENT_SELECTION = 12;
-  CASCADE_NUX_TRIGGER_MANAGER_CREATE_FIRST_PROJECT_DIALOG = 13;
-  CASCADE_NUX_TRIGGER_MANAGER_PLUGINS_DASHBOARD_OPENED = 14;
-  CASCADE_NUX_TRIGGER_REMOTE_CONTROL_ELIGIBLE = 15;
-  CASCADE_NUX_TRIGGER_PERMISSIONS_V2_ENABLED = 16;
-}
-
-enum CascadeRunExtensionCode {
-  CASCADE_RUN_EXTENSION_CODE_UNSPECIFIED = 0;
-  CASCADE_RUN_EXTENSION_CODE_ENABLED = 1;
-  CASCADE_RUN_EXTENSION_CODE_DISABLED = 2;
-  CASCADE_RUN_EXTENSION_CODE_ONLY = 3;
-}
-
-enum CascadeRunExtensionCodeAutoRun {
-  CASCADE_RUN_EXTENSION_CODE_AUTO_RUN_UNSPECIFIED = 0;
-  CASCADE_RUN_EXTENSION_CODE_AUTO_RUN_ENABLED = 1;
-  CASCADE_RUN_EXTENSION_CODE_AUTO_RUN_DISABLED = 2;
-  CASCADE_RUN_EXTENSION_CODE_AUTO_RUN_MODEL_DECIDES = 3;
-}
-
 enum CascadeRunStatus {
   CASCADE_RUN_STATUS_UNSPECIFIED = 0;
   CASCADE_RUN_STATUS_IDLE = 1;
   CASCADE_RUN_STATUS_RUNNING = 2;
   CASCADE_RUN_STATUS_CANCELING = 3;
   CASCADE_RUN_STATUS_BUSY = 4;
-}
-
-enum CascadeWebSearchTool {
-  CASCADE_WEB_SEARCH_TOOL_UNSPECIFIED = 0;
-  CASCADE_WEB_SEARCH_TOOL_ENABLED = 1;
-  CASCADE_WEB_SEARCH_TOOL_DISABLED = 2;
-}
-
-enum CaseSensitivity {
-  CASE_SENSITIVITY_UNSPECIFIED = 0;
-  CASE_SENSITIVITY_AUTO = 1;
-  CASE_SENSITIVITY_YES = 2;
-  CASE_SENSITIVITY_NO = 3;
-}
-
-enum ChangelistReviewState {
-  CHANGELIST_REVIEW_STATE_UNSPECIFIED = 0;
-  CHANGELIST_REVIEW_STATE_PENDING = 1;
-  CHANGELIST_REVIEW_STATE_IN_REVIEW = 2;
-  CHANGELIST_REVIEW_STATE_LGTM = 3;
-  CHANGELIST_REVIEW_STATE_SUBMITTED = 4;
-}
-
-enum ChannelType {
-  CHANNEL_TYPE_UNKNOWN = 0;
-  STABLE = 1;
-  EXPERIMENTAL = 2;
 }
 
 enum ChatClientRequestStreamClientType {
@@ -661,11 +296,6 @@ enum ChatMessageSource {
   CHAT_MESSAGE_SOURCE_UNKNOWN = 3;
 }
 
-enum CheckoutMode {
-  CHECKOUT_MODE_UNSPECIFIED = 0;
-  CHECKOUT_MODE_EDIT_IN_PLACE = 1;
-}
-
 enum CheckpointStrategy {
   CHECKPOINT_STRATEGY_UNSPECIFIED = 0;
   CHECKPOINT_STRATEGY_SAME_MODEL = 1;
@@ -685,27 +315,6 @@ enum ClientTrajectoryVerbosity {
   CLIENT_TRAJECTORY_VERBOSITY_FULL = 3;
 }
 
-enum CodeAcknowledgementScope {
-  CODE_ACKNOWLEDGEMENT_SCOPE_UNSPECIFIED = 0;
-  CODE_ACKNOWLEDGEMENT_SCOPE_FILE = 1;
-  CODE_ACKNOWLEDGEMENT_SCOPE_ALL = 2;
-  CODE_ACKNOWLEDGEMENT_SCOPE_HUNK = 3;
-}
-
-enum CodeContextSource {
-  CODE_CONTEXT_SOURCE_UNSPECIFIED = 0;
-  CODE_CONTEXT_SOURCE_OPEN_DOCS = 1;
-  CODE_CONTEXT_SOURCE_SEARCH_RESULT = 2;
-  CODE_CONTEXT_SOURCE_IMPORT = 3;
-  CODE_CONTEXT_SOURCE_LOCAL_DIRECTORY = 4;
-  CODE_CONTEXT_SOURCE_LAST_ACTIVE_DOC = 5;
-  CODE_CONTEXT_SOURCE_ORACLE_ITEMS = 6;
-  CODE_CONTEXT_SOURCE_PINNED_CONTEXT = 7;
-  CODE_CONTEXT_SOURCE_RESEARCH_STATE = 8;
-  CODE_CONTEXT_SOURCE_GROUND_TRUTH_PLAN_EDIT = 9;
-  CODE_CONTEXT_SOURCE_COMMIT_GRAPH = 10;
-}
-
 enum CodeContextType {
   CODE_CONTEXT_TYPE_UNSPECIFIED = 0;
   CODE_CONTEXT_TYPE_FUNCTION = 1;
@@ -716,74 +325,6 @@ enum CodeContextType {
   CODE_CONTEXT_TYPE_REFERENCE_CLASS = 6;
   CODE_CONTEXT_TYPE_FILE = 7;
   CODE_CONTEXT_TYPE_TERMINAL = 8;
-}
-
-enum CodeRevertActionType {
-  CODE_REVERT_ACTION_TYPE_UNSPECIFIED = 0;
-  CODE_REVERT_ACTION_TYPE_MODIFY = 1;
-  CODE_REVERT_ACTION_TYPE_CREATE = 2;
-  CODE_REVERT_ACTION_TYPE_DELETE = 3;
-}
-
-enum CogSquashMode {
-  COG_SQUASH_MODE_UNSPECIFIED = 0;
-  COG_SQUASH_MODE_PRUNE = 1;
-  COG_SQUASH_MODE_PRUNE_AND_ABANDON_CHANGE = 2;
-}
-
-enum CommandRequestSource {
-  COMMAND_REQUEST_SOURCE_UNSPECIFIED = 0;
-  COMMAND_REQUEST_SOURCE_DEFAULT = 1;
-  COMMAND_REQUEST_SOURCE_PLAN = 7;
-  COMMAND_REQUEST_SOURCE_FAST_APPLY = 12;
-  COMMAND_REQUEST_SOURCE_TERMINAL = 13;
-  COMMAND_REQUEST_SOURCE_SUPERCOMPLETE = 10;
-  COMMAND_REQUEST_SOURCE_TAB_JUMP = 14;
-  COMMAND_REQUEST_SOURCE_CASCADE_CHAT = 16;
-}
-
-enum CompletionFeedback {
-  COMPLETION_FEEDBACK_UNSPECIFIED = 0;
-  COMPLETION_FEEDBACK_ACCEPTED = 1;
-  COMPLETION_FEEDBACK_REJECTED = 2;
-  COMPLETION_FEEDBACK_HIDDEN = 3;
-}
-
-enum CompletionType {
-  COMPLETION_TYPE_UNSPECIFIED = 0;
-  COMPLETION_TYPE_SINGLE = 1;
-  COMPLETION_TYPE_MULTI = 2;
-  COMPLETION_TYPE_INLINE_FIM = 3;
-  COMPLETION_TYPE_CASCADE = 4;
-}
-
-enum ContextScopeType {
-  CONTEXT_SCOPE_TYPE_UNSPECIFIED = 0;
-  CONTEXT_SCOPE_TYPE_FILE = 1;
-  CONTEXT_SCOPE_TYPE_DIRECTORY = 2;
-  CONTEXT_SCOPE_TYPE_REPOSITORY = 3;
-  CONTEXT_SCOPE_TYPE_CODE_CONTEXT = 4;
-  CONTEXT_SCOPE_TYPE_CCI_WITH_SUBRANGE = 5;
-  CONTEXT_SCOPE_TYPE_REPOSITORY_PATH = 6;
-  CONTEXT_SCOPE_TYPE_SLACK = 7;
-  CONTEXT_SCOPE_TYPE_GITHUB = 8;
-  CONTEXT_SCOPE_TYPE_FILE_LINE_RANGE = 9;
-  CONTEXT_SCOPE_TYPE_TEXT_BLOCK = 10;
-  CONTEXT_SCOPE_TYPE_JIRA = 11;
-  CONTEXT_SCOPE_TYPE_GOOGLE_DRIVE = 12;
-  CONTEXT_SCOPE_TYPE_CONSOLE_LOG = 13;
-  CONTEXT_SCOPE_TYPE_DOM_ELEMENT = 14;
-  CONTEXT_SCOPE_TYPE_RECIPE = 15;
-  CONTEXT_SCOPE_TYPE_KNOWLEDGE = 16;
-  CONTEXT_SCOPE_TYPE_RULE = 17;
-  CONTEXT_SCOPE_TYPE_MCP_RESOURCE = 18;
-  CONTEXT_SCOPE_TYPE_BROWSER_PAGE = 19;
-  CONTEXT_SCOPE_TYPE_BROWSER_CODE_BLOCK = 20;
-  CONTEXT_SCOPE_TYPE_BROWSER_TEXT = 21;
-  CONTEXT_SCOPE_TYPE_CONVERSATION = 22;
-  CONTEXT_SCOPE_TYPE_USER_ACTIVITY = 23;
-  CONTEXT_SCOPE_TYPE_TERMINAL = 24;
-  CONTEXT_SCOPE_TYPE_SLASH_COMMAND = 25;
 }
 
 enum ContextSnippetType {
@@ -1003,55 +544,11 @@ enum CreditType {
   GOOGLE_ONE_AI = 1;
 }
 
-enum CustomizationFileType {
-  CUSTOMIZATION_FILE_TYPE_UNSPECIFIED = 0;
-  CUSTOMIZATION_FILE_TYPE_RULES = 1;
-  CUSTOMIZATION_FILE_TYPE_WORKFLOWS = 2;
-  CUSTOMIZATION_FILE_TYPE_GLOBAL_WORKFLOWS = 3;
-  CUSTOMIZATION_FILE_TYPE_SKILLS = 4;
-  CUSTOMIZATION_FILE_TYPE_GLOBAL_SKILLS = 5;
-  CUSTOMIZATION_FILE_TYPE_AGENT = 6;
-  CUSTOMIZATION_FILE_TYPE_GLOBAL_AGENT = 7;
-  CUSTOMIZATION_FILE_TYPE_PLUGIN = 8;
-  CUSTOMIZATION_FILE_TYPE_GLOBAL_PLUGIN = 9;
-  CUSTOMIZATION_FILE_TYPE_HOOKS = 10;
-  CUSTOMIZATION_FILE_TYPE_MCP = 11;
-}
-
-enum CustomizationPathsOperation {
-  CUSTOMIZATION_PATHS_OPERATION_UNSPECIFIED = 0;
-  CUSTOMIZATION_PATHS_OPERATION_ADD = 1;
-  CUSTOMIZATION_PATHS_OPERATION_REMOVE = 2;
-  CUSTOMIZATION_PATHS_OPERATION_SET = 3;
-}
-
 enum DeploymentProvider {
   DEPLOYMENT_PROVIDER_UNSPECIFIED = 0;
   DEPLOYMENT_PROVIDER_VERCEL = 1;
   DEPLOYMENT_PROVIDER_NETLIFY = 2;
   DEPLOYMENT_PROVIDER_CLOUDFLARE = 3;
-}
-
-enum DetectAndUseProxy {
-  DETECT_AND_USE_PROXY_UNSPECIFIED = 0;
-  DETECT_AND_USE_PROXY_ENABLED = 1;
-  DETECT_AND_USE_PROXY_DISABLED = 2;
-}
-
-enum DiffChangeType {
-  DIFF_CHANGE_TYPE_UNSPECIFIED = 0;
-  DIFF_CHANGE_TYPE_INSERT = 1;
-  DIFF_CHANGE_TYPE_DELETE = 2;
-  DIFF_CHANGE_TYPE_UNCHANGED = 3;
-}
-
-enum DiffType {
-  DIFF_TYPE_UNSPECIFIED = 0;
-  DIFF_TYPE_UNIFIED = 1;
-  DIFF_TYPE_CHARACTER = 2;
-  DIFF_TYPE_COMBO = 3;
-  DIFF_TYPE_TMP_SUPERCOMPLETE = 4;
-  DIFF_TYPE_TMP_TAB_JUMP = 5;
 }
 
 enum DiscoveryCategory {
@@ -1074,17 +571,6 @@ enum DocumentType {
   DOCUMENT_TYPE_GOOGLE_DRIVE_FOLDER = 6;
   DOCUMENT_TYPE_JIRA_ISSUE = 7;
   DOCUMENT_TYPE_CCI = 9;
-}
-
-enum EndBattleModeErrorType {
-  END_BATTLE_MODE_ERROR_TYPE_UNSPECIFIED = 0;
-  END_BATTLE_MODE_ERROR_TYPE_TRAJECTORY_RUNNING = 1;
-  END_BATTLE_MODE_ERROR_TYPE_MERGE_BACK_FAILED = 2;
-  END_BATTLE_MODE_ERROR_TYPE_OTHER = 3;
-  END_BATTLE_MODE_ERROR_TYPE_SUBAGENTS_RUNNING = 4;
-  END_BATTLE_MODE_ERROR_TYPE_BACKGROUND_TASKS_RUNNING = 5;
-  END_BATTLE_MODE_ERROR_TYPE_ALREADY_ELIMINATED = 6;
-  END_BATTLE_MODE_ERROR_TYPE_ALREADY_ENDED = 7;
 }
 
 enum EphemeralMessagePersistenceLevel {
@@ -1317,13 +803,6 @@ enum FeedbackType {
   FEEDBACK_TYPE_MOUSE_POINTER = 2;
 }
 
-enum FileAccessPolicy {
-  FILE_ACCESS_POLICY_UNSPECIFIED = 0;
-  FILE_ACCESS_POLICY_DENY = 1;
-  FILE_ACCESS_POLICY_ALWAYS_ASK = 2;
-  FILE_ACCESS_POLICY_NOT_ENFORCED = 3;
-}
-
 enum FileType {
   FILE_TYPE_UNSPECIFIED = 0;
   FILE_TYPE_FILE = 1;
@@ -1331,26 +810,11 @@ enum FileType {
   FILE_TYPE_SYMLINK = 3;
 }
 
-enum FolderType {
-  FOLDER_TYPE_UNSPECIFIED = 0;
-  FOLDER_TYPE_NORMAL_FOLDER = 1;
-  FOLDER_TYPE_GIT_FOLDER = 2;
-  FOLDER_TYPE_GOOGLE3_FOLDER = 3;
-  FOLDER_TYPE_NON_EXISTENT = 4;
-}
-
 enum ForkTarget {
   FORK_TARGET_UNSPECIFIED = 0;
   FORK_TARGET_CURRENT_WORKSPACE = 1;
   FORK_TARGET_NEW_WORKTREE = 2;
   FORK_TARGET_NEW_WORKSPACE = 3;
-}
-
-enum ForkType {
-  FORK_TYPE_UNSPECIFIED = 0;
-  FORK_TYPE_PIPER = 1;
-  FORK_TYPE_JJ = 2;
-  FORK_TYPE_FIG = 3;
 }
 
 enum GitCloneStrategy {
@@ -1368,15 +832,6 @@ enum HookType {
   HOOK_TYPE_POST_TOOL_USE = 5;
 }
 
-enum IdeAction {
-  IDE_ACTION_UNSPECIFIED = 0;
-  IDE_ACTION_SAVE = 1;
-  IDE_ACTION_SELECTION_CHANGED = 2;
-  IDE_ACTION_VISIBLE_RANGES_CHANGED = 3;
-  IDE_ACTION_ACTIVE_EDITOR_CHANGED = 4;
-  IDE_ACTION_STARTUP = 5;
-}
-
 enum IndexChoice {
   INDEX_CHOICE_UNSPECIFIED = 0;
   INDEX_CHOICE_GITHUB_BASE = 1;
@@ -1385,29 +840,6 @@ enum IndexChoice {
   INDEX_CHOICE_GOOGLE_DRIVE_BASE = 4;
   INDEX_CHOICE_JIRA_BASE = 5;
   INDEX_CHOICE_SCM = 6;
-}
-
-enum IneligibleTierReasonCodes {
-  INELIGIBLE_TIER_REASON_CODES_UNKNOWN = 0;
-  INELIGIBLE_ACCOUNT = 1;
-  UNKNOWN_LOCATION = 2;
-  UNSUPPORTED_LOCATION = 3;
-  RESTRICTED_NETWORK = 4;
-  RESTRICTED_AGE = 5;
-  NON_USER_ACCOUNT = 6;
-  DASHER_USER = 7;
-  BYOID_USER = 8;
-  RESTRICTED_DASHER_USER = 9;
-  VALIDATION_REQUIRED = 10;
-  GOOGLE_TOS_NOT_SUPPORTED_BY_CLIENT = 11;
-  UNSUPPORTED_CLIENT = 12;
-}
-
-enum JavascriptExecutionPolicy {
-  JAVASCRIPT_EXECUTION_POLICY_UNSPECIFIED = 0;
-  JAVASCRIPT_EXECUTION_POLICY_DISABLED = 1;
-  JAVASCRIPT_EXECUTION_POLICY_REQUEST_REVIEW = 2;
-  JAVASCRIPT_EXECUTION_POLICY_NOT_ENFORCED = 3;
 }
 
 enum Language {
@@ -1423,14 +855,6 @@ enum MarkdownNodeType {
   MARKDOWN_NODE_TYPE_HEADER_4 = 4;
   MARKDOWN_NODE_TYPE_HEADER_5 = 5;
   MARKDOWN_NODE_TYPE_HEADER_6 = 6;
-}
-
-enum MatchSource {
-  MATCH_SOURCE_UNSPECIFIED = 0;
-  MATCH_SOURCE_TITLE = 1;
-  MATCH_SOURCE_USER = 2;
-  MATCH_SOURCE_AGENT = 3;
-  MATCH_SOURCE_WORKSPACE = 4;
 }
 
 enum McpAuthProviderType {
@@ -1458,13 +882,6 @@ enum MediaResolution {
   MEDIUM = 2;
   HIGH = 3;
   ULTRA_HIGH = 4;
-}
-
-enum MergeStrategy {
-  MERGE_STRATEGY_UNSPECIFIED = 0;
-  MERGE_STRATEGY_OVERWRITE = 1;
-  MERGE_STRATEGY_SAFE_MERGE = 2;
-  MERGE_STRATEGY_MERGE_WITH_CONFLICTS = 3;
 }
 
 enum MessageDeliveryStrategy {
@@ -1556,12 +973,6 @@ enum ModelProvider {
   MODEL_PROVIDER_KIMI = 8;
 }
 
-enum ModelStatus {
-  MODEL_STATUS_UNSPECIFIED = 0;
-  MODEL_STATUS_INFO = 1;
-  MODEL_STATUS_WARNING = 2;
-}
-
 enum ModelTier {
   MODEL_TIER_UNSPECIFIED = 0;
   MODEL_TIER_INHERIT = 1;
@@ -1576,12 +987,6 @@ enum ModelType {
   MODEL_TYPE_CHAT = 2;
   MODEL_TYPE_EMBED = 3;
   MODEL_TYPE_QUERY = 4;
-}
-
-enum NUXInteractionType {
-  NUX_INTERACTION_TYPE_UNSPECIFIED = 0;
-  NUX_INTERACTION_TYPE_DISMISSED = 1;
-  NUX_INTERACTION_TYPE_ACCEPTED = 2;
 }
 
 enum NullValue {
@@ -1632,12 +1037,6 @@ enum PermissionScope {
   PERMISSION_SCOPE_PROJECT = 5;
 }
 
-enum PlanMode {
-  PLAN_MODE_UNSPECIFIED = 0;
-  PLAN_MODE_ON = 1;
-  PLAN_MODE_OFF = 2;
-}
-
 enum PlanningMode {
   PLANNING_MODE_UNSPECIFIED = 0;
   PLANNING_MODE_OFF = 1;
@@ -1664,23 +1063,6 @@ enum PromptAnnotationKind {
   PROMPT_ANNOTATION_KIND_PROMPT_CACHE = 2;
 }
 
-enum PromptElementKind {
-  PROMPT_ELEMENT_KIND_UNSPECIFIED = 0;
-  PROMPT_ELEMENT_KIND_FILE_MARKER = 2;
-  PROMPT_ELEMENT_KIND_OTHER_DOCUMENT = 4;
-  PROMPT_ELEMENT_KIND_BEFORE_CURSOR = 5;
-  PROMPT_ELEMENT_KIND_AFTER_CURSOR = 7;
-  PROMPT_ELEMENT_KIND_FIM = 8;
-  PROMPT_ELEMENT_KIND_SOT = 9;
-  PROMPT_ELEMENT_KIND_EOT = 10;
-  PROMPT_ELEMENT_KIND_CODE_CONTEXT_ITEM = 13;
-  PROMPT_ELEMENT_KIND_INSTRUCTION = 14;
-  PROMPT_ELEMENT_KIND_SELECTION = 15;
-  PROMPT_ELEMENT_KIND_TRAJECTORY_STEP = 16;
-  PROMPT_ELEMENT_KIND_ACTIVE_DOCUMENT = 17;
-  PROMPT_ELEMENT_KIND_CACHED_MESSAGE = 18;
-}
-
 enum PromptSectionSourceType {
   PROMPT_SECTION_SOURCE_TYPE_UNSPECIFIED = 0;
   PROMPT_SECTION_SOURCE_TYPE_RAW = 1;
@@ -1704,19 +1086,6 @@ enum Protocol {
   PROTOCOL_MCP = 1;
 }
 
-enum ProviderSource {
-  PROVIDER_SOURCE_UNSPECIFIED = 0;
-  PROVIDER_SOURCE_AUTOCOMPLETE = 1;
-  PROVIDER_SOURCE_COMMAND_GENERATE = 4;
-  PROVIDER_SOURCE_COMMAND_EDIT = 5;
-  PROVIDER_SOURCE_SUPERCOMPLETE = 6;
-  PROVIDER_SOURCE_COMMAND_PLAN = 7;
-  PROVIDER_SOURCE_FAST_APPLY = 9;
-  PROVIDER_SOURCE_COMMAND_TERMINAL = 10;
-  PROVIDER_SOURCE_TAB_JUMP = 11;
-  PROVIDER_SOURCE_CASCADE = 12;
-}
-
 enum RefreshCustomizationType {
   REFRESH_CUSTOMIZATION_TYPE_UNSPECIFIED = 0;
   REFRESH_CUSTOMIZATION_TYPE_RULE = 1;
@@ -1726,12 +1095,6 @@ enum RefreshCustomizationType {
   REFRESH_CUSTOMIZATION_TYPE_PLUGIN = 5;
   REFRESH_CUSTOMIZATION_TYPE_HOOKS = 6;
   REFRESH_CUSTOMIZATION_TYPE_MCP = 7;
-}
-
-enum RememberLastModelSelection {
-  REMEMBER_LAST_MODEL_SELECTION_UNSPECIFIED = 0;
-  REMEMBER_LAST_MODEL_SELECTION_ENABLED = 1;
-  REMEMBER_LAST_MODEL_SELECTION_DISABLED = 2;
 }
 
 enum RenderLocation {
@@ -1816,49 +1179,6 @@ enum SensitivityLevel {
   SENSITIVITY_LEVEL_RESTRICTED = 3;
 }
 
-enum SetupChatState {
-  SETUP_CHAT_STATE_UNSPECIFIED = 0;
-  SETUP_CHAT_STATE_CREATING_CLOUD_PROJECT = 1;
-  SETUP_CHAT_STATE_CONFIGURING_CHAT_BOT = 2;
-  SETUP_CHAT_STATE_INSTALLING_TO_CHAT = 3;
-  SETUP_CHAT_STATE_CREATING_DM_SPACE = 4;
-  SETUP_CHAT_STATE_CONFIGURING_CHAT_SECTION = 5;
-  SETUP_CHAT_STATE_MOVING_TO_AGENTS_SECTION = 6;
-  SETUP_CHAT_STATE_CREATING_SIDECAR = 7;
-  SETUP_CHAT_STATE_COMPLETED = 8;
-  SETUP_CHAT_STATE_AUTH_REQUIRED = 9;
-  SETUP_CHAT_STATE_ERROR = 10;
-}
-
-enum SidecarAction {
-  SIDECAR_ACTION_UNSPECIFIED = 0;
-  SIDECAR_ACTION_DISABLE = 1;
-  SIDECAR_ACTION_ENABLE = 2;
-  SIDECAR_ACTION_DELETE = 3;
-  SIDECAR_ACTION_RESTART = 4;
-  SIDECAR_ACTION_CREATE = 5;
-  SIDECAR_ACTION_SET_PROJECT = 6;
-  SIDECAR_ACTION_UPDATE = 7;
-  SIDECAR_ACTION_SET_ALL_PROJECTS = 8;
-  SIDECAR_ACTION_UPDATE_ARGS = 9;
-  SIDECAR_ACTION_RUN_NOW = 10;
-}
-
-enum SidecarErrorSource {
-  SIDECAR_ERROR_SOURCE_UNSPECIFIED = 0;
-  SIDECAR_ERROR_SOURCE_MANAGER = 1;
-  SIDECAR_ERROR_SOURCE_PROCESS = 2;
-}
-
-enum SidecarStatus {
-  SIDECAR_STATUS_UNSPECIFIED = 0;
-  SIDECAR_STATUS_RUNNING = 1;
-  SIDECAR_STATUS_STOPPED = 2;
-  SIDECAR_STATUS_ERRORED = 3;
-  SIDECAR_STATUS_BACKOFF = 4;
-  SIDECAR_STATUS_STARTING = 5;
-}
-
 enum SidecarUIEntrypoint {
   SIDECAR_UI_ENTRYPOINT_UNSPECIFIED = 0;
   SIDECAR_UI_ENTRYPOINT_AUX_PANE = 1;
@@ -1903,32 +1223,6 @@ enum StopReason {
   STOP_REASON_NON_INSERTION = 12;
 }
 
-enum SupercompleteTriggerCondition {
-  SUPERCOMPLETE_TRIGGER_CONDITION_UNSPECIFIED = 0;
-  SUPERCOMPLETE_TRIGGER_CONDITION_AUTOCOMPLETE_ACCEPT = 1;
-  SUPERCOMPLETE_TRIGGER_CONDITION_CURSOR_LINE_NAVIGATION = 2;
-  SUPERCOMPLETE_TRIGGER_CONDITION_TYPING = 3;
-  SUPERCOMPLETE_TRIGGER_CONDITION_FORCED = 4;
-  SUPERCOMPLETE_TRIGGER_CONDITION_TAB_JUMP_ACCEPT = 5;
-  SUPERCOMPLETE_TRIGGER_CONDITION_SUPERCOMPLETE_ACCEPT = 6;
-  SUPERCOMPLETE_TRIGGER_CONDITION_TAB_JUMP_PREDICTIVE = 7;
-  SUPERCOMPLETE_TRIGGER_CONDITION_AUTOCOMPLETE_PREDICTIVE = 8;
-  SUPERCOMPLETE_TRIGGER_CONDITION_SUPERCOMPLETE_PREDICTIVE = 9;
-  SUPERCOMPLETE_TRIGGER_CONDITION_TAB_JUMP_EDIT = 10;
-}
-
-enum TabEnabled {
-  TAB_ENABLED_UNSPECIFIED = 0;
-  TAB_ENABLED_OFF = 1;
-  TAB_ENABLED_ON = 2;
-}
-
-enum TabToJump {
-  TAB_TO_JUMP_UNSPECIFIED = 0;
-  TAB_TO_JUMP_ENABLED = 1;
-  TAB_TO_JUMP_DISABLED = 2;
-}
-
 enum TeamsFeatures {
   TEAMS_FEATURES_UNSPECIFIED = 0;
   TEAMS_FEATURES_SSO = 1;
@@ -1954,23 +1248,10 @@ enum TeamsTier {
   TEAMS_TIER_PRO_ULTIMATE = 8;
 }
 
-enum TerminalCommandAutoExecutionPolicy {
-  TERMINAL_COMMAND_AUTO_EXECUTION_POLICY_UNSPECIFIED = 0;
-  TERMINAL_COMMAND_AUTO_EXECUTION_POLICY_REQUIRE_REVIEW = 1;
-  TERMINAL_COMMAND_AUTO_EXECUTION_POLICY_PROCEED_IN_SANDBOX = 2;
-  TERMINAL_COMMAND_AUTO_EXECUTION_POLICY_NOT_ENFORCED = 3;
-}
-
 enum TerminalShellCommandSource {
   TERMINAL_SHELL_COMMAND_SOURCE_UNSPECIFIED = 0;
   TERMINAL_SHELL_COMMAND_SOURCE_USER = 1;
   TERMINAL_SHELL_COMMAND_SOURCE_CASCADE = 2;
-}
-
-enum TerminalShellCommandStatus {
-  TERMINAL_SHELL_COMMAND_STATUS_UNSPECIFIED = 0;
-  TERMINAL_SHELL_COMMAND_STATUS_RUNNING = 1;
-  TERMINAL_SHELL_COMMAND_STATUS_COMPLETED = 2;
 }
 
 enum ThemeMode {
@@ -1978,13 +1259,6 @@ enum ThemeMode {
   THEME_MODE_DARK = 1;
   THEME_MODE_LIGHT = 2;
   THEME_MODE_INHERIT = 3;
-}
-
-enum ThemePreference {
-  THEME_PREFERENCE_UNSPECIFIED = 0;
-  THEME_PREFERENCE_AUTO = 1;
-  THEME_PREFERENCE_LIGHT = 2;
-  THEME_PREFERENCE_DARK = 3;
 }
 
 enum ThirdPartyWebSearchProvider {
@@ -2018,18 +1292,6 @@ enum ToolFormatterType {
   TOOL_FORMATTER_TYPE_XML = 3;
   TOOL_FORMATTER_TYPE_CHAT_TRANSCRIPT = 4;
   TOOL_FORMATTER_TYPE_NONE = 5;
-}
-
-enum Trainable {
-  UNKNOWN_TRAINABLE = 0;
-  FORMATTER_DEFINED = 1;
-  ALWAYS = 2;
-  NEVER = 3;
-}
-
-enum TrajectoryShareStatus {
-  TRAJECTORY_SHARE_STATUS_UNSPECIFIED = 0;
-  TRAJECTORY_SHARE_STATUS_TEAM = 1;
 }
 
 enum TransactionStatus {
@@ -2094,21 +1356,6 @@ enum Visibility {
   GOOGLE_INTERNAL = 2;
 }
 
-enum WorkingDirectoryStatus {
-  WORKING_DIRECTORY_STATUS_UNSPECIFIED = 0;
-  WORKING_DIRECTORY_STATUS_READY = 1;
-  WORKING_DIRECTORY_STATUS_LOADING = 2;
-  WORKING_DIRECTORY_STATUS_ERROR = 3;
-}
-
-enum WorkspaceResourceType {
-  WORKSPACE_RESOURCE_TYPE_UNSPECIFIED = 0;
-  WORKSPACE_RESOURCE_TYPE_DOCS = 1;
-  WORKSPACE_RESOURCE_TYPE_SHEETS = 2;
-  WORKSPACE_RESOURCE_TYPE_SLIDES = 3;
-  WORKSPACE_RESOURCE_TYPE_DRIVE = 4;
-}
-
 enum WorkspaceType {
   WORKSPACE_TYPE_UNSPECIFIED = 0;
   WORKSPACE_TYPE_GIT = 1;
@@ -2121,16 +1368,8 @@ enum WorkspaceType {
 }
 
 // ==========================================================================
-// Messages & Structs
+// Messages
 // ==========================================================================
-
-message AcceptTermsOfServiceRequest {
-  Metadata metadata = 1;
-  string version = 2;
-}
-
-message AcceptTermsOfServiceResponse {
-}
 
 message AccumulatedItem {
   string id = 1;
@@ -2160,36 +1399,8 @@ message AccumulatedSectionsUpdate {
   repeated AccumulatedSection accumulated_sections = 1;
 }
 
-message AcknowledgeCascadeCodeEditRequest {
-  Metadata metadata = 4;
-  string cascade_id = 1;
-  repeated string absolute_uri = 2;
-  repeated string contents = 5;
-  bool accept = 3;
-}
-
-message AcknowledgeCascadeCodeEditResponse {
-}
-
-message AcknowledgeCodeActionStepRequest {
-  string cascade_id = 1;
-  bool accept = 3;
-  string written_feedback = 4;
-  CodeAcknowledgementScope acknowledgement_scope = 5;
-  repeated CodeAcknowledgementRequestInfo code_acknowledgement_request_infos = 7;
-}
-
-message AcknowledgeCodeActionStepResponse {
-}
-
 message ActionDebugInfo {
   repeated DebugInfoEntry entries = 1;
-}
-
-message ActionPointer {
-  string cortex_plan_id = 1;
-  string code_plan_id = 2;
-  int32 action_index = 3;
 }
 
 message ActionResultEdit {
@@ -2205,31 +1416,6 @@ message ActionResultEdit {
   repeated CodeContextItem result_ccis = 9;
   string original_content = 10;
   bool create_file = 11;
-}
-
-message AddEnvironmentToProjectRequest {
-  string project_id = 1;
-  Environment environment = 2;
-}
-
-message AddEnvironmentToProjectResponse {
-}
-
-message AddToBrowserWhitelistRequest {
-  string hostname = 1;
-  repeated string hostnames = 2;
-}
-
-message AddToBrowserWhitelistResponse {
-}
-
-message AddTrackedWorkspaceRequest {
-  string workspace = 1;
-  bool do_not_watch_files = 2;
-  bool is_passive_workspace = 3;
-}
-
-message AddTrackedWorkspaceResponse {
 }
 
 message AgentApiConfig {
@@ -2248,12 +1434,6 @@ message AgentConfigResolution {
   string applied_contrib_variant = 2;
 }
 
-message AgentControls {
-  bool sandbox_mode_enabled = 1;
-  FileAccessPolicy outside_workspace_file_access_policy = 2;
-  TerminalCommandAutoExecutionPolicy terminal_command_auto_execution_policy = 3;
-}
-
 message AgentCustomization {
   string path = 1;
   AgentScriptItem agent = 2;
@@ -2266,15 +1446,6 @@ message AgentDiscoveryConfig {
   repeated string builtin_agent_names = 2;
   repeated AgentScriptItem agents = 3;
   repeated CustomizationPath agents_paths = 4;
-}
-
-message AgentInstance {
-  string name = 1;
-  string log_file_path = 2;
-  string latest_trajectory_id = 3;
-  string latest_cascade_id = 4;
-  Timestamp last_step_updated_at = 5;
-  string description = 6;
 }
 
 message AgentMessage {
@@ -2369,17 +1540,6 @@ message AgentScriptPythonSpec {
   string relative_path_to_requirements_txt = 4;
 }
 
-message AgentStatePageUpdateRequest {
-  string conversation_id = 1;
-  string subscriber_id = 2;
-  Slice step_page_bounds = 3;
-  Slice generator_metadatas_page_bounds = 4;
-  Slice executor_metadatas_page_bounds = 5;
-}
-
-message AgentStatePageUpdateResponse {
-}
-
 message AgentStateUpdate {
   string conversation_id = 1;
   string trajectory_id = 2;
@@ -2408,12 +1568,6 @@ message AgentStateUpdate {
   bool has_active_children = 14;
 }
 
-message AgentTeamTask {
-  string id = 1;
-  bool is_completed = 2;
-  string task_file_uri = 3;
-}
-
 message AgenticModeConfig {
   repeated InjectArtifactReminderThresholdMapEntry inject_artifact_reminder_threshold_map = 1;
   bool disable_artifact_reminders = 2;
@@ -2429,14 +1583,6 @@ message AllowAlwaysConfig {
 message AllowedModelConfig {
   ModelOrAlias model_or_alias = 1;
   float credit_multiplier = 2;
-}
-
-message AnalyticsEvent {
-  string event_name = 1;
-  repeated ExtraEntry extra = 2;
-  repeated ExperimentsEntry experiments = 3;
-  RuntimeEnvironment runtime_environment = 4;
-  int64 client_timestamp_ms = 5;
 }
 
 message Annotation {
@@ -2480,25 +1626,8 @@ message AntigravityBrowserToolConfig {
   bool generate_recording_synchronously = 27;
 }
 
-message Any {
-  string type_url = 1;
-  bytes value = 2;
-}
-
-message ApplyUpdateRequest {
-}
-
-message ApplyUpdateResponse {
-  bool notified_host = 1;
-}
-
 message ApprovalInteraction {
   bool confirm = 1;
-}
-
-message ArchiveSource {
-  string url = 1;
-  string sha256 = 2;
 }
 
 message ArgumentDescriptionOverridesEntry {
@@ -2522,11 +1651,6 @@ message ArgumentValueOverridesEntry {
 }
 
 message ArgumentValuesEntry {
-  string key = 1;
-  string value = 2;
-}
-
-message ArgumentsEntry {
   string key = 1;
   string value = 2;
 }
@@ -2671,12 +1795,6 @@ message AuthResult {
   AuthMode auth_mode = 15;
 }
 
-message Author {
-  string name = 1;
-  string email = 2;
-  string ldap = 3;
-}
-
 message AutoCommandConfig {
   bool enable_model_auto_run = 1;
   repeated string user_allowlist = 2;
@@ -2787,12 +1905,6 @@ message BrowserCodeBlockScopeItem {
   string page_id = 6;
 }
 
-message BrowserControls {
-  bool browser_enabled = 1;
-  JavascriptExecutionPolicy javascript_execution_policy = 2;
-  repeated string actuation_allowed_urls = 3;
-}
-
 message BrowserCustomReminderMode {
   string reminder = 1;
 }
@@ -2805,18 +1917,6 @@ message BrowserListNetworkRequestsToolConfig {
   bool enabled = 1;
 }
 
-message BrowserPageMetadata {
-  string url = 1;
-  string page_id = 2;
-  string page_title = 3;
-  uint32 viewport_width = 4;
-  uint32 viewport_height = 5;
-  uint32 page_height = 9;
-  string favicon_url = 6;
-  float device_pixel_ratio = 8;
-  Timestamp last_visited_time = 7;
-}
-
 message BrowserPageScopeItem {
   string url = 1;
   string title = 2;
@@ -2827,12 +1927,6 @@ message BrowserPageScopeItem {
 message BrowserStateDiffingConfig {
   bool capture_agent_action_diffs = 1;
   bool include_dom_tree_in_diffs = 2;
-}
-
-message BrowserStateSnapshot {
-  Timestamp timestamp = 1;
-  string user_active_page_id = 2;
-  repeated BrowserPageMetadata pages = 3;
 }
 
 message BrowserSubagentContextConfig {
@@ -2860,13 +1954,6 @@ message BrowserTextScopeItem {
   string url = 1;
   string visible_text = 2;
   string page_id = 3;
-}
-
-message BrowserValidateCascadeOrCancelOverlayRequest {
-  string cascade_id = 1;
-}
-
-message BrowserValidateCascadeOrCancelOverlayResponse {
 }
 
 message BrowserVerifyCompletenessMode {
@@ -2925,23 +2012,6 @@ message CancelCascadeStepsResponse {
 
 message CaptureBrowserScreenshotToolConfig {
   bool enable_saving = 1;
-}
-
-message CaptureConsoleLogsRequest {
-  string page_id = 1;
-}
-
-message CaptureConsoleLogsResponse {
-  ConsoleLogScopeItem console_logs = 1;
-}
-
-message CaptureScreenshotRequest {
-  string page_id = 1;
-}
-
-message CaptureScreenshotResponse {
-  ImageData screenshot = 2;
-  Media media_screenshot = 3;
 }
 
 message CascadeBrowserActionInteraction {
@@ -3036,24 +2106,6 @@ message CascadeModelConfigData {
   string error_message = 6;
 }
 
-message CascadeNUXConfig {
-  uint32 uid = 1;
-  CascadeNUXLocation location = 2;
-  CascadeNUXTrigger trigger = 3;
-  string analytics_event_name = 4;
-  string learn_more_url = 7;
-  int32 priority = 8;
-  CascadeNUXIcon icon = 10;
-  bool requires_idle_cascade = 11;
-  string title = 12;
-  string body = 13;
-  string image_url = 14;
-  string video_url = 15;
-  repeated CascadeNUXInteractionType available_interactions = 16;
-  string learn_more_button_text = 17;
-  string primary_cta_text = 18;
-}
-
 message CascadeOpenBrowserSetupInteraction {
   bool confirm = 1;
 }
@@ -3099,24 +2151,6 @@ message CascadePlannerConfig {
   CompletionConfiguration completion_config_override = 56;
   int32 customization_token_budget = 58;
   int32 rules_token_budget = 59;
-}
-
-message CascadePluginCommand {
-  CascadePluginCommandTemplate template = 1;
-  repeated CascadePluginCommandVariable variables = 2;
-}
-
-message CascadePluginCommandTemplate {
-  string command = 1;
-  repeated string args = 2;
-  repeated EnvEntry env = 3;
-}
-
-message CascadePluginCommandVariable {
-  string name = 1;
-  string title = 2;
-  string description = 3;
-  string link = 4;
 }
 
 message CascadePluginLocalConfig {
@@ -3270,34 +2304,6 @@ message CciWithSubrange {
   ContextSubrange subrange = 2;
 }
 
-message CciWithSubrangeWithRetrievalMetadata {
-  CciWithSubrange cci_with_subrange = 1;
-  RetrievedCodeContextItemMetadata metadata = 2;
-}
-
-message ChangelistStatus {
-  int64 cl_number = 1;
-  string title = 2;
-  ChangelistReviewState review_state = 3;
-  int32 lgtms_count = 4;
-  int32 unresolved_comment_count = 5;
-  string description = 6;
-}
-
-message CharacterDiff {
-  repeated CharacterDiffChange changes = 1;
-}
-
-message CharacterDiffChange {
-  string text = 1;
-  DiffChangeType type = 2;
-}
-
-message ChatExperimentStatus {
-  ExperimentKey experiment_key = 1;
-  bool enabled = 2;
-}
-
 message ChatMessagePrompt {
   string message_id = 1;
   ChatMessageSource source = 2;
@@ -3363,29 +2369,6 @@ message ChatStartMetadata {
   CacheRequestOptions cache_request = 9;
 }
 
-message ChatStats {
-  uint64 chats_sent = 1;
-  uint64 chats_received = 2;
-  uint64 chats_accepted = 3;
-  uint64 chats_inserted_at_cursor = 4;
-  uint64 chats_applied = 5;
-  uint64 chat_loc_used = 6;
-  uint64 chat_code_blocks_used = 7;
-  uint64 function_explain_count = 8;
-  uint64 function_docstring_count = 9;
-  uint64 function_refactor_count = 10;
-  uint64 code_block_explain_count = 11;
-  uint64 code_block_refactor_count = 12;
-  uint64 problem_explain_count = 13;
-  uint64 function_unit_tests_count = 14;
-  uint32 active_developer_days = 15;
-}
-
-message ChatStatsByModelEntry {
-  Model model_id = 1;
-  ChatStats chat_stats = 2;
-}
-
 message ChatToolCall {
   string id = 1;
   string name = 2;
@@ -3415,42 +2398,6 @@ message ChatToolDefinition {
   string response_json_schema_string = 9;
 }
 
-message CheckDevToolsActivePortRequest {
-}
-
-message CheckDevToolsActivePortResponse {
-  bool exists = 1;
-}
-
-message CheckoutCommitRequest {
-  string workspace_uri = 1;
-  string commit_id = 2;
-  CheckoutMode mode = 3;
-}
-
-message CheckoutCommitResponse {
-}
-
-message CheckoutSummary {
-  int32 files_changed = 1;
-  int32 additions = 2;
-  int32 deletions = 3;
-}
-
-message CheckoutWorktreeRequest {
-  string worktree_dir_uri = 1;
-  string target_workspace_uri = 2;
-  bool delete_worktree_after_checkout = 3;
-  MergeStrategy merge_strategy = 4;
-}
-
-message CheckoutWorktreeResponse {
-  bool success = 1;
-  string error_message = 2;
-  CheckoutSummary summary = 3;
-  string diff_patch = 4;
-}
-
 message CheckpointConfig {
   uint32 token_threshold = 1;
   float max_overhead_ratio = 3;
@@ -3478,12 +2425,6 @@ message CheckpointConfig {
   string checkpoint_prompt_override = 30;
   string continuation_prompt_override = 31;
   int32 max_artifact_section_bytes = 32;
-}
-
-message Chunk {
-  string text = 3;
-  Image image = 4;
-  Trainable trainable = 10;
 }
 
 message Citation {
@@ -3572,16 +2513,6 @@ message CodeAcknowledgementConverterConfig {
   bool show_to_model_on_rejection = 2;
 }
 
-message CodeAcknowledgementRequestInfo {
-  string uri_path = 1;
-  repeated uint32 step_indices = 2;
-  string pre_code_actions_state = 3;
-  string post_code_actions_state = 4;
-}
-
-message CodeChangeWithContext {
-}
-
 message CodeContextItem {
   string absolute_path_migrate_me_to_uri = 1;
   string absolute_uri = 16;
@@ -3599,27 +2530,6 @@ message CodeContextItem {
   bytes file_content_hash = 15;
 }
 
-message CodeContextProviderMetadata {
-  float relative_weight = 1;
-}
-
-message CodeDiagnostic {
-  Range range = 1;
-  string message = 2;
-  string severity = 3;
-  string source = 4;
-  string uri = 5;
-  string id = 6;
-  Language language = 7;
-  int64 score = 8;
-}
-
-message CodeEditRevertPreview {
-  string file_uri = 1;
-  UnifiedDiff diff = 2;
-  CodeRevertActionType action_type = 3;
-}
-
 message CodeExecutionCallArguments {
   Language language = 1;
   string code = 2;
@@ -3632,14 +2542,6 @@ message CodeExecutionCallContent {
 message CodeExecutionResultContent {
   string result = 1;
   bool is_error = 2;
-}
-
-message CodeFrequencyRecord {
-  int32 num_commits = 1;
-  int32 lines_added = 2;
-  int32 lines_deleted = 3;
-  Timestamp record_start_time = 4;
-  Timestamp record_end_time = 5;
 }
 
 message CodeSearchToolConfig {
@@ -3689,64 +2591,9 @@ message CodingAgentConfig {
   bool agentic_mode = 2;
 }
 
-message CogCommitRequest {
-  string workspace_uri = 1;
-  string message = 2;
-  string repo_path = 3;
-}
-
-message CogCommitResponse {
-  string commit_id = 1;
-}
-
-message CogSquashRequest {
-  string workspace_uri = 1;
-  string repo_path = 2;
-  string commit_id = 3;
-  string commit_message = 4;
-  CogSquashMode mode = 5;
-}
-
-message CogSquashResponse {
-}
-
-message CogSyncRequest {
-  string workspace_uri = 1;
-  string repo_path = 2;
-  string target = 3;
-}
-
-message CogSyncResponse {
-}
-
-message CogUploadRequest {
-  string workspace_uri = 1;
-  string repo_path = 2;
-  string commit_id = 3;
-}
-
-message CogUploadResponse {
-  string cl_number = 1;
-}
-
 message CogWorkspaceConfig {
   string repo_name = 1;
   string branch_name = 2;
-}
-
-message CogWorkspaceOptions {
-  string repo_name = 1;
-  string branch_name = 2;
-}
-
-message ComboDiff {
-  repeated ComboDiffLine lines = 1;
-}
-
-message ComboDiffLine {
-  string text = 1;
-  DiffChangeType type = 2;
-  CharacterDiff character_diff = 3;
 }
 
 message CommandAssessorConfig {
@@ -3774,14 +2621,6 @@ message CommandsEntry {
   AgentPluginCommand value = 2;
 }
 
-message CommitMessageData {
-  string repo_root = 1;
-  string commit_message_summary = 2;
-  string commit_message_description = 3;
-  repeated string changed_files_migrate_me_to_uri = 4;
-  repeated string changed_file_uris = 5;
-}
-
 message CompactionInfo {
   repeated int32 compacted_at_step_indices = 1;
 }
@@ -3792,16 +2631,6 @@ message CompleteMcpOAuthRequest {
 }
 
 message CompleteMcpOAuthResponse {
-}
-
-message CompletionByDateEntry {
-  Timestamp timestamp = 1;
-  CompletionStatistics completion_statistics = 2;
-}
-
-message CompletionByLanguageEntry {
-  Language language = 1;
-  CompletionStatistics completion_statistics = 2;
 }
 
 message CompletionConfiguration {
@@ -3826,53 +2655,9 @@ message CompletionConfiguration {
   bool return_logprob = 16;
 }
 
-message CompletionStatistics {
-  uint32 num_acceptances = 1;
-  uint32 num_rejections = 2;
-  uint32 num_lines_accepted = 3;
-  uint32 num_bytes_accepted = 4;
-  uint32 num_users = 5;
-  uint32 active_developer_days = 6;
-  uint32 active_developer_hours = 7;
-}
-
-message CompletionsRequest {
-  CompletionConfiguration configuration = 1;
-  string prompt = 2;
-  string serialized_prompt = 26;
-  string context_prompt = 21;
-  string uid = 25;
-  repeated PromptElementRange prompt_element_ranges = 8;
-  repeated PromptElementKindInfo prompt_element_kind_infos = 9;
-  uint64 prompt_latency_ms = 11;
-  repeated PromptStageLatency prompt_stage_latencies = 12;
-  uint64 num_tokenized_bytes = 20;
-  string editor_language = 3;
-  Language language = 4;
-  string absolute_path_uri_for_telemetry = 5;
-  string relative_path_for_telemetry = 6;
-  string workspace_uri_for_telemetry = 13;
-  string experiment_features_json = 7;
-  string experiment_variant_json = 19;
-  Model model = 10;
-  bool has_line_suffix = 14;
-  bool should_inline_fim = 15;
-  Repository repository = 16;
-  string model_tag = 17;
-  repeated string experiment_tags = 18;
-  string eval_suffix = 22;
-  repeated PromptAnnotationRange prompt_annotation_ranges = 23;
-  bool supports_packed_streaming_completion_maps = 24;
-}
-
 message ComponentResolutionPolicy {
   ResolutionPolicy unknown_component_policy = 1;
   ResolutionPolicy empty_component_policy = 2;
-}
-
-message ConfigMapEntry {
-  string key = 1;
-  string value = 2;
 }
 
 message ConsoleLogLine {
@@ -3902,21 +2687,6 @@ message Content {
   ThoughtContent thought = 5;
   ToolCallContent tool_call = 24;
   ToolResultContent tool_result = 25;
-}
-
-message ContextModuleResult {
-  repeated CciWithSubrangeWithRetrievalMetadata retrieved_cci_with_subranges = 1;
-  Document active_document = 2;
-  DocumentOutline active_document_outline = 5;
-  LocalNodeState local_node_state = 3;
-  Guideline guideline = 4;
-  repeated Document open_documents = 6;
-  repeated TerminalShellCommand running_terminal_commands = 8;
-  BrowserStateSnapshot browser_state_snapshot = 9;
-}
-
-message ContextScope {
-  repeated ContextScopeItem items = 1;
 }
 
 message ContextScopeItem {
@@ -4006,46 +2776,11 @@ message ConversationHistoryConfig {
   int32 max_artifact_summary_chars = 6;
 }
 
-message ConversationMetadataEvent {
-  CortexTrajectoryMetadata metadata = 1;
-}
-
 message ConversationScopeItem {
   string id = 1;
   string title = 2;
   Timestamp last_modified_time = 3;
   string source = 4;
-}
-
-message ConversationSearchResult {
-  string cascade_id = 1;
-  string title = 2;
-  string workspace_name = 3;
-  string snippet = 4;
-  Timestamp last_modified_time = 5;
-  bool needs_attention = 6;
-  repeated StringMatchRange title_match_ranges = 7;
-  repeated StringMatchRange snippet_match_ranges = 8;
-  MatchSource match_source = 9;
-  bool archived = 10;
-}
-
-message ConvertTrajectoryToMarkdownRequest {
-  Trajectory trajectory = 1;
-  string conversation_id = 2;
-}
-
-message ConvertTrajectoryToMarkdownResponse {
-  string markdown = 1;
-}
-
-message CopyBuiltinWorkflowToWorkspaceRequest {
-  WorkflowSpec workflow = 1;
-  Metadata metadata = 2;
-}
-
-message CopyBuiltinWorkflowToWorkspaceResponse {
-  WorkflowSpec workflow = 1;
 }
 
 message CortexErrorDetails {
@@ -4152,26 +2887,6 @@ message CortexStepPlannerResponse {
   repeated Any passback_context = 18;
 }
 
-message CortexStepUserInput {
-  repeated TextOrScopeItem items = 3;
-  string user_response = 2;
-  ContextModuleResult active_user_state = 4;
-  repeated ArtifactComment artifact_comments = 7;
-  repeated FileDiffComment file_diff_comments = 10;
-  repeated FileComment file_comments = 11;
-  ChatClientRequestStreamClientType client_type = 8;
-  CascadeConfig user_config = 12;
-  CascadeConfig last_user_config = 13;
-  repeated Any side_channels = 15;
-  repeated string tags = 16;
-  UserIdentity user_identity = 17;
-  CustomAgentSpec user_agent_spec = 18;
-  repeated Media media = 9;
-  bool is_queued_message = 6;
-  string query = 1;
-  repeated ImageData images = 5;
-}
-
 message CortexTrajectoryMetadata {
   repeated CortexWorkspaceMetadata workspaces = 1;
   Timestamp created_at = 2;
@@ -4234,39 +2949,6 @@ message CostDisplaySection {
   repeated ToolBreakdownEntry tool_breakdown = 7;
 }
 
-message CreateCitcWorkspaceRequest {
-  Metadata metadata = 1;
-  repeated TextOrScopeItem items = 2;
-  repeated Media media = 3;
-  bool clone_current_workspace = 4;
-  string source_workspace_uri = 5;
-  VcsType vcs_type = 6;
-  string workspace_name = 7;
-}
-
-message CreateCitcWorkspaceResponse {
-  string workspace_dir_uri = 1;
-  string workspace_name = 2;
-}
-
-message CreateCustomizationFileRequest {
-  CustomizationFileType file_type = 1;
-  string file_name = 2;
-  string workspace_uri = 3;
-}
-
-message CreateCustomizationFileResponse {
-  string file_path = 1;
-}
-
-message CreateDebugBundleRequest {
-  repeated ExtraFilesEntry extra_files = 1;
-}
-
-message CreateDebugBundleResponse {
-  string bundle_uri = 1;
-}
-
 message CreateDirectoryRequest {
   string uri = 1;
 }
@@ -4274,33 +2956,11 @@ message CreateDirectoryRequest {
 message CreateDirectoryResponse {
 }
 
-message CreateMagicProjectRequest {
-  repeated TextOrScopeItem items = 1;
-  repeated Media media = 2;
-  string project_id = 3;
-  VcsType vcs_type = 4;
-  CogWorkspaceOptions cog_options = 5;
-}
-
-message CreateMagicProjectResponse {
-  string project_id = 1;
-}
-
 message CreateProjectRequest {
   Project project = 1;
 }
 
 message CreateProjectResponse {
-}
-
-message CreateScratchProjectFolderRequest {
-  string name = 1;
-}
-
-message CreateScratchProjectFolderResponse {
-  string folder_uri = 1;
-  bool is_git_repo = 2;
-  string error_message = 3;
 }
 
 message CreateTerminalRequest {
@@ -4312,33 +2972,6 @@ message CreateTerminalRequest {
 
 message CreateTerminalResponse {
   TerminalInfo terminal = 1;
-}
-
-message CreateTrajectoryShareRequest {
-  Metadata metadata = 1;
-  TrajectoryShareStatus share_status = 3;
-  string cascade_id = 4;
-}
-
-message CreateTrajectoryShareResponse {
-  string url = 1;
-}
-
-message CreateWorktreeRequest {
-  Metadata metadata = 1;
-  string repo_path = 2;
-  string repo_uri = 9;
-  string base_branch_name = 3;
-  PlanInfo plan_info = 4;
-  repeated TextOrScopeItem items = 5;
-  repeated ImageData images = 6;
-  repeated Media media = 7;
-  string worktree_name = 8;
-}
-
-message CreateWorktreeResponse {
-  string worktree_dir_uri = 1;
-  string worktree_name = 2;
 }
 
 message CreditUsageSummary {
@@ -4456,21 +3089,6 @@ message CustomizationPath {
   string absolute = 3;
 }
 
-message CustomizationPathsList {
-  repeated string paths = 1;
-}
-
-message CustomizationSource {
-  Google3Source google3 = 1;
-  ArchiveSource archive = 2;
-}
-
-message CustomizationSourceConfig {
-  repeated string exclude = 1;
-  repeated ProfilePathEntry inherits = 2;
-  repeated ProfilePathEntry entries = 3;
-}
-
 message DOMElementScopeItem {
   string tag_name = 1;
   string outer_html = 2;
@@ -4542,21 +3160,6 @@ message DefaultTeamFeaturesEntry {
   TeamsFeaturesMetadata value = 2;
 }
 
-message DeleteAgentMessageRequest {
-  string message_id = 1;
-  string recipient = 2;
-}
-
-message DeleteAgentMessageResponse {
-}
-
-message DeleteCascadeMemoryRequest {
-  string memory_id = 1;
-}
-
-message DeleteCascadeMemoryResponse {
-}
-
 message DeleteCascadeTrajectoryRequest {
   string cascade_id = 1;
 }
@@ -4596,33 +3199,6 @@ message DeleteProjectRequest {
 message DeleteProjectResponse {
 }
 
-message DeleteQueuedUserInputStepRequest {
-  string cascade_id = 1;
-  int32 step_index = 2;
-}
-
-message DeleteQueuedUserInputStepResponse {
-}
-
-message DeleteSkillRequest {
-  string skill_id = 1;
-}
-
-message DeleteSkillResponse {
-  bool success = 1;
-  string message = 2;
-}
-
-message DeleteWorktreeRequest {
-  string worktree_dir_uri = 1;
-  string repo_uri = 2;
-}
-
-message DeleteWorktreeResponse {
-  bool success = 1;
-  string error_message = 2;
-}
-
 message DeployTarget {
   DeploymentProvider deployment_provider = 1;
   bool is_sandbox = 2;
@@ -4652,18 +3228,6 @@ message DetailsEntry {
   string value = 2;
 }
 
-message DetectBattleModeAutoTriggerRequest {
-  string cascade_id = 1;
-  Model model = 2;
-  SendUserCascadeMessageRequest user_message = 3;
-}
-
-message DetectBattleModeAutoTriggerResponse {
-  int32 target_battle_n = 2;
-  string trigger_tag = 3;
-  string banner_text = 4;
-}
-
 message DiffBlock {
   int32 start_line = 1;
   int32 end_line = 2;
@@ -4674,14 +3238,6 @@ message DiffCommentInfo {
   TextSelection original_selection = 1;
   TextSelection modified_selection = 2;
   string comment = 3;
-}
-
-message DiscardFileChangesRequest {
-  string workspace_uri = 1;
-  repeated string uris = 2;
-}
-
-message DiscardFileChangesResponse {
 }
 
 message DisconnectMcpOAuthRequest {
@@ -4719,35 +3275,9 @@ message DocumentContent {
   string mime_type_string = 6;
 }
 
-message DocumentLinesElement {
-  DocumentQuery document_query = 1;
-  repeated CodeContextItem overlapped_code_context_items = 2;
-  uint32 first_element_suffix_overlap = 3;
-  uint32 last_element_prefix_overlap = 4;
-}
-
-message DocumentOutline {
-  repeated DocumentOutlineElement elements = 1;
-  int64 start_index = 2;
-}
-
-message DocumentOutlineElement {
-  CodeContextItem code_context_item = 1;
-  DocumentLinesElement document_lines_element = 2;
-  string text = 3;
-}
-
 message DocumentPosition {
   uint64 row = 1;
   uint64 col = 2;
-}
-
-message DocumentQuery {
-  string text = 1;
-  int32 cursor_offset = 2;
-  uint32 start_line = 3;
-  uint32 end_line = 4;
-  bool use_character_position = 5;
 }
 
 message DownloadBuildWithGooglePluginRequest {
@@ -4757,32 +3287,6 @@ message DownloadBuildWithGooglePluginRequest {
 message DownloadBuildWithGooglePluginResponse {
   bool success = 1;
   string message = 2;
-}
-
-message DriveFileResult {
-  string file_id = 1;
-  string name = 2;
-  string url = 3;
-  string mime_type = 4;
-  WorkspaceResourceType resource_type = 5;
-}
-
-message DumpFlightRecorderRequest {
-  Metadata metadata = 1;
-  string trace_file_path = 2;
-}
-
-message DumpFlightRecorderResponse {
-}
-
-message DumpPprofRequest {
-  Metadata metadata = 1;
-  string heap_file_path = 2;
-  string goroutine_file_path = 3;
-  string mutex_file_path = 4;
-}
-
-message DumpPprofResponse {
 }
 
 message Duration {
@@ -4795,12 +3299,6 @@ message DynamicContextScopeItem {
   string item_value = 2;
   string item_label = 3;
   string uri = 4;
-}
-
-message EditorOptions {
-  uint64 tab_size = 1;
-  bool insert_spaces = 2;
-  bool disable_autocomplete_in_comments = 3;
 }
 
 message EditorState {
@@ -4825,46 +3323,11 @@ message ElicitationInteraction {
   string content_json = 2;
 }
 
-message EliminateBattleModeArmRequest {
-  string source_conversation_id = 1;
-  string eliminated_conversation_id = 2;
-}
-
-message EliminateBattleModeArmResponse {
-  BattleModeInfo battle_mode_info = 1;
-}
-
 message EndAudioSessionRequest {
   string session_id = 1;
 }
 
 message EndAudioSessionResponse {
-}
-
-message EndBattleModeError {
-  EndBattleModeErrorType error_type = 1;
-  string error_message = 2;
-}
-
-message EndBattleModeRequest {
-  string winner_conversation_id = 1;
-  MergeStrategy merge_strategy = 2;
-  BattleEndType end_type = 3;
-  string source_conversation_id = 4;
-  bool force_stop_running = 5;
-}
-
-message EndBattleModeResponse {
-  string main_conversation_id = 1;
-  EndBattleModeError error = 2;
-  Model winning_model = 3;
-}
-
-message EndNarrationRequest {
-  string session_id = 1;
-}
-
-message EndNarrationResponse {
 }
 
 message EnterpriseToolConfig {
@@ -4875,12 +3338,6 @@ message EnterpriseToolConfig {
 message EnvEntry {
   string key = 1;
   string value = 2;
-}
-
-message Environment {
-  string id = 1;
-  string name = 2;
-  Resources resources = 3;
 }
 
 message EphemeralMessagesConfig {
@@ -4917,14 +3374,6 @@ message Event {
   EventType event_type = 1;
   string event_json = 2;
   int64 timestamp_unix_ms = 3;
-}
-
-message Evolution {
-  bool is_obsolete = 1;
-  bool is_orphaned = 2;
-  bool is_divergent = 3;
-  repeated string successors = 4;
-  repeated string precursors = 5;
 }
 
 message ExecutableScriptSpec {
@@ -4965,12 +3414,6 @@ message ExecutorMetadatasUpdate {
   Slice page_bounds = 4;
 }
 
-message ExitRequest {
-}
-
-message ExitResponse {
-}
-
 message ExperimentConfig {
   repeated ExperimentWithVariant experiments = 6;
   repeated ExperimentKey force_enable_experiments = 1;
@@ -5007,16 +3450,6 @@ message ExperimentsEntry {
   ExperimentValue value = 2;
 }
 
-message ExtraEntry {
-  string key = 1;
-  string value = 2;
-}
-
-message ExtraFilesEntry {
-  string key = 1;
-  bytes value = 2;
-}
-
 message FastApplyFallbackConfig {
   bool enabled = 1;
   uint32 prompt_unchanged_threshold = 2;
@@ -5024,16 +3457,6 @@ message FastApplyFallbackConfig {
   uint32 content_edit_radius_lines = 4;
   Model fast_apply_model = 5;
   bool repair_replace_blocks = 6;
-}
-
-message FetchAdminControlsRequest {
-}
-
-message FetchAdminControlsResponse {
-  bool admin_controls_applicable = 1;
-  AgentControls agent_controls = 2;
-  BrowserControls browser_controls = 3;
-  McpControls mcp_controls = 4;
 }
 
 message FetchAvailableModelsResponse {
@@ -5053,13 +3476,6 @@ message FetchAvailableModelsResponse {
   repeated int32 experiment_ids = 13;
 }
 
-message FetchUserInfoRequest {
-}
-
-message FetchUserInfoResponse {
-  UserSettings user_settings = 1;
-}
-
 message Field {
   string name = 1;
   Value value = 2;
@@ -5071,40 +3487,6 @@ message FieldDiff {
   RepeatedDiff update_repeated = 3;
   MapDiff update_map = 4;
   bool clear = 5;
-}
-
-message FigAmendRequest {
-  string workspace_uri = 1;
-  string message = 2;
-}
-
-message FigAmendResponse {
-  string commit_id = 1;
-}
-
-message FigCommitRequest {
-  string workspace_uri = 1;
-  string message = 2;
-}
-
-message FigCommitResponse {
-  string commit_id = 1;
-}
-
-message FigSyncRequest {
-  string workspace_uri = 1;
-}
-
-message FigSyncResponse {
-}
-
-message FigUploadRequest {
-  string workspace_uri = 1;
-  string commit_id = 2;
-}
-
-message FigUploadResponse {
-  repeated string cl_numbers = 1;
 }
 
 message FileCitation {
@@ -5127,27 +3509,9 @@ message FileCommentInfo {
   ArtifactImageSelection image_selection = 3;
 }
 
-message FileData {
-  bytes content = 3;
-  string mime_type = 2;
-}
-
 message FileDiffComment {
   string file_uri = 1;
   repeated DiffCommentInfo diff_comment_infos = 3;
-}
-
-message FileDiffData {
-  int32 additions = 1;
-  int32 deletions = 2;
-  string original_contents = 3;
-  string modified_contents = 4;
-  bool is_artifact_file = 5;
-}
-
-message FileDiffsEntry {
-  string key = 1;
-  FileDiffData value = 2;
 }
 
 message FileLineRange {
@@ -5182,31 +3546,6 @@ message FindToolConfig {
 
 message FinishToolConfig {
   string result_json_schema_string = 1;
-}
-
-message FocusUserPageRequest {
-  string page_id = 1;
-}
-
-message FocusUserPageResponse {
-}
-
-message ForceBackgroundResearchRefreshRequest {
-  Metadata metadata = 1;
-  string mainline_trajectory_id = 2;
-  bool blocking = 3;
-  bool full_refresh = 4;
-}
-
-message ForceBackgroundResearchRefreshResponse {
-}
-
-message ForceStopCascadeTreeRequest {
-  string conversation_id = 1;
-}
-
-message ForceStopCascadeTreeResponse {
-  repeated string stopped_conversation_ids = 1;
 }
 
 message ForkConversationRequest {
@@ -5279,34 +3618,8 @@ message GStaticSource {
   string link = 1;
 }
 
-message GcertStatus {
-  bool valid = 1;
-  string error = 2;
-  Timestamp expires_at = 3;
-}
-
 message GeneralError {
   string reason = 1;
-}
-
-message GenerateCommitMessageRequest {
-  Metadata metadata = 1;
-  PlanInfo plan_info = 2;
-  string repo_root = 3;
-}
-
-message GenerateCommitMessageResponse {
-  CommitMessageData commit_message = 2;
-}
-
-message GenerateEnvironmentNameRequest {
-  repeated TextOrScopeItem items = 1;
-  repeated Media media = 2;
-  repeated string existing_names = 3;
-}
-
-message GenerateEnvironmentNameResponse {
-  string name = 1;
 }
 
 message GenerateImageToolConfig {
@@ -5314,62 +3627,11 @@ message GenerateImageToolConfig {
   string output_directory = 2;
 }
 
-message GenerateSkillInstallationCLRequest {
-  repeated string skill_paths = 1;
-  string ldap = 2;
-}
-
-message GenerateSkillInstallationCLResponse {
-  int64 cl_number = 1;
-  string cl_url = 2;
-}
-
 message GeneratorMetadatasUpdate {
   repeated uint32 indices = 1;
   repeated CortexStepGeneratorMetadata generator_metadatas = 2;
   uint32 total_length = 3;
   Slice page_bounds = 4;
-}
-
-message GetAgentScriptsRequest {
-  repeated string workspace_uris = 1;
-  string active_profile = 2;
-}
-
-message GetAgentScriptsResponse {
-  repeated AgentScriptItem agent_scripts = 1;
-  repeated AgentCustomization agent_customizations = 2;
-}
-
-message GetAgentTeamMetadataRequest {
-  string project_dir_uri = 1;
-}
-
-message GetAgentTeamMetadataResponse {
-  repeated AgentInstance agents = 1;
-  repeated AgentTeamTask tasks = 2;
-}
-
-message GetAllBrowserWhitelistedUrlsRequest {
-}
-
-message GetAllBrowserWhitelistedUrlsResponse {
-  repeated string whitelisted_urls = 1;
-}
-
-message GetAllCascadeTrajectoriesRequest {
-  bool exclude_subtrajectories = 1;
-}
-
-message GetAllCascadeTrajectoriesResponse {
-  repeated TrajectorySummariesEntry trajectory_summaries = 1;
-}
-
-message GetAllCustomAgentConfigsRequest {
-}
-
-message GetAllCustomAgentConfigsResponse {
-  repeated ConfigMapEntry config_map = 1;
 }
 
 message GetAllPluginsRequest {
@@ -5381,16 +3643,6 @@ message GetAllPluginsResponse {
   repeated Plugin plugins = 1;
 }
 
-message GetAllRulesRequest {
-  repeated string workspace_uris = 1;
-  string active_profile = 2;
-  bool enable_personal = 3;
-}
-
-message GetAllRulesResponse {
-  repeated CortexMemory memories = 2;
-}
-
 message GetAllSkillsRequest {
   repeated string workspace_uris = 1;
   string active_profile = 2;
@@ -5400,24 +3652,6 @@ message GetAllSkillsRequest {
 
 message GetAllSkillsResponse {
   repeated WorkflowSpec skills = 1;
-}
-
-message GetAllWorkflowsRequest {
-  repeated string workspace_uris = 1;
-  string active_profile = 2;
-  bool enable_personal = 3;
-}
-
-message GetAllWorkflowsResponse {
-  repeated WorkflowSpec workflows = 2;
-}
-
-message GetArtifactSnapshotsRequest {
-  string cascade_id = 1;
-}
-
-message GetArtifactSnapshotsResponse {
-  repeated ArtifactSnapshot artifact_snapshots = 1;
 }
 
 message GetAuthStatusRequest {
@@ -5445,51 +3679,11 @@ message GetAvailableModelsResponse {
   FetchAvailableModelsResponse response = 1;
 }
 
-message GetBattleWorktreeDiffRequest {
-  string arm_workspace_uri = 1;
-  string parent_workspace_uri = 2;
-}
-
-message GetBattleWorktreeDiffResponse {
-  repeated VcsFileChange file_changes = 1;
-}
-
-message GetBrowserOpenConversationRequest {
-}
-
-message GetBrowserOpenConversationResponse {
-  string cascade_id = 1;
-}
-
-message GetBrowserWhitelistFilePathRequest {
-}
-
-message GetBrowserWhitelistFilePathResponse {
-  string path = 1;
-}
-
 message GetBuildWithGooglePluginsRequest {
 }
 
 message GetBuildWithGooglePluginsResponse {
   repeated BuildWithGooglePlugin plugins = 1;
-}
-
-message GetCapabilitiesRequest {
-}
-
-message GetCapabilitiesResponse {
-  bool supports_hook_result_proto_bytes = 1;
-}
-
-message GetCascadeMemoriesRequest {
-}
-
-message GetCascadeMemoriesResponse {
-  repeated CortexMemory memories = 1;
-}
-
-message GetCascadeModelConfigDataRequest {
 }
 
 message GetCascadeModelConfigsRequest {
@@ -5501,58 +3695,6 @@ message GetCascadeModelConfigsResponse {
   repeated ClientModelConfig client_model_configs = 1;
   repeated ClientModelSort client_model_sorts = 2;
   DefaultOverrideModelConfig default_override_model_config = 3;
-}
-
-message GetCascadeNuxesRequest {
-  Metadata metadata = 1;
-}
-
-message GetCascadeNuxesResponse {
-  repeated CascadeNUXConfig nuxes = 1;
-}
-
-message GetCascadePluginByIdRequest {
-  Metadata metadata = 1;
-  string os = 2;
-  string plugin_id = 3;
-}
-
-message GetCascadePluginByIdResponse {
-  CascadePluginTemplate plugin = 1;
-}
-
-message GetCascadeTrajectoryExecutorMetadatasRequest {
-  string cascade_id = 1;
-  uint32 executor_metadata_offset = 2;
-}
-
-message GetCascadeTrajectoryExecutorMetadatasResponse {
-  repeated ExecutorMetadata executor_metadata = 1;
-}
-
-message GetCascadeTrajectoryGeneratorMetadataRequest {
-  string cascade_id = 1;
-  uint32 generator_metadata_offset = 2;
-  bool include_messages = 3;
-}
-
-message GetCascadeTrajectoryGeneratorMetadataResponse {
-  repeated CortexStepGeneratorMetadata generator_metadata = 1;
-}
-
-message GetCascadeTrajectoryRequest {
-  string cascade_id = 1;
-  ClientTrajectoryVerbosity verbosity = 2;
-  ClientTrajectoryVerbosity trajectory_verbosity = 3;
-  bool disable_rehydration = 4;
-}
-
-message GetCascadeTrajectoryResponse {
-  Trajectory trajectory = 1;
-  CascadeRunStatus status = 2;
-  uint32 num_total_steps = 3;
-  uint32 num_total_generator_metadata = 4;
-  uint32 num_total_executor_metadata = 5;
 }
 
 message GetCascadeTrajectoryStepsRequest {
@@ -5567,23 +3709,6 @@ message GetCascadeTrajectoryStepsResponse {
   repeated Step steps = 1;
 }
 
-message GetChangelistStatusRequest {
-  repeated int64 cl_numbers = 1;
-  bool include_content = 2;
-}
-
-message GetChangelistStatusResponse {
-  repeated ChangelistStatus statuses = 1;
-}
-
-message GetChangelogRequest {
-  string version = 1;
-}
-
-message GetChangelogResponse {
-  string path = 1;
-}
-
 message GetCodeActionDiffRequest {
   string cascade_id = 1;
   int32 step_index = 2;
@@ -5591,24 +3716,6 @@ message GetCodeActionDiffRequest {
 
 message GetCodeActionDiffResponse {
   DiffBlock diff = 1;
-}
-
-message GetCodeFrequencyForRepoRequest {
-  string repo_uri = 1;
-  string branch = 2;
-  int32 minutes_per_bucket = 3;
-}
-
-message GetCodeFrequencyForRepoResponse {
-  repeated CodeFrequencyRecord code_frequency = 1;
-}
-
-message GetCodeValidationStatesRequest {
-  string cascade_id = 1;
-}
-
-message GetCodeValidationStatesResponse {
-  repeated ValidationState states = 1;
 }
 
 message GetCommandModelConfigsRequest {
@@ -5619,94 +3726,6 @@ message GetCommandModelConfigsResponse {
   repeated ClientModelConfig client_model_configs = 1;
 }
 
-message GetCommitDetailsRequest {
-  string workspace_uri = 1;
-  string commit_id = 2;
-}
-
-message GetCommitDetailsResponse {
-  repeated VcsFileChange changed_files = 1;
-  repeated string parent_commit_ids = 2;
-}
-
-message GetConversationMetadataRequest {
-  string conversation_id = 1;
-}
-
-message GetConversationMetadataResponse {
-  CortexTrajectoryMetadata metadata = 1;
-}
-
-message GetDebugDiagnosticsRequest {
-}
-
-message GetDebugDiagnosticsResponse {
-  LanguageServerDiagnostics language_server_diagnostics = 1;
-}
-
-message GetDefaultProjectDirRequest {
-}
-
-message GetDefaultProjectDirResponse {
-  string default_project_dir_uri = 1;
-}
-
-message GetGrantedScopesRequest {
-  bool is_gcp_tos = 1;
-}
-
-message GetGrantedScopesResponse {
-  repeated string scopes = 1;
-}
-
-message GetHoverRequest {
-  string file_uri = 1;
-  int32 line = 2;
-  int32 column = 3;
-}
-
-message GetHoverResponse {
-  string contents = 1;
-  Range range = 2;
-}
-
-message GetInputCompletionRequest {
-  string completion_id = 1;
-  string cascade_id = 4;
-  string content = 2;
-  int32 cursor = 3;
-}
-
-message GetInputCompletionResponse {
-  string completion_id = 1;
-  int32 start_offset = 2;
-  int32 end_offset = 3;
-  string replacement = 4;
-}
-
-message GetJJWorktreesRequest {
-  string repo_uri = 1;
-}
-
-message GetJJWorktreesResponse {
-  repeated JJWorktree worktrees = 1;
-}
-
-message GetKnowledgeItemsRequest {
-}
-
-message GetKnowledgeItemsResponse {
-  repeated KnowledgeItem items = 1;
-}
-
-message GetLoadCodeAssistRequest {
-  bool force_refresh = 1;
-}
-
-message GetLoadCodeAssistResponse {
-  LoadCodeAssistResponse response = 1;
-}
-
 message GetLocalUserInfoRequest {
 }
 
@@ -5714,53 +3733,6 @@ message GetLocalUserInfoResponse {
   string username = 1;
   string home_dir_uri = 2;
   string machine_type = 3;
-}
-
-message GetMarketplaceBundlesRequest {
-  repeated string ids = 1;
-}
-
-message GetMarketplaceBundlesResponse {
-  repeated MarketplaceBundle bundles = 1;
-  repeated MarketplaceCustomization customizations = 2;
-}
-
-message GetMarketplaceCustomizationRequest {
-  string id = 1;
-  bool include_preview = 2;
-}
-
-message GetMarketplaceCustomizationResponse {
-  MarketplaceCustomization customization = 1;
-  Plugin plugin = 2;
-  SkillPreview skill = 3;
-}
-
-message GetMatchingContextScopeItemsRequest {
-  Metadata metadata = 1;
-  repeated ContextScopeType allowed_types = 2;
-  repeated CodeContextType allowed_context_types = 7;
-  string query = 3;
-  bool fuzzy_match = 4;
-  int32 max_items = 5;
-  bool case_insensitive = 6;
-  string repo_filter = 8;
-  uint64 cancel_token = 9;
-}
-
-message GetMatchingContextScopeItemsResponse {
-  repeated ContextScopeItem items = 1;
-}
-
-message GetMcpPromptRequest {
-  string server_name = 1;
-  string name = 2;
-  repeated ArgumentsEntry arguments = 3;
-}
-
-message GetMcpPromptResponse {
-  string description = 1;
-  repeated McpPromptMessage messages = 2;
 }
 
 message GetMcpServerStatesRequest {
@@ -5779,57 +3751,6 @@ message GetMcpServerTemplatesResponse {
   repeated McpServerTemplate templates = 1;
 }
 
-message GetMendelFlagsRequest {
-}
-
-message GetMendelFlagsResponse {
-  ExperimentConfig experiment_config = 1;
-}
-
-message GetModelResponseRequest {
-  string prompt = 1;
-  Model model = 2;
-}
-
-message GetModelResponseResponse {
-  string response = 1;
-}
-
-message GetModelStatusesRequest {
-  Metadata metadata = 1;
-}
-
-message GetModelStatusesResponse {
-  repeated ModelStatusInfo model_status_infos = 1;
-}
-
-message GetPatchAndCodeChangeRequest {
-  string intent = 1;
-  GitRepoInfo base_state_repo_info = 2;
-  string repo_path = 3;
-}
-
-message GetPatchAndCodeChangeResponse {
-  string patch_string = 1;
-  CodeChangeWithContext code_change_with_context = 2;
-}
-
-message GetPluginRequest {
-  string plugin_id = 1;
-}
-
-message GetPluginResponse {
-  Plugin plugin = 1;
-}
-
-message GetProfileDataRequest {
-  string api_key = 1;
-}
-
-message GetProfileDataResponse {
-  string profile_picture_url = 1;
-}
-
 message GetRemoteControlInfoRequest {
 }
 
@@ -5846,67 +3767,6 @@ message GetRepoInfosRequest {
 
 message GetRepoInfosResponse {
   repeated RepoInfo repos = 1;
-}
-
-message GetRevertPreviewRequest {
-  string cascade_id = 1;
-  int32 step_index = 2;
-  Metadata metadata = 3;
-  CascadeConfig override_config = 4;
-}
-
-message GetRevertPreviewResponse {
-  repeated CodeEditRevertPreview code_edit_previews = 1;
-}
-
-message GetRevisionArtifactRequest {
-  string repo_path_uri = 1;
-  string base_commit = 2;
-}
-
-message GetRevisionArtifactResponse {
-  PatchStats stats = 1;
-  string patch = 2;
-}
-
-message GetServerConfigurationRequest {
-}
-
-message GetServerConfigurationResponse {
-  LanguageServerConfig config = 1;
-}
-
-message GetSidecarEventsRequest {
-  string sidecar_id = 1;
-}
-
-message GetSidecarEventsResponse {
-  repeated SidecarEvent events = 1;
-}
-
-message GetSidecarLogsRequest {
-  string sidecar_id = 1;
-  int32 tail_lines = 2;
-  string log_filename = 3;
-}
-
-message GetSidecarLogsResponse {
-  string logs = 1;
-}
-
-message GetSidecarsRequest {
-}
-
-message GetSidecarsResponse {
-  repeated SidecarStatusInfo sidecars = 1;
-}
-
-message GetSkillMarketplaceLinkRequest {
-  string skill_path = 1;
-}
-
-message GetSkillMarketplaceLinkResponse {
-  string marketplace_url = 1;
 }
 
 message GetSlashCommandsRequest {
@@ -5930,54 +3790,12 @@ message GetStandaloneDirResponse {
   string standalone_dir = 1;
 }
 
-message GetStaticExperimentStatusRequest {
-  Metadata metadata = 1;
-}
-
-message GetStaticExperimentStatusResponse {
-  repeated ChatExperimentStatus status = 1;
-}
-
 message GetStatusRequest {
   Metadata metadata = 1;
 }
 
 message GetStatusResponse {
   Status status = 1;
-}
-
-message GetTeamOrganizationalControlsRequest {
-  Metadata metadata = 1;
-}
-
-message GetTeamOrganizationalControlsResponse {
-  TeamOrganizationalControls controls = 1;
-}
-
-message GetTermsOfServiceRequest {
-  Metadata metadata = 1;
-}
-
-message GetTermsOfServiceResponse {
-  string terms_of_service_text = 1;
-  string version = 2;
-}
-
-message GetTokenBaseRequest {
-  CascadeConfig cascade_config = 1;
-  repeated string workspace_uris = 2;
-  string active_profile = 3;
-}
-
-message GetTokenBaseResponse {
-  TokenBreakdown customization_token_base = 3;
-  int32 remaining_budget = 4;
-  int32 customization_budget = 5;
-  TokenBreakdown truncated_customization_token_base = 6;
-  int32 rules_budget = 7;
-  int32 remaining_rules_budget = 8;
-  TokenBreakdown token_base = 1;
-  int32 max_token_base = 2;
 }
 
 message GetTrajectoryFileDiffsRequest {
@@ -5999,58 +3817,6 @@ message GetTranscriptionResponse {
   string transcribed_text = 1;
 }
 
-message GetTurnDiffRequest {
-  string conversation_id = 1;
-  uint32 step_index = 2;
-}
-
-message GetTurnDiffResponse {
-  repeated FileDiffsEntry file_diffs = 1;
-  int32 total_additions = 2;
-  int32 total_deletions = 3;
-  CortexStepUserInput user_input = 4;
-  int32 turn_start_index = 5;
-  int32 turn_end_index_exclusive = 6;
-}
-
-message GetUnleashDataRequest {
-  Metadata metadata = 1;
-  repeated PropertiesEntry properties = 2;
-}
-
-message GetUnleashDataResponse {
-  UnleashContext context = 1;
-  ExperimentConfig experiment_config = 2;
-}
-
-message GetUpdateStatusRequest {
-}
-
-message GetUpdateStatusResponse {
-  UpdateStatus status = 1;
-}
-
-message GetUserAnalyticsSummaryRequest {
-  Metadata metadata = 1;
-  string time_zone = 2;
-  Timestamp start_timestamp = 3;
-  Timestamp end_timestamp = 4;
-}
-
-message GetUserAnalyticsSummaryResponse {
-  CompletionStatistics completion_statistics = 1;
-  repeated CompletionByDateEntry completions_by_day = 2;
-  repeated CompletionByLanguageEntry completions_by_language = 3;
-  repeated ChatStatsByModelEntry chats_by_model = 4;
-}
-
-message GetUserMemoriesRequest {
-}
-
-message GetUserMemoriesResponse {
-  repeated CortexMemory memories = 1;
-}
-
 message GetUserSettingsRequest {
 }
 
@@ -6065,72 +3831,6 @@ message GetUserStatusRequest {
 message GetUserStatusResponse {
   UserStatus user_status = 1;
   PlanInfo plan_info = 2;
-}
-
-message GetUserTrajectoryDebugRequest {
-  bool include_all_trajectories = 1;
-}
-
-message GetUserTrajectoryDebugResponse {
-  repeated ImplicitTrajectory mainline = 1;
-  Trajectory granular = 2;
-  SupercompletePromptTrajectory supercomplete = 3;
-}
-
-message GetUserTrajectoryDescriptionsRequest {
-}
-
-message GetUserTrajectoryDescriptionsResponse {
-  repeated ImplicitTrajectoryDescription trajectories = 1;
-}
-
-message GetUserTrajectoryRequest {
-  string trajectory_id = 1;
-}
-
-message GetUserTrajectoryResponse {
-  Trajectory trajectory = 1;
-}
-
-message GetVersionControlFileContentRequest {
-  string uri = 1;
-  string commit_id = 2;
-  bool staged = 3;
-}
-
-message GetVersionControlFileContentResponse {
-  bytes content = 1;
-}
-
-message GetVersionControlStateRequest {
-  string workspace_path = 1;
-}
-
-message GetVersionControlStateResponse {
-  VcsWorkspaceState state = 1;
-}
-
-message GetWebDocsOptionsRequest {
-  Metadata metadata = 1;
-}
-
-message GetWebDocsOptionsResponse {
-  repeated WebDocsOption options = 1;
-}
-
-message GetWorkingDirectoriesRequest {
-}
-
-message GetWorkingDirectoriesResponse {
-  repeated WorkingDirectoryInfo directories = 1;
-}
-
-message GetWorkspaceChangelistsRequest {
-  repeated string workspace_uris = 1;
-}
-
-message GetWorkspaceChangelistsResponse {
-  repeated WorkspaceChangelists workspaces = 1;
 }
 
 message GetWorkspaceEditStateRequest {
@@ -6150,49 +3850,6 @@ message GetWorkspaceInfosResponse {
   string gemini_dir_uri = 4;
 }
 
-message GetWorktreeDiffRequest {
-  string worktree_dir_uri = 1;
-  string target_workspace_uri = 2;
-}
-
-message GetWorktreeDiffResponse {
-  string diff_patch = 1;
-  CheckoutSummary summary = 2;
-}
-
-message GitCommitRequest {
-  string workspace_uri = 1;
-  string message = 2;
-  bool amend = 3;
-}
-
-message GitCommitResponse {
-  string commit_id = 1;
-}
-
-message GitDiscardRequest {
-  string workspace_uri = 1;
-  repeated string uris = 2;
-  bool unstaged_only = 3;
-}
-
-message GitDiscardResponse {
-}
-
-message GitFolder {
-  string folder_uri = 1;
-  string default_branch = 2;
-  bool allow_write = 3;
-}
-
-message GitPushRequest {
-  string workspace_uri = 1;
-}
-
-message GitPushResponse {
-  string review_url = 1;
-}
-
 message GitRepoInfo {
   string name = 1;
   string owner = 2;
@@ -6201,26 +3858,6 @@ message GitRepoInfo {
   string version_alias = 4;
   ScmProvider scm_provider = 6;
   string base_git_url = 7;
-}
-
-message GitStageRequest {
-  string workspace_uri = 1;
-  repeated string uris = 2;
-}
-
-message GitStageResponse {
-}
-
-message GitUnstageRequest {
-  string workspace_uri = 1;
-  repeated string uris = 2;
-}
-
-message GitUnstageResponse {
-}
-
-message Google3 {
-  ForkType fork_type = 1;
 }
 
 message Google3Source {
@@ -6271,14 +3908,6 @@ message GoogleSpecificSettings {
   bool google3_project_created = 1;
 }
 
-message GrepSearchResult {
-  string relative_path = 1;
-  uint32 line_number = 2;
-  string content = 3;
-  string absolute_path = 4;
-  CodeContextItem cci = 5;
-}
-
 message GrepToolConfig {
   uint32 max_grep_results = 1;
   bool include_cci_in_result = 2;
@@ -6299,81 +3928,12 @@ message GroupsEntry {
   ConversationGroupConfig value = 2;
 }
 
-message Guideline {
-  repeated GuidelineItem items = 1;
-}
-
-message GuidelineItem {
-  string guideline = 1;
-}
-
 message HandleCascadeUserInteractionRequest {
   string cascade_id = 1;
   CascadeUserInteraction interaction = 2;
 }
 
 message HandleCascadeUserInteractionResponse {
-}
-
-message HandleScreenRecordingRequest {
-  string cascade_id = 1;
-}
-
-message HandleScreenRecordingResponse {
-  bytes video_data = 1;
-}
-
-message HandleStreamingCommandRequest {
-  Metadata metadata = 1;
-  Document document = 2;
-  EditorOptions editor_options = 3;
-  Model requested_model_id = 4;
-  uint64 selection_start_line = 6;
-  uint64 selection_end_line = 7;
-  string command_text = 8;
-  CommandRequestSource request_source = 9;
-  ContextScope mentioned_scope = 10;
-  ActionPointer action_pointer = 11;
-  string parent_completion_id = 12;
-  DiffType diff_type = 13;
-  repeated CodeDiagnostic diagnostics = 14;
-  SupercompleteTriggerCondition supercomplete_trigger_condition = 15;
-  TerminalCommandData terminal_command_data = 16;
-  ExperimentConfig experiment_config = 5;
-  bool ignore_supercomplete_debounce = 17;
-  string clipboard_entry = 18;
-  repeated IntellisenseSuggestion intellisense_suggestions = 19;
-}
-
-message HandleStreamingCommandResponse {
-  string completion_id = 1;
-  string prompt_id = 2;
-  UnifiedDiff diff = 3;
-  LatencyInfo latency_info = 4;
-  uint64 selection_start_line = 5;
-  uint64 selection_end_line = 6;
-  double score = 7;
-  CharacterDiff character_diff = 8;
-  ComboDiff combo_diff = 9;
-  SuperCompleteFilterReason filter_reason = 10;
-  DocumentPosition jump_position = 14;
-  RequestInfo request_info = 12;
-  StopReason stop_reason = 13;
-  Trajectory trajectory = 15;
-  string raw_text = 16;
-  string trace_id = 17;
-  uint64 closest_changed_line = 11;
-}
-
-message HasAuthTokenRequest {
-}
-
-message HasAuthTokenResponse {
-  bool has_token = 1;
-  bool is_gcp_tos = 2;
-  string project_id = 3;
-  string location = 4;
-  string wif_provider = 5;
 }
 
 message HeadersEntry {
@@ -6411,12 +3971,6 @@ message HooksDiscoveryConfig {
   repeated CustomizationPath hooks_paths = 2;
 }
 
-message Image {
-  FileData value = 5;
-  int32 height_px = 3;
-  int32 width_px = 4;
-}
-
 message ImageContent {
   bytes data = 2;
   string uri = 6;
@@ -6432,55 +3986,9 @@ message ImageData {
   string uri = 4;
 }
 
-message ImplicitTrajectory {
-  Trajectory trajectory = 1;
-  TrajectoryScope trajectory_scope = 5;
-}
-
-message ImplicitTrajectoryDescription {
-  string trajectory_id = 1;
-  TrajectoryScope trajectory_scope = 2;
-  bool current = 3;
-}
-
-message ImportFromCursorRequest {
-  string source_path = 1;
-}
-
-message ImportFromCursorResponse {
-  repeated string copied_files = 1;
-  repeated string duplicate_files = 2;
-  repeated string problem_files = 3;
-}
-
-message ImportProjectFromUrlRequest {
-  string blob_id = 1;
-  string signature = 2;
-  string gcp_group_name = 3;
-}
-
-message ImportProjectFromUrlResponse {
-  string project_name = 1;
-  string project_root_uri = 2;
-  bool should_download_firebase_skill = 3;
-  string latest_conversation_id = 4;
-}
-
 message IneligibleInfo {
   string reason = 1;
   string verification_url = 2;
-}
-
-message IneligibleTier {
-  IneligibleTierReasonCodes reason_code = 1;
-  string reason_message = 2;
-  string tier_id = 3;
-  string tier_name = 4;
-  string validation_error_message = 5;
-  string validation_url_link_text = 6;
-  string validation_url = 7;
-  string validation_learn_more_link_text = 8;
-  string validation_learn_more_url = 9;
 }
 
 message InitializeCascadePanelStateRequest {
@@ -6499,44 +4007,9 @@ message InjectArtifactReminderThresholdMapEntry {
 message InjectedResponseMetadata {
 }
 
-message InstallCascadePluginRequest {
-  Metadata metadata = 1;
-  string plugin_id = 2;
-}
-
-message InstallCascadePluginResponse {
-  int64 installation_count = 1;
-}
-
-message InstallCustomizationRequest {
-  string id = 2;
-}
-
-message InstallCustomizationResponse {
-  bool success = 1;
-  string message = 2;
-  string install_dir = 3;
-}
-
-message IntellisenseSuggestion {
-  Range range = 1;
-  string text = 2;
-  string label = 3;
-  string label_detail = 4;
-  string description = 5;
-  string detail = 6;
-  string documentation = 7;
-  string kind = 8;
-  bool selected = 9;
-}
-
 message IntentToolConfig {
   Model intent_model = 1;
   uint32 max_context_tokens = 2;
-}
-
-message Interaction {
-  NUXInteraction nux_interaction = 1;
 }
 
 message InternalSearchToolConfig {
@@ -6553,11 +4026,6 @@ message InvokeSubagentToolConfig {
   bool allow_task_mode = 5;
   bool always_inherit_model = 6;
   bool allow_fork = 7;
-}
-
-message JJWorktree {
-  string base_commit_description = 2;
-  string uri = 3;
 }
 
 message JetboxAppState {
@@ -6577,39 +4045,6 @@ message JetboxAppState {
   RetroactiveMigrationStatus migrate_retroactive_projects = 19;
   int64 opted_out_best_of_n_auto_trigger_at = 20;
   repeated MigrationsEntry migrations = 21;
-}
-
-message JetboxDeleteSummaryRequest {
-  string cascade_id = 1;
-}
-
-message JetboxDeleteSummaryResponse {
-}
-
-message JetboxReadAppStateRequest {
-}
-
-message JetboxReadAppStateResponse {
-}
-
-message JetboxReadUserConfigRequest {
-}
-
-message JetboxReadUserConfigResponse {
-}
-
-message JetboxSubscribeToGcertStateRequest {
-}
-
-message JetboxSubscribeToGcertStateResponse {
-  GcertStatus gcert_status = 1;
-}
-
-message JetboxSubscribeToOAuthStateRequest {
-}
-
-message JetboxSubscribeToOAuthStateResponse {
-  OAuthStatus oauth_status = 1;
 }
 
 message JetboxSubscribeToStateRequest {
@@ -6636,48 +4071,6 @@ message JetboxWriteStateRequest {
 }
 
 message JetboxWriteStateResponse {
-}
-
-message JetboxWriteSummaryRequest {
-  string cascade_id = 1;
-  CascadeTrajectorySummary summary = 2;
-}
-
-message JetboxWriteSummaryResponse {
-}
-
-message JjCommitRequest {
-  string workspace_uri = 1;
-  string message = 2;
-}
-
-message JjCommitResponse {
-  string commit_id = 1;
-}
-
-message JjSquashRequest {
-  string workspace_uri = 1;
-  string message = 2;
-}
-
-message JjSquashResponse {
-  string commit_id = 1;
-}
-
-message JjSyncRequest {
-  string workspace_uri = 1;
-}
-
-message JjSyncResponse {
-}
-
-message JjUploadRequest {
-  string workspace_uri = 1;
-  string revset = 2;
-}
-
-message JjUploadResponse {
-  repeated string cl_numbers = 1;
 }
 
 message KnowledgeBaseChunk {
@@ -6735,57 +4128,7 @@ message KnowledgeConfig {
   uint32 max_invocations = 4;
 }
 
-message KnowledgeItem {
-  string dir_name = 1;
-  string dir_uri = 2;
-  string metadata_uri = 3;
-  string metadata_contents = 4;
-  repeated string artifact_source_uris = 5;
-}
-
-message LanguageServerConfig {
-  SidecarConfig sidecars = 1;
-  bool dev_mode = 2;
-  bool is_google_environment = 3;
-  bool standalone = 4;
-  bool is_jetski = 5;
-  string workspace_id = 6;
-  string app_data_dir = 7;
-  bool running_in_xbox = 8;
-  bool running_in_actor = 9;
-  bool use_local_chrome = 10;
-  bool antigravity_hub = 11;
-  int32 max_num_tracked_workspaces = 12;
-  string subclient_type = 13;
-  string config_dir = 14;
-}
-
-message LanguageServerDiagnostics {
-  repeated string logs = 1;
-}
-
-message LatencyInfo {
-  uint64 client_latency_ms = 1;
-  uint64 prompt_latency_ms = 2;
-  repeated PromptStageLatency prompt_stage_latencies = 3;
-  uint64 debounce_latency_ms = 4;
-  uint64 rpc_latency_ms = 5;
-  uint64 network_latency_ms = 6;
-}
-
-message License {
-  string user_tier = 1;
-  string tier_display_name = 2;
-  string project_id = 3;
-  string location = 4;
-}
-
 message LicenseRequiredInfo {
-}
-
-message Lineage {
-  bool is_trunk = 1;
-  int64 trunk_order = 2;
 }
 
 message LinkScopeItem {
@@ -6796,73 +4139,8 @@ message LinkScopeItem {
   string provider = 5;
 }
 
-message ListCustomizationPathsByFileRequest {
-  RefreshCustomizationType type = 1;
-  bool is_global = 2;
-}
-
-message ListCustomizationPathsByFileResponse {
-  repeated PathsFilesEntry paths_files = 1;
-}
-
 message ListDirToolConfig {
   bool force_disable = 2;
-}
-
-message ListGobReposRequest {
-  string query = 1;
-  int32 max_results = 2;
-}
-
-message ListGobReposResponse {
-  repeated string repos = 1;
-}
-
-message ListLicensesRequest {
-}
-
-message ListLicensesResponse {
-  repeated License licenses = 1;
-  string data_sharing_disclaimer = 2;
-}
-
-message ListMcpPromptsRequest {
-}
-
-message ListMcpPromptsResponse {
-  repeated McpPromptSpec prompts = 1;
-}
-
-message ListMcpResourcesRequest {
-  string server_name = 1;
-  string query = 2;
-}
-
-message ListMcpResourcesResponse {
-  repeated McpResourceItem resources = 1;
-}
-
-message ListPagesRequest {
-}
-
-message ListPagesResponse {
-  repeated BrowserPageMetadata pages = 1;
-}
-
-message ListProfilesRequest {
-  repeated string workspace_uris = 1;
-}
-
-message ListProfilesResponse {
-  repeated ProfileItem profiles = 1;
-}
-
-message ListSidecarLogFilesRequest {
-  string sidecar_id = 1;
-}
-
-message ListSidecarLogFilesResponse {
-  repeated string log_filenames = 1;
 }
 
 message ListTerminalsRequest {
@@ -6879,44 +4157,6 @@ message ListValue {
   repeated Value values = 1;
 }
 
-message LoadCodeAssistResponse {
-  UserTier current_tier = 1;
-  repeated UserTier allowed_tiers = 2;
-  string cloudaicompanion_project = 3;
-  Status project_validation_error = 4;
-  repeated IneligibleTier ineligible_tiers = 5;
-  bool gcp_managed = 6;
-  string manage_subscription_uri = 7;
-  ReleaseChannel release_channel = 8;
-  string upgrade_subscription_uri = 9;
-  string g1_tier = 11;
-  UserTier paid_tier = 12;
-}
-
-message LoadReplayConversationRequest {
-  string workspace_name = 1;
-  string user = 2;
-  string cascade_id = 3;
-}
-
-message LoadReplayConversationResponse {
-}
-
-message LoadSharedTrajectoryRequest {
-  string path = 1;
-}
-
-message LoadSharedTrajectoryResponse {
-  string cascade_id = 1;
-}
-
-message LoadTrajectoryRequest {
-  string cascade_id = 1;
-}
-
-message LoadTrajectoryResponse {
-}
-
 message LoadedCustomization {
   RefreshCustomizationType type = 1;
   string name = 2;
@@ -6928,12 +4168,6 @@ message LoadedCustomization {
 
 message LoadedCustomizations {
   repeated LoadedCustomization customizations = 1;
-}
-
-message LocalNodeState {
-  CodeContextItem current_node = 1;
-  CodeContextItem closest_above_node = 2;
-  CodeContextItem closest_below_node = 3;
 }
 
 message LogArtifactsConfig {
@@ -6957,15 +4191,6 @@ message LoginResponse {
   AuthResult auth_result = 1;
 }
 
-message LoginWithBrowserRequest {
-  bool is_gcp_tos = 1;
-  repeated string additional_scopes = 2;
-}
-
-message LoginWithBrowserResponse {
-  AuthResult auth_result = 1;
-}
-
 message LowLevelToolsConfig {
   bool enable_low_level_tools_instructions = 1;
   bool enable_mouse_tools = 2;
@@ -6982,18 +4207,6 @@ message MQueryConfig {
   uint32 min_token_space_for_context = 8;
   uint32 max_target_files = 9;
   uint32 top_cci_count = 10;
-}
-
-message ManageSidecarRequest {
-  string sidecar_id = 1;
-  SidecarAction action = 2;
-  SidecarConfig config = 3;
-  string project_id = 4;
-  bool all_projects = 5;
-  repeated ArgumentValuesEntry argument_values = 6;
-}
-
-message ManageSidecarResponse {
 }
 
 message MapDiff {
@@ -7021,51 +4234,10 @@ message MarkdownHeader {
   string text = 2;
 }
 
-message MarketplaceBundle {
-  string marketplace = 1;
-  string id = 2;
-  string display_name = 3;
-  string description = 4;
-  string logo = 5;
-  string repository = 6;
-  repeated string member_ids = 7;
-  int32 member_count = 8;
-}
-
-message MarketplaceCustomization {
-  string marketplace = 1;
-  string id = 2;
-  string display_name = 3;
-  string description = 4;
-  CustomizationSource source = 5;
-  PluginFacet plugin = 6;
-  SkillFacet skill = 8;
-  string logo = 7;
-  string version = 9;
-}
-
 message MarketplaceInstall {
   string marketplace = 1;
   string id = 2;
   string version = 3;
-}
-
-message McpCommandTemplate {
-  string command = 1;
-  repeated string args = 2;
-  repeated EnvEntry env = 3;
-}
-
-message McpCommandVariable {
-  string name = 1;
-  string title = 2;
-  string description = 3;
-  string link = 4;
-}
-
-message McpControls {
-  bool mcp_enabled = 1;
-  Struct mcp_allowlist = 2;
 }
 
 message McpDiscoveryConfig {
@@ -7111,14 +4283,6 @@ message McpPromptScopeItem {
   repeated McpPromptMessage messages = 6;
 }
 
-message McpPromptSpec {
-  string server_name = 1;
-  string name = 2;
-  string title = 3;
-  string description = 4;
-  repeated McpPromptArgument arguments = 5;
-}
-
 message McpRemoteServer {
   string type = 1;
   string url = 2;
@@ -7138,11 +4302,6 @@ message McpResourceItem {
   string description = 3;
   string mime_type = 4;
   string server_name = 5;
-}
-
-message McpServerCommand {
-  McpCommandTemplate template = 1;
-  repeated McpCommandVariable variables = 2;
 }
 
 message McpServerConfig {
@@ -7269,11 +4428,6 @@ message MemoryToolConfig {
   bool disable_auto_generate_memories = 2;
 }
 
-message Message {
-  string role = 1;
-  repeated Chunk chunks = 2;
-}
-
 message MessageConfig {
   bool enabled = 1;
 }
@@ -7322,14 +4476,6 @@ message MetricsRecord {
   string trajectory_id = 7;
   bool lower_better = 4;
   bool is_bool = 5;
-}
-
-message MigrateApiKeyRequest {
-  string api_key = 1;
-}
-
-message MigrateApiKeyResponse {
-  string session_token = 1;
 }
 
 message MigrationsEntry {
@@ -7504,12 +4650,6 @@ message ModelSort {
   repeated ModelGroup groups = 2;
 }
 
-message ModelStatusInfo {
-  Model model = 1;
-  string message = 2;
-  ModelStatus status = 3;
-}
-
 message ModelUsageStats {
   Model model = 1;
   uint64 input_tokens = 2;
@@ -7547,33 +4687,11 @@ message MqueryToolConfig {
   bool force_disable = 9;
 }
 
-message NUXInteraction {
-  int32 nux_id = 1;
-  NUXInteractionType interaction_type = 2;
-}
-
 message NamedItem {
   string name = 1;
   string pattern = 4;
   bool builtin = 2;
   string provider_name = 3;
-}
-
-message NarrationAudioChunk {
-  bytes data = 1;
-  string mime_type = 2;
-}
-
-message NarrationComplete {
-}
-
-message NarrationReady {
-  string session_id = 1;
-}
-
-message NewConversationEvent {
-  string prompt = 1;
-  string conversation_id = 2;
 }
 
 message NewEnvironmentArgs {
@@ -7589,35 +4707,9 @@ message NotifyUserConfig {
   ArtifactReviewMode artifact_review_mode = 1;
 }
 
-message OAuthStatus {
-  bool valid = 1;
-  string error = 2;
-}
-
-message OpenUrlRequest {
-  string url = 1;
-}
-
-message OpenUrlResponse {
-}
-
-message Operation {
-  string name = 1;
-  Any metadata = 2;
-  bool done = 3;
-  RpcStatus error = 4;
-  Any response = 5;
-}
-
 message OriginalWorkspaceSnapshotsEntry {
   string key = 1;
   int32 value = 2;
-}
-
-message PatchStats {
-  int32 num_files_changed = 1;
-  int32 num_line_additions = 2;
-  int32 num_line_deletions = 3;
 }
 
 message PathScopeItem {
@@ -7627,11 +4719,6 @@ message PathScopeItem {
   repeated WorkspaceUrisToRelativePathsEntry workspace_uris_to_relative_paths = 6;
   uint32 num_files = 3;
   uint64 num_bytes = 4;
-}
-
-message PathsFilesEntry {
-  string key = 1;
-  CustomizationPathsList value = 2;
 }
 
 message PendingAgentMessagesUpdate {
@@ -7758,19 +4845,6 @@ message PluginDiscoveryConfig {
   repeated string builtin_plugin_names = 3;
 }
 
-message PluginFacet {
-}
-
-message PluginItem {
-  string name = 1;
-  string description = 2;
-  bool disabled = 3;
-  string logo = 4;
-  string version = 5;
-  repeated string suggested_prompts = 6;
-  string display_name = 7;
-}
-
 message PluginMcpUserConfig {
   repeated VariablesEntry variables = 1;
 }
@@ -7816,46 +4890,6 @@ message PrivacyNotice {
   bool show_notice = 1;
   string notice_text = 2;
   bool minor_notice = 4;
-}
-
-message ProfileConfig {
-  string name = 1;
-  string description = 2;
-  repeated ProfileInheritEntry inherit = 3;
-  CustomizationSourceConfig skills = 4;
-  CustomizationSourceConfig agents = 5;
-  CustomizationSourceConfig plugins = 6;
-  CustomizationSourceConfig hooks = 7;
-  CustomizationSourceConfig mcp = 8;
-  CustomizationSourceConfig rules = 9;
-}
-
-message ProfileExcludeConfig {
-  repeated string skills = 1;
-  repeated string agents = 2;
-  repeated string plugins = 3;
-  repeated string hooks = 4;
-  repeated string mcp = 5;
-  repeated string rules = 6;
-}
-
-message ProfileInheritEntry {
-  string path = 1;
-  ProfileExcludeConfig exclude = 2;
-}
-
-message ProfileItem {
-  string name = 1;
-  string description = 2;
-  string path = 3;
-  ProfileConfig config = 4;
-  bool is_default = 5;
-}
-
-message ProfilePathEntry {
-  string path = 1;
-  repeated string include_only = 2;
-  repeated string exclude = 3;
 }
 
 message ProfilesConfig {
@@ -7913,22 +4947,6 @@ message PromptCacheOptions {
   CacheControlType type = 1;
 }
 
-message PromptElementKindInfo {
-  PromptElementKind kind = 1;
-  ExperimentKey experiment_key = 2;
-  bool enabled = 3;
-  uint64 num_considered = 4;
-  uint64 num_included = 5;
-}
-
-message PromptElementRange {
-  PromptElementKind kind = 1;
-  uint64 byte_offset_start = 2;
-  uint64 byte_offset_end = 3;
-  uint64 token_offset_start = 4;
-  uint64 token_offset_end = 5;
-}
-
 message PromptSection {
   string title = 1;
   string content = 2;
@@ -7957,44 +4975,6 @@ message PromptSectionMetadata {
   PromptSectionSourceType source_type = 1;
   string template_key = 2;
   bool is_internal = 3;
-}
-
-message PromptStageLatency {
-  string name = 1;
-  uint64 latency_ms = 2;
-}
-
-message PropertiesEntry {
-  string key = 1;
-  string value = 2;
-}
-
-message ProvideCompletionFeedbackRequest {
-  Metadata metadata = 1;
-  bool is_accepted = 2;
-  int64 feedback_delay_ms = 3;
-  string completion_id = 4;
-  string prompt_id = 5;
-  LatencyInfo latency_info = 6;
-  ProviderSource source = 7;
-  Document document = 8;
-  uint64 view_columns_open = 10;
-  bool is_intentional_reject = 11;
-  bool is_partial = 12;
-  string midstream_autocomplete_text = 13;
-  bool has_active_vim_extension = 14;
-  string trace_id = 15;
-  int64 accepted_lines = 16;
-  int64 removed_lines = 17;
-  ExperimentConfig experiment_config = 9;
-}
-
-message ProvideCompletionFeedbackResponse {
-}
-
-message ProviderMetadataEntry {
-  string key = 1;
-  CodeContextProviderMetadata value = 2;
 }
 
 message QueuedStepsUpdate {
@@ -8101,27 +5081,6 @@ message RecitationMetadata {
   repeated Recitation recitations = 1;
 }
 
-message ReconnectExtensionServerRequest {
-  int32 extension_server_port = 1;
-  string extension_server_csrf_token = 2;
-}
-
-message ReconnectExtensionServerResponse {
-}
-
-message RecordAnalyticsEventRequest {
-  string event_name = 1;
-  Metadata metadata = 2;
-  repeated ExtraEntry extra = 3;
-  repeated ExperimentsEntry experiments = 4;
-  RuntimeEnvironment runtime_environment = 5;
-  repeated AnalyticsEvent events = 6;
-  repeated string enabled_labs_features = 7;
-}
-
-message RecordAnalyticsEventResponse {
-}
-
 message RecordChatFeedbackRequest {
   Metadata metadata = 1;
   string message_id = 2;
@@ -8133,134 +5092,12 @@ message RecordChatFeedbackRequest {
 message RecordChatFeedbackResponse {
 }
 
-message RecordChatPanelSessionRequest {
-  Metadata metadata = 1;
-  Timestamp start_timestamp = 2;
-  Timestamp end_timestamp = 3;
-}
-
-message RecordChatPanelSessionResponse {
-}
-
-message RecordCommitMessageSaveRequest {
-  Metadata metadata = 1;
-  string repo_root = 2;
-  string branch_name = 3;
-  string commit_hash = 4;
-  string commit_message = 5;
-  Timestamp commit_timestamp = 6;
-  string parent_commit_hash = 7;
-  string author_name = 8;
-  string author_email = 9;
-}
-
-message RecordCommitMessageSaveResponse {
-}
-
-message RecordErrorRequest {
-  ErrorTrace error_trace = 1;
-  bool should_upload_immediately = 2;
-}
-
-message RecordErrorResponse {
-}
-
 message RecordEventRequest {
   Metadata metadata = 1;
   Event event = 2;
 }
 
 message RecordEventResponse {
-}
-
-message RecordInteractiveCascadeFeedbackRequest {
-  Metadata metadata = 1;
-  string cascade_id = 2;
-  int32 step_index = 3;
-  int32 chunk_index = 4;
-  AcknowledgementType acknowledgement_type = 5;
-}
-
-message RecordInteractiveCascadeFeedbackResponse {
-}
-
-message RecordLintsRequest {
-  Language current_language = 1;
-  repeated CodeDiagnostic lints = 2;
-  Timestamp timestamp = 3;
-}
-
-message RecordLintsResponse {
-}
-
-message RecordObservabilityDataRequest {
-  string datatype = 1;
-  repeated ExtraEntry extra = 2;
-  repeated SensitiveDataEntry sensitive_data = 3;
-}
-
-message RecordObservabilityDataResponse {
-}
-
-message RecordSearchDocOpenRequest {
-  Metadata metadata = 1;
-  string result_id = 2;
-}
-
-message RecordSearchDocOpenResponse {
-}
-
-message RecordSearchResultsViewRequest {
-  Metadata metadata = 1;
-  string cluster_search_id = 2;
-  string exact_search_id = 3;
-  repeated string search_result_ids = 4;
-}
-
-message RecordSearchResultsViewResponse {
-}
-
-message RecordSidecarEventRequest {
-  string sidecar_id = 1;
-  SidecarEventPayload payload = 2;
-  string error = 3;
-}
-
-message RecordSidecarEventResponse {
-}
-
-message RecordUserGrepRequest {
-  string query = 1;
-  repeated GrepSearchResult results = 2;
-  Timestamp timestamp = 3;
-}
-
-message RecordUserGrepResponse {
-}
-
-message RecordUserStepSnapshotRequest {
-  string cascade_id = 1;
-  int32 step_index = 2;
-  UserStepSnapshot snapshot = 3;
-}
-
-message RecordUserStepSnapshotResponse {
-}
-
-message RefreshContextForIdeActionRequest {
-  Metadata metadata = 8;
-  Document active_document = 1;
-  repeated string open_document_filepaths_migrate_me_to_uri = 2;
-  repeated string open_document_uris = 6;
-  repeated Document other_documents = 5;
-  repeated string workspace_paths_migrate_me_to_uri = 3;
-  repeated string workspace_uris = 7;
-  bool blocking = 4;
-  ExperimentConfig experiment_config = 9;
-  IdeAction ide_action = 10;
-}
-
-message RefreshContextForIdeActionResponse {
 }
 
 message RefreshMcpServersRequest {
@@ -8271,47 +5108,9 @@ message RefreshMcpServersRequest {
 message RefreshMcpServersResponse {
 }
 
-message Refs {
-  repeated string branches = 1;
-  repeated string bookmarks = 2;
-  repeated string tags = 3;
-}
-
-message RegisterGdmUserRequest {
-}
-
-message RegisterGdmUserResponse {
-  bool created = 1;
-  string name = 2;
-  string email = 3;
-  string api_key = 4;
-}
-
-message RegisterInteractionRequest {
-  Interaction interaction = 1;
-}
-
-message RegisterInteractionResponse {
-  string message = 1;
-}
-
-message ReleaseChannel {
-  ChannelType type = 1;
-  string name = 2;
-  string description = 3;
-}
-
 message RemoteControlDetails {
   string user_agent = 1;
   Transport transport = 2;
-}
-
-message RemoveTrackedWorkspaceRequest {
-  string workspace = 1;
-  bool is_passive_workspace = 2;
-}
-
-message RemoveTrackedWorkspaceResponse {
 }
 
 message RepeatedDiff {
@@ -8332,37 +5131,6 @@ message ReplaceContentToolConfig {
   bool use_line_range = 10;
 }
 
-message ReplayGroundTruthTrajectoryRequest {
-  Metadata metadata = 1;
-  repeated Step replay_steps = 2;
-  string cascade_id = 3;
-  CascadeConfig cascade_config = 4;
-}
-
-message ReplayGroundTruthTrajectoryResponse {
-  Trajectory trajectory = 1;
-}
-
-message RepoAmendRequest {
-  string workspace_uri = 1;
-  string message = 2;
-  string repo_path = 3;
-}
-
-message RepoAmendResponse {
-  string commit_id = 1;
-}
-
-message RepoCommitRequest {
-  string workspace_uri = 1;
-  string message = 2;
-  string repo_path = 3;
-}
-
-message RepoCommitResponse {
-  string commit_id = 1;
-}
-
 message RepoInfo {
   string name = 1;
   string repo_path = 2;
@@ -8370,25 +5138,6 @@ message RepoInfo {
   ScmType scm_type = 4;
   string repo_uri = 5;
   bool abfs_workspace = 6;
-}
-
-message RepoSyncRequest {
-  string workspace_uri = 1;
-  string repo_path = 2;
-  string target = 3;
-}
-
-message RepoSyncResponse {
-}
-
-message RepoUploadRequest {
-  string workspace_uri = 1;
-  string repo_path = 2;
-  string commit_id = 3;
-}
-
-message RepoUploadResponse {
-  string change_id = 1;
 }
 
 message Repository {
@@ -8411,29 +5160,6 @@ message RepositoryScopeItem {
   GitRepoInfo repo_info = 1;
 }
 
-message RequestInfo {
-  string prompt_id = 1;
-  CompletionsRequest completions_request = 4;
-  string typing_as_suggested_prompt_suffix = 5;
-  CompletionType completion_type = 6;
-}
-
-message ResetOnboardingRequest {
-  bool clear_history = 1;
-}
-
-message ResetOnboardingResponse {
-}
-
-message ResolveFolderRequest {
-  string folder_uri = 1;
-}
-
-message ResolveFolderResponse {
-  FolderType resource_type = 1;
-  VcsType vcs_type = 2;
-}
-
 message ResolveOutstandingStepsRequest {
   string cascade_id = 1;
 }
@@ -8441,52 +5167,9 @@ message ResolveOutstandingStepsRequest {
 message ResolveOutstandingStepsResponse {
 }
 
-message ResolveSidecarConfigRequest {
-  string sidecar_id = 1;
-  repeated ArgumentValuesEntry argument_values = 2;
-}
-
-message ResolveSidecarConfigResponse {
-  SidecarConfig resolved_config = 1;
-}
-
-message ResolveWorkspaceUrlPreviewRequest {
-  string url = 1;
-  string document_id = 2;
-}
-
-message ResolveWorkspaceUrlPreviewResponse {
-  string title = 1;
-  WorkspaceResourceType resource_type = 2;
-}
-
-message Resource {
-  string folder_uri = 1;
-  Google3 google3 = 2;
-  GitFolder git_folder = 3;
-}
-
-message Resources {
-  repeated Resource resources = 1;
-}
-
 message ResponseHeaderEntry {
   string key = 1;
   string value = 2;
-}
-
-message RestartRequest {
-}
-
-message RestartResponse {
-}
-
-message ResultGroup {
-  string id = 1;
-  string display_name = 2;
-  string description = 3;
-  repeated string member_ids = 4;
-  string next_page_token = 5;
 }
 
 message RetrieveUserQuotaSummaryRequest {
@@ -8497,15 +5180,6 @@ message RetrieveUserQuotaSummaryResponse {
   repeated QuotaSummaryBucket buckets = 1;
   repeated QuotaSummaryGroup groups = 2;
   string description = 3;
-}
-
-message RetrievedCodeContextItemMetadata {
-  repeated CodeContextSource context_sources = 1;
-  CodeContextType context_type = 2;
-  string scorer = 3;
-  float score = 4;
-  repeated ProviderMetadataEntry provider_metadata = 5;
-  bool is_in_pinned_scope = 6;
 }
 
 message RetryInfo {
@@ -8589,28 +5263,6 @@ message RunCommandToolConfig {
   bool disable_sandbox_bypass = 21;
 }
 
-message RuntimeEnvironment {
-  string host = 1;
-  string binary = 2;
-  string viewport_width_cohort = 3;
-  string user_cohort = 4;
-  string os = 5;
-  string environment_type = 6;
-  string identity_type = 7;
-}
-
-message SaveAgentScriptCommandSpecRequest {
-  string name = 1;
-  bool save_to_workspace = 2;
-  bool overwrite = 3;
-  AgentScriptCommandSpec command_spec = 4;
-}
-
-message SaveAgentScriptCommandSpecResponse {
-  bool created = 1;
-  AgentScriptItem agent_script = 2;
-}
-
 message SaveMediaAsArtifactRequest {
   Media media = 1;
 }
@@ -8619,78 +5271,9 @@ message SaveMediaAsArtifactResponse {
   string uri = 1;
 }
 
-message SaveScreenRecordingRequest {
-  bytes video_data = 1;
-  string filename = 2;
-  string cascade_id = 3;
-}
-
-message SaveScreenRecordingResponse {
-  string file_path = 1;
-}
-
-message ScanSkillsConfigFileRequest {
-  string config_file_path = 1;
-  string workspace_uri = 2;
-}
-
-message ScanSkillsConfigFileResponse {
-  repeated WorkflowSpec skills = 1;
-}
-
 message ScheduleToolConfig {
   bool enabled = 1;
   bool enable_daemon = 2;
-}
-
-message SearchCodeRequest {
-  string query = 1;
-  string workspace_uri = 2;
-  int32 max_results = 3;
-  int32 lines_context = 4;
-  uint64 cancel_token = 5;
-  bool is_regex = 6;
-  CaseSensitivity case_sensitivity = 7;
-  bool whole_word = 8;
-  repeated string target_paths = 9;
-  repeated string include_globs = 10;
-  repeated string exclude_globs = 11;
-  int32 max_columns = 13;
-  string file_pattern = 14;
-}
-
-message SearchCodeResponse {
-  repeated SearchCodeResult results = 1;
-}
-
-message SearchCodeResult {
-  string absolute_uri = 1;
-  repeated WorkspaceUrisToRelativePathsEntry workspace_uris_to_relative_paths = 2;
-  int32 line_number = 3;
-  string snippet = 4;
-  int32 match_start_col = 5;
-  int32 match_end_col = 6;
-  repeated string context_before = 7;
-  repeated string context_after = 8;
-}
-
-message SearchConversationsRequest {
-  string query = 1;
-  int32 limit = 2;
-}
-
-message SearchConversationsResponse {
-  repeated ConversationSearchResult results = 1;
-  bool index_stale = 2;
-}
-
-message SearchDriveFilesRequest {
-  string query = 1;
-  int32 page_size = 2;
-}
-
-message SearchDriveFilesResponse {
-  repeated DriveFileResult files = 1;
 }
 
 message SearchFilesRequest {
@@ -8703,29 +5286,6 @@ message SearchFilesRequest {
 
 message SearchFilesResponse {
   repeated PathScopeItem results = 1;
-}
-
-message SearchMarketplaceCustomizationsRequest {
-  string query = 1;
-  int32 page_size = 2;
-  repeated string extension_types = 3;
-}
-
-message SearchMarketplaceCustomizationsResponse {
-  repeated WorkflowSpec extensions = 1;
-  bool has_more = 2;
-}
-
-message SearchMarketplaceRequest {
-  string query = 1;
-  string group_id = 2;
-  string page_token = 3;
-}
-
-message SearchMarketplaceResponse {
-  repeated MarketplaceCustomization customizations = 1;
-  string next_page_token = 2;
-  repeated ResultGroup groups = 3;
 }
 
 message SearchWebToolConfig {
@@ -8748,57 +5308,6 @@ message SeenNuxUids {
   repeated int32 uids = 1;
 }
 
-message SelectLicenseRequest {
-  string user_tier = 1;
-  string project_id = 2;
-  string location = 3;
-  string tier_display_name = 4;
-}
-
-message SelectLicenseResponse {
-  AuthResult auth_result = 1;
-}
-
-message SelfAssignLicenseRequest {
-  string project_id = 1;
-  string location = 2;
-}
-
-message SelfAssignLicenseResponse {
-  License license = 1;
-  bool assigned = 2;
-  string error_message = 3;
-  string data_sharing_disclaimer = 4;
-}
-
-message SendActionToChatPanelRequest {
-  string action_type = 1;
-  repeated bytes payload = 2;
-}
-
-message SendActionToChatPanelResponse {
-}
-
-message SendAgentMessageRequest {
-  string content = 1;
-  string recipient = 2;
-  string sender_id = 3;
-  SourceMetadata source_metadata = 4;
-  string display_title = 5;
-}
-
-message SendAgentMessageResponse {
-}
-
-message SendAllQueuedMessagesRequest {
-  Metadata metadata = 1;
-  string cascade_id = 2;
-  CascadeConfig cascade_config = 3;
-}
-
-message SendAllQueuedMessagesResponse {
-}
-
 message SendAudioChunkRequest {
   string session_id = 1;
   bytes data = 2;
@@ -8806,39 +5315,6 @@ message SendAudioChunkRequest {
 }
 
 message SendAudioChunkResponse {
-}
-
-message SendInputCompletionFeedbackRequest {
-  string completion_id = 1;
-  CompletionFeedback feedback = 2;
-  int64 duration_ms = 3;
-  string output_text_id = 4;
-}
-
-message SendInputCompletionFeedbackResponse {
-}
-
-message SendMessageEvent {
-  string recipient_id = 1;
-  string content = 2;
-}
-
-message SendNarrationTurnRequest {
-  string session_id = 1;
-  string text = 2;
-  string role = 3;
-  bool turn_complete = 4;
-}
-
-message SendNarrationTurnResponse {
-}
-
-message SendStepsToBackgroundRequest {
-  string conversation_id = 1;
-  repeated uint32 step_indices = 2;
-}
-
-message SendStepsToBackgroundResponse {
 }
 
 message SendTerminalInputRequest {
@@ -8884,92 +5360,12 @@ message SendUserCascadeMessageRequest {
 message SendUserCascadeMessageResponse {
 }
 
-message SensitiveDataEntry {
-  string key = 1;
-  string value = 2;
-}
-
-message SetBaseExperimentsRequest {
-  ExperimentConfig experiment_config = 1;
-}
-
-message SetBaseExperimentsResponse {
-}
-
-message SetBrowserOpenConversationRequest {
-  string cascade_id = 1;
-  Timestamp expires_at = 2;
-}
-
-message SetBrowserOpenConversationResponse {
-}
-
-message SetCloudCodeURLRequest {
-  string url = 1;
-}
-
-message SetCloudCodeURLResponse {
-}
-
-message SetOrVerifyStaticConfigRequest {
-  string cascade_id = 1;
-  CustomAgentSpec custom_agent_spec = 2;
-}
-
-message SetOrVerifyStaticConfigResponse {
-}
-
-message SetUserInfoRequest {
-  UserSettings user_settings = 1;
-}
-
-message SetUserInfoResponse {
-  UserSettings user_settings = 1;
-}
-
 message SetUserSettingsRequest {
   UserSettings user_settings = 1;
 }
 
 message SetUserSettingsResponse {
   UserSettings user_settings = 1;
-}
-
-message SetWorkingDirectoriesRequest {
-  repeated string directory_uris = 1;
-}
-
-message SetWorkingDirectoriesResponse {
-}
-
-message SetupJetskiChatRequest {
-  string display_name = 1;
-  string avatar_url = 2;
-  string version_info = 3;
-}
-
-message SetupJetskiChatResponse {
-  SetupChatState state = 1;
-  string message = 2;
-  string oauth_url = 3;
-}
-
-message SetupUniversitySandboxRequest {
-}
-
-message SetupUniversitySandboxResponse {
-  string base_directory = 1;
-}
-
-message ShouldEnableUnleashRequest {
-}
-
-message ShouldEnableUnleashResponse {
-  bool should_enable = 1;
-}
-
-message Side {
-  string label = 2;
 }
 
 message SidebarWorkspaceInfo {
@@ -9015,34 +5411,6 @@ message SidecarConfig {
   repeated SidecarArgumentDefinition arguments = 12;
 }
 
-message SidecarEvent {
-  int64 timestamp_ms = 1;
-  int64 command_invocation_timestamp_ms = 2;
-  string error = 3;
-  SidecarEventPayload payload = 4;
-}
-
-message SidecarEventPayload {
-  SendMessageEvent send_message = 1;
-  NewConversationEvent new_conversation = 2;
-  ConversationMetadataEvent conversation_metadata = 3;
-}
-
-message SidecarStatusInfo {
-  string sidecar_id = 1;
-  SidecarConfig config = 2;
-  SidecarStatus status = 3;
-  string last_error = 4;
-  int64 start_time_ms = 5;
-  int32 web_port = 6;
-  SidecarUIConfig ui_config = 7;
-  string base_url = 8;
-  SidecarUserConfig user_config = 9;
-  SidecarErrorSource error_source = 10;
-  bool is_bundled = 11;
-  string plugin_path = 12;
-}
-
 message SidecarUIConfig {
   string display_name = 1;
   repeated SidecarUIView views = 2;
@@ -9069,19 +5437,6 @@ message SidecarsEntry {
   SidecarUserConfig value = 2;
 }
 
-message SignalExecutableIdleRequest {
-  string conversation_id = 1;
-}
-
-message SignalExecutableIdleResponse {
-}
-
-message SimulateSegFaultRequest {
-}
-
-message SimulateSegFaultResponse {
-}
-
 message SingularValue {
   double double_value = 1;
   float float_value = 2;
@@ -9100,13 +5455,6 @@ message SingularValue {
   string string_value = 15;
   bytes bytes_value = 16;
   MessageDiff message_value = 17;
-}
-
-message SkillFacet {
-}
-
-message SkillPreview {
-  string skill_md = 1;
 }
 
 message SkillSearchToolConfig {
@@ -9130,20 +5478,6 @@ message SkillsConfig {
 message SkillsEntry {
   string key = 1;
   SkillUserConfig value = 2;
-}
-
-message SkipBrowserSubagentRequest {
-  string cascade_id = 1;
-  int32 step_index = 2;
-}
-
-message SkipBrowserSubagentResponse {
-}
-
-message SkipOnboardingRequest {
-}
-
-message SkipOnboardingResponse {
 }
 
 message SlashCommandArgument {
@@ -9187,14 +5521,6 @@ message SmartFocusConversationRequest {
 message SmartFocusConversationResponse {
 }
 
-message SmartOpenBrowserRequest {
-  string url = 1;
-  bool is_onboarded = 2;
-}
-
-message SmartOpenBrowserResponse {
-}
-
 message SnapshotMetadata {
   string user = 1;
   string workspace_id = 2;
@@ -9232,25 +5558,6 @@ message StartAudioTranscriptionRequest {
   bool continuous = 6;
 }
 
-message StartBattleModeRequest {
-  repeated SendUserCascadeMessageRequest requests = 11;
-  int32 num_forks = 2;
-  repeated Model models = 3;
-  int32 fork_at_step_index = 4;
-  bool auto_triggered = 5;
-  repeated AgentScriptItem agent_scripts = 6;
-  repeated string agent_paths = 9;
-  repeated string children_conversation_ids = 7;
-  string trigger_tag = 8;
-  CloneStrategy clone_strategy = 10;
-  SendUserCascadeMessageRequest request = 1;
-}
-
-message StartBattleModeResponse {
-  repeated string children_conversation_ids = 1;
-  int32 start_step_index = 2;
-}
-
 message StartCascadeRequest {
   BaseTrajectoryIdentifier base_trajectory_identifier = 3;
   SourceMetadata source_metadata = 13;
@@ -9276,18 +5583,6 @@ message StartCascadeRequest {
 message StartCascadeResponse {
   string cascade_id = 1;
   ProjectEnvironmentInfo project_env_info = 2;
-}
-
-message StartNarrationRequest {
-  string user_text = 1;
-}
-
-message StartScreenRecordingRequest {
-  string cascade_id = 1;
-  bool onboarded = 2;
-}
-
-message StartScreenRecordingResponse {
 }
 
 message StatUriRequest {
@@ -9323,7 +5618,7 @@ message StaticMediaProcessing {
   double fps = 3;
 }
 
-message RpcStatus {
+message Status {
   int32 code = 1;
   string message = 2;
   repeated Any details = 3;
@@ -9376,12 +5671,6 @@ message StreamAudioTranscriptionResponse {
   AudioStreamComplete complete = 3;
 }
 
-message StreamNarrationResponse {
-  NarrationReady ready = 1;
-  NarrationAudioChunk audio = 2;
-  NarrationComplete complete = 3;
-}
-
 message StreamReactiveUpdatesRequest {
   uint32 protocol_version = 1;
   string id = 2;
@@ -9391,10 +5680,6 @@ message StreamReactiveUpdatesRequest {
 message StreamReactiveUpdatesResponse {
   uint64 version = 1;
   MessageDiff diff = 2;
-}
-
-message StreamSearchCodeResponse {
-  SearchCodeResult result = 1;
 }
 
 message StreamTerminalOutputRequest {
@@ -9414,11 +5699,6 @@ message StreamTerminalShellCommandResponse {
 message StringArgument {
   string default_value = 1;
   string placeholder = 2;
-}
-
-message StringMatchRange {
-  int32 start_offset = 1;
-  int32 end_offset_exclusive = 2;
 }
 
 message StringReplacement {
@@ -9476,21 +5756,6 @@ message SubscribeToMcpServerStatesResponse {
   bool is_loading = 2;
 }
 
-message SubscribeToPluginsRequest {
-  repeated string workspace_uris = 1;
-}
-
-message SubscribeToPluginsResponse {
-  repeated Plugin plugins = 1;
-}
-
-message SubscribeToSidecarsRequest {
-}
-
-message SubscribeToSidecarsResponse {
-  repeated SidecarStatusInfo sidecars = 1;
-}
-
 message SubtrajectoryUpdatesEntry {
   string key = 1;
   TrajectoryUpdate value = 2;
@@ -9498,15 +5763,6 @@ message SubtrajectoryUpdatesEntry {
 
 message SuggestedResponseConfig {
   bool force_disable = 1;
-}
-
-message SuperCompleteFilterReason {
-  string reason = 1;
-}
-
-message SupercompletePromptTrajectory {
-  Trajectory trajectory = 1;
-  repeated int32 included_steps = 2;
 }
 
 message SupportedMimeTypesEntry {
@@ -9564,26 +5820,10 @@ message TeamConfig {
   bool disable_tool_call_execution_outside_workspace = 26;
 }
 
-message TeamOrganizationalControls {
-  string team_id = 1;
-  repeated string cascade_model_labels = 2;
-  repeated string command_model_labels = 3;
-  Timestamp created_at = 4;
-  Timestamp updated_at = 5;
-  repeated string extension_model_labels = 6;
-}
-
 message TeamsFeaturesMetadata {
   bool is_active = 1;
   string stripe_subscription_id = 2;
   bool has_access = 3;
-}
-
-message TerminalCommandData {
-  string terminal_id = 1;
-  string platform = 2;
-  string cwd = 3;
-  string shell_name = 4;
 }
 
 message TerminalInfo {
@@ -9603,20 +5843,6 @@ message TerminalScopeItem {
   string name = 2;
   string last_command = 3;
   string selectionContent = 4;
-}
-
-message TerminalShellCommand {
-  string id = 10;
-  uint32 shell_pid = 1;
-  string command_line = 2;
-  string cwd = 3;
-  bytes output = 4;
-  int32 exit_code = 5;
-  Timestamp start_time = 6;
-  Timestamp end_time = 7;
-  Timestamp last_updated_time = 11;
-  TerminalShellCommandStatus status = 8;
-  TerminalShellCommandSource source = 9;
 }
 
 message TerminalShellCommandData {
@@ -9865,22 +6091,11 @@ message TrajectoryFileDiffsUpdate {
   uint32 total_length = 3;
 }
 
-message TrajectoryScope {
-  string workspace_uri = 1;
-  string git_root_uri = 2;
-  string branch_name = 3;
-}
-
 message TrajectorySearchToolConfig {
   bool force_disable = 1;
   bool conversations_enabled = 2;
   bool user_activities_enabled = 3;
   uint32 max_scored_chunks = 4;
-}
-
-message TrajectorySummariesEntry {
-  string key = 1;
-  CascadeTrajectorySummary value = 2;
 }
 
 message TrajectoryUpdate {
@@ -9924,79 +6139,6 @@ message UnifiedDiffLine {
   UnifiedDiffLineType type = 2;
 }
 
-message UnleashContext {
-  string user_id = 1;
-  string session_id = 2;
-  repeated PropertiesEntry properties = 3;
-}
-
-message UpdateCascadeMemoryRequest {
-  string memory_id = 1;
-  string title = 2;
-  string content = 3;
-  repeated string tags = 4;
-}
-
-message UpdateCascadeMemoryResponse {
-}
-
-message UpdateConversationAnnotationsRequest {
-  string cascade_id = 1;
-  ConversationAnnotations annotations = 2;
-  bool merge_annotations = 3;
-  repeated string cascade_ids = 4;
-}
-
-message UpdateConversationAnnotationsResponse {
-}
-
-message UpdateCustomizationPathsFileRequest {
-  string file_path = 1;
-  repeated string paths = 2;
-  CustomizationPathsOperation operation = 3;
-}
-
-message UpdateCustomizationPathsFileResponse {
-}
-
-message UpdateCustomizationRequest {
-  string path = 1;
-  CustomizationPathsOperation operation = 2;
-  AgentScriptItem agent = 3;
-  PluginItem plugin = 4;
-}
-
-message UpdateCustomizationResponse {
-}
-
-message UpdateDevExperimentsRequest {
-  ExperimentConfig experiment_config = 1;
-}
-
-message UpdateDevExperimentsResponse {
-}
-
-message UpdateEnterpriseExperimentsFromUrlRequest {
-  string portal_url = 1;
-}
-
-message UpdateEnterpriseExperimentsFromUrlResponse {
-  bool success = 1;
-  string error_message = 2;
-  ExperimentConfig experiment_config = 3;
-}
-
-message UpdatePRForWorktreeRequest {
-  string worktree_fs_path = 1;
-  string commit_message = 2;
-  string title = 3;
-  string body = 4;
-}
-
-message UpdatePRForWorktreeResponse {
-  string pr_url = 1;
-}
-
 message UpdateProjectRequest {
   Project project = 1;
 }
@@ -10004,20 +6146,9 @@ message UpdateProjectRequest {
 message UpdateProjectResponse {
 }
 
-message UpdateStatus {
-}
-
 message UpdatesEntry {
   string key = 1;
   CascadeTrajectorySummary value = 2;
-}
-
-message UploadToDriveRequest {
-  string file_uri = 1;
-}
-
-message UploadToDriveResponse {
-  string web_view_link = 1;
 }
 
 message UrlArtifactPayload {
@@ -10138,10 +6269,6 @@ message UserStatus {
   string profile_picture_url = 38;
 }
 
-message UserStepSnapshot {
-  string name = 1;
-}
-
 message UserTier {
   string id = 1;
   string name = 2;
@@ -10156,32 +6283,6 @@ message UserTier {
   UpgradeType upgrade_subscription_type = 9;
   bool uses_gcp_tos = 13;
   repeated Credits available_credits = 14;
-}
-
-message ValidateProjectRequest {
-  string project_id = 2;
-  string location = 3;
-}
-
-message ValidateProjectResponse {
-  AuthResult auth_result = 1;
-}
-
-message ValidateTerminalSetupScriptRequest {
-  string setup_command = 1;
-  string cwd = 2;
-}
-
-message ValidateTerminalSetupScriptResponse {
-  int32 exit_code = 1;
-  bytes output = 2;
-}
-
-message ValidationState {
-  string uri = 1;
-  string last_acknowledged_state = 2;
-  string current_state = 3;
-  bool last_state_file_nonexistent = 4;
 }
 
 message Value {
@@ -10203,58 +6304,6 @@ message ValuesEntry {
 message VariablesEntry {
   string key = 1;
   string value = 2;
-}
-
-message VcsCommit {
-  string id = 1;
-  string change_id = 2;
-  repeated string parent_ids = 3;
-  Author author = 4;
-  int64 timestamp_ms = 5;
-  Message message = 6;
-  Status status = 7;
-  Refs refs = 8;
-  Evolution evolution = 9;
-  Lineage lineage = 10;
-}
-
-message VcsConflictFile {
-  string path = 1;
-  Side yours = 2;
-  Side theirs = 3;
-  string uri = 4;
-}
-
-message VcsConflictState {
-  bool in_conflict = 1;
-  Operation operation = 2;
-  repeated VcsConflictFile conflicts = 3;
-}
-
-message VcsFileChange {
-  string uri = 1;
-  Operation operation = 2;
-  string original_uri = 3;
-  string content_hash = 4;
-}
-
-message VcsWorkspaceState {
-  VcsType vcs_type = 1;
-  string current_ref = 2;
-  string active_commit_id = 3;
-  repeated VcsCommit commits = 4;
-  repeated VcsFileChange working_directory_changes = 5;
-  VcsConflictState conflict_state = 6;
-  repeated VcsFileChange staged_changes = 7;
-  repeated VcsFileChange branch_changes = 8;
-  string merge_base_commit_id = 9;
-  string target_branch = 10;
-  string upstream_branch = 13;
-  int32 commits_ahead = 14;
-  int32 commits_behind = 15;
-  bool has_push_remote = 16;
-  string repo_path = 11;
-  repeated VcsWorkspaceState sub_repos = 12;
 }
 
 message VerificationRequired {
@@ -10299,50 +6348,8 @@ message ViewFileToolConfig {
   bool force_disable = 17;
 }
 
-message WaitForConversationFullyIdleRequest {
-  string conversation_id = 1;
-  int32 inactivity_timeout_seconds = 2;
-  int32 stabilization_duration_seconds = 3;
-  bool return_on_executor_error = 4;
-}
-
-message WaitForConversationFullyIdleResponse {
-  bool timed_out = 1;
-}
-
 message WaitToolConfig {
   bool enabled = 1;
-}
-
-message WatchDirectoryRequest {
-  repeated string uris = 3;
-}
-
-message WatchDirectoryResponse {
-  repeated string uri = 1;
-}
-
-message WatchVersionControlStateRequest {
-  string workspace_uri = 1;
-}
-
-message WatchVersionControlStateResponse {
-  VcsWorkspaceState state = 1;
-}
-
-message WebDocsOption {
-  string label = 1;
-  string docs_url = 2;
-  string docs_search_domain = 3;
-  repeated string synonyms = 4;
-  bool is_featured = 5;
-}
-
-message WellSupportedLanguagesRequest {
-}
-
-message WellSupportedLanguagesResponse {
-  repeated Language languages = 1;
 }
 
 message WifLoginInfo {
@@ -10390,23 +6397,11 @@ message WorkflowSpec {
   string display_name = 17;
 }
 
-message WorkingDirectoryInfo {
-  string absolute_uri = 1;
-  string relative_path = 2;
-  WorkingDirectoryStatus status = 3;
-  string error = 4;
-}
-
 message WorkspaceAPIToolConfig {
   bool read_only = 1;
 }
 
 message WorkspaceArgument {
-}
-
-message WorkspaceChangelists {
-  string workspace_uri = 1;
-  repeated ChangelistStatus changelists = 2;
 }
 
 message WorkspaceEditState {
@@ -10453,4 +6448,3 @@ message WriteFileResponse {
 message WriteToFileToolConfig {
   bool force_disable = 1;
 }
-

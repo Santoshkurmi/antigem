@@ -172,6 +172,13 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 }
 
+configurations.all {
+  resolutionStrategy {
+    force("com.squareup.okhttp3:okhttp:4.12.0")
+    force("com.squareup.okhttp3:okhttp-android:4.12.0")
+  }
+}
+
 wire {
   sourcePath {
     srcDir("src/main/proto")

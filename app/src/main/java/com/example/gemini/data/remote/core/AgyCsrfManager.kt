@@ -62,6 +62,33 @@ class AgyCsrfManager(
     }
 
     /**
+     * Synchronous CSRF token retrieval for OkHttp interceptors with thread safety.
+     */
+    fun getCsrfTokenSync(
+        hubUrl: String,
+        forceRefresh: Boolean = false
+    ): String {
+        val normalizedUrl = hubUrl.trimEnd('/')
+        if (!forceRefresh) {
+            cachedTokens[normalizedUrl]?.takeIf { it.isNotBlank() }?.let { return it }
+        }
+
+        synchronized(this) {
+            if (!forceRefresh) {
+                cachedTokens[normalizedUrl]?.takeIf { it.isNotBlank() }?.let { return it }
+            }
+            val token = fetchTokenFromHub(normalizedUrl)
+            if (token.isNotBlank()) {
+                cachedTokens[normalizedUrl] = token
+                Log.d(TAG, "Successfully acquired CSRF token for $normalizedUrl (${token.take(8)}...)")
+            } else {
+                Log.w(TAG, "Failed to resolve CSRF token from $normalizedUrl")
+            }
+            return token
+        }
+    }
+
+    /**
      * Clears cached token for a specific URL or all URLs.
      */
     fun clearToken(hubUrl: String? = null) {
