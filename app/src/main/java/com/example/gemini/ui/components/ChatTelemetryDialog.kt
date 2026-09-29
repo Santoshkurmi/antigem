@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -99,6 +100,11 @@ fun ChatTelemetryDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+                    val inputColor = if (isDark) Color(0xFF64B5F6) else Color(0xFF1565C0)
+                    val outputColor = if (isDark) Color(0xFF81C784) else Color(0xFF2E7D32)
+                    val cacheColor = if (isDark) Color(0xFFFFD54F) else Color(0xFFB45309)
+
                     // Total Token Metric Grid
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -108,14 +114,14 @@ fun ChatTelemetryDialog(
                             title = "Input Tokens",
                             value = numberFormat.format(totalPromptTokens),
                             icon = Icons.Outlined.ArrowDownward,
-                            iconColor = Color(0xFF64B5F6),
+                            iconColor = inputColor,
                             modifier = Modifier.weight(1f)
                         )
                         TelemetryMetricCard(
                             title = "Output Tokens",
                             value = numberFormat.format(totalOutputTokens),
                             icon = Icons.Outlined.ArrowUpward,
-                            iconColor = Color(0xFF81C784),
+                            iconColor = outputColor,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -128,7 +134,7 @@ fun ChatTelemetryDialog(
                             title = "Cache Read Hits",
                             value = if (totalCachedTokens > 0) "${numberFormat.format(totalCachedTokens)} ($cacheEfficiencyPct%)" else "0",
                             icon = Icons.Outlined.FlashOn,
-                            iconColor = Color(0xFFFFD54F),
+                            iconColor = cacheColor,
                             modifier = Modifier.weight(1f)
                         )
                         TelemetryMetricCard(

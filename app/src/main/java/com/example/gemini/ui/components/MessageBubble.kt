@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -710,10 +711,15 @@ fun TokenUsageTelemetryPill(
         ((usage.cachedTokens.toDouble() / (usage.promptTokens + usage.cachedTokens)) * 100).toInt().coerceIn(0, 100)
     } else 0
 
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val inputColor = if (isDark) Color(0xFF64B5F6) else Color(0xFF1565C0)
+    val outputColor = if (isDark) Color(0xFF81C784) else Color(0xFF2E7D32)
+    val cacheColor = if (isDark) Color(0xFFFFD54F) else Color(0xFFB45309)
+
     Surface(
         shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.45f else 0.7f),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDark) 0.12f else 0.18f)),
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
             .then(if (onViewPayload != null) Modifier.clickable { onViewPayload() } else Modifier)
@@ -727,23 +733,23 @@ fun TokenUsageTelemetryPill(
                 text = "📥 ${formatCompactTokens(usage.promptTokens)}",
                 fontSize = 10.5.sp,
                 fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Medium,
-                color = Color(0xFF64B5F6)
+                fontWeight = FontWeight.SemiBold,
+                color = inputColor
             )
             Text(
                 text = "📤 ${formatCompactTokens(usage.outputTokens)}",
                 fontSize = 10.5.sp,
                 fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Medium,
-                color = Color(0xFF81C784)
+                fontWeight = FontWeight.SemiBold,
+                color = outputColor
             )
             if (usage.cachedTokens > 0) {
                 Text(
                     text = "⚡ ${formatCompactTokens(usage.cachedTokens)} ($cachePct%)",
                     fontSize = 10.5.sp,
                     fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFFFFD54F)
+                    fontWeight = FontWeight.Bold,
+                    color = cacheColor
                 )
             }
             if (usage.durationMs > 0) {
