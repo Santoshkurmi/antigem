@@ -34,6 +34,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Public
+import com.example.gemini.ui.components.AppToastHelper
+import com.example.gemini.ui.components.ChatToastType
 import android.widget.Toast
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Settings
@@ -58,7 +60,12 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.example.gemini.data.remote.AgyHubClient
 import com.example.gemini.domain.model.Conversation
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Description
 import com.example.gemini.theme.ClaudeTerracotta
+import com.example.gemini.theme.GeminiBlue
+import com.example.gemini.ui.components.ConversationExportHelper
 import com.example.gemini.ui.components.DrawerEngineWarmingUpView
 import com.example.gemini.ui.components.SidebarChatListSkeleton
 import kotlinx.coroutines.launch
@@ -105,6 +112,7 @@ fun ChatHistoryDrawer(
     var showProfileDialog by remember { mutableStateOf(false) }
     var showSigningInProgressDialog by remember { mutableStateOf(false) }
     var showExitConfirmDialog by remember { mutableStateOf(false) }
+    var conversationToDelete by remember { mutableStateOf<Conversation?>(null) }
     val context = LocalContext.current
 
     val filtered = remember(conversations, searchQuery) {
@@ -462,6 +470,77 @@ fun ChatHistoryDrawer(
                 }
             },
             containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
+    if (conversationToDelete != null) {
+        val targetConv = conversationToDelete!!
+        AlertDialog(
+            onDismissRequest = { conversationToDelete = null },
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            },
+            title = {
+                Text(
+                    text = "Delete Conversation?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to delete \"${targetConv.title.ifBlank { "this conversation" }}\"? This will permanently remove all messages and trajectory data.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val id = targetConv.id
+                        conversationToDelete = null
+                        onDeleteConversation(id)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Delete", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { conversationToDelete = null },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Cancel", fontSize = 13.5.sp)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(18.dp)
         )
     }
@@ -840,7 +919,7 @@ fun ChatHistoryDrawer(
                                             onSelectConversation(conv.id)
                                         },
                                         onForkConversation = onForkConversation,
-                                        onDeleteConversation = onDeleteConversation,
+                                        onRequestDelete = { conversationToDelete = it },
                                         onTerminateInstance = { inst, title ->
                                             instanceToTerminate = inst to title
                                         }
@@ -949,7 +1028,7 @@ fun ChatHistoryDrawer(
                                                 onSelectConversation(conv.id)
                                             },
                                             onForkConversation = onForkConversation,
-                                            onDeleteConversation = onDeleteConversation,
+                                            onRequestDelete = { conversationToDelete = it },
                                             onTerminateInstance = { inst, title ->
                                                 instanceToTerminate = inst to title
                                             }
@@ -1305,7 +1384,7 @@ private fun ChatHistoryItemRow(
     onToggleSubagents: (() -> Unit)? = null,
     onSelectConversation: (String) -> Unit,
     onForkConversation: (String) -> Unit,
-    onDeleteConversation: (String) -> Unit,
+    onRequestDelete: (Conversation) -> Unit,
     onTerminateInstance: (com.example.gemini.data.remote.AgyActiveInstance, String) -> Unit
 ) {
     val isSubagent = depth > 0
@@ -1490,6 +1569,9 @@ private fun ChatHistoryItemRow(
         val clipboardManager = LocalClipboardManager.current
         val context = LocalContext.current
 
+        val scope = rememberCoroutineScope()
+        val snackbarHostState = com.example.gemini.ui.components.LocalSnackbarHostState.current
+
         Box {
             IconButton(
                 onClick = { menuExpanded = true },
@@ -1505,7 +1587,11 @@ private fun ChatHistoryItemRow(
 
             DropdownMenu(
                 expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false }
+                onDismissRequest = { menuExpanded = false },
+                shape = RoundedCornerShape(12.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                modifier = Modifier.widthIn(min = 210.dp)
             ) {
                 DropdownMenuItem(
                     text = { Text("Copy Conversation ID", fontSize = 13.5.sp) },
@@ -1513,13 +1599,14 @@ private fun ChatHistoryItemRow(
                         Icon(
                             imageVector = Icons.Outlined.ContentCopy,
                             contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                     },
                     onClick = {
                         menuExpanded = false
                         clipboardManager.setText(AnnotatedString(conv.id))
-                        Toast.makeText(context, "Conversation ID copied", Toast.LENGTH_SHORT).show()
+                        AppToastHelper.showToast("Conversation ID copied", ChatToastType.SUCCESS)
                     }
                 )
                 DropdownMenuItem(
@@ -1528,6 +1615,7 @@ private fun ChatHistoryItemRow(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.CallSplit,
                             contentDescription = null,
+                            tint = ClaudeTerracotta,
                             modifier = Modifier.size(18.dp)
                         )
                     },
@@ -1535,6 +1623,60 @@ private fun ChatHistoryItemRow(
                         menuExpanded = false
                         onForkConversation(conv.id)
                     }
+                )
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+                DropdownMenuItem(
+                    text = { Text("Export Markdown (.md)", fontSize = 13.5.sp) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Description,
+                            contentDescription = null,
+                            tint = GeminiBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        scope.launch {
+                            ConversationExportHelper.exportConversation(
+                                context = context,
+                                conversationId = conv.id,
+                                title = conv.title,
+                                format = ConversationExportHelper.ExportFormat.MARKDOWN,
+                                snackbarHostState = snackbarHostState
+                            )
+                        }
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Export Standalone HTML", fontSize = 13.5.sp) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Code,
+                            contentDescription = null,
+                            tint = Color(0xFF34D399),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        scope.launch {
+                            ConversationExportHelper.exportConversation(
+                                context = context,
+                                conversationId = conv.id,
+                                title = conv.title,
+                                format = ConversationExportHelper.ExportFormat.HTML,
+                                snackbarHostState = snackbarHostState
+                            )
+                        }
+                    }
+                )
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
                 DropdownMenuItem(
                     text = {
@@ -1554,7 +1696,7 @@ private fun ChatHistoryItemRow(
                     },
                     onClick = {
                         menuExpanded = false
-                        onDeleteConversation(conv.id)
+                        onRequestDelete(conv)
                     }
                 )
             }

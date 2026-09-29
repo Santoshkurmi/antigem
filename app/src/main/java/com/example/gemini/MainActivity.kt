@@ -36,10 +36,7 @@ class MainActivity : ComponentActivity() {
         private var instanceRef: java.lang.ref.WeakReference<MainActivity>? = null
 
         fun showToast(message: String) {
-            val activity = instanceRef?.get() ?: return
-            activity.runOnUiThread {
-                android.widget.Toast.makeText(activity, message, android.widget.Toast.LENGTH_SHORT).show()
-            }
+            com.example.gemini.ui.components.AppToastHelper.showToast(message)
         }
     }
 

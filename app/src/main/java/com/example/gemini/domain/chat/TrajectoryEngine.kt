@@ -264,6 +264,21 @@ class TrajectoryEngine {
     }
 
     /**
+     * Directly parses an array of Steps (e.g. for offline export or trajectory inspections)
+     * and returns the resulting list of ChatMessages.
+     */
+    fun ingestStepsDirect(steps: List<Step>, convId: String = ""): List<ChatMessage> {
+        reset(convId, force = true)
+        ingestInitialFullSync(
+            indices = steps.indices.toList(),
+            steps = steps,
+            cascadeRunning = false
+        )
+        finalizeActiveTurn()
+        return toChatMessages(convId)
+    }
+
+    /**
      * Parses Chunk 0 (the complete historical trajectory) into completed turns.
      */
     private fun ingestInitialFullSync(indices: List<Int>, steps: List<Step>, cascadeRunning: Boolean) {

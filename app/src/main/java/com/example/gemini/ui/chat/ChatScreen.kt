@@ -1,5 +1,8 @@
 package com.example.gemini.ui.chat
 
+import com.example.gemini.ui.components.ChatToast
+import com.example.gemini.ui.components.ChatToastType
+import com.example.gemini.ui.components.AppToastHelper
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -306,6 +309,12 @@ fun ChatScreen(
     LaunchedEffect(Unit) {
         viewModel.authFeedbackMessage.collect { msg ->
             showToast(msg)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        com.example.gemini.ui.components.AppToastHelper.toastFlow.collect { toast ->
+            currentToast = toast
         }
     }
 
@@ -859,14 +868,7 @@ fun ChatScreen(
             )
         }
         Scaffold(
-            snackbarHost = {
-                SnackbarHost(
-                    hostState = snackbarHostState,
-                    modifier = Modifier
-                        .navigationBarsPadding()
-                        .imePadding()
-                )
-            },
+            snackbarHost = {},
             topBar = {
                 TopAppBar(
                     title = {
@@ -2281,26 +2283,6 @@ fun ChatScreen(
         )
     }
 
-    // Top-Level Floating Toast Banner (Renders above all drawers, dialogs, and scaffolds)
-    AnimatedVisibility(
-        visible = currentToast != null,
-        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .zIndex(99999f)
-    ) {
-        currentToast?.let { toast ->
-            ChatToastBanner(
-                toast = toast,
-                onDismiss = { currentToast = null },
-                modifier = Modifier
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-            )
-        }
-    }
-
     // Right-side Artifacts Drawer Modal Overlay (Opened via topbar/message button, 0 gesture conflicts, standard LTR)
     AnimatedVisibility(
         visible = showArtifactsDrawer,
@@ -2351,22 +2333,51 @@ fun ChatScreen(
             }
         }
     }
-    } // End of ModalNavigationDrawer
+
+    // Bottom-Level Floating Toast Banner (Renders above all drawers, sidebar, dialogs, and scaffolds)
+    AnimatedVisibility(
+        visible = currentToast != null,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .zIndex(99999f)
+    ) {
+        currentToast?.let { toast ->
+            ChatToastBanner(
+                toast = toast,
+                onDismiss = { currentToast = null },
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            )
+        }
+    }
+
+    // Bottom-Level SnackbarHost (Renders above all drawers, sidebar, dialogs, and scaffolds with Open button)
+    SnackbarHost(
+        hostState = snackbarHostState,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .navigationBarsPadding()
+            .imePadding()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .zIndex(99999f)
+    ) { data ->
+        Snackbar(
+            snackbarData = data,
+            shape = RoundedCornerShape(12.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            actionColor = ClaudeTerracotta,
+            actionContentColor = ClaudeTerracotta,
+            dismissActionContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
     } // End of Box
     } // End of CompositionLocalProvider
-
-
-enum class ChatToastType {
-    SUCCESS,
-    ERROR,
-    INFO
-}
-
-data class ChatToast(
-    val id: Long = System.currentTimeMillis(),
-    val message: String,
-    val type: ChatToastType = ChatToastType.INFO
-)
+} // End of fun ChatScreen
 
 @Composable
 fun ChatToastBanner(
