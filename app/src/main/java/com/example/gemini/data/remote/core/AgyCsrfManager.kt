@@ -1,6 +1,7 @@
 package com.example.gemini.data.remote.core
 
 import android.util.Log
+import com.example.gemini.data.preferences.AuthPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -33,6 +34,16 @@ class AgyCsrfManager(
     private val _csrfEvents = MutableSharedFlow<String>(extraBufferCapacity = 16)
     val csrfEvents = _csrfEvents.asSharedFlow()
 
+    private fun normalizeUrl(url: String): String {
+        val trimmed = url.trim().trimEnd('/')
+        val base = if (trimmed.isBlank()) AuthPreferences.DEFAULT_HUB_URL else trimmed
+        return if (!base.startsWith("http://") && !base.startsWith("https://")) {
+            "http://$base"
+        } else {
+            base
+        }.trimEnd('/')
+    }
+
     /**
      * Gets existing CSRF token or safely fetches a new one from the AGY Hub.
      */
@@ -40,7 +51,7 @@ class AgyCsrfManager(
         hubUrl: String,
         forceRefresh: Boolean = false
     ): String = withContext(Dispatchers.IO) {
-        val normalizedUrl = hubUrl.trimEnd('/')
+        val normalizedUrl = normalizeUrl(hubUrl)
         if (!forceRefresh) {
             cachedTokens[normalizedUrl]?.takeIf { it.isNotBlank() }?.let { return@withContext it }
         }
@@ -68,7 +79,7 @@ class AgyCsrfManager(
         hubUrl: String,
         forceRefresh: Boolean = false
     ): String {
-        val normalizedUrl = hubUrl.trimEnd('/')
+        val normalizedUrl = normalizeUrl(hubUrl)
         if (!forceRefresh) {
             cachedTokens[normalizedUrl]?.takeIf { it.isNotBlank() }?.let { return it }
         }
@@ -93,6 +104,8 @@ class AgyCsrfManager(
      */
     fun clearToken(hubUrl: String? = null) {
         if (hubUrl != null) {
+            val normalized = normalizeUrl(hubUrl)
+            cachedTokens.remove(normalized)
             cachedTokens.remove(hubUrl.trimEnd('/'))
         } else {
             cachedTokens.clear()
@@ -100,19 +113,22 @@ class AgyCsrfManager(
     }
 
     fun notifyCsrfExpired(hubUrl: String, endpoint: String) {
+        Log.w(TAG, "⚠️ [notifyCsrfExpired] Invalidating CSRF cache for $hubUrl (triggered by $endpoint)")
         clearToken(hubUrl)
         _csrfEvents.tryEmit("CSRF token expired on $endpoint ($hubUrl). Refreshing...")
     }
 
     private fun fetchTokenFromHub(hubUrl: String): String {
+        val base = normalizeUrl(hubUrl)
         val candidates = listOf(
-            "$hubUrl/",
-            "$hubUrl/login",
-            "$hubUrl/auth"
+            "$base/"
         )
+
+        Log.d(TAG, "🔍 [fetchTokenFromHub] Attempting to fetch CSRF token for '$base' across candidates: $candidates")
 
         for (url in candidates) {
             try {
+                Log.d(TAG, "🌐 [fetchTokenFromHub] Querying candidate: $url")
                 val req = Request.Builder()
                     .url(url)
                     .get()
@@ -120,31 +136,40 @@ class AgyCsrfManager(
                     .build()
 
                 httpClient.newCall(req).execute().use { resp ->
+                    val code = resp.code
+                    val headerToken = resp.header("x-codeium-csrf-token")
                     val html = resp.body?.string() ?: ""
 
                     // 1. Try standard JSON csrfToken pattern
                     val m1 = CSRF_PATTERN.matcher(html)
                     if (m1.find()) {
                         val token = m1.group(1)?.trim()
-                        if (!token.isNullOrBlank()) return token
+                        if (!token.isNullOrBlank()) {
+                            return token
+                        }
                     }
 
                     // 2. Try HTML/tag csrfToken pattern
                     val m2 = CSRF_HTML_PATTERN.matcher(html)
                     if (m2.find()) {
                         val token = m2.group(1)?.trim()
-                        if (!token.isNullOrBlank()) return token
+                        if (!token.isNullOrBlank()) {
+                            return token
+                        }
                     }
 
                     // 3. Try header
-                    resp.header("x-codeium-csrf-token")?.takeIf { it.isNotBlank() }?.let {
-                        return it
+                    if (!headerToken.isNullOrBlank()) {
+                        return headerToken
                     }
+
+                    Log.w(TAG, "⚠️ [fetchTokenFromHub] No token matched in body (preview: ${html.take(150).replace('\n', ' ')})")
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Attempt to fetch CSRF token from $url failed: ${e.message}")
+                Log.e(TAG, "❌ [fetchTokenFromHub] Attempt to fetch CSRF token from $url threw exception: ${e::class.simpleName}: ${e.message}", e)
             }
         }
+        Log.w(TAG, "❌ [fetchTokenFromHub] All candidates exhausted. Returning empty CSRF token for $hubUrl")
         return ""
     }
 }
