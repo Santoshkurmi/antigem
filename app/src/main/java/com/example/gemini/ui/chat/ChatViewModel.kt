@@ -527,6 +527,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    val isNetworkInspectorEnabled: StateFlow<Boolean> = authPrefs.isNetworkInspectorEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getNetworkInspectorEnabledSync())
+
+    fun setNetworkInspectorEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.saveNetworkInspectorEnabled(enabled)
+        }
+    }
+
+    val isFloatingNetworkInspectorEnabled: StateFlow<Boolean> = authPrefs.isFloatingNetworkInspectorEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingNetworkInspectorEnabledSync())
+
+    fun setFloatingNetworkInspectorEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.saveFloatingNetworkInspectorEnabled(enabled)
+        }
+    }
+
     private val _globalSecuritySettings = MutableStateFlow<AgyHubClient.GlobalUserSettings?>(null)
     val globalSecuritySettings: StateFlow<AgyHubClient.GlobalUserSettings?> = _globalSecuritySettings.asStateFlow()
 

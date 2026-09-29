@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "auth_prefs")
@@ -67,6 +69,8 @@ class AuthPreferences(private val context: Context) {
         val IS_BROWSER_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_browser_automation_enabled")
         val IS_TERMINAL_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_automation_enabled")
         val IS_FLOATING_DIAGNOSTICS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_diagnostics_enabled")
+        val IS_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_network_inspector_enabled")
+        val IS_FLOATING_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_network_inspector_enabled")
         const val DEFAULT_HUB_URL = "http://127.0.0.1:8090"
         const val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:8080"
 
@@ -93,6 +97,10 @@ class AuthPreferences(private val context: Context) {
         val savedBridgeHttp = syncPrefs.getString("agy_bridge_http_url", null)
         if (!savedHub.isNullOrBlank()) currentHubUrl = savedHub
         if (!savedBridgeHttp.isNullOrBlank()) currentBridgeHttpUrl = savedBridgeHttp
+        val inspectorOn = syncPrefs.getBoolean("is_network_inspector_enabled", false)
+        val inspectorFloating = syncPrefs.getBoolean("is_floating_network_inspector_enabled", false)
+        com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled = inspectorOn
+        com.example.gemini.data.remote.inspector.NetworkInspectorManager.isFloatingBubbleEnabled = inspectorFloating
     }
 
     val groupChatsByWorkspace: Flow<Boolean> = context.dataStore.data.map { it[GROUP_CHATS_BY_WORKSPACE] ?: false }
@@ -589,6 +597,52 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveFloatingDiagnosticsEnabled(enabled: Boolean) {
         syncPrefs.edit().putBoolean("is_floating_diagnostics_enabled", enabled).apply()
         context.dataStore.edit { it[IS_FLOATING_DIAGNOSTICS_ENABLED] = enabled }
+    }
+
+    val isNetworkInspectorEnabled: Flow<Boolean> = callbackFlow {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "is_network_inspector_enabled") {
+                trySend(getNetworkInspectorEnabledSync())
+            }
+        }
+        syncPrefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getNetworkInspectorEnabledSync())
+        awaitClose { syncPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    fun getNetworkInspectorEnabledSync(): Boolean = syncPrefs.getBoolean("is_network_inspector_enabled", false)
+
+    fun saveNetworkInspectorEnabledSync(enabled: Boolean) {
+        com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled = enabled
+        syncPrefs.edit().putBoolean("is_network_inspector_enabled", enabled).commit()
+    }
+
+    suspend fun saveNetworkInspectorEnabled(enabled: Boolean) {
+        saveNetworkInspectorEnabledSync(enabled)
+        context.dataStore.edit { it[IS_NETWORK_INSPECTOR_ENABLED] = enabled }
+    }
+
+    val isFloatingNetworkInspectorEnabled: Flow<Boolean> = callbackFlow {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "is_floating_network_inspector_enabled") {
+                trySend(getFloatingNetworkInspectorEnabledSync())
+            }
+        }
+        syncPrefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getFloatingNetworkInspectorEnabledSync())
+        awaitClose { syncPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    fun getFloatingNetworkInspectorEnabledSync(): Boolean = syncPrefs.getBoolean("is_floating_network_inspector_enabled", false)
+
+    fun saveFloatingNetworkInspectorEnabledSync(enabled: Boolean) {
+        com.example.gemini.data.remote.inspector.NetworkInspectorManager.isFloatingBubbleEnabled = enabled
+        syncPrefs.edit().putBoolean("is_floating_network_inspector_enabled", enabled).commit()
+    }
+
+    suspend fun saveFloatingNetworkInspectorEnabled(enabled: Boolean) {
+        saveFloatingNetworkInspectorEnabledSync(enabled)
+        context.dataStore.edit { it[IS_FLOATING_NETWORK_INSPECTOR_ENABLED] = enabled }
     }
 
     suspend fun clearAuth() {

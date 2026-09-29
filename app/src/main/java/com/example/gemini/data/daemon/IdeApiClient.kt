@@ -107,6 +107,11 @@ object IdeApiClient {
         .connectTimeout(3, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .writeTimeout(10, TimeUnit.SECONDS)
+        .apply {
+            if (com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled) {
+                addInterceptor(com.example.gemini.data.remote.inspector.NetworkInspectorInterceptor("IDE Bridge (HTTP)"))
+            }
+        }
         .build()
 
     private val client: OkHttpClient get() = okHttpClient

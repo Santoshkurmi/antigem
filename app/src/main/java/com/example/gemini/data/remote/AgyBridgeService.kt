@@ -112,6 +112,11 @@ class AgyBridgeService(
         .writeTimeout(10, TimeUnit.SECONDS)
         .pingInterval(3, TimeUnit.SECONDS) // Active heartbeat ping every 3 seconds to instantly detect broken TCP socket
         .retryOnConnectionFailure(true)
+        .apply {
+            if (com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled) {
+                addInterceptor(com.example.gemini.data.remote.inspector.NetworkInspectorInterceptor("IDE Bridge (HTTP)"))
+            }
+        }
         .build()
 ) {
     companion object {
@@ -125,6 +130,11 @@ class AgyBridgeService(
         .readTimeout(1000, TimeUnit.MILLISECONDS)
         .writeTimeout(1000, TimeUnit.MILLISECONDS)
         .retryOnConnectionFailure(false)
+        .apply {
+            if (com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled) {
+                addInterceptor(com.example.gemini.data.remote.inspector.NetworkInspectorInterceptor("IDE Bridge (HTTP)"))
+            }
+        }
         .build()
 
     // Dedicated WebSocket client for live bridge monitoring with 1s connect timeout and 1s heartbeat ping

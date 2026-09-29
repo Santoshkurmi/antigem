@@ -194,6 +194,11 @@ fun SettingsDialog(
     onChangePermissionRuleDecision: (rawRule: String, newDecision: String) -> Unit = { _, _ -> },
     isFloatingDiagnosticsEnabled: Boolean = false,
     onToggleFloatingDiagnostics: (Boolean) -> Unit = {},
+    isNetworkInspectorEnabled: Boolean = false,
+    onToggleNetworkInspector: (Boolean) -> Unit = {},
+    isFloatingNetworkInspectorEnabled: Boolean = false,
+    onToggleFloatingNetworkInspector: (Boolean) -> Unit = {},
+    onOpenNetworkInspector: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -457,6 +462,11 @@ fun SettingsDialog(
                     SettingsSection.DIAGNOSTICS -> DiagnosticsSubScreen(
                         isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
                         onToggleFloatingDiagnostics = onToggleFloatingDiagnostics,
+                        isNetworkInspectorEnabled = isNetworkInspectorEnabled,
+                        onToggleNetworkInspector = onToggleNetworkInspector,
+                        isFloatingNetworkInspectorEnabled = isFloatingNetworkInspectorEnabled,
+                        onToggleFloatingNetworkInspector = onToggleFloatingNetworkInspector,
+                        onOpenNetworkInspector = onOpenNetworkInspector,
                         cardBg = cardBg,
                         cardBorder = cardBorder
                     )
@@ -5325,6 +5335,11 @@ private fun AutomationSubScreen(
 private fun DiagnosticsSubScreen(
     isFloatingDiagnosticsEnabled: Boolean,
     onToggleFloatingDiagnostics: (Boolean) -> Unit,
+    isNetworkInspectorEnabled: Boolean,
+    onToggleNetworkInspector: (Boolean) -> Unit,
+    isFloatingNetworkInspectorEnabled: Boolean,
+    onToggleFloatingNetworkInspector: (Boolean) -> Unit,
+    onOpenNetworkInspector: () -> Unit,
     cardBg: Color,
     cardBorder: BorderStroke
 ) {
@@ -5338,6 +5353,64 @@ private fun DiagnosticsSubScreen(
     }
 
     val snapshot by com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.snapshot.collectAsState()
+    val logs by com.example.gemini.data.remote.inspector.NetworkInspectorManager.logs.collectAsState()
+    val activeStreams by com.example.gemini.data.remote.inspector.NetworkInspectorManager.activeStreamsCount.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var pendingInspectorRestart by remember { mutableStateOf<Boolean?>(null) }
+
+    if (pendingInspectorRestart != null) {
+        val targetState = pendingInspectorRestart!!
+        AlertDialog(
+            onDismissRequest = { pendingInspectorRestart = null },
+            title = {
+                Text(
+                    text = "Restart Required",
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = if (targetState) {
+                        "Enabling Network Inspector requires restarting the app so OkHttp can attach live routing interceptors. Restart now?"
+                    } else {
+                        "Disabling Network Inspector requires restarting the app to restore 100% native network performance with zero debug interceptors. Restart now?"
+                    },
+                    fontSize = 13.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val toEnable = targetState
+                        pendingInspectorRestart = null
+                        com.example.gemini.data.preferences.AuthPreferences(context).saveNetworkInspectorEnabledSync(toEnable)
+                        val pm = context.packageManager
+                        val intent = pm.getLaunchIntentForPackage(context.packageName)
+                        if (intent != null) {
+                            val restartIntent = android.content.Intent.makeRestartActivityTask(intent.component)
+                            context.startActivity(restartIntent)
+                            Runtime.getRuntime().exit(0)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Restart App", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { pendingInspectorRestart = null }
+                ) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(14.dp)
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -5346,6 +5419,148 @@ private fun DiagnosticsSubScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Section 1: Network Inspector Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = (if (isNetworkInspectorEnabled) Color(0xFF0284C7) else Color.Gray).copy(alpha = 0.12f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Language,
+                                    contentDescription = null,
+                                    tint = if (isNetworkInspectorEnabled) Color(0xFF0284C7) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Network Inspector (Live Logs)",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (isNetworkInspectorEnabled) Color(0xFF0284C7).copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = if (isNetworkInspectorEnabled) "ACTIVE" else "OFF",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isNetworkInspectorEnabled) Color(0xFF0284C7) else Color.Gray,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Inspect IDE Bridge HTTP & AGY Daemon gRPC calls in real-time",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isNetworkInspectorEnabled,
+                        onCheckedChange = { targetState ->
+                            pendingInspectorRestart = targetState
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color(0xFF0284C7)
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "Zero-overhead architecture: When disabled, OkHttp calls execute at 100% native speed with zero allocations or buffering.",
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                    lineHeight = 16.sp
+                )
+
+                if (isNetworkInspectorEnabled) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), thickness = 0.8.dp)
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Floating Inspector Bubble toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Floating Network Bubble",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Show on-screen draggable pill with live call count & streams",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Switch(
+                            checked = isFloatingNetworkInspectorEnabled,
+                            onCheckedChange = onToggleFloatingNetworkInspector,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF0284C7)
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Open Inspector Button
+                    Button(
+                        onClick = onOpenNetworkInspector,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF0284C7)
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Open Network Inspector (${logs.size} calls recorded)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
         // Toggle Card
         Card(
             modifier = Modifier.fillMaxWidth(),

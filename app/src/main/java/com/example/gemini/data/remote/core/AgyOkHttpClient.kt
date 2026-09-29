@@ -18,7 +18,7 @@ object AgyOkHttpClient {
         }
         val connectionPool = ConnectionPool(32, 5, TimeUnit.MINUTES)
 
-        OkHttpClient.Builder()
+        val builder = OkHttpClient.Builder()
             .dispatcher(dispatcher)
             .connectionPool(connectionPool)
             .protocols(listOf(okhttp3.Protocol.H2_PRIOR_KNOWLEDGE))
@@ -26,7 +26,12 @@ object AgyOkHttpClient {
             .readTimeout(0, TimeUnit.MILLISECONDS) // Indefinite read timeout for streaming
             .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
-            .addInterceptor { chain ->
+
+        if (com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled) {
+            builder.addInterceptor(com.example.gemini.data.remote.inspector.NetworkInspectorInterceptor("AGY Daemon (gRPC)"))
+        }
+
+        builder.addInterceptor { chain ->
                 val hubUrl = AuthPreferences.currentHubUrl
                 var token = AgyCsrfManager.instance.token
                 if (token.isBlank()) {

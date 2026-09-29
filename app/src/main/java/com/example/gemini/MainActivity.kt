@@ -45,7 +45,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         instanceRef = java.lang.ref.WeakReference(this)
-        enableEdgeToEdge()
+        com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled =
+            chatViewModel.authPreferences.getNetworkInspectorEnabledSync()
+        com.example.gemini.data.remote.inspector.NetworkInspectorManager.isFloatingBubbleEnabled =
+            chatViewModel.authPreferences.getFloatingNetworkInspectorEnabledSync()
 
         try {
             android.webkit.WebView.enableSlowWholeDocumentDraw()
@@ -115,6 +118,9 @@ class MainActivity : ComponentActivity() {
             val floatingSwitcherPosX by chatViewModel.floatingSwitcherPosX.collectAsState()
             val floatingSwitcherPosY by chatViewModel.floatingSwitcherPosY.collectAsState()
             val isFloatingDiagnosticsEnabled by chatViewModel.isFloatingDiagnosticsEnabled.collectAsState()
+            val isNetworkInspectorEnabled by chatViewModel.isNetworkInspectorEnabled.collectAsState()
+            val isFloatingNetworkInspectorEnabled by chatViewModel.isFloatingNetworkInspectorEnabled.collectAsState()
+            var showNetworkInspectorDialog by remember { mutableStateOf(false) }
 
             LaunchedEffect(isFloatingDiagnosticsEnabled) {
                 if (isFloatingDiagnosticsEnabled) {
@@ -318,6 +324,20 @@ class MainActivity : ComponentActivity() {
                                     onDismiss = {
                                         chatViewModel.setFloatingDiagnosticsEnabled(false)
                                     }
+                                )
+                            }
+
+                            // Floating Network Inspector Bubble (In-app draggable bubble across all screens)
+                            if (isNetworkInspectorEnabled && isFloatingNetworkInspectorEnabled) {
+                                com.example.gemini.ui.components.FloatingNetworkInspectorBubble(
+                                    onClick = { showNetworkInspectorDialog = true }
+                                )
+                            }
+
+                            // Global Network Inspector Dialog
+                            if (showNetworkInspectorDialog) {
+                                com.example.gemini.ui.components.NetworkInspectorDialog(
+                                    onDismiss = { showNetworkInspectorDialog = false }
                                 )
                             }
                         }

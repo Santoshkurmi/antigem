@@ -222,6 +222,9 @@ fun ChatScreen(
     val floatingSwitcherItems by viewModel.floatingSwitcherItems.collectAsState()
     val floatingSwitcherAutoCollapseSec by viewModel.floatingSwitcherAutoCollapseSec.collectAsState()
     val isFloatingDiagnosticsEnabled by viewModel.isFloatingDiagnosticsEnabled.collectAsState()
+    val isNetworkInspectorEnabled by viewModel.isNetworkInspectorEnabled.collectAsState()
+    val isFloatingNetworkInspectorEnabled by viewModel.isFloatingNetworkInspectorEnabled.collectAsState()
+    var showNetworkInspectorDialog by remember { mutableStateOf(false) }
     val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
     val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
     val hubStatus by viewModel.hubStatus.collectAsState()
@@ -1954,6 +1957,11 @@ fun ChatScreen(
             onToggleGroupChatsByWorkspace = { viewModel.setGroupChatsByWorkspace(it) },
             isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
             onToggleFloatingDiagnostics = { viewModel.setFloatingDiagnosticsEnabled(it) },
+            isNetworkInspectorEnabled = isNetworkInspectorEnabled,
+            onToggleNetworkInspector = { viewModel.setNetworkInspectorEnabled(it) },
+            isFloatingNetworkInspectorEnabled = isFloatingNetworkInspectorEnabled,
+            onToggleFloatingNetworkInspector = { viewModel.setFloatingNetworkInspectorEnabled(it) },
+            onOpenNetworkInspector = { showNetworkInspectorDialog = true },
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -2433,6 +2441,13 @@ fun ChatScreen(
             actionColor = ClaudeTerracotta,
             actionContentColor = ClaudeTerracotta,
             dismissActionContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    // Network Inspector Dialog (DevTools from Settings)
+    if (showNetworkInspectorDialog) {
+        com.example.gemini.ui.components.NetworkInspectorDialog(
+            onDismiss = { showNetworkInspectorDialog = false }
         )
     }
     } // End of Box
