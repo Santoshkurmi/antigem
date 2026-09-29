@@ -757,7 +757,7 @@ fun ChatScreen(
                 activeInstances = activeInstances,
                 isLoading = isConversationsLoading,
                 hasReceivedInitialSync = hasReceivedInitialSync,
-                isHubOnline = hubStatus.status == "online",
+                systemConnectionState = systemConnectionState,
                 errorMessage = conversationError,
                 isStreaming = isStreaming,
                 groupByWorkspace = groupChatsByWorkspace,
@@ -983,35 +983,8 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) || systemConnectionState !is com.example.gemini.data.remote.SystemConnectionState.Offline || hubStatus.status != "idle") {
-                            val isCheckingAuth = isAuthBusy || agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING
-                            val isUnauthenticated = !systemConnectionState.isAuth || agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED || (!agyAuthInfo.isLoggedIn && !isCheckingAuth)
-
-                            val dotColor = when {
-                                serverStatus is com.example.gemini.data.local.LocalServerStatus.Stopping -> Color(0xFFF59E0B)
-                                systemConnectionState is com.example.gemini.data.remote.SystemConnectionState.Connected -> {
-                                    val conn = systemConnectionState as com.example.gemini.data.remote.SystemConnectionState.Connected
-                                    when (conn.hubStatus) {
-                                        "online" -> {
-                                            when {
-                                                isCheckingAuth -> Color(0xFF3B82F6) // Blue: Hub active, checking/verifying auth
-                                                isUnauthenticated -> Color(0xFFA855F7) // Purple: Hub active, but user not logged in
-                                                else -> Color(0xFF22C55E) // Green: Hub active & user authenticated
-                                            }
-                                        }
-                                        "starting", "idle" -> Color(0xFFF59E0B) // Yellow: Bridge online, Hub starting
-                                        "error" -> Color(0xFFEF4444) // Red: Hub error
-                                        "stopped" -> Color(0xFF9CA3AF) // Gray: Hub stopped
-                                        else -> Color(0xFFF59E0B)
-                                    }
-                                }
-                                systemConnectionState is com.example.gemini.data.remote.SystemConnectionState.Error -> Color(0xFFEF4444) // Red: Bridge error
-                                else -> when {
-                                    isLocalStarting || isLocalRunning -> Color(0xFFF59E0B) // Yellow: Local process booting
-                                    isLocalError -> Color(0xFFEF4444) // Red: Local process error
-                                    else -> Color(0xFF9CA3AF) // Gray: Offline
-                                }
-                            }
+                        if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) || systemConnectionState.status != com.example.gemini.data.remote.SystemStatus.OFFLINE) {
+                            val dotColor = systemConnectionState.dotColor
 
                             Box(
                                 modifier = Modifier
@@ -1089,22 +1062,9 @@ fun ChatScreen(
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    val isHubOnline = hubStatus.status == "online" || (systemConnectionState is com.example.gemini.data.remote.SystemConnectionState.Connected && (systemConnectionState as com.example.gemini.data.remote.SystemConnectionState.Connected).hubStatus == "online")
-                    val isServerInitializing = !isHubOnline && (
-                        isInitialGracePeriod ||
-                        hubStatus.status == "starting" ||
-                        hubStatus.status == "idle" ||
-                        isLocalStarting ||
-                        isLocalRunning ||
-                        serverStatus is com.example.gemini.data.local.LocalServerStatus.Starting ||
-                        serverStatus is com.example.gemini.data.local.LocalServerStatus.Stopping
-                    )
-                    val isServerStopped = !isHubOnline && !isServerInitializing && (
-                        isLocalStopped ||
-                        serverStatus is com.example.gemini.data.local.LocalServerStatus.Stopped ||
-                        systemConnectionState is com.example.gemini.data.remote.SystemConnectionState.Offline ||
-                        hubStatus.status == "stopped"
-                    )
+                    val sysStatus = systemConnectionState.status
+                    val isServerInitializing = sysStatus == com.example.gemini.data.remote.SystemStatus.STARTING || sysStatus == com.example.gemini.data.remote.SystemStatus.ACQUIRING_CSRF || isInitialGracePeriod
+                    val isServerStopped = sysStatus == com.example.gemini.data.remote.SystemStatus.OFFLINE
                     val isExistingConversation = currentConv != null && currentConv?.title != "New Chat" && conversations.any { it.id == currentConv?.id }
                     val isExistingChat = messages.isEmpty() && isExistingConversation && isLoadingConversation
                     Log.d("CHAT_OPEN_DEBUG", "🖥️ [ChatScreen Render] convId=${currentConv?.id}, title='${currentConv?.title}', isLoading=$isLoadingConversation, isExisting=$isExistingChat, msgCount=${messages.size}, error=$conversationError, isServerStopped=$isServerStopped")
@@ -1188,8 +1148,6 @@ fun ChatScreen(
                     } else if (isExistingChat) {
                         com.example.gemini.ui.components.ConversationLoadingSkeleton()
                     } else if (messages.isEmpty()) {
-                        val isCheckingAuth = isAuthBusy || agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING
-                        val isExplicitlyUnauthenticated = agyAuthInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED
                         BoxWithConstraints(
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -1209,27 +1167,33 @@ fun ChatScreen(
                                     )
                                 }
 
-                                if (isCheckingAuth) {
-                                    com.example.gemini.ui.components.NewChatCheckingAuthPromptCard()
-                                } else if (isExplicitlyUnauthenticated && isNetworkConnected) {
-                                    com.example.gemini.ui.components.NewChatSignInPromptCard(
-                                        onSignInClick = { viewModel.loginToAgyHub(force = true) }
-                                    )
-                                } else {
-                                    Text(
-                                        text = "How can I help you today?",
-                                        fontSize = 22.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = "Ask a question, brainstorm ideas, or start coding",
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                                        textAlign = TextAlign.Center
-                                    )
+                                when (systemConnectionState.status) {
+                                    com.example.gemini.data.remote.SystemStatus.CHECKING_AUTH -> {
+                                        com.example.gemini.ui.components.NewChatCheckingAuthPromptCard()
+                                    }
+                                    com.example.gemini.data.remote.SystemStatus.UNAUTHENTICATED -> {
+                                        if (isNetworkConnected) {
+                                            com.example.gemini.ui.components.NewChatSignInPromptCard(
+                                                onSignInClick = { viewModel.loginToAgyHub(force = true) }
+                                            )
+                                        }
+                                    }
+                                    else -> {
+                                        Text(
+                                            text = "How can I help you today?",
+                                            fontSize = 22.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "Ask a question, brainstorm ideas, or start coding",
+                                            fontSize = 14.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 }
                             }
                         }

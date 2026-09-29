@@ -202,26 +202,20 @@ func (m *HubManager) StartContinuousMonitor() {
 				m.mu.Lock()
 				currentStatus := m.status
 				if active {
+					tokenAcquired := false
 					if m.csrfToken == "" {
 						m.mu.Unlock()
 						tok := m.FetchCsrfToken()
 						m.mu.Lock()
 						if tok != "" {
 							m.csrfToken = tok
+							tokenAcquired = true
 						}
 					}
-					// Strictly require CSRF token to declare Hub online
-					if m.csrfToken != "" {
-						if currentStatus != HubStatusOnline {
-							m.isRunning = true
-							m.setStatusLocked(HubStatusOnline, "")
-							log.Printf("\033[1;32m[Hub Monitor]\033[0m ✅ AGY Hub detected ONLINE on http://127.0.0.1:%s (CSRF token present: %s...)", m.HubPort, m.csrfToken[:min(8, len(m.csrfToken))])
-						}
-					} else {
-						log.Printf("\033[1;33m[Hub Monitor]\033[0m ⏳ AGY Hub port %s listening, but CSRF token not yet extracted. Status remains '%s'", m.HubPort, currentStatus)
-						if currentStatus == HubStatusOnline {
-							m.setStatusLocked(HubStatusStarting, "")
-						}
+					if currentStatus != HubStatusOnline || tokenAcquired {
+						m.isRunning = true
+						m.setStatusLocked(HubStatusOnline, "")
+						log.Printf("\033[1;32m[Hub Monitor]\033[0m ✅ AGY Hub detected ONLINE on http://127.0.0.1:%s (CSRF token present: %t)", m.HubPort, m.csrfToken != "")
 					}
 				} else {
 					if currentStatus == HubStatusOnline || currentStatus == HubStatusStarting {
@@ -261,14 +255,10 @@ func (m *HubManager) Start() error {
 		m.mu.Lock()
 		if tok != "" {
 			m.csrfToken = tok
-			m.setStatusLocked(HubStatusOnline, "")
-			m.mu.Unlock()
-			fmt.Printf(" \033[32m[✓]\033[0m AGY Hub is already active and listening on http://127.0.0.1:%s\n", m.HubPort)
-			return nil
 		}
-		m.setStatusLocked(HubStatusStarting, "")
+		m.setStatusLocked(HubStatusOnline, "")
 		m.mu.Unlock()
-		fmt.Printf(" \033[33m[!]\033[0m AGY Hub port is active, waiting for CSRF token extraction...\n")
+		fmt.Printf(" \033[32m[✓]\033[0m AGY Hub is already active and listening on http://127.0.0.1:%s\n", m.HubPort)
 		return nil
 	}
 
@@ -416,14 +406,10 @@ func (m *HubManager) Start() error {
 		m.mu.Lock()
 		if tok != "" {
 			m.csrfToken = tok
-			m.setStatusLocked(HubStatusOnline, "")
-			m.mu.Unlock()
-			fmt.Printf("\r\033[K \033[32m[✓]\033[0m AGY Hub is online and listening on http://127.0.0.1:%s\n", m.HubPort)
-		} else {
-			m.setStatusLocked(HubStatusStarting, "")
-			m.mu.Unlock()
-			fmt.Printf("\r\033[K \033[33m[!]\033[0m AGY Hub port is open, waiting for CSRF token extraction...\n")
 		}
+		m.setStatusLocked(HubStatusOnline, "")
+		m.mu.Unlock()
+		fmt.Printf("\r\033[K \033[32m[✓]\033[0m AGY Hub is online and listening on http://127.0.0.1:%s\n", m.HubPort)
 	} else if m.IsRunning() {
 		fmt.Printf("\r\033[K \033[33m[!]\033[0m AGY Hub started (PID %d), waiting for initialization on port %s...\n", cmd.Process.Pid, m.HubPort)
 	}

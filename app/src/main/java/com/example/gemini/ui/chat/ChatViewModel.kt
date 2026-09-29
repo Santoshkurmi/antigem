@@ -1090,6 +1090,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun checkAgyAuthStatus(userInitiated: Boolean = false) {
         viewModelScope.launch {
+            agyBridgeService.updateAuthChecking(true)
             if (!isNetworkConnected()) {
                 android.util.Log.d("ChatViewModel", "Skipping auth status check: device is offline.")
                 _agyAuthInfo.value = _agyAuthInfo.value.copy(
@@ -1097,6 +1098,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     isOffline = true
                 )
                 _isAuthBusy.value = false
+                agyBridgeService.updateAuthState(isAuth = false, isChecking = false)
                 if (userInitiated) {
                     _authFeedbackMessage.tryEmit("Cannot check status: device is offline.")
                 }
@@ -1122,7 +1124,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             if (res.isSuccess) {
                 val info = res.getOrThrow()
                 _agyAuthInfo.value = info
-                agyBridgeService.updateAuthState(info.isLoggedIn)
+                agyBridgeService.updateAuthState(isAuth = info.isLoggedIn, isChecking = false)
                 if (info.isLoggedIn) {
                     lastAuthCheckTimeMs = System.currentTimeMillis()
                     _isAuthBusy.value = false
@@ -1140,6 +1142,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     status = com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.OFFLINE,
                     isOffline = true
                 )
+                agyBridgeService.updateAuthState(isAuth = false, isChecking = false)
                 if (userInitiated) {
                     _authFeedbackMessage.tryEmit("Unable to reach server.")
                 }
@@ -1154,6 +1157,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         _isAuthBusy.value = true
+        agyBridgeService.updateAuthChecking(true)
         loginPollJob?.cancel()
 
         viewModelScope.launch {
@@ -1164,7 +1168,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             if (preCheck.isSuccess && preCheck.getOrThrow().isLoggedIn) {
                 val authed = preCheck.getOrThrow()
                 _agyAuthInfo.value = authed
-                agyBridgeService.updateAuthState(true)
+                agyBridgeService.updateAuthState(isAuth = true, isChecking = false)
                 lastAuthCheckTimeMs = System.currentTimeMillis()
                 _isAuthBusy.value = false
                 _authFeedbackMessage.tryEmit("Already signed in as ${authed.displayName}!")
@@ -1185,7 +1189,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         if (res.isSuccess && res.getOrThrow().isLoggedIn) {
                             val authed = res.getOrThrow()
                             _agyAuthInfo.value = authed
-                            agyBridgeService.updateAuthState(true)
+                            agyBridgeService.updateAuthState(isAuth = true, isChecking = false)
                             lastAuthCheckTimeMs = System.currentTimeMillis()
                             _isAuthBusy.value = false
                             _pendingLoginUrl.value = null
@@ -1196,6 +1200,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 _isAuthBusy.value = false
+                agyBridgeService.updateAuthChecking(false)
             }
 
             // 2. Kick off login RPC on daemon (Login RPC opens browser / triggers auth flow)
@@ -1222,7 +1227,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     status = com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED,
                     isLoggedIn = false
                 )
-                agyBridgeService.updateAuthState(false)
+                agyBridgeService.updateAuthState(isAuth = false, isChecking = false)
                 _authFeedbackMessage.tryEmit("Logged out successfully.")
                 refreshQuotas(force = true)
             } catch (e: Exception) {
@@ -1955,8 +1960,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun sendMessage(content: String) {
         if ((content.isBlank() && _attachments.value.isEmpty()) || _isStreaming.value) return
 
-        if (!systemConnectionState.value.isHubOnline) {
-            android.widget.Toast.makeText(getApplication(), "Cannot send message: Server is offline. Please start the server.", android.widget.Toast.LENGTH_SHORT).show()
+        val state = systemConnectionState.value
+        if (!state.canSend) {
+            val reason = when (state.status) {
+                com.example.gemini.data.remote.SystemStatus.OFFLINE -> "Server is offline. Please start the server."
+                com.example.gemini.data.remote.SystemStatus.STARTING -> "Server is starting up. Please wait..."
+                com.example.gemini.data.remote.SystemStatus.ACQUIRING_CSRF -> "Acquiring security token. Please wait..."
+                com.example.gemini.data.remote.SystemStatus.CHECKING_AUTH -> "Verifying authentication. Please wait..."
+                com.example.gemini.data.remote.SystemStatus.UNAUTHENTICATED -> "Please sign in to send messages."
+                com.example.gemini.data.remote.SystemStatus.ERROR -> "Server error. Please check server logs."
+                else -> "Cannot send message right now."
+            }
+            android.widget.Toast.makeText(getApplication(), reason, android.widget.Toast.LENGTH_SHORT).show()
             return
         }
 

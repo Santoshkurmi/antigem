@@ -170,14 +170,36 @@ class AgyBridgeService(
         } ?: false
     }
 
+    private var isBridgeConnected: Boolean = false
     private var currentAuthState: Boolean = true
+    private var currentAuthChecking: Boolean = false
+    private var currentHubStatus: String = "idle"
+    private var currentHubError: String? = null
 
-    fun updateAuthState(isAuth: Boolean) {
-        currentAuthState = isAuth
-        val current = _systemConnectionState.value
-        if (current is SystemConnectionState.Connected) {
-            _systemConnectionState.value = current.copy(isAuth = isAuth)
+    fun recomputeSystemConnectionState() {
+        if (!isBridgeConnected) {
+            _systemConnectionState.value = SystemConnectionState.Offline
+            return
         }
+        val hasCsrf = AgyCsrfManager.instance.token.isNotBlank()
+        _systemConnectionState.value = SystemConnectionState.Connected(
+            hubStatus = currentHubStatus,
+            error = currentHubError,
+            isAuth = currentAuthState,
+            isAuthChecking = currentAuthChecking,
+            hasCsrfToken = hasCsrf
+        )
+    }
+
+    fun updateAuthState(isAuth: Boolean, isChecking: Boolean = false) {
+        currentAuthState = isAuth
+        currentAuthChecking = isChecking
+        recomputeSystemConnectionState()
+    }
+
+    fun updateAuthChecking(isChecking: Boolean) {
+        currentAuthChecking = isChecking
+        recomputeSystemConnectionState()
     }
 
     fun updateConnectionState(newState: BridgeConnectionState) {
@@ -186,23 +208,25 @@ class AgyBridgeService(
 
     fun updateHubStatus(newStatus: AgyHubStatus) {
         _hubStatus.value = newStatus
+        currentHubStatus = newStatus.status
+        currentHubError = newStatus.error
         if (!newStatus.csrfToken.isNullOrBlank()) {
             AgyCsrfManager.instance.setCachedToken(AuthPreferences.currentHubUrl, newStatus.csrfToken)
         } else if (newStatus.status == "stopped" || newStatus.status == "error") {
             AgyCsrfManager.instance.clearToken()
         }
-        _systemConnectionState.value = SystemConnectionState.Connected(
-            hubStatus = newStatus.status,
-            error = newStatus.error,
-            isAuth = currentAuthState
-        )
+        recomputeSystemConnectionState()
     }
 
     fun resetState() {
+        isBridgeConnected = false
         _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
         _hubStatus.value = AgyHubStatus(status = "stopped")
-        _systemConnectionState.value = SystemConnectionState.Offline
+        currentHubStatus = "stopped"
+        currentHubError = null
         currentAuthState = true
+        currentAuthChecking = false
+        _systemConnectionState.value = SystemConnectionState.Offline
         AgyCsrfManager.instance.clearToken()
         try {
             activeWebSocket?.cancel()
@@ -405,7 +429,9 @@ class AgyBridgeService(
         val request = Request.Builder().url(wsUrl).build()
         val wsListener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                isBridgeConnected = true
                 _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                recomputeSystemConnectionState()
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -426,39 +452,27 @@ class AgyBridgeService(
                             }
                         }
 
-                        val hubUrl = AuthPreferences.currentHubUrl
-                        if (!csrf.isNullOrBlank()) {
-                            AgyCsrfManager.instance.setCachedToken(hubUrl, csrf)
-                        } else if (st == "stopped" || st == "error") {
-                            AgyCsrfManager.instance.clearToken(hubUrl)
-                        }
-
                         val statusObj = AgyHubStatus(status = st, port = p, csrfToken = csrf, error = err, logs = logsList)
-                        _hubStatus.value = statusObj
-                        _systemConnectionState.value = SystemConnectionState.Connected(
-                            hubStatus = st,
-                            error = err,
-                            isAuth = currentAuthState
-                        )
+                        updateHubStatus(statusObj)
                         trySend(statusObj)
                     }
                 } catch (_: Exception) {}
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                isBridgeConnected = false
                 _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
-                _systemConnectionState.value = SystemConnectionState.Offline
                 val stopped = AgyHubStatus(status = "stopped")
-                _hubStatus.value = stopped
+                updateHubStatus(stopped)
                 trySend(stopped)
                 close(t)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                isBridgeConnected = false
                 _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
-                _systemConnectionState.value = SystemConnectionState.Offline
                 val stopped = AgyHubStatus(status = "stopped")
-                _hubStatus.value = stopped
+                updateHubStatus(stopped)
                 trySend(stopped)
                 close()
             }
@@ -467,9 +481,9 @@ class AgyBridgeService(
         val ws = wsClient.newWebSocket(request, wsListener)
         awaitClose {
             ws.cancel()
+            isBridgeConnected = false
             _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
-            _systemConnectionState.value = SystemConnectionState.Offline
-            _hubStatus.value = AgyHubStatus(status = "stopped")
+            updateHubStatus(AgyHubStatus(status = "stopped"))
         }
     }.flowOn(Dispatchers.IO)
 

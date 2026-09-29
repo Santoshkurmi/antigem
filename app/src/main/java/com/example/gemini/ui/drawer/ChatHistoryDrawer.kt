@@ -81,7 +81,7 @@ fun ChatHistoryDrawer(
     activeInstances: List<com.example.gemini.data.remote.AgyActiveInstance> = emptyList(),
     isLoading: Boolean = false,
     hasReceivedInitialSync: Boolean = false,
-    isHubOnline: Boolean = true,
+    systemConnectionState: com.example.gemini.data.remote.SystemConnectionState = com.example.gemini.data.remote.SystemConnectionState.Offline,
     errorMessage: String? = null,
     isStreaming: Boolean = false,
     authInfo: AgyHubClient.AgyAuthInfo = AgyHubClient.AgyAuthInfo(),
@@ -800,9 +800,9 @@ fun ChatHistoryDrawer(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            val isEngineConnecting = !isHubOnline && conversations.isEmpty()
+            val isEngineConnecting = (systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.STARTING ||
+                    systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.ACQUIRING_CSRF ||
+                    systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.OFFLINE) && conversations.isEmpty()
             val showSkeleton =
                 (!hasReceivedInitialSync || isLoading) && conversations.isEmpty() && errorMessage.isNullOrBlank()
 
@@ -1139,156 +1139,139 @@ fun ChatHistoryDrawer(
                             )
                         }
                     }
-                } else if (authInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING) {
-                    // Non-animated checking / connecting indicator (clickable to refresh)
-                    Surface(
-                        onClick = onCheckAuth,
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.height(30.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = "Checking...",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-                } else if (authInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.OFFLINE) {
-                    // Connecting indicator (clickable to retry checking)
-                    Surface(
-                        onClick = onCheckAuth,
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        modifier = Modifier.height(30.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(Color(0xFFE57373), CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = "Connecting...",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-                } else if (authInfo.isLoggedIn || authInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.AUTHENTICATED) {
-                    // Profile avatar button with real display name
-                    Surface(
-                        onClick = { showProfileDialog = true },
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            ClaudeTerracotta.copy(alpha = 0.4f)
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            SubcomposeAsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(parseProfileAvatarModel(authInfo.profilePictureUrl))
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = "Profile Picture",
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                loading = {
-                                    Box(
+                } else {
+                    when (systemConnectionState.status) {
+                        com.example.gemini.data.remote.SystemStatus.READY -> {
+                            // Profile avatar button with real display name
+                            Surface(
+                                onClick = { showProfileDialog = true },
+                                shape = RoundedCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    ClaudeTerracotta.copy(alpha = 0.4f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    SubcomposeAsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(parseProfileAvatarModel(authInfo.profilePictureUrl))
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = "Profile Picture",
                                         modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(ClaudeTerracotta),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        val initial =
-                                            authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+                                            .size(24.dp)
+                                            .clip(CircleShape),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                        loading = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(ClaudeTerracotta),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                val initial =
+                                                    authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+                                                Text(
+                                                    text = initial,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        },
+                                        error = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(ClaudeTerracotta),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                val initial =
+                                                    authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+                                                Text(
+                                                    text = initial,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
+                                    )
+                                    val nameToShow = authInfo.displayName
+                                    if (nameToShow.isNotBlank()) {
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = initial,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-                                    }
-                                },
-                                error = {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(ClaudeTerracotta),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        val initial =
-                                            authInfo.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
-                                        Text(
-                                            text = initial,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
+                                            text = nameToShow,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.widthIn(max = 110.dp),
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }
-                            )
-                            val nameToShow = authInfo.displayName
-                            if (nameToShow.isNotBlank()) {
-                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                        }
+
+                        com.example.gemini.data.remote.SystemStatus.UNAUTHENTICATED -> {
+                            // Not logged in (UNAUTHENTICATED) -> Sign In button
+                            FilledTonalButton(
+                                onClick = onLogin,
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = ClaudeTerracotta.copy(alpha = 0.15f),
+                                    contentColor = ClaudeTerracotta
+                                ),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.Login,
+                                    contentDescription = "Sign In",
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = nameToShow,
+                                    text = "Sign In",
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.widthIn(max = 110.dp),
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
-                    }
-                } else if (authInfo.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.UNAUTHENTICATED) {
-                    // Not logged in (UNAUTHENTICATED) -> Sign In button
-                    FilledTonalButton(
-                        onClick = onLogin,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = ClaudeTerracotta.copy(alpha = 0.15f),
-                            contentColor = ClaudeTerracotta
-                        ),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.Login,
-                            contentDescription = "Sign In",
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Sign In",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+
+                        else -> {
+                            // All intermediate or offline states (OFFLINE, STARTING, ACQUIRING_CSRF, CHECKING_AUTH, ERROR)
+                            val statusObj = systemConnectionState.status
+                            Surface(
+                                onClick = if (statusObj == com.example.gemini.data.remote.SystemStatus.OFFLINE || statusObj == com.example.gemini.data.remote.SystemStatus.ERROR) onRetry else onCheckAuth,
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .background(statusObj.dotColor, CircleShape)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = statusObj.label,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
