@@ -100,7 +100,7 @@ func (m *HubManager) isHubReady() bool {
 func (m *HubManager) FetchCsrfToken() string {
 	url := fmt.Sprintf("http://127.0.0.1:%s/", m.HubPort)
 	client := &http.Client{
-		Timeout: 1500 * time.Millisecond,
+		Timeout: 1 * time.Second,
 	}
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -183,13 +183,13 @@ func (m *HubManager) setStatusLocked(status string, errorMsg string) {
 }
 
 // StartContinuousMonitor actively checks AGY Hub state in the background and broadcasts updates.
-// When online, it checks every 10 seconds; when offline/starting, it checks every 1 second.
+// When online and CSRF token is present, it checks every 10 seconds; when offline, starting, or missing CSRF token, it checks every 1 second.
 func (m *HubManager) StartContinuousMonitor() {
 	go func() {
 		for {
 			interval := 1 * time.Second
 			m.mu.Lock()
-			if m.status == HubStatusOnline {
+			if m.status == HubStatusOnline && m.csrfToken != "" {
 				interval = 10 * time.Second
 			}
 			m.mu.Unlock()
