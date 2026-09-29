@@ -22,10 +22,10 @@ enum class SystemStatus(
     ACQUIRING_CSRF("Acquiring Token...", 0xFF06B6D4, false),
 
     /** Hub (:8090) + CSRF token ready, actively verifying authentication */
-    CHECKING_AUTH("Checking Auth...", 0xFF3B82F6, false),
+    CHECKING_AUTH("Checking Auth...", 0xFF3B82F6, true),
 
     /** Hub (:8090) + CSRF token ready, but user is not logged in / auth failed */
-    UNAUTHENTICATED("Sign In Required", 0xFFA855F7, false),
+    UNAUTHENTICATED("Sign In Required", 0xFFA855F7, true),
 
     /** Everything connected, token ready, user authenticated - fully operational */
     READY("Ready", 0xFF22C55E, true),
@@ -82,6 +82,7 @@ sealed class SystemConnectionState {
                     !isAuth -> SystemStatus.UNAUTHENTICATED
                     else -> SystemStatus.READY
                 }
+
                 else -> SystemStatus.STARTING
             }
     }
