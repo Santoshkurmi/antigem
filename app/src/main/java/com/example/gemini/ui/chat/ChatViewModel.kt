@@ -1772,7 +1772,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             while (activeStreamConversationId == conversationId) {
                 try {
-                    _isServerOnline.value = true
                     agyHubClient.streamAgentStateUpdates(conversationId, hubUrl).collect { resp ->
                         if (activeStreamConversationId != conversationId) {
                             Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel Stream] Dropping frame for inactive conversation (active=$activeStreamConversationId vs frame=$conversationId)")
@@ -1790,6 +1789,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                         withContext(Dispatchers.Main) {
                             if (activeStreamConversationId != conversationId) return@withContext
+                            _isServerOnline.value = true
                             _conversationError.value = null
                             _isLoadingConversation.value = false
                             _isReconnecting.value = false
@@ -1836,7 +1836,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         break
                     } else {
-                        // Normal disconnection after receiving data; clean up in-flight states and pause briefly before reconnecting
+                        // Normal disconnection after receiving data; clean up in-flight states and stop loop so banner stays stable
                         withContext(Dispatchers.Main) {
                             _isServerOnline.value = false
                             _isReconnecting.value = false
@@ -1847,7 +1847,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 markLastAssistantMessageDisconnected()
                             }
                         }
-                        delay(2000)
+                        break
                     }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) {
@@ -1863,6 +1863,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     withContext(Dispatchers.Main) {
+                        _isServerOnline.value = false
                         _isReconnecting.value = false
                         _isLoadingConversation.value = false
                         if (_messages.value.isEmpty()) {
@@ -1875,12 +1876,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             markLastAssistantMessageDisconnected()
                         }
                     }
-
-                    // If we have no messages yet, stop the loop so the error message is cleanly shown with a Retry button
-                    if (_messages.value.isEmpty()) {
-                        break
-                    }
-                    delay(2000)
+                    break
                 }
             }
         }
