@@ -1998,7 +1998,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             updatedConv = updatedConv.copy(title = cleanTitle)
         }
 
-        updatedConv = updatedConv.copy(updatedAt = System.currentTimeMillis(), isRunning = true)
+        updatedConv = updatedConv.copy(updatedAt = System.currentTimeMillis())
         _currentConversation.value = updatedConv
 
         trajectoryEngine.submitUserPrompt(finalPrompt, currentAtts, conv.id)

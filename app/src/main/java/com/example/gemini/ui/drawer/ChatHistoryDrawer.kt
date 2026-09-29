@@ -894,8 +894,7 @@ fun ChatHistoryDrawer(
                                     val conv = item.conv
                                     val isSelected = conv.id == currentConversationId
                                     val activeInst = activeInstances.find { it.conversationId == conv.id }
-                                    val isActivelyRunning =
-                                        conv.isRunning || (conv.id == currentConversationId && isStreaming)
+                                    val isActivelyRunning = conv.isRunning
                                     val isScheduledOrBackground =
                                         !isActivelyRunning && (conv.notFullyIdle || conv.hasActivity || activeInst != null)
 
@@ -1003,8 +1002,7 @@ fun ChatHistoryDrawer(
                                         val conv = item.conv
                                         val isSelected = conv.id == currentConversationId
                                         val activeInst = activeInstances.find { it.conversationId == conv.id }
-                                        val isActivelyRunning =
-                                            conv.isRunning || (conv.id == currentConversationId && isStreaming)
+                                        val isActivelyRunning = conv.isRunning
                                         val isScheduledOrBackground =
                                             !isActivelyRunning && (conv.notFullyIdle || conv.hasActivity || activeInst != null)
 
