@@ -115,6 +115,12 @@ fun ChatHistoryDrawer(
     var showSigningInProgressDialog by remember { mutableStateOf(false) }
     var showExitConfirmDialog by remember { mutableStateOf(false) }
     var conversationToDelete by remember { mutableStateOf<Conversation?>(null) }
+    var isInitialGracePeriod by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(3500)
+        isInitialGracePeriod = false
+    }
     val context = LocalContext.current
 
     val filtered = remember(conversations, searchQuery) {
@@ -802,7 +808,7 @@ fun ChatHistoryDrawer(
 
             val isEngineConnecting = (systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.STARTING ||
                     systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.ACQUIRING_CSRF ||
-                    systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.OFFLINE) && conversations.isEmpty()
+                    (systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.OFFLINE && isInitialGracePeriod)) && conversations.isEmpty()
             val showSkeleton =
                 (!hasReceivedInitialSync || isLoading) && conversations.isEmpty() && errorMessage.isNullOrBlank()
 
