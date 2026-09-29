@@ -937,17 +937,26 @@ class TrajectoryEngine {
                 val prompt = argsMap["Prompt"] ?: genImg?.prompt ?: ""
                 val metaSummary = meta?.tool_summary ?: ""
                 command = if (prompt.isNotBlank()) prompt else if (metaSummary.isNotBlank()) metaSummary else "generate_image"
-                output = if (genImg?.generated_media?.inline_data != null) {
-                    val base64 = genImg.generated_media.inline_data.base64()
-                    val mime = genImg.generated_media.mime_type.takeIf { it.isNotBlank() } ?: "image/jpeg"
-                    "data:$mime;base64,$base64"
-                } else if (genImg?.generated_image?.base64_data != null && genImg.generated_image.base64_data.isNotBlank()) {
-                    val mime = genImg.generated_image.mime_type.takeIf { it.isNotBlank() } ?: "image/jpeg"
-                    "data:$mime;base64,${genImg.generated_image.base64_data}"
-                } else {
-                    genImg?.generated_image?.uri?.takeIf { it.isNotBlank() }
-                        ?: genImg?.generated_media?.uri
-                        ?: ""
+                val inlineBytes = genImg?.generated_media?.inline_data
+                val inlineBase64 = if (inlineBytes != null && inlineBytes.size > 0) inlineBytes.base64() else ""
+                val imageBase64 = genImg?.generated_image?.base64_data?.takeIf { it.isNotBlank() } ?: ""
+
+                output = when {
+                    inlineBase64.isNotBlank() -> {
+                        val mime = genImg?.generated_media?.mime_type?.takeIf { it.isNotBlank() } ?: "image/png"
+                        "data:$mime;base64,$inlineBase64"
+                    }
+                    imageBase64.isNotBlank() -> {
+                        val mime = genImg?.generated_image?.mime_type?.takeIf { it.isNotBlank() } ?: "image/png"
+                        "data:$mime;base64,$imageBase64"
+                    }
+                    genImg?.generated_media?.uri?.isNotBlank() == true -> {
+                        genImg.generated_media.uri
+                    }
+                    genImg?.generated_image?.uri?.isNotBlank() == true -> {
+                        genImg.generated_image.uri
+                    }
+                    else -> ""
                 }
             }
             "call_mcp_tool" -> {
@@ -1106,7 +1115,7 @@ class TrajectoryEngine {
         userInput.media.forEachIndexed { idx, media ->
             val resolvedMime = media.mime_type
             val cleanUri = (media.uri).removePrefix("file://")
-            val base64Data = if (media.inline_data != null) media.inline_data.base64() else ""
+            val base64Data = if (media.inline_data.size > 0) media.inline_data.base64() else ""
             if (resolvedMime.isBlank() && cleanUri.isBlank() && base64Data.isBlank()) {
                 return@forEachIndexed
             }

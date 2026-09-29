@@ -347,7 +347,7 @@ fun AgentToolCallCard(
         // Always-visible Image Preview for Generate Image tool (once generated)
         if (isImageOutput && !isRunning && (toolCall.output.isNotBlank() || isSuccess)) {
             val displayUri = resolvedImageUri.ifBlank { toolCall.output }
-                val coilData = remember(displayUri) {
+            val coilData: Any? = remember(displayUri, resolvedImageUri) {
                     val memKey = HubMediaResolver.normalizeKey(toolCall.output)
                     val cachedBytes = HubMediaResolver.getImageBytes(memKey)
                     when {
@@ -355,10 +355,20 @@ fun AgentToolCallCard(
                         displayUri.startsWith("data:image/") -> {
                             try {
                                 val b64 = displayUri.substringAfter("base64,")
-                                android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                                if (b64.isNotBlank()) {
+                                    android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                                } else null
                             } catch (_: Exception) { displayUri }
                         }
-                        else -> displayUri
+                        displayUri.startsWith("file://") -> {
+                            val f = java.io.File(displayUri.removePrefix("file://"))
+                            if (f.exists() && f.canRead()) f else displayUri
+                        }
+                        displayUri.isNotBlank() -> {
+                            val f = java.io.File(displayUri)
+                            if (f.exists() && f.canRead()) f else displayUri
+                        }
+                        else -> null
                     }
                 }
                 Surface(
