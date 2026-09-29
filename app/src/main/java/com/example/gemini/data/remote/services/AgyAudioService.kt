@@ -6,9 +6,9 @@ import exa.language_server_pb.GetTranscriptionRequest
 import exa.language_server_pb.Metadata
 import exa.language_server_pb.SendAudioChunkRequest
 import exa.language_server_pb.StartAudioTranscriptionRequest
+import exa.language_server_pb.StreamAudioTranscriptionResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.withContext
 import okio.ByteString
 import okio.ByteString.Companion.decodeBase64
@@ -42,7 +42,7 @@ class AgyAudioService {
     }
 
     /**
-     * Live streaming audio transcription RPC.
+     * Live streaming audio transcription RPC returning full StreamAudioTranscriptionResponse stream.
      */
     fun streamAudioTranscription(
         cascadeId: String = "",
@@ -50,16 +50,14 @@ class AgyAudioService {
         postCursorText: String = "",
         mimeType: String = "audio/pcm;rate=16000",
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Flow<String> {
+    ): Flow<StreamAudioTranscriptionResponse> {
         val req = StartAudioTranscriptionRequest(
             cascade_id = cascadeId,
             pre_cursor_text = preCursorText,
             post_cursor_text = postCursorText,
             mime_type = mimeType
         )
-        return AgyLanguageService.StreamAudioTranscription().asFlowSafely(req).mapNotNull { res ->
-            res.transcription?.text?.takeIf { it.isNotBlank() }
-        }
+        return AgyLanguageService.StreamAudioTranscription().asFlowSafely(req)
     }
 
     /**

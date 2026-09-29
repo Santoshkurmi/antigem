@@ -409,7 +409,7 @@ class AgyHubClient {
         postCursorText: String = "",
         mimeType: String = "audio/pcm;rate=16000",
         hubUrl: String = AuthPreferences.currentHubUrl
-    ): Flow<String> =
+    ): Flow<exa.language_server_pb.StreamAudioTranscriptionResponse> =
         audioService.streamAudioTranscription(cascadeId, preCursorText, postCursorText, mimeType, hubUrl)
 
     suspend fun sendAudioChunk(

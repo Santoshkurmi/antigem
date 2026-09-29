@@ -10,7 +10,6 @@ import com.example.gemini.data.remote.AgyHubClient
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.json.JSONObject
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -167,17 +166,15 @@ class AgyAudioTranscriptionManager(
                     preCursorText = preCursorText,
                     postCursorText = postCursorText,
                     hubUrl = hubUrl
-                ).collect { frameJson ->
+                ).collect { response ->
                     try {
-                        val json = JSONObject(frameJson)
-                        if (json.has("ready")) {
-                            val sid = json.getJSONObject("ready").getString("sessionId")
+                        response.ready?.session_id?.takeIf { it.isNotBlank() }?.let { sid ->
                             Log.d(TAG, "Audio stream session ready: $sid")
                             currentSessionId.value = sid
-                        } else if (json.has("transcription")) {
-                            val trans = json.getJSONObject("transcription")
-                            val text = trans.optString("text", "")
-                            val isFinal = trans.optBoolean("isFinal", false)
+                        }
+                        response.transcription?.let { trans ->
+                            val text = trans.text
+                            val isFinal = trans.is_final
                             if (text.isNotBlank()) {
                                 lastTranscribedText = text
                                 if (isFinal) {
@@ -186,11 +183,12 @@ class AgyAudioTranscriptionManager(
                                     withContext(Dispatchers.Main) { onPartialText(text) }
                                 }
                             }
-                        } else if (json.has("complete")) {
+                        }
+                        if (response.complete != null) {
                             Log.d(TAG, "Audio stream session complete")
                         }
                     } catch (e: Exception) {
-                        Log.w(TAG, "Failed parsing stream frame: ${e.message}")
+                        Log.w(TAG, "Failed handling stream response: ${e.message}")
                     }
                 }
             } catch (e: Exception) {
