@@ -1098,7 +1098,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     isOffline = true
                 )
                 _isAuthBusy.value = false
-                agyBridgeService.updateAuthState(isAuth = false, isChecking = false)
+                agyBridgeService.updateAuthChecking(false)
                 if (userInitiated) {
                     _authFeedbackMessage.tryEmit("Cannot check status: device is offline.")
                 }
@@ -1142,7 +1142,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     status = com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.OFFLINE,
                     isOffline = true
                 )
-                agyBridgeService.updateAuthState(isAuth = false, isChecking = false)
+                // Retain current auth state; only clear the isChecking flag on network/RPC failure
+                agyBridgeService.updateAuthChecking(false)
                 if (userInitiated) {
                     _authFeedbackMessage.tryEmit("Unable to reach server.")
                 }
