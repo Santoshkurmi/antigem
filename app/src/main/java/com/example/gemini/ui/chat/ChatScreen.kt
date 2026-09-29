@@ -901,13 +901,13 @@ fun ChatScreen(
                             Spacer(modifier = Modifier.height(2.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 val isChatStarted = messages.isNotEmpty()
-                                val displayedProjectName = remember(currentConv?.workspaceUri, activeChatProject) {
+                                val displayedProjectName = remember(currentConv?.workspaceUri, isChatStarted) {
                                     val convUri = currentConv?.workspaceUri
                                     if (!convUri.isNullOrBlank()) {
                                         val clean = convUri.removePrefix("file://").trimEnd('/')
                                         File(clean).name.ifBlank { "Workspace" }
                                     } else {
-                                        activeChatProject?.name ?: "Select Project"
+                                        if (isChatStarted) "Outside" else "Select Project"
                                     }
                                 }
 
@@ -2305,9 +2305,14 @@ fun ChatScreen(
     }
 
     if (showProjectPickerDialog) {
+        val currentConvPath = currentConv?.workspaceUri?.removePrefix("file://")?.trimEnd('/') ?: ""
+        val activeProj = if (currentConvPath.isNotBlank()) {
+            usedProjects.find { it.path == currentConvPath } ?: ProjectItem(File(currentConvPath).name, currentConvPath)
+        } else null
+
         ProjectPickerDialog(
             projects = usedProjects,
-            activeProject = activeChatProject,
+            activeProject = activeProj,
             onSelectProject = { proj ->
                 TermuxDaemonManager.setActiveProject(proj)
                 viewModel.onProjectChanged(proj?.path ?: "")

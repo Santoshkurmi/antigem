@@ -1638,12 +1638,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onProjectChanged(projectPath: String) {
         _bridgeStatusMessage.value = null
+        val conv = _currentConversation.value
+        if (conv != null) {
+            val uri = if (projectPath.isNotBlank()) {
+                if (projectPath.startsWith("file://")) projectPath else "file://$projectPath"
+            } else ""
+            _currentConversation.value = conv.copy(workspaceUri = uri)
+        }
         viewModelScope.launch {
             val httpUrl = AuthPreferences.currentBridgeHttpUrl
-            val conv = _currentConversation.value
             val model = _selectedModelId.value.ifBlank { _availableModels.value.firstOrNull()?.id ?: "" }
             agyBridgeService.prewarm(
-                conversationId = conv?.id,
+                conversationId = _currentConversation.value?.id,
                 model = model,
                 workspaceDir = projectPath,
                 httpBaseUrl = httpUrl
@@ -1677,11 +1683,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             (_enabledModels.value.firstOrNull()?.id ?: "")
         }
+        val defaultProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path ?: ""
+        val defaultWorkspaceUri = if (defaultProjPath.isNotBlank()) {
+            if (defaultProjPath.startsWith("file://")) defaultProjPath else "file://$defaultProjPath"
+        } else ""
         val newConv = Conversation(
             id = UUID.randomUUID().toString(),
             title = "New Chat",
             modelId = modelToUse,
-            sessionId = UUID.randomUUID().toString()
+            sessionId = UUID.randomUUID().toString(),
+            workspaceUri = defaultWorkspaceUri
         )
         _currentConversation.value = newConv
         trajectoryEngine.reset(newConv.id, force = true)
@@ -2204,11 +2215,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 (_enabledModels.value.firstOrNull()?.id ?: "")
             }
+            val defaultProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path ?: ""
+            val defaultWorkspaceUri = if (defaultProjPath.isNotBlank()) {
+                if (defaultProjPath.startsWith("file://")) defaultProjPath else "file://$defaultProjPath"
+            } else ""
             _currentConversation.value = Conversation(
                 id = UUID.randomUUID().toString(),
                 title = "New Chat",
                 modelId = modelToUse,
-                sessionId = UUID.randomUUID().toString()
+                sessionId = UUID.randomUUID().toString(),
+                workspaceUri = defaultWorkspaceUri
             )
         }
 
@@ -2321,9 +2337,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val supportsThinking = selectedModel?.supportsThinking ?: (modelEnum.contains("thinking", ignoreCase = true) || modelEnum.contains("flash", ignoreCase = true) || modelEnum.contains("pro", ignoreCase = true))
         val thinkingBudget = if (supportsThinking) 8192 else 0
 
-        val currentProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path ?: ""
-        val workspaceUri = if (currentProjPath.isNotBlank()) {
-            if (currentProjPath.startsWith("file://")) currentProjPath else "file://$currentProjPath"
+        val convWorkspace = conv.workspaceUri
+        val workspaceUri = if (convWorkspace.isNotBlank()) {
+            if (convWorkspace.startsWith("file://")) convWorkspace else "file://$convWorkspace"
         } else ""
 
         val isKnownOnDaemon = knownDaemonCascadeIds.contains(conv.id) ||
@@ -2363,8 +2379,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     knownDaemonCascadeIds.add(conv.id)
                     if (workspaceUri.isNotBlank()) {
-                        val projName = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.name
-                            ?: java.io.File(workspaceUri.removePrefix("file://")).name
+                        val projName = java.io.File(workspaceUri.removePrefix("file://")).name
                         agyHubClient.updateProjectSettings(
                             projectId = "default-cli-project",
                             projectName = projName,

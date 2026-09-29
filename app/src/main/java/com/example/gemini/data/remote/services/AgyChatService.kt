@@ -106,8 +106,7 @@ class AgyChatService {
             source = CortexTrajectorySource.CORTEX_TRAJECTORY_SOURCE_CASCADE_CLIENT,
             requested_model = modelProto ?: Model.MODEL_UNSPECIFIED,
             workspace_uris = if (normalizedUri.isNotBlank()) listOf(normalizedUri) else emptyList(),
-            override_workspace_uris = if (normalizedUri.isNotBlank()) listOf(normalizedUri) else emptyList(),
-            project_env_config = if (normalizedUri.isBlank()) ProjectEnvironmentConfig(project_id = "outside-of-project") else null
+            override_workspace_uris = if (normalizedUri.isNotBlank()) listOf(normalizedUri) else emptyList()
         )
 
         AgyLanguageService.StartCascade().executeSafely(req).map { cid }
