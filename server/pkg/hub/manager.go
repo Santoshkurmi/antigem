@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
@@ -18,7 +19,11 @@ import (
 	"gemini-server/pkg/config"
 )
 
-var loginURLRegex = regexp.MustCompile(`https://accounts\.google\.com/[^\s"'<>]+`)
+var (
+	loginURLRegex   = regexp.MustCompile(`https://accounts\.google\.com/[^\s"'<>]+`)
+	csrfJSONPattern = regexp.MustCompile(`"csrfToken":\s*"([^"]+)"`)
+	csrfHTMLPattern = regexp.MustCompile(`(?i)(?:csrf[_-]?token|csrfToken)["']?\s*[:=]\s*["']([^"']+)["']`)
+)
 
 const (
 	HubStatusIdle     = "idle"
@@ -35,12 +40,13 @@ type HubManager struct {
 	AppDataDir     string
 	AgyBinPath     string
 	OnLoginURL     func(url string)
-	OnStatusChange func(status string, errorMsg string, logs []string)
+	OnStatusChange func(status string, csrfToken string, errorMsg string, logs []string)
 
 	cmd         *exec.Cmd
 	stdinPipe   io.WriteCloser
 	cancel      context.CancelFunc
 	status      string
+	csrfToken   string
 	lastError   string
 	isRunning   bool
 	isExternal  bool
@@ -90,13 +96,65 @@ func (m *HubManager) isHubReady() bool {
 	return true
 }
 
-// GetStatusInfo returns the current status, last error, and captured logs.
-func (m *HubManager) GetStatusInfo() (string, string, []string) {
+// FetchCsrfToken attempts to retrieve the active CSRF token directly from the Hub root endpoint.
+func (m *HubManager) FetchCsrfToken() string {
+	url := fmt.Sprintf("http://127.0.0.1:%s/", m.HubPort)
+	client := &http.Client{
+		Timeout: 1500 * time.Millisecond,
+	}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		log.Printf("[FetchCsrfToken] NewRequest error: %v", err)
+		return ""
+	}
+	req.Header.Set("User-Agent", "antiGem-Go-Supervisor")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[FetchCsrfToken] GET %s error: %v", url, err)
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if headerToken := strings.TrimSpace(resp.Header.Get("x-codeium-csrf-token")); headerToken != "" {
+		log.Printf("[FetchCsrfToken] Found token in header: %s", headerToken)
+		return headerToken
+	}
+
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 128*1024))
+	if err != nil {
+		log.Printf("[FetchCsrfToken] Read body error: %v", err)
+		return ""
+	}
+	bodyStr := string(bodyBytes)
+
+	if match := csrfJSONPattern.FindStringSubmatch(bodyStr); len(match) > 1 {
+		token := strings.TrimSpace(match[1])
+		if token != "" {
+			log.Printf("[FetchCsrfToken] Extracted token via JSON pattern: %s", token)
+			return token
+		}
+	}
+
+	if match := csrfHTMLPattern.FindStringSubmatch(bodyStr); len(match) > 1 {
+		token := strings.TrimSpace(match[1])
+		if token != "" {
+			log.Printf("[FetchCsrfToken] Extracted token via HTML pattern: %s", token)
+			return token
+		}
+	}
+
+	log.Printf("[FetchCsrfToken] No CSRF token matched in body (%d bytes)", len(bodyStr))
+	return ""
+}
+
+// GetStatusInfo returns the current status, csrf token, last error, and captured logs.
+func (m *HubManager) GetStatusInfo() (string, string, string, []string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	logsCopy := make([]string, len(m.recentLogs))
 	copy(logsCopy, m.recentLogs)
-	return m.status, m.lastError, logsCopy
+	return m.status, m.csrfToken, m.lastError, logsCopy
 }
 
 func (m *HubManager) setStatus(status string, errorMsg string) {
@@ -109,14 +167,18 @@ func (m *HubManager) setStatusLocked(status string, errorMsg string) {
 	oldStatus := m.status
 	m.status = status
 	m.lastError = errorMsg
+	if status == HubStatusStopped || status == HubStatusError || status == HubStatusIdle {
+		m.csrfToken = ""
+	}
+	csrfToken := m.csrfToken
 	cb := m.OnStatusChange
 	logsCopy := make([]string, len(m.recentLogs))
 	copy(logsCopy, m.recentLogs)
 
-	log.Printf("\033[1;36m[Hub State Update]\033[0m Transition: '%s' -> '%s' (err: '%s')", oldStatus, status, errorMsg)
+	log.Printf("\033[1;36m[Hub State Update]\033[0m Transition: '%s' -> '%s' (csrf: %t, err: '%s')", oldStatus, status, csrfToken != "", errorMsg)
 
 	if cb != nil {
-		go cb(status, errorMsg, logsCopy)
+		go cb(status, csrfToken, errorMsg, logsCopy)
 	}
 }
 
@@ -140,14 +202,31 @@ func (m *HubManager) StartContinuousMonitor() {
 				m.mu.Lock()
 				currentStatus := m.status
 				if active {
-					if currentStatus != HubStatusOnline {
-						m.isRunning = true
-						m.setStatusLocked(HubStatusOnline, "")
-						log.Printf("\033[1;32m[Hub Monitor]\033[0m ✅ AGY Hub detected ONLINE on http://127.0.0.1:%s", m.HubPort)
+					if m.csrfToken == "" {
+						m.mu.Unlock()
+						tok := m.FetchCsrfToken()
+						m.mu.Lock()
+						if tok != "" {
+							m.csrfToken = tok
+						}
+					}
+					// Strictly require CSRF token to declare Hub online
+					if m.csrfToken != "" {
+						if currentStatus != HubStatusOnline {
+							m.isRunning = true
+							m.setStatusLocked(HubStatusOnline, "")
+							log.Printf("\033[1;32m[Hub Monitor]\033[0m ✅ AGY Hub detected ONLINE on http://127.0.0.1:%s (CSRF token present: %s...)", m.HubPort, m.csrfToken[:min(8, len(m.csrfToken))])
+						}
+					} else {
+						log.Printf("\033[1;33m[Hub Monitor]\033[0m ⏳ AGY Hub port %s listening, but CSRF token not yet extracted. Status remains '%s'", m.HubPort, currentStatus)
+						if currentStatus == HubStatusOnline {
+							m.setStatusLocked(HubStatusStarting, "")
+						}
 					}
 				} else {
-					if currentStatus == HubStatusOnline {
+					if currentStatus == HubStatusOnline || currentStatus == HubStatusStarting {
 						m.isRunning = false
+						m.csrfToken = ""
 						m.setStatusLocked(HubStatusStopped, "")
 						log.Printf("\033[1;33m[Hub Monitor]\033[0m ⚠️ AGY Hub port %s became unreachable -> marked STOPPED", m.HubPort)
 					}
@@ -177,9 +256,19 @@ func (m *HubManager) Start() error {
 	if m.isHubReady() {
 		m.isRunning = true
 		m.isExternal = true
-		m.setStatusLocked(HubStatusOnline, "")
 		m.mu.Unlock()
-		fmt.Printf(" \033[32m[✓]\033[0m AGY Hub is already active and listening on http://127.0.0.1:%s\n", m.HubPort)
+		tok := m.FetchCsrfToken()
+		m.mu.Lock()
+		if tok != "" {
+			m.csrfToken = tok
+			m.setStatusLocked(HubStatusOnline, "")
+			m.mu.Unlock()
+			fmt.Printf(" \033[32m[✓]\033[0m AGY Hub is already active and listening on http://127.0.0.1:%s\n", m.HubPort)
+			return nil
+		}
+		m.setStatusLocked(HubStatusStarting, "")
+		m.mu.Unlock()
+		fmt.Printf(" \033[33m[!]\033[0m AGY Hub port is active, waiting for CSRF token extraction...\n")
 		return nil
 	}
 
@@ -323,8 +412,18 @@ func (m *HubManager) Start() error {
 	}
 
 	if ready {
-		m.setStatus(HubStatusOnline, "")
-		fmt.Printf("\r\033[K \033[32m[✓]\033[0m AGY Hub is online and listening on http://127.0.0.1:%s\n", m.HubPort)
+		tok := m.FetchCsrfToken()
+		m.mu.Lock()
+		if tok != "" {
+			m.csrfToken = tok
+			m.setStatusLocked(HubStatusOnline, "")
+			m.mu.Unlock()
+			fmt.Printf("\r\033[K \033[32m[✓]\033[0m AGY Hub is online and listening on http://127.0.0.1:%s\n", m.HubPort)
+		} else {
+			m.setStatusLocked(HubStatusStarting, "")
+			m.mu.Unlock()
+			fmt.Printf("\r\033[K \033[33m[!]\033[0m AGY Hub port is open, waiting for CSRF token extraction...\n")
+		}
 	} else if m.IsRunning() {
 		fmt.Printf("\r\033[K \033[33m[!]\033[0m AGY Hub started (PID %d), waiting for initialization on port %s...\n", cmd.Process.Pid, m.HubPort)
 	}

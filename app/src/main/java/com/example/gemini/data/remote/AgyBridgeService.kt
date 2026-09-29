@@ -2,6 +2,7 @@ package com.example.gemini.data.remote
 
 import android.util.Log
 import com.example.gemini.data.preferences.AuthPreferences
+import com.example.gemini.data.remote.core.AgyCsrfManager
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
@@ -65,6 +66,7 @@ enum class BridgeConnectionState {
 data class AgyHubStatus(
     val status: String = "idle", // "idle", "starting", "online", "error", "stopped"
     val port: String = "8090",
+    val csrfToken: String? = null,
     val error: String? = null,
     val logs: List<String> = emptyList()
 )
@@ -184,6 +186,11 @@ class AgyBridgeService(
 
     fun updateHubStatus(newStatus: AgyHubStatus) {
         _hubStatus.value = newStatus
+        if (!newStatus.csrfToken.isNullOrBlank()) {
+            AgyCsrfManager.instance.setCachedToken(AuthPreferences.currentHubUrl, newStatus.csrfToken)
+        } else if (newStatus.status == "stopped" || newStatus.status == "error") {
+            AgyCsrfManager.instance.clearToken()
+        }
         _systemConnectionState.value = SystemConnectionState.Connected(
             hubStatus = newStatus.status,
             error = newStatus.error,
@@ -196,6 +203,7 @@ class AgyBridgeService(
         _hubStatus.value = AgyHubStatus(status = "stopped")
         _systemConnectionState.value = SystemConnectionState.Offline
         currentAuthState = true
+        AgyCsrfManager.instance.clearToken()
         try {
             activeWebSocket?.cancel()
         } catch (_: Exception) {}
@@ -367,6 +375,7 @@ class AgyBridgeService(
                     val hubObj = json.optJSONObject("hub")
                     val st = hubObj?.optString("status", if (hubObj.optBoolean("active", false)) "online" else "stopped") ?: "stopped"
                     val p = java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "8090"
+                    val csrf = hubObj?.optString("csrf_token")?.takeIf { it.isNotBlank() }
                     val err = hubObj?.optString("error")?.takeIf { it.isNotBlank() }
                     val logsArr = hubObj?.optJSONArray("logs")
                     val logsList = mutableListOf<String>()
@@ -375,7 +384,13 @@ class AgyBridgeService(
                             logsList.add(logsArr.optString(i))
                         }
                     }
-                    AgyHubStatus(status = st, port = p, error = err, logs = logsList)
+                    val hubUrl = AuthPreferences.currentHubUrl
+                    if (!csrf.isNullOrBlank()) {
+                        AgyCsrfManager.instance.setCachedToken(hubUrl, csrf)
+                    } else if (st == "stopped" || st == "error") {
+                        AgyCsrfManager.instance.clearToken(hubUrl)
+                    }
+                    AgyHubStatus(status = st, port = p, csrfToken = csrf, error = err, logs = logsList)
                 }
             } catch (_: Exception) {
                 null
@@ -398,7 +413,10 @@ class AgyBridgeService(
                     val root = JSONObject(text)
                     if (root.optString("type") == "hub_status") {
                         val st = root.optString("status", "idle")
-                        val p = java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "8090"
+                        val p = root.optString("port").takeIf { it.isNotBlank() }
+                            ?: java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "8090"
+                        val csrf = root.optString("csrf_token").takeIf { it.isNotBlank() }
+                            ?: root.optString("csrfToken").takeIf { it.isNotBlank() }
                         val err = root.optString("error").takeIf { it.isNotBlank() }
                         val logsArr = root.optJSONArray("logs")
                         val logsList = mutableListOf<String>()
@@ -407,7 +425,15 @@ class AgyBridgeService(
                                 logsList.add(logsArr.optString(i))
                             }
                         }
-                        val statusObj = AgyHubStatus(status = st, port = p, error = err, logs = logsList)
+
+                        val hubUrl = AuthPreferences.currentHubUrl
+                        if (!csrf.isNullOrBlank()) {
+                            AgyCsrfManager.instance.setCachedToken(hubUrl, csrf)
+                        } else if (st == "stopped" || st == "error") {
+                            AgyCsrfManager.instance.clearToken(hubUrl)
+                        }
+
+                        val statusObj = AgyHubStatus(status = st, port = p, csrfToken = csrf, error = err, logs = logsList)
                         _hubStatus.value = statusObj
                         _systemConnectionState.value = SystemConnectionState.Connected(
                             hubStatus = st,

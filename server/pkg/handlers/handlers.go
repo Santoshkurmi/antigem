@@ -90,13 +90,14 @@ func (h *Handler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 	hubActive := false
 	hubPort := "8090"
 	hubStatus := "stopped"
+	hubCsrfToken := ""
 	hubError := ""
 	var hubLogs []string
 
 	if h.HubManager != nil {
 		hubActive = h.HubManager.IsRunning()
 		hubPort = h.HubManager.HubPort
-		hubStatus, hubError, hubLogs = h.HubManager.GetStatusInfo()
+		hubStatus, hubCsrfToken, hubError, hubLogs = h.HubManager.GetStatusInfo()
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":    "ok",
@@ -104,12 +105,13 @@ func (h *Handler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 		"version":   "2.0.0",
 		"hub": map[string]interface{}{
-			"active":  hubActive,
-			"status":  hubStatus,
-			"port":    hubPort,
-			"address": fmt.Sprintf("http://127.0.0.1:%s", hubPort),
-			"error":   hubError,
-			"logs":    hubLogs,
+			"active":     hubActive,
+			"status":     hubStatus,
+			"port":       hubPort,
+			"csrf_token": hubCsrfToken,
+			"address":    fmt.Sprintf("http://127.0.0.1:%s", hubPort),
+			"error":      hubError,
+			"logs":       hubLogs,
 		},
 		"pool": map[string]interface{}{
 			"activeSessions": 0,

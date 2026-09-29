@@ -29,7 +29,7 @@ func (c *ClientConn) SendJSON(v interface{}) error {
 }
 
 type HubStatusProvider interface {
-	GetStatusInfo() (status string, errorMsg string, logs []string)
+	GetStatusInfo() (status string, csrfToken string, errorMsg string, logs []string)
 }
 
 type Hub struct {
@@ -56,13 +56,14 @@ func (h *Hub) Broadcast(msg interface{}) {
 	}
 }
 
-func (h *Hub) BroadcastHubStatus(status string, port string, errorMsg string, logs []string) {
+func (h *Hub) BroadcastHubStatus(status string, port string, csrfToken string, errorMsg string, logs []string) {
 	h.Broadcast(map[string]interface{}{
-		"type":   "hub_status",
-		"status": status,
-		"port":   port,
-		"error":  errorMsg,
-		"logs":   logs,
+		"type":       "hub_status",
+		"status":     status,
+		"port":       port,
+		"csrf_token": csrfToken,
+		"error":      errorMsg,
+		"logs":       logs,
 	})
 }
 
@@ -100,13 +101,14 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	// Send initial hub status immediately on connection
 	if prov != nil {
-		st, errMsg, logs := prov.GetStatusInfo()
+		st, csrf, errMsg, logs := prov.GetStatusInfo()
 		_ = client.SendJSON(map[string]interface{}{
-			"type":   "hub_status",
-			"status": st,
-			"port":   port,
-			"error":  errMsg,
-			"logs":   logs,
+			"type":       "hub_status",
+			"status":     st,
+			"port":       port,
+			"csrf_token": csrf,
+			"error":      errMsg,
+			"logs":       logs,
 		})
 	}
 

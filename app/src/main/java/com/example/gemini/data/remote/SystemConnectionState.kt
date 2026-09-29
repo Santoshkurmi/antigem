@@ -37,7 +37,7 @@ sealed class SystemConnectionState {
         get() = this is Connected
 
     val isHubOnline: Boolean
-        get() = this is Connected && this.hubStatus == "online"
+        get() = this is Connected && this.hubStatus == "online" && com.example.gemini.data.remote.core.AgyCsrfManager.instance.token.isNotBlank()
 
     val isHubStarting: Boolean
         get() = this is Connected && this.hubStatus == "starting"

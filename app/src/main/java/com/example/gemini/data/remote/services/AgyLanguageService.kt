@@ -82,13 +82,8 @@ suspend fun <Req : Any, Resp : Any> GrpcCall<Req, Resp>.executeSafely(
     val isCsrfError = e.grpcStatus == GrpcStatus.UNAUTHENTICATED || e.grpcMessage?.contains("CSRF", ignoreCase = true) == true
     if (isCsrfError) {
         val hubUrl = AuthPreferences.currentHubUrl
-        android.util.Log.w("AGY_RPC", "🔄 [AgyLanguageService.executeSafely] CSRF error detected on RPC. Refreshing CSRF token...")
+        android.util.Log.w("AGY_RPC", "🔄 [AgyLanguageService.executeSafely] CSRF error detected on RPC. Invalidating token...")
         AgyCsrfManager.instance.notifyCsrfExpired(hubUrl, "executeSafely")
-        try {
-            AgyCsrfManager.instance.getCsrfToken(hubUrl, forceRefresh = true)
-        } catch (refreshEx: Throwable) {
-            android.util.Log.w("AGY_RPC", "⚠️ [AgyLanguageService.executeSafely] CSRF token refresh failed: ${refreshEx.message}")
-        }
     }
     val err = when {
         isCsrfError || e.grpcStatus == GrpcStatus.UNAUTHENTICATED -> AgyRpcError.Unauthenticated(e.grpcMessage ?: "Session unauthenticated or CSRF validation failed.")

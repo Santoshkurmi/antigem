@@ -28,7 +28,18 @@ object AgyOkHttpClient {
             .retryOnConnectionFailure(true)
             .addInterceptor { chain ->
                 val hubUrl = AuthPreferences.currentHubUrl
-                val token = AgyCsrfManager.instance.getCsrfTokenSync(hubUrl)
+                var token = AgyCsrfManager.instance.token
+                if (token.isBlank()) {
+                    try {
+                        val status = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                            com.example.gemini.data.remote.AgyBridgeService.instance.fetchServerStatus(AuthPreferences.currentBridgeHttpUrl)
+                        }
+                        if (!status?.csrfToken.isNullOrBlank()) {
+                            token = status.csrfToken
+                        }
+                    } catch (_: Exception) {}
+                }
+
                 val request = chain.request().newBuilder()
                     .header("User-Agent", "antiGem-Android-Native")
                     .header("X-Grpc-Web", "1")
@@ -44,13 +55,7 @@ object AgyOkHttpClient {
                 // Check for CSRF expiry (HTTP 401/403 or gRPC status 16 UNAUTHENTICATED)
                 val isCsrfError = response.code == 401 || response.code == 403 || response.header("grpc-status") == "16"
                 if (isCsrfError) {
-                    response.close()
                     AgyCsrfManager.instance.notifyCsrfExpired(hubUrl, chain.request().url.encodedPath)
-                    val freshToken = AgyCsrfManager.instance.getCsrfTokenSync(hubUrl, forceRefresh = true)
-                    val retryRequest = request.newBuilder()
-                        .header("x-codeium-csrf-token", freshToken)
-                        .build()
-                    return@addInterceptor chain.proceed(retryRequest)
                 }
 
                 response

@@ -420,8 +420,8 @@ func main() {
 	wsHub.StatusProv = hubMgr
 	wsHub.HubPort = hubPort
 	hubMgr.OnLoginURL = h.HandleLoginURL
-	hubMgr.OnStatusChange = func(status string, errorMsg string, logs []string) {
-		wsHub.BroadcastHubStatus(status, hubPort, errorMsg, logs)
+	hubMgr.OnStatusChange = func(status string, csrfToken string, errorMsg string, logs []string) {
+		wsHub.BroadcastHubStatus(status, hubPort, csrfToken, errorMsg, logs)
 	}
 	hubMgr.StartContinuousMonitor()
 
