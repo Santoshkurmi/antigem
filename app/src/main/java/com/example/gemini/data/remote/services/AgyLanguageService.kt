@@ -66,7 +66,7 @@ sealed class AgyRpcError(override val message: String, override val cause: Throw
 
 /**
  * Executes a unary gRPC call safely, mapping network/gRPC failures into AgyRpcError.
- * Automatically handles CSRF expiry by invalidating cached token and retrying once.
+ * Automatically handles CSRF expiry by invalidating and refreshing the cached token without retrying the request.
  */
 suspend fun <Req : Any, Resp : Any> GrpcCall<Req, Resp>.executeSafely(
     request: Req
@@ -82,34 +82,20 @@ suspend fun <Req : Any, Resp : Any> GrpcCall<Req, Resp>.executeSafely(
     val isCsrfError = e.grpcStatus == GrpcStatus.UNAUTHENTICATED || e.grpcMessage?.contains("CSRF", ignoreCase = true) == true
     if (isCsrfError) {
         val hubUrl = AuthPreferences.currentHubUrl
-        android.util.Log.w("AGY_RPC", "🔄 [AgyLanguageService.executeSafely] CSRF error detected on RPC. Invalidating cache and retrying...")
+        android.util.Log.w("AGY_RPC", "🔄 [AgyLanguageService.executeSafely] CSRF error detected on RPC. Refreshing CSRF token...")
         AgyCsrfManager.instance.notifyCsrfExpired(hubUrl, "executeSafely")
         try {
             AgyCsrfManager.instance.getCsrfToken(hubUrl, forceRefresh = true)
-            val retryRes = execute(request)
-            android.util.Log.d("AGY_RPC", "✅ [AgyLanguageService.executeSafely] Retry succeeded after CSRF refresh: ${retryRes::class.simpleName}")
-            Result.success(retryRes)
-        } catch (retryEx: CancellationException) {
-            throw retryEx
-        } catch (retryEx: GrpcException) {
-            android.util.Log.e("AGY_RPC", "❌ [AgyLanguageService.executeSafely] Retry failed: status=${retryEx.grpcStatus}, msg=${retryEx.grpcMessage}", retryEx)
-            val err = when (retryEx.grpcStatus) {
-                GrpcStatus.UNAUTHENTICATED -> AgyRpcError.Unauthenticated(retryEx.grpcMessage ?: "Unauthenticated")
-                GrpcStatus.UNAVAILABLE -> AgyRpcError.DaemonOffline("AGY Hub is offline or unreachable.", retryEx)
-                else -> AgyRpcError.ServerError(retryEx.grpcStatus, retryEx.grpcMessage ?: retryEx.message ?: "gRPC error")
-            }
-            Result.failure(err)
-        } catch (retryEx: Throwable) {
-            android.util.Log.e("AGY_RPC", "❌ [AgyLanguageService.executeSafely] Retry failed with throwable: ${retryEx.message}", retryEx)
-            Result.failure(AgyRpcError.Unknown(retryEx.message ?: "Unexpected error during retry", retryEx))
+        } catch (refreshEx: Throwable) {
+            android.util.Log.w("AGY_RPC", "⚠️ [AgyLanguageService.executeSafely] CSRF token refresh failed: ${refreshEx.message}")
         }
-    } else {
-        val err = when (e.grpcStatus) {
-            GrpcStatus.UNAVAILABLE -> AgyRpcError.DaemonOffline("AGY Hub is offline or unreachable.", e)
-            else -> AgyRpcError.ServerError(e.grpcStatus, e.grpcMessage ?: e.message ?: "gRPC error")
-        }
-        Result.failure(err)
     }
+    val err = when {
+        isCsrfError || e.grpcStatus == GrpcStatus.UNAUTHENTICATED -> AgyRpcError.Unauthenticated(e.grpcMessage ?: "Session unauthenticated or CSRF validation failed.")
+        e.grpcStatus == GrpcStatus.UNAVAILABLE -> AgyRpcError.DaemonOffline("AGY Hub is offline or unreachable.", e)
+        else -> AgyRpcError.ServerError(e.grpcStatus, e.grpcMessage ?: e.message ?: "gRPC error")
+    }
+    Result.failure(err)
 } catch (e: IOException) {
     android.util.Log.e("AGY_RPC", "❌ [AgyLanguageService.executeSafely] IOException: ${e.message}", e)
     Result.failure(AgyRpcError.DaemonOffline("Failed to connect to AGY Hub: ${e.message}", e))
