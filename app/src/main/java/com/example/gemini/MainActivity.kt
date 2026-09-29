@@ -355,9 +355,6 @@ class MainActivity : ComponentActivity() {
             com.example.gemini.data.service.TermuxService.start(this)
             com.example.gemini.data.local.LocalServerManager.autoStartOnAppLaunch(this)
         }
-        lifecycleScope.launch {
-            com.example.gemini.data.daemon.TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
-        }
     }
 
     override fun onNewIntent(intent: Intent) {

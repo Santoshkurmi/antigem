@@ -147,9 +147,6 @@ fun ChatScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.onAppForegrounded()
-                scope.launch {
-                    TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
-                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

@@ -126,7 +126,6 @@ fun IdeScreen(
 
     fun refreshProjectsAndTree() {
         coroutineScope.launch {
-            TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
             val projs = TermuxDaemonManager.loadProjects(conversations)
             val current = TermuxDaemonManager.activeProject.value
             if (current != null) {
@@ -141,7 +140,6 @@ fun IdeScreen(
     // Auto-refresh file tree and projects whenever user switches to IDE screen
     LaunchedEffect(isVisible) {
         if (isVisible) {
-            TermuxDaemonManager.ensureDaemonStarted()
             refreshProjectsAndTree()
         }
     }

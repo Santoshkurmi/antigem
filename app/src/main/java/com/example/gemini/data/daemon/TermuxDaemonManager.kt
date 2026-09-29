@@ -106,11 +106,24 @@ object TermuxDaemonManager {
             _activeProject.value = ProjectItem(savedName, savedPath)
         }
 
-        // Immediately check daemon status and start continuous auto-reconnection monitor
+        // Reactively observe unified bridge system connection state (zero polling)
         scope.launch {
-            ensureDaemonStarted()
+            com.example.gemini.data.remote.AgyBridgeService.instance.systemConnectionState.collect { state ->
+                when (state) {
+                    is com.example.gemini.data.remote.SystemConnectionState.Connected -> {
+                        _status.value = DaemonStatus.RUNNING
+                        val ep = AuthPreferences.currentBridgeHttpUrl.removePrefix("http://").removePrefix("https://")
+                        _statusMessage.value = "Running on $ep"
+                    }
+                    is com.example.gemini.data.remote.SystemConnectionState.Offline,
+                    is com.example.gemini.data.remote.SystemConnectionState.Error -> {
+                        _status.value = DaemonStatus.ERROR
+                        val ep = AuthPreferences.currentBridgeHttpUrl.removePrefix("http://").removePrefix("https://")
+                        _statusMessage.value = "Server Offline ($ep)"
+                    }
+                }
+            }
         }
-        startAutoReconnectMonitor()
     }
 
     fun setActiveProject(project: ProjectItem?) {
@@ -283,13 +296,7 @@ object TermuxDaemonManager {
     }
 
     fun startAutoReconnectMonitor() {
-        if (autoReconnectJob?.isActive == true) return
-        autoReconnectJob = scope.launch {
-            while (isActive) {
-                delay(12_000)
-                checkHealthAndReconnect(isSilent = true)
-            }
-        }
+        // No-op: connection state is reactively managed by AgyBridgeService WebSocket and systemConnectionState
     }
 
     suspend fun checkHealthAndReconnect(isSilent: Boolean = false): Boolean = withContext(Dispatchers.IO) {
@@ -326,8 +333,6 @@ object TermuxDaemonManager {
         val ep = AuthPreferences.currentBridgeHttpUrl.removePrefix("http://").removePrefix("https://")
         _statusMessage.value = "Checking $ep..."
         log("Checking HTTP healthcheck at ${AuthPreferences.currentBridgeHttpUrl}/api/health...")
-        val ok = checkHealthAndReconnect(isSilent = false)
-        startAutoReconnectMonitor()
-        ok
+        checkHealthAndReconnect(isSilent = false)
     }
 }
