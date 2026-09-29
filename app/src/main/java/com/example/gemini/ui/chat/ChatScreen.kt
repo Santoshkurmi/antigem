@@ -264,6 +264,7 @@ fun ChatScreen(
     var showAttachmentSelector by remember { mutableStateOf(false) }
     var showProjectPickerDialog by remember { mutableStateOf(false) }
     var showWorkspaceFolderBrowserDialog by remember { mutableStateOf(false) }
+    var showStopConfirmDialog by remember { mutableStateOf(false) }
     var isInitialGracePeriod by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
@@ -1754,7 +1755,7 @@ fun ChatScreen(
                         textFieldValue = TextFieldValue("")
                         userSentMessageTrigger++
                     },
-                    onStopStreaming = { viewModel.stopStreaming() },
+                    onStopStreaming = { showStopConfirmDialog = true },
                     attachments = attachments,
                     isUploadingAttachment = isUploadingAttachment,
                     onRemoveAttachment = { viewModel.removeAttachment(it) },
@@ -2010,6 +2011,60 @@ fun ChatScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingMessageAction = null }) {
+                    Text(text = "Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+            }
+        )
+    }
+
+    // Confirmation Dialog before stopping active model generation
+    if (showStopConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showStopConfirmDialog = false },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Cancel,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Stop Generation?",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.5.sp
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = "Do you want to stop the model from outputting? The current generation will be stopped immediately.",
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showStopConfirmDialog = false
+                        viewModel.stopStreaming()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "Stop Output",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onError
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStopConfirmDialog = false }) {
                     Text(text = "Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
             }
