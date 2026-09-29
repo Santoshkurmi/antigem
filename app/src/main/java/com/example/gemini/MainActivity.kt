@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
         com.example.gemini.data.local.LocalTerminalBridge.instance.init(this)
         com.example.gemini.data.remote.AndroidLocalBridgeServer.instance.start(this)
         handleOAuthIntent(intent)
+        handleIncomingFileIntent(intent)
 
         setContent {
             val initialThemeMode = remember { chatViewModel.authPreferences.getThemeModeSync() }
@@ -309,6 +310,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleOAuthIntent(intent)
+        handleIncomingFileIntent(intent)
     }
 
     private fun handleOAuthIntent(intent: Intent?) {
@@ -318,6 +320,27 @@ class MainActivity : ComponentActivity() {
             if (code != null) {
                 chatViewModel.handleOAuthCode(code)
             }
+        }
+    }
+
+    private fun handleIncomingFileIntent(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action
+        val uri: android.net.Uri? = when (action) {
+            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_SEND -> {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM)
+                }
+            }
+            else -> null
+        }
+
+        if (uri != null) {
+            chatViewModel.loadSharedConversationFromUri(this, uri)
         }
     }
 }

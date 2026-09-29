@@ -65,7 +65,9 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Description
 import com.example.gemini.theme.ClaudeTerracotta
 import com.example.gemini.theme.GeminiBlue
+import androidx.compose.material.icons.outlined.Share
 import com.example.gemini.ui.components.ConversationExportHelper
+import com.example.gemini.ui.components.ConversationShareHelper
 import com.example.gemini.ui.components.DrawerEngineWarmingUpView
 import com.example.gemini.ui.components.SidebarChatListSkeleton
 import kotlinx.coroutines.launch
@@ -1669,6 +1671,28 @@ private fun ChatHistoryItemRow(
                                 conversationId = conv.id,
                                 title = conv.title,
                                 format = ConversationExportHelper.ExportFormat.HTML,
+                                snackbarHostState = snackbarHostState
+                            )
+                        }
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Share (.antigem)", fontSize = 13.5.sp) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Share,
+                            contentDescription = null,
+                            tint = ClaudeTerracotta,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        scope.launch {
+                            ConversationShareHelper.shareConversation(
+                                context = context,
+                                conversationId = conv.id,
+                                title = conv.title,
                                 snackbarHostState = snackbarHostState
                             )
                         }

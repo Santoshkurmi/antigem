@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gemini.data.preferences.AuthPreferences
@@ -66,6 +67,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _currentConversation = MutableStateFlow<Conversation?>(null)
     val currentConversation: StateFlow<Conversation?> = _currentConversation.asStateFlow()
+
+    private val _sharedConversationPreview = MutableStateFlow<com.example.gemini.ui.components.SharedConversationData?>(null)
+    val sharedConversationPreview: StateFlow<com.example.gemini.ui.components.SharedConversationData?> = _sharedConversationPreview.asStateFlow()
+
+    private val _isSharedConversationLoading = MutableStateFlow(false)
+    val isSharedConversationLoading: StateFlow<Boolean> = _isSharedConversationLoading.asStateFlow()
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
@@ -3596,6 +3603,45 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _deletingPluginId.value = null
             }
         }
+    }
+
+    private var sharedConversationLoadJob: Job? = null
+
+    fun loadSharedConversationFromUri(context: Context, uri: Uri) {
+        sharedConversationLoadJob?.cancel()
+        _isSharedConversationLoading.value = true
+        sharedConversationLoadJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream != null) {
+                    val parsed = com.example.gemini.ui.components.ConversationShareHelper.parseSharedConversation(inputStream)
+                    if (!isActive) return@launch
+                    _sharedConversationPreview.value = parsed
+                    withContext(Dispatchers.Main) {
+                        com.example.gemini.ui.components.AppToastHelper.showToast("Loaded shared chat: ${parsed.title}", com.example.gemini.ui.components.ChatToastType.SUCCESS)
+                    }
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) return@launch
+                Log.e("ChatViewModel", "Failed to load shared conversation from uri $uri: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    com.example.gemini.ui.components.AppToastHelper.showToast("Failed to load shared chat file", com.example.gemini.ui.components.ChatToastType.ERROR)
+                }
+            } finally {
+                _isSharedConversationLoading.value = false
+            }
+        }
+    }
+
+    fun cancelSharedConversationLoading() {
+        sharedConversationLoadJob?.cancel()
+        sharedConversationLoadJob = null
+        _isSharedConversationLoading.value = false
+        _sharedConversationPreview.value = null
+    }
+
+    fun dismissSharedConversation() {
+        _sharedConversationPreview.value = null
     }
 
     override fun onCleared() {

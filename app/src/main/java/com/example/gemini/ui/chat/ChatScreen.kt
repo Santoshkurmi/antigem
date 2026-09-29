@@ -102,6 +102,8 @@ import com.example.gemini.ui.components.FileLinkHandler
 import com.example.gemini.ui.components.LocalFileLinkHandler
 import com.example.gemini.ui.components.FileDetailsDialog
 import com.example.gemini.ui.components.MarkdownDocViewerModal
+import com.example.gemini.ui.components.SharedChatViewerModal
+import com.example.gemini.ui.components.SharedChatLoadingDialog
 import com.example.gemini.ui.components.ProjectPickerDialog
 import com.example.gemini.ui.components.FileManagerDialog
 import com.example.gemini.ui.components.ToolCallExpansionCache
@@ -175,6 +177,8 @@ fun ChatScreen(
     val contextWindowLimit by viewModel.contextWindowLimit.collectAsState()
 
     val summaryModelIdPref by viewModel.summaryModelIdPref.collectAsState()
+    val sharedConversationPreview by viewModel.sharedConversationPreview.collectAsState()
+    val isSharedConversationLoading by viewModel.isSharedConversationLoading.collectAsState()
     val isDevModeEnabled by viewModel.isDevModeEnabled.collectAsState()
     val chatFontScale by viewModel.chatFontScale.collectAsState(initial = 1.0f)
     val bridgeStatusMessage by viewModel.bridgeStatusMessage.collectAsState()
@@ -2223,6 +2227,20 @@ fun ChatScreen(
                     onNavigateToIde()
                 }
             }
+        )
+    }
+
+    // Shared Conversation Viewer Modal (.antigem / .jsonl shared chats)
+    sharedConversationPreview?.let { previewData ->
+        SharedChatViewerModal(
+            data = previewData,
+            onDismiss = { viewModel.dismissSharedConversation() }
+        )
+    }
+
+    if (isSharedConversationLoading) {
+        SharedChatLoadingDialog(
+            onCancel = { viewModel.cancelSharedConversationLoading() }
         )
     }
 
