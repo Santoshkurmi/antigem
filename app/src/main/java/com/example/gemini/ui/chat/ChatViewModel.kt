@@ -74,6 +74,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSharedConversationLoading = MutableStateFlow(false)
     val isSharedConversationLoading: StateFlow<Boolean> = _isSharedConversationLoading.asStateFlow()
 
+    private val _incomingMarkdownPreview = MutableStateFlow<Pair<String, String>?>(null)
+    val incomingMarkdownPreview: StateFlow<Pair<String, String>?> = _incomingMarkdownPreview.asStateFlow()
+
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
@@ -3642,6 +3645,41 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissSharedConversation() {
         _sharedConversationPreview.value = null
+    }
+
+    fun dismissIncomingMarkdownPreview() {
+        _incomingMarkdownPreview.value = null
+    }
+
+    fun loadMarkdownFromUri(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                var fileName: String? = null
+                if (uri.scheme == "content") {
+                    try {
+                        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                                if (nameIdx != -1) {
+                                    fileName = cursor.getString(nameIdx)
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+                val resolvedName = fileName ?: uri.lastPathSegment?.substringAfterLast('/') ?: "document.md"
+                val content = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+                _incomingMarkdownPreview.value = resolvedName to content
+                withContext(Dispatchers.Main) {
+                    com.example.gemini.ui.components.AppToastHelper.showToast("Opened $resolvedName", com.example.gemini.ui.components.ChatToastType.SUCCESS)
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "Failed to load markdown from URI $uri: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    com.example.gemini.ui.components.AppToastHelper.showToast("Failed to load markdown file", com.example.gemini.ui.components.ChatToastType.ERROR)
+                }
+            }
+        }
     }
 
     override fun onCleared() {

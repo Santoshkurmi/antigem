@@ -179,6 +179,7 @@ fun ChatScreen(
     val summaryModelIdPref by viewModel.summaryModelIdPref.collectAsState()
     val sharedConversationPreview by viewModel.sharedConversationPreview.collectAsState()
     val isSharedConversationLoading by viewModel.isSharedConversationLoading.collectAsState()
+    val incomingMarkdownPreview by viewModel.incomingMarkdownPreview.collectAsState()
     val isDevModeEnabled by viewModel.isDevModeEnabled.collectAsState()
     val chatFontScale by viewModel.chatFontScale.collectAsState(initial = 1.0f)
     val bridgeStatusMessage by viewModel.bridgeStatusMessage.collectAsState()
@@ -2221,6 +2222,23 @@ fun ChatScreen(
             onDismiss = { activeMarkdownDoc = null },
             onOpenInIde = { path ->
                 activeMarkdownDoc = null
+                scope.launch {
+                    val content = try { File(path).readText() } catch (e: Exception) { docContent }
+                    TermuxDaemonManager.openOrSelectTab(path, File(path).name, content)
+                    onNavigateToIde()
+                }
+            }
+        )
+    }
+
+    // External / Shared Incoming Markdown Document Viewer
+    incomingMarkdownPreview?.let { (docPath, docContent) ->
+        MarkdownDocViewerModal(
+            filePath = docPath,
+            content = docContent,
+            onDismiss = { viewModel.dismissIncomingMarkdownPreview() },
+            onOpenInIde = { path ->
+                viewModel.dismissIncomingMarkdownPreview()
                 scope.launch {
                     val content = try { File(path).readText() } catch (e: Exception) { docContent }
                     TermuxDaemonManager.openOrSelectTab(path, File(path).name, content)

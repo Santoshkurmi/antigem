@@ -340,7 +340,15 @@ class MainActivity : ComponentActivity() {
         }
 
         if (uri != null) {
-            chatViewModel.loadSharedConversationFromUri(this, uri)
+            val type = intent.type?.lowercase() ?: ""
+            val uriStr = uri.toString().lowercase()
+            val pathStr = uri.path?.lowercase() ?: ""
+            val isMarkdown = type.contains("markdown") || uriStr.endsWith(".md") || uriStr.endsWith(".markdown") || pathStr.endsWith(".md") || pathStr.endsWith(".markdown")
+            if (isMarkdown) {
+                chatViewModel.loadMarkdownFromUri(this, uri)
+            } else {
+                chatViewModel.loadSharedConversationFromUri(this, uri)
+            }
         }
     }
 }
