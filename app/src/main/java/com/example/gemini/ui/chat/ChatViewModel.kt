@@ -77,6 +77,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _incomingMarkdownPreview = MutableStateFlow<Pair<String, String>?>(null)
     val incomingMarkdownPreview: StateFlow<Pair<String, String>?> = _incomingMarkdownPreview.asStateFlow()
 
+    val requestedViewMode = MutableStateFlow<String?>(null)
+
+    fun requestViewMode(mode: String) {
+        requestedViewMode.value = mode
+    }
+
+    fun consumeRequestedViewMode() {
+        requestedViewMode.value = null
+    }
+
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
@@ -3677,6 +3687,44 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e("ChatViewModel", "Failed to load markdown from URI $uri: ${e.message}", e)
                 withContext(Dispatchers.Main) {
                     com.example.gemini.ui.components.AppToastHelper.showToast("Failed to load markdown file", com.example.gemini.ui.components.ChatToastType.ERROR)
+                }
+            }
+        }
+    }
+
+    fun openFileInIdeDirectly(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                var fileName: String? = null
+                if (uri.scheme == "content") {
+                    try {
+                        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                                if (nameIdx != -1) {
+                                    fileName = cursor.getString(nameIdx)
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+                val resolvedName = fileName ?: uri.lastPathSegment?.substringAfterLast('/') ?: "file.txt"
+                val resolvedPath = if (uri.scheme == "file") uri.path ?: resolvedName else uri.toString()
+                val content = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+
+                com.example.gemini.data.daemon.TermuxDaemonManager.openOrSelectTab(
+                    path = resolvedPath,
+                    name = resolvedName,
+                    content = content
+                )
+                requestViewMode("IDE")
+                withContext(Dispatchers.Main) {
+                    com.example.gemini.ui.components.AppToastHelper.showToast("Opened $resolvedName in IDE", com.example.gemini.ui.components.ChatToastType.SUCCESS)
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "Failed to open file in IDE from URI $uri: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    com.example.gemini.ui.components.AppToastHelper.showToast("Failed to open file in IDE", com.example.gemini.ui.components.ChatToastType.ERROR)
                 }
             }
         }

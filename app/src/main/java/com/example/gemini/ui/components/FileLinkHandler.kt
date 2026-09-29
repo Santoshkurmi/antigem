@@ -313,7 +313,11 @@ fun MarkdownDocViewerModal(
                                 onOpenInIde(filePath)
                             }
                         ) {
-                            Icon(Icons.Outlined.Code, contentDescription = "Open in IDE", tint = ClaudeTerracotta)
+                            Icon(
+                                imageVector = Icons.Outlined.Edit,
+                                contentDescription = "Edit in IDE",
+                                tint = ClaudeTerracotta
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(

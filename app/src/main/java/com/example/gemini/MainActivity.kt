@@ -72,8 +72,41 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemDark
             }
 
-            var currentViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
+            val requestedMode by chatViewModel.requestedViewMode.collectAsState()
+            val initialViewMode = remember {
+                when (chatViewModel.requestedViewMode.value) {
+                    "IDE" -> AppViewMode.IDE
+                    "TERMINAL" -> AppViewMode.TERMINAL
+                    "BROWSER" -> AppViewMode.BROWSER
+                    else -> AppViewMode.CHAT
+                }
+            }
+            var currentViewMode by remember { mutableStateOf(initialViewMode) }
             var previousViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
+
+            LaunchedEffect(requestedMode) {
+                requestedMode?.let { mode ->
+                    when (mode) {
+                        "IDE" -> {
+                            previousViewMode = currentViewMode
+                            currentViewMode = AppViewMode.IDE
+                        }
+                        "CHAT" -> {
+                            previousViewMode = currentViewMode
+                            currentViewMode = AppViewMode.CHAT
+                        }
+                        "TERMINAL" -> {
+                            previousViewMode = currentViewMode
+                            currentViewMode = AppViewMode.TERMINAL
+                        }
+                        "BROWSER" -> {
+                            previousViewMode = currentViewMode
+                            currentViewMode = AppViewMode.BROWSER
+                        }
+                    }
+                    chatViewModel.consumeRequestedViewMode()
+                }
+            }
 
             val isFloatingSwitcherEnabled by chatViewModel.isFloatingSwitcherEnabled.collectAsState()
             val floatingSwitcherOrientation by chatViewModel.floatingSwitcherOrientation.collectAsState()
@@ -340,14 +373,61 @@ class MainActivity : ComponentActivity() {
         }
 
         if (uri != null) {
-            val type = intent.type?.lowercase() ?: ""
-            val uriStr = uri.toString().lowercase()
-            val pathStr = uri.path?.lowercase() ?: ""
-            val isMarkdown = type.contains("markdown") || uriStr.endsWith(".md") || uriStr.endsWith(".markdown") || pathStr.endsWith(".md") || pathStr.endsWith(".markdown")
-            if (isMarkdown) {
-                chatViewModel.loadMarkdownFromUri(this, uri)
-            } else {
-                chatViewModel.loadSharedConversationFromUri(this, uri)
+            val intentMime = intent.type?.lowercase() ?: ""
+            val crMime = try { contentResolver.getType(uri)?.lowercase() } catch (_: Exception) { null } ?: ""
+            val resolvedMime = intentMime.ifBlank { crMime }
+            val uriPath = uri.path?.lowercase() ?: ""
+
+            var fileName: String? = null
+            if (uri.scheme == "content") {
+                try {
+                    contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            if (nameIdx != -1) {
+                                fileName = cursor.getString(nameIdx)?.lowercase()
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+            val displayName = fileName ?: uri.lastPathSegment?.substringAfterLast('/')?.lowercase() ?: uriPath.substringAfterLast('/')
+
+            val isMarkdown = resolvedMime.contains("markdown") || displayName.endsWith(".md") || displayName.endsWith(".markdown") || uriPath.endsWith(".md") || uriPath.endsWith(".markdown")
+            val isAntigem = displayName.endsWith(".antigem") || displayName.endsWith(".jsonl.antigem") || uriPath.endsWith(".antigem") || uriPath.endsWith(".jsonl.antigem")
+
+            when {
+                isMarkdown -> {
+                    chatViewModel.loadMarkdownFromUri(this, uri)
+                }
+                isAntigem -> {
+                    chatViewModel.loadSharedConversationFromUri(this, uri)
+                }
+                resolvedMime.startsWith("text/") || resolvedMime.contains("json") || resolvedMime.contains("javascript") ||
+                resolvedMime.contains("xml") || resolvedMime.contains("sql") || resolvedMime.contains("html") ||
+                resolvedMime.contains("css") || resolvedMime.contains("x-sh") || resolvedMime.contains("script") ||
+                resolvedMime.contains("code") || displayName.endsWith(".html") || displayName.endsWith(".htm") ||
+                displayName.endsWith(".js") || displayName.endsWith(".ts") || displayName.endsWith(".py") ||
+                displayName.endsWith(".json") || displayName.endsWith(".txt") || displayName.endsWith(".xml") -> {
+                    chatViewModel.openFileInIdeDirectly(this, uri)
+                }
+                else -> {
+                    // Probe if text or antigem trajectory header
+                    try {
+                        val headerSample = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {
+                            val chars = CharArray(150)
+                            val read = it.read(chars, 0, 150)
+                            if (read > 0) String(chars, 0, read) else ""
+                        } ?: ""
+                        if (headerSample.contains("\"antigem_trajectory\"")) {
+                            chatViewModel.loadSharedConversationFromUri(this, uri)
+                        } else {
+                            chatViewModel.openFileInIdeDirectly(this, uri)
+                        }
+                    } catch (_: Exception) {
+                        chatViewModel.openFileInIdeDirectly(this, uri)
+                    }
+                }
             }
         }
     }
