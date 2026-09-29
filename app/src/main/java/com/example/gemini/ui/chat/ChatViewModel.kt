@@ -1330,6 +1330,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             "stopped" -> {
                                 _isServerOnline.value = false
                                 _isBridgeOnline.value = false
+                                if (_conversations.value.any { it.isRunning }) {
+                                    _conversations.value = _conversations.value.map { if (it.isRunning) it.copy(isRunning = false) else it }
+                                }
+                                if (_currentConversation.value?.isRunning == true) {
+                                    _currentConversation.value = _currentConversation.value?.copy(isRunning = false)
+                                }
                                 agyBridgeService.resetState()
                             }
                         }
@@ -1553,6 +1559,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     android.util.Log.e("ChatViewModel", "subscribeToSummaries failed: ${e.message}")
                     _isServerOnline.value = false
+                    if (_conversations.value.any { it.isRunning }) {
+                        _conversations.value = _conversations.value.map { if (it.isRunning) it.copy(isRunning = false) else it }
+                    }
+                    if (_currentConversation.value?.isRunning == true) {
+                        _currentConversation.value = _currentConversation.value?.copy(isRunning = false)
+                    }
                     val rawErr = e.message ?: "Connection failed"
                     val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
                         "Cannot connect to Antigravity Hub (${AuthPreferences.currentHubUrl}). Make sure 'agy --hub' is running."
