@@ -67,7 +67,7 @@ sealed class SystemConnectionState {
         val hubUrl: String = AuthPreferences.currentHubUrl,
         val bridgeUrl: String = AuthPreferences.currentBridgeHttpUrl,
         val error: String? = null,
-        val isAuth: Boolean = true,
+        override val isAuth: Boolean = true,
         val isAuthChecking: Boolean = false,
         val hasCsrfToken: Boolean = false
     ) : SystemConnectionState() {
@@ -102,7 +102,7 @@ sealed class SystemConnectionState {
     val isReady: Boolean
         get() = status == SystemStatus.READY
 
-    val isAuth: Boolean
+    open val isAuth: Boolean
         get() = status != SystemStatus.UNAUTHENTICATED
 
     val canSend: Boolean
