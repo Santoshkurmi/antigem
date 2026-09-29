@@ -355,22 +355,24 @@ object IdeApiClient {
         force: Boolean = false
     ): FileSaveResult = withContext(Dispatchers.IO) {
         try {
-            val payload = JSONObject().apply {
-                put("path", path)
-                put("content", content)
+            val payload = kotlinx.serialization.json.buildJsonObject {
+                put("path", kotlinx.serialization.json.JsonPrimitive(path))
+                put("content", kotlinx.serialization.json.JsonPrimitive(content))
                 if (!expectedHash.isNullOrBlank()) {
-                    put("expectedHash", expectedHash)
+                    put("expectedHash", kotlinx.serialization.json.JsonPrimitive(expectedHash))
                 }
                 if (force) {
-                    put("force", true)
+                    put("force", kotlinx.serialization.json.JsonPrimitive(true))
                 }
             }.toString()
+            Log.d(TAG, "[saveFileDetailed] Sending save request: url=$baseUrl/api/file/save, path='$path', contentLength=${content.length}, force=$force, expectedHash=$expectedHash")
             val request = Request.Builder()
                 .url("$baseUrl/api/file/save")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
             client.newCall(request).execute().use { response ->
                 val bodyStr = response.body?.string().orEmpty()
+                Log.d(TAG, "[saveFileDetailed] Response code=${response.code}, body=$bodyStr")
                 if (response.code == 409) {
                     val json = try { JSONObject(bodyStr) } catch (_: Exception) { JSONObject() }
                     val diskHash = json.optString("diskHash")

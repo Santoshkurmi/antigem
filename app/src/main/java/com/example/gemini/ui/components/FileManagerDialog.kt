@@ -86,9 +86,12 @@ fun FileManagerDialog(
     initialPath: String? = null,
     onOpenAsProject: ((ProjectItem) -> Unit)? = null,
     onOpenFileInEditor: ((path: String, name: String) -> Unit)? = null,
+    onSaveFileHere: ((folderPath: String, fileName: String) -> Unit)? = null,
+    saveModeFileName: String? = null,
     onDismiss: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    var saveFileNameInput by remember(saveModeFileName) { mutableStateOf(saveModeFileName ?: "file.txt") }
     var currentPath by remember {
         val start = initialPath?.takeIf { it.isNotBlank() } ?: FileManagerStateHolder.currentPath
         if (FileManagerStateHolder.currentPath != start) {
@@ -489,6 +492,8 @@ fun FileManagerDialog(
                                         .clickable {
                                             if (item.isDir) {
                                                 jumpTo(item.path)
+                                            } else if (onSaveFileHere != null) {
+                                                saveFileNameInput = item.name
                                             } else if (onOpenFileInEditor != null) {
                                                 onOpenFileInEditor(item.path, item.name)
                                                 onDismiss()
@@ -633,8 +638,66 @@ fun FileManagerDialog(
                             }
                         }
 
-                        // Open Folder as Project Button
-                        if (onOpenAsProject != null) {
+                        // Save File to Current Folder Dock
+                        if (onSaveFileHere != null) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Folder,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = ClaudeTerracotta
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Folder: ${currentPath.ifBlank { "~" }}",
+                                        fontSize = 11.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                OutlinedTextField(
+                                    value = saveFileNameInput,
+                                    onValueChange = { saveFileNameInput = it },
+                                    label = { Text("File Name to Save", fontSize = 12.sp) },
+                                    singleLine = true,
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Description,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = ClaudeTerracotta
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Button(
+                                    onClick = {
+                                        val name = saveFileNameInput.trim().trimStart('/').trimEnd('/').ifBlank { "file.txt" }
+                                        val folder = currentPath.trim().ifBlank { "~" }
+                                        onSaveFileHere(folder, name)
+                                        onDismiss()
+                                    },
+                                    enabled = saveFileNameInput.isNotBlank(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(44.dp)
+                                ) {
+                                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Save to this Folder", fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else if (onOpenAsProject != null) {
                             Button(
                                 onClick = {
                                     val folderName = File(currentPath).name.ifBlank { "Project" }

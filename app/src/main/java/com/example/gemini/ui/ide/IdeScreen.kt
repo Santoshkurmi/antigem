@@ -87,6 +87,7 @@ fun IdeScreen(
     var isWordWrap by remember { mutableStateOf(false) }
     var showNewProjectDialog by remember { mutableStateOf(false) }
     var showFileManager by remember { mutableStateOf(false) }
+    var saveAsDialogTab by remember { mutableStateOf<OpenTab?>(null) }
     var tabToClose by remember { mutableStateOf<OpenTab?>(null) }
     var conflictDialogTab by remember { mutableStateOf<OpenTab?>(null) }
     var autoUpdateNotification by remember { mutableStateOf<String?>(null) }
@@ -379,39 +380,47 @@ fun IdeScreen(
 
                         // Save Button
                         if (activeTab != null && !activeTab.isReadOnly && (!isImageFile || (isSvgFile && showSvgSource))) {
+                            val isExternal = activeTab.isExternal || activeTab.path.startsWith("content://") || activeTab.path.startsWith("android.resource://")
                             IconButton(
                                 onClick = {
-                                    coroutineScope.launch {
-                                        val result = IdeApiClient.saveFileDetailed(
-                                            path = activeTab.path,
-                                            content = activeTab.content,
-                                            expectedHash = activeTab.originalHash,
-                                            force = false
-                                        )
-                                        when (result) {
-                                            is FileSaveResult.Success -> {
-                                                TermuxDaemonManager.markTabSaved(activeTab.path, result.hash)
-                                                Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
-                                            }
-                                            is FileSaveResult.Conflict -> {
-                                                conflictDialogTab = activeTab.copy(
-                                                    diskConflict = true,
-                                                    diskContentOnConflict = result.diskContent
-                                                )
-                                            }
-                                            is FileSaveResult.Error -> {
-                                                Toast.makeText(context, "Save Error: ${result.message}", Toast.LENGTH_LONG).show()
+                                    if (isExternal) {
+                                        // Externally opened file has no location on the daemon server filesystem yet -> prompt where to save
+                                        saveAsDialogTab = activeTab
+                                    } else {
+                                        // Normal project/workspace file -> direct save to its server path
+                                        coroutineScope.launch {
+                                            val currentContent = currentEditorView?.getText() ?: activeTab.content
+                                            val result = IdeApiClient.saveFileDetailed(
+                                                path = activeTab.path,
+                                                content = currentContent,
+                                                expectedHash = activeTab.originalHash,
+                                                force = false
+                                            )
+                                            when (result) {
+                                                is FileSaveResult.Success -> {
+                                                    TermuxDaemonManager.markTabSaved(activeTab.path, result.hash)
+                                                    Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+                                                }
+                                                is FileSaveResult.Conflict -> {
+                                                    conflictDialogTab = activeTab.copy(
+                                                        diskConflict = true,
+                                                        diskContentOnConflict = result.diskContent
+                                                    )
+                                                }
+                                                is FileSaveResult.Error -> {
+                                                    Toast.makeText(context, "Save Error: ${result.message}", Toast.LENGTH_LONG).show()
+                                                }
                                             }
                                         }
                                     }
                                 },
-                                enabled = activeTab.isModified,
+                                enabled = activeTab.isModified || isExternal,
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Save,
-                                    contentDescription = "Save File",
-                                    tint = if (activeTab.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                                    contentDescription = if (isExternal) "Save As..." else "Save File",
+                                    tint = if (activeTab.isModified || isExternal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -1129,6 +1138,50 @@ fun IdeScreen(
                         }
                     },
                     onDismiss = { showFileManager = false }
+                )
+            }
+            // Save As File Manager Dialog (e.g. for externally opened files or save-as)
+            saveAsDialogTab?.let { tabToSave ->
+                val initialSavePath = remember(activeProject?.path) {
+                    activeProject?.path?.takeIf { it.isNotBlank() } ?: "~"
+                }
+                FileManagerDialog(
+                    initialPath = initialSavePath,
+                    saveModeFileName = tabToSave.name,
+                    onSaveFileHere = { folderPath, fileName ->
+                        val cleanFolder = folderPath.trim().trimEnd('/')
+                        val cleanFileName = fileName.trim().trimStart('/').trimEnd('/').ifBlank { "file.txt" }
+                        val fullPath = if (cleanFolder.isBlank() || cleanFolder == "~") {
+                            cleanFileName
+                        } else {
+                            "$cleanFolder/$cleanFileName"
+                        }
+                        val contentToSave = currentEditorView?.getText()
+                            ?: TermuxDaemonManager.openTabs.value.find { it.path == tabToSave.path }?.content
+                            ?: tabToSave.content
+
+                        android.util.Log.d("IdeScreen", "[SaveAs] Saving external file: targetFullPath='$fullPath', folder='$cleanFolder', file='$cleanFileName', contentLength=${contentToSave.length}")
+
+                        coroutineScope.launch {
+                            val res = IdeApiClient.saveFileDetailed(
+                                path = fullPath,
+                                content = contentToSave,
+                                expectedHash = "",
+                                force = true
+                            )
+                            if (res is FileSaveResult.Success) {
+                                TermuxDaemonManager.closeTab(tabToSave.path)
+                                TermuxDaemonManager.openOrSelectTab(fullPath, cleanFileName, contentToSave, res.hash)
+                                TermuxDaemonManager.markTabSaved(fullPath, res.hash)
+                                saveAsDialogTab = null
+                                refreshProjectsAndTree()
+                                Toast.makeText(context, "Saved to $fullPath", Toast.LENGTH_SHORT).show()
+                            } else if (res is FileSaveResult.Error) {
+                                Toast.makeText(context, "Save Error: ${res.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    onDismiss = { saveAsDialogTab = null }
                 )
             }
         }

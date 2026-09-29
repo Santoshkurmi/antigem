@@ -867,8 +867,12 @@ func (h *Handler) FileReadHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) FileSaveHandler(w http.ResponseWriter, r *http.Request) {
 	var req models.FileSaveReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "valid path and content required"})
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("invalid JSON payload: %v", err)})
+		return
+	}
+	if req.Path == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "path parameter required"})
 		return
 	}
 	req.Path = expandHome(req.Path)

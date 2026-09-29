@@ -296,7 +296,7 @@ func main() {
 
 		var reqPayload string
 		if r.Body != nil && !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
-			bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 4096))
+			bodyBytes, err := io.ReadAll(r.Body)
 			if err == nil && len(bodyBytes) > 0 {
 				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 				trimmed := strings.TrimSpace(string(bodyBytes))

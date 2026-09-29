@@ -3715,7 +3715,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 com.example.gemini.data.daemon.TermuxDaemonManager.openOrSelectTab(
                     path = resolvedPath,
                     name = resolvedName,
-                    content = content
+                    content = content,
+                    isExternal = true
                 )
                 requestViewMode("IDE")
                 withContext(Dispatchers.Main) {

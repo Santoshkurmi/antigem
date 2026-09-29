@@ -41,4 +41,4 @@ proto_generator/*.json
 
 # IDE & Gemini Metadata
 .gemini/
-
+server_android

@@ -115,6 +115,7 @@ class CodeEditorView @JvmOverloads constructor(
 
     fun canUndo(): Boolean = editor.canUndo()
     fun canRedo(): Boolean = editor.canRedo()
+    fun getText(): String = editor.text.toString()
 
     fun search(query: String, caseSensitive: Boolean = false) {
         if (query.isEmpty()) {

@@ -34,7 +34,8 @@ data class OpenTab(
     val isReadOnly: Boolean = false,
     val originalHash: String = "",
     val diskConflict: Boolean = false,
-    val diskContentOnConflict: String = ""
+    val diskContentOnConflict: String = "",
+    val isExternal: Boolean = false
 )
 
 enum class TabDiskUpdateResult {
@@ -221,9 +222,10 @@ object TermuxDaemonManager {
         }
     }
 
-    fun openOrSelectTab(path: String, name: String, content: String, hash: String = "", isReadOnly: Boolean = false) {
+    fun openOrSelectTab(path: String, name: String, content: String, hash: String = "", isReadOnly: Boolean = false, isExternal: Boolean = false) {
         val existing = _openTabs.value.find { it.path == path }
         val finalHash = hash.ifBlank { computeSha256(content) }
+        val resolvedIsExternal = isExternal || path.startsWith("content://") || path.startsWith("android.resource://") || path.startsWith("file://")
         if (existing == null) {
             _openTabs.value = _openTabs.value + OpenTab(
                 path = path,
@@ -231,7 +233,8 @@ object TermuxDaemonManager {
                 content = content,
                 originalContent = content,
                 originalHash = finalHash,
-                isReadOnly = isReadOnly
+                isReadOnly = isReadOnly,
+                isExternal = resolvedIsExternal
             )
         }
         _activeTabPath.value = path
