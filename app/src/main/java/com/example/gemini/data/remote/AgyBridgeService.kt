@@ -445,6 +445,7 @@ class AgyBridgeService(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                isBridgeConnected = true
                 try {
                     val root = JSONObject(text)
                     if (root.optString("type") == "hub_status") {

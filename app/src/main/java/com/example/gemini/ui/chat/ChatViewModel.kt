@@ -1348,14 +1348,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             }
                             "stopped" -> {
                                 _isServerOnline.value = false
-                                _isBridgeOnline.value = false
+                                _isBridgeOnline.value = true
                                 if (_conversations.value.any { it.isRunning }) {
                                     _conversations.value = _conversations.value.map { if (it.isRunning) it.copy(isRunning = false) else it }
                                 }
                                 if (_currentConversation.value?.isRunning == true) {
                                     _currentConversation.value = _currentConversation.value?.copy(isRunning = false)
                                 }
-                                agyBridgeService.resetState()
                             }
                         }
                     }
