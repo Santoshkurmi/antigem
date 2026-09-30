@@ -1,5 +1,7 @@
 import re
 import os
+import sys
+import shutil
 import json
 from io import BytesIO
 from collections import defaultdict, deque
@@ -196,7 +198,32 @@ class ProtoRegistry:
         if f".{short}" in self.enums: return "enum", self.enums[f".{short}"], f".{short}"
         return None, None, type_name
 
-def scan_all_descriptors(binary_path="/data/data/com.termux/files/usr/bin/agy.va39"):
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_OUTPUT_DIR = os.path.join(SCRIPT_DIR, "protos")
+
+def find_agy_binary(custom_path=None):
+    if custom_path and os.path.isfile(custom_path):
+        return custom_path
+
+    candidates = [
+        os.path.expanduser("~/.local/bin/agy"),
+        "/usr/bin/agy",
+        "/data/data/com.termux/files/usr/bin/agy.va39",
+        "/data/data/com.termux/files/usr/bin/agy",
+        os.path.expanduser("~/.gemini/bin/agy"),
+        os.path.expanduser("~/.antigravity/bin/agy"),
+        shutil.which("agy"),
+    ]
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return c
+
+    raise FileNotFoundError(f"Could not find 'agy' binary. Checked locations: {candidates}")
+
+def scan_all_descriptors(binary_path=None):
+    if not binary_path:
+        binary_path = find_agy_binary()
+    print(f"Scanning embedded protobuf descriptors from binary: {binary_path}")
     with open(binary_path, "rb") as f: data = f.read()
     registry = ProtoRegistry()
     proto_offsets = [m.start() for m in re.finditer(rb'\.proto', data)]
@@ -221,10 +248,11 @@ def scan_all_descriptors(binary_path="/data/data/com.termux/files/usr/bin/agy.va
                         break
     return registry
 
-def generate_per_service_protos(output_dir="/data/data/com.termux/files/home/proto_test/protos"):
+def generate_per_service_protos(output_dir=None, binary_path=None):
+    if not output_dir:
+        output_dir = DEFAULT_OUTPUT_DIR
     os.makedirs(output_dir, exist_ok=True)
-    print("Scanning embedded protobuf descriptors from binary...")
-    registry = scan_all_descriptors()
+    registry = scan_all_descriptors(binary_path)
     print(f"Discovered {len(registry.services)} services, {len(registry.messages)} messages, {len(registry.enums)} enums.\n")
 
     target_service_keys = [
@@ -387,4 +415,7 @@ def generate_per_service_protos(output_dir="/data/data/com.termux/files/home/pro
     print(f"\nAll service proto files updated in: {output_dir}")
 
 if __name__ == "__main__":
-    generate_per_service_protos()
+    custom_bin = sys.argv[1] if len(sys.argv) > 1 else None
+    custom_out = sys.argv[2] if len(sys.argv) > 2 else None
+    generate_per_service_protos(output_dir=custom_out, binary_path=custom_bin)
+

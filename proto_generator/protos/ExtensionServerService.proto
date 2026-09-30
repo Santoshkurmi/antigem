@@ -77,25 +77,10 @@ enum APIProvider {
   API_PROVIDER_OPENAI_VERTEX = 31;
 }
 
-enum AcknowledgementType {
-  ACKNOWLEDGEMENT_TYPE_UNSPECIFIED = 0;
-  ACKNOWLEDGEMENT_TYPE_ACCEPT = 1;
-  ACKNOWLEDGEMENT_TYPE_REJECT = 2;
-  ACKNOWLEDGEMENT_TYPE_STALE = 3;
-  ACKNOWLEDGEMENT_TYPE_CLEARED = 4;
-}
-
 enum ActiveEditorType {
   ACTIVE_EDITOR_TYPE_UNSPECIFIED = 0;
   ACTIVE_EDITOR_TYPE_TEXT_EDITOR = 1;
   ACTIVE_EDITOR_TYPE_TERMINAL = 2;
-}
-
-enum AgentMode {
-  AGENT_MODE_UNSPECIFIED = 0;
-  AGENT_MODE_PLANNING = 1;
-  AGENT_MODE_EXECUTION = 2;
-  AGENT_MODE_VERIFICATION = 3;
 }
 
 enum AgentPermissionPreset {
@@ -108,32 +93,11 @@ enum AgentPermissionPreset {
   AGENT_PERMISSION_PRESET_AUTO = 6;
 }
 
-enum ArtifactApprovalStatus {
-  ARTIFACT_APPROVAL_STATUS_UNSPECIFIED = 0;
-  ARTIFACT_APPROVAL_STATUS_APPROVED = 1;
-  ARTIFACT_APPROVAL_STATUS_REQUESTED_CHANGES = 2;
-}
-
 enum ArtifactReviewMode {
   ARTIFACT_REVIEW_MODE_UNSPECIFIED = 0;
   ARTIFACT_REVIEW_MODE_ALWAYS = 1;
   ARTIFACT_REVIEW_MODE_TURBO = 2;
   ARTIFACT_REVIEW_MODE_AUTO = 3;
-}
-
-enum ArtifactReviewStatus {
-  ARTIFACT_REVIEW_STATUS_UNSPECIFIED = 0;
-  ARTIFACT_REVIEW_STATUS_PENDING_REVIEW = 1;
-  ARTIFACT_REVIEW_STATUS_REVIEWED = 2;
-  ARTIFACT_REVIEW_STATUS_MODIFIED = 3;
-}
-
-enum ArtifactType {
-  ARTIFACT_TYPE_UNSPECIFIED = 0;
-  ARTIFACT_TYPE_IMPLEMENTATION_PLAN = 1;
-  ARTIFACT_TYPE_WALKTHROUGH = 2;
-  ARTIFACT_TYPE_TASK = 3;
-  ARTIFACT_TYPE_OTHER = 4;
 }
 
 enum AutoInteractionBehavior {
@@ -168,33 +132,6 @@ enum BetterDirection {
   BETTER_DIRECTION_UNSPECIFIED = 0;
   BETTER_DIRECTION_LOWER = 1;
   BETTER_DIRECTION_HIGHER = 2;
-}
-
-enum BlockReason {
-  BLOCK_REASON_UNSPECIFIED = 0;
-  BLOCK_REASON_OUTSIDE_WORKSPACE = 1;
-  BLOCK_REASON_GITIGNORED = 2;
-}
-
-enum BrainEntryType {
-  BRAIN_ENTRY_TYPE_UNSPECIFIED = 0;
-  BRAIN_ENTRY_TYPE_PLAN = 1;
-  BRAIN_ENTRY_TYPE_TASK = 2;
-}
-
-enum BrainUpdateTrigger {
-  BRAIN_UPDATE_TRIGGER_UNSPECIFIED = 0;
-  BRAIN_UPDATE_TRIGGER_SYSTEM_FORCED = 1;
-  BRAIN_UPDATE_TRIGGER_USER_REQUESTED = 2;
-  BRAIN_UPDATE_TRIGGER_USER_NEW_INFO = 3;
-  BRAIN_UPDATE_TRIGGER_RESEARCH_NEW_INFO = 4;
-}
-
-enum BrowserActionWaitingReason {
-  BROWSER_ACTION_WAITING_REASON_UNSPECIFIED = 0;
-  BROWSER_ACTION_WAITING_REASON_PAGE_ACCESS = 1;
-  BROWSER_ACTION_WAITING_REASON_ACTION_PERMISSION = 2;
-  BROWSER_ACTION_WAITING_REASON_PAGE_ACCESS_AND_ACTION_PERMISSION = 3;
 }
 
 enum BrowserEphemeralOption {
@@ -260,12 +197,6 @@ enum CellStatus {
   CELL_STATUS_FAILURE = 2;
 }
 
-enum ChatClientRequestStreamClientType {
-  CHAT_CLIENT_REQUEST_STREAM_CLIENT_TYPE_UNSPECIFIED = 0;
-  CHAT_CLIENT_REQUEST_STREAM_CLIENT_TYPE_IDE = 1;
-  CHAT_CLIENT_REQUEST_STREAM_CLIENT_TYPE_BROWSER = 2;
-}
-
 enum ChatMessageSource {
   CHAT_MESSAGE_SOURCE_UNSPECIFIED = 0;
   CHAT_MESSAGE_SOURCE_USER = 1;
@@ -288,57 +219,6 @@ enum CitcCloneStrategy {
   CITC_CLONE_STRATEGY_VCS_FULL = 2;
 }
 
-enum ClickType {
-  CLICKTYPE_UNSPECIFIED = 0;
-}
-
-enum CloudSQLUpdateSchemaErrorCode {
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_OK = 0;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_CANCELLED = 1;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_UNKNOWN = 2;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_INVALID_ARGUMENT = 3;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_DEADLINE_EXCEEDED = 4;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_NOT_FOUND = 5;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_ALREADY_EXISTS = 6;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_PERMISSION_DENIED = 7;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_RESOURCE_EXHAUSTED = 8;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_FAILED_PRECONDITION = 9;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_ABORTED = 10;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_OUT_OF_RANGE = 11;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_UNIMPLEMENTED = 12;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_INTERNAL = 13;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_UNAVAILABLE = 14;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_DATA_LOSS = 15;
-  CLOUD_SQL_UPDATE_SCHEMA_ERROR_CODE_UNAUTHENTICATED = 16;
-}
-
-enum CloudSQLUpdateSchemaResult {
-  CLOUD_SQL_UPDATE_SCHEMA_RESULT_UNSPECIFIED = 0;
-  CLOUD_SQL_UPDATE_SCHEMA_RESULT_SUCCESS = 1;
-  CLOUD_SQL_UPDATE_SCHEMA_RESULT_ERROR = 2;
-}
-
-enum CodeAcknowledgementScope {
-  CODE_ACKNOWLEDGEMENT_SCOPE_UNSPECIFIED = 0;
-  CODE_ACKNOWLEDGEMENT_SCOPE_FILE = 1;
-  CODE_ACKNOWLEDGEMENT_SCOPE_ALL = 2;
-  CODE_ACKNOWLEDGEMENT_SCOPE_HUNK = 3;
-}
-
-enum CodeContextSource {
-  CODE_CONTEXT_SOURCE_UNSPECIFIED = 0;
-  CODE_CONTEXT_SOURCE_OPEN_DOCS = 1;
-  CODE_CONTEXT_SOURCE_SEARCH_RESULT = 2;
-  CODE_CONTEXT_SOURCE_IMPORT = 3;
-  CODE_CONTEXT_SOURCE_LOCAL_DIRECTORY = 4;
-  CODE_CONTEXT_SOURCE_LAST_ACTIVE_DOC = 5;
-  CODE_CONTEXT_SOURCE_ORACLE_ITEMS = 6;
-  CODE_CONTEXT_SOURCE_PINNED_CONTEXT = 7;
-  CODE_CONTEXT_SOURCE_RESEARCH_STATE = 8;
-  CODE_CONTEXT_SOURCE_GROUND_TRUTH_PLAN_EDIT = 9;
-  CODE_CONTEXT_SOURCE_COMMIT_GRAPH = 10;
-}
-
 enum CodeContextType {
   CODE_CONTEXT_TYPE_UNSPECIFIED = 0;
   CODE_CONTEXT_TYPE_FUNCTION = 1;
@@ -349,19 +229,6 @@ enum CodeContextType {
   CODE_CONTEXT_TYPE_REFERENCE_CLASS = 6;
   CODE_CONTEXT_TYPE_FILE = 7;
   CODE_CONTEXT_TYPE_TERMINAL = 8;
-}
-
-enum CodeHeuristicFailure {
-  CODE_HEURISTIC_FAILURE_UNSPECIFIED = 0;
-  CODE_HEURISTIC_FAILURE_LAZY_COMMENT = 1;
-  CODE_HEURISTIC_FAILURE_DELETED_LINES = 2;
-}
-
-enum CommandOutputPriority {
-  COMMAND_OUTPUT_PRIORITY_UNSPECIFIED = 0;
-  COMMAND_OUTPUT_PRIORITY_TOP = 1;
-  COMMAND_OUTPUT_PRIORITY_BOTTOM = 2;
-  COMMAND_OUTPUT_PRIORITY_SPLIT = 3;
 }
 
 enum CommandRequestSource {
@@ -383,17 +250,6 @@ enum CompletionType {
   COMPLETION_TYPE_CASCADE = 4;
 }
 
-enum ConnectorType {
-  CONNECTOR_TYPE_UNSPECIFIED = 0;
-  CONNECTOR_TYPE_GITHUB = 1;
-  CONNECTOR_TYPE_SLACK = 2;
-  CONNECTOR_TYPE_GOOGLE_DRIVE = 3;
-  CONNECTOR_TYPE_JIRA = 4;
-  CONNECTOR_TYPE_CODEIUM = 5;
-  CONNECTOR_TYPE_EMAIL = 6;
-  CONNECTOR_TYPE_GITHUB_OAUTH = 7;
-}
-
 enum ContextSnippetType {
   CONTEXT_SNIPPET_TYPE_UNSPECIFIED = 0;
   CONTEXT_SNIPPET_TYPE_RAW_SOURCE = 1;
@@ -411,74 +267,6 @@ enum ConversationalPlannerMode {
   CONVERSATIONAL_PLANNER_MODE_UNSPECIFIED = 0;
   CONVERSATIONAL_PLANNER_MODE_DEFAULT = 1;
   CONVERSATIONAL_PLANNER_MODE_READ_ONLY = 2;
-}
-
-enum CortexComponentSource {
-  CORTEX_COMPONENT_SOURCE_UNSPECIFIED = 0;
-  CORTEX_COMPONENT_SOURCE_BUILTIN = 1;
-  CORTEX_COMPONENT_SOURCE_PROVIDER = 2;
-  CORTEX_COMPONENT_SOURCE_CUSTOMIZATION = 3;
-}
-
-enum CortexMemorySource {
-  CORTEX_MEMORY_SOURCE_UNSPECIFIED = 0;
-  CORTEX_MEMORY_SOURCE_USER = 1;
-  CORTEX_MEMORY_SOURCE_CASCADE = 2;
-}
-
-enum CortexMemoryTrigger {
-  CORTEX_MEMORY_TRIGGER_UNSPECIFIED = 0;
-  CORTEX_MEMORY_TRIGGER_ALWAYS_ON = 1;
-  CORTEX_MEMORY_TRIGGER_MODEL_DECISION = 2;
-  CORTEX_MEMORY_TRIGGER_MANUAL = 3;
-  CORTEX_MEMORY_TRIGGER_GLOB = 4;
-}
-
-enum CortexRequestSource {
-  CORTEX_REQUEST_SOURCE_UNSPECIFIED = 0;
-  CORTEX_REQUEST_SOURCE_CASCADE = 1;
-  CORTEX_REQUEST_SOURCE_USER_IMPLICIT = 2;
-}
-
-enum CortexStepCompileTool {
-  CORTEX_STEP_COMPILE_TOOL_UNSPECIFIED = 0;
-  CORTEX_STEP_COMPILE_TOOL_PYLINT = 1;
-}
-
-enum CortexStepCreditReason {
-  CORTEX_STEP_CREDIT_REASON_UNSPECIFIED = 0;
-  CORTEX_STEP_CREDIT_REASON_LINT_FIXING_DISCOUNT = 1;
-}
-
-enum CortexStepManagerFeedbackStatus {
-  CORTEX_STEP_MANAGER_FEEDBACK_STATUS_UNSPECIFIED = 0;
-  CORTEX_STEP_MANAGER_FEEDBACK_STATUS_APPROVED = 1;
-  CORTEX_STEP_MANAGER_FEEDBACK_STATUS_DENIED = 2;
-  CORTEX_STEP_MANAGER_FEEDBACK_STATUS_ERROR = 3;
-}
-
-enum CortexStepSource {
-  CORTEX_STEP_SOURCE_UNSPECIFIED = 0;
-  CORTEX_STEP_SOURCE_MODEL = 2;
-  CORTEX_STEP_SOURCE_USER_IMPLICIT = 3;
-  CORTEX_STEP_SOURCE_USER_EXPLICIT = 4;
-  CORTEX_STEP_SOURCE_SYSTEM = 5;
-  CORTEX_STEP_SOURCE_SYSTEM_SDK = 6;
-}
-
-enum CortexStepStatus {
-  CORTEX_STEP_STATUS_UNSPECIFIED = 0;
-  CORTEX_STEP_STATUS_PENDING = 1;
-  CORTEX_STEP_STATUS_RUNNING = 2;
-  CORTEX_STEP_STATUS_DONE = 3;
-  CORTEX_STEP_STATUS_INVALID = 4;
-  CORTEX_STEP_STATUS_CLEARED = 5;
-  CORTEX_STEP_STATUS_CANCELED = 6;
-  CORTEX_STEP_STATUS_ERROR = 7;
-  CORTEX_STEP_STATUS_GENERATING = 8;
-  CORTEX_STEP_STATUS_WAITING = 9;
-  CORTEX_STEP_STATUS_QUEUED = 11;
-  CORTEX_STEP_STATUS_INTERRUPTED = 12;
 }
 
 enum CortexStepType {
@@ -632,6 +420,9 @@ enum CortexTrajectorySource {
   CORTEX_TRAJECTORY_SOURCE_JETBOX = 18;
   CORTEX_TRAJECTORY_SOURCE_AGENT_API = 19;
   CORTEX_TRAJECTORY_SOURCE_CIDER = 20;
+  CORTEX_TRAJECTORY_SOURCE_GEMINI_APP = 21;
+  CORTEX_TRAJECTORY_SOURCE_VSCODE = 22;
+  CORTEX_TRAJECTORY_SOURCE_VISUAL_STUDIO = 23;
 }
 
 enum CortexTrajectoryType {
@@ -653,39 +444,9 @@ enum CortexTrajectoryType {
   CORTEX_TRAJECTORY_TYPE_COMMIT_MESSAGE_GENERATION = 23;
 }
 
-enum Cortexstepexecutenotebook_CellStatus {
-  CELL_STATUS_UNSPECIFIED = 0;
-  CELL_STATUS_SUCCESS = 1;
-  CELL_STATUS_FAILURE = 2;
-}
-
-enum Cortexstepexecutenotebook_ExecutionStatus {
-  EXECUTION_STATUS_UNSPECIFIED = 0;
-  EXECUTION_STATUS_SUCCESS = 1;
-  EXECUTION_STATUS_FAILURE = 2;
-  EXECUTION_STATUS_PARTIAL_SUCCESS = 3;
-}
-
 enum CreditType {
   CREDIT_TYPE_UNSPECIFIED = 0;
   GOOGLE_ONE_AI = 1;
-}
-
-enum DeploymentBuildStatus {
-  DEPLOYMENT_BUILD_STATUS_UNSPECIFIED = 0;
-  DEPLOYMENT_BUILD_STATUS_QUEUED = 1;
-  DEPLOYMENT_BUILD_STATUS_INITIALIZING = 2;
-  DEPLOYMENT_BUILD_STATUS_BUILDING = 3;
-  DEPLOYMENT_BUILD_STATUS_ERROR = 4;
-  DEPLOYMENT_BUILD_STATUS_READY = 5;
-  DEPLOYMENT_BUILD_STATUS_CANCELED = 6;
-}
-
-enum DeploymentProvider {
-  DEPLOYMENT_PROVIDER_UNSPECIFIED = 0;
-  DEPLOYMENT_PROVIDER_VERCEL = 1;
-  DEPLOYMENT_PROVIDER_NETLIFY = 2;
-  DEPLOYMENT_PROVIDER_CLOUDFLARE = 3;
 }
 
 enum DiffChangeType {
@@ -702,15 +463,6 @@ enum DiffType {
   DIFF_TYPE_COMBO = 3;
   DIFF_TYPE_TMP_SUPERCOMPLETE = 4;
   DIFF_TYPE_TMP_TAB_JUMP = 5;
-}
-
-enum DiscoveryCategory {
-  DISCOVERY_CATEGORY_UNSPECIFIED = 0;
-  DISCOVERY_CATEGORY_BUILTIN = 1;
-  DISCOVERY_CATEGORY_INSTALLED = 2;
-  DISCOVERY_CATEGORY_GOOGLE3 = 3;
-  DISCOVERY_CATEGORY_CONFIG = 4;
-  DISCOVERY_CATEGORY_WORKSPACE = 5;
 }
 
 enum DocumentType {
@@ -956,92 +708,10 @@ enum FeedbackType {
   FEEDBACK_TYPE_MOUSE_POINTER = 2;
 }
 
-enum FileChangeType {
-  FILE_CHANGE_TYPE_UNSPECIFIED = 0;
-  FILE_CHANGE_TYPE_CREATE = 1;
-  FILE_CHANGE_TYPE_EDIT = 2;
-  FILE_CHANGE_TYPE_DELETE = 3;
-}
-
-enum FileOperation {
-  FILE_OPERATION_UNSPECIFIED = 0;
-  FILE_OPERATION_ADD = 1;
-  FILE_OPERATION_DELETE = 2;
-  FILE_OPERATION_MODIFY = 3;
-  FILE_OPERATION_RENAME = 4;
-  FILE_OPERATION_BRANCH = 5;
-}
-
-enum FindResultType {
-  FIND_RESULT_TYPE_UNSPECIFIED = 0;
-  FIND_RESULT_TYPE_FILE = 1;
-  FIND_RESULT_TYPE_DIRECTORY = 2;
-  FIND_RESULT_TYPE_ANY = 3;
-}
-
-enum FirebasePlatform {
-  FIREBASE_PLATFORM_UNSPECIFIED = 0;
-  FIREBASE_PLATFORM_WEB = 1;
-  FIREBASE_PLATFORM_ANDROID = 2;
-}
-
-enum FirebaseProduct {
-  FIREBASE_PRODUCT_UNSPECIFIED = 0;
-  FIREBASE_PRODUCT_FIRESTORE = 1;
-  FIREBASE_PRODUCT_AI_LOGIC = 2;
-}
-
-enum GenaiAudiocontent_MimeType {
-  TYPE_UNSPECIFIED = 0;
-  TYPE_WAV = 1;
-  TYPE_MP3 = 2;
-  TYPE_AIFF = 3;
-  TYPE_AAC = 4;
-  TYPE_OGG = 5;
-  TYPE_FLAC = 6;
-  TYPE_MPEG = 7;
-  TYPE_M4A = 8;
-  TYPE_L16 = 9;
-  TYPE_S16LE = 10;
-  TYPE_OPUS = 11;
-  TYPE_ALAW = 12;
-  TYPE_MULAW = 13;
-  TYPE_VIDEO_AUDIO_S16LE = 14;
-  TYPE_WEBM = 15;
-}
-
-enum GenaiCodeexecutioncallcontentCodeexecutioncallarguments_Language {
+enum GenaiCodeexecutioncallstepCodeexecutioncallsteparguments_Language {
   LANGUAGE_UNSPECIFIED = 0;
   PYTHON = 1;
-}
-
-enum GenaiDocumentcontent_MimeType {
-  TYPE_UNSPECIFIED = 0;
-  TYPE_PDF = 1;
-  TYPE_CSV = 2;
-}
-
-enum GenaiUrlcontextresultcontentUrlcontextresult_Status {
-  STATUS_UNSPECIFIED = 0;
-  SUCCESS = 1;
-  ERROR = 2;
-  PAYWALL = 3;
-  UNSAFE = 4;
-}
-
-enum GenaiVideocontent_MimeType {
-  TYPE_UNSPECIFIED = 0;
-  TYPE_MP4 = 1;
-  TYPE_MPEG = 2;
-  TYPE_MPG = 3;
-  TYPE_MOV = 4;
-  TYPE_AVI = 5;
-  TYPE_X_FLV = 6;
-  TYPE_WEBM = 7;
-  TYPE_WMV = 8;
-  TYPE_3GPP = 9;
-  TYPE_YT_BEYOND = 10;
-  TYPE_JPEG2000 = 11;
+  BASH = 2;
 }
 
 enum GitCloneStrategy {
@@ -1060,20 +730,10 @@ enum IndexChoice {
   INDEX_CHOICE_SCM = 6;
 }
 
-enum InteractiveCascadeEditImportance {
-  INTERACTIVE_CASCADE_EDIT_IMPORTANCE_UNSPECIFIED = 0;
-  INTERACTIVE_CASCADE_EDIT_IMPORTANCE_LOW = 1;
-  INTERACTIVE_CASCADE_EDIT_IMPORTANCE_MEDIUM = 2;
-  INTERACTIVE_CASCADE_EDIT_IMPORTANCE_HIGH = 3;
-}
-
-enum Internal_EditNotebookOperation {
-  EDIT_NOTEBOOK_OPERATION_UNSPECIFIED = 0;
-  EDIT_NOTEBOOK_OPERATION_INSERT_AFTER = 1;
-  EDIT_NOTEBOOK_OPERATION_INSERT_BEFORE = 2;
-  EDIT_NOTEBOOK_OPERATION_REPLACE_CELLS = 3;
-  EDIT_NOTEBOOK_OPERATION_DELETE_CELLS = 4;
-  EDIT_NOTEBOOK_OPERATION_OVERWRITE_NOTEBOOK = 5;
+enum Internal_Status {
+  STATUS_UNSPECIFIED = 0;
+  ACTIVE = 1;
+  EXPIRED = 2;
 }
 
 enum Language {
@@ -1171,11 +831,19 @@ enum Language {
   LANGUAGE_APEX = 91;
 }
 
-enum LintDiffType {
-  LINT_DIFF_TYPE_UNSPECIFIED = 0;
-  LINT_DIFF_TYPE_DELETE = 1;
-  LINT_DIFF_TYPE_INSERT = 2;
-  LINT_DIFF_TYPE_UNCHANGED = 3;
+enum LineAction {
+  LINE_ACTION_UNSPECIFIED = 0;
+  LINE_ACTION_INSERT = 1;
+  LINE_ACTION_DELETE = 2;
+  LINE_ACTION_NONE = 3;
+}
+
+enum LoadedcustomizationsLoadedcustomization_Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_ENABLED = 1;
+  STATUS_DISABLED = 2;
+  STATUS_TRUNCATED = 3;
+  STATUS_ERROR = 4;
 }
 
 enum MarkdownNodeType {
@@ -1205,26 +873,6 @@ enum MediaResolution {
   MEDIUM = 2;
   HIGH = 3;
   ULTRA_HIGH = 4;
-}
-
-enum MemoryActionType {
-  MEMORY_ACTION_TYPE_UNSPECIFIED = 0;
-  MEMORY_ACTION_TYPE_CREATE = 1;
-  MEMORY_ACTION_TYPE_UPDATE = 2;
-  MEMORY_ACTION_TYPE_DELETE = 3;
-}
-
-enum MessageDeliveryStrategy {
-  MESSAGE_DELIVERY_STRATEGY_UNSPECIFIED = 0;
-  MESSAGE_DELIVERY_STRATEGY_NEXT_INVOCATION = 1;
-  MESSAGE_DELIVERY_STRATEGY_WHEN_IDLE = 2;
-}
-
-enum MessagePriority {
-  MESSAGE_PRIORITY_UNSPECIFIED = 0;
-  MESSAGE_PRIORITY_LOW = 1;
-  MESSAGE_PRIORITY_NORMAL = 2;
-  MESSAGE_PRIORITY_HIGH = 3;
 }
 
 enum MetricsScope {
@@ -2002,19 +1650,11 @@ enum NullValue {
   NULL_VALUE = 0;
 }
 
-enum PermissionScope {
-  PERMISSION_SCOPE_UNSPECIFIED = 0;
-  PERMISSION_SCOPE_ONCE = 1;
-  PERMISSION_SCOPE_CONVERSATION = 2;
-  PERMISSION_SCOPE_WORKSPACE = 3;
-  PERMISSION_SCOPE_GLOBAL = 4;
-  PERMISSION_SCOPE_PROJECT = 5;
-}
-
-enum PersistSuggestionType {
-  PERSIST_SUGGESTION_TYPE_UNSPECIFIED = 0;
-  PERSIST_SUGGESTION_TYPE_SUGGESTED = 1;
-  PERSIST_SUGGESTION_TYPE_BLOCKED = 2;
+enum Operation {
+  OPERATION_UNSPECIFIED = 0;
+  OPERATION_LIST_SKILLS = 1;
+  OPERATION_LOOKUP_SKILLS = 2;
+  OPERATION_GET_SKILL_RESOURCES = 3;
 }
 
 enum Processing {
@@ -2304,13 +1944,6 @@ enum Protocol {
   PROTOCOL_MCP = 1;
 }
 
-enum RecordingGenerationStatus {
-  RECORDING_GENERATION_STATUS_UNSPECIFIED = 0;
-  RECORDING_GENERATION_STATUS_GENERATING = 1;
-  RECORDING_GENERATION_STATUS_ERROR = 2;
-  RECORDING_GENERATION_STATUS_COMPLETED = 3;
-}
-
 enum RefreshCustomizationType {
   REFRESH_CUSTOMIZATION_TYPE_UNSPECIFIED = 0;
   REFRESH_CUSTOMIZATION_TYPE_RULE = 1;
@@ -2320,12 +1953,6 @@ enum RefreshCustomizationType {
   REFRESH_CUSTOMIZATION_TYPE_PLUGIN = 5;
   REFRESH_CUSTOMIZATION_TYPE_HOOKS = 6;
   REFRESH_CUSTOMIZATION_TYPE_MCP = 7;
-}
-
-enum RenderLocation {
-  RENDER_LOCATION_UNSPECIFIED = 0;
-  RENDER_LOCATION_ABOVE_INPUT = 1;
-  RENDER_LOCATION_SIDE_PANEL = 2;
 }
 
 enum ReplaceToolVariant {
@@ -2349,14 +1976,6 @@ enum RetryReason {
   RETRY_REASON_NON_RECOVERABLE = 3;
 }
 
-enum RunExtensionCodeAutoRunDecision {
-  RUN_EXTENSION_CODE_AUTO_RUN_DECISION_UNSPECIFIED = 0;
-  RUN_EXTENSION_CODE_AUTO_RUN_DECISION_ALLOWED = 1;
-  RUN_EXTENSION_CODE_AUTO_RUN_DECISION_DENIED = 2;
-  RUN_EXTENSION_CODE_AUTO_RUN_DECISION_MODEL_ALLOWED = 3;
-  RUN_EXTENSION_CODE_AUTO_RUN_DECISION_MODEL_DENIED = 4;
-}
-
 enum ScmProvider {
   SCM_PROVIDER_UNSPECIFIED = 0;
   SCM_PROVIDER_GITHUB = 1;
@@ -2372,10 +1991,6 @@ enum Scope {
   SCOPE_WORKSPACE = 3;
 }
 
-enum ScrollDirection {
-  SCROLLDIRECTION_UNSPECIFIED = 0;
-}
-
 enum SearchFallbackMode {
   SEARCH_FALLBACK_UNSPECIFIED = 0;
   SEARCH_FALLBACK_CODE_SEARCH = 1;
@@ -2389,12 +2004,6 @@ enum SearchType {
   SEARCH_TYPE_IMAGE_SEARCH = 2;
 }
 
-enum SearchWebType {
-  SEARCH_WEB_TYPE_UNSPECIFIED = 0;
-  SEARCH_WEB_TYPE_WEB = 1;
-  SEARCH_WEB_TYPE_IMAGE = 2;
-}
-
 enum SectionOverrideMode {
   SECTION_OVERRIDE_MODE_UNSPECIFIED = 0;
   SECTION_OVERRIDE_MODE_OVERRIDE = 1;
@@ -2402,83 +2011,11 @@ enum SectionOverrideMode {
   SECTION_OVERRIDE_MODE_PREPEND = 3;
 }
 
-enum SemanticCodebaseSearchType {
-  SEMANTIC_CODEBASE_SEARCH_TYPE_UNSPECIFIED = 0;
-  SEMANTIC_CODEBASE_SEARCH_TYPE_MQUERY = 1;
-  SEMANTIC_CODEBASE_SEARCH_TYPE_VECTOR_INDEX = 2;
-}
-
 enum SensitivityLevel {
   SENSITIVITY_LEVEL_UNSPECIFIED = 0;
   SENSITIVITY_LEVEL_STANDARD = 1;
   SENSITIVITY_LEVEL_REDACTED = 2;
   SENSITIVITY_LEVEL_RESTRICTED = 3;
-}
-
-enum SetUpCloudSqlErrorCode {
-  SET_UP_CLOUD_SQL_ERROR_CODE_OK = 0;
-  SET_UP_CLOUD_SQL_ERROR_CODE_CANCELLED = 1;
-  SET_UP_CLOUD_SQL_ERROR_CODE_UNKNOWN = 2;
-  SET_UP_CLOUD_SQL_ERROR_CODE_INVALID_ARGUMENT = 3;
-  SET_UP_CLOUD_SQL_ERROR_CODE_DEADLINE_EXCEEDED = 4;
-  SET_UP_CLOUD_SQL_ERROR_CODE_NOT_FOUND = 5;
-  SET_UP_CLOUD_SQL_ERROR_CODE_ALREADY_EXISTS = 6;
-  SET_UP_CLOUD_SQL_ERROR_CODE_PERMISSION_DENIED = 7;
-  SET_UP_CLOUD_SQL_ERROR_CODE_RESOURCE_EXHAUSTED = 8;
-  SET_UP_CLOUD_SQL_ERROR_CODE_FAILED_PRECONDITION = 9;
-  SET_UP_CLOUD_SQL_ERROR_CODE_ABORTED = 10;
-  SET_UP_CLOUD_SQL_ERROR_CODE_OUT_OF_RANGE = 11;
-  SET_UP_CLOUD_SQL_ERROR_CODE_UNIMPLEMENTED = 12;
-  SET_UP_CLOUD_SQL_ERROR_CODE_INTERNAL = 13;
-  SET_UP_CLOUD_SQL_ERROR_CODE_UNAVAILABLE = 14;
-  SET_UP_CLOUD_SQL_ERROR_CODE_DATA_LOSS = 15;
-  SET_UP_CLOUD_SQL_ERROR_CODE_UNAUTHENTICATED = 16;
-}
-
-enum SetUpCloudSqlResult {
-  SET_UP_CLOUD_SQL_RESULT_UNSPECIFIED = 0;
-  SET_UP_CLOUD_SQL_RESULT_IMPLEMENT_CLOUDSQL = 1;
-  SET_UP_CLOUD_SQL_RESULT_PROVISIONING_ERROR = 2;
-}
-
-enum SetUpFirebaseErrorCode {
-  ERROR_CODE_OK = 0;
-  ERROR_CODE_CANCELLED = 1;
-  ERROR_CODE_UNKNOWN = 2;
-  ERROR_CODE_INVALID_ARGUMENT = 3;
-  ERROR_CODE_DEADLINE_EXCEEDED = 4;
-  ERROR_CODE_NOT_FOUND = 5;
-  ERROR_CODE_ALREADY_EXISTS = 6;
-  ERROR_CODE_PERMISSION_DENIED = 7;
-  ERROR_CODE_RESOURCE_EXHAUSTED = 8;
-  ERROR_CODE_FAILED_PRECONDITION = 9;
-  ERROR_CODE_ABORTED = 10;
-  ERROR_CODE_OUT_OF_RANGE = 11;
-  ERROR_CODE_UNIMPLEMENTED = 12;
-  ERROR_CODE_INTERNAL = 13;
-  ERROR_CODE_UNAVAILABLE = 14;
-  ERROR_CODE_DATA_LOSS = 15;
-  ERROR_CODE_UNAUTHENTICATED = 16;
-}
-
-enum SetUpFirebaseRequest {
-  SET_UP_FIREBASE_REQUEST_UNSPECIFIED = 0;
-  SET_UP_FIREBASE_REQUEST_FORCE_SHOW_SET_UP_UI = 1;
-  SET_UP_FIREBASE_REQUEST_PROVISION = 2;
-}
-
-enum SetUpFirebaseResult {
-  SET_UP_FIREBASE_RESULT_UNSPECIFIED = 0;
-  SET_UP_FIREBASE_RESULT_SHOW_SET_UP_UI = 1;
-  SET_UP_FIREBASE_RESULT_IMPLEMENT_FIREBASE = 2;
-  SET_UP_FIREBASE_RESULT_TOS_ERROR = 3;
-  SET_UP_FIREBASE_RESULT_PROVISIONING_ERROR = 4;
-}
-
-enum Side {
-  SIDE_UNSPECIFIED = 0;
-  SIDE_LEFT = 1;
-  SIDE_RIGHT = 2;
 }
 
 enum SidecarUIEntrypoint {
@@ -2500,9 +2037,10 @@ enum SoundType {
 
 enum Status {
   STATUS_UNSPECIFIED = 0;
-  STATUS_ENABLED = 1;
-  STATUS_DISABLED = 2;
-  STATUS_TRUNCATED = 3;
+  SUCCESS = 1;
+  ERROR = 2;
+  PAYWALL = 3;
+  UNSAFE = 4;
 }
 
 enum StopReason {
@@ -2543,32 +2081,10 @@ enum SupercompleteTriggerCondition {
   SUPERCOMPLETE_TRIGGER_CONDITION_TAB_JUMP_EDIT = 10;
 }
 
-enum TaskDeltaType {
-  TASK_DELTA_TYPE_UNSPECIFIED = 0;
-  TASK_DELTA_TYPE_ADD = 1;
-  TASK_DELTA_TYPE_PRUNE = 2;
-  TASK_DELTA_TYPE_DELETE = 3;
-  TASK_DELTA_TYPE_UPDATE = 4;
-  TASK_DELTA_TYPE_MOVE = 5;
-}
-
-enum TaskStatus {
-  TASK_STATUS_UNSPECIFIED = 0;
-  TASK_STATUS_TODO = 1;
-  TASK_STATUS_IN_PROGRESS = 2;
-  TASK_STATUS_DONE = 3;
-}
-
 enum TerminalShellCommandSource {
   TERMINAL_SHELL_COMMAND_SOURCE_UNSPECIFIED = 0;
   TERMINAL_SHELL_COMMAND_SOURCE_USER = 1;
   TERMINAL_SHELL_COMMAND_SOURCE_CASCADE = 2;
-}
-
-enum TerminalShellCommandStatus {
-  TERMINAL_SHELL_COMMAND_STATUS_UNSPECIFIED = 0;
-  TERMINAL_SHELL_COMMAND_STATUS_RUNNING = 1;
-  TERMINAL_SHELL_COMMAND_STATUS_COMPLETED = 2;
 }
 
 enum ThirdPartyWebSearchProvider {
@@ -2604,12 +2120,6 @@ enum ToolFormatterType {
   TOOL_FORMATTER_TYPE_NONE = 5;
 }
 
-enum TrajectorySearchIdType {
-  TRAJECTORY_SEARCH_ID_TYPE_UNSPECIFIED = 0;
-  TRAJECTORY_SEARCH_ID_TYPE_CASCADE_ID = 1;
-  TRAJECTORY_SEARCH_ID_TYPE_MAINLINE = 2;
-}
-
 enum Transport {
   TRANSPORT_UNSPECIFIED = 0;
   TRANSPORT_WEB_CHANNEL = 1;
@@ -2622,25 +2132,11 @@ enum TruncationReason {
   TRUNCATION_REASON_MAX_TOKEN_LIMIT = 2;
 }
 
-enum Type {
-  TYPE_UNSPECIFIED = 0;
-  TYPE_EFFECTIVE_GRANT = 1;
-  TYPE_DEFAULT_GRANT = 2;
-  TYPE_CROSS_PROJECT_ISOLATION = 3;
-  TYPE_SECURE_MODE = 4;
-  TYPE_DEFAULT_FALLBACK = 5;
-  TYPE_FORCE_ASK_HOOK = 6;
-}
-
 enum UnifiedDiffLineType {
   UNIFIED_DIFF_LINE_TYPE_UNSPECIFIED = 0;
   UNIFIED_DIFF_LINE_TYPE_INSERT = 1;
   UNIFIED_DIFF_LINE_TYPE_DELETE = 2;
   UNIFIED_DIFF_LINE_TYPE_UNCHANGED = 3;
-}
-
-enum WindowState {
-  WINDOWSTATE_UNSPECIFIED = 0;
 }
 
 enum WorkspaceType {
@@ -2658,105 +2154,10 @@ enum WorkspaceType {
 // Messages & Structs
 // ==========================================================================
 
-message AIComment {
-  string file_path = 1;
-  Side side = 2;
-  int32 line_number = 3;
-  string comment = 4;
-}
-
-message AccumulatedItem {
-  string id = 1;
-  Any value = 2;
-  AccumulatedItemRenderInfo render_info = 3;
-}
-
-message AccumulatedItemRenderInfo {
-  string markdown = 1;
-  string file_uri = 2;
-  string icon = 3;
-  string label = 4;
-  TrajectoryFileDiff file_diff = 5;
-  TaskView task_view = 6;
-}
-
-message AccumulatedSection {
-  string key = 1;
-  string title = 2;
-  string icon = 3;
-  repeated AccumulatedItem items = 4;
-  repeated RenderLocation locations = 5;
-  int32 max_visible_items = 6;
-}
-
-message ActionDebugInfo {
-  repeated DebugInfoEntry entries = 1;
-}
-
 message ActionPointer {
   string cortex_plan_id = 1;
   string code_plan_id = 2;
   int32 action_index = 3;
-}
-
-message ActionResult {
-  ActionResultEdit edit = 1;
-  bool apply_existing_result = 2;
-}
-
-message ActionResultEdit {
-  string absolute_path_migrate_me_to_uri = 1;
-  DiffBlock diff = 2;
-  string context_prefix = 3;
-  string context_suffix = 4;
-  ActionDebugInfo debug_info = 5;
-  string completion_id = 6;
-  string file_content_hash = 7;
-  string absolute_uri = 8;
-  repeated CodeContextItem result_ccis = 9;
-  string original_content = 10;
-  bool create_file = 11;
-  string prompt_id = 12;
-}
-
-message ActionSpec {
-  ActionSpecCommand command = 1;
-  ActionSpecCreateFile create_file = 2;
-  repeated uint32 parent_step_indices = 3;
-  ActionSpecDeleteFile delete_file = 4;
-  ActionSpecSed sed = 5;
-}
-
-message ActionSpecCommand {
-  string instruction = 1;
-  bool is_edit = 2;
-  CodeContextItem code_context = 3;
-  PathScopeItem file = 4;
-  repeated CodeContextItem reference_ccis = 5;
-  CciWithSubrange cci_with_subrange = 6;
-  LineRangeTarget line_range = 7;
-  bool use_fast_apply = 8;
-  repeated ReplacementChunk replacement_chunks = 9;
-  CommandContentTarget content_target = 10;
-  string classification = 11;
-  InteractiveCascadeEditImportance importance = 12;
-}
-
-message ActionSpecCreateFile {
-  string instruction = 1;
-  PathScopeItem path = 2;
-  repeated CodeContextItem reference_ccis = 3;
-  bool overwrite = 4;
-}
-
-message ActionSpecDeleteFile {
-  PathScopeItem path = 1;
-}
-
-message ActionSpecSed {
-  repeated string expressions = 1;
-  repeated FileContentEntry file_content = 2;
-  PathScopeItem path = 3;
 }
 
 message AgentApiConfig {
@@ -2780,26 +2181,6 @@ message AgentDiscoveryConfig {
   repeated string builtin_agent_names = 2;
   repeated AgentScriptItem agents = 3;
   repeated CustomizationPath agents_paths = 4;
-}
-
-message AgentMessage {
-  string id = 1;
-  string recipient = 2;
-  string sender = 3;
-  string content = 4;
-  MessagePriority priority = 5;
-  Timestamp timestamp = 6;
-  bytes step_payload = 9;
-  MessageRenderDetails render_details = 10;
-  bool hide_from_user = 11;
-  SourceMetadata source_metadata = 12;
-  MessageDeliveryStrategy delivery_strategy = 13;
-}
-
-message AgentRef {
-  string conversation_id = 1;
-  string title = 2;
-  string subtitle = 3;
 }
 
 message AgentScriptCommandSpec {
@@ -2827,6 +2208,8 @@ message AgentScriptItem {
   bool main_agent = 13;
   bool disable_model_selection = 14;
   ModelTier model_tier = 15;
+  string input_placeholder = 16;
+  string plugin_name = 17;
 }
 
 message AgentScriptPythonSpec {
@@ -2848,12 +2231,6 @@ message AllowAlwaysConfig {
   repeated DangerousSubcommandsEntry dangerous_subcommands = 3;
 }
 
-message AndroidConfig {
-  string package_name = 1;
-  string sha1_certificate = 2;
-  string sha256_certificate = 3;
-}
-
 message Annotation {
   int32 start_index = 1;
   int32 end_index = 2;
@@ -2861,6 +2238,7 @@ message Annotation {
   FileCitation file_citation = 6;
   PlaceCitation place_citation = 7;
   WordInfo word_info = 8;
+  SpeechAnnotation speech_metadata = 11;
 }
 
 message AntigravityBrowserToolConfig {
@@ -2895,28 +2273,6 @@ message AntigravityBrowserToolConfig {
   bool enable_ark = 29;
 }
 
-message AntigravityDeployment {
-  string antigravity_deployment_id = 1;
-  string auth_uid = 2;
-  DeploymentProvider deployment_provider = 3;
-  string project_id = 4;
-  string project_name = 5;
-  string workspace_path = 6;
-  Timestamp created_at = 7;
-  Timestamp updated_at = 8;
-  string build_status_url = 9;
-  string project_url = 10;
-  Timestamp expires_at = 11;
-  string deployment_url = 12;
-  Timestamp deprovisioned_at = 13;
-  string provider_deployment_id = 14;
-  Timestamp claimed_at = 15;
-  string domain = 16;
-  string subdomain_name = 17;
-  string antigravity_project_id = 19;
-  string provider_team_id = 20;
-}
-
 message Any {
   string type_url = 1;
   bytes value = 2;
@@ -2927,33 +2283,6 @@ message AppliedUpdate {
   Row new_row = 2;
   int64 current_e_tag = 3;
   bool deleted = 5;
-}
-
-message Approval {
-  string type = 1;
-  string display_name = 2;
-  bool approved = 3;
-}
-
-message ApprovalInteraction {
-  bool confirm = 1;
-}
-
-message ApprovalInteractionSpec {
-}
-
-message Args {
-  string absolute_path_uri = 1;
-  repeated string cell_ids = 2;
-  repeated int32 cell_indices = 3;
-  bool stop_on_error = 4;
-  bool restart_kernel = 5;
-  bool use_message_bridge = 6;
-}
-
-message ArgsEntry {
-  string key = 1;
-  string value = 2;
 }
 
 message ArgumentDescriptionOverridesEntry {
@@ -2967,7 +2296,7 @@ message ArgumentNameOverridesEntry {
 }
 
 message ArgumentOverride {
-  Internal_Value static_value = 1;
+  Value static_value = 1;
   bool omit = 2;
 }
 
@@ -2981,93 +2310,12 @@ message ArgumentValuesEntry {
   string value = 2;
 }
 
-message ArtifactComment {
-  string artifact_uri = 1;
-  string comment = 4;
-  ArtifactFullFileTarget full_file = 5;
-  ArtifactSelectionTarget selections = 6;
-  ArtifactApprovalStatus approval_status = 7;
-}
-
-message ArtifactFullFileTarget {
-  ImageData image = 1;
-  Media media = 2;
-}
-
-message ArtifactImageSelection {
-  ImageData cropped_image = 1;
-  float x = 2;
-  float y = 3;
-  float width = 4;
-  float height = 5;
-  Media cropped_media = 6;
-}
-
-message ArtifactMetadata {
-  ArtifactType artifact_type = 1;
-  string summary = 2;
-  Timestamp created_at = 3;
-  Timestamp updated_at = 4;
-  int64 version = 5;
-  bool request_feedback = 6;
-  bool user_facing = 7;
-}
-
-message ArtifactReviewState {
-  string artifact_uri = 1;
-  ArtifactReviewStatus status = 2;
-  Timestamp last_reviewed_time = 3;
-  string last_reviewed_content = 4;
-}
-
-message ArtifactSelection {
-  TextSelection text_selection = 1;
-  ArtifactImageSelection image_selection = 2;
-}
-
-message ArtifactSelectionTarget {
-  repeated ArtifactSelection selections = 1;
-}
-
-message ArtifactSnapshot {
-  string artifact_name = 1;
-  string content = 2;
-  string artifact_absolute_uri = 3;
-  Timestamp last_edited = 4;
-  ArtifactReviewState review_state = 5;
-  ArtifactMetadata artifact_metadata = 6;
-  UrlArtifactPayload url_artifact_payload = 7;
-}
-
 message AskCustomPermissionToolConfig {
   bool enabled = 1;
 }
 
 message AskPermissionToolConfig {
   bool enabled = 1;
-}
-
-message AskQuestionEntry {
-  string question = 1;
-  repeated AskQuestionOption options = 2;
-  bool is_multi_select = 3;
-  repeated string selected_option_ids = 4;
-  string write_in_response = 5;
-  bool skipped = 6;
-}
-
-message AskQuestionInteraction {
-  repeated AskQuestionEntry responses = 1;
-  bool cancelled = 2;
-}
-
-message AskQuestionInteractionSpec {
-  repeated AskQuestionEntry questions = 1;
-}
-
-message AskQuestionOption {
-  string id = 1;
-  string text = 2;
 }
 
 message AskQuestionToolConfig {
@@ -3080,7 +2328,7 @@ message AttributesEntry {
 }
 
 message AudioContent {
-  GenaiAudiocontent_MimeType mime_type = 1;
+  MimeType mime_type = 1;
   bytes data = 2;
   string uri = 5;
   int32 channels = 7;
@@ -3112,12 +2360,6 @@ message AwaitNewLintsConfig {
   bool include_saved = 4;
 }
 
-message Badge {
-  string icon = 1;
-  string label = 2;
-  string tooltip = 3;
-}
-
 message BattleModeConfig {
   int32 max_turns = 1;
 }
@@ -3141,8 +2383,9 @@ message BattleModeInfo {
   bool forked_from_history = 16;
   string trigger_tag = 17;
   string reference_conversation_id = 18;
-  repeated Battlemodeinfo_MetadataEntry metadata = 19;
+  repeated MetadataEntry metadata = 19;
   CloneStrategy clone_strategy = 20;
+  repeated string contrib_variants = 21;
 }
 
 message BattleModeMetadata {
@@ -3151,31 +2394,8 @@ message BattleModeMetadata {
   ModelInfo model_info_override = 3;
 }
 
-message Battlemodeinfo_MetadataEntry {
-  string key = 1;
-  string value = 2;
-}
-
 message Blobref {
   string blob_id = 1;
-}
-
-message BrainEntry {
-  string id = 1;
-  BrainEntryType type = 2;
-  string content = 3;
-}
-
-message BrainEntryDelta {
-  BrainEntry before = 1;
-  BrainEntry after = 2;
-  string absolute_path_uri = 3;
-  BrainEntryDeltaSummary summary = 4;
-}
-
-message BrainEntryDeltaSummary {
-  PlanEntryDeltaSummary plan = 1;
-  TaskEntryDeltaSummary task = 2;
 }
 
 message BroadcastConversationDeletionRequest {
@@ -3206,18 +2426,6 @@ message BrowserListNetworkRequestsToolConfig {
   bool enabled = 1;
 }
 
-message BrowserPageMetadata {
-  string url = 1;
-  string page_id = 2;
-  string page_title = 3;
-  uint32 viewport_width = 4;
-  uint32 viewport_height = 5;
-  string favicon_url = 6;
-  Timestamp last_visited_time = 7;
-  float device_pixel_ratio = 8;
-  uint32 page_height = 9;
-}
-
 message BrowserPageScopeItem {
   string url = 1;
   string title = 2;
@@ -3228,12 +2436,6 @@ message BrowserPageScopeItem {
 message BrowserStateDiffingConfig {
   bool capture_agent_action_diffs = 1;
   bool include_dom_tree_in_diffs = 2;
-}
-
-message BrowserStateSnapshot {
-  Timestamp timestamp = 1;
-  string user_active_page_id = 2;
-  repeated BrowserPageMetadata pages = 3;
 }
 
 message BrowserSubagentContextConfig {
@@ -3274,37 +2476,6 @@ message BrowserWindowSize {
   int32 height_px = 2;
 }
 
-message BugData {
-  int64 bug_id = 1;
-  string title = 2;
-  string description = 3;
-}
-
-message BuildCleanerStep {
-  string tool_name = 1;
-  DevtoolsCiderAgentTrajectory_stepsBuildcleanerstep_Args args = 2;
-  DevtoolsCiderAgentTrajectory_stepsBuildcleanerstep_Reply reply = 3;
-  ToolStatus tool_status = 4;
-}
-
-message BuildFailure {
-  string target = 1;
-  string stderr = 2;
-}
-
-message BuildReply {
-  bool succeeded = 1;
-  string error_message = 2;
-  repeated BuildFailure failure_details = 3;
-  string invocation_id = 5;
-}
-
-message BuildTargetsStep {
-  string tool_name = 1;
-  DevtoolsCiderAgentTrajectory_stepsBuildtargetsstep_Args args = 2;
-  BuildReply reply = 3;
-}
-
 message BuiltinAgentConfig {
   DefaultAgentConfig default_agent = 1;
   Model model = 2;
@@ -3327,24 +2498,6 @@ message CaptureBrowserScreenshotToolConfig {
   bool enable_saving = 1;
 }
 
-message CascadeBrowserActionInteraction {
-  bool confirm = 1;
-}
-
-message CascadeCaptureBrowserScreenshotInteraction {
-  bool confirm = 1;
-}
-
-message CascadeCaptureBrowserScreenshotInteractionSpec {
-}
-
-message CascadeClickBrowserPixelInteraction {
-  bool confirm = 1;
-}
-
-message CascadeClickBrowserPixelInteractionSpec {
-}
-
 message CascadeConfig {
   CascadePlannerConfig planner_config = 1;
   CheckpointConfig checkpoint_config = 2;
@@ -3360,10 +2513,6 @@ message CascadeConfig {
   BattleModeConfig battle_mode_config = 13;
 }
 
-message CascadeConfirmBrowserSetupInteraction {
-  bool confirm = 1;
-}
-
 message CascadeConversationalPlannerConfig {
   ConversationalPlannerMode planner_mode = 4;
   bool eval_mode = 5;
@@ -3372,23 +2521,6 @@ message CascadeConversationalPlannerConfig {
   ConversationHistoryConfig conversation_history_config = 16;
   string override_workspace_dir_experimental_use_only = 17;
   string override_cascade_id_for_prompt = 20;
-}
-
-message CascadeDeployInteraction {
-  bool cancel = 1;
-  DeployTarget deploy_target = 2;
-  string subdomain = 3;
-}
-
-message CascadeDeployInteractionSpec {
-  repeated DeployTarget deploy_target_options = 1;
-}
-
-message CascadeExecuteBrowserJavaScriptInteraction {
-  bool confirm = 1;
-}
-
-message CascadeExecuteBrowserJavaScriptInteractionSpec {
 }
 
 message CascadeExecutorConfig {
@@ -3417,24 +2549,6 @@ message CascadeExecutorConfig {
   bool disable_tool_hook_notices = 24;
   bool disable_message_wake_after_execution_error = 25;
   bool cortex_snapshot_recording = 26;
-}
-
-message CascadeMcpInteraction {
-  bool confirm = 1;
-}
-
-message CascadeMcpInteractionSpec {
-}
-
-message CascadeOpenBrowserSetupInteraction {
-  bool confirm = 1;
-}
-
-message CascadeOpenBrowserUrlInteraction {
-  bool confirm = 1;
-}
-
-message CascadeOpenBrowserUrlInteractionSpec {
 }
 
 message CascadePlannerConfig {
@@ -3474,37 +2588,6 @@ message CascadePlannerConfig {
   CustomizationDiscoveryConfig customization_discovery_config = 57;
   int32 customization_token_budget = 58;
   int32 rules_token_budget = 59;
-}
-
-message CascadeReadUrlContentInteraction {
-  bool confirm = 1;
-}
-
-message CascadeReadUrlContentInteractionSpec {
-}
-
-message CascadeRunCommandInteraction {
-  bool confirm = 1;
-  string proposed_command_line = 2;
-  string submitted_command_line = 3;
-  bool sandbox_override = 4;
-}
-
-message CascadeRunCommandInteractionSpec {
-}
-
-message CascadeRunExtensionCodeInteraction {
-  bool confirm = 1;
-}
-
-message CascadeRunExtensionCodeInteractionSpec {
-}
-
-message CascadeSendCommandInputInteraction {
-  bool confirm = 1;
-}
-
-message CascadeSendCommandInputInteractionSpec {
 }
 
 message CascadeToolConfig {
@@ -3586,39 +2669,9 @@ message CascadeTrajectorySummary {
   bool has_activity = 26;
 }
 
-message CascadeUserInteraction {
-  string trajectory_id = 1;
-  uint32 step_index = 2;
-  CascadeDeployInteraction deploy = 4;
-  CascadeRunCommandInteraction run_command = 5;
-  CascadeOpenBrowserUrlInteraction open_browser_url = 6;
-  CascadeRunExtensionCodeInteraction run_extension_code = 7;
-  CascadeExecuteBrowserJavaScriptInteraction execute_browser_javascript = 8;
-  CascadeCaptureBrowserScreenshotInteraction capture_browser_screenshot = 9;
-  CascadeClickBrowserPixelInteraction click_browser_pixel = 10;
-  CascadeBrowserActionInteraction browser_action = 13;
-  CascadeOpenBrowserSetupInteraction open_browser_setup = 14;
-  CascadeConfirmBrowserSetupInteraction confirm_browser_setup = 15;
-  CascadeSendCommandInputInteraction send_command_input = 16;
-  CascadeReadUrlContentInteraction read_url_content = 17;
-  CascadeMcpInteraction mcp = 18;
-  FilePermissionInteraction file_permission = 19;
-  ElicitationInteraction elicitation = 20;
-  PermissionInteraction permission = 21;
-  AskQuestionInteraction ask_question = 22;
-  ApprovalInteraction approval_interaction = 23;
-  bool timed_out = 24;
-  RemoteControlDetails remote_control_details = 25;
-}
-
 message CciWithSubrange {
   CodeContextItem cci = 1;
   ContextSubrange subrange = 2;
-}
-
-message CciWithSubrangeWithRetrievalMetadata {
-  CciWithSubrange cci_with_subrange = 1;
-  RetrievedCodeContextItemMetadata metadata = 2;
 }
 
 message Cell {
@@ -3635,20 +2688,6 @@ message CellOutput {
   bool generated_images = 6;
   string error_trace = 7;
   repeated NotebookBlob blobs = 8;
-}
-
-message ChangeData {
-  string description = 1;
-  repeated BugData bugs = 2;
-  repeated ChangedFileData files = 3;
-  repeated Tag tags = 4;
-}
-
-message ChangedFileData {
-  FileOperation operation = 1;
-  string old_file_path = 2;
-  string new_file_path = 3;
-  string file_diff = 4;
 }
 
 message CharacterDiff {
@@ -3682,7 +2721,7 @@ message ChatMessagePrompt {
   string provider_assigned_message_id = 21;
   repeated Any side_channels = 22;
   repeated Any passback_context = 24;
-  Genai_Struct prompt_struct = 25;
+  Struct prompt_struct = 25;
   repeated int32 merged_step_idxs = 26;
   bool telemetry_redacted = 27;
 }
@@ -3735,6 +2774,7 @@ message ChatToolCall {
   bytes thinking_signature = 7;
   string original_arguments_json = 8;
   string original_name = 9;
+  repeated Media function_call_parts = 10;
 }
 
 message ChatToolChoice {
@@ -3790,14 +2830,7 @@ message CheckpointConfig {
   string checkpoint_prompt_override = 30;
   string continuation_prompt_override = 31;
   int32 max_artifact_section_bytes = 32;
-}
-
-message Citation {
-  int32 start_index = 1;
-  int32 end_index = 2;
-  string uri = 3;
-  string title = 4;
-  string license = 5;
+  bool fail_on_invalid_output = 33;
 }
 
 message ClickBrowserPixelToolConfig {
@@ -3825,12 +2858,6 @@ message CodeAcknowledgementConverterConfig {
   bool show_to_model_on_rejection = 2;
 }
 
-message CodeAcknowledgementInfo {
-  string uri_path = 1;
-  repeated uint32 step_indices = 2;
-  UnifiedDiff diff = 3;
-}
-
 message CodeContextItem {
   string absolute_path_migrate_me_to_uri = 1;
   repeated WorkspacePath workspace_paths = 2;
@@ -3848,10 +2875,6 @@ message CodeContextItem {
   string absolute_uri = 16;
 }
 
-message CodeContextProviderMetadata {
-  float relative_weight = 1;
-}
-
 message CodeDiagnostic {
   Range range = 1;
   string message = 2;
@@ -3864,7 +2887,7 @@ message CodeDiagnostic {
 }
 
 message CodeExecutionCallArguments {
-  GenaiCodeexecutioncallcontentCodeexecutioncallarguments_Language language = 1;
+  Language language = 1;
   string code = 2;
 }
 
@@ -3872,22 +2895,24 @@ message CodeExecutionCallContent {
   CodeExecutionCallArguments arguments = 2;
 }
 
+message CodeExecutionCallStep {
+  CodeExecutionCallStepArguments arguments = 1;
+}
+
+message CodeExecutionCallStepArguments {
+  GenaiCodeexecutioncallstepCodeexecutioncallsteparguments_Language language = 1;
+  string code = 2;
+}
+
 message CodeExecutionResultContent {
   string result = 1;
   bool is_error = 2;
 }
 
-message CodeSearchMatch {
-  string snippet = 1;
-  int32 line_number = 2;
-}
-
-message CodeSearchResults {
-  string path = 1;
-  repeated CodeSearchMatch matches = 4;
-  string changelist = 5;
-  string depot_path = 6;
-  int32 total_matches_in_file = 7;
+message CodeExecutionResultStep {
+  string result = 1;
+  bool is_error = 2;
+  int32 exit_code = 3;
 }
 
 message CodeSearchToolConfig {
@@ -3906,6 +2931,7 @@ message CodeSearchToolConfig {
   int32 max_matches_per_file = 13;
   bool use_detailed_search_guidance_in_di = 14;
   int32 max_tokens = 15;
+  bool enable_cs_query_optimizations = 16;
 }
 
 message CodeToolConfig {
@@ -3956,11 +2982,6 @@ message CommandAssessorConfig {
   string sonar_monitors_config_textproto = 6;
 }
 
-message CommandContentTarget {
-  string content = 1;
-  string absolute_uri = 2;
-}
-
 message CommandStatusToolConfig {
   bool use_delta = 1;
   int32 max_output_characters = 2;
@@ -3970,27 +2991,6 @@ message CommandStatusToolConfig {
   bool enable_input_detection = 6;
   Model input_detection_model = 7;
   bool force_disable = 8;
-}
-
-message Comment {
-  string depot_path = 1;
-  string type = 2;
-  string author = 3;
-  string content = 4;
-  bool resolved = 5;
-  repeated Approval approval = 6;
-  repeated CommentReply replies = 7;
-}
-
-message CommentReply {
-  string author = 1;
-  string content = 2;
-  string action = 3;
-}
-
-message CompletedInteraction {
-  RequestedInteraction request = 1;
-  CascadeUserInteraction response = 2;
 }
 
 message CompletionConfiguration {
@@ -4049,6 +3049,15 @@ message ComponentResolutionPolicy {
   ResolutionPolicy empty_component_policy = 2;
 }
 
+message ConfirmationRequest {
+  ElicitationChoice positive_choice = 1;
+  ElicitationChoice negative_choice = 2;
+}
+
+message ConfirmationResponse {
+  bool is_confirmed = 1;
+}
+
 message ConsoleLogLine {
   string timestamp_str = 1;
   string type = 2;
@@ -4072,27 +3081,8 @@ message Content {
   ToolResultContent tool_result = 25;
 }
 
-message ContentBlock {
-  string markdown = 1;
-  MediaRef media = 2;
-  TerminalBlock terminal = 3;
-  AgentRef agent = 4;
-}
-
-message ContextData {
-  G3DocData g3doc = 1;
-  FileContentData file = 2;
-}
-
-message ContextModuleResult {
-  repeated CciWithSubrangeWithRetrievalMetadata retrieved_cci_with_subranges = 1;
-  Document active_document = 2;
-  LocalNodeState local_node_state = 3;
-  Guideline guideline = 4;
-  DocumentOutline active_document_outline = 5;
-  repeated Document open_documents = 6;
-  repeated TerminalShellCommand running_terminal_commands = 8;
-  BrowserStateSnapshot browser_state_snapshot = 9;
+message ContentList {
+  repeated Content contents = 1;
 }
 
 message ContextScope {
@@ -4128,6 +3118,7 @@ message ContextScopeItem {
   SlashCommandScopeItem slash_command = 27;
   DynamicContextScopeItem dynamic_context = 28;
   LinkScopeItem link = 29;
+  PluginScopeItem plugin = 30;
 }
 
 message ContextSubrange {
@@ -4190,544 +3181,6 @@ message ConversationScopeItem {
   string source = 4;
 }
 
-message CortexErrorDetails {
-  string user_error_message = 1;
-  string short_error = 2;
-  string full_error = 3;
-  bool is_benign = 4;
-  string details = 5;
-  string error_id = 6;
-  uint32 error_code = 7;
-  repeated StructuredErrorPart structured_error_parts = 8;
-  string model_error_message = 9;
-  repeated string rpc_error_details = 10;
-  string sherlog_link = 11;
-  string user_error_number = 12;
-}
-
-message CortexMemory {
-  string memory_id = 1;
-  CortexMemoryMetadata metadata = 2;
-  CortexMemorySource source = 3;
-  CortexMemoryScope scope = 4;
-  CortexMemoryText text_memory = 5;
-  string title = 6;
-  string absolute_path = 7;
-  string discovered_in = 8;
-  DiscoveryCategory discovery_category = 9;
-  int32 num_truncated_bytes = 10;
-}
-
-message CortexMemoryAllScope {
-}
-
-message CortexMemoryGlobalScope {
-  string absolute_file_path = 1;
-}
-
-message CortexMemoryLocalScope {
-  string repo_base_dir_uri = 1;
-  repeated string corpus_names = 2;
-  repeated string base_dir_uris = 3;
-}
-
-message CortexMemoryMetadata {
-  Timestamp created_at = 1;
-  Timestamp last_modified = 2;
-  Timestamp last_accessed = 3;
-  repeated string tags = 4;
-  bool user_triggered = 5;
-}
-
-message CortexMemoryProjectScope {
-  string file_path = 1;
-  repeated string base_dir_uris = 2;
-  repeated string corpus_names = 3;
-  CortexMemoryTrigger trigger = 4;
-  string description = 5;
-  repeated string globs = 6;
-  string absolute_file_path = 7;
-  int32 priority = 8;
-}
-
-message CortexMemoryScope {
-  CortexMemoryGlobalScope global_scope = 1;
-  CortexMemoryLocalScope local_scope = 2;
-  CortexMemoryAllScope all_scope = 3;
-  CortexMemoryProjectScope project_scope = 4;
-}
-
-message CortexMemoryText {
-  string content = 1;
-}
-
-message CortexStepAgencyToolCall {
-  string agent_name = 1;
-  string function_name = 2;
-  repeated Any request_messages = 3;
-  repeated Any response_messages = 4;
-}
-
-message CortexStepAskQuestion {
-  repeated AskQuestionEntry questions = 1;
-}
-
-message CortexStepBrainUpdate {
-  BrainEntryType entry_type = 1;
-  repeated BrainEntryDelta deltas = 2;
-  BrainUpdateTrigger trigger = 3;
-}
-
-message CortexStepBrowserClickElement {
-  string page_id = 1;
-  int32 index = 2;
-  string description = 3;
-  bool user_rejected = 4;
-  ClickType click_type = 5;
-  BrowserPageMetadata page_metadata = 6;
-  string browser_state_diff = 7;
-}
-
-message CortexStepBrowserDragPixelToPixel {
-  string page_id = 1;
-  repeated Point2 waypoints = 2;
-  bool user_rejected = 6;
-  BrowserPageMetadata page_metadata = 7;
-  repeated Media screenshots_with_drag_feedback = 8;
-}
-
-message CortexStepBrowserGetDom {
-  string page_id = 1;
-  DOMTree dom_tree = 2;
-  string serialized_dom_tree = 3;
-  BrowserPageMetadata page_metadata = 4;
-  string serialized_dom_tree_uri = 5;
-}
-
-message CortexStepBrowserGetNetworkRequest {
-  string page_id = 1;
-  string request_id = 2;
-  BrowserPageMetadata page_metadata = 3;
-  string network_request_details = 4;
-}
-
-message CortexStepBrowserInput {
-  string page_id = 1;
-  int32 index = 2;
-  string text = 3;
-  bool press_enter = 4;
-  bool clear_text = 5;
-  BrowserPageMetadata page_metadata = 6;
-  string browser_state_diff = 7;
-}
-
-message CortexStepBrowserListNetworkRequests {
-  string page_id = 1;
-  bool include_preserved_requests = 2;
-  repeated string resource_types = 3;
-  BrowserPageMetadata page_metadata = 4;
-  string network_requests = 5;
-}
-
-message CortexStepBrowserMouseDown {
-  string page_id = 1;
-  string button = 2;
-  BrowserPageMetadata page_metadata = 3;
-  string browser_state_diff = 4;
-}
-
-message CortexStepBrowserMouseUp {
-  string page_id = 1;
-  string button = 2;
-  BrowserPageMetadata page_metadata = 3;
-  string browser_state_diff = 4;
-}
-
-message CortexStepBrowserMouseWheel {
-  string page_id = 1;
-  int32 x = 2;
-  int32 y = 3;
-  int32 dx = 4;
-  int32 dy = 5;
-  BrowserPageMetadata page_metadata = 6;
-  string browser_state_diff = 7;
-}
-
-message CortexStepBrowserMoveMouse {
-  string page_id = 1;
-  int32 x = 2;
-  int32 y = 3;
-  BrowserPageMetadata page_metadata = 6;
-  string browser_state_diff = 7;
-}
-
-message CortexStepBrowserPressKey {
-  string page_id = 1;
-  string key = 2;
-  string text = 3;
-  string browser_state_diff = 4;
-  BrowserPageMetadata page_metadata = 5;
-}
-
-message CortexStepBrowserRefreshPage {
-  string page_id = 1;
-  BrowserPageMetadata page_metadata = 2;
-  string browser_state_diff = 3;
-}
-
-message CortexStepBrowserResizeWindow {
-  string page_id = 1;
-  int32 width = 2;
-  int32 height = 3;
-  bool user_rejected = 4;
-  BrowserPageMetadata page_metadata = 5;
-  WindowState window_state = 6;
-  string browser_state_diff = 7;
-}
-
-message CortexStepBrowserScroll {
-  string page_id = 1;
-  ScrollDirection direction = 2;
-  bool scroll_to_end = 3;
-  bool scroll_by_element_index = 4;
-  int32 element_index = 5;
-  int32 pixels_scrolled_x = 6;
-  int32 pixels_scrolled_y = 7;
-  string browser_state_diff = 8;
-}
-
-message CortexStepBrowserScrollDown {
-  string page_id = 1;
-  bool scroll_to_end = 2;
-  bool scroll_by_element_index = 3;
-  int32 element_index = 4;
-  string browser_state_diff = 5;
-}
-
-message CortexStepBrowserScrollUp {
-  string page_id = 1;
-  bool scroll_to_end = 2;
-  bool scroll_by_element_index = 3;
-  int32 element_index = 4;
-  string browser_state_diff = 5;
-}
-
-message CortexStepBrowserSelectOption {
-  string page_id = 1;
-  int32 index = 2;
-  string value = 3;
-  BrowserPageMetadata page_metadata = 6;
-  string browser_state_diff = 7;
-}
-
-message CortexStepBrowserSubagent {
-  string task = 1;
-  string result = 2;
-  string task_name = 3;
-  string recording_path = 4;
-  RecordingGenerationStatus recording_generation_status = 6;
-  string recording_name = 7;
-  string subagent_id = 8;
-  string reused_subagent_id = 9;
-  bool skipped = 10;
-  repeated Media media = 11;
-  string scratchpad_path = 12;
-  string task_summary = 13;
-}
-
-message CortexStepCaptureBrowserConsoleLogs {
-  string page_id = 1;
-  BrowserPageMetadata page_metadata = 2;
-  ConsoleLogScopeItem console_logs = 3;
-}
-
-message CortexStepCaptureBrowserScreenshot {
-  string page_id = 1;
-  bool user_rejected = 2;
-  ImageData screenshot = 3;
-  BrowserPageMetadata page_metadata = 4;
-  AutoRunDecision auto_run_decision = 5;
-  bool save_screenshot = 7;
-  bool capture_by_element_index = 8;
-  int32 element_index = 9;
-  string screenshot_name = 10;
-  Media media_screenshot = 11;
-  bool capture_beyond_viewport = 12;
-  Viewport screenshot_viewport = 13;
-}
-
-message CortexStepCheckDeployStatus {
-  string antigravity_deployment_id = 1;
-  AntigravityDeployment deployment = 2;
-  DeploymentBuildStatus build_status = 3;
-  string build_error = 4;
-  string build_logs = 5;
-  bool is_claimed = 6;
-  string claim_url = 7;
-}
-
-message CortexStepCheckpoint {
-  uint32 checkpoint_index = 1;
-  repeated uint32 included_step_indices = 3;
-  string user_intent = 4;
-  string session_summary = 5;
-  string code_change_summary = 6;
-  repeated EditedFileMapEntry edited_file_map = 7;
-  string memory_summary = 8;
-  bool intent_only = 9;
-  string conversation_title = 10;
-  uint32 included_step_index_start = 11;
-  uint32 included_step_index_end = 12;
-  repeated ArtifactSnapshot artifact_snapshots = 14;
-  repeated string conversation_log_uris = 15;
-  bool model_summarization_failed = 16;
-  bool used_fallback_summary = 17;
-  repeated TrajectoryFileDiff trajectory_file_diffs = 18;
-  repeated string user_requests = 19;
-  repeated SubagentSnapshot subagent_snapshots = 20;
-  repeated TaskSnapshot running_task_snapshots = 21;
-  bool render_latest_checkpoint = 24;
-  int64 render_user_message_step_index = 25;
-  repeated AccumulatedSection accumulated_sections = 26;
-  uint32 total_subagent_count = 27;
-}
-
-message CortexStepClickBrowserPixel {
-  string page_id = 1;
-  int32 x = 2;
-  int32 y = 3;
-  bool user_rejected = 4;
-  BrowserPageMetadata page_metadata = 5;
-  Media screenshot_with_click_feedback = 6;
-  ClickType click_type = 7;
-  string browser_state_diff = 8;
-}
-
-message CortexStepClipboard {
-  string content = 1;
-}
-
-message CortexStepCloudSQLExecuteSQL {
-  string project_id = 1;
-  string instance_name = 2;
-  string sql_statement = 3;
-  string error_message = 4;
-  string output = 5;
-}
-
-message CortexStepCloudSQLSchemaUpdate {
-  string error_message = 1;
-  CloudSQLUpdateSchemaErrorCode rpc_error_code = 2;
-  CloudSQLUpdateSchemaResult result = 3;
-  string output = 4;
-}
-
-message CortexStepCodeAcknowledgement {
-  bool is_accept = 3;
-  string written_feedback = 4;
-  CodeAcknowledgementScope acknowledgement_scope = 5;
-  repeated CodeAcknowledgementInfo code_acknowledgement_infos = 7;
-}
-
-message CortexStepCodeAction {
-  ActionSpec action_spec = 1;
-  ActionResult action_result = 2;
-  bool use_fast_apply = 4;
-  AcknowledgementType acknowledgement_type = 5;
-  CodeHeuristicFailure heuristic_failure = 7;
-  string code_instruction = 8;
-  repeated CodeDiagnostic lint_errors = 11;
-  repeated CodeDiagnostic persistent_lint_errors = 12;
-  repeated ReplacementChunkInfo replacement_infos = 13;
-  repeated string lint_error_ids_aiming_to_fix = 14;
-  FastApplyFallbackInfo fast_apply_fallback_info = 15;
-  bool target_file_has_carriage_returns = 16;
-  bool target_file_has_all_carriage_returns = 17;
-  repeated CortexStepCompileDiagnostic introduced_errors = 18;
-  string triggered_memories = 19;
-  bool is_artifact_file = 21;
-  int32 artifact_version = 22;
-  ArtifactMetadata artifact_metadata = 23;
-  bool is_knowledge_file = 24;
-  FilePermissionInteractionSpec file_permission_request = 25;
-  string description = 26;
-  string markdown_validation_error = 27;
-  DiffStats diff_stats = 28;
-}
-
-message CortexStepCodeSearch {
-  string query = 1;
-  repeated CodeSearchResults results = 5;
-  bool only_paths = 6;
-  bool allow_dirs = 7;
-  repeated QueryCorrectionSuggestion query_correction_suggestions = 8;
-  int32 max_num_results = 9;
-  int32 estimated_total_results = 10;
-  int32 max_matches_per_file = 11;
-  int32 max_tokens = 12;
-}
-
-message CortexStepCommandStatus {
-  string command_id = 1;
-  CortexStepStatus status = 2;
-  string stdout = 3;
-  string stderr = 4;
-  int32 exit_code = 5;
-  CortexErrorDetails error = 6;
-  CommandOutputPriority output_priority = 7;
-  uint32 output_character_count = 8;
-  string combined = 9;
-  uint32 wait_duration_seconds = 10;
-  uint32 waited_duration_seconds = 11;
-  string delta = 12;
-}
-
-message CortexStepCompile {
-  CortexStepCompileTool tool = 1;
-  string input_spec = 2;
-  repeated OptionsEntry options = 3;
-  string target = 4;
-  string artifact_path = 5;
-  bool artifact_is_executable = 6;
-  repeated CortexStepCompileDiagnostic errors = 7;
-  repeated CortexStepCompileDiagnostic warnings = 8;
-}
-
-message CortexStepCompileApplet {
-  string error_message = 1;
-  string logs = 3;
-}
-
-message CortexStepCompileDiagnostic {
-  string message = 1;
-  string path = 2;
-  uint32 line = 3;
-  uint32 column = 4;
-  string symbol = 5;
-}
-
-message CortexStepConversationHistory {
-  string content = 1;
-}
-
-message CortexStepDeleteDirectory {
-  string directory_path_uri = 1;
-  bool force = 2;
-}
-
-message CortexStepDeployFirebase {
-  string error_message = 1;
-}
-
-message CortexStepDirectoryRules {
-  string content = 1;
-  repeated string rule_file_uris = 2;
-}
-
-message CortexStepDummy {
-  uint32 input = 1;
-  uint32 output = 2;
-}
-
-message CortexStepEditNotebook {
-  string tool_name = 1;
-  Cortexstepeditnotebook_Args args = 2;
-  Cortexstepeditnotebook_Reply reply = 3;
-}
-
-message CortexStepEphemeralMessage {
-  string content = 1;
-  repeated Media media = 2;
-  repeated string triggered_heuristics = 3;
-  repeated Media attachments = 4;
-  string dom_tree_uri = 5;
-  repeated Cortexstepephemeralmessage_MetadataEntry metadata = 6;
-}
-
-message CortexStepErrorMessage {
-  CortexErrorDetails error = 3;
-  bool should_show_model = 4;
-  bool should_show_user = 5;
-}
-
-message CortexStepExecuteBrowserJavaScript {
-  string page_id = 1;
-  string javascript_source = 2;
-  string javascript_description = 3;
-  bool user_rejected = 4;
-  ImageData screenshot_end = 5;
-  BrowserPageMetadata page_metadata = 6;
-  uint64 execution_duration_ms = 7;
-  string javascript_result = 8;
-  string title = 9;
-  bool should_auto_run = 10;
-  string browser_state_diff = 11;
-  Media media_screenshot_end = 12;
-  BrowserActionWaitingReason waiting_reason = 13;
-}
-
-message CortexStepExecuteNotebook {
-  string tool_name = 1;
-  Args args = 2;
-  Reply reply = 3;
-}
-
-message CortexStepFileBreakdown {
-  string absolute_path = 1;
-  DocumentOutline document_outline = 2;
-}
-
-message CortexStepFileChange {
-  string absolute_path_uri = 1;
-  FileChangeType file_change_type = 2;
-  repeated ReplacementChunk replacement_chunks = 3;
-  DiffBlock diff = 4;
-  string instruction = 5;
-  repeated ReplacementChunkInfo replacement_infos = 6;
-  FastApplyFallbackInfo fast_apply_fallback_info = 7;
-  bool overwrite = 8;
-}
-
-message CortexStepFind {
-  string pattern = 1;
-  repeated string includes = 2;
-  repeated string excludes = 3;
-  FindResultType type = 4;
-  int32 max_depth = 5;
-  uint32 total_results = 7;
-  string find_error = 8;
-  string command_run = 9;
-  string search_directory = 10;
-  string raw_output = 11;
-  repeated string extensions = 12;
-  bool full_path = 13;
-  string truncated_output = 14;
-  uint32 truncated_total_results = 15;
-}
-
-message CortexStepFindAllReferences {
-  string absolute_uri = 1;
-  string symbol = 2;
-  uint32 line = 3;
-  uint32 occurrence_index = 4;
-  repeated LspReference references = 5;
-}
-
-message CortexStepFinish {
-  repeated OutputEntry output = 1;
-  string output_string = 2;
-}
-
-message CortexStepGenerateImage {
-  string prompt = 1;
-  repeated string image_paths = 2;
-  ImageData generated_image = 3;
-  string image_name = 4;
-  string model_name = 5;
-  Media generated_media = 6;
-  string aspect_ratio = 7;
-}
-
 message CortexStepGeneratorMetadata {
   ChatModelMetadata chat_model = 1;
   repeated uint32 step_indices = 2;
@@ -4739,580 +3192,6 @@ message CortexStepGeneratorMetadata {
   string prompt_debug_str = 9;
   bool has_ever_used_non_google_model = 10;
   SensitivityLevel sensitivity_level = 11;
-}
-
-message CortexStepGeneric {
-  repeated ArgsEntry args = 1;
-  GenericStepResult result = 2;
-}
-
-message CortexStepGitCommit {
-  PlanInput input = 1;
-  string commit_message = 2;
-  string commit_hash = 3;
-}
-
-message CortexStepGrepSearch {
-  string query = 1;
-  repeated string includes = 2;
-  string raw_output = 3;
-  repeated GrepSearchResult results = 4;
-  string grep_error = 5;
-  uint32 total_results = 7;
-  bool match_per_line = 8;
-  bool case_insensitive = 9;
-  string command_run = 10;
-  string search_path_uri = 11;
-  bool no_files_searched = 12;
-  bool allow_access_gitignore = 13;
-  bool is_regex = 14;
-  bool timed_out = 15;
-  FilePermissionInteractionSpec file_permission_request = 16;
-}
-
-message CortexStepInstallAppletDependencies {
-  string error_message = 1;
-  string logs = 2;
-}
-
-message CortexStepInstallAppletPackage {
-  string package_name = 1;
-  string error_message = 2;
-  string logs = 3;
-  bool is_dev_dependency = 4;
-  repeated string package_names = 5;
-}
-
-message CortexStepInternalMetadata {
-  repeated StatusTransition status_transitions = 1;
-}
-
-message CortexStepInternalSearch {
-  string query = 1;
-  repeated InternalSearchResults results = 2;
-}
-
-message CortexStepInvokeSubagent {
-  string subagent_name = 1;
-  string prompt = 2;
-  string conversation_id = 5;
-  repeated SubagentSpec subagents = 9;
-  repeated SubagentResult results = 10;
-  bool task_mode = 11;
-}
-
-message CortexStepKIInsertion {
-  repeated KiReferencesEntry ki_references = 1;
-}
-
-message CortexStepKnowledgeArtifacts {
-  string content = 1;
-}
-
-message CortexStepKnowledgeGeneration {
-}
-
-message CortexStepLintApplet {
-  int32 exit_code = 1;
-  string output = 2;
-  string error_message = 3;
-}
-
-message CortexStepLintDiff {
-  LintDiffType type = 1;
-  CodeDiagnostic lint = 2;
-}
-
-message CortexStepListBrowserPages {
-  repeated BrowserPageMetadata pages = 1;
-}
-
-message CortexStepListDirectory {
-  string directory_path_uri = 1;
-  repeated string children = 2;
-  repeated ListDirectoryResult results = 3;
-  bool dir_not_found = 4;
-  FilePermissionInteractionSpec file_permission_request = 5;
-}
-
-message CortexStepListResources {
-  string server_name = 1;
-  string cursor = 2;
-  repeated McpResource resources = 3;
-  string next_cursor = 4;
-}
-
-message CortexStepLookupKnowledgeBase {
-  repeated string urls = 1;
-  repeated string document_ids = 2;
-  repeated KnowledgeBaseItemWithMetadata knowledge_base_items = 3;
-}
-
-message CortexStepManagerFeedback {
-  CortexStepManagerFeedbackStatus status = 1;
-  string feedback = 2;
-}
-
-message CortexStepMcpTool {
-  string server_name = 1;
-  ChatToolCall tool_call = 2;
-  string result_string = 3;
-  McpServerInfo server_info = 4;
-  repeated ImageData images = 5;
-  repeated Media media = 6;
-  bool user_rejected = 7;
-  string result_uri = 8;
-  StepRenderInfo render_info = 9;
-  string progress_message = 10;
-  double progress = 11;
-  double progress_total = 12;
-  repeated MetadataEntry metadata = 13;
-}
-
-message CortexStepMemory {
-  string memory_id = 1;
-  CortexMemory memory = 2;
-  MemoryActionType action = 3;
-  CortexMemory prev_memory = 4;
-}
-
-message CortexStepMetadata {
-  Timestamp created_at = 1;
-  CortexStepSource source = 3;
-  ChatToolCall tool_call = 4;
-  repeated string arguments_order = 5;
-  Timestamp viewable_at = 6;
-  Timestamp finished_generating_at = 7;
-  Timestamp completed_at = 8;
-  ModelUsageStats model_usage = 9;
-  float model_cost = 10;
-  Model generator_model = 11;
-  string execution_id = 12;
-  ModelOrAlias requested_model = 13;
-  int32 flow_credits_used = 14;
-  int32 prompt_credits_used = 15;
-  repeated ChatToolCall tool_call_choices = 16;
-  string tool_call_choice_reason = 17;
-  repeated CortexStepCreditReason non_standard_credit_reasons = 18;
-  CortexRequestSource cortex_request_source = 19;
-  SourceTrajectoryStepInfo source_trajectory_step_info = 20;
-  uint32 step_generation_version = 21;
-  Timestamp last_completed_chunk_at = 22;
-  int32 tool_call_output_tokens = 23;
-  ModelInfo model_info = 24;
-  SnapshotMetadata snapshot_metadata = 25;
-  CortexStepInternalMetadata internal_metadata = 26;
-  bool wait_for_previous_tools = 27;
-  repeated RetryInfo retry_infos = 28;
-  ChatToolCall modified_tool_call = 29;
-  string tool_summary = 30;
-  string tool_action = 31;
-  Timestamp started_at = 32;
-  bool is_interrupting_step = 33;
-  repeated PreToolHookResult pre_tool_hook_results = 34;
-  string model_api_content_id = 35;
-  DataAccessMetadata data_access = 36;
-  RemoteControlDetails remote_control_details = 37;
-  CortexComponentSource tool_source = 38;
-  SensitivityLevel sensitivity_level = 39;
-}
-
-message CortexStepMove {
-  string src_absolute_path_uri = 1;
-  string dst_absolute_path_uri = 2;
-}
-
-message CortexStepMquery {
-  PlanInput input = 1;
-  repeated CciWithSubrangeWithRetrievalMetadata ccis = 2;
-  uint32 num_tokens_processed = 3;
-  uint32 num_items_scored = 4;
-  SemanticCodebaseSearchType search_type = 5;
-}
-
-message CortexStepNotifyUser {
-  repeated string review_absolute_uris = 1;
-  string notification_content = 2;
-  bool is_blocking = 3;
-  float confidence_score = 4;
-  string confidence_justification = 5;
-  string diffs_uri = 6;
-  bool ask_for_user_feedback = 7;
-  bool should_auto_proceed = 8;
-}
-
-message CortexStepOpenBrowserUrl {
-  string url = 1;
-  AutoRunDecision auto_run_decision = 2;
-  bool user_rejected = 3;
-  string page_id = 4;
-  KnowledgeBaseItem web_document = 5;
-  BrowserPageMetadata page_metadata = 6;
-  ImageData screenshot = 7;
-  string page_id_to_replace = 8;
-  string browser_state_diff = 9;
-  Media media_screenshot = 10;
-}
-
-message CortexStepPlanInput {
-  PlanInput plan_input = 1;
-  bool user_provided = 2;
-}
-
-message CortexStepPlannerResponse {
-  string response = 1;
-  repeated KnowledgeBaseItemWithMetadata knowledge_base_items = 2;
-  string thinking = 3;
-  string signature = 4;
-  bool thinking_redacted = 5;
-  string message_id = 6;
-  repeated ChatToolCall tool_calls = 7;
-  string modified_response = 8;
-  Duration thinking_duration = 11;
-  StopReason stop_reason = 12;
-  RecitationMetadata recitation_metadata = 13;
-  bytes thinking_signature = 14;
-  string provider_assigned_message_id = 15;
-  string raw_thinking = 16;
-  repeated Any side_channels = 17;
-  repeated Any passback_context = 18;
-  GroundingMetadata grounding_metadata = 19;
-}
-
-message CortexStepPostPrReview {
-  string body = 1;
-  string commit_id = 2;
-  string path = 3;
-  string side = 4;
-  int32 start_line = 5;
-  int32 end_line = 6;
-  string category = 7;
-}
-
-message CortexStepProposalFeedback {
-  AcknowledgementType acknowledgement_type = 1;
-  uint32 target_step_index = 2;
-  ReplacementChunk replacement_chunk = 3;
-}
-
-message CortexStepProposeCode {
-  ActionSpec action_spec = 1;
-  ActionResult action_result = 2;
-  string code_instruction = 3;
-  string markdown_language = 4;
-}
-
-message CortexStepRPCAction {
-  string service_name = 1;
-  string method_name = 2;
-  Struct arguments = 3;
-  string error_message = 4;
-  Struct result = 5;
-}
-
-message CortexStepReadBrowserPage {
-  string page_id = 1;
-  KnowledgeBaseItem web_document = 2;
-  BrowserPageMetadata page_metadata = 3;
-}
-
-message CortexStepReadNotebook {
-  string tool_name = 1;
-  Cortexstepreadnotebook_Args args = 2;
-  Cortexstepreadnotebook_Reply reply = 3;
-}
-
-message CortexStepReadResource {
-  string server_name = 1;
-  string uri = 2;
-  repeated McpResourceContent contents = 3;
-  bool skipped_non_image_binary_content = 4;
-}
-
-message CortexStepReadTerminal {
-  string process_id = 1;
-  string name = 2;
-  string contents = 3;
-}
-
-message CortexStepReadUrlContent {
-  string url = 1;
-  KnowledgeBaseItem web_document = 2;
-  string resolved_url = 3;
-  uint32 latency_ms = 4;
-  bool user_rejected = 5;
-  string content_path = 6;
-}
-
-message CortexStepRestartDevServer {
-  string error_message = 1;
-}
-
-message CortexStepRetrieveMemory {
-  bool run_subagent = 1;
-  string cascade_memory_summary = 2;
-  string user_memory_summary = 3;
-  string reason = 4;
-  bool show_reason = 5;
-  repeated CortexMemory retrieved_memories = 6;
-  bool blocking = 7;
-  bool add_user_memories = 8;
-}
-
-message CortexStepRunCommand {
-  string command = 1;
-  string cwd = 2;
-  repeated string args = 3;
-  string stdout = 4;
-  string stderr = 5;
-  int32 exit_code = 6;
-  string stdout_buffer = 7;
-  string stderr_buffer = 8;
-  uint32 stdout_lines_above = 9;
-  uint32 stderr_lines_above = 10;
-  bool blocking = 11;
-  uint64 wait_ms_before_async = 12;
-  string command_id = 13;
-  bool user_rejected = 14;
-  bool should_auto_run = 15;
-  AutoRunDecision auto_run_decision = 16;
-  string requested_terminal_id = 17;
-  string terminal_id = 18;
-  RunCommandOutput stdout_output = 19;
-  RunCommandOutput stderr_output = 20;
-  RunCommandOutput combined_output = 21;
-  bool used_ide_terminal = 22;
-  string command_line = 23;
-  string raw_debug_output = 24;
-  string proposed_command_line = 25;
-  RunCommandOutput combined_output_snapshot = 26;
-  bool sandbox_override = 27;
-  bool run_persistent = 28;
-  string sandbox_errors = 29;
-  uint64 notification_timeout_seconds = 30;
-  string shell_name = 31;
-  bool is_daemon = 32;
-  bool is_trusted_cli = 33;
-  bool ran_in_sandbox = 34;
-  bool sandbox_bypass_disabled = 35;
-}
-
-message CortexStepRunExtensionCode {
-  string code = 1;
-  string language = 2;
-  string output = 3;
-  bool user_rejected = 4;
-  RunExtensionCodeAutoRunDecision auto_run_decision = 5;
-  bool model_wants_auto_run = 6;
-  string user_facing_explanation = 7;
-}
-
-message CortexStepSearchKnowledgeBase {
-  repeated string queries = 1;
-  repeated KnowledgeBaseGroup knowledge_base_groups = 2;
-  TimeRange time_range = 3;
-  repeated ConnectorType connector_types = 4;
-  repeated string aggregate_ids = 7;
-}
-
-message CortexStepSearchWeb {
-  string query = 1;
-  repeated KnowledgeBaseItem web_documents = 2;
-  string domain = 3;
-  string web_search_url = 4;
-  string summary = 5;
-  ThirdPartyWebSearchConfig third_party_config = 6;
-  SearchWebType search_type = 7;
-}
-
-message CortexStepSendCommandInput {
-  string command_id = 1;
-  string input = 2;
-  bool should_auto_run = 3;
-  bool user_rejected = 4;
-  AutoRunDecision auto_run_decision = 5;
-  bool terminate = 6;
-  int64 wait_ms = 7;
-  RunCommandOutput output = 8;
-  bool running = 9;
-  int32 exit_code = 10;
-}
-
-message CortexStepSetUpCloudSql {
-  string error_message = 1;
-  SetUpCloudSqlErrorCode rpc_error_code = 2;
-  SetUpCloudSqlResult result = 3;
-  SetUpCloudSqlAppConfig app_config = 4;
-}
-
-message CortexStepSetUpFirebase {
-  string error_message = 1;
-  SetUpFirebaseRequest request = 2;
-  SetUpFirebaseResult result = 3;
-  SetUpFirebaseAppConfig app_config = 4;
-  SetUpFirebaseErrorCode rpc_error_code = 6;
-  string firebase_project_id = 7;
-  string firestore_region = 8;
-  string database_id = 9;
-  AndroidConfig android_config = 10;
-  FirebasePlatform platform = 11;
-  repeated FirebaseProduct requested_products = 12;
-}
-
-message CortexStepShellExec {
-  string command = 1;
-  int32 exit_code = 2;
-  string output = 3;
-  string error_message = 4;
-}
-
-message CortexStepSuggestedResponses {
-  repeated string suggestions = 1;
-}
-
-message CortexStepSystemMessage {
-  string message = 1;
-  StepRenderInfo render_info = 2;
-  string event_type = 3;
-  AgentMessage agent_message = 4;
-  repeated Cortexstepsystemmessage_MetadataEntry metadata = 5;
-  repeated Media media = 6;
-}
-
-message CortexStepTaskBoundary {
-  string task_name = 1;
-  string task_status = 2;
-  string task_summary = 3;
-  string task_summary_with_citations = 4;
-  AgentMode mode = 5;
-  string delta_summary = 6;
-  string delta_summary_with_citations = 7;
-}
-
-message CortexStepToolCallChoice {
-  repeated ChatToolCall proposal_tool_calls = 1;
-  uint32 choice = 2;
-  string reason = 3;
-}
-
-message CortexStepToolCallProposal {
-  ChatToolCall tool_call = 1;
-}
-
-message CortexStepToolSearch {
-  repeated string function_names = 1;
-  Any response = 2;
-}
-
-message CortexStepTrajectoryChoice {
-  repeated string proposal_trajectory_ids = 1;
-  int32 choice = 2;
-  string reason = 3;
-}
-
-message CortexStepTrajectorySearch {
-  string id = 1;
-  string query = 2;
-  TrajectorySearchIdType id_type = 3;
-  repeated CciWithSubrangeWithRetrievalMetadata chunks = 4;
-  TrajectoryDescription trajectory_description = 5;
-  uint32 total_chunks = 6;
-}
-
-message CortexStepUserInput {
-  string query = 1;
-  string user_response = 2;
-  repeated TextOrScopeItem items = 3;
-  ContextModuleResult active_user_state = 4;
-  repeated ImageData images = 5;
-  bool is_queued_message = 6;
-  repeated ArtifactComment artifact_comments = 7;
-  ChatClientRequestStreamClientType client_type = 8;
-  repeated Media media = 9;
-  repeated FileDiffComment file_diff_comments = 10;
-  repeated FileComment file_comments = 11;
-  CascadeConfig user_config = 12;
-  CascadeConfig last_user_config = 13;
-  repeated Any side_channels = 15;
-  repeated string tags = 16;
-  UserIdentity user_identity = 17;
-  CustomAgentSpec user_agent_spec = 18;
-}
-
-message CortexStepViewCodeItem {
-  string absolute_uri = 1;
-  repeated string node_paths = 4;
-  repeated CodeContextItem ccis = 5;
-  FilePermissionInteractionSpec file_permission_request = 6;
-}
-
-message CortexStepViewContentChunk {
-  int32 position = 2;
-  KnowledgeBaseItem cropped_item = 4;
-  string document_id = 5;
-}
-
-message CortexStepViewFile {
-  string absolute_path_uri = 1;
-  uint32 start_line = 2;
-  uint32 end_line = 3;
-  string content = 4;
-  string raw_content = 9;
-  string triggered_memories = 10;
-  uint32 num_lines = 11;
-  uint32 num_bytes = 12;
-  bool is_injected_reminder = 13;
-  ImageData binary_data = 14;
-  Media media_data = 15;
-  FilePermissionInteractionSpec file_permission_request = 16;
-  bool is_skill_file = 17;
-  SkillMetadata skill_metadata = 18;
-  uint32 content_offset = 19;
-  uint32 line_range_bytes = 20;
-}
-
-message CortexStepViewFileOutline {
-  string absolute_path_uri = 1;
-  uint32 cci_offset = 2;
-  repeated CodeContextItem ccis = 3;
-  uint32 total_cci_count = 4;
-  uint32 num_lines = 5;
-  uint32 num_bytes = 6;
-  string contents = 7;
-  uint32 content_lines_truncated = 8;
-  repeated string outline_items = 9;
-  uint32 num_items_scanned = 10;
-  string triggered_memories = 11;
-  string raw_content = 12;
-  FilePermissionInteractionSpec file_permission_request = 13;
-}
-
-message CortexStepWait {
-  int64 duration_ms = 1;
-}
-
-message CortexStepWorkspaceAPI {
-  string url = 1;
-  string http_method = 2;
-  string body = 3;
-  string description = 4;
-  int32 status_code = 5;
-  string response = 6;
-}
-
-message CortexStepWriteBlob {
-  string blob_id = 1;
-  string target_path = 2;
-  string error_message = 3;
-  int64 bytes_written = 4;
-}
-
-message CortexStepWriteToFile {
-  string target_file_uri = 1;
-  repeated string code_content = 2;
-  DiffBlock diff = 3;
-  bool file_created = 4;
-  AcknowledgementType acknowledgement_type = 5;
 }
 
 message CortexTrajectoryMetadata {
@@ -5359,81 +3238,10 @@ message CortexWorkspaceMetadata {
   string branch_name = 4;
 }
 
-message Cortexstepeditnotebook_Args {
-  string absolute_path_uri = 1;
-  Internal_EditNotebookOperation operation = 2;
-  string anchor_cell_id = 3;
-  int32 anchor_cell_index = 4;
-  repeated Cortexstepeditnotebook_Cell cells = 5;
-  int32 delete_count = 6;
-}
-
-message Cortexstepeditnotebook_Cell {
-  string kind = 1;
-  string content = 2;
-}
-
-message Cortexstepeditnotebook_ModifiedCell {
-  string cell_id = 1;
-  string kind = 2;
-  string content = 3;
-  int32 index = 4;
-}
-
-message Cortexstepeditnotebook_Reply {
-  repeated Cortexstepeditnotebook_ModifiedCell modified_cells = 1;
-  int32 total_cell_count = 2;
-}
-
-message Cortexstepephemeralmessage_MetadataEntry {
-  string key = 1;
-  string value = 2;
-}
-
-message Cortexstepexecutenotebook_CellOutput {
-  string cell_id = 1;
-  int32 cell_index = 2;
-  Cortexstepexecutenotebook_CellStatus status = 3;
-  string output_text = 4;
-  bool output_text_truncated = 5;
-  bool generated_images = 6;
-  string error_trace = 7;
-  repeated NotebookBlob blobs = 8;
-}
-
-message Cortexstepreadnotebook_Args {
-  string absolute_path_uri = 1;
-  repeated int32 cell_indices = 2;
-  repeated string cell_ids = 3;
-}
-
-message Cortexstepreadnotebook_Reply {
-  string flattened_content = 1;
-  int32 read_cell_count = 2;
-  repeated NotebookBlob blobs = 3;
-}
-
-message Cortexstepsystemmessage_MetadataEntry {
-  string key = 1;
-  string value = 2;
-}
-
 message Credits {
   CreditType credit_type = 1;
   int64 credit_amount = 2;
   int64 minimum_credit_amount_for_usage = 3;
-}
-
-message CritiqueSnapshot {
-  int64 ocl_number = 1;
-  int64 snapshot_number = 2;
-}
-
-message CritiqueStep {
-  string tool_name = 1;
-  DevtoolsCiderAgentTrajectory_stepsCritiquestep_Args args = 2;
-  DevtoolsCiderAgentTrajectory_stepsCritiquestep_Reply reply = 3;
-  ToolStatus tool_status = 4;
 }
 
 message CustomAgentConfig {
@@ -5468,9 +3276,6 @@ message CustomAgentSpec {
 
 message CustomAgentSystemPromptConfig {
   repeated string include_sections = 5;
-}
-
-message CustomExtensions {
 }
 
 message CustomMetadataEntry {
@@ -5517,6 +3322,7 @@ message CustomizationDiscoveryConfig {
   RulesDiscoveryConfig rules = 7;
   string agent_path = 8;
   HooksDiscoveryConfig hooks = 9;
+  string plugin_name = 10;
 }
 
 message CustomizationPath {
@@ -5557,18 +3363,9 @@ message DangerousSubcommandsEntry {
   DangerousSubcommands value = 2;
 }
 
-message DataAccessMetadata {
-  repeated string depot_paths = 1;
-}
-
 message DataEntry {
   string key = 1;
   Row value = 2;
-}
-
-message DebugInfoEntry {
-  string key = 1;
-  string value = 2;
 }
 
 message DeclarativeComponentConfig {
@@ -5592,14 +3389,6 @@ message DefaultAgentConfig {
   string force_contrib_variant = 4;
 }
 
-message DeployTarget {
-  DeploymentProvider deployment_provider = 1;
-  bool is_sandbox = 2;
-  string provider_team_id = 3;
-  string provider_team_slug = 4;
-  string domain = 5;
-}
-
 message DescriptionsEntry {
   string key = 1;
   SectionOverrideConfig value = 2;
@@ -5610,105 +3399,15 @@ message DetailsEntry {
   string value = 2;
 }
 
-message DevtoolsCiderAgentTrajectory_stepsBuildcleanerstep_Args {
-  repeated string workspace_paths = 1;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsBuildcleanerstep_Reply {
-  repeated string updated_build_files = 1;
-  repeated Issue issues = 2;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsBuildtargetsstep_Args {
-  repeated string targets = 1;
-  repeated string arguments = 2;
-  uint64 wait_ms_before_async = 3;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsCritiquestep_Args {
-  string changelist = 1;
-  bool include_code_changes = 2;
-  bool include_reviewer_comments = 3;
-  repeated string paths = 4;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsCritiquestep_Reply {
-  string changelist_content = 1;
-  repeated Comment comments = 2;
-  repeated string modified_paths = 3;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsDummystep_Args {
-  int32 a = 1;
-  int32 b = 2;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsDummystep_Reply {
-  int32 a_plus_b = 1;
-  Image image_data = 2;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsFindingsstep_Args {
-  string changelist = 1;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsFindingsstep_Reply {
-  repeated Finding findings = 1;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsMomastep_Args {
-  string query = 1;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsMomastep_Reply {
-  repeated Result search_results = 1;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsProposeaicommentsstep_Args {
-  repeated AIComment comments = 1;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsRetrievecontentstep_Args {
-  repeated string uri = 1;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsRetrievecontentstep_Reply {
-  repeated LookupResult results = 1;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsStartcodereviewstep_Args {
-  CritiqueSnapshot critique_snapshot = 1;
-  string user_prompt = 2;
-  repeated ExternalContext external_contexts = 3;
-  repeated string file_paths = 4;
-}
-
-message DevtoolsCiderAgentTrajectory_stepsTesttargetsstep_Args {
-  repeated string targets = 1;
-  repeated string arguments = 2;
-  repeated string coverage_files = 3;
-  uint64 wait_ms_before_async = 4;
-}
-
 message DiffBlock {
   int32 start_line = 1;
   int32 end_line = 2;
-  UnifiedDiff unified_diff = 3;
+  repeated DiffLine lines = 3;
 }
 
-message DiffCommentInfo {
-  TextSelection original_selection = 1;
-  TextSelection modified_selection = 2;
-  string comment = 3;
-}
-
-message DiffList {
-  repeated DiffBlock diffs = 2;
-}
-
-message DiffStats {
-  int32 additions = 1;
-  int32 deletions = 2;
+message DiffLine {
+  string text = 1;
+  LineAction action = 2;
 }
 
 message Document {
@@ -5733,47 +3432,15 @@ message Document {
 }
 
 message DocumentContent {
-  GenaiDocumentcontent_MimeType mime_type = 1;
+  MimeType mime_type = 1;
   bytes data = 2;
   string uri = 5;
   string mime_type_string = 6;
 }
 
-message DocumentLinesElement {
-  DocumentQuery document_query = 1;
-  repeated CodeContextItem overlapped_code_context_items = 2;
-  uint32 first_element_suffix_overlap = 3;
-  uint32 last_element_prefix_overlap = 4;
-}
-
-message DocumentOutline {
-  repeated DocumentOutlineElement elements = 1;
-  int64 start_index = 2;
-}
-
-message DocumentOutlineElement {
-  CodeContextItem code_context_item = 1;
-  DocumentLinesElement document_lines_element = 2;
-  string text = 3;
-}
-
 message DocumentPosition {
   uint64 row = 1;
   uint64 col = 2;
-}
-
-message DocumentQuery {
-  string text = 1;
-  int32 cursor_offset = 2;
-  uint32 start_line = 3;
-  uint32 end_line = 4;
-  bool use_character_position = 5;
-}
-
-message DummyStep {
-  string tool_name = 1;
-  DevtoolsCiderAgentTrajectory_stepsDummystep_Args args = 2;
-  DevtoolsCiderAgentTrajectory_stepsDummystep_Reply reply = 3;
 }
 
 message Duration {
@@ -5788,6 +3455,14 @@ message DynamicContextScopeItem {
   string uri = 4;
 }
 
+message EditFileCallStep {
+  string file_path = 1;
+}
+
+message EditFileResultStep {
+  repeated DiffBlock diff_block = 1;
+}
+
 message EditNotebookRequest {
   string absolute_path_uri = 1;
   EditNotebookOperation operation = 2;
@@ -5800,11 +3475,6 @@ message EditNotebookRequest {
 message EditNotebookResponse {
   repeated ModifiedCell modified_cells = 1;
   int32 total_cell_count = 2;
-}
-
-message EditedFileMapEntry {
-  string key = 1;
-  DiffList value = 2;
 }
 
 message EditorOptions {
@@ -5825,17 +3495,29 @@ message ElementNode {
   int32 central_y = 9;
 }
 
-message ElicitationInteraction {
-  string action = 1;
-  string content_json = 2;
+message ElicitationCallStep {
+  string elicitation_id = 1;
+  ElicitationPreamble preamble = 2;
+  ConfirmationRequest confirmation_request = 3;
+  Duration timeout_duration = 4;
+  MultipleChoiceRequest multiple_choice_request = 5;
 }
 
-message ElicitationInteractionSpec {
-  string server_name = 1;
-  string mode = 2;
-  string message = 3;
-  string requested_schema_json = 4;
-  string url = 5;
+message ElicitationChoice {
+  string label = 1;
+  repeated Content display = 2;
+}
+
+message ElicitationPreamble {
+  repeated Content content = 1;
+}
+
+message ElicitationResultStep {
+  string elicitation_id = 1;
+  ContentList user_input = 2;
+  UserTimeout user_timeout = 3;
+  ConfirmationResponse confirmation = 4;
+  MultipleChoiceResponse multiple_choice = 5;
 }
 
 message EndAudioRecordingRequest {
@@ -5851,8 +3533,9 @@ message EnterpriseToolConfig {
 }
 
 message Entry {
-  GoogleApiExpr_Value key = 1;
-  GoogleApiExpr_Value value = 2;
+  string name = 1;
+  bool is_directory = 2;
+  uint64 file_size = 3;
 }
 
 message EnumValue {
@@ -5976,10 +3659,6 @@ message Experiments {
   repeated ValuesEntry values = 1;
 }
 
-message ExternalContext {
-  string g3doc_path = 1;
-}
-
 message FastApplyFallbackConfig {
   bool enabled = 1;
   uint32 prompt_unchanged_threshold = 2;
@@ -5989,69 +3668,18 @@ message FastApplyFallbackConfig {
   bool repair_replace_blocks = 6;
 }
 
-message FastApplyFallbackInfo {
-  bool fallback_attempted = 1;
-  string fallback_error = 2;
-  ActionResult fast_apply_result = 3;
-  CodeHeuristicFailure heuristic_failure = 4;
-  string fast_apply_prompt = 5;
-  uint32 num_fast_apply_edits_masked = 6;
-  bool fallback_match_had_no_diff = 7;
-  bool used_repair_fallback = 8;
-}
-
 message Field {
   string name = 1;
   Value value = 2;
-}
-
-message FileAccessPermission {
-  string path = 1;
-  bool is_directory = 2;
-  bool allow = 3;
-  PermissionScope scope = 4;
-  bool from_current_step = 5;
 }
 
 message FileCitation {
   string document_uri = 1;
   string file_name = 2;
   string source = 3;
-  Genai_Struct custom_metadata = 4;
+  Struct custom_metadata = 4;
   int32 page_number = 5;
   string media_id = 6;
-}
-
-message FileComment {
-  string file_uri = 1;
-  repeated FileCommentInfo file_comment_infos = 2;
-}
-
-message FileCommentInfo {
-  string comment = 1;
-  TextSelection selection = 2;
-  ArtifactImageSelection image_selection = 3;
-}
-
-message FileContentData {
-  string file_path = 1;
-  string content = 2;
-  FileVersion file_version = 3;
-}
-
-message FileContentEntry {
-  string key = 1;
-  string value = 2;
-}
-
-message FileDiffComment {
-  string file_uri = 1;
-  repeated DiffCommentInfo diff_comment_infos = 3;
-}
-
-message FileDiffRef {
-  string uri = 1;
-  DiffStats diff_stats = 2;
 }
 
 message FileLineRange {
@@ -6060,25 +3688,10 @@ message FileLineRange {
   uint32 end_line = 3;
 }
 
-message FilePermissionInteraction {
-  bool allow = 1;
-  PermissionScope scope = 2;
-  string absolute_path_uri = 3;
-}
-
-message FilePermissionInteractionSpec {
-  string absolute_path_uri = 1;
-  bool is_directory = 2;
-  BlockReason block_reason = 3;
-}
-
-message FileRef {
-  string uri = 1;
-  int32 start_line = 2;
-  int32 end_line = 3;
-}
-
 message FileSearchCallContent {
+}
+
+message FileSearchCallStep {
 }
 
 message FileSearchResult {
@@ -6088,10 +3701,7 @@ message FileSearchResultContent {
   repeated FileSearchResult result = 1;
 }
 
-message FileVersion {
-  CritiqueSnapshot critique_snapshot = 1;
-  int64 piper_cl_number = 2;
-  int64 piper_file_revision = 3;
+message FileSearchResultStep {
 }
 
 message FindAllReferencesRequest {
@@ -6105,27 +3715,20 @@ message FindAllReferencesResponse {
   repeated LspReference references = 1;
 }
 
+message FindFileCallStep {
+  string file_path = 1;
+  string query = 2;
+}
+
+message FindFileResultStep {
+}
+
 message FindToolConfig {
   uint32 max_find_results = 1;
   string fd_path = 2;
   bool use_code_search = 3;
   bool disable_fallback_to_local_execution = 4;
   bool force_disable = 5;
-}
-
-message Finding {
-  string category = 1;
-  string subcategory = 2;
-  string description = 3;
-  bool actionable = 4;
-  Location location = 5;
-}
-
-message FindingsStep {
-  string tool_name = 1;
-  DevtoolsCiderAgentTrajectory_stepsFindingsstep_Args args = 2;
-  DevtoolsCiderAgentTrajectory_stepsFindingsstep_Reply reply = 3;
-  ToolStatus tool_status = 4;
 }
 
 message FinishToolConfig {
@@ -6148,18 +3751,14 @@ message FocusManagerWindow {
   string cascade_id = 1;
 }
 
-message Function {
-  string name = 1;
-  string description = 2;
-  Value parameters = 3;
-  Value response = 5;
-  bool defer_loading = 7;
-  string short_description = 8;
-}
-
 message FunctionCallContent {
   string name = 3;
-  Genai_Struct arguments = 4;
+  Struct arguments = 4;
+}
+
+message FunctionCallStep {
+  string name = 1;
+  Struct arguments = 2;
 }
 
 message FunctionProvider {
@@ -6173,10 +3772,16 @@ message FunctionProvider {
 
 message FunctionResultContent {
   bool is_error = 2;
-  Genai_Struct struct_result = 3;
+  Struct struct_result = 3;
   string string_result = 7;
   string name = 8;
   FunctionResultSubcontentList content_list = 9;
+}
+
+message FunctionResultStep {
+  string name = 2;
+  bool is_error = 3;
+  Value result = 7;
 }
 
 message FunctionResultSubcontent {
@@ -6188,44 +3793,24 @@ message FunctionResultSubcontentList {
   repeated FunctionResultSubcontent contents = 1;
 }
 
-message G3DocData {
-  string g3doc_path = 1;
-  string content = 2;
-  FileVersion file_version = 3;
-}
-
 message GRPCStatus {
   int32 code = 1;
   string message = 2;
 }
 
-message Genai_Struct {
-  repeated Field fields = 1;
+message GenerateImageCallStep {
+  string prompt = 1;
+  repeated string image_paths = 2;
+}
+
+message GenerateImageResultStep {
+  string image_name = 1;
+  string aspect_ratio = 2;
 }
 
 message GenerateImageToolConfig {
   bool force_disable = 1;
   string output_directory = 2;
-}
-
-message GenericStepResult {
-  string result = 1;
-  repeated Genericstepresult_MetadataEntry metadata = 2;
-  StepRenderInfo step_render_info = 3;
-  repeated Media media = 4;
-  repeated Genericstepresult_DataEntry data = 5;
-  Any payload = 6;
-  string full_output_uri = 7;
-}
-
-message Genericstepresult_DataEntry {
-  string key = 1;
-  Any value = 2;
-}
-
-message Genericstepresult_MetadataEntry {
-  string key = 1;
-  string value = 2;
 }
 
 message GetBrowserOnboardingPortRequest {
@@ -6296,8 +3881,9 @@ message GitRepoInfo {
   string base_git_url = 7;
 }
 
-message GoogleApiExpr_ListValue {
-  repeated GoogleApiExpr_Value values = 1;
+message GoogleApiExprMapvalue_Entry {
+  GoogleApiExpr_Value key = 1;
+  GoogleApiExpr_Value value = 2;
 }
 
 message GoogleApiExpr_Value {
@@ -6311,7 +3897,7 @@ message GoogleApiExpr_Value {
   EnumValue enum_value = 9;
   Any object_value = 10;
   MapValue map_value = 11;
-  GoogleApiExpr_ListValue list_value = 12;
+  ListValue list_value = 12;
   string type_value = 15;
 }
 
@@ -6323,6 +3909,14 @@ message GoogleMapsCallContent {
   GoogleMapsCallArguments arguments = 1;
 }
 
+message GoogleMapsCallStep {
+  GoogleMapsCallStepArguments arguments = 1;
+}
+
+message GoogleMapsCallStepArguments {
+  repeated string queries = 1;
+}
+
 message GoogleMapsResult {
   repeated Places places = 1;
   string widget_context_token = 2;
@@ -6330,6 +3924,22 @@ message GoogleMapsResult {
 
 message GoogleMapsResultContent {
   repeated GoogleMapsResult result = 1;
+}
+
+message GoogleMapsResultItem {
+  repeated GoogleMapsResultPlaces places = 1;
+  string widget_context_token = 2;
+}
+
+message GoogleMapsResultPlaces {
+  string place_id = 1;
+  string name = 2;
+  string url = 3;
+  repeated ReviewSnippet review_snippets = 4;
+}
+
+message GoogleMapsResultStep {
+  repeated GoogleMapsResultItem result = 1;
 }
 
 message GoogleSearchCallArguments {
@@ -6341,6 +3951,15 @@ message GoogleSearchCallContent {
   SearchType search_type = 2;
 }
 
+message GoogleSearchCallStep {
+  GoogleSearchCallStepArguments arguments = 1;
+  SearchType search_type = 2;
+}
+
+message GoogleSearchCallStepArguments {
+  repeated string queries = 1;
+}
+
 message GoogleSearchResult {
   string search_suggestions = 5;
 }
@@ -6350,12 +3969,13 @@ message GoogleSearchResultContent {
   bool is_error = 3;
 }
 
-message GrepSearchResult {
-  string relative_path = 1;
-  uint32 line_number = 2;
-  string content = 3;
-  string absolute_path = 4;
-  CodeContextItem cci = 5;
+message GoogleSearchResultItem {
+  string search_suggestions = 5;
+}
+
+message GoogleSearchResultStep {
+  repeated GoogleSearchResultItem result = 1;
+  bool is_error = 2;
 }
 
 message GrepToolConfig {
@@ -6367,18 +3987,6 @@ message GrepToolConfig {
   bool use_code_search = 7;
   bool disable_fallback_to_local_execution = 8;
   bool force_disable = 9;
-}
-
-message GroundingMetadata {
-  repeated Source sources = 1;
-}
-
-message Guideline {
-  repeated GuidelineItem items = 1;
-}
-
-message GuidelineItem {
-  string guideline = 1;
 }
 
 message HandleAsyncPostMessageRequest {
@@ -6460,9 +4068,11 @@ message HooksDiscoveryConfig {
   repeated CustomizationPath hooks_paths = 2;
 }
 
-message Image {
-  string mime_type = 1;
-  bytes data = 2;
+message Http {
+  string address = 1;
+  string cert_file = 2;
+  string username = 3;
+  string password = 4;
 }
 
 message ImageContent {
@@ -6513,31 +4123,10 @@ message IntentToolConfig {
   uint32 max_context_tokens = 2;
 }
 
-message InternalSearchResults {
-  string url = 1;
-  string title = 2;
-  string content = 3;
-}
-
 message InternalSearchToolConfig {
   int32 max_results = 1;
   int32 max_content_length = 2;
   bool force_disable = 3;
-}
-
-message Internal_Value {
-  NullValue null_value = 1;
-  bool bool_value = 2;
-  int64 int64_value = 3;
-  uint64 uint64_value = 4;
-  double double_value = 5;
-  string string_value = 6;
-  bytes bytes_value = 7;
-  EnumValue enum_value = 9;
-  Any object_value = 10;
-  MapValue map_value = 11;
-  GoogleApiExpr_ListValue list_value = 12;
-  string type_value = 15;
 }
 
 message InvokeSubagentToolConfig {
@@ -6548,6 +4137,7 @@ message InvokeSubagentToolConfig {
   bool allow_task_mode = 5;
   bool always_inherit_model = 6;
   bool allow_fork = 7;
+  bool send_initial_prompt_as_message = 8;
 }
 
 message IsAgentManagerEnabledRequest {
@@ -6557,29 +4147,10 @@ message IsAgentManagerEnabledResponse {
   bool enabled = 1;
 }
 
-message Issue {
-  string blaze_package = 1;
-  string action = 2;
-  string action_label = 3;
-  string status = 4;
-  string status_detail = 5;
-}
-
-message KiReferencesEntry {
-  string key = 1;
-  KnowledgeReferences value = 2;
-}
-
 message KnowledgeBaseChunk {
   string text = 1;
   int32 position = 2;
   MarkdownChunk markdown_chunk = 3;
-}
-
-message KnowledgeBaseGroup {
-  string description = 1;
-  KnowledgeBaseItemWithMetadata item = 2;
-  repeated KnowledgeBaseGroup children = 3;
 }
 
 message KnowledgeBaseItem {
@@ -6593,13 +4164,6 @@ message KnowledgeBaseItem {
   ImageData image = 8;
   DOMTree dom_tree = 9;
   Media media = 10;
-}
-
-message KnowledgeBaseItemWithMetadata {
-  KnowledgeBaseItem knowledge_base_item = 1;
-  float score = 2;
-  string index_name = 3;
-  string document_source_name = 4;
 }
 
 message KnowledgeBaseScopeItem {
@@ -6631,16 +4195,6 @@ message KnowledgeConfig {
   bool enable_ki_insertion = 10;
 }
 
-message KnowledgeReference {
-  string file_path = 1;
-  string conversation_id = 2;
-  string url = 3;
-}
-
-message KnowledgeReferences {
-  repeated KnowledgeReference references = 1;
-}
-
 message LanguageServerStartedRequest {
   int32 https_port = 1;
   int32 lsp_port = 2;
@@ -6669,10 +4223,45 @@ message LaunchBrowserResponse {
   string cdp_address = 1;
 }
 
-message LineRangeTarget {
-  string absolute_uri = 1;
-  uint32 start_line = 2;
-  uint32 end_line = 3;
+message LegacyAudioContent {
+  MimeType mime_type = 1;
+  bytes data = 2;
+  string uri = 3;
+  int32 rate = 4;
+  int32 channels = 5;
+  int32 sample_rate = 6;
+  string mime_type_string = 11;
+}
+
+message LegacyDocumentContent {
+  MimeType mime_type = 1;
+  bytes data = 2;
+  string uri = 3;
+  string mime_type_string = 6;
+}
+
+message LegacyImageContent {
+  MimeType mime_type = 1;
+  bytes data = 2;
+  string uri = 3;
+  MediaResolution resolution = 4;
+  string mime_type_string = 8;
+}
+
+message LegacyTextContent {
+  string text = 1;
+  repeated Annotation annotations = 2;
+}
+
+message LegacyVideoContent {
+  MimeType mime_type = 1;
+  bytes data = 2;
+  string uri = 3;
+  MediaResolution resolution = 4;
+  string mime_type_string = 8;
+  string name = 16;
+  Processing processing_type = 17;
+  MediaProcessing processing_config = 18;
 }
 
 message LinkScopeItem {
@@ -6687,15 +4276,16 @@ message ListDirToolConfig {
   bool force_disable = 2;
 }
 
-message ListDirectoryResult {
-  string name = 1;
-  bool is_dir = 2;
-  uint32 num_children = 3;
-  uint64 size_bytes = 4;
+message ListDirectoryCallStep {
+  string directory_path = 1;
+}
+
+message ListDirectoryResultStep {
+  repeated Entry entries = 1;
 }
 
 message ListValue {
-  repeated Value values = 1;
+  repeated GoogleApiExpr_Value values = 1;
 }
 
 message LoadedCustomization {
@@ -6703,24 +4293,13 @@ message LoadedCustomization {
   string name = 2;
   string path = 3;
   Scope scope = 4;
-  Status status = 5;
+  LoadedcustomizationsLoadedcustomization_Status status = 5;
   string plugin_name = 6;
+  string error_detail = 7;
 }
 
 message LoadedCustomizations {
   repeated LoadedCustomization customizations = 1;
-}
-
-message LocalNodeState {
-  CodeContextItem current_node = 1;
-  CodeContextItem closest_above_node = 2;
-  CodeContextItem closest_below_node = 3;
-}
-
-message Location {
-  string depot_path = 1;
-  int32 line_number_start = 2;
-  int32 line_number_end = 3;
 }
 
 message LogArtifactsConfig {
@@ -6740,15 +4319,6 @@ message LogEventRequest {
 }
 
 message LogEventResponse {
-}
-
-message LookupResult {
-  string uri = 1;
-  string content = 2;
-  string binary_content = 3;
-  string error = 4;
-  string title = 5;
-  string mime_type = 6;
 }
 
 message LowLevelToolsConfig {
@@ -6781,7 +4351,7 @@ message MapEntry {
 }
 
 message MapValue {
-  repeated Entry entries = 1;
+  repeated GoogleApiExprMapvalue_Entry entries = 1;
 }
 
 message MarkdownChunk {
@@ -6826,13 +4396,6 @@ message McpPromptScopeItem {
   repeated McpPromptMessage messages = 6;
 }
 
-message McpResource {
-  string uri = 1;
-  string name = 2;
-  string description = 3;
-  string mime_type = 4;
-}
-
 message McpResourceContent {
   string uri = 1;
   TextData text = 2;
@@ -6846,11 +4409,6 @@ message McpResourceItem {
   string description = 3;
   string mime_type = 4;
   string server_name = 5;
-}
-
-message McpServerInfo {
-  string name = 1;
-  string version = 2;
 }
 
 message McpServerSpec {
@@ -6882,12 +4440,19 @@ message McpServerSpec {
   string config_path = 26;
   bool is_global = 27;
   string plugin_version = 28;
+  string original_server_name = 29;
 }
 
 message McpServerToolCallContent {
   string name = 1;
   string server_name = 2;
-  Genai_Struct arguments = 3;
+  Struct arguments = 3;
+}
+
+message McpServerToolCallStep {
+  string name = 1;
+  string server_name = 2;
+  Struct arguments = 3;
 }
 
 message McpServerToolConfig {
@@ -6899,9 +4464,15 @@ message McpServerToolConfig {
 message McpServerToolResultContent {
   string name = 1;
   string server_name = 2;
-  Genai_Struct struct_result = 3;
+  Struct struct_result = 3;
   string string_result = 4;
   FunctionResultSubcontentList content_list = 6;
+}
+
+message McpServerToolResultStep {
+  string name = 1;
+  string server_name = 2;
+  Value result = 7;
 }
 
 message McpTaskOptions {
@@ -6946,12 +4517,6 @@ message MediaProcessing {
   StaticMediaProcessing static = 2;
 }
 
-message MediaRef {
-  string uri = 1;
-  string mime_type = 2;
-  string alt = 3;
-}
-
 message MemoryToolConfig {
   bool force_disable = 1;
   bool disable_auto_generate_memories = 2;
@@ -6964,10 +4529,6 @@ message MessageConfig {
 message MessagePromptMetadata {
   uint32 message_index = 1;
   uint32 segment_index = 2;
-}
-
-message MessageRenderDetails {
-  string message_title = 1;
 }
 
 message Metadata {
@@ -7107,6 +4668,10 @@ message ModelOutputRetryConfig {
   bool retry_only_on_invalid_args = 5;
 }
 
+message ModelOutputStep {
+  repeated Content content = 1;
+}
+
 message ModelUsageStats {
   Model model = 1;
   uint64 input_tokens = 2;
@@ -7134,13 +4699,6 @@ message ModifiedCell {
   int32 index = 4;
 }
 
-message MomaStep {
-  string tool_name = 1;
-  DevtoolsCiderAgentTrajectory_stepsMomastep_Args args = 2;
-  DevtoolsCiderAgentTrajectory_stepsMomastep_Reply reply = 3;
-  ToolStatus tool_status = 4;
-}
-
 message MqueryToolConfig {
   MQueryConfig m_query_config = 1;
   Model m_query_model = 2;
@@ -7151,6 +4709,16 @@ message MqueryToolConfig {
   bool allow_access_gitignore = 7;
   bool disable_semantic_codebase_search = 8;
   bool force_disable = 9;
+}
+
+message MultipleChoiceRequest {
+  repeated ElicitationChoice choices = 1;
+  bool allow_multiple_selections = 2;
+}
+
+message MultipleChoiceResponse {
+  repeated string selected_choice_labels = 1;
+  ContentList user_input = 2;
 }
 
 message NamedItem {
@@ -7262,19 +4830,9 @@ message OpenVirtualFileRequest {
 message OpenVirtualFileResponse {
 }
 
-message OptionsEntry {
-  string key = 1;
-  string value = 2;
-}
-
 message OriginalWorkspaceSnapshotsEntry {
   string key = 1;
   int32 value = 2;
-}
-
-message OutputEntry {
-  string key = 1;
-  string value = 2;
 }
 
 message PathScopeItem {
@@ -7295,43 +4853,10 @@ message PermissionConfig {
   AgentPermissionPreset effective_permission_preset = 6;
 }
 
-message PermissionGrant {
-  PermissionResource resource = 1;
-  bool allow = 2;
-  PermissionScope scope = 3;
-  string user_deny_instruction = 4;
-  string action = 5;
-  string target = 6;
-}
-
 message PermissionGrantsConfig {
   repeated string allow = 1;
   repeated string deny = 2;
   repeated string ask = 3;
-}
-
-message PermissionInteraction {
-  bool allow = 1;
-  PermissionScope scope = 2;
-  bool sandbox_override = 3;
-  PermissionGrantsConfig persist_grants = 4;
-  string user_deny_instruction = 5;
-  string edited_target = 6;
-}
-
-message PermissionInteractionSpec {
-  PermissionResource resource = 1;
-  string suggested_persist_pattern = 2;
-  PersistSuggestionType persist_suggestion_type = 3;
-  string reason = 4;
-  string action_description = 5;
-  TriggerSource trigger_source = 6;
-  string shell_name = 7;
-}
-
-message PermissionResource {
-  string action = 1;
-  string target = 2;
 }
 
 message PlaceCitation {
@@ -7346,19 +4871,6 @@ message Places {
   string name = 2;
   string url = 3;
   repeated ReviewSnippet review_snippets = 4;
-}
-
-message PlanEntryDeltaSummary {
-  repeated string items_added = 1;
-  repeated string items_completed = 2;
-}
-
-message PlanInput {
-  string goal = 1;
-  repeated string target_directories = 2;
-  repeated string target_files = 3;
-  repeated ContextScopeItem scope_items = 4;
-  repeated string next_steps = 5;
 }
 
 message PlannerRetryConfig {
@@ -7379,9 +4891,17 @@ message PluginDiscoveryConfig {
   repeated string builtin_plugin_names = 3;
 }
 
-message Point2 {
-  int32 x = 1;
-  int32 y = 2;
+message PluginRef {
+  string name = 1;
+  string display_name = 2;
+  string logo = 3;
+}
+
+message PluginScopeItem {
+  string name = 1;
+  string display_name = 2;
+  string path = 3;
+  string logo = 4;
 }
 
 message PolicyGuardianConfig {
@@ -7401,13 +4921,10 @@ message PolicyGuardianConfig {
   bool use_v2 = 14;
 }
 
-message PreToolHookResult {
-  bool allow_tool = 1;
-  string deny_reason = 2;
-  Struct overwrite = 3;
-  string decision = 4;
-  string reason = 5;
-  repeated string permission_overrides = 6;
+message ProcessingCallStep {
+}
+
+message ProcessingResultStep {
 }
 
 message ProfilesConfig {
@@ -7478,26 +4995,11 @@ message PromptStageLatency {
   uint64 latency_ms = 2;
 }
 
-message ProposeAICommentsStep {
-  DevtoolsCiderAgentTrajectory_stepsProposeaicommentsstep_Args args = 2;
-}
-
-message ProviderMetadataEntry {
-  string key = 1;
-  CodeContextProviderMetadata value = 2;
-}
-
 message PushUnifiedStateSyncUpdateRequest {
   UpdateRequest update = 1;
 }
 
 message PushUnifiedStateSyncUpdateResponse {
-}
-
-message QueryCorrectionSuggestion {
-  string context = 1;
-  string reason = 2;
-  string suggestion = 3;
 }
 
 message Range {
@@ -7545,15 +5047,6 @@ message RecipeScopeItem {
   string uri = 5;
 }
 
-message Recitation {
-  Citation citation = 1;
-  string content = 2;
-}
-
-message RecitationMetadata {
-  repeated Recitation recitations = 1;
-}
-
 message RecordErrorRequest {
   ErrorTrace error_trace = 1;
 }
@@ -7576,41 +5069,6 @@ message ReplaceContentToolConfig {
   bool show_triggered_memories = 8;
   bool disable_allow_multiple = 9;
   bool use_line_range = 10;
-}
-
-message ReplacementChunk {
-  string target_content = 1;
-  string replacement_content = 2;
-  bool allow_multiple = 3;
-  bool target_has_carriage_return = 4;
-  repeated string context_lines = 5;
-  int32 start_line = 6;
-  int32 end_line = 7;
-  AcknowledgementType acknowledgement_type = 11;
-  int32 index = 12;
-}
-
-message ReplacementChunkInfo {
-  ReplacementChunk original_chunk = 1;
-  string fuzzy_match = 2;
-  int32 edit_distance = 3;
-  float rel_edit_distance = 4;
-  uint32 num_matches = 5;
-  bool error = 6;
-  bool is_non_exact = 7;
-  bool boundary_lines_match = 8;
-  string error_str = 9;
-  bool fast_apply_fixable = 10;
-  bool use_global_match = 11;
-  bool repair_fixable = 12;
-  bool repaired = 13;
-}
-
-message Reply {
-  Cortexstepexecutenotebook_ExecutionStatus status = 1;
-  int32 executed_cells_count = 2;
-  repeated Cortexstepexecutenotebook_CellOutput cell_outputs = 3;
-  string error_trace = 4;
 }
 
 message Repository {
@@ -7640,27 +5098,6 @@ message RequestInfo {
   CompletionType completion_type = 6;
 }
 
-message RequestedInteraction {
-  CascadeDeployInteractionSpec deploy = 2;
-  CascadeRunCommandInteractionSpec run_command = 3;
-  CascadeOpenBrowserUrlInteractionSpec open_browser_url = 4;
-  CascadeRunExtensionCodeInteractionSpec run_extension_code = 5;
-  CascadeExecuteBrowserJavaScriptInteractionSpec execute_browser_javascript = 7;
-  CascadeCaptureBrowserScreenshotInteractionSpec capture_browser_screenshot = 8;
-  CascadeClickBrowserPixelInteractionSpec click_browser_pixel = 9;
-  CascadeBrowserActionInteraction browser_action = 13;
-  CascadeOpenBrowserSetupInteraction open_browser_setup = 14;
-  CascadeConfirmBrowserSetupInteraction confirm_browser_setup = 15;
-  CascadeSendCommandInputInteractionSpec send_command_input = 16;
-  CascadeReadUrlContentInteractionSpec read_url_content = 17;
-  CascadeMcpInteractionSpec mcp = 18;
-  FilePermissionInteractionSpec file_permission = 19;
-  ElicitationInteractionSpec elicitation = 20;
-  PermissionInteractionSpec permission = 21;
-  AskQuestionInteractionSpec ask_question = 22;
-  ApprovalInteractionSpec approval_interaction = 23;
-}
-
 message ResponseHeaderEntry {
   string key = 1;
   string value = 2;
@@ -7670,27 +5107,6 @@ message RestartUserStatusUpdaterRequest {
 }
 
 message RestartUserStatusUpdaterResponse {
-}
-
-message Result {
-  string uri = 1;
-  string title = 2;
-  string content = 3;
-}
-
-message RetrieveContentStep {
-  string tool_name = 1;
-  DevtoolsCiderAgentTrajectory_stepsRetrievecontentstep_Args args = 2;
-  DevtoolsCiderAgentTrajectory_stepsRetrievecontentstep_Reply reply = 3;
-}
-
-message RetrievedCodeContextItemMetadata {
-  repeated CodeContextSource context_sources = 1;
-  CodeContextType context_type = 2;
-  string scorer = 3;
-  float score = 4;
-  repeated ProviderMetadataEntry provider_metadata = 5;
-  bool is_in_pinned_scope = 6;
 }
 
 message RetryInfo {
@@ -7725,12 +5141,6 @@ message RulesDiscoveryConfig {
   repeated CustomizationPath rules_paths = 2;
 }
 
-message RunCommandOutput {
-  string full = 1;
-  string truncated = 2;
-  uint32 num_lines_above = 3;
-}
-
 message RunCommandToolConfig {
   uint32 max_chars_command_stdout = 1;
   bool force_disable = 2;
@@ -7752,6 +5162,7 @@ message RunCommandToolConfig {
   SearchFallbackMode search_fallback_mode = 19;
   bool read_only_sandbox = 20;
   bool disable_sandbox_bypass = 21;
+  SandboxProxy sandbox_proxy = 22;
 }
 
 message RunExtensionCodeRequest {
@@ -7772,6 +5183,10 @@ message RuntimeEnvironment {
   string identity_type = 7;
 }
 
+message SandboxProxy {
+  Http http = 1;
+}
+
 message SaveDocumentRequest {
   string uri = 1;
   string conversation_id = 2;
@@ -7783,6 +5198,15 @@ message SaveDocumentResponse {
 message ScheduleToolConfig {
   bool enabled = 1;
   bool enable_daemon = 2;
+}
+
+message SearchDirectoryCallStep {
+  string directory_path = 1;
+  string query = 2;
+}
+
+message SearchDirectoryResultStep {
+  int32 num_results = 1;
 }
 
 message SearchWebToolConfig {
@@ -7810,16 +5234,6 @@ message SendTerminalInputRequest {
 message SendTerminalInputResponse {
   bool success = 1;
   string error = 2;
-}
-
-message SetUpCloudSqlAppConfig {
-  string instance_name = 1;
-  string project_id = 2;
-}
-
-message SetUpFirebaseAppConfig {
-  string firebase_project_id = 1;
-  repeated FirebaseProduct provisioned_products = 2;
 }
 
 message ShowTerminalRequest {
@@ -7872,6 +5286,7 @@ message SidecarUIView {
   SidecarUIEntrypoint entrypoint = 2;
   string path = 3;
   string title = 4;
+  repeated string file_extensions = 5;
 }
 
 message Sidecarconfig_EnvEntry {
@@ -7879,11 +5294,14 @@ message Sidecarconfig_EnvEntry {
   string value = 2;
 }
 
-message SkillMetadata {
-  string name = 1;
-  string description = 2;
-  string publisher = 3;
-  string version = 4;
+message SkillLookupCallStep {
+  Operation operation = 1;
+  repeated string requested_skill_names = 2;
+}
+
+message SkillLookupResultStep {
+  repeated string resolved_skill_names = 1;
+  string error_message = 2;
 }
 
 message SkillSearchToolConfig {
@@ -7908,6 +5326,7 @@ message SlashCommandInfo {
   string definition_path = 5;
   string display_name = 6;
   string logo = 7;
+  PluginRef plugin = 8;
 }
 
 message SlashCommandScopeItem {
@@ -7941,20 +5360,15 @@ message SnippetWithWordCount {
   repeated WordCountBySplitterEntry word_count_by_splitter = 2;
 }
 
-message Source {
-  string reference_id = 1;
-}
-
 message SourceMetadata {
   ToolSourceMetadata tool = 1;
   SidecarCommandSource sidecar = 2;
+  bool hide_from_conversation_list = 3;
 }
 
-message SourceTrajectoryStepInfo {
-  string trajectory_id = 1;
-  uint32 step_index = 2;
-  uint32 metadata_index = 3;
-  string cascade_id = 4;
+message SpeechAnnotation {
+  string speaker = 1;
+  string style = 2;
 }
 
 message StartAudioRecordingRequest {
@@ -7963,177 +5377,26 @@ message StartAudioRecordingRequest {
 message StartAudioRecordingResponse {
 }
 
-message StartCodeReviewStep {
-  DevtoolsCiderAgentTrajectory_stepsStartcodereviewstep_Args args = 1;
-  ChangeData change_data = 2;
-  repeated ContextData context_data = 3;
-  bool continue_review = 4;
-}
-
 message StaticMediaProcessing {
   Duration start_offset = 1;
   Duration end_offset = 2;
   double fps = 3;
 }
 
-message StatusTransition {
-  CortexStepStatus updated_status = 1;
-  Timestamp timestamp = 2;
-}
-
 message Step {
-  CortexStepType type = 1;
-  CortexStepStatus status = 4;
-  CortexStepMetadata metadata = 5;
-  Trajectory subtrajectory = 6;
-  CortexStepDummy dummy = 7;
-  CortexStepPlanInput plan_input = 8;
-  CortexStepMquery mquery = 9;
-  CortexStepCodeAction code_action = 10;
-  CortexStepGitCommit git_commit = 11;
-  CortexStepFinish finish = 12;
-  CortexStepGrepSearch grep_search = 13;
-  CortexStepViewFile view_file = 14;
-  CortexStepListDirectory list_directory = 15;
-  CortexStepCompile compile = 16;
-  CortexStepUserInput user_input = 19;
-  CortexStepPlannerResponse planner_response = 20;
-  CortexStepFileBreakdown file_breakdown = 21;
-  CortexStepViewCodeItem view_code_item = 22;
-  CortexStepWriteToFile write_to_file = 23;
-  CortexStepErrorMessage error_message = 24;
-  CortexStepRunCommand run_command = 28;
-  CortexStepCheckpoint checkpoint = 30;
-  CortexErrorDetails error = 31;
-  CortexStepProposeCode propose_code = 32;
-  CortexStepFind find = 34;
-  CortexStepSearchKnowledgeBase search_knowledge_base = 35;
-  CortexStepSuggestedResponses suggested_responses = 36;
-  CortexStepCommandStatus command_status = 37;
-  CortexStepMemory memory = 38;
-  CortexStepLookupKnowledgeBase lookup_knowledge_base = 39;
-  CortexStepReadUrlContent read_url_content = 40;
-  CortexStepViewContentChunk view_content_chunk = 41;
-  CortexStepSearchWeb search_web = 42;
-  CortexStepRetrieveMemory retrieve_memory = 43;
-  CortexStepMcpTool mcp_tool = 47;
-  CortexStepManagerFeedback manager_feedback = 48;
-  CortexStepToolCallProposal tool_call_proposal = 49;
-  CortexStepToolCallChoice tool_call_choice = 50;
-  CortexStepTrajectoryChoice trajectory_choice = 52;
-  CortexStepClipboard clipboard = 55;
-  RequestedInteraction requested_interaction = 56;
-  CortexStepViewFileOutline view_file_outline = 58;
-  CortexStepCheckDeployStatus check_deploy_status = 59;
-  CortexStepPostPrReview post_pr_review = 60;
-  CortexStepListResources list_resources = 62;
-  CortexStepReadResource read_resource = 63;
-  CortexStepLintDiff lint_diff = 64;
-  CortexStepFindAllReferences find_all_references = 65;
-  CortexStepBrainUpdate brain_update = 66;
-  CortexStepOpenBrowserUrl open_browser_url = 67;
-  CortexStepRunExtensionCode run_extension_code = 68;
-  UserStepAnnotations user_annotations = 69;
-  CortexStepProposalFeedback proposal_feedback = 71;
-  CortexStepTrajectorySearch trajectory_search = 72;
-  CortexStepExecuteBrowserJavaScript execute_browser_javascript = 73;
-  CortexStepListBrowserPages list_browser_pages = 74;
-  CortexStepCaptureBrowserScreenshot capture_browser_screenshot = 75;
-  CortexStepClickBrowserPixel click_browser_pixel = 76;
-  CortexStepReadTerminal read_terminal = 77;
-  CortexStepCaptureBrowserConsoleLogs capture_browser_console_logs = 78;
-  CortexStepReadBrowserPage read_browser_page = 79;
-  CortexStepBrowserGetDom browser_get_dom = 80;
-  CortexStepCodeSearch code_search = 85;
-  CortexStepBrowserInput browser_input = 86;
-  CortexStepBrowserMoveMouse browser_move_mouse = 87;
-  CortexStepBrowserSelectOption browser_select_option = 88;
-  CortexStepBrowserScrollUp browser_scroll_up = 89;
-  CortexStepBrowserScrollDown browser_scroll_down = 90;
-  CortexStepBrowserClickElement browser_click_element = 91;
-  CortexStepBrowserPressKey browser_press_key = 92;
-  CortexStepTaskBoundary task_boundary = 93;
-  CortexStepNotifyUser notify_user = 94;
-  CortexStepCodeAcknowledgement code_acknowledgement = 95;
-  CortexStepInternalSearch internal_search = 96;
-  CortexStepBrowserSubagent browser_subagent = 97;
-  CortexStepFileChange file_change = 98;
-  CortexStepMove move = 100;
-  CortexStepBrowserScroll browser_scroll = 101;
-  CortexStepKnowledgeGeneration knowledge_generation = 102;
-  CortexStepEphemeralMessage ephemeral_message = 103;
-  CortexStepGenerateImage generate_image = 104;
-  CortexStepDeleteDirectory delete_directory = 105;
-  CortexStepCompileApplet compile_applet = 106;
-  CortexStepInstallAppletDependencies install_applet_dependencies = 107;
-  CortexStepInstallAppletPackage install_applet_package = 108;
-  CortexStepBrowserResizeWindow browser_resize_window = 109;
-  CortexStepBrowserDragPixelToPixel browser_drag_pixel_to_pixel = 110;
-  CortexStepConversationHistory conversation_history = 111;
-  CortexStepKnowledgeArtifacts knowledge_artifacts = 112;
-  CortexStepSendCommandInput send_command_input = 113;
-  CortexStepSystemMessage system_message = 114;
-  CortexStepWait wait = 115;
-  CortexStepAgencyToolCall agency_tool_call = 116;
-  DummyStep cider_agent_dummy = 117;
-  BuildCleanerStep build_cleaner = 118;
-  BuildTargetsStep blaze_build_targets = 119;
-  TestTargetsStep blaze_test_targets = 120;
-  CortexStepSetUpFirebase set_up_firebase = 121;
-  MomaStep moma = 122;
-  CortexStepRestartDevServer restart_dev_server = 123;
-  CortexStepDeployFirebase deploy_firebase = 124;
-  CortexStepBrowserMouseWheel browser_mouse_wheel = 125;
-  CortexStepLintApplet lint_applet = 126;
-  CortexStepShellExec shell_exec = 127;
-  CortexStepKIInsertion ki_insertion = 129;
-  RetrieveContentStep retrieve_content = 130;
-  CritiqueStep critique = 131;
-  FindingsStep findings = 132;
-  TrajectoryPermissions permissions = 133;
-  CortexStepBrowserMouseUp browser_mouse_up = 134;
-  CortexStepBrowserMouseDown browser_mouse_down = 135;
-  CortexStepWorkspaceAPI workspace_api = 136;
-  CortexStepBrowserListNetworkRequests browser_list_network_requests = 137;
-  CortexStepBrowserGetNetworkRequest browser_get_network_request = 138;
-  CortexStepBrowserRefreshPage browser_refresh_page = 139;
-  CortexStepGeneric generic = 140;
-  CortexStepEditNotebook edit_notebook = 141;
-  CortexStepWriteBlob write_blob = 142;
-  CortexStepInvokeSubagent invoke_subagent = 143;
-  CortexStepReadNotebook read_notebook = 144;
-  ProposeAICommentsStep propose_ai_comments = 145;
-  StartCodeReviewStep start_code_review = 146;
-  repeated CompletedInteraction completed_interactions = 147;
-  TaskDetails task_details = 148;
-  CortexStepSetUpCloudSql set_up_cloudsql = 149;
-  CortexStepExecuteNotebook execute_notebook = 150;
-  CortexStepCloudSQLSchemaUpdate cloudsql_update_schema = 151;
-  CortexStepRPCAction rpc_action = 152;
-  CortexStepCloudSQLExecuteSQL cloudsql_execute_sql = 153;
-  CortexStepAskQuestion ask_question = 154;
-  repeated Any attachments = 155;
-  CortexStepDirectoryRules directory_rules = 156;
-  CortexStepToolSearch tool_search = 157;
-  CustomExtensions custom_extensions = 158;
-}
-
-message StepProgress {
-  double progress = 1;
-  double progress_total = 2;
-  string progress_message = 3;
-}
-
-message StepRenderInfo {
-  string title = 1;
-  string markdown = 2;
-  bool hidden = 4;
-  string title_prefix = 5;
-  string icon = 6;
-  string aggregation_key = 7;
-  StepProgress progress = 8;
-  repeated TitlePart title_parts = 9;
-  repeated ContentBlock content_blocks = 10;
+  UserInputStep user_input = 1;
+  ModelOutputStep model_output = 2;
+  ThoughtStep thought = 3;
+  ToolCallStep tool_call = 4;
+  ToolResultStep tool_result = 5;
+  LegacyTextContent text = 6;
+  LegacyImageContent image = 7;
+  LegacyAudioContent audio = 8;
+  LegacyDocumentContent document = 9;
+  LegacyVideoContent video = 10;
+  ElicitationCallStep elicitation_call = 13;
+  ElicitationResultStep elicitation_result = 14;
+  string description = 16;
 }
 
 message StepStringConverterConfig {
@@ -8162,31 +5425,10 @@ message Struct {
   repeated Field fields = 1;
 }
 
-message StructuredErrorPart {
-  string text = 1;
-  string file_uri = 2;
-  string directory_uri = 3;
-  string url = 4;
-  string code_text = 5;
-}
-
 message SubagentReminderMode {
   BrowserVerifyScreenshotsMode verify_screenshots = 1;
   BrowserVerifyCompletenessMode verify_completeness = 2;
   BrowserCustomReminderMode custom = 3;
-}
-
-message SubagentResult {
-  string conversation_id = 1;
-  string log_absolute_uri = 2;
-  repeated string workspace_uris = 3;
-}
-
-message SubagentSnapshot {
-  SubagentSpec spec = 4;
-  SubagentResult result = 5;
-  bool killed = 6;
-  int32 spawn_step_index = 7;
 }
 
 message SubagentSpec {
@@ -8225,70 +5467,11 @@ message SupportedMimeTypesEntry {
   bool value = 2;
 }
 
-message Tag {
-  string name = 1;
-  string value = 2;
-}
-
 message TaskBoundaryToolConfig {
   int32 minimum_predicted_task_size = 1;
   int32 target_status_update_frequency = 2;
   int32 no_active_task_soft_reminder_tool_threshold = 3;
   int32 no_active_task_strict_reminder_tool_threshold = 4;
-}
-
-message TaskDelta {
-  TaskDeltaType type = 1;
-  string id = 2;
-  string content = 3;
-  TaskStatus status = 4;
-  string parent_id = 5;
-  string prev_sibling_id = 6;
-  string from_parent = 7;
-  string from_prev_sibling = 8;
-}
-
-message TaskDetails {
-  string id = 1;
-  string log_uri = 2;
-  string progress = 3;
-  string description = 4;
-  bool requires_input_approval = 5;
-  bool is_daemon = 6;
-  string title = 7;
-}
-
-message TaskEntryDeltaSummary {
-  repeated TaskDelta deltas = 1;
-  int32 items_added = 2;
-  int32 items_pruned = 3;
-  int32 items_deleted = 4;
-  int32 items_updated = 5;
-  int32 items_moved = 6;
-}
-
-message TaskSnapshot {
-  string task_id = 1;
-  string tool_name = 2;
-  string tool_summary = 3;
-  string description = 4;
-  Timestamp start_time = 5;
-  uint32 step_index = 6;
-  string log_uri = 7;
-  bool is_daemon = 8;
-}
-
-message TaskView {
-  string header = 1;
-  string log_uri = 2;
-}
-
-message TerminalBlock {
-  string command = 1;
-  string cwd = 2;
-  int32 exit_code = 3;
-  string output = 4;
-  int32 num_lines_above = 5;
 }
 
 message TerminalCommandData {
@@ -8310,20 +5493,6 @@ message TerminalScopeItem {
   string name = 2;
   string last_command = 3;
   string selectionContent = 4;
-}
-
-message TerminalShellCommand {
-  uint32 shell_pid = 1;
-  string command_line = 2;
-  string cwd = 3;
-  bytes output = 4;
-  int32 exit_code = 5;
-  Timestamp start_time = 6;
-  Timestamp end_time = 7;
-  TerminalShellCommandStatus status = 8;
-  TerminalShellCommandSource source = 9;
-  string id = 10;
-  Timestamp last_updated_time = 11;
 }
 
 message TerminalShellCommandData {
@@ -8359,27 +5528,6 @@ message TerminateCommandRequest {
 message TerminateCommandResponse {
 }
 
-message TestFailure {
-  string target = 1;
-  string test_case = 2;
-  string failure_message = 3;
-}
-
-message TestReply {
-  bool succeeded = 1;
-  string error_message = 2;
-  repeated BuildFailure build_failure_details = 3;
-  repeated TestFailure test_failure_details = 4;
-  string raw_lcov = 5;
-  string invocation_id = 8;
-}
-
-message TestTargetsStep {
-  string tool_name = 1;
-  DevtoolsCiderAgentTrajectory_stepsTesttargetsstep_Args args = 2;
-  TestReply reply = 3;
-}
-
 message TextBlock {
   string content = 1;
   FileLineRange file_line_range = 2;
@@ -8400,17 +5548,6 @@ message TextNode {
   string text = 1;
 }
 
-message TextOrScopeItem {
-  string text = 1;
-  ContextScopeItem item = 2;
-}
-
-message TextSelection {
-  string content = 1;
-  int32 start_line = 2;
-  int32 end_line = 3;
-}
-
 message ThirdPartyWebSearchConfig {
   ThirdPartyWebSearchProvider provider = 1;
 }
@@ -8420,26 +5557,19 @@ message ThoughtContent {
   repeated ThoughtSummaryContent summary = 9;
 }
 
+message ThoughtStep {
+  bytes signature = 1;
+  repeated Content summary = 2;
+}
+
 message ThoughtSummaryContent {
   TextContent text = 1;
   ImageContent image = 2;
 }
 
-message TimeRange {
-  Timestamp start = 1;
-  Timestamp end = 2;
-}
-
 message Timestamp {
   int64 seconds = 1;
   int32 nanos = 2;
-}
-
-message TitlePart {
-  string text = 1;
-  FileRef file = 2;
-  Badge badge = 3;
-  FileDiffRef file_diff = 4;
 }
 
 message TokenBreakdown {
@@ -8463,6 +5593,26 @@ message ToolCallContent {
   FileSearchCallContent file_search_call = 8;
   bytes signature = 9;
   GoogleMapsCallContent google_maps_call = 10;
+}
+
+message ToolCallStep {
+  string id = 1;
+  bytes signature = 2;
+  FunctionCallStep function_call = 3;
+  CodeExecutionCallStep code_execution_call = 4;
+  UrlContextCallStep url_context_call = 5;
+  McpServerToolCallStep mcp_server_tool_call = 6;
+  GoogleSearchCallStep google_search_call = 7;
+  FileSearchCallStep file_search_call = 8;
+  GoogleMapsCallStep google_maps_call = 9;
+  FindFileCallStep find_file_call = 12;
+  ListDirectoryCallStep list_directory_call = 13;
+  SearchDirectoryCallStep search_directory_call = 14;
+  ViewFileCallStep view_file_call = 15;
+  EditFileCallStep edit_file_call = 16;
+  GenerateImageCallStep generate_image_call = 17;
+  ProcessingCallStep processing_call = 18;
+  SkillLookupCallStep skill_lookup_call = 19;
 }
 
 message ToolConfigEntry {
@@ -8504,15 +5654,30 @@ message ToolResultContent {
   GoogleMapsResultContent google_maps_result = 10;
 }
 
+message ToolResultStep {
+  string call_id = 1;
+  bytes signature = 2;
+  FunctionResultStep function_result = 3;
+  CodeExecutionResultStep code_execution_result = 4;
+  UrlContextResultStep url_context_result = 5;
+  GoogleSearchResultStep google_search_result = 6;
+  McpServerToolResultStep mcp_server_tool_result = 7;
+  FileSearchResultStep file_search_result = 8;
+  GoogleMapsResultStep google_maps_result = 9;
+  FindFileResultStep find_file_result = 12;
+  ListDirectoryResultStep list_directory_result = 13;
+  SearchDirectoryResultStep search_directory_result = 14;
+  EditFileResultStep edit_file_result = 15;
+  GenerateImageResultStep generate_image_result = 16;
+  ProcessingResultStep processing_result = 17;
+  ViewFileResultStep view_file_result = 18;
+  SkillLookupResultStep skill_lookup_result = 19;
+}
+
 message ToolSourceMetadata {
   string conversation_id = 1;
   int32 step_index = 2;
   ChatToolCall tool_call = 3;
-}
-
-message ToolStatus {
-  string widget_update = 1;
-  string warning = 2;
 }
 
 message TopLevelTokenGroup {
@@ -8563,40 +5728,11 @@ message TrajectoryConversionConfig {
   string task_details_suffix = 23;
 }
 
-message TrajectoryDescription {
-  string cascade_conversation_title = 1;
-  string mainline_branch_name = 2;
-}
-
-message TrajectoryFileDiff {
-  string uri = 1;
-  string original_content = 2;
-  string modified_content = 3;
-  bool is_artifact_file = 4;
-  bool is_knowledge_file = 5;
-  Timestamp last_modified_at = 6;
-  bool has_model_edited = 7;
-  uint32 first_touched_step_index = 8;
-  uint32 last_touched_step_index = 9;
-  bool is_noop = 10;
-  bytes original_content_hash = 11;
-}
-
-message TrajectoryPermissions {
-  repeated FileAccessPermission file_access_permissions = 1;
-  repeated PermissionGrant permission_grants = 2;
-}
-
 message TrajectorySearchToolConfig {
   bool force_disable = 1;
   bool conversations_enabled = 2;
   bool user_activities_enabled = 3;
   uint32 max_scored_chunks = 4;
-}
-
-message TriggerSource {
-  Type type = 1;
-  string detail = 2;
 }
 
 message UnifiedDiff {
@@ -8635,11 +5771,6 @@ message UpdateRequest {
   AppliedUpdate applied_update = 5;
 }
 
-message UrlArtifactPayload {
-  string url = 1;
-  string title = 2;
-}
-
 message UrlCitation {
   string url = 1;
   string title = 2;
@@ -8653,14 +5784,32 @@ message UrlContextCallContent {
   UrlContextCallArguments arguments = 2;
 }
 
+message UrlContextCallStep {
+  UrlContextCallStepArguments arguments = 1;
+}
+
+message UrlContextCallStepArguments {
+  repeated string urls = 1;
+}
+
 message UrlContextResult {
   string url = 1;
-  GenaiUrlcontextresultcontentUrlcontextresult_Status status = 2;
+  Internal_Status status = 2;
 }
 
 message UrlContextResultContent {
   repeated UrlContextResult result = 2;
   bool is_error = 3;
+}
+
+message UrlContextResultItem {
+  string url = 1;
+  Status status = 2;
+}
+
+message UrlContextResultStep {
+  repeated UrlContextResultItem result = 1;
+  bool is_error = 2;
 }
 
 message UserActivityScopeItem {
@@ -8669,16 +5818,12 @@ message UserActivityScopeItem {
   bool current = 3;
 }
 
-message UserIdentity {
-  string username = 1;
+message UserInputStep {
+  ContentList content_list = 2;
+  string content_string = 3;
 }
 
-message UserStepAnnotations {
-  UserStepSnapshot snapshot = 1;
-}
-
-message UserStepSnapshot {
-  string name = 1;
+message UserTimeout {
 }
 
 message ValidationState {
@@ -8690,13 +5835,17 @@ message ValidationState {
 
 message Value {
   NullValue null_value = 1;
-  double number_value = 2;
-  string string_value = 3;
-  bool bool_value = 4;
-  Genai_Struct struct_value = 5;
-  ListValue list_value = 6;
-  Content content_value = 7;
-  Function function_value = 9;
+  bool bool_value = 2;
+  int64 int64_value = 3;
+  uint64 uint64_value = 4;
+  double double_value = 5;
+  string string_value = 6;
+  bytes bytes_value = 7;
+  EnumValue enum_value = 9;
+  Any object_value = 10;
+  MapValue map_value = 11;
+  ListValue list_value = 12;
+  string type_value = 15;
 }
 
 message ValuesEntry {
@@ -8705,7 +5854,7 @@ message ValuesEntry {
 }
 
 message VideoContent {
-  GenaiVideocontent_MimeType mime_type = 1;
+  MimeType mime_type = 1;
   bytes data = 2;
   MediaResolution resolution = 5;
   string uri = 6;
@@ -8722,6 +5871,15 @@ message ViewCodeItemToolConfig {
   bool force_disable = 5;
 }
 
+message ViewFileCallStep {
+  string file_path = 1;
+  uint32 start_line = 2;
+  uint32 end_line = 3;
+}
+
+message ViewFileResultStep {
+}
+
 message ViewFileToolConfig {
   bool allow_view_gitignore = 7;
   bool split_outline_tool = 8;
@@ -8735,13 +5893,6 @@ message ViewFileToolConfig {
   bool force_disable = 17;
   uint32 max_bytes_per_view = 18;
   uint32 max_file_size_bytes = 19;
-}
-
-message Viewport {
-  int32 x = 1;
-  int32 y = 2;
-  int32 width = 3;
-  int32 height = 4;
 }
 
 message WaitToolConfig {
