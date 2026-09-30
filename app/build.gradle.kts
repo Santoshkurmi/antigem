@@ -189,3 +189,23 @@ wire {
   }
 }
 
+val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
+  val binDir = layout.projectDirectory.dir("src/main/assets/bin")
+  val bridgeSourceDir = layout.projectDirectory.dir("../agy_ide_bridge")
+
+  doFirst {
+    binDir.asFile.mkdirs()
+  }
+
+  workingDir = bridgeSourceDir.asFile
+  environment("GOOS", "android")
+  environment("GOARCH", "arm64")
+  environment("CGO_ENABLED", "0")
+  commandLine("go", "build", "-ldflags=-s -w", "-o", binDir.file("agy_ide_bridge").asFile.absolutePath, "main.go")
+}
+
+tasks.named("preBuild") {
+  dependsOn(buildAgyIdeBridge)
+}
+
+

@@ -40,9 +40,66 @@ object LocalServerManager {
     // Track whether auto-start has already run during the lifetime of this app process
     private var hasInitialAutoStarted = false
 
+    private const val PREFS_NAME = "local_server_prefs"
+    private const val KEY_BRIDGE_LAST_UPDATE_TIME = "bridge_last_update_time"
+
     fun hasServerScript(context: Context): Boolean {
         val binBridge = File(LocalEnvironmentManager.getBinDir(context), "agy_ide_bridge")
-        return binBridge.exists()
+        if (binBridge.exists()) return true
+        return try {
+            context.assets.list("bin")?.contains("agy_ide_bridge") == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun ensureBridgeBinary(context: Context) {
+        val binDir = LocalEnvironmentManager.getBinDir(context)
+        val targetFile = File(binDir, "agy_ide_bridge")
+
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val lastSavedUpdate = prefs.getLong(KEY_BRIDGE_LAST_UPDATE_TIME, 0L)
+        val packageInfo = try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+        } catch (_: Exception) {
+            null
+        }
+        val currentAppUpdateTime = packageInfo?.lastUpdateTime ?: 0L
+
+        val needsCopy = !targetFile.exists() || (currentAppUpdateTime > 0L && currentAppUpdateTime != lastSavedUpdate)
+
+        if (needsCopy) {
+            try {
+                context.assets.open("bin/agy_ide_bridge").use { input ->
+                    if (!binDir.exists()) {
+                        binDir.mkdirs()
+                    }
+                    val tempFile = File(binDir, "agy_ide_bridge.tmp")
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                    tempFile.setExecutable(true, false)
+                    tempFile.setReadable(true, false)
+                    if (targetFile.exists()) {
+                        targetFile.delete()
+                    }
+                    tempFile.renameTo(targetFile)
+                    targetFile.setExecutable(true, false)
+                    targetFile.setReadable(true, false)
+                }
+                if (currentAppUpdateTime > 0L) {
+                    prefs.edit().putLong(KEY_BRIDGE_LAST_UPDATE_TIME, currentAppUpdateTime).apply()
+                }
+                Log.d(TAG, "[ServerManager] Successfully extracted agy_ide_bridge asset to ${targetFile.absolutePath}")
+            } catch (e: Exception) {
+                Log.e(TAG, "[ServerManager] Failed to extract agy_ide_bridge from assets", e)
+            }
+        }
     }
 
     private fun resolveServerCommand(context: Context): String? {
@@ -139,6 +196,8 @@ object LocalServerManager {
         }
 
         val appContext = context.applicationContext
+        ensureBridgeBinary(appContext)
+
         val command = resolveServerCommand(appContext)
         if (command == null) {
             Log.d(TAG, "[ServerManager] No start or server executable found in home directory")
