@@ -193,10 +193,11 @@ class AgyModelService {
      * Fetches user quota summary (5-hour and weekly buckets) from RetrieveUserQuotaSummary via typed AgyLanguageService
      */
     suspend fun retrieveUserQuotaSummary(
+        forceRefresh: Boolean = false,
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<QuotaSummaryResponse> = withContext(Dispatchers.IO) {
         try {
-            val req = RetrieveUserQuotaSummaryRequest()
+            val req = RetrieveUserQuotaSummaryRequest(force_refresh = forceRefresh)
             val res = AgyLanguageService.RetrieveUserQuotaSummary().executeSafely(req)
             if (!res.isSuccess) {
                 return@withContext Result.failure(res.exceptionOrNull() ?: Exception("Failed to retrieve quota summary"))

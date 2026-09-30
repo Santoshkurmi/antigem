@@ -254,9 +254,10 @@ class AgyHubClient {
         modelService.getAvailableModels(forceRefresh, hubUrl)
 
     suspend fun retrieveUserQuotaSummary(
+        forceRefresh: Boolean = false,
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<QuotaSummaryResponse> =
-        modelService.retrieveUserQuotaSummary(hubUrl)
+        modelService.retrieveUserQuotaSummary(forceRefresh, hubUrl)
 
     // ==================== SETTINGS & PROJECTS ====================
 

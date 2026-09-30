@@ -2666,7 +2666,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val hubUrl = AuthPreferences.currentHubUrl
                 val modelsDeferred = async { agyHubClient.getAvailableModels(forceRefresh = force, hubUrl = hubUrl) }
-                val quotasDeferred = async { agyHubClient.retrieveUserQuotaSummary(hubUrl = hubUrl) }
+                val quotasDeferred = async { agyHubClient.retrieveUserQuotaSummary(forceRefresh = force, hubUrl = hubUrl) }
 
                 val modelsRes = modelsDeferred.await()
                 val quotasRes = quotasDeferred.await()
