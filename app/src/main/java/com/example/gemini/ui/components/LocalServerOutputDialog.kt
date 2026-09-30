@@ -309,7 +309,7 @@ fun LocalServerOutputDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "No server process running.\nTap 'Restart' above to run ./start",
+                                text = "No bridge process running.\nTap 'Restart' above to run agy_ide_bridge",
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp,
                                 color = Color(0xFF71717A),

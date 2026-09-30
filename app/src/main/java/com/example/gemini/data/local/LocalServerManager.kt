@@ -41,43 +41,20 @@ object LocalServerManager {
     private var hasInitialAutoStarted = false
 
     fun hasServerScript(context: Context): Boolean {
-        val homeDir = LocalEnvironmentManager.getHomeDir(context)
-        val startFile = File(homeDir, "start")
-        val startShFile = File(homeDir, "start.sh")
-        val serverFile = File(homeDir, "server")
-        return startFile.exists() || startShFile.exists() || serverFile.exists()
+        val binBridge = File(LocalEnvironmentManager.getBinDir(context), "agy_ide_bridge")
+        return binBridge.exists()
     }
 
     private fun resolveServerCommand(context: Context): String? {
-        val homeDir = LocalEnvironmentManager.getHomeDir(context)
-        val startFile = File(homeDir, "start")
-        val startShFile = File(homeDir, "start.sh")
-        val serverFile = File(homeDir, "server")
-
-        return when {
-            startFile.exists() -> {
-                try {
-                    startFile.setExecutable(true, false)
-                    startFile.setReadable(true, false)
-                } catch (_: Exception) {}
-                "./start"
-            }
-            startShFile.exists() -> {
-                try {
-                    startShFile.setExecutable(true, false)
-                    startShFile.setReadable(true, false)
-                } catch (_: Exception) {}
-                "sh ./start.sh"
-            }
-            serverFile.exists() -> {
-                try {
-                    serverFile.setExecutable(true, false)
-                    serverFile.setReadable(true, false)
-                } catch (_: Exception) {}
-                "./server -f"
-            }
-            else -> null
+        val binBridge = File(LocalEnvironmentManager.getBinDir(context), "agy_ide_bridge")
+        if (binBridge.exists()) {
+            try {
+                binBridge.setExecutable(true, false)
+                binBridge.setReadable(true, false)
+            } catch (_: Exception) {}
+            return "agy_ide_bridge -f"
         }
+        return null
     }
 
     /**

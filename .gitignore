@@ -17,11 +17,16 @@ local.properties
 *.keystore
 release.jks
 
-# Go Daemon & Server Build Outputs
+# Go Daemon & Bridge Build Outputs
 server/bin/
 server/server
 server/daemon
 server/gemini-server
+agy_ide_bridge/bin/
+agy_ide_bridge/agy_ide_bridge
+agy_ide_bridge/server
+agy_ide_bridge/daemon
+agy_ide_bridge/gemini-server
 gemini-server
 *.exe
 *.test
@@ -42,3 +47,4 @@ proto_generator/*.json
 # IDE & Gemini Metadata
 .gemini/
 server_android
+agy_ide_bridge_android

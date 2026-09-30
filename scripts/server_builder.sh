@@ -19,8 +19,8 @@ NC='\033[0m' # No Color
 # --- Directory Resolution ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVER_DIR="$PROJECT_ROOT/server"
-OUTPUT_BINARY="$SERVER_DIR/server_android"
+SERVER_DIR="$PROJECT_ROOT/agy_ide_bridge"
+OUTPUT_BINARY="$SERVER_DIR/agy_ide_bridge_android"
 
 clear 2>/dev/null || true
 
@@ -114,27 +114,16 @@ echo -e "   ${GREEN}✔${NC} Target Device: ${BOLD}$DEVICE_MODEL${NC} (${DIM}$DE
 # --- Deployment ---
 echo -e "\n${CYAN}🚀 [4/4] Deploying Binary to Device Storage...${NC}"
 
-# 1. Ensure target dirs exist
-adb -s "$DEVICE_ID" shell "mkdir -p /sdcard/test" 2>/dev/null || true
+# Push to /sdcard/agy_ide_bridge
+echo -e "   • Pushing to ${BOLD}/sdcard/agy_ide_bridge${NC}..."
+adb -s "$DEVICE_ID" push "$OUTPUT_BINARY" /sdcard/agy_ide_bridge >/dev/null
 
-# 2. Push to /sdcard/server
-echo -e "   • Pushing to ${BOLD}/sdcard/server${NC}..."
-adb -s "$DEVICE_ID" push "$OUTPUT_BINARY" /sdcard/server >/dev/null
-
-# 3. Push to /sdcard/test/server and /sdcard/test/server_arm64
-echo -e "   • Pushing to ${BOLD}/sdcard/test/server${NC}..."
-adb -s "$DEVICE_ID" push "$OUTPUT_BINARY" /sdcard/test/server >/dev/null
-adb -s "$DEVICE_ID" push "$OUTPUT_BINARY" /sdcard/test/server_arm64 >/dev/null
-
-echo -e "   ${GREEN}✔ All files deployed successfully!${NC}"
+echo -e "   ${GREEN}✔ Binary deployed successfully!${NC}"
 
 # --- Summary & Instructions ---
 echo -e "\n${DIM}================================================================${NC}"
 echo -e "${GREEN}${BOLD}🎉 COMPLETE! Ready to run on your phone.${NC}"
 echo -e "${DIM}================================================================${NC}"
-echo -e "Inside ${BOLD}Termux${NC}, run this one-liner to update and start:"
+echo -e "Inside ${BOLD}Termux${NC}, run this one-liner to install to \$PREFIX/bin and start:"
 echo -e ""
-echo -e "  ${ORANGE}${BOLD}pkill -f server; cp /sdcard/server ~/server && chmod +x ~/server && ~/server -f${NC}"
-echo -e ""
-echo -e "${DIM}Or copy from /sdcard/test/server:${NC}"
-echo -e "  ${DIM}cp /sdcard/test/server ~/server && chmod +x ~/server && ~/server -f${NC}\n"
+echo -e "  ${ORANGE}${BOLD}pkill -f agy_ide_bridge; cp /sdcard/agy_ide_bridge \$PREFIX/bin/agy_ide_bridge && chmod +x \$PREFIX/bin/agy_ide_bridge && agy_ide_bridge -f${NC}\n"
