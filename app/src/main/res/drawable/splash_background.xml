@@ -15,12 +15,5 @@
             android:dither="true"
             android:gravity="center" />
     </item>
-
-    <!-- Bottom AntiGem Brand Typography -->
-    <item
-        android:drawable="@drawable/splash_brand_name"
-        android:gravity="bottom|center_horizontal"
-        android:bottom="64dp"
-        android:width="160dp"
-        android:height="44dp" />
 </layer-list>
+
