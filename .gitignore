@@ -48,6 +48,7 @@ proto_generator/*.json
 .gemini/
 server_android
 agy_ide_bridge_android
+termux-app/
 agy_ide_bridge
 backup_bootstrap
 output/
