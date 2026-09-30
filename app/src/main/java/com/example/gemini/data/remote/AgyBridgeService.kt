@@ -448,24 +448,32 @@ class AgyBridgeService(
                 isBridgeConnected = true
                 try {
                     val root = JSONObject(text)
-                    if (root.optString("type") == "hub_status") {
-                        val st = root.optString("status", "idle")
-                        val p = root.optString("port").takeIf { it.isNotBlank() }
-                            ?: java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "8090"
-                        val csrf = root.optString("csrf_token").takeIf { it.isNotBlank() }
-                            ?: root.optString("csrfToken").takeIf { it.isNotBlank() }
-                        val err = root.optString("error").takeIf { it.isNotBlank() }
-                        val logsArr = root.optJSONArray("logs")
-                        val logsList = mutableListOf<String>()
-                        if (logsArr != null) {
-                            for (i in 0 until logsArr.length()) {
-                                logsList.add(logsArr.optString(i))
+                    when (root.optString("type")) {
+                        "auth_login_url" -> {
+                            val url = root.optString("url")
+                            if (url.isNotBlank()) {
+                                _loginUrlEvents.tryEmit(url)
                             }
                         }
+                        "hub_status" -> {
+                            val st = root.optString("status", "idle")
+                            val p = root.optString("port").takeIf { it.isNotBlank() }
+                                ?: java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "8090"
+                            val csrf = root.optString("csrf_token").takeIf { it.isNotBlank() }
+                                ?: root.optString("csrfToken").takeIf { it.isNotBlank() }
+                            val err = root.optString("error").takeIf { it.isNotBlank() }
+                            val logsArr = root.optJSONArray("logs")
+                            val logsList = mutableListOf<String>()
+                            if (logsArr != null) {
+                                for (i in 0 until logsArr.length()) {
+                                    logsList.add(logsArr.optString(i))
+                                }
+                            }
 
-                        val statusObj = AgyHubStatus(status = st, port = p, csrfToken = csrf, error = err, logs = logsList)
-                        updateHubStatus(statusObj)
-                        trySend(statusObj)
+                            val statusObj = AgyHubStatus(status = st, port = p, csrfToken = csrf, error = err, logs = logsList)
+                            updateHubStatus(statusObj)
+                            trySend(statusObj)
+                        }
                     }
                 } catch (_: Exception) {}
             }
