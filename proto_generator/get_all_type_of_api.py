@@ -191,9 +191,11 @@ def main():
     api_query = sys.argv[1].strip()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
+    repo_root = os.path.abspath(os.path.join(script_dir, ".."))
 
     search_paths = [
+        os.path.join(repo_root, "app", "src"),
+        os.path.join(repo_root, "proto_generator"),
         os.path.join(repo_root, "antiGem", "app", "src"),
         os.path.join(repo_root, "antiGem", "proto_generator")
     ]
