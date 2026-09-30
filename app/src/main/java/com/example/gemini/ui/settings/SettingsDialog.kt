@@ -52,8 +52,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.gemini.BuildConfig
+import com.example.gemini.data.updater.AppUpdateManager
+import com.example.gemini.data.updater.AppUpdateInfo
+import com.example.gemini.ui.updater.AppUpdateDialog
+import com.example.gemini.data.local.LocalServerManager
+import android.app.DownloadManager
+import android.widget.Toast
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class SettingsSection(val title: String, val subtitle: String) {
     MAIN("Settings & Preferences", "Configure your AntiGem experience"),
@@ -64,7 +75,8 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     AUTOMATION("Automation & Device Tools", "Browser & Terminal AI agent permissions"),
     TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling"),
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
-    DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD")
+    DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD"),
+    ABOUT("About & Info", "App version, package details, and bridge export")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -470,6 +482,11 @@ fun SettingsDialog(
                         cardBg = cardBg,
                         cardBorder = cardBorder
                     )
+
+                    SettingsSection.ABOUT -> AboutSubScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder
+                    )
                 }
             }
         }
@@ -647,6 +664,19 @@ private fun MainSettingsMenu(
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.DIAGNOSTICS) }
+        )
+
+        // Section 7: About & Info
+        SettingsCategoryCard(
+            icon = Icons.Outlined.Info,
+            iconTint = Color(0xFF8B5CF6),
+            title = "About & Info",
+            subtitle = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • ${BuildConfig.APPLICATION_ID}",
+            badgeText = "v${BuildConfig.VERSION_NAME}",
+            badgeColor = Color(0xFF8B5CF6),
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.ABOUT) }
         )
     }
 }
@@ -5778,6 +5808,563 @@ private fun DiagnosticsSubScreen(
     }
 }
 
+@Composable
+private fun AboutSubScreen(
+    cardBg: Color,
+    cardBorder: BorderStroke
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
+    var updateCheckResultText by remember { mutableStateOf<String?>(null) }
+    var isUpdateCheckError by remember { mutableStateOf(false) }
 
+    // Bridge file tracking in public Downloads directory
+    val downloadDir = remember { Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) }
+    val bridgeFile = remember { File(downloadDir, "agy_ide_bridge") }
+    var bridgeExists by remember { mutableStateOf(bridgeFile.exists() && bridgeFile.length() > 0) }
+    var bridgeSize by remember { mutableStateOf(if (bridgeFile.exists()) bridgeFile.length() else 0L) }
+    var bridgeLastModified by remember { mutableStateOf(if (bridgeFile.exists()) bridgeFile.lastModified() else 0L) }
+    var isExportingBridge by remember { mutableStateOf(false) }
 
+    fun refreshBridgeStatus() {
+        val f = File(downloadDir, "agy_ide_bridge")
+        bridgeExists = f.exists() && f.length() > 0
+        bridgeSize = if (f.exists()) f.length() else 0L
+        bridgeLastModified = if (f.exists()) f.lastModified() else 0L
+    }
 
+    if (updateInfo != null) {
+        AppUpdateDialog(
+            updateInfo = updateInfo!!,
+            onDismiss = { updateInfo = null }
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // 1. App Header & Branding Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF8B5CF6).copy(alpha = 0.15f),
+                    border = BorderStroke(1.5.dp, Color(0xFF8B5CF6).copy(alpha = 0.4f)),
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Outlined.Info,
+                            contentDescription = null,
+                            tint = Color(0xFF8B5CF6),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "AntiGem",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Antigravity Mobile Hub & AI Pair Programmer",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF8B5CF6).copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = "Version ${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = Color(0xFF8B5CF6),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+
+        // 2. Package & Environment Details
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Build & Package Information",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Application ID",
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = BuildConfig.APPLICATION_ID,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Build Type",
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = BuildConfig.BUILD_TYPE.uppercase(Locale.ROOT),
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Native Architecture",
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+
+        // 3. Updates Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.SystemUpdateAlt,
+                            contentDescription = null,
+                            tint = ClaudeTerracotta,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Software Updates",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Checks GitHub releases for new versions and downloads the matching APK directly.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 16.sp
+                )
+
+                if (updateCheckResultText != null) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isUpdateCheckError) Color(0xFFFF5252).copy(alpha = 0.12f) else QuotaGreen.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, if (isUpdateCheckError) Color(0xFFFF5252).copy(alpha = 0.3f) else QuotaGreen.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isUpdateCheckError) Icons.Default.Warning else Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = if (isUpdateCheckError) Color(0xFFFF5252) else QuotaGreen,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = updateCheckResultText!!,
+                                fontSize = 12.sp,
+                                color = if (isUpdateCheckError) Color(0xFFFF5252) else QuotaGreen
+                            )
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        if (!isCheckingUpdate) {
+                            isCheckingUpdate = true
+                            updateCheckResultText = null
+                            isUpdateCheckError = false
+                            coroutineScope.launch {
+                                val updateManager = AppUpdateManager(context)
+                                val checkResult = updateManager.checkForUpdates(forceCheck = true)
+                                isCheckingUpdate = false
+                                checkResult.onSuccess { info ->
+                                    if (info != null) {
+                                        updateInfo = info
+                                        updateCheckResultText = null
+                                    } else {
+                                        isUpdateCheckError = false
+                                        updateCheckResultText = "AntiGem is up to date (v${BuildConfig.VERSION_NAME})."
+                                        Toast.makeText(context, "AntiGem is up to date!", Toast.LENGTH_SHORT).show()
+                                    }
+                                }.onFailure { err ->
+                                    isUpdateCheckError = true
+                                    val msg = err.localizedMessage ?: "Could not connect to GitHub"
+                                    updateCheckResultText = msg
+                                    Toast.makeText(context, "Update check failed: $msg", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    },
+                    enabled = !isCheckingUpdate,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                ) {
+                    if (isCheckingUpdate) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Checking GitHub...")
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Check for Updates")
+                    }
+                }
+            }
+        }
+
+        // 4. AGY IDE Bridge Server & Downloads Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.FolderZip,
+                            contentDescription = null,
+                            tint = Color(0xFF00ACC1),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "AGY IDE Bridge Binary",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (bridgeExists) QuotaGreen.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = if (bridgeExists) "IN DOWNLOADS" else "NOT EXPORTED",
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (bridgeExists) QuotaGreen else Color.Gray,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Export the compiled agy_ide_bridge daemon binary to your device's public Download folder to execute in custom chroots, Termux environments, or external terminals.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 16.sp
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Path: ${bridgeFile.absolutePath}",
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                        )
+                        if (bridgeExists) {
+                            val sizeKb = bridgeSize / 1024
+                            val dateStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(bridgeLastModified))
+                            Text(
+                                text = "Size: $sizeKb KB • Modified: $dateStr",
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = QuotaGreen
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            isExportingBridge = true
+                            coroutineScope.launch(Dispatchers.IO) {
+                                val exported = LocalServerManager.saveBridgeToDownloads(context)
+                                withContext(Dispatchers.Main) {
+                                    isExportingBridge = false
+                                    refreshBridgeStatus()
+                                    if (exported != null && exported.exists()) {
+                                        Toast.makeText(context, "Saved agy_ide_bridge to Downloads!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Failed to export bridge binary", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isExportingBridge,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00ACC1))
+                    ) {
+                        if (isExportingBridge) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.FileDownload,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Export to Downloads", fontSize = 12.5.sp)
+                        }
+                    }
+
+                    if (bridgeExists) {
+                        OutlinedButton(
+                            onClick = {
+                                try {
+                                    val intent = Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Downloads: ${bridgeFile.absolutePath}", Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            modifier = Modifier.weight(0.7f),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, Color(0xFF00ACC1).copy(alpha = 0.5f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.OpenInNew,
+                                contentDescription = null,
+                                tint = Color(0xFF00ACC1),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("View File", fontSize = 12.5.sp, color = Color(0xFF00ACC1))
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. GitHub & External Links
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Resources & Repository",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/santoshkurmi/antigem"))
+                            context.startActivity(intent)
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Code,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "GitHub Repository",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "github.com/santoshkurmi/antigem",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/santoshkurmi/antigem/releases"))
+                            context.startActivity(intent)
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.History,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Release Changelogs",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "View tag notes & APK downloads",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

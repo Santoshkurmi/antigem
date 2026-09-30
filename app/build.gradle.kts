@@ -1,3 +1,16 @@
+import groovy.json.JsonSlurper
+
+val versionFile = rootProject.file("version.json")
+val parsedVersion = if (versionFile.exists()) {
+    @Suppress("UNCHECKED_CAST")
+    JsonSlurper().parseText(versionFile.readText()) as Map<String, Any>
+} else {
+    mapOf("version_code" to 1, "version_name" to "1.0.0")
+}
+
+val appVersionCode = (parsedVersion["version_code"] as? Number)?.toInt() ?: 1
+val appVersionName = (parsedVersion["version_name"] as? String) ?: "1.0.0"
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
@@ -12,8 +25,8 @@ android {
         applicationId = "com.antigem"
         minSdk = 24
         targetSdk = 28
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
 
     signingConfigs {
@@ -50,6 +63,11 @@ android {
             )
         }
     }
+
+    base {
+        archivesName.set("antiGem")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -63,7 +81,7 @@ android {
     buildFeatures {
       compose = true
       aidl = false
-      buildConfig = false
+      buildConfig = true
       shaders = false
     }
 

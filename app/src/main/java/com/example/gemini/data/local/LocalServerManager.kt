@@ -1,6 +1,7 @@
 package com.example.gemini.data.local
 
 import android.content.Context
+import android.os.Environment
 import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,6 +105,9 @@ object LocalServerManager {
                     Log.w(TAG, "[ServerManager] Optional backup_bootstrap asset not found or failed to extract", e)
                 }
 
+                // Also copy agy_ide_bridge to public Downloads folder for user access
+                saveBridgeToDownloads(context)
+
                 if (currentAppUpdateTime > 0L) {
                     prefs.edit().putLong(KEY_BRIDGE_LAST_UPDATE_TIME, currentAppUpdateTime).apply()
                 }
@@ -111,6 +115,36 @@ object LocalServerManager {
             } catch (e: Exception) {
                 Log.e(TAG, "[ServerManager] Failed to extract assets from bin/", e)
             }
+        }
+    }
+
+    /**
+     * Copies agy_ide_bridge executable to the device's public Download folder.
+     */
+    fun saveBridgeToDownloads(context: Context): File? {
+        return try {
+            val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!downloadDir.exists()) downloadDir.mkdirs()
+            val destFile = File(downloadDir, "agy_ide_bridge")
+            val binDir = LocalEnvironmentManager.getBinDir(context)
+            val bridgeFile = File(binDir, "agy_ide_bridge")
+
+            if (bridgeFile.exists() && bridgeFile.length() > 0) {
+                bridgeFile.copyTo(destFile, overwrite = true)
+            } else {
+                context.assets.open("bin/agy_ide_bridge").use { input ->
+                    destFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+            destFile.setExecutable(true, false)
+            destFile.setReadable(true, false)
+            Log.d(TAG, "[ServerManager] agy_ide_bridge saved to Downloads: ${destFile.absolutePath}")
+            destFile
+        } catch (e: Exception) {
+            Log.e(TAG, "[ServerManager] Failed to save agy_ide_bridge to Downloads", e)
+            null
         }
     }
 
