@@ -53,9 +53,28 @@ object LocalServerManager {
         }
     }
 
+    private fun extractAssetToBin(context: Context, binDir: File, assetName: String, targetFileName: String = assetName) {
+        val targetFile = File(binDir, targetFileName)
+        context.assets.open("bin/$assetName").use { input ->
+            val tempFile = File(binDir, "$targetFileName.tmp")
+            tempFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+            tempFile.setExecutable(true, false)
+            tempFile.setReadable(true, false)
+            if (targetFile.exists()) {
+                targetFile.delete()
+            }
+            tempFile.renameTo(targetFile)
+            targetFile.setExecutable(true, false)
+            targetFile.setReadable(true, false)
+        }
+    }
+
     private fun ensureBridgeBinary(context: Context) {
         val binDir = LocalEnvironmentManager.getBinDir(context)
-        val targetFile = File(binDir, "agy_ide_bridge")
+        val bridgeFile = File(binDir, "agy_ide_bridge")
+        val backupFile = File(binDir, "backup_bootstrap")
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val lastSavedUpdate = prefs.getLong(KEY_BRIDGE_LAST_UPDATE_TIME, 0L)
@@ -71,33 +90,26 @@ object LocalServerManager {
         }
         val currentAppUpdateTime = packageInfo?.lastUpdateTime ?: 0L
 
-        val needsCopy = !targetFile.exists() || (currentAppUpdateTime > 0L && currentAppUpdateTime != lastSavedUpdate)
+        val needsCopy = !bridgeFile.exists() || !backupFile.exists() || (currentAppUpdateTime > 0L && currentAppUpdateTime != lastSavedUpdate)
 
         if (needsCopy) {
             try {
-                context.assets.open("bin/agy_ide_bridge").use { input ->
-                    if (!binDir.exists()) {
-                        binDir.mkdirs()
-                    }
-                    val tempFile = File(binDir, "agy_ide_bridge.tmp")
-                    tempFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                    tempFile.setExecutable(true, false)
-                    tempFile.setReadable(true, false)
-                    if (targetFile.exists()) {
-                        targetFile.delete()
-                    }
-                    tempFile.renameTo(targetFile)
-                    targetFile.setExecutable(true, false)
-                    targetFile.setReadable(true, false)
+                if (!binDir.exists()) {
+                    binDir.mkdirs()
                 }
+                extractAssetToBin(context, binDir, "agy_ide_bridge")
+                try {
+                    extractAssetToBin(context, binDir, "backup_bootstrap")
+                } catch (e: Exception) {
+                    Log.w(TAG, "[ServerManager] Optional backup_bootstrap asset not found or failed to extract", e)
+                }
+
                 if (currentAppUpdateTime > 0L) {
                     prefs.edit().putLong(KEY_BRIDGE_LAST_UPDATE_TIME, currentAppUpdateTime).apply()
                 }
-                Log.d(TAG, "[ServerManager] Successfully extracted agy_ide_bridge asset to ${targetFile.absolutePath}")
+                Log.d(TAG, "[ServerManager] Successfully extracted assets to ${binDir.absolutePath}")
             } catch (e: Exception) {
-                Log.e(TAG, "[ServerManager] Failed to extract agy_ide_bridge from assets", e)
+                Log.e(TAG, "[ServerManager] Failed to extract assets from bin/", e)
             }
         }
     }

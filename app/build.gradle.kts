@@ -204,8 +204,15 @@ val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
   commandLine("go", "build", "-ldflags=-s -w", "-o", binDir.file("agy_ide_bridge").asFile.absolutePath, "main.go")
 }
 
-tasks.named("preBuild") {
-  dependsOn(buildAgyIdeBridge)
+val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
+  from(layout.projectDirectory.file("../scripts/backup_bootstrap.sh"))
+  into(layout.projectDirectory.dir("src/main/assets/bin"))
+  rename { "backup_bootstrap" }
 }
+
+tasks.named("preBuild") {
+  dependsOn(buildAgyIdeBridge, copyScriptsToAssets)
+}
+
 
 
