@@ -13,7 +13,7 @@ import exa.language_server_pb.DeleteMediaArtifactRequest
 import exa.language_server_pb.GetAllSkillsRequest
 import exa.language_server_pb.JetboxSubscribeToStateRequest
 import exa.language_server_pb.JetboxWriteStateRequest
-import exa.language_server_pb.Jetbox_state_pb_UserSettings
+import exa.language_server_pb.JetboxState_UserSettings
 import exa.language_server_pb.Media
 import exa.language_server_pb.PermissionGrants
 import exa.language_server_pb.PermissionGrantsConfig
@@ -55,22 +55,23 @@ class AgyProjectService {
     /**
      * Fetches all registered skills directly from AGY Hub via GetAllSkills RPC.
      */
-    suspend fun fetchAllSkills(hubUrl: String = AuthPreferences.currentHubUrl): Result<List<SkillItem>> = withContext(Dispatchers.IO) {
-        val req = GetAllSkillsRequest()
-        AgyLanguageService.GetAllSkills().executeSafely(req).map { res ->
-            res.skills.mapNotNull { spec ->
-                if (spec.name.isNotBlank()) {
-                    SkillItem(
-                        name = spec.name,
-                        description = spec.description,
-                        path = spec.path,
-                        pluginName = spec.plugin_name.takeIf { it.isNotBlank() },
-                        content = spec.content
-                    )
-                } else null
+    suspend fun fetchAllSkills(hubUrl: String = AuthPreferences.currentHubUrl): Result<List<SkillItem>> =
+        withContext(Dispatchers.IO) {
+            val req = GetAllSkillsRequest()
+            AgyLanguageService.GetAllSkills().executeSafely(req).map { res ->
+                res.skills.mapNotNull { spec ->
+                    if (spec.name.isNotBlank()) {
+                        SkillItem(
+                            name = spec.name,
+                            description = spec.description,
+                            path = spec.path,
+                            pluginName = spec.plugin_name.takeIf { it.isNotBlank() },
+                            content = spec.content
+                        )
+                    } else null
+                }
             }
         }
-    }
 
     /**
      * Reads a file via LanguageServerService/ReadFile RPC.
@@ -102,7 +103,8 @@ class AgyProjectService {
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> = withContext(Dispatchers.IO) {
         val rawBytes = base64Data.decodeBase64() ?: ByteString.EMPTY
-        val thumbBytes = if (thumbnailBase64.isNotBlank()) thumbnailBase64.decodeBase64() ?: ByteString.EMPTY else ByteString.EMPTY
+        val thumbBytes =
+            if (thumbnailBase64.isNotBlank()) thumbnailBase64.decodeBase64() ?: ByteString.EMPTY else ByteString.EMPTY
         val req = SaveMediaAsArtifactRequest(
             media = Media(
                 mime_type = mimeType,
@@ -131,48 +133,49 @@ class AgyProjectService {
      * Fetches live daemon user settings snapshot by subscribing to JetboxSubscribeToState
      * and reading the very first frame pushed by the daemon.
      */
-    suspend fun fetchGlobalUserSettings(hubUrl: String = AuthPreferences.currentHubUrl): Result<GlobalUserSettings> = withContext(Dispatchers.IO) {
-        try {
-            val update = withTimeoutOrNull(5000L) {
-                AgyLanguageService.JetboxSubscribeToState()
-                    .asFlowSafely(JetboxSubscribeToStateRequest())
-                    .firstOrNull()
-            } ?: return@withContext Result.failure(Exception("JetboxSubscribeToState timeout"))
+    suspend fun fetchGlobalUserSettings(hubUrl: String = AuthPreferences.currentHubUrl): Result<GlobalUserSettings> =
+        withContext(Dispatchers.IO) {
+            try {
+                val update = withTimeoutOrNull(5000L) {
+                    AgyLanguageService.JetboxSubscribeToState()
+                        .asFlowSafely(JetboxSubscribeToStateRequest())
+                        .firstOrNull()
+                } ?: return@withContext Result.failure(Exception("JetboxSubscribeToState timeout"))
 
-            val userSettings = update.user_config?.user_settings ?: update.state?.user_settings
+                val userSettings = update.user_config?.user_settings ?: update.state?.user_settings
 
-            val autoExec = userSettings?.auto_execution_policy?.name ?: "CASCADE_COMMANDS_AUTO_EXECUTION_OFF"
-            val fileAccess = if (userSettings?.allow_agent_access_non_workspace_files == true) {
-                "AGENT_SETTING_POLICY_ALLOW"
-            } else {
-                "AGENT_SETTING_POLICY_ASK"
-            }
-            val artifactReview = userSettings?.artifact_review_mode?.name ?: "ARTIFACT_REVIEW_MODE_ALWAYS"
-            val sandbox = userSettings?.enable_terminal_sandbox ?: false
+                val autoExec = userSettings?.auto_execution_policy?.name ?: "CASCADE_COMMANDS_AUTO_EXECUTION_OFF"
+                val fileAccess = if (userSettings?.allow_agent_access_non_workspace_files == true) {
+                    "AGENT_SETTING_POLICY_ALLOW"
+                } else {
+                    "AGENT_SETTING_POLICY_ASK"
+                }
+                val artifactReview = userSettings?.artifact_review_mode?.name ?: "ARTIFACT_REVIEW_MODE_ALWAYS"
+                val sandbox = userSettings?.enable_terminal_sandbox ?: false
 
-            val grants = userSettings?.global_permission_grants
-            val allowList = grants?.allow ?: emptyList()
-            val denyList = grants?.deny ?: emptyList()
-            val askList = grants?.ask ?: emptyList()
+                val grants = userSettings?.global_permission_grants
+                val allowList = grants?.allow ?: emptyList()
+                val denyList = grants?.deny ?: emptyList()
+                val askList = grants?.ask ?: emptyList()
 
-            Result.success(
-                GlobalUserSettings(
-                    autoExecutionPolicy = autoExec,
-                    nonWorkspaceFileAccessPolicy = fileAccess,
-                    artifactReviewMode = artifactReview,
-                    enableTerminalSandbox = sandbox,
-                    globalPermissionGrants = GlobalPermissionGrants(
-                        allow = allowList,
-                        deny = denyList,
-                        ask = askList
+                Result.success(
+                    GlobalUserSettings(
+                        autoExecutionPolicy = autoExec,
+                        nonWorkspaceFileAccessPolicy = fileAccess,
+                        artifactReviewMode = artifactReview,
+                        enableTerminalSandbox = sandbox,
+                        globalPermissionGrants = GlobalPermissionGrants(
+                            allow = allowList,
+                            deny = denyList,
+                            ask = askList
+                        )
                     )
                 )
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "fetchGlobalUserSettings failed: ${e.message}")
-            Result.failure(e)
+            } catch (e: Exception) {
+                Log.e(TAG, "fetchGlobalUserSettings failed: ${e.message}")
+                Result.failure(e)
+            }
         }
-    }
 
     /**
      * Updates daemon user settings via JetboxWriteState
@@ -197,8 +200,9 @@ class AgyProjectService {
             )
         }
 
-        val userSettings = Jetbox_state_pb_UserSettings(
-            auto_execution_policy = autoExecEnum ?: CascadeCommandsAutoExecution.CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED,
+        val userSettings = JetboxState_UserSettings(
+            auto_execution_policy = autoExecEnum
+                ?: CascadeCommandsAutoExecution.CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED,
             artifact_review_mode = artifactReviewEnum ?: ArtifactReviewMode.ARTIFACT_REVIEW_MODE_UNSPECIFIED,
             allow_agent_access_non_workspace_files = allowNonWorkspace ?: false,
             enable_terminal_sandbox = enableTerminalSandbox ?: false,
@@ -214,61 +218,62 @@ class AgyProjectService {
     /**
      * Discovers all projects registered in the daemon via ProjectUpdatesStream and ReadProjects.
      */
-    suspend fun fetchAllProjects(hubUrl: String = AuthPreferences.currentHubUrl): Result<List<ProjectItem>> = withContext(Dispatchers.IO) {
-        try {
-            val update = withTimeoutOrNull(5000L) {
-                AgyLanguageService.ProjectUpdatesStream()
-                    .asFlowSafely(ProjectUpdatesStreamRequest())
-                    .firstOrNull()
-            }
-
-            val projectIds = update?.project_list?.project_ids?.ifEmpty {
-                listOf("default-cli-project", "outside-of-project")
-            } ?: listOf("default-cli-project", "outside-of-project")
-
-            val req = ReadProjectsRequest(ids = projectIds)
-            val readRes = AgyLanguageService.ReadProjects().executeSafely(req)
-            if (readRes.isFailure) {
-                return@withContext Result.failure(readRes.exceptionOrNull() ?: Exception("ReadProjects failed"))
-            }
-
-            val projects = readRes.getOrThrow().projects
-            val items = projects.map { p ->
-                val pid = p.id
-                val name = p.name.ifBlank { pid }
-                val settings = p.settings
-                val autoExec = settings?.auto_execution_policy?.name?.takeIf {
-                    it.isNotBlank() && it != "CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED"
+    suspend fun fetchAllProjects(hubUrl: String = AuthPreferences.currentHubUrl): Result<List<ProjectItem>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val update = withTimeoutOrNull(5000L) {
+                    AgyLanguageService.ProjectUpdatesStream()
+                        .asFlowSafely(ProjectUpdatesStreamRequest())
+                        .firstOrNull()
                 }
-                val fileAccess = settings?.file_access_policy?.name?.takeIf {
-                    it.isNotBlank() && it != "AGENT_SETTING_POLICY_UNSPECIFIED"
-                }
-                val artifactReview = settings?.artifact_review_mode?.name?.takeIf {
-                    it.isNotBlank() && it != "ARTIFACT_REVIEW_MODE_UNSPECIFIED"
-                }
-                val sandbox = settings?.sandbox_mode
 
-                val isInheriting = settings == null || (
-                    autoExec == null && fileAccess == null && artifactReview == null && sandbox == null
-                )
+                val projectIds = update?.project_list?.project_ids?.ifEmpty {
+                    listOf("default-cli-project", "outside-of-project")
+                } ?: listOf("default-cli-project", "outside-of-project")
 
-                ProjectItem(
-                    id = pid,
-                    name = name,
-                    autoExecutionPolicy = autoExec,
-                    fileAccessPolicy = fileAccess,
-                    artifactReviewMode = artifactReview,
-                    sandboxMode = sandbox,
-                    isInheritingGlobal = isInheriting
-                )
+                val req = ReadProjectsRequest(ids = projectIds)
+                val readRes = AgyLanguageService.ReadProjects().executeSafely(req)
+                if (readRes.isFailure) {
+                    return@withContext Result.failure(readRes.exceptionOrNull() ?: Exception("ReadProjects failed"))
+                }
+
+                val projects = readRes.getOrThrow().projects
+                val items = projects.map { p ->
+                    val pid = p.id
+                    val name = p.name.ifBlank { pid }
+                    val settings = p.settings
+                    val autoExec = settings?.auto_execution_policy?.name?.takeIf {
+                        it.isNotBlank() && it != "CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED"
+                    }
+                    val fileAccess = settings?.file_access_policy?.name?.takeIf {
+                        it.isNotBlank() && it != "AGENT_SETTING_POLICY_UNSPECIFIED"
+                    }
+                    val artifactReview = settings?.artifact_review_mode?.name?.takeIf {
+                        it.isNotBlank() && it != "ARTIFACT_REVIEW_MODE_UNSPECIFIED"
+                    }
+                    val sandbox = settings?.sandbox_mode
+
+                    val isInheriting = settings == null || (
+                            autoExec == null && fileAccess == null && artifactReview == null && sandbox == null
+                            )
+
+                    ProjectItem(
+                        id = pid,
+                        name = name,
+                        autoExecutionPolicy = autoExec,
+                        fileAccessPolicy = fileAccess,
+                        artifactReviewMode = artifactReview,
+                        sandboxMode = sandbox,
+                        isInheritingGlobal = isInheriting
+                    )
+                }
+
+                Result.success(items)
+            } catch (e: Exception) {
+                Log.e(TAG, "fetchAllProjects error: ${e.message}")
+                Result.failure(e)
             }
-
-            Result.success(items)
-        } catch (e: Exception) {
-            Log.e(TAG, "fetchAllProjects error: ${e.message}")
-            Result.failure(e)
         }
-    }
 
     /**
      * Updates a specific project's settings via UpdateProject RPC.
@@ -297,7 +302,8 @@ class AgyProjectService {
             null
         } else {
             ProjectSettings(
-                auto_execution_policy = autoExecEnum ?: CascadeCommandsAutoExecution.CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED,
+                auto_execution_policy = autoExecEnum
+                    ?: CascadeCommandsAutoExecution.CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED,
                 file_access_policy = fileAccessEnum ?: AgentSettingPolicy.AGENT_SETTING_POLICY_UNSPECIFIED,
                 artifact_review_mode = artifactReviewEnum ?: ArtifactReviewMode.ARTIFACT_REVIEW_MODE_UNSPECIFIED,
                 sandbox_mode = sandboxMode ?: false
@@ -319,5 +325,9 @@ class AgyProjectService {
     }
 
     private inline fun <reified T : Enum<T>> safeValueOf(name: String): T? =
-        try { enumValueOf<T>(name) } catch (_: Exception) { null }
+        try {
+            enumValueOf<T>(name)
+        } catch (_: Exception) {
+            null
+        }
 }

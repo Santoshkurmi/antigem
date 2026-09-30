@@ -310,11 +310,39 @@ def scan_all_descriptors(binary_path=None):
 #      This is 100% deterministic and requires zero guessing.
 # ---------------------------------------------------------------------------
 
-def assign_display_names(full_names):
+def get_clean_package_prefix(full_name, current_package):
+    """
+    Extract a clean 1-2 word CamelCase package prefix from full_name.
+    Strips noise like .exa., _pb, .v1, etc.
+    """
+    parts = [p for p in full_name.strip('.').split('.')[:-1] if p]
+    filtered = []
+    for p in parts:
+        p_clean = p.replace('_pb', '').replace('pb', '')
+        if p_clean in ['exa', 'proto', 'protos', 'v1', 'v1internal', 'internal']:
+            continue
+        filtered.append(p_clean)
+
+    if not filtered:
+        return "Internal"
+
+    # CamelCase each piece: e.g. "codeium_common" -> "CodeiumCommon"
+    clean_parts = []
+    for f in filtered[-2:]:  # take at most last 2 distinguishing package elements
+        clean = "".join(w.capitalize() for w in f.split('_') if w)
+        if clean:
+            clean_parts.append(clean)
+
+    return "".join(clean_parts) or "Internal"
+
+def assign_display_names(full_names, current_package=None):
     """
     Given a collection of fully-qualified type names, return a dict
     mapping each full name → a unique display name.
-    Short leaf names are preferred; collisions get the full-path name.
+    If multiple types share a leaf name:
+      - The type native to current_package keeps the plain leaf name.
+      - Other colliding types get a clean package prefix (e.g. CodeiumCommon_UserSettings).
+      - If multiple non-native types collide on the same prefix, a deterministic counter is added.
     """
     from collections import defaultdict
     leaf_to_fulls = defaultdict(list)
@@ -325,13 +353,42 @@ def assign_display_names(full_names):
     display = {}
     for leaf, fulls in leaf_to_fulls.items():
         if len(fulls) == 1:
-            # No collision — use the short leaf name
+            # No collision — use the clean short leaf name
             display[fulls[0]] = leaf
         else:
-            # Collision — every one of them gets the full-path name
-            for fn in fulls:
-                # e.g. ".gemini_coder.Step" → "gemini_coder_Step"
-                display[fn] = fn.lstrip('.').replace('.', '_')
+            # Collision across packages
+            # Check if one belongs directly to current_package or its primary parent
+            native_match = None
+            if current_package:
+                for fn in fulls:
+                    if fn.startswith(f".{current_package}.") or fn.startswith(f".{current_package.split('.')[0]}."):
+                        native_match = fn
+                        break
+
+            # If no direct match, sort deterministically
+            sorted_fulls = sorted(fulls)
+            if not native_match:
+                native_match = sorted_fulls[0]
+
+            display[native_match] = leaf
+            used_names = {leaf}
+
+            for fn in sorted_fulls:
+                if fn == native_match:
+                    continue
+                prefix = get_clean_package_prefix(fn, current_package)
+                candidate_name = f"{prefix}_{leaf}"
+                
+                # Deduplicate prefix if multiple packages share the same clean prefix
+                final_name = candidate_name
+                count = 2
+                while final_name in used_names:
+                    final_name = f"{candidate_name}{count}"
+                    count += 1
+
+                used_names.add(final_name)
+                display[fn] = final_name
+
     return display
 
 # ---------------------------------------------------------------------------
@@ -418,8 +475,8 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
         #   Message and enum name spaces are kept separate so an enum and
         #   a message can share a leaf name without conflict.
         # ------------------------------------------------------------------
-        msg_display  = assign_display_names(resolved_messages.keys())
-        enum_display = assign_display_names(resolved_enums.keys())
+        msg_display  = assign_display_names(resolved_messages.keys(), package_name)
+        enum_display = assign_display_names(resolved_enums.keys(), package_name)
 
         # If a message and an enum share the SAME display name, suffix the enum
         msg_display_values = set(msg_display.values())
