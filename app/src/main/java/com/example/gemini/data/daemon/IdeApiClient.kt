@@ -71,6 +71,12 @@ data class FileNode(
     val children: List<FileNode> = emptyList()
 )
 
+data class FileReadResult(
+    val content: String,
+    val category: String = "text", // "text", "image", "binary"
+    val mimeType: String = "text/plain"
+)
+
 data class SearchMatch(
     val path: String,
     val lineNumber: Int,
@@ -338,13 +344,18 @@ object IdeApiClient {
         return list
     }
 
-    suspend fun readFile(path: String): String? = withContext(Dispatchers.IO) {
+    suspend fun readFileDetailed(path: String): FileReadResult? = withContext(Dispatchers.IO) {
         try {
             val url = "$baseUrl/api/file/read?path=${java.net.URLEncoder.encode(path, "UTF-8")}"
             val request = Request.Builder().url(url).get().build()
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
-                    response.body?.string()
+                    val bodyStr = response.body?.string() ?: ""
+                    val category = response.header("X-File-Category") ?: run {
+                        if (bodyStr.contains('\u0000')) "binary" else "text"
+                    }
+                    val mime = response.header("X-File-Mime") ?: response.header("Content-Type") ?: "text/plain"
+                    FileReadResult(content = bodyStr, category = category, mimeType = mime)
                 } else null
             }
         } catch (e: Exception) {
@@ -352,6 +363,8 @@ object IdeApiClient {
             null
         }
     }
+
+    suspend fun readFile(path: String): String? = readFileDetailed(path)?.content
 
     suspend fun saveFileDetailed(
         path: String,

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
+	"unicode/utf8"
 )
 
 type ProjectItem struct {
@@ -455,21 +458,12 @@ func main() {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		ext := strings.ToLower(filepath.Ext(path))
-		switch ext {
-		case ".svg":
-			w.Header().Set("Content-Type", "image/svg+xml")
-		case ".png":
-			w.Header().Set("Content-Type", "image/png")
-		case ".jpg", ".jpeg":
-			w.Header().Set("Content-Type", "image/jpeg")
-		case ".webp":
-			w.Header().Set("Content-Type", "image/webp")
-		case ".gif":
-			w.Header().Set("Content-Type", "image/gif")
-		default:
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		}
+
+		category, mimeType := detectFileCategoryAndMime(content)
+		w.Header().Set("Content-Type", mimeType)
+		w.Header().Set("X-File-Category", category)
+		w.Header().Set("X-File-Mime", mimeType)
+		w.Header().Set("Access-Control-Expose-Headers", "X-File-Category, X-File-Mime, Content-Type")
 		w.Write(content)
 	}))
 
@@ -757,3 +751,30 @@ func copyRecursive(src, dst string) error {
 	}
 	return os.WriteFile(dst, data, 0644)
 }
+
+func detectFileCategoryAndMime(data []byte) (category string, mime string) {
+	if len(data) == 0 {
+		return "text", "text/plain; charset=utf-8"
+	}
+
+	sample := data
+	if len(sample) > 4096 {
+		sample = sample[:4096]
+	}
+
+	detectedMime := http.DetectContentType(sample)
+
+	// 1. Check for image
+	if strings.HasPrefix(detectedMime, "image/") || strings.Contains(detectedMime, "svg") {
+		return "image", detectedMime
+	}
+
+	// 2. Check for text: zero null bytes and valid UTF-8
+	if bytes.IndexByte(sample, 0) == -1 && utf8.Valid(sample) {
+		return "text", detectedMime
+	}
+
+	// 3. Otherwise binary
+	return "binary", detectedMime
+}
+

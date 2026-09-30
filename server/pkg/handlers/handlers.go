@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/hub"
@@ -836,35 +838,39 @@ func (h *Handler) FileReadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ext := strings.ToLower(filepath.Ext(path))
-	switch ext {
-	case ".svg":
-		w.Header().Set("Content-Type", "image/svg+xml")
-	case ".png":
-		w.Header().Set("Content-Type", "image/png")
-	case ".jpg", ".jpeg":
-		w.Header().Set("Content-Type", "image/jpeg")
-	case ".webp":
-		w.Header().Set("Content-Type", "image/webp")
-	case ".gif":
-		w.Header().Set("Content-Type", "image/gif")
-	case ".json":
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	case ".html", ".htm":
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	case ".m4a", ".mp4":
-		w.Header().Set("Content-Type", "audio/mp4")
-	case ".mp3":
-		w.Header().Set("Content-Type", "audio/mpeg")
-	case ".wav":
-		w.Header().Set("Content-Type", "audio/wav")
-	case ".ogg":
-		w.Header().Set("Content-Type", "audio/ogg")
-	default:
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	}
+	category, mimeType := detectFileCategoryAndMime(content)
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("X-File-Category", category)
+	w.Header().Set("X-File-Mime", mimeType)
+	w.Header().Set("Access-Control-Expose-Headers", "X-File-Category, X-File-Mime, Content-Type")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Write(content)
+}
+
+func detectFileCategoryAndMime(data []byte) (category string, mime string) {
+	if len(data) == 0 {
+		return "text", "text/plain; charset=utf-8"
+	}
+
+	sample := data
+	if len(sample) > 4096 {
+		sample = sample[:4096]
+	}
+
+	detectedMime := http.DetectContentType(sample)
+
+	// 1. Check for image
+	if strings.HasPrefix(detectedMime, "image/") || strings.Contains(detectedMime, "svg") {
+		return "image", detectedMime
+	}
+
+	// 2. Check for text: zero null bytes and valid UTF-8
+	if bytes.IndexByte(sample, 0) == -1 && utf8.Valid(sample) {
+		return "text", detectedMime
+	}
+
+	// 3. Otherwise binary
+	return "binary", detectedMime
 }
 
 func (h *Handler) FileSaveHandler(w http.ResponseWriter, r *http.Request) {

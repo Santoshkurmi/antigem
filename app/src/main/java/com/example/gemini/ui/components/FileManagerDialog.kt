@@ -115,6 +115,7 @@ fun FileManagerDialog(
     var showNewProjectDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf<FsItemNode?>(null) }
     var showDeleteConfirmDialog by remember { mutableStateOf<FsItemNode?>(null) }
+    var showDetailsDialog by remember { mutableStateOf<FsItemNode?>(null) }
     var showItemOptionsSheet by remember { mutableStateOf<FsItemNode?>(null) }
 
     var inputName by remember { mutableStateOf("") }
@@ -1054,6 +1055,15 @@ fun FileManagerDialog(
                 )
 
                 ListItem(
+                    headlineContent = { Text("Details") },
+                    leadingContent = { Icon(Icons.Default.Info, contentDescription = null) },
+                    modifier = Modifier.clickable {
+                        showDetailsDialog = item
+                        showItemOptionsSheet = null
+                    }
+                )
+
+                ListItem(
                     headlineContent = { Text("Delete", color = MaterialTheme.colorScheme.error) },
                     leadingContent = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                     modifier = Modifier.clickable {
@@ -1065,6 +1075,18 @@ fun FileManagerDialog(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+
+    // 7. Details Dialog
+    showDetailsDialog?.let { item ->
+        FileDetailsDialog(
+            name = item.name,
+            path = item.path,
+            isDir = item.isDir,
+            size = item.size,
+            modTime = item.modTime,
+            onDismiss = { showDetailsDialog = null }
+        )
     }
 }
 

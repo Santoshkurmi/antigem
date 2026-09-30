@@ -235,6 +235,17 @@ object TermuxDaemonManager {
         }
     }
 
+    fun renameTab(oldPath: String, newPath: String, newName: String) {
+        _openTabs.value = _openTabs.value.map { tab ->
+            if (tab.path == oldPath) {
+                tab.copy(path = newPath, name = newName)
+            } else tab
+        }
+        if (_activeTabPath.value == oldPath) {
+            _activeTabPath.value = newPath
+        }
+    }
+
     fun openOrSelectTab(path: String, name: String, content: String, hash: String = "", isReadOnly: Boolean = false, isExternal: Boolean = false) {
         val existing = _openTabs.value.find { it.path == path }
         val finalHash = hash.ifBlank { computeSha256(content) }

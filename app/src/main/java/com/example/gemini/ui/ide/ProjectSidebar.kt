@@ -44,6 +44,7 @@ fun ProjectSidebar(
     onOpenFile: (FileNode) -> Unit,
     onOpenFileDiff: (filePath: String, isStaged: Boolean) -> Unit = { _, _ -> },
     onCreateFile: (parentPath: String, name: String, isDir: Boolean) -> Unit,
+    onRenameFile: (oldPath: String, newPath: String) -> Unit = { _, _ -> },
     onDeleteFile: (path: String) -> Unit,
     onRefreshTree: () -> Unit,
     modifier: Modifier = Modifier
@@ -53,6 +54,9 @@ fun ProjectSidebar(
     var showCreateFileDialog by remember { mutableStateOf<String?>(null) } // parentPath
     var isNewFolderMode by remember { mutableStateOf(false) }
     var newItemName by remember { mutableStateOf("") }
+    var showRenameDialog by remember { mutableStateOf<FileNode?>(null) }
+    var showDeleteDialog by remember { mutableStateOf<FileNode?>(null) }
+    var showDetailsDialog by remember { mutableStateOf<FileNode?>(null) }
     val daemonStatus by com.example.gemini.data.daemon.TermuxDaemonManager.status.collectAsState()
 
     Column(
@@ -422,7 +426,15 @@ fun ProjectSidebar(
                                 isNewFolderMode = isDir
                                 showCreateFileDialog = parentPath
                             },
-                            onDeleteFile = onDeleteFile
+                            onRenameRequested = { targetNode ->
+                                showRenameDialog = targetNode
+                            },
+                            onDetailsRequested = { targetNode ->
+                                showDetailsDialog = targetNode
+                            },
+                            onDeleteRequested = { targetNode ->
+                                showDeleteDialog = targetNode
+                            }
                         )
                     }
                 }
@@ -430,46 +442,28 @@ fun ProjectSidebar(
         }
     }
 
-    // --- Create File / Folder Dialog ---
+    // --- 1. Create File / Folder Dialog ---
     if (showCreateFileDialog != null) {
         AlertDialog(
             onDismissRequest = { showCreateFileDialog = null },
-            title = { Text(if (isNewFolderMode) "Create Folder" else "Create File") },
+            icon = {
+                Icon(
+                    imageVector = if (isNewFolderMode) Icons.Default.CreateNewFolder else Icons.Default.NoteAdd,
+                    contentDescription = null,
+                    tint = ClaudeTerracotta,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = { Text(if (isNewFolderMode) "Create Folder" else "Create File", fontWeight = FontWeight.Bold) },
             text = {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                OutlinedTextField(
+                    value = newItemName,
+                    onValueChange = { newItemName = it },
+                    label = { Text(if (isNewFolderMode) "Folder Name" else "File Name") },
+                    placeholder = { Text(if (isNewFolderMode) "e.g. components" else "e.g. utils.py") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    androidx.compose.foundation.text.BasicTextField(
-                        value = newItemName,
-                        onValueChange = { newItemName = it },
-                        singleLine = true,
-                        textStyle = androidx.compose.ui.text.TextStyle(
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 13.5.sp,
-                            lineHeight = 18.sp
-                        ),
-                        cursorBrush = androidx.compose.ui.graphics.SolidColor(ClaudeTerracotta),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        decorationBox = { innerTextField ->
-                            Box(contentAlignment = Alignment.CenterStart) {
-                                if (newItemName.isEmpty()) {
-                                    Text(
-                                        text = if (isNewFolderMode) "e.g. components" else "e.g. utils.py",
-                                        fontSize = 13.5.sp,
-                                        lineHeight = 18.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        }
-                    )
-                }
+                )
             },
             confirmButton = {
                 Button(
@@ -482,7 +476,8 @@ fun ProjectSidebar(
                             showCreateFileDialog = null
                         }
                     },
-                    enabled = newItemName.isNotBlank()
+                    enabled = newItemName.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                 ) {
                     Text("Create")
                 }
@@ -494,6 +489,116 @@ fun ProjectSidebar(
             }
         )
     }
+
+    // --- 2. Rename Dialog ---
+    showRenameDialog?.let { node ->
+        var renameInput by remember(node) { mutableStateOf(node.name) }
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.DriveFileRenameOutline,
+                    contentDescription = null,
+                    tint = ClaudeTerracotta,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Rename ${if (node.isDir) "Folder" else "File"}",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = renameInput,
+                    onValueChange = { renameInput = it },
+                    label = { Text("New Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = renameInput.trim()
+                        if (trimmed.isNotBlank() && trimmed != node.name) {
+                            val parent = java.io.File(node.path).parent ?: ""
+                            val newPath = if (parent.isNotBlank()) "$parent/$trimmed" else trimmed
+                            showRenameDialog = null
+                            onRenameFile(node.path, newPath)
+                        }
+                    },
+                    enabled = renameInput.trim().isNotBlank() && renameInput.trim() != node.name,
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                ) {
+                    Text("Rename")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // --- 3. Delete Confirmation Dialog ---
+    showDeleteDialog?.let { node ->
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.DeleteForever,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(30.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Delete ${if (node.isDir) "Folder" else "File"}?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to permanently delete \"${node.name}\"? This action cannot be undone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val path = node.path
+                        showDeleteDialog = null
+                        onDeleteFile(path)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // --- 4. File / Folder Details Dialog ---
+    showDetailsDialog?.let { node ->
+        com.example.gemini.ui.components.FileDetailsDialog(
+            name = node.name,
+            path = node.path,
+            isDir = node.isDir,
+            size = node.size,
+            childCount = if (node.isDir) node.children.size else null,
+            onDismiss = { showDetailsDialog = null }
+        )
+    }
 }
 
 @Composable
@@ -503,7 +608,9 @@ fun FileTreeNodeItem(
     activeFilePath: String?,
     onOpenFile: (FileNode) -> Unit,
     onCreateChildFile: (parentPath: String, isDir: Boolean) -> Unit,
-    onDeleteFile: (path: String) -> Unit
+    onRenameRequested: (FileNode) -> Unit,
+    onDetailsRequested: (FileNode) -> Unit,
+    onDeleteRequested: (FileNode) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -586,26 +693,81 @@ fun FileTreeNodeItem(
             ) {
                 if (node.isDir) {
                     DropdownMenuItem(
-                        text = { Text("+ New File") },
+                        text = { Text("New File") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.NoteAdd,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
                         onClick = {
                             menuExpanded = false
                             onCreateChildFile(node.path, false)
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("+ New Folder") },
+                        text = { Text("New Folder") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.CreateNewFolder,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
                         onClick = {
                             menuExpanded = false
                             onCreateChildFile(node.path, true)
                         }
                     )
-                    Divider()
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                 }
                 DropdownMenuItem(
-                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    text = { Text("Rename") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.DriveFileRenameOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
                     onClick = {
                         menuExpanded = false
-                        onDeleteFile(node.path)
+                        onRenameRequested(node)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Details") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onDetailsRequested(node)
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                DropdownMenuItem(
+                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onDeleteRequested(node)
                     }
                 )
             }
@@ -619,7 +781,9 @@ fun FileTreeNodeItem(
                     activeFilePath = activeFilePath,
                     onOpenFile = onOpenFile,
                     onCreateChildFile = onCreateChildFile,
-                    onDeleteFile = onDeleteFile
+                    onRenameRequested = onRenameRequested,
+                    onDetailsRequested = onDetailsRequested,
+                    onDeleteRequested = onDeleteRequested
                 )
             }
         }

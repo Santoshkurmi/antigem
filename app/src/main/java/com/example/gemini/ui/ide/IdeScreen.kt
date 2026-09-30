@@ -214,6 +214,7 @@ fun IdeScreen(
     val isImageFile = activeExt in listOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "ico")
     val isSvgFile = activeExt == "svg"
     var showSvgSource by remember(activeTabPath) { mutableStateOf(false) }
+    var binaryWarningDialog by remember { mutableStateOf<BinaryWarningTab?>(null) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
@@ -250,9 +251,26 @@ fun IdeScreen(
                     },
                     onOpenFile = { node ->
                         coroutineScope.launch {
-                            val content = IdeApiClient.readFile(node.path) ?: ""
-                            TermuxDaemonManager.openOrSelectTab(node.path, node.name, content)
-                            drawerState.close()
+                            val res = IdeApiClient.readFileDetailed(node.path)
+                            if (res == null) {
+                                Toast.makeText(
+                                    context,
+                                    "Cannot open '${node.name}'. IDE Bridge is offline or file is unreachable.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                if (res.category == "binary") {
+                                    binaryWarningDialog = BinaryWarningTab(
+                                        path = node.path,
+                                        name = node.name,
+                                        content = res.content,
+                                        mimeType = res.mimeType
+                                    )
+                                } else {
+                                    TermuxDaemonManager.openOrSelectTab(node.path, node.name, res.content)
+                                    drawerState.close()
+                                }
+                            }
                         }
                     },
                     onOpenFileDiff = { filePath, isStaged ->
@@ -266,15 +284,37 @@ fun IdeScreen(
                     },
                     onCreateFile = { fullPath, _, isDir ->
                         coroutineScope.launch {
-                            IdeApiClient.createFileOrDir(fullPath, isDir)
-                            fileTree = IdeApiClient.getFileTree(activeProject?.path)
+                            val ok = IdeApiClient.createFileOrDir(fullPath, isDir)
+                            if (ok) {
+                                fileTree = IdeApiClient.getFileTree(activeProject?.path)
+                            } else {
+                                Toast.makeText(context, "Failed to create ${if (isDir) "folder" else "file"}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    onRenameFile = { oldPath, newPath ->
+                        coroutineScope.launch {
+                            val ok = IdeApiClient.renameFileOrDir(oldPath, newPath)
+                            if (ok) {
+                                val newName = File(newPath).name
+                                TermuxDaemonManager.renameTab(oldPath, newPath, newName)
+                                fileTree = IdeApiClient.getFileTree(activeProject?.path)
+                                Toast.makeText(context, "Renamed to '$newName'", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Failed to rename", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
                     onDeleteFile = { path ->
                         coroutineScope.launch {
-                            IdeApiClient.deleteFileOrDir(path)
-                            TermuxDaemonManager.closeTab(path)
-                            fileTree = IdeApiClient.getFileTree(activeProject?.path)
+                            val ok = IdeApiClient.deleteFileOrDir(path)
+                            if (ok) {
+                                TermuxDaemonManager.closeTab(path)
+                                fileTree = IdeApiClient.getFileTree(activeProject?.path)
+                                Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Failed to delete", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
                     onRefreshTree = { refreshProjectsAndTree() }
@@ -1130,9 +1170,27 @@ fun IdeScreen(
                     },
                     onOpenFileInEditor = { path, name ->
                         coroutineScope.launch {
-                            val content = IdeApiClient.readFile(path) ?: ""
-                            TermuxDaemonManager.openOrSelectTab(path, name, content)
-                            showFileManager = false
+                            val res = IdeApiClient.readFileDetailed(path)
+                            if (res == null) {
+                                Toast.makeText(
+                                    context,
+                                    "Cannot open '$name'. IDE Bridge is offline or file is unreachable.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                if (res.category == "binary") {
+                                    binaryWarningDialog = BinaryWarningTab(
+                                        path = path,
+                                        name = name,
+                                        content = res.content,
+                                        mimeType = res.mimeType
+                                    )
+                                    showFileManager = false
+                                } else {
+                                    TermuxDaemonManager.openOrSelectTab(path, name, res.content)
+                                    showFileManager = false
+                                }
+                            }
                         }
                     },
                     onDismiss = { showFileManager = false }
@@ -1182,8 +1240,64 @@ fun IdeScreen(
                     onDismiss = { saveAsDialogTab = null }
                 )
             }
+
+            // Binary / Non-Text File Warning Confirmation Dialog
+            binaryWarningDialog?.let { tabInfo ->
+                AlertDialog(
+                    onDismissRequest = { binaryWarningDialog = null },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.WarningAmber,
+                            contentDescription = null,
+                            tint = Color(0xFFF59E0B),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    },
+                    title = {
+                        Text("Non-Text File Warning", fontWeight = FontWeight.Bold)
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "\"${tabInfo.name}\" appears to be a non-text / binary file (${tabInfo.mimeType}).",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Opening it in the text editor may display garbled characters, cause lag, or corrupt the file if saved.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                TermuxDaemonManager.openOrSelectTab(tabInfo.path, tabInfo.name, tabInfo.content)
+                                binaryWarningDialog = null
+                                coroutineScope.launch { drawerState.close() }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B))
+                        ) {
+                            Text("Open Anyway", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { binaryWarningDialog = null }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
         }
     }
 }
 }
+
+data class BinaryWarningTab(
+    val path: String,
+    val name: String,
+    val content: String,
+    val mimeType: String
+)
 
