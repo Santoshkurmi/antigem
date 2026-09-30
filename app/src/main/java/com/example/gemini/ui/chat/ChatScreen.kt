@@ -1064,7 +1064,7 @@ fun ChatScreen(
                         .fillMaxWidth()
                 ) {
                     val sysStatus = systemConnectionState.status
-                    val isServerInitializing = sysStatus == com.example.gemini.data.remote.SystemStatus.STARTING || sysStatus == com.example.gemini.data.remote.SystemStatus.ACQUIRING_CSRF || isInitialGracePeriod
+                    val isServerInitializing = sysStatus == com.example.gemini.data.remote.SystemStatus.STARTING || sysStatus == com.example.gemini.data.remote.SystemStatus.ACQUIRING_CSRF || (sysStatus == com.example.gemini.data.remote.SystemStatus.OFFLINE && isInitialGracePeriod)
                     val isServerStopped = sysStatus == com.example.gemini.data.remote.SystemStatus.OFFLINE && !isInitialGracePeriod
                     val isExistingConversation = currentConv != null && currentConv?.title != "New Chat" && conversations.any { it.id == currentConv?.id }
                     val isExistingChat = messages.isEmpty() && isExistingConversation && isLoadingConversation
