@@ -23,6 +23,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Functions
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -89,6 +91,7 @@ fun AgentToolCallCard(
     val isGenImg = toolCall.toolType == ToolType.GENERATE_IMAGE
     val isMcp = toolCall.toolType == ToolType.MCP
     val isBash = toolCall.toolType == ToolType.BASH
+    val isSystemNotice = toolCall.toolType == ToolType.SYSTEM_NOTIFICATION || toolCall.name == "system_notice"
 
     val isImageOutput = remember(toolCall.output, isGenImg) {
         isGenImg || toolCall.output.startsWith("data:image/") ||
@@ -136,8 +139,10 @@ fun AgentToolCallCard(
         isRunning && (isFind || isGrep) -> "Searching code..."
         isRunning && isGenImg -> "Generating image..."
         isRunning && isMcp -> "Executing MCP tool..."
+        isRunning && isSystemNotice -> "System event..."
         isRunning -> "Executing in Termux..."
 
+        isSuccess && isSystemNotice -> "System:"
         isSuccess && isSearch -> "Web search"
         isSuccess && isReader -> "Read page"
         isSuccess && isMath -> "Math evaluated"
@@ -196,7 +201,9 @@ fun AgentToolCallCard(
 
             Spacer(modifier = Modifier.width(4.dp))
 
+            val isTimer = toolCall.command.contains("timer", ignoreCase = true) || toolCall.command.contains("schedule", ignoreCase = true)
             val toolIcon = when {
+                isSystemNotice -> if (isTimer) Icons.Outlined.Schedule else Icons.Outlined.Notifications
                 isSearch -> Icons.Outlined.Search
                 isReader -> Icons.Outlined.Language
                 isMath -> Icons.Outlined.Functions
@@ -499,6 +506,7 @@ fun AgentToolCallCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val commandPrefix = when {
+                            isSystemNotice -> "Notification: ${toolCall.command}"
                             isSearch -> "Search Query: \"${toolCall.command}\""
                             isReader -> "URL: ${toolCall.command}"
                             isMath -> "CAS Expr: ${toolCall.command}"

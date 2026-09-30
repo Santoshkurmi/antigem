@@ -24,6 +24,7 @@ enum class ToolType {
     MCP,
     ASK_CHOICE,
     MATH,
+    SYSTEM_NOTIFICATION,
     UNKNOWN
 }
 

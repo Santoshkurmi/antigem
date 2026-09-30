@@ -628,7 +628,21 @@ class TrajectoryEngine {
                             }
                             is TurnBlock.SystemNotice -> {
                                 if (block.content.isNotBlank()) {
-                                    contentParts.add("ℹ️ ${block.title}: ${block.content}")
+                                    val noticeToolId = "notice_${block.stepIndex}"
+                                    if (toolCalls.none { it.id == noticeToolId || it.stepIndex == block.stepIndex }) {
+                                        val noticeTool = ToolCall(
+                                            id = noticeToolId,
+                                            name = "system_notice",
+                                            toolType = ToolType.SYSTEM_NOTIFICATION,
+                                            command = block.title.ifBlank { "System Notification" },
+                                            status = "SUCCESS",
+                                            output = block.content,
+                                            exitCode = 0,
+                                            stepIndex = block.stepIndex
+                                        )
+                                        toolCalls.add(noticeTool)
+                                        contentParts.add("<!-- tool_call:$noticeToolId -->")
+                                    }
                                 }
                             }
                         }
@@ -697,7 +711,9 @@ class TrajectoryEngine {
         if (step.type == CortexStepType.CORTEX_STEP_TYPE_SYSTEM_MESSAGE || step.system_message != null) {
             val sysMsg = step.system_message
             val msgText = sysMsg?.message?.takeIf { it.isNotBlank() } ?: ""
-            val renderTitle = sysMsg?.render_info?.title?.takeIf { it.isNotBlank() } ?: "System"
+            val renderTitle = sysMsg?.render_info?.title?.takeIf { it.isNotBlank() && it != "System" }
+                ?: sysMsg?.agent_message?.render_details?.message_title?.takeIf { it.isNotBlank() }
+                ?: extractTitleFromSystemMessage(msgText)
             val isHidden = sysMsg?.render_info?.hidden == true || sysMsg?.agent_message?.hide_from_user == true
 
             val isBackgroundStopNotice = msgText.contains("subagents and background tasks have been stopped", ignoreCase = true) ||
@@ -798,6 +814,7 @@ class TrajectoryEngine {
             "generate_image" -> ToolType.GENERATE_IMAGE
             "call_mcp_tool", "mcp_tool" -> ToolType.MCP
             "ask_choices", "ask_question", "user_choice" -> ToolType.ASK_CHOICE
+            "system_notice", "system_notification", "system_message" -> ToolType.SYSTEM_NOTIFICATION
             else -> if (rawName.startsWith("mcp_")) ToolType.MCP else ToolType.UNKNOWN
         }
 
@@ -1183,5 +1200,33 @@ class TrajectoryEngine {
         }
 
         return list
+    }
+
+    private fun extractTitleFromSystemMessage(msgText: String): String {
+        val clean = msgText.trim()
+        if (clean.startsWith("Schedule timer:", ignoreCase = true) || clean.startsWith("Schedule timer", ignoreCase = true)) {
+            return "Schedule Timer"
+        }
+        if (clean.startsWith("Timer has expired", ignoreCase = true)) {
+            return "Timer Expired"
+        }
+        if (clean.startsWith("Task completed:", ignoreCase = true)) {
+            return "Task Completed"
+        }
+        if (clean.contains("[Message]", ignoreCase = true)) {
+            val prefix = clean.substringBefore("[Message]").trim().removeSuffix(":")
+            if (prefix.isNotBlank() && prefix.length <= 40) {
+                return prefix
+            }
+            return "System Notification"
+        }
+        val firstLine = clean.lines().firstOrNull()?.trim() ?: ""
+        if (firstLine.contains(":") && firstLine.indexOf(":") in 3..40) {
+            val candidate = firstLine.substringBefore(":").trim()
+            if (!candidate.contains("\n") && candidate.length <= 40) {
+                return candidate
+            }
+        }
+        return if (firstLine.isNotBlank() && firstLine.length <= 40) firstLine else "System Notification"
     }
 }
