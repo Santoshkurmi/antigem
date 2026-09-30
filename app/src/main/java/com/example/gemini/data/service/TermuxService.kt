@@ -102,17 +102,18 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_STOP_SERVICE -> {
+        val action = intent?.action
+        when {
+            action == ACTION_STOP_SERVICE || action?.endsWith(".service_stop") == true -> {
                 Log.d(TAG, "ACTION_STOP_SERVICE intent received")
                 actionStopService()
                 return START_NOT_STICKY
             }
-            ACTION_WAKE_LOCK -> {
+            action == ACTION_WAKE_LOCK || action?.endsWith(".service_wake_lock") == true -> {
                 Log.d(TAG, "ACTION_WAKE_LOCK intent received")
                 actionAcquireWakeLock()
             }
-            ACTION_WAKE_UNLOCK -> {
+            action == ACTION_WAKE_UNLOCK || action?.endsWith(".service_wake_unlock") == true -> {
                 Log.d(TAG, "ACTION_WAKE_UNLOCK intent received")
                 actionReleaseWakeLock()
             }
@@ -247,9 +248,9 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "termux:service-wakelock").apply {
                 setReferenceCounted(false)
-                acquire()
+                acquire(60 * 60 * 1000L) // 1-hour maximum timeout
             }
-            Log.d(TAG, "Acquired partial WakeLock")
+            Log.d(TAG, "Acquired partial WakeLock (1-hour timeout)")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to acquire WakeLock: ${e.message}")
         }

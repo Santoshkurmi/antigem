@@ -16,6 +16,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -110,15 +115,60 @@
             android:taskAffinity=""
             android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize" />
 
+        <!-- Termux Open Activity (termux-open / termux-open-url / xdg-open activity intent targets) -->
+        <activity
+            android:name=".data.receiver.TermuxOpenActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="com.termux.app.TermuxUrlOpenActivity" />
+                <action android:name="com.termux.app.TermuxOpenActivity" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Termux System Receiver (termux-setup-storage, reload_style) -->
+        <receiver
+            android:name=".data.receiver.TermuxSystemReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.termux.app.request_storage_permissions" />
+                <action android:name="com.termux.app.reload_style" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Termux Open Receiver (termux-open, termux-open-url, xdg-open) -->
+        <receiver
+            android:name=".data.receiver.TermuxOpenReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.termux.app.TermuxOpenReceiver" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Termux:API Subsystem Receiver (termux-toast, termux-vibrate, termux-clipboard, etc.) -->
+        <receiver
+            android:name=".data.receiver.TermuxApiReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.termux.api.ACTION_API" />
+                <action android:name="com.termux.api" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".data.service.TermuxService"
             android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Background terminal and AI language server execution" />
+            <intent-filter>
+                <action android:name="com.termux.service_wake_lock" />
+                <action android:name="com.termux.service_wake_unlock" />
+                <action android:name="com.termux.service_stop" />
+            </intent-filter>
         </service>
 
         <provider
