@@ -1,6 +1,7 @@
 package com.example.gemini.ui.ide
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,6 +9,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material.icons.automirrored.outlined.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -57,6 +60,7 @@ fun ProjectSidebar(
     var showRenameDialog by remember { mutableStateOf<FileNode?>(null) }
     var showDeleteDialog by remember { mutableStateOf<FileNode?>(null) }
     var showDetailsDialog by remember { mutableStateOf<FileNode?>(null) }
+    var expandedPaths by remember { mutableStateOf(setOf<String>()) }
     val daemonStatus by com.example.gemini.data.daemon.TermuxDaemonManager.status.collectAsState()
 
     Column(
@@ -421,10 +425,15 @@ fun ProjectSidebar(
                             node = node,
                             depth = 0,
                             activeFilePath = activeFilePath,
+                            expandedPaths = expandedPaths,
+                            onToggleExpand = { path ->
+                                expandedPaths = if (expandedPaths.contains(path)) expandedPaths - path else expandedPaths + path
+                            },
                             onOpenFile = onOpenFile,
                             onCreateChildFile = { parentPath, isDir ->
                                 isNewFolderMode = isDir
                                 showCreateFileDialog = parentPath
+                                expandedPaths = expandedPaths + parentPath
                             },
                             onRenameRequested = { targetNode ->
                                 showRenameDialog = targetNode
@@ -471,6 +480,7 @@ fun ProjectSidebar(
                         val parent = showCreateFileDialog ?: ""
                         if (newItemName.isNotBlank() && parent.isNotBlank()) {
                             val fullPath = "$parent/${newItemName.trim()}"
+                            expandedPaths = expandedPaths + parent
                             onCreateFile(fullPath, newItemName.trim(), isNewFolderMode)
                             newItemName = ""
                             showCreateFileDialog = null
@@ -606,13 +616,15 @@ fun FileTreeNodeItem(
     node: FileNode,
     depth: Int,
     activeFilePath: String?,
+    expandedPaths: Set<String>,
+    onToggleExpand: (String) -> Unit,
     onOpenFile: (FileNode) -> Unit,
     onCreateChildFile: (parentPath: String, isDir: Boolean) -> Unit,
     onRenameRequested: (FileNode) -> Unit,
     onDetailsRequested: (FileNode) -> Unit,
     onDeleteRequested: (FileNode) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    val isExpanded = expandedPaths.contains(node.path)
     var menuExpanded by remember { mutableStateOf(false) }
     val isActive = activeFilePath == node.path
 
@@ -629,7 +641,7 @@ fun FileTreeNodeItem(
                 )
                 .clickable {
                     if (node.isDir) {
-                        expanded = !expanded
+                        onToggleExpand(node.path)
                     } else {
                         onOpenFile(node)
                     }
@@ -639,14 +651,14 @@ fun FileTreeNodeItem(
         ) {
             if (node.isDir) {
                 Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
-                    imageVector = if (expanded) Icons.Default.FolderOpen else Icons.Default.Folder,
+                    imageVector = if (isExpanded) Icons.Default.FolderOpen else Icons.Default.Folder,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(18.dp)
@@ -675,110 +687,118 @@ fun FileTreeNodeItem(
             )
 
             // Context Menu Button
-            IconButton(
-                onClick = { menuExpanded = true },
-                modifier = Modifier.size(24.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "Options",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp)
-                )
-            }
+            Box {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
 
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false }
-            ) {
-                if (node.isDir) {
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    shape = RoundedCornerShape(12.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    modifier = Modifier.widthIn(min = 175.dp)
+                ) {
+                    if (node.isDir) {
+                        DropdownMenuItem(
+                            text = { Text("New File", fontSize = 13.5.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.NoteAdd,
+                                    contentDescription = null,
+                                    tint = ClaudeTerracotta,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onCreateChildFile(node.path, false)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("New Folder", fontSize = 13.5.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.CreateNewFolder,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onCreateChildFile(node.path, true)
+                            }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    }
                     DropdownMenuItem(
-                        text = { Text("New File") },
+                        text = { Text("Rename", fontSize = 13.5.sp) },
                         leadingIcon = {
                             Icon(
-                                imageVector = Icons.Default.NoteAdd,
+                                imageVector = Icons.Default.DriveFileRenameOutline,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp)
                             )
                         },
                         onClick = {
                             menuExpanded = false
-                            onCreateChildFile(node.path, false)
+                            onRenameRequested(node)
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("New Folder") },
+                        text = { Text("Details", fontSize = 13.5.sp) },
                         leadingIcon = {
                             Icon(
-                                imageVector = Icons.Default.CreateNewFolder,
+                                imageVector = Icons.Default.Info,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp)
                             )
                         },
                         onClick = {
                             menuExpanded = false
-                            onCreateChildFile(node.path, true)
+                            onDetailsRequested(node)
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = MaterialTheme.colorScheme.error, fontSize = 13.5.sp) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onDeleteRequested(node)
+                        }
+                    )
                 }
-                DropdownMenuItem(
-                    text = { Text("Rename") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.DriveFileRenameOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    onClick = {
-                        menuExpanded = false
-                        onRenameRequested(node)
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Details") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    onClick = {
-                        menuExpanded = false
-                        onDetailsRequested(node)
-                    }
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                DropdownMenuItem(
-                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    onClick = {
-                        menuExpanded = false
-                        onDeleteRequested(node)
-                    }
-                )
             }
         }
 
-        if (node.isDir && expanded && node.children.isNotEmpty()) {
+        if (node.isDir && isExpanded && node.children.isNotEmpty()) {
             node.children.forEach { child ->
                 FileTreeNodeItem(
                     node = child,
                     depth = depth + 1,
                     activeFilePath = activeFilePath,
+                    expandedPaths = expandedPaths,
+                    onToggleExpand = onToggleExpand,
                     onOpenFile = onOpenFile,
                     onCreateChildFile = onCreateChildFile,
                     onRenameRequested = onRenameRequested,

@@ -282,11 +282,12 @@ fun IdeScreen(
                             drawerState.close()
                         }
                     },
-                    onCreateFile = { fullPath, _, isDir ->
+                    onCreateFile = { fullPath, name, isDir ->
                         coroutineScope.launch {
                             val ok = IdeApiClient.createFileOrDir(fullPath, isDir)
                             if (ok) {
                                 fileTree = IdeApiClient.getFileTree(activeProject?.path)
+                                Toast.makeText(context, "Created ${if (isDir) "folder" else "file"} '$name'", Toast.LENGTH_SHORT).show()
                             } else {
                                 Toast.makeText(context, "Failed to create ${if (isDir) "folder" else "file"}", Toast.LENGTH_SHORT).show()
                             }
