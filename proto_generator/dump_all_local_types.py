@@ -1,8 +1,12 @@
 import re
 import os
-import json
+import shutil
 from io import BytesIO
-from collections import defaultdict, deque
+from collections import deque
+
+# ---------------------------------------------------------------------------
+# Binary protobuf parser (raw varint / length-delimited fields)
+# ---------------------------------------------------------------------------
 
 def read_varint(stream):
     res, shift = 0, 0
@@ -23,7 +27,8 @@ def parse_proto(stream, length=None):
         tag = read_varint(stream)
         if tag is None: break
         fn, wt = tag >> 3, tag & 0x07
-        if wt == 0: val = read_varint(stream)
+        if wt == 0:
+            val = read_varint(stream)
         elif wt == 1:
             val = stream.read(8)
             if len(val) < 8: break
@@ -35,7 +40,8 @@ def parse_proto(stream, length=None):
         elif wt == 5:
             val = stream.read(4)
             if len(val) < 4: break
-        else: break
+        else:
+            break
         fields.append((fn, wt, val))
     return fields
 
@@ -43,10 +49,10 @@ def parse_field_descriptor(data):
     fields = parse_proto(BytesIO(data))
     name, number, label, type_id, type_name = "", 0, 1, 0, ""
     for fn, wt, val in fields:
-        if fn == 1: name = val.decode('utf-8', errors='ignore')
-        elif fn == 3: number = val
-        elif fn == 4: label = val
-        elif fn == 5: type_id = val
+        if fn == 1:   name      = val.decode('utf-8', errors='ignore')
+        elif fn == 3: number    = val
+        elif fn == 4: label     = val
+        elif fn == 5: type_id   = val
         elif fn == 6: type_name = val.decode('utf-8', errors='ignore')
     return {"name": name, "number": number, "label": label, "type": type_id, "type_name": type_name}
 
@@ -54,7 +60,7 @@ def parse_enum_value(data):
     fields = parse_proto(BytesIO(data))
     name, number = "", 0
     for fn, wt, val in fields:
-        if fn == 1: name = val.decode('utf-8', errors='ignore')
+        if fn == 1:   name   = val.decode('utf-8', errors='ignore')
         elif fn == 2: number = val
     return {"name": name, "number": number}
 
@@ -62,7 +68,7 @@ def parse_enum(data):
     fields = parse_proto(BytesIO(data))
     name, values = "", []
     for fn, wt, val in fields:
-        if fn == 1: name = val.decode('utf-8', errors='ignore')
+        if fn == 1:   name = val.decode('utf-8', errors='ignore')
         elif fn == 2: values.append(parse_enum_value(val))
     return {"name": name, "values": values}
 
@@ -70,7 +76,7 @@ def parse_message_descriptor(data):
     fields = parse_proto(BytesIO(data))
     name, msg_fields, nested_types, enum_types = "", [], [], []
     for fn, wt, val in fields:
-        if fn == 1: name = val.decode('utf-8', errors='ignore')
+        if fn == 1:   name = val.decode('utf-8', errors='ignore')
         elif fn == 2: msg_fields.append(parse_field_descriptor(val))
         elif fn == 3: nested_types.append(parse_message_descriptor(val))
         elif fn == 4: enum_types.append(parse_enum(val))
@@ -80,18 +86,19 @@ def parse_method(data):
     fields = parse_proto(BytesIO(data))
     name, in_t, out_t, cs, ss = "", "", "", False, False
     for fn, wt, val in fields:
-        if fn == 1: name = val.decode('utf-8', errors='ignore')
+        if fn == 1:   name = val.decode('utf-8', errors='ignore')
         elif fn == 2: in_t = val.decode('utf-8', errors='ignore')
         elif fn == 3: out_t = val.decode('utf-8', errors='ignore')
         elif fn == 5: cs = bool(val)
         elif fn == 6: ss = bool(val)
-    return {"name": name, "input_type": in_t, "output_type": out_t, "client_streaming": cs, "server_streaming": ss}
+    return {"name": name, "input_type": in_t, "output_type": out_t,
+            "client_streaming": cs, "server_streaming": ss}
 
 def parse_service(data):
     fields = parse_proto(BytesIO(data))
     name, methods = "", []
     for fn, wt, val in fields:
-        if fn == 1: name = val.decode('utf-8', errors='ignore')
+        if fn == 1:   name = val.decode('utf-8', errors='ignore')
         elif fn == 2: methods.append(parse_method(val))
     return name, methods
 
@@ -99,8 +106,8 @@ def parse_file(data):
     fields = parse_proto(BytesIO(data))
     filename, package, messages, enums, services = "", "", [], [], []
     for fn, wt, val in fields:
-        if fn == 1: filename = val.decode('utf-8', errors='ignore')
-        elif fn == 2: package = val.decode('utf-8', errors='ignore')
+        if fn == 1:   filename = val.decode('utf-8', errors='ignore')
+        elif fn == 2: package  = val.decode('utf-8', errors='ignore')
         elif fn == 4: messages.append(parse_message_descriptor(val))
         elif fn == 5: enums.append(parse_enum(val))
         elif fn == 6:
@@ -109,123 +116,237 @@ def parse_file(data):
                 services.append(s)
     return filename, package, messages, enums, services
 
+# ---------------------------------------------------------------------------
+# Primitive type map
+# ---------------------------------------------------------------------------
+
 TYPE_MAP = {
-    1: 'double', 2: 'float', 3: 'int64', 4: 'uint64', 5: 'int32',
-    6: 'fixed64', 7: 'fixed32', 8: 'bool', 9: 'string', 11: 'message',
-    12: 'bytes', 13: 'uint32', 14: 'enum', 15: 'sfixed32', 16: 'sfixed64',
-    17: 'sint32', 18: 'sint64'
+    1: 'double', 2: 'float',   3: 'int64',    4: 'uint64',   5: 'int32',
+    6: 'fixed64', 7: 'fixed32', 8: 'bool',    9: 'string',  11: 'message',
+   12: 'bytes',  13: 'uint32', 14: 'enum',    15: 'sfixed32', 16: 'sfixed64',
+   17: 'sint32', 18: 'sint64',
 }
 
+# Package names used in gRPC route paths (kept only for the output package declaration)
 SERVICE_PACKAGE_MAP = {
-    "LanguageServerService": "exa.language_server_pb",
+    "LanguageServerService":  "exa.language_server_pb",
     "ExtensionServerService": "exa.extension_server_pb",
-    "RemotingService": "exa.remoting"
+    "RemotingService":        "exa.remoting",
 }
+
+# ---------------------------------------------------------------------------
+# Registry — stores EVERYTHING keyed by exact full dotted name
+# ---------------------------------------------------------------------------
 
 class ProtoRegistry:
     def __init__(self):
+        # key: ".pkg.SubPkg.TypeName"  (always fully-qualified, always starts with '.')
         self.messages = {}
-        self.enums = {}
+        self.enums    = {}
         self.services = {}
+        # Built-in well-known
         self.enums[".google.protobuf.NullValue"] = {
             "name": "NullValue",
             "values": [{"name": "NULL_VALUE", "number": 0}]
         }
-        self.enums[".NullValue"] = self.enums[".google.protobuf.NullValue"]
 
     def register_file(self, filename, package, messages, enums, services):
         prefix = f".{package}" if package else ""
         for s_name, methods in services:
             full_s_name = f"{prefix}.{s_name}".lstrip('.')
-            self.services[full_s_name] = {"file": filename, "service": s_name, "package": package, "methods": methods}
+            self.services[full_s_name] = {
+                "file": filename, "service": s_name,
+                "package": package, "methods": methods
+            }
         for e in enums:
             full_e_name = f"{prefix}.{e['name']}"
-            self.enums[full_e_name] = e
-            if f".{e['name']}" not in self.enums:
-                self.enums[f".{e['name']}"] = e
+            # Only register the first occurrence of each full name so that
+            # a file registered later doesn't silently overwrite an earlier one.
+            if full_e_name not in self.enums:
+                self.enums[full_e_name] = e
         for m in messages:
             self._register_message(prefix, m)
 
     def _register_message(self, prefix, msg):
         full_m_name = f"{prefix}.{msg['name']}"
-        self.messages[full_m_name] = msg
-        if f".{msg['name']}" not in self.messages:
-            self.messages[f".{msg['name']}"] = msg
+        if full_m_name not in self.messages:
+            self.messages[full_m_name] = msg
         for nested in msg.get('nested_types', []):
             self._register_message(full_m_name, nested)
         for nested_enum in msg.get('enum_types', []):
-            self.enums[f"{full_m_name}.{nested_enum['name']}"] = nested_enum
-            if f".{nested_enum['name']}" not in self.enums:
-                self.enums[f".{nested_enum['name']}"] = nested_enum
+            full_e_name = f"{full_m_name}.{nested_enum['name']}"
+            if full_e_name not in self.enums:
+                self.enums[full_e_name] = nested_enum
 
-    def find_type(self, type_name, s_pkg="exa.cortex_pb", expected_kind=None):
-        if not type_name: return None, None, type_name
-        lookup = type_name if type_name.startswith('.') else f".{type_name}"
-        short = lookup.split('.')[-1]
+    # ------------------------------------------------------------------
+    # find_type: DIRECT lookup only — no guessing, no short-name fallback.
+    # In protobuf descriptors, field type_name is always fully qualified
+    # (starts with '.').  We just look it up.
+    # ------------------------------------------------------------------
+    def find_type(self, type_name):
+        if not type_name:
+            return None, None, type_name
+        key = type_name if type_name.startswith('.') else f".{type_name}"
+        if key in self.messages:
+            return "message", self.messages[key], key
+        if key in self.enums:
+            return "enum", self.enums[key], key
+        return None, None, key
 
-        candidates = [
-            lookup,
-            lookup.replace(".exa.language_server_pb.", ".exa.cortex_pb."),
-            lookup.replace(".exa.cortex_pb.", ".exa.language_server_pb."),
-            f".{s_pkg}.{short}",
-            f".exa.cortex_pb.{short}",
-            f".exa.language_server_pb.{short}",
-            f".exa.codeium_common_pb.{short}",
-            f".exa.extension_server_pb.{short}",
-            f".exa.remoting.{short}",
-        ]
+# ---------------------------------------------------------------------------
+# Binary discovery
+# ---------------------------------------------------------------------------
 
-        if expected_kind in ("enum", 14):
-            for c in candidates:
-                if c in self.enums: return "enum", self.enums[c], c
-            if f".{short}" in self.enums: return "enum", self.enums[f".{short}"], f".{short}"
-            for k, v in self.enums.items():
-                if k.endswith(f".{short}"): return "enum", v, k
+def find_agy_binary(custom_path=None):
+    if custom_path and os.path.isfile(custom_path):
+        return custom_path
 
-        if expected_kind in ("message", 11):
-            for c in candidates:
-                if c in self.messages: return "message", self.messages[c], c
-            if f".{short}" in self.messages: return "message", self.messages[f".{short}"], f".{short}"
-            for k, v in self.messages.items():
-                if k.endswith(f".{short}"): return "message", v, k
+    candidates = [
+        os.path.expanduser("~/.local/bin/agy"),
+        "/usr/bin/agy",
+        "/data/data/com.termux/files/usr/bin/agy.va39",
+        "/data/data/com.termux/files/usr/bin/agy",
+        os.path.expanduser("~/.gemini/bin/agy"),
+        os.path.expanduser("~/.antigravity/bin/agy"),
+        shutil.which("agy"),
+    ]
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return c
 
-        for c in candidates:
-            if c in self.messages: return "message", self.messages[c], c
-            if c in self.enums: return "enum", self.enums[c], c
-        if f".{short}" in self.messages: return "message", self.messages[f".{short}"], f".{short}"
-        if f".{short}" in self.enums: return "enum", self.enums[f".{short}"], f".{short}"
-        return None, None, type_name
+    raise FileNotFoundError(
+        f"Could not find 'agy' binary. Checked: {[c for c in candidates if c]}"
+    )
 
-def scan_all_descriptors(binary_path="/data/data/com.termux/files/usr/bin/agy.va39"):
-    with open(binary_path, "rb") as f: data = f.read()
+# ---------------------------------------------------------------------------
+# Binary scanning
+# ---------------------------------------------------------------------------
+
+def scan_all_descriptors(binary_path=None):
+    binary_path = find_agy_binary(binary_path)
+    print(f"Using binary: {binary_path}")
+    with open(binary_path, "rb") as f:
+        data = f.read()
+    data_len = len(data)
     registry = ProtoRegistry()
-    proto_offsets = [m.start() for m in re.finditer(rb'\.proto', data)]
-    seen_offsets = set()
 
-    for p in proto_offsets:
-        for back in range(p, max(0, p-250), -1):
-            if data[back] == 0x0a:
-                stream = BytesIO(data[back+1:back+5])
-                l = read_varint(stream)
-                if l and l > 0 and (back + 1 + stream.tell() + l) <= len(data):
-                    header_len = 1 + stream.tell()
-                    name_bytes = data[back+header_len : back+header_len+l]
-                    if name_bytes.endswith(b'.proto') and len(name_bytes) == l:
-                        if back not in seen_offsets:
-                            seen_offsets.add(back)
-                            try:
-                                fname, pkg, msgs, enums, svcs = parse_file(data[back:back+15000000])
-                                if fname.endswith('.proto'):
-                                    registry.register_file(fname, pkg, msgs, enums, svcs)
-                            except Exception: pass
-                        break
+    # ------------------------------------------------------------------
+    # Phase 1: Forward scan — find every 0x0a byte that looks like
+    # field-1 (name) of a FileDescriptorProto.
+    # Pattern: 0x0a <varint length> <bytes ending in b'.proto'>
+    # Uses bytes.find() jumps instead of a byte-by-byte loop → fast on
+    # a 200 MB binary. No backward walk, no distance limit.
+    # ------------------------------------------------------------------
+    candidates = []
+    pos = 0
+    while True:
+        pos = data.find(b'\x0a', pos)
+        if pos == -1 or pos + 2 >= data_len:
+            break
+        stream = BytesIO(data[pos + 1: pos + 6])
+        l = read_varint(stream)
+        if l and 4 <= l <= 512:
+            hlen = 1 + stream.tell()
+            end  = pos + hlen + l
+            if end <= data_len:
+                name_bytes = data[pos + hlen: end]
+                if name_bytes.endswith(b'.proto') and b'\x00' not in name_bytes:
+                    candidates.append(pos)
+        pos += 1
+
+    # ------------------------------------------------------------------
+    # Phase 2: Validate and deduplicate candidates.
+    # For each candidate, try to parse a bounded blob [candidate, next_candidate).
+    # A true FileDescriptorProto start will produce a valid filename matching
+    # what we detected in Phase 1.  A false positive (dependency string inside
+    # a real blob) will either produce a wrong filename or consume 0 useful bytes.
+    # We deduplicate by resolved filename — first occurrence of each file wins.
+    # ------------------------------------------------------------------
+    candidates.sort()
+    valid_blobs   = []        # (start, end, fname) for confirmed descriptors
+    seen_fnames   = set()     # dedup by resolved filename
+    seen_starts   = set()     # dedup by offset
+
+    for idx, start in enumerate(candidates):
+        if start in seen_starts:
+            continue
+        # Bound to next candidate (or end of binary)
+        end = candidates[idx + 1] if idx + 1 < len(candidates) else data_len
+        blob = data[start:end]
+        try:
+            fname, pkg, msgs, enums, svcs = parse_file(blob)
+        except Exception:
+            continue
+        if not fname.endswith('.proto'):
+            continue
+        if fname in seen_fnames:
+            # Same file seen before — mark this offset as consumed so we
+            # don't let it corrupt the next candidate's boundary
+            seen_starts.add(start)
+            continue
+        seen_fnames.add(fname)
+        seen_starts.add(start)
+        valid_blobs.append((start, end, fname, pkg, msgs, enums, svcs))
+
+    # ------------------------------------------------------------------
+    # Phase 3: Register all validated blobs.
+    # ------------------------------------------------------------------
+    for start, end, fname, pkg, msgs, enums, svcs in valid_blobs:
+        try:
+            registry.register_file(fname, pkg, msgs, enums, svcs)
+        except Exception:
+            pass
+
     return registry
 
-def generate_per_service_protos(output_dir="/data/data/com.termux/files/home/proto_test/protos"):
+
+# ---------------------------------------------------------------------------
+# Short-name assignment (display only, done after the walk is complete)
+#
+# Rules (no hardcoded package names):
+#   1. Try the bare leaf name (e.g. "Step").
+#   2. If taken by a different full path, build a unique name from the
+#      full dotted path itself — strip leading '.', replace '.' with '_'.
+#      This is 100% deterministic and requires zero guessing.
+# ---------------------------------------------------------------------------
+
+def assign_display_names(full_names):
+    """
+    Given a collection of fully-qualified type names, return a dict
+    mapping each full name → a unique display name.
+    Short leaf names are preferred; collisions get the full-path name.
+    """
+    from collections import defaultdict
+    leaf_to_fulls = defaultdict(list)
+    for fn in full_names:
+        leaf = fn.split('.')[-1]
+        leaf_to_fulls[leaf].append(fn)
+
+    display = {}
+    for leaf, fulls in leaf_to_fulls.items():
+        if len(fulls) == 1:
+            # No collision — use the short leaf name
+            display[fulls[0]] = leaf
+        else:
+            # Collision — every one of them gets the full-path name
+            for fn in fulls:
+                # e.g. ".gemini_coder.Step" → "gemini_coder_Step"
+                display[fn] = fn.lstrip('.').replace('.', '_')
+    return display
+
+# ---------------------------------------------------------------------------
+# Main generation
+# ---------------------------------------------------------------------------
+
+def generate_per_service_protos(output_dir=None, binary_path=None):
+    # Always output next to this script file regardless of cwd
+    if output_dir is None:
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "protos")
     os.makedirs(output_dir, exist_ok=True)
     print("Scanning embedded protobuf descriptors from binary...")
-    registry = scan_all_descriptors()
-    print(f"Discovered {len(registry.services)} services, {len(registry.messages)} messages, {len(registry.enums)} enums.\n")
+    registry = scan_all_descriptors(binary_path)
+    print(f"Discovered {len(registry.services)} services, "
+          f"{len(registry.messages)} messages, {len(registry.enums)} enums.\n")
 
     target_service_keys = [
         s for s in registry.services.keys()
@@ -233,156 +354,174 @@ def generate_per_service_protos(output_dir="/data/data/com.termux/files/home/pro
     ]
 
     for s_key in sorted(target_service_keys):
-        s_info = registry.services[s_key]
+        s_info       = registry.services[s_key]
         service_name = s_info["service"]
-        s_pkg = s_info["package"] or "exa.local_grpc"
-        
-        # Use exact route package name for gRPC client compatibility
+        s_pkg        = s_info["package"] or "exa.local_grpc"
         package_name = SERVICE_PACKAGE_MAP.get(service_name, s_pkg)
 
-        needed_types = deque()
+        # ------------------------------------------------------------------
+        # PHASE 1: Dependency walk — use FULL names throughout.
+        #   resolved_messages / resolved_enums: full_name → descriptor dict
+        #   Each field's type_name references a full name exactly as the
+        #   binary encoded it — we do a direct registry lookup, no fallback.
+        # ------------------------------------------------------------------
+        needed   = deque()
         for m in s_info["methods"]:
-            if m["input_type"]: needed_types.append((m["input_type"], "message"))
-            if m["output_type"]: needed_types.append((m["output_type"], "message"))
+            if m["input_type"]:  needed.append((m["input_type"],  "message"))
+            if m["output_type"]: needed.append((m["output_type"], "message"))
 
-        resolved_messages = {}
-        resolved_enums = {}
-        short_to_full = {}
-        type_name_map = {}
-        processed = set()
+        resolved_messages = {}   # full_name → desc
+        resolved_enums    = {}   # full_name → desc
+        processed         = set()
 
-        while needed_types:
-            full_name, expected_kind = needed_types.popleft()
-            if not full_name or (full_name, expected_kind) in processed: continue
-            processed.add((full_name, expected_kind))
+        while needed:
+            type_ref, expected_kind = needed.popleft()
+            if not type_ref or type_ref in processed:
+                continue
+            processed.add(type_ref)
 
-            kind, desc, matched_full_name = registry.find_type(full_name, s_pkg, expected_kind)
+            kind, desc, full_name = registry.find_type(type_ref)
+
             if not kind or not desc:
-                short_name = full_name.split('.')[-1]
+                # Unknown type — emit a stub so the file is still valid
+                leaf = type_ref.split('.')[-1]
                 if expected_kind == "enum":
-                    desc = {"name": short_name, "values": [{"name": f"{short_name.upper()}_UNSPECIFIED", "number": 0}]}
+                    desc = {"name": leaf,
+                            "values": [{"name": f"{leaf.upper()}_UNSPECIFIED", "number": 0}]}
                     kind = "enum"
                 else:
-                    desc = {"name": short_name, "fields": []}
+                    desc = {"name": leaf, "fields": []}
                     kind = "message"
-                matched_full_name = full_name
+                full_name = type_ref
 
-            orig_short = desc["name"]
-            if orig_short not in short_to_full:
-                short_to_full[orig_short] = matched_full_name
-                unique_name = orig_short
-            elif short_to_full[orig_short] == matched_full_name:
-                unique_name = orig_short
-            else:
-                # Collision across packages! Disambiguate with package prefix
-                pkg_parts = [p for p in matched_full_name.split(".")[:-1] if p and p not in ["exa", "cortex_pb", "language_server_pb", "extension_server_pb", "remoting"]]
-                prefix = "".join([p.capitalize() for p in pkg_parts])
-                unique_name = f"{prefix}_{orig_short}" if prefix else f"Internal_{orig_short}"
-                if unique_name in short_to_full and short_to_full[unique_name] != matched_full_name:
-                    unique_name = matched_full_name.replace(".", "_").strip("_")
-                short_to_full[unique_name] = matched_full_name
-
-            type_name_map[full_name] = unique_name
-            type_name_map[matched_full_name] = unique_name
-            type_name_map[full_name.lstrip(".")] = unique_name
-            type_name_map[matched_full_name.lstrip(".")] = unique_name
+            if full_name in processed and full_name != type_ref:
+                continue  # already walked via another reference alias
 
             if kind == "enum":
-                resolved_enums[matched_full_name] = desc
+                resolved_enums[full_name] = desc
             else:
-                resolved_messages[matched_full_name] = desc
-                for f in desc.get("fields", []):
-                    if f.get("type_name"):
-                        child_kind = "enum" if f["type"] == 14 else "message"
-                        needed_types.append((f["type_name"], child_kind))
+                resolved_messages[full_name] = desc
+                # Enqueue every field's type reference (still fully qualified)
+                for field in desc.get("fields", []):
+                    if field.get("type_name"):
+                        child_kind = "enum" if field["type"] == 14 else "message"
+                        child_ref  = field["type_name"]
+                        if child_ref not in processed:
+                            needed.append((child_ref, child_kind))
 
-        colls = set([type_name_map[fn] for fn in resolved_messages]).intersection(set([type_name_map[fn] for fn in resolved_enums]))
-        enum_rename = {}
-        for c in colls:
-            enum_rename[c] = f"{c}Enum"
+            processed.add(full_name)
 
-        # Write service file
+        # ------------------------------------------------------------------
+        # PHASE 2: Assign display names.
+        #   Short leaf name if unique across the resolved set.
+        #   Full-path-derived name (no dots) if there's a collision.
+        #   Message and enum name spaces are kept separate so an enum and
+        #   a message can share a leaf name without conflict.
+        # ------------------------------------------------------------------
+        msg_display  = assign_display_names(resolved_messages.keys())
+        enum_display = assign_display_names(resolved_enums.keys())
+
+        # If a message and an enum share the SAME display name, suffix the enum
+        msg_display_values = set(msg_display.values())
+        for fn, dn in list(enum_display.items()):
+            if dn in msg_display_values:
+                enum_display[fn] = f"{dn}Enum"
+
+        # Build a unified lookup: type_ref (full name) → display name
+        # used when writing field references
+        type_name_map = {}
+        for fn, dn in msg_display.items():
+            type_name_map[fn] = dn
+        for fn, dn in enum_display.items():
+            type_name_map[fn] = dn
+
+        # ------------------------------------------------------------------
+        # PHASE 3: Write .proto file
+        # ------------------------------------------------------------------
         proto_file_path = os.path.join(output_dir, f"{service_name}.proto")
         with open(proto_file_path, "w") as f:
             f.write('syntax = "proto3";\n\n')
             f.write(f'package {package_name};\n\n')
-            
-            f.write(f'// ==========================================================================\n')
+
+            f.write(f'// {"=" * 72}\n')
             f.write(f'// Service: {service_name} ({len(s_info["methods"])} Methods)\n')
             f.write(f'// Target Route: /{package_name}.{service_name}/<Method>\n')
-            f.write(f'// ==========================================================================\n\n')
-            
+            f.write(f'// {"=" * 72}\n\n')
+
             f.write(f'service {service_name} {{\n')
             for m in s_info["methods"]:
-                cs = "stream " if m["client_streaming"] else ""
-                ss = "stream " if m["server_streaming"] else ""
-                in_lookup = m["input_type"]
-                out_lookup = m["output_type"]
-                in_t = type_name_map.get(in_lookup, type_name_map.get(in_lookup.lstrip("."), in_lookup.split('.')[-1]))
-                out_t = type_name_map.get(out_lookup, type_name_map.get(out_lookup.lstrip("."), out_lookup.split('.')[-1]))
+                cs   = "stream " if m["client_streaming"]  else ""
+                ss   = "stream " if m["server_streaming"]   else ""
+                in_t  = type_name_map.get(m["input_type"],  m["input_type"].split('.')[-1])
+                out_t = type_name_map.get(m["output_type"], m["output_type"].split('.')[-1])
                 f.write(f'  rpc {m["name"]} ({cs}{in_t}) returns ({ss}{out_t});\n')
             f.write('}\n\n')
 
             # Enums
             if resolved_enums:
-                f.write('// ==========================================================================\n')
-                f.write('// Enumerations\n')
-                f.write('// ==========================================================================\n\n')
+                f.write(f'// {"=" * 72}\n// Enumerations\n// {"=" * 72}\n\n')
                 written_enums = set()
-                for fn in sorted(resolved_enums.keys(), key=lambda x: type_name_map[x]):
-                    e_name = type_name_map[fn]
-                    if e_name in enum_rename:
-                        e_name = enum_rename[e_name]
-                    if e_name in written_enums: continue
-                    written_enums.add(e_name)
+                for fn in sorted(resolved_enums.keys(), key=lambda x: enum_display[x]):
+                    dn = enum_display[fn]
+                    if dn in written_enums: continue
+                    written_enums.add(dn)
                     e = resolved_enums[fn]
-                    f.write(f'enum {e_name} {{\n')
+                    # Comment shows the exact origin full name from the binary
+                    f.write(f'// origin: {fn}\n')
+                    f.write(f'enum {dn} {{\n')
                     for v in sorted(e["values"], key=lambda x: x["number"]):
                         f.write(f'  {v["name"]} = {v["number"]};\n')
                     f.write('}\n\n')
 
             # Messages
             if resolved_messages:
-                f.write('// ==========================================================================\n')
-                f.write('// Messages & Structs\n')
-                f.write('// ==========================================================================\n\n')
+                f.write(f'// {"=" * 72}\n// Messages & Structs\n// {"=" * 72}\n\n')
                 written_msgs = set()
-                for fn in sorted(resolved_messages.keys(), key=lambda x: type_name_map[x]):
-                    m_name = type_name_map[fn]
-                    if m_name in written_msgs: continue
-                    written_msgs.add(m_name)
+                for fn in sorted(resolved_messages.keys(), key=lambda x: msg_display[x]):
+                    dn = msg_display[fn]
+                    if dn in written_msgs: continue
+                    written_msgs.add(dn)
                     m = resolved_messages[fn]
-                    f.write(f'message {m_name} {{\n')
+                    # Comment shows the exact origin full name from the binary
+                    f.write(f'// origin: {fn}\n')
+                    f.write(f'message {dn} {{\n')
                     for field in sorted(m["fields"], key=lambda x: x["number"]):
                         lbl = "repeated " if field["label"] == 3 else ""
                         if field["type_name"]:
-                            fn_lookup = field["type_name"]
-                            t_str = type_name_map.get(fn_lookup, type_name_map.get(fn_lookup.lstrip("."), fn_lookup.split('.')[-1]))
-                            if field["type"] == 14 and t_str in enum_rename:
-                                t_str = enum_rename[t_str]
+                            t_str = type_name_map.get(field["type_name"],
+                                                       field["type_name"].split('.')[-1])
                         else:
-                            t_str = TYPE_MAP.get(field["type"], "string")
+                            t_str = TYPE_MAP.get(field["type"], "bytes")
                         f.write(f'  {lbl}{t_str} {field["name"]} = {field["number"]};\n')
                     f.write('}\n\n')
 
-        # Validation Check
-        all_defined = set([type_name_map[fn] for fn in resolved_messages]).union(set([enum_rename.get(type_name_map[fn], type_name_map[fn]) for fn in resolved_enums]))
+        # ------------------------------------------------------------------
+        # PHASE 4: Validate — every field type reference must be defined
+        # ------------------------------------------------------------------
+        all_defined     = set(msg_display.values()) | set(enum_display.values())
         primitive_types = set(TYPE_MAP.values())
         errors = []
         for full_name, m in resolved_messages.items():
-            m_name = type_name_map[full_name]
+            m_dn = msg_display[full_name]
             for field in m["fields"]:
                 if field["type_name"]:
-                    fn_lookup = field["type_name"]
-                    st = type_name_map.get(fn_lookup, type_name_map.get(fn_lookup.lstrip("."), fn_lookup.split('.')[-1]))
-                    if field["type"] == 14 and st in enum_rename:
-                        st = enum_rename[st]
-                    if st not in all_defined and st not in primitive_types:
-                        errors.append(f"In message '{m_name}', field '{field['name']}' references undefined type '{st}'")
+                    t_str = type_name_map.get(field["type_name"],
+                                               field["type_name"].split('.')[-1])
+                    if t_str not in all_defined and t_str not in primitive_types:
+                        errors.append(
+                            f"  '{m_dn}'.{field['name']} → '{t_str}' (from {field['type_name']})"
+                        )
 
-        status_str = "✅ 100% Validated (0 errors)" if not errors else f"⚠️ {len(errors)} warnings"
-        collision_str = f", Resolved {len(colls)} Collisions" if colls else ""
-        print(f"Generated: {service_name}.proto -> {len(s_info['methods'])} RPCs, {len(resolved_messages)} Messages, {len(resolved_enums)} Enums{collision_str} [{status_str}]")
+        status_str = "✅ 100% Validated (0 errors)" if not errors else f"⚠️  {len(errors)} unresolved refs"
+        coll_msgs  = sum(1 for dn in msg_display.values()  if '_' in dn and '.' not in dn)
+        coll_enums = sum(1 for dn in enum_display.values() if '_' in dn and '.' not in dn)
+        coll_str   = f", Collisions: {coll_msgs}msg/{coll_enums}enum" if (coll_msgs or coll_enums) else ""
+        print(f"Generated: {service_name}.proto → {len(s_info['methods'])} RPCs, "
+              f"{len(resolved_messages)} Messages, {len(resolved_enums)} Enums"
+              f"{coll_str} [{status_str}]")
+        if errors:
+            for e in errors[:10]:
+                print(e)
 
     print(f"\nAll service proto files updated in: {output_dir}")
 
