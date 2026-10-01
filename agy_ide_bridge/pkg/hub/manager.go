@@ -505,6 +505,16 @@ func (m *HubManager) Stop() {
 			_ = exec.Command("pkill", "-9", "-f", "agy --hub").Run()
 			fmt.Println("⚠️  AGY Hub force terminated.")
 		}
+
+		// Auto-unpatch binary back to standard header once process has exited and lock is released
+		if m.AgyBinPath != "" {
+			restored, elapsed, err := security.UnpatchAgyHeader(m.AgyBinPath)
+			if err == nil {
+				log.Printf("\033[1;32m[Security]\033[0m Auto-unpatched AGY binary (%s) back to '%s' in %v", m.AgyBinPath, restored, elapsed)
+			} else {
+				log.Printf("\033[1;33m[Security Warning]\033[0m Could not auto-unpatch AGY binary: %v", err)
+			}
+		}
 	}
 
 	m.setStatus(HubStatusStopped, "")
