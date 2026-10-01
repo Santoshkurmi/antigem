@@ -43,7 +43,7 @@ type Hub struct {
 func NewHub(cfg *config.Config) *Hub {
 	return &Hub{
 		Cfg:     cfg,
-		HubPort: "8090",
+		HubPort: "1235",
 		clients: make(map[*ClientConn]bool),
 	}
 }
@@ -154,7 +154,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		case "send_prompt":
 			_ = client.SendJSON(map[string]interface{}{
 				"type":  "error",
-				"error": "Chat is managed directly via AGY Hub on port 8090",
+				"error": "Chat is managed directly via AGY Hub on port 1235",
 			})
 		}
 	}

@@ -90,7 +90,7 @@ func (h *Handler) ShutdownHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 	hubActive := false
-	hubPort := "8090"
+	hubPort := "1235"
 	hubStatus := "stopped"
 	hubCsrfToken := ""
 	hubError := ""
@@ -1457,7 +1457,7 @@ func (h *Handler) GetLoginURLHandler(w http.ResponseWriter, r *http.Request) {
 
 // StartLoginHandler sends a Login request to the AGY Hub RPC server.
 func (h *Handler) StartLoginHandler(w http.ResponseWriter, r *http.Request) {
-	hubPort := "8090"
+	hubPort := "1235"
 	if h.HubManager != nil && h.HubManager.HubPort != "" {
 		hubPort = h.HubManager.HubPort
 	}

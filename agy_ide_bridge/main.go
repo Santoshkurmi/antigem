@@ -32,8 +32,8 @@ Usage:
 Flags:
   -t, --token <token>    12-character security token for API & AGY CSRF obfuscation
   -f, --force, --f       Force start AGY Hub automatically without prompting
-  -p, --port <port>      Port for the Go IDE Server (default: 8080)
-  --hub-port <port>      Port for the AGY Hub RPC server (default: 8090)
+  -p, --port <port>      Port for the Go IDE Server (default: 1234)
+  --hub-port <port>      Port for the AGY Hub RPC server (default: 1235)
   --no-hub               Skip launching AGY Hub (run IDE server only)
   -d, --dir <path>       Custom workspace directory
   -h, --help             Show help documentation`)
@@ -106,7 +106,7 @@ func main() {
 	var forceStart bool
 	var skipHub bool
 	var cliToken string
-	hubPort := "8090"
+	hubPort := "1235"
 
 	// Parse command line arguments
 	for i := 1; i < len(os.Args); i++ {

@@ -8,7 +8,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Request payload for /exa.language_server_pb.LanguageServerService/HandleCascadeUserInteraction
- * Verified directly against recorded live traffic logs on port 8090/8091.
+ * Verified directly against recorded live traffic logs on port 1235/8091.
  */
 @Serializable
 data class HandleCascadeUserInteractionRequestDto(

@@ -93,8 +93,8 @@ class AuthPreferences(private val context: Context) {
         val currentFramedHeader: String
             get() = buildFramedHeader(currentSecurityToken)
 
-        const val DEFAULT_HUB_URL = "http://127.0.0.1:8090"
-        const val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:8080"
+        const val DEFAULT_HUB_URL = "http://127.0.0.1:1235"
+        const val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:1234"
 
         @Volatile
         var currentHubUrl: String = DEFAULT_HUB_URL

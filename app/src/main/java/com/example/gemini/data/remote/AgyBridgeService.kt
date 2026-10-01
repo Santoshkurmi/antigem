@@ -65,7 +65,7 @@ enum class BridgeConnectionState {
 
 data class AgyHubStatus(
     val status: String = "idle", // "idle", "starting", "online", "error", "stopped"
-    val port: String = "8090",
+    val port: String = "1235",
     val csrfToken: String? = null,
     val error: String? = null,
     val logs: List<String> = emptyList()
@@ -176,7 +176,7 @@ class AgyBridgeService(
     val loginUrlEvents: SharedFlow<String> = _loginUrlEvents.asSharedFlow()
 
     /**
-     * Suspends until the IDE Bridge (:8080) is connected and online, or returns false on timeout.
+     * Suspends until the IDE Bridge (:1234) is connected and online, or returns false on timeout.
      */
     suspend fun awaitBridgeReady(timeoutMs: Long = 8000L): Boolean {
         if (_systemConnectionState.value.isBridgeOnline) return true
@@ -187,7 +187,7 @@ class AgyBridgeService(
     }
 
     /**
-     * Suspends until the Antigravity Hub (:8090) is fully ready and online, or returns false on timeout.
+     * Suspends until the Antigravity Hub (:1235) is fully ready and online, or returns false on timeout.
      */
     suspend fun awaitHubReady(timeoutMs: Long = 8000L): Boolean {
         if (_systemConnectionState.value.isHubOnline) return true
@@ -425,7 +425,7 @@ class AgyBridgeService(
                     val json = JSONObject(body)
                     val hubObj = json.optJSONObject("hub")
                     val st = hubObj?.optString("status", if (hubObj.optBoolean("active", false)) "online" else "stopped") ?: "stopped"
-                    val p = java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "8090"
+                    val p = java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "1235"
                     val csrf = hubObj?.optString("csrf_token")?.takeIf { it.isNotBlank() }
                     val err = hubObj?.optString("error")?.takeIf { it.isNotBlank() }
                     val logsArr = hubObj?.optJSONArray("logs")
@@ -484,7 +484,7 @@ class AgyBridgeService(
                         "hub_status" -> {
                             val st = root.optString("status", "idle")
                             val p = root.optString("port").takeIf { it.isNotBlank() }
-                                ?: java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "8090"
+                                ?: java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "1235"
                             val csrf = root.optString("csrf_token").takeIf { it.isNotBlank() }
                                 ?: root.optString("csrfToken").takeIf { it.isNotBlank() }
                             val err = root.optString("error").takeIf { it.isNotBlank() }

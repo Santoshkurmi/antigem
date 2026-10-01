@@ -35,7 +35,7 @@ const (
 	HubStatusStopped  = "stopped"
 )
 
-// HubManager supervises the background `agy --hub` process on port 8090.
+// HubManager supervises the background `agy --hub` process on port 1235.
 type HubManager struct {
 	HubPort        string
 	WorkspaceDir   string
@@ -62,7 +62,7 @@ type HubManager struct {
 // NewHubManager initializes a supervisor for AGY Hub.
 func NewHubManager(hubPort, workspaceDir, appDataDir, securityToken string) *HubManager {
 	if hubPort == "" {
-		hubPort = "8090"
+		hubPort = "1235"
 	}
 	return &HubManager{
 		HubPort:       hubPort,
@@ -95,7 +95,7 @@ func resolveAgyBinary() string {
 	return "agy"
 }
 
-// isHubReady probes if port 8090 is active and accepting connections, logging probe details for debugging
+// isHubReady probes if port 1235 is active and accepting connections, logging probe details for debugging
 func (m *HubManager) isHubReady() bool {
 	start := time.Now()
 	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+m.HubPort, 400*time.Millisecond)

@@ -12,19 +12,19 @@ enum class SystemStatus(
     val colorHex: Long,
     val canSend: Boolean
 ) {
-    /** Bridge (:8080) is offline or unreachable */
+    /** Bridge (:1234) is offline or unreachable */
     OFFLINE("Offline", 0xFF9CA3AF, false),
 
-    /** Bridge (:8080) is connected, Antigravity Hub (:8090) is starting/idle */
+    /** Bridge (:1234) is connected, Antigravity Hub (:1235) is starting/idle */
     STARTING("Starting...", 0xFFF59E0B, false),
 
-    /** Hub (:8090) is running, but CSRF token is not yet acquired */
+    /** Hub (:1235) is running, but CSRF token is not yet acquired */
     ACQUIRING_CSRF("Acquiring Token...", 0xFF06B6D4, false),
 
-    /** Hub (:8090) + CSRF token ready, actively verifying authentication */
+    /** Hub (:1235) + CSRF token ready, actively verifying authentication */
     CHECKING_AUTH("Checking Auth...", 0xFF3B82F6, true),
 
-    /** Hub (:8090) + CSRF token ready, but user is not logged in / auth failed */
+    /** Hub (:1235) + CSRF token ready, but user is not logged in / auth failed */
     UNAUTHENTICATED("Sign In Required", 0xFFA855F7, true),
 
     /** Everything connected, token ready, user authenticated - fully operational */

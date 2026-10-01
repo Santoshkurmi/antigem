@@ -26,7 +26,7 @@ func LoadConfig() *Config {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "1234"
 	}
 
 	workspace := os.Getenv("WORKSPACE_DIR")
