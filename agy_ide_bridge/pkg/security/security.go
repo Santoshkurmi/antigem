@@ -3,9 +3,9 @@ package security
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,15 +20,21 @@ const (
 	TokenLen      = 12
 	HeaderLen     = 20
 	DefaultHeader = "x-codeium-csrf-token"
+	charset       = "0123456789abcdefghijklmnopqrstuvwxyz"
 )
 
-// GenerateToken generates a cryptographically secure 12-character hex token.
+// GenerateToken generates a cryptographically secure 12-character alphanumeric token.
 func GenerateToken() string {
-	b := make([]byte, TokenLen/2)
-	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("%012x", time.Now().UnixNano()&0xFFFFFFFFFFFF)
+	b := make([]byte, TokenLen)
+	for i := 0; i < TokenLen; i++ {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			b[i] = charset[(time.Now().UnixNano()+int64(i))%int64(len(charset))]
+		} else {
+			b[i] = charset[num.Int64()]
+		}
 	}
-	return hex.EncodeToString(b)
+	return string(b)
 }
 
 // BuildFramedHeader constructs the 20-byte HTTP header name from a 12-byte token.

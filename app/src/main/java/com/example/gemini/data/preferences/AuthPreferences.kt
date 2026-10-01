@@ -82,9 +82,15 @@ class AuthPreferences(private val context: Context) {
             return "$TOKEN_PREFIX$clean$TOKEN_SUFFIX"
         }
 
+        private const val TOKEN_CHARSET = "0123456789abcdefghijklmnopqrstuvwxyz"
+        private val secureRandom = java.security.SecureRandom()
+
         fun generateRandomToken(): String {
-            val uuid = java.util.UUID.randomUUID().toString().replace("-", "")
-            return uuid.take(TOKEN_LENGTH)
+            val sb = StringBuilder(TOKEN_LENGTH)
+            for (i in 0 until TOKEN_LENGTH) {
+                sb.append(TOKEN_CHARSET[secureRandom.nextInt(TOKEN_CHARSET.length)])
+            }
+            return sb.toString()
         }
 
         @Volatile
