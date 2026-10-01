@@ -213,6 +213,107 @@ func PatchAgyHeader(binaryPath string, token string) (string, time.Duration, err
 	return newHeaderStr, time.Since(t0), nil
 }
 
+// UnpatchAgyHeader restores any framed 20-byte security header back to the standard DefaultHeader (x-codeium-csrf-token).
+func UnpatchAgyHeader(binaryPath string) (string, time.Duration, error) {
+	t0 := time.Now()
+	if binaryPath == "" {
+		return "", 0, errors.New("empty binary path")
+	}
+
+	// Resolve symlinks if binary is a symlink
+	realPath, err := filepath.EvalSymlinks(binaryPath)
+	if err == nil {
+		binaryPath = realPath
+	}
+
+	fi, err := os.Stat(binaryPath)
+	if err != nil {
+		return "", 0, fmt.Errorf("binary not found: %w", err)
+	}
+	fileSize := int(fi.Size())
+	if fileSize < HeaderLen {
+		return "", 0, errors.New("binary file too small")
+	}
+
+	defaultHeaderBytes := []byte(DefaultHeader)
+	prefixBytes := []byte(Prefix)
+	suffixBytes := []byte(Suffix)
+
+	file, err := os.OpenFile(binaryPath, os.O_RDWR, 0755)
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to open binary for writing: %w", err)
+	}
+	defer file.Close()
+
+	// Memory-mapped in-place scan and replace
+	data, mmapErr := syscall.Mmap(int(file.Fd()), 0, fileSize, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
+	if mmapErr == nil {
+		defer syscall.Munmap(data)
+
+		replacedCount := 0
+		pos := 0
+		for {
+			idx := bytes.Index(data[pos:], prefixBytes)
+			if idx == -1 {
+				break
+			}
+			absIdx := pos + idx
+			if absIdx+HeaderLen <= len(data) && bytes.Equal(data[absIdx+16:absIdx+20], suffixBytes) {
+				copy(data[absIdx:absIdx+HeaderLen], defaultHeaderBytes)
+				replacedCount++
+				pos = absIdx + HeaderLen
+			} else {
+				pos = absIdx + 1
+			}
+		}
+
+		if replacedCount == 0 {
+			if bytes.Contains(data, defaultHeaderBytes) {
+				return DefaultHeader, time.Since(t0), nil
+			}
+			return "", 0, errors.New("neither patched framed header nor default header found in binary")
+		}
+
+		return DefaultHeader, time.Since(t0), nil
+	}
+
+	// Fallback without mmap
+	buf, err := os.ReadFile(binaryPath)
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to read binary: %w", err)
+	}
+
+	replacedCount := 0
+	pos := 0
+	for {
+		idx := bytes.Index(buf[pos:], prefixBytes)
+		if idx == -1 {
+			break
+		}
+		absIdx := pos + idx
+		if absIdx+HeaderLen <= len(buf) && bytes.Equal(buf[absIdx+16:absIdx+20], suffixBytes) {
+			copy(buf[absIdx:absIdx+HeaderLen], defaultHeaderBytes)
+			replacedCount++
+			pos = absIdx + HeaderLen
+		} else {
+			pos = absIdx + 1
+		}
+	}
+
+	if replacedCount == 0 {
+		if bytes.Contains(buf, defaultHeaderBytes) {
+			return DefaultHeader, time.Since(t0), nil
+		}
+		return "", 0, errors.New("neither patched framed header nor default header found in binary")
+	}
+
+	if err := os.WriteFile(binaryPath, buf, fi.Mode().Perm()); err != nil {
+		return "", 0, fmt.Errorf("failed to write unpatched binary: %w", err)
+	}
+
+	return DefaultHeader, time.Since(t0), nil
+}
+
 // AuthMiddleware enforces the 20-byte framed token header on API endpoints.
 func AuthMiddleware(token string, next http.Handler) http.Handler {
 	expectedHeaderName := http.CanonicalHeaderKey(BuildFramedHeader(token))

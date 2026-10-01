@@ -69,15 +69,15 @@ func NewHubManager(hubPort, workspaceDir, appDataDir, securityToken string) *Hub
 		WorkspaceDir:  workspaceDir,
 		AppDataDir:    appDataDir,
 		SecurityToken: securityToken,
-		AgyBinPath:    resolveAgyBinary(),
+		AgyBinPath:    ResolveAgyBinary(),
 		status:        HubStatusIdle,
 		recentLogs:    make([]string, 0, 50),
 		monitorStop:   make(chan struct{}),
 	}
 }
 
-// resolveAgyBinary finds the agy executable in standard locations.
-func resolveAgyBinary() string {
+// ResolveAgyBinary finds the agy executable in standard locations.
+func ResolveAgyBinary() string {
 	candidates := []string{
 		"agy.va39",
 		"agy",

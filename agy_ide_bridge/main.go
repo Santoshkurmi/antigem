@@ -31,6 +31,8 @@ Usage:
   go run main.go [flags]
 
 Flags:
+  -u, --unpatch             Unpatch AGY binary back to standard header and exit (do not start server)
+  --bin <path>              Custom path to AGY binary (for --unpatch or custom setups)
   -t, --token <token>       12-character security token for API & AGY CSRF obfuscation
   -f, --force, --f          Force start AGY Hub automatically without prompting
   -p, --port <port>         Port for the Go IDE Server (default: 1234)
@@ -106,6 +108,8 @@ func formatHumanCrash(p interface{}, rawStack []byte) (reason string, location s
 func main() {
 	cfg := config.LoadConfig()
 
+	var unpatchOnly bool
+	var customAgyBin string
 	var forceStart bool
 	var skipHub bool
 	var cliToken string
@@ -117,6 +121,15 @@ func main() {
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
 		switch {
+		case arg == "-u" || arg == "--unpatch":
+			unpatchOnly = true
+		case strings.HasPrefix(arg, "--bin="):
+			customAgyBin = strings.TrimPrefix(arg, "--bin=")
+		case arg == "--bin" || arg == "--agy-bin":
+			if i+1 < len(os.Args) {
+				customAgyBin = os.Args[i+1]
+				i++
+			}
 		case strings.HasPrefix(arg, "--token="):
 			cliToken = strings.TrimPrefix(arg, "--token=")
 		case arg == "-t" || arg == "--token":
@@ -171,6 +184,26 @@ func main() {
 			printUsage()
 			os.Exit(0)
 		}
+	}
+
+	if unpatchOnly {
+		agyBin := customAgyBin
+		if agyBin == "" {
+			agyBin = hub.ResolveAgyBinary()
+		}
+		fmt.Println("\033[1;36m============================================================\033[0m")
+		fmt.Println("\033[1;33m  ⚡ antiGem AGY Binary Header Unpatcher\033[0m")
+		fmt.Println("\033[1;36m============================================================\033[0m")
+		fmt.Printf("  \033[1m• Target Binary:\033[0m  %s\n", agyBin)
+
+		restoredHeader, elapsed, err := security.UnpatchAgyHeader(agyBin)
+		if err != nil {
+			fmt.Printf("  \033[1;31m✗ Unpatch Failed:\033[0m %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("  \033[1;32m✓ Unpatch Succeeded:\033[0m Header restored to standard '%s' in %v\n", restoredHeader, elapsed)
+		fmt.Println("\033[1;36m============================================================\033[0m")
+		os.Exit(0)
 	}
 
 	// Configure local timezone if offset or name is specified (or in environment)
