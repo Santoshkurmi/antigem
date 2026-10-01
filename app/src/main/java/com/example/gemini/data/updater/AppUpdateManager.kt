@@ -75,7 +75,11 @@ class AppUpdateManager(private val context: Context) {
             val remoteVersionCode = json.optInt("version_code", 0)
             val remoteVersionName = json.optString("version_name", "1.0.0")
             val minSupportedCode = json.optInt("min_supported_version_code", 0)
-            val changelog = json.optString("changelog", "• General improvements and bug fixes.")
+            val changelog = when (val raw = json.opt("changelog")) {
+                is org.json.JSONArray -> (0 until raw.length()).joinToString("\n") { raw.optString(it) }
+                is String -> raw
+                else -> "• General improvements and bug fixes."
+            }
             val isCritical = json.optBoolean("is_critical", false) || (BuildConfig.VERSION_CODE < minSupportedCode)
 
             // Auto-generate package-specific download URL based on remote version name and flavor
@@ -84,6 +88,26 @@ class AppUpdateManager(private val context: Context) {
             val downloadUrl = "https://github.com/santoshkurmi/antigem/releases/download/v$remoteVersionName/antiGem-$flavorType-v$remoteVersionName-release.apk"
 
             if (remoteVersionCode > BuildConfig.VERSION_CODE && downloadUrl.isNotBlank()) {
+                // Verify that the APK asset is actually published and downloadable on GitHub
+                val probeRequest = Request.Builder()
+                    .url(downloadUrl)
+                    .head()
+                    .header("User-Agent", "antiGem-Updater/${BuildConfig.VERSION_NAME}")
+                    .build()
+
+                val isAvailable = try {
+                    httpClient.newCall(probeRequest).execute().use { probeResponse ->
+                        probeResponse.isSuccessful || probeResponse.isRedirect
+                    }
+                } catch (_: Exception) {
+                    false
+                }
+
+                if (!isAvailable) {
+                    // Release is not yet fully published or APK is still building on CI
+                    return@withContext Result.success(null)
+                }
+
                 Result.success(
                     AppUpdateInfo(
                         versionCode = remoteVersionCode,
