@@ -1,6 +1,8 @@
 import re
 import os
+import sys
 import shutil
+import subprocess
 from io import BytesIO
 from collections import deque
 
@@ -197,26 +199,106 @@ class ProtoRegistry:
 # Binary discovery
 # ---------------------------------------------------------------------------
 
-def find_agy_binary(custom_path=None):
-    if custom_path and os.path.isfile(custom_path):
-        return custom_path
-
-    candidates = [
-        os.path.expanduser("~/.local/bin/agy"),
-        "/usr/bin/agy",
-        "/data/data/com.termux/files/usr/bin/agy.va39",
-        "/data/data/com.termux/files/usr/bin/agy",
-        os.path.expanduser("~/.gemini/bin/agy"),
-        os.path.expanduser("~/.antigravity/bin/agy"),
-        shutil.which("agy"),
+def find_all_agy_binaries():
+    home = os.path.expanduser("~")
+    raw_candidates = [
+        os.path.join(home, ".local", "bin", "agy"),
+        os.path.join(home, ".gemini", "bin", "agy"),
+        os.path.join(home, ".antigravity", "bin", "agy"),
+        os.path.join(home, "usr", "bin", "agy"),
+        os.path.join(home, "..", "usr", "bin", "agy"),
     ]
-    for c in candidates:
-        if c and os.path.isfile(c):
-            return c
+    prefix = os.environ.get("PREFIX")
+    if prefix:
+        raw_candidates.append(os.path.join(prefix, "bin", "agy"))
+    which_agy = shutil.which("agy")
+    if which_agy:
+        raw_candidates.append(which_agy)
 
-    raise FileNotFoundError(
-        f"Could not find 'agy' binary. Checked: {[c for c in candidates if c]}"
-    )
+    seen = set()
+    results = []
+    for c in raw_candidates:
+        if not c:
+            continue
+        abs_path = os.path.normpath(os.path.abspath(os.path.expanduser(c)))
+        if abs_path in seen:
+            continue
+        if os.path.isfile(abs_path):
+            seen.add(abs_path)
+            results.append(abs_path)
+    return results
+
+def get_agy_version(bin_path):
+    if not bin_path or not os.path.isfile(bin_path):
+        return None
+    try:
+        res = subprocess.run(
+            [bin_path, "--version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=2
+        )
+        out = (res.stdout or res.stderr).strip()
+        if out:
+            for line in out.splitlines():
+                if line.strip():
+                    return line.strip()
+    except Exception:
+        pass
+    return None
+
+def resolve_agy_binary(custom_path=None):
+    if custom_path:
+        expanded = os.path.normpath(os.path.abspath(os.path.expanduser(custom_path)))
+        if not os.path.isfile(expanded):
+            raise FileNotFoundError(f"Specified AGY binary not found at '{custom_path}' (resolved: '{expanded}')")
+        return expanded
+
+    bins = find_all_agy_binaries()
+    if not bins:
+        raise FileNotFoundError("No AGY binary found in ~/.local/bin, ~/.gemini/bin, ~/.antigravity/bin, ~/usr/bin, ~/../usr/bin, or PATH")
+
+    if len(bins) == 1 or not sys.stdin.isatty():
+        return bins[0]
+
+    print("\n\033[1;33m⚡ Multiple AGY binaries detected:\033[0m")
+    for idx, b in enumerate(bins, 1):
+        ver = get_agy_version(b)
+        ver_str = f" \033[2m(v{ver})\033[0m" if ver else ""
+        print(f"   \033[1m[{idx}]\033[0m {b}{ver_str}")
+
+    try:
+        choice = input(f" \033[1;36m? Select AGY binary to scan [1-{len(bins)}] (default: 1): \033[0m").strip()
+        if not choice:
+            return bins[0]
+        choice_idx = int(choice)
+        if 1 <= choice_idx <= len(bins):
+            return bins[choice_idx - 1]
+    except Exception:
+        pass
+
+    return bins[0]
+
+def resolve_dump_target(bin_path):
+    if not bin_path or not os.path.isfile(bin_path):
+        return bin_path
+    size = os.path.getsize(bin_path)
+    if size >= 10 * 1024 * 1024:
+        return bin_path
+
+    # If < 10 MB (wrapper script), check for agy.va39 in same directory
+    bin_dir = os.path.dirname(bin_path)
+    companion = os.path.join(bin_dir, "agy.va39")
+    if os.path.isfile(companion) and os.path.getsize(companion) >= 10 * 1024 * 1024:
+        print(f"Wrapper detected ({bin_path}, {size} bytes). Using companion binary for proto extraction: {companion}")
+        return companion
+
+    return bin_path
+
+def find_agy_binary(custom_path=None):
+    bin_path = resolve_agy_binary(custom_path)
+    return resolve_dump_target(bin_path)
 
 # ---------------------------------------------------------------------------
 # Binary scanning
@@ -224,7 +306,9 @@ def find_agy_binary(custom_path=None):
 
 def scan_all_descriptors(binary_path=None):
     binary_path = find_agy_binary(binary_path)
-    print(f"Using binary: {binary_path}")
+    ver = get_agy_version(binary_path)
+    ver_str = f" (version: {ver})" if ver else ""
+    print(f"Using binary: {binary_path}{ver_str}")
     with open(binary_path, "rb") as f:
         data = f.read()
     data_len = len(data)
@@ -583,4 +667,19 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
     print(f"\nAll service proto files updated in: {output_dir}")
 
 if __name__ == "__main__":
-    generate_per_service_protos()
+    custom_bin = None
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a.startswith("--bin="):
+            custom_bin = a.split("=", 1)[1]
+        elif a in ("--bin", "-b") and i + 1 < len(args):
+            custom_bin = args[i + 1]
+            i += 1
+        elif not a.startswith("-") and custom_bin is None:
+            custom_bin = a
+        i += 1
+
+    generate_per_service_protos(binary_path=custom_bin)
+
