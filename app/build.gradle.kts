@@ -32,9 +32,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("release.jks")
-            storePassword = "geminiapp123"
-            keyAlias = "release"
-            keyPassword = "geminiapp123"
+            storePassword = "123456"
+            keyAlias = "antigem"
+            keyPassword = "123456"
         }
     }
 

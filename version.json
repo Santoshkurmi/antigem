@@ -1,7 +1,7 @@
 {
-  "version_code": 102,
-  "version_name": "1.0.2",
+  "version_code": 103,
+  "version_name": "1.0.3",
   "min_supported_version_code": 1,
-  "changelog": "• Initial release with centralized versioning system\n• Support for com.antigem and com.termux packages\n• In-app seamless auto-updater with live download progress",
+  "changelog": "Fix update system and testing github workflow to do release",
   "is_critical": false
 }

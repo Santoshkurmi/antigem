@@ -1,0 +1,69 @@
+name: Build & Publish Release
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'version.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Parse version.json
+        id: version
+        run: |
+          VERSION_NAME=$(python3 -c "import json; print(json.load(open('version.json')).get('version_name', '1.0.0'))")
+          VERSION_CODE=$(python3 -c "import json; print(json.load(open('version.json')).get('version_code', 1))")
+          CHANGELOG=$(python3 -c "import json; print(json.load(open('version.json')).get('changelog', ''))")
+          echo "tag=v${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "name=v${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Restore Keystore from Secret
+        run: |
+          if [ -z "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "Error: RELEASE_KEYSTORE_BASE64 secret is missing in GitHub repository settings."
+            exit 1
+          fi
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/release.jks
+
+      - name: Build Release APKs
+        run: |
+          chmod +x gradlew scripts/build_all_apks.sh
+          ./scripts/build_all_apks.sh --release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.name }}
+          body: ${{ steps.version.outputs.changelog }}
+          files: output/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
