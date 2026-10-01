@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -59,8 +61,130 @@ type HubManager struct {
 	mu          sync.Mutex
 }
 
+// FindAllAgyBinaries discovers all existing AGY binaries in candidate paths and PATH.
+func FindAllAgyBinaries() []string {
+	home, _ := os.UserHomeDir()
+	var rawCandidates []string
+	if home != "" {
+		rawCandidates = append(rawCandidates,
+			filepath.Join(home, ".local", "bin", "agy"),
+			filepath.Join(home, ".gemini", "bin", "agy"),
+			filepath.Join(home, ".antigravity", "bin", "agy"),
+			filepath.Join(home, "usr", "bin", "agy"),
+			filepath.Join(home, "..", "usr", "bin", "agy"),
+		)
+	}
+	if prefix := os.Getenv("PREFIX"); prefix != "" {
+		rawCandidates = append(rawCandidates, filepath.Join(prefix, "bin", "agy"))
+	}
+	if p := config.SafeLookPath("agy"); p != "" {
+		rawCandidates = append(rawCandidates, p)
+	}
+
+	seen := make(map[string]bool)
+	var results []string
+
+	for _, c := range rawCandidates {
+		if c == "" {
+			continue
+		}
+		absPath, err := filepath.Abs(c)
+		if err != nil {
+			absPath = c
+		}
+		absPath = filepath.Clean(absPath)
+		if seen[absPath] {
+			continue
+		}
+		if fi, err := os.Stat(absPath); err == nil && !fi.IsDir() {
+			seen[absPath] = true
+			results = append(results, absPath)
+		}
+	}
+	return results
+}
+
+// ResolveAgyBinaryInteractive resolves the AGY binary path. If customPath is provided, it validates existence.
+// If multiple binaries are found, it prompts interactively (or defaults to top priority if forceAuto).
+func ResolveAgyBinaryInteractive(customPath string, forceAuto bool) (string, error) {
+	if customPath != "" {
+		expanded := config.ExpandHome(customPath)
+		cleanPath, err := filepath.Abs(expanded)
+		if err != nil {
+			cleanPath = expanded
+		}
+		cleanPath = filepath.Clean(cleanPath)
+		if fi, err := os.Stat(cleanPath); err != nil || fi.IsDir() {
+			return "", fmt.Errorf("specified AGY binary not found at '%s' (resolved: '%s')", customPath, cleanPath)
+		}
+		return cleanPath, nil
+	}
+
+	bins := FindAllAgyBinaries()
+	if len(bins) == 0 {
+		return "", errors.New("no AGY binary found in ~/.local/bin, ~/.gemini/bin, ~/.antigravity/bin, ~/usr/bin, ~/../usr/bin, or PATH")
+	}
+
+	if len(bins) == 1 || forceAuto {
+		return bins[0], nil
+	}
+
+	// Interactive selection
+	fmt.Println("\n \033[1;33m⚡ Multiple AGY binaries detected:\033[0m")
+	for idx, b := range bins {
+		fmt.Printf("   \033[1m[%d]\033[0m %s\n", idx+1, b)
+	}
+	fmt.Printf(" \033[1;36m? Select AGY binary to run [1-%d] (default: 1): \033[0m", len(bins))
+
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return bins[0], nil
+	}
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return bins[0], nil
+	}
+	choice, err := strconv.Atoi(trimmed)
+	if err != nil || choice < 1 || choice > len(bins) {
+		fmt.Printf(" \033[33mℹ Invalid selection '%s'. Defaulting to [1] %s\033[0m\n", trimmed, bins[0])
+		return bins[0], nil
+	}
+	return bins[choice-1], nil
+}
+
+// ResolveAgyBinary is the default non-interactive fallback.
+func ResolveAgyBinary() string {
+	bins := FindAllAgyBinaries()
+	if len(bins) > 0 {
+		return bins[0]
+	}
+	return "agy"
+}
+
+// ResolvePatchTarget determines the target binary for CSRF header patching.
+// If the selected binary is < 10 MB (wrapper script), it checks for agy.va39 in the same directory.
+func ResolvePatchTarget(binPath string) string {
+	if binPath == "" {
+		return ""
+	}
+	fi, err := os.Stat(binPath)
+	if err == nil && fi.Size() >= 10*1024*1024 {
+		return binPath
+	}
+
+	// If < 10 MB, search in same directory for agy.va39
+	dir := filepath.Dir(binPath)
+	companion := filepath.Join(dir, "agy.va39")
+	if fi2, err2 := os.Stat(companion); err2 == nil && !fi2.IsDir() && fi2.Size() >= 10*1024*1024 {
+		return companion
+	}
+
+	return binPath
+}
+
 // NewHubManager initializes a supervisor for AGY Hub.
-func NewHubManager(hubPort, workspaceDir, appDataDir, securityToken string) *HubManager {
+func NewHubManager(hubPort, workspaceDir, appDataDir, securityToken, agyBinPath string) *HubManager {
 	if hubPort == "" {
 		hubPort = "1235"
 	}
@@ -69,30 +193,11 @@ func NewHubManager(hubPort, workspaceDir, appDataDir, securityToken string) *Hub
 		WorkspaceDir:  workspaceDir,
 		AppDataDir:    appDataDir,
 		SecurityToken: securityToken,
-		AgyBinPath:    ResolveAgyBinary(),
+		AgyBinPath:    agyBinPath,
 		status:        HubStatusIdle,
 		recentLogs:    make([]string, 0, 50),
 		monitorStop:   make(chan struct{}),
 	}
-}
-
-// ResolveAgyBinary finds the agy executable in standard locations.
-func ResolveAgyBinary() string {
-	candidates := []string{
-		"agy.va39",
-		"agy",
-		"/data/data/com.termux/files/usr/bin/agy.va39",
-		"/data/data/com.termux/files/usr/bin/agy",
-	}
-	for _, c := range candidates {
-		if p := config.SafeLookPath(c); p != "" {
-			return p
-		}
-		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
-			return c
-		}
-	}
-	return "agy"
 }
 
 // isHubReady probes if port 1235 is active and accepting connections, logging probe details for debugging
@@ -279,21 +384,28 @@ func (m *HubManager) Start() error {
 
 	m.setStatusLocked(HubStatusStarting, "")
 
+	if m.AgyBinPath == "" {
+		err := fmt.Errorf("AGY executable binary not specified or found")
+		m.setStatusLocked(HubStatusError, err.Error())
+		return err
+	}
+
 	// In-place patch AGY binary with 20-byte framed security header (Strict Fail-Closed Security)
 	if m.SecurityToken != "" {
-		if m.AgyBinPath == "" {
+		patchTarget := ResolvePatchTarget(m.AgyBinPath)
+		if patchTarget == "" {
 			err := fmt.Errorf("AGY executable binary not found for security header patching")
 			m.setStatusLocked(HubStatusError, err.Error())
 			return err
 		}
-		patchedHeader, elapsed, err := security.PatchAgyHeader(m.AgyBinPath, m.SecurityToken)
+		patchedHeader, elapsed, err := security.PatchAgyHeader(patchTarget, m.SecurityToken)
 		if err != nil {
-			errMsg := fmt.Sprintf("Security Error: Failed to patch AGY binary (%s): %v", m.AgyBinPath, err)
+			errMsg := fmt.Sprintf("Security Error: Failed to patch AGY binary (%s): %v", patchTarget, err)
 			log.Printf("\033[1;31m[Security Fatal]\033[0m %s", errMsg)
 			m.setStatusLocked(HubStatusError, errMsg)
 			return errors.New(errMsg)
 		}
-		log.Printf("\033[1;32m[Security]\033[0m In-place patched AGY binary (%s) in %v -> Active Header: %s", m.AgyBinPath, elapsed, patchedHeader)
+		log.Printf("\033[1;32m[Security]\033[0m In-place patched AGY binary (%s) in %v -> Active Header: %s", patchTarget, elapsed, patchedHeader)
 	}
 
 	args := []string{
@@ -317,22 +429,23 @@ func (m *HubManager) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 
-	shArgs := append([]string{"-c", `exec agy "$@"`, "agy"}, args...)
+	shArgs := append([]string{"-c", `exec "$0" "$@"`, m.AgyBinPath}, args...)
 	cmd := exec.CommandContext(ctx, "sh", shArgs...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	// Set required environment variables for agy hub mode
+	// Set required environment variables for agy hub mode dynamically across all platforms
 	home, _ := os.UserHomeDir()
-	termuxBin := "/data/data/com.termux/files/usr/bin"
-	geminiBin := "/data/data/com.termux/files/home/.gemini/bin"
-	if home != "" {
-		geminiBin = home + "/.gemini/bin"
+	geminiBin := filepath.Join(home, ".gemini", "bin")
+	localBin := filepath.Join(home, ".local", "bin")
+	usrBin := filepath.Join(home, "..", "usr", "bin")
+	if prefix := os.Getenv("PREFIX"); prefix != "" {
+		usrBin = filepath.Join(prefix, "bin")
 	}
 
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
 		"USERPROFILE="+home,
-		"PATH="+geminiBin+":"+termuxBin+":/usr/local/bin:/usr/bin:/bin:/system/bin:/system/xbin:"+os.Getenv("PATH"),
+		"PATH="+geminiBin+":"+localBin+":"+usrBin+":/usr/local/bin:/usr/bin:/bin:/system/bin:/system/xbin:"+os.Getenv("PATH"),
 		"AGY_ENABLE_HUB=1",
 		"ANTIGRAVITY_VSCODE_HOST=1",
 		"ANTIGRAVITY_AUTH_SUCCESS_APP=vscode",
@@ -508,11 +621,14 @@ func (m *HubManager) Stop() {
 
 		// Auto-unpatch binary back to standard header once process has exited and lock is released
 		if m.AgyBinPath != "" {
-			restored, elapsed, err := security.UnpatchAgyHeader(m.AgyBinPath)
-			if err == nil {
-				log.Printf("\033[1;32m[Security]\033[0m Auto-unpatched AGY binary (%s) back to '%s' in %v", m.AgyBinPath, restored, elapsed)
-			} else {
-				log.Printf("\033[1;33m[Security Warning]\033[0m Could not auto-unpatch AGY binary: %v", err)
+			patchTarget := ResolvePatchTarget(m.AgyBinPath)
+			if patchTarget != "" {
+				restored, elapsed, err := security.UnpatchAgyHeader(patchTarget)
+				if err == nil {
+					log.Printf("\033[1;32m[Security]\033[0m Auto-unpatched AGY binary (%s) back to '%s' in %v", patchTarget, restored, elapsed)
+				} else {
+					log.Printf("\033[1;33m[Security Warning]\033[0m Could not auto-unpatch AGY binary: %v", err)
+				}
 			}
 		}
 	}

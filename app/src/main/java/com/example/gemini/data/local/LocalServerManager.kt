@@ -149,24 +149,26 @@ object LocalServerManager {
     }
 
     private fun resolveServerCommand(context: Context): String? {
-        val binBridge = File(LocalEnvironmentManager.getBinDir(context), "agy_ide_bridge")
-        if (binBridge.exists()) {
-            try {
-                binBridge.setExecutable(true, false)
-                binBridge.setReadable(true, false)
-            } catch (_: Exception) {}
-            val authPrefs = AuthPreferences(context)
-            val token = authPrefs.getSecurityTokenSync()
-            val bridgePort = try {
-                java.net.URI(AuthPreferences.currentBridgeHttpUrl).port.takeIf { it > 0 } ?: 1234
-            } catch (_: Exception) { 1234 }
-            val hubPort = try {
-                java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 } ?: 1235
-            } catch (_: Exception) { 1235 }
-            val tzOffset = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 1000
-            return "agy_ide_bridge -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset"
+        val authPrefs = AuthPreferences(context)
+        val bridgeCmd = authPrefs.getAgyBridgeBinaryPathSync().trim().ifBlank { AuthPreferences.DEFAULT_BRIDGE_BINARY_PATH }
+        val agyCmd = authPrefs.getAgyBinaryPathSync().trim().ifBlank { AuthPreferences.DEFAULT_AGY_BINARY_PATH }
+
+        val token = authPrefs.getSecurityTokenSync()
+        val bridgePort = try {
+            java.net.URI(AuthPreferences.currentBridgeHttpUrl).port.takeIf { it > 0 } ?: 1234
+        } catch (_: Exception) { 1234 }
+        val hubPort = try {
+            java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 } ?: 1235
+        } catch (_: Exception) { 1235 }
+        val tzOffset = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 1000
+
+        val binParam = if (agyCmd.isNotBlank()) {
+            " --bin \"$agyCmd\""
+        } else {
+            ""
         }
-        return null
+
+        return "$bridgeCmd -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset$binParam"
     }
 
     /**

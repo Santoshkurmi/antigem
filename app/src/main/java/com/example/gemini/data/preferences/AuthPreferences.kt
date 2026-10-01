@@ -72,6 +72,11 @@ class AuthPreferences(private val context: Context) {
         val IS_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_network_inspector_enabled")
         val IS_FLOATING_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_network_inspector_enabled")
         val SECURITY_TOKEN = stringPreferencesKey("security_token")
+        val AGY_BRIDGE_BINARY_PATH = stringPreferencesKey("agy_bridge_binary_path")
+        val AGY_BINARY_PATH = stringPreferencesKey("agy_binary_path")
+
+        const val DEFAULT_BRIDGE_BINARY_PATH = "~/../usr/bin/agy_ide_bridge"
+        const val DEFAULT_AGY_BINARY_PATH = "~/../usr/bin/agy"
 
         const val TOKEN_PREFIX = "x-ag"
         const val TOKEN_SUFFIX = "_9qx"
@@ -700,6 +705,32 @@ class AuthPreferences(private val context: Context) {
         syncPrefs.edit().putString("security_token", validToken).apply()
         currentSecurityToken = validToken
         context.dataStore.edit { it[SECURITY_TOKEN] = validToken }
+    }
+
+    val agyBridgeBinaryPath: Flow<String> = context.dataStore.data.map {
+        it[AGY_BRIDGE_BINARY_PATH] ?: getAgyBridgeBinaryPathSync()
+    }
+
+    fun getAgyBridgeBinaryPathSync(): String =
+        syncPrefs.getString("agy_bridge_binary_path", DEFAULT_BRIDGE_BINARY_PATH) ?: DEFAULT_BRIDGE_BINARY_PATH
+
+    suspend fun saveAgyBridgeBinaryPath(path: String) {
+        val trimmed = path.trim().ifBlank { DEFAULT_BRIDGE_BINARY_PATH }
+        syncPrefs.edit().putString("agy_bridge_binary_path", trimmed).apply()
+        context.dataStore.edit { it[AGY_BRIDGE_BINARY_PATH] = trimmed }
+    }
+
+    val agyBinaryPath: Flow<String> = context.dataStore.data.map {
+        it[AGY_BINARY_PATH] ?: getAgyBinaryPathSync()
+    }
+
+    fun getAgyBinaryPathSync(): String =
+        syncPrefs.getString("agy_binary_path", DEFAULT_AGY_BINARY_PATH) ?: DEFAULT_AGY_BINARY_PATH
+
+    suspend fun saveAgyBinaryPath(path: String) {
+        val trimmed = path.trim().ifBlank { DEFAULT_AGY_BINARY_PATH }
+        syncPrefs.edit().putString("agy_binary_path", trimmed).apply()
+        context.dataStore.edit { it[AGY_BINARY_PATH] = trimmed }
     }
 
     suspend fun clearAuth() {

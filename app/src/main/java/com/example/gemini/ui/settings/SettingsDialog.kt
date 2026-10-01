@@ -1420,10 +1420,15 @@ private fun ServersSubScreen(
     val (initHubHost, initHubPort) = remember { parseHostPort(currentHubUrl, AuthPreferences.DEFAULT_HUB_URL) }
     val (initBridgeHost, initBridgePort) = remember { parseHostPort(currentBridgeUrl, AuthPreferences.DEFAULT_BRIDGE_HTTP_URL) }
 
-    var hubHost by remember { mutableStateOf(initHubHost) }
-    var hubPort by remember { mutableStateOf(initHubPort) }
-    var bridgeHost by remember { mutableStateOf(initBridgeHost) }
-    var bridgePort by remember { mutableStateOf(initBridgePort) }
+    val initialSharedHost = remember { initBridgeHost.ifBlank { initHubHost.ifBlank { "127.0.0.1" } } }
+    var sharedHost by remember { mutableStateOf(initialSharedHost) }
+    var hubPort by remember { mutableStateOf(initHubPort.ifBlank { "1235" }) }
+    var bridgePort by remember { mutableStateOf(initBridgePort.ifBlank { "1234" }) }
+
+    val initialBridgeBinPath = remember { authPrefs.getAgyBridgeBinaryPathSync() }
+    val initialAgyBinPath = remember { authPrefs.getAgyBinaryPathSync() }
+    var bridgeBinPath by remember { mutableStateOf(initialBridgeBinPath) }
+    var agyBinPath by remember { mutableStateOf(initialAgyBinPath) }
 
     var hubTestStatus by remember { mutableStateOf<String?>(null) }
     var isTestingHub by remember { mutableStateOf(false) }
@@ -1434,6 +1439,76 @@ private fun ServersSubScreen(
     var saveFeedback by remember { mutableStateOf<String?>(null) }
 
     var showRestartDialog by remember { mutableStateOf(false) }
+    var showUnsavedDialog by remember { mutableStateOf(false) }
+
+    val hasUnsavedChanges = remember(sharedHost, hubPort, bridgePort, bridgeBinPath, agyBinPath, securityToken) {
+        sharedHost.trim() != initialSharedHost.trim() ||
+            hubPort.trim() != initHubPort.trim() ||
+            bridgePort.trim() != initBridgePort.trim() ||
+            bridgeBinPath.trim() != initialBridgeBinPath.trim() ||
+            agyBinPath.trim() != initialAgyBinPath.trim() ||
+            securityToken.trim() != initSecurityToken.trim()
+    }
+
+    androidx.activity.compose.BackHandler(enabled = hasUnsavedChanges) {
+        showUnsavedDialog = true
+    }
+
+    if (showUnsavedDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnsavedDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = ClaudeTerracotta,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Unsaved Server Settings",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "You have unsaved changes in Server & Connectivity settings. Please save them manually using 'Save Server & Security Settings' below or discard your modifications.",
+                    fontSize = 13.5.sp,
+                    lineHeight = 19.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showUnsavedDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Keep Editing", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showUnsavedDialog = false
+                        sharedHost = initialSharedHost
+                        hubPort = initHubPort.ifBlank { "1235" }
+                        bridgePort = initBridgePort.ifBlank { "1234" }
+                        bridgeBinPath = initialBridgeBinPath
+                        agyBinPath = initialAgyBinPath
+                        securityToken = initSecurityToken
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Discard Changes", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
 
     if (showRestartDialog) {
         AlertDialog(
@@ -1499,7 +1574,7 @@ private fun ServersSubScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // AGY Hub Section
+        // Unified Server Endpoints (Shared Host & Individual Ports)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -1511,49 +1586,67 @@ private fun ServersSubScreen(
                     Icon(imageVector = Icons.Outlined.Dns, contentDescription = null, tint = QuotaGreen, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "Antigravity Hub (Daemon)", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        Text(text = "Primary gRPC-Web Language Server (agy --hub)", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        Text(text = "Server & Connectivity Endpoints", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(text = "Shared server host address with dedicated daemon & bridge ports", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(if (isServerOnline || hubTestStatus?.startsWith("✓") == true) QuotaGreen else Color.Red)
-                    )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
+                OutlinedTextField(
+                    value = sharedHost,
+                    onValueChange = { sharedHost = it; saveFeedback = null },
+                    label = { Text("Server Host / IP Address (Shared)") },
+                    placeholder = { Text("127.0.0.1") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        value = hubHost,
-                        onValueChange = { hubHost = it; saveFeedback = null },
-                        label = { Text("Hub IP / Host") },
-                        modifier = Modifier.weight(2.2f),
+                        value = hubPort,
+                        onValueChange = { hubPort = it; saveFeedback = null },
+                        label = { Text("AGY Hub Port") },
+                        placeholder = { Text("1235") },
+                        modifier = Modifier.weight(1f),
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp)
                     )
                     OutlinedTextField(
-                        value = hubPort,
-                        onValueChange = { hubPort = it; saveFeedback = null },
-                        label = { Text("Port") },
+                        value = bridgePort,
+                        onValueChange = { bridgePort = it; saveFeedback = null },
+                        label = { Text("IDE Bridge Port") },
+                        placeholder = { Text("1234") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                Text(
-                    text = "Endpoint: http://$hubHost:$hubPort",
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
+                // Endpoints status & preview
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (isServerOnline || hubTestStatus?.startsWith("✓") == true) QuotaGreen else Color.Red)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Hub: http://${sharedHost.trim()}:${hubPort.trim()}",
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
 
                 if (hubTestStatus != null) {
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = hubTestStatus ?: "",
                         fontSize = 11.5.sp,
@@ -1562,98 +1655,26 @@ private fun ServersSubScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                OutlinedButton(
-                    onClick = {
-                        isTestingHub = true
-                        hubTestStatus = "Pinging http://$hubHost:$hubPort..."
-                        coroutineScope.launch {
-                            val ok = withContext(Dispatchers.IO) {
-                                try {
-                                    val u = URL("http://$hubHost:$hubPort")
-                                    val conn = u.openConnection() as HttpURLConnection
-                                    conn.connectTimeout = 3000
-                                    conn.readTimeout = 3000
-                                    val code = conn.responseCode
-                                    conn.disconnect()
-                                    code in 200..499
-                                } catch (e: Exception) {
-                                    false
-                                }
-                            }
-                            isTestingHub = false
-                            hubTestStatus = if (ok) "✓ Connected to AGY Hub successfully!" else "✗ Failed to reach Hub on port $hubPort"
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    enabled = !isTestingHub
-                ) {
-                    if (isTestingHub) {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text("Test Hub Connection", fontSize = 12.sp)
-                }
-            }
-        }
-
-        // AGY IDE Bridge Section
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            border = cardBorder
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Outlined.CloudSync, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "IDE Bridge (HTTP / WebSocket)", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        Text(text = "Instance management & prewarm proxy", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                    }
                     Box(
                         modifier = Modifier
-                            .size(10.dp)
+                            .size(8.dp)
                             .clip(CircleShape)
                             .background(if (isBridgeOnline || bridgeTestStatus?.startsWith("✓") == true) QuotaGreen else Color.Red)
                     )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = bridgeHost,
-                        onValueChange = { bridgeHost = it; saveFeedback = null },
-                        label = { Text("Bridge IP / Host") },
-                        modifier = Modifier.weight(2.2f),
-                        singleLine = true,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    OutlinedTextField(
-                        value = bridgePort,
-                        onValueChange = { bridgePort = it; saveFeedback = null },
-                        label = { Text("Port") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        shape = RoundedCornerShape(10.dp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Bridge: http://${sharedHost.trim()}:${bridgePort.trim()}",
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Endpoint: http://$bridgeHost:$bridgePort",
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
 
                 if (bridgeTestStatus != null) {
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = bridgeTestStatus ?: "",
                         fontSize = 11.5.sp,
@@ -1662,28 +1683,133 @@ private fun ServersSubScreen(
                     )
                 }
 
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            isTestingHub = true
+                            hubTestStatus = "Pinging http://${sharedHost.trim()}:${hubPort.trim()}..."
+                            coroutineScope.launch {
+                                val ok = withContext(Dispatchers.IO) {
+                                    try {
+                                        val u = URL("http://${sharedHost.trim()}:${hubPort.trim()}")
+                                        val conn = u.openConnection() as HttpURLConnection
+                                        conn.connectTimeout = 3000
+                                        conn.readTimeout = 3000
+                                        val code = conn.responseCode
+                                        conn.disconnect()
+                                        code in 200..499
+                                    } catch (e: Exception) {
+                                        false
+                                    }
+                                }
+                                isTestingHub = false
+                                hubTestStatus = if (ok) "✓ Hub Connected!" else "✗ Hub unreachable (${hubPort.trim()})"
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        enabled = !isTestingHub
+                    ) {
+                        if (isTestingHub) {
+                            CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+                        Text("Test Hub", fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            isTestingBridge = true
+                            bridgeTestStatus = "Pinging http://${sharedHost.trim()}:${bridgePort.trim()}..."
+                            coroutineScope.launch {
+                                val base = "http://${sharedHost.trim()}:${bridgePort.trim()}"
+                                val ok = com.example.gemini.data.remote.AgyBridgeService.instance.checkServerHealth(base)
+                                isTestingBridge = false
+                                bridgeTestStatus = if (ok) "✓ Bridge Connected!" else "✗ Bridge unreachable (${bridgePort.trim()})"
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        enabled = !isTestingBridge
+                    ) {
+                        if (isTestingBridge) {
+                            CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+                        Text("Test Bridge", fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        // Binary Executable Paths Section (Auto-Launch & --bin arguments)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Outlined.Terminal, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Binary Executable Paths", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(text = "Custom paths used when auto-starting IDE Bridge and AGY Hub", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedTextField(
+                    value = bridgeBinPath,
+                    onValueChange = { bridgeBinPath = it; saveFeedback = null },
+                    label = { Text("IDE Bridge Binary Path") },
+                    placeholder = { Text(AuthPreferences.DEFAULT_BRIDGE_BINARY_PATH) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = agyBinPath,
+                    onValueChange = { agyBinPath = it; saveFeedback = null },
+                    label = { Text("AGY Hub Binary Path") },
+                    placeholder = { Text(AuthPreferences.DEFAULT_AGY_BINARY_PATH) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "• Passed via --bin on launch so auto-start executes the designated binary directly without interactive prompts.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+
                 Spacer(modifier = Modifier.height(10.dp))
 
                 OutlinedButton(
                     onClick = {
-                        isTestingBridge = true
-                        bridgeTestStatus = "Pinging http://$bridgeHost:$bridgePort..."
-                        coroutineScope.launch {
-                            val base = "http://${bridgeHost.trim()}:${bridgePort.trim()}"
-                            val ok = com.example.gemini.data.remote.AgyBridgeService.instance.checkServerHealth(base)
-                            isTestingBridge = false
-                            bridgeTestStatus = if (ok) "✓ Connected to IDE Bridge successfully!" else "✗ Failed to reach Bridge on port $bridgePort"
-                        }
+                        sharedHost = "127.0.0.1"
+                        hubPort = "1235"
+                        bridgePort = "1234"
+                        bridgeBinPath = AuthPreferences.DEFAULT_BRIDGE_BINARY_PATH
+                        agyBinPath = AuthPreferences.DEFAULT_AGY_BINARY_PATH
+                        saveFeedback = "Settings reset to defaults (click Save to apply)."
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    enabled = !isTestingBridge
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    if (isTestingBridge) {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text("Test Bridge Connection", fontSize = 12.sp)
+                    Icon(imageVector = Icons.Outlined.RestartAlt, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Reset All to Defaults", fontSize = 12.sp)
                 }
             }
         }
@@ -1790,14 +1916,19 @@ private fun ServersSubScreen(
 
         Button(
             onClick = {
-                val fullHub = "http://${hubHost.trim()}:${hubPort.trim()}"
-                val fullBridge = "http://${bridgeHost.trim()}:${bridgePort.trim()}"
+                val cleanHost = sharedHost.trim().ifBlank { "127.0.0.1" }
+                val cleanHubPort = hubPort.trim().ifBlank { "1235" }
+                val cleanBridgePort = bridgePort.trim().ifBlank { "1234" }
+                val fullHub = "http://$cleanHost:$cleanHubPort"
+                val fullBridge = "http://$cleanHost:$cleanBridgePort"
                 onSaveServerUrls(fullHub, fullBridge)
                 val tokenToSave = if (securityToken.length == AuthPreferences.TOKEN_LENGTH) securityToken else AuthPreferences.generateRandomToken()
                 coroutineScope.launch {
                     authPrefs.saveSecurityToken(tokenToSave)
+                    authPrefs.saveAgyBridgeBinaryPath(bridgeBinPath.trim().ifBlank { AuthPreferences.DEFAULT_BRIDGE_BINARY_PATH })
+                    authPrefs.saveAgyBinaryPath(agyBinPath.trim().ifBlank { AuthPreferences.DEFAULT_AGY_BINARY_PATH })
                 }
-                saveFeedback = "✓ Server and Security settings saved!"
+                saveFeedback = "✓ Server, Binaries and Security settings saved!"
                 showRestartDialog = true
             },
             modifier = Modifier.fillMaxWidth(),
