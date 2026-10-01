@@ -20,7 +20,9 @@ sealed class LocalServerStatus {
     object Starting : LocalServerStatus()
     data class Running(val startTimeMs: Long = System.currentTimeMillis()) : LocalServerStatus()
     object Stopping : LocalServerStatus()
-    data class Stopped(val exitCode: Int? = null, val stopTimeMs: Long = System.currentTimeMillis()) : LocalServerStatus()
+    data class Stopped(val exitCode: Int? = null, val stopTimeMs: Long = System.currentTimeMillis()) :
+        LocalServerStatus()
+
     data class Error(val message: String) : LocalServerStatus()
 }
 
@@ -54,7 +56,12 @@ object LocalServerManager {
         }
     }
 
-    private fun extractAssetToBin(context: Context, binDir: File, assetName: String, targetFileName: String = assetName) {
+    private fun extractAssetToBin(
+        context: Context,
+        binDir: File,
+        assetName: String,
+        targetFileName: String = assetName
+    ) {
         val targetFile = File(binDir, targetFileName)
         context.assets.open("bin/$assetName").use { input ->
             val tempFile = File(binDir, "$targetFileName.tmp")
@@ -76,12 +83,17 @@ object LocalServerManager {
         val binDir = LocalEnvironmentManager.getBinDir(context)
         val bridgeFile = File(binDir, "agy_ide_bridge")
         val backupFile = File(binDir, "backup_bootstrap")
+        val backupChatsFile = File(binDir, "backup_chats")
+        val restoreChatsFile = File(binDir, "restore_chats")
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val lastSavedUpdate = prefs.getLong(KEY_BRIDGE_LAST_UPDATE_TIME, 0L)
         val packageInfo = try {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                context.packageManager.getPackageInfo(
+                    context.packageName,
+                    android.content.pm.PackageManager.PackageInfoFlags.of(0)
+                )
             } else {
                 @Suppress("DEPRECATION")
                 context.packageManager.getPackageInfo(context.packageName, 0)
@@ -91,7 +103,8 @@ object LocalServerManager {
         }
         val currentAppUpdateTime = packageInfo?.lastUpdateTime ?: 0L
 
-        val needsCopy = !bridgeFile.exists() || !backupFile.exists() || (currentAppUpdateTime > 0L && currentAppUpdateTime != lastSavedUpdate)
+        val needsCopy =
+            !bridgeFile.exists() || !backupFile.exists() || !backupChatsFile.exists() || !restoreChatsFile.exists() || (currentAppUpdateTime > 0L && currentAppUpdateTime != lastSavedUpdate)
 
         if (needsCopy) {
             try {
@@ -102,7 +115,17 @@ object LocalServerManager {
                 try {
                     extractAssetToBin(context, binDir, "backup_bootstrap")
                 } catch (e: Exception) {
-                    Log.w(TAG, "[ServerManager] Optional backup_bootstrap asset not found or failed to extract", e)
+                    Log.w(TAG, "backup_bootstrap asset not extracted", e)
+                }
+                try {
+                    extractAssetToBin(context, binDir, "backup_chats")
+                } catch (e: Exception) {
+                    Log.w(TAG, "backup_chats asset not extracted", e)
+                }
+                try {
+                    extractAssetToBin(context, binDir, "restore_chats")
+                } catch (e: Exception) {
+                    Log.w(TAG, "restore_chats asset not extracted", e)
                 }
 
                 // Also copy agy_ide_bridge to public Downloads folder for user access
@@ -150,16 +173,21 @@ object LocalServerManager {
 
     private fun resolveServerCommand(context: Context): String? {
         val authPrefs = AuthPreferences(context)
-        val bridgeCmd = authPrefs.getAgyBridgeBinaryPathSync().trim().ifBlank { AuthPreferences.DEFAULT_BRIDGE_BINARY_PATH }
+        val bridgeCmd =
+            authPrefs.getAgyBridgeBinaryPathSync().trim().ifBlank { AuthPreferences.DEFAULT_BRIDGE_BINARY_PATH }
         val agyCmd = authPrefs.getAgyBinaryPathSync().trim().ifBlank { AuthPreferences.DEFAULT_AGY_BINARY_PATH }
 
         val token = authPrefs.getSecurityTokenSync()
         val bridgePort = try {
             java.net.URI(AuthPreferences.currentBridgeHttpUrl).port.takeIf { it > 0 } ?: 1234
-        } catch (_: Exception) { 1234 }
+        } catch (_: Exception) {
+            1234
+        }
         val hubPort = try {
             java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 } ?: 1235
-        } catch (_: Exception) { 1235 }
+        } catch (_: Exception) {
+            1235
+        }
         val tzOffset = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 1000
 
         val binParam = if (agyCmd.isNotBlank()) {
@@ -180,7 +208,8 @@ object LocalServerManager {
             session.terminalSession.emulator?.screen?.clearTranscript()
             session.terminalSession.emulator?.reset()
             session.notifyTextChanged()
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
     /**
@@ -198,7 +227,8 @@ object LocalServerManager {
                 session.write("\u0003")
                 session.terminalSession.finishIfRunning()
                 session.close()
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
 
         _serverSession.value = null
@@ -213,7 +243,10 @@ object LocalServerManager {
     @Synchronized
     fun autoStartOnAppLaunch(context: Context) {
         if (hasInitialAutoStarted) {
-            Log.d(TAG, "[ServerManager] Initial auto-start already executed for this process, skipping autoStartOnAppLaunch")
+            Log.d(
+                TAG,
+                "[ServerManager] Initial auto-start already executed for this process, skipping autoStartOnAppLaunch"
+            )
             return
         }
         if (!LocalEnvironmentManager.isInstalled(context)) {
@@ -273,7 +306,10 @@ object LocalServerManager {
             return
         }
 
-        Log.d(TAG, "[ServerManager] Spawning dedicated persistent terminal session for server runner with initialCommand: $command")
+        Log.d(
+            TAG,
+            "[ServerManager] Spawning dedicated persistent terminal session for server runner with initialCommand: $command"
+        )
 
         val session = withContext(Dispatchers.Main) {
             LocalPtySession(
@@ -321,21 +357,24 @@ object LocalServerManager {
                     .post("{}".toRequestBody(null))
                     .build()
                 AgyBridgeService.instance.fastClient.newCall(req).execute().close()
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
 
         // 2. Also send Ctrl+C to persistent PTY terminal session
         if (session != null && !session.isExited.value) {
             try {
                 session.write("\u0003")
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
 
         // 3. Send pkill to terminate any child tree processes (agy daemon, child node processes)
         if (session != null && !session.isExited.value) {
             try {
                 session.write("pkill -f gemini-server; pkill -f 'server -f'; pkill -f 'agy '\n")
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
 
         // 4. Wait for SystemConnectionState to transition to Offline

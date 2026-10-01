@@ -62,6 +62,14 @@ import android.widget.Toast
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -74,6 +82,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     SKILLS_PLUGINS("Skills & Plugins", "Agent capabilities, Google plugins, and extensions"),
     AUTOMATION("Automation & Device Tools", "Browser & Terminal AI agent permissions"),
     TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling"),
+    BACKUPS("Backups & Restore", "Backup rootfs environment and AGY chat histories"),
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
     DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD"),
     ABOUT("About & Info", "App version, package details, and bridge export")
@@ -330,6 +339,7 @@ fun SettingsDialog(
                         commandAutoExecutionPolicy = commandAutoExecutionPolicy,
                         commandSandboxEnabled = commandSandboxEnabled,
                         isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
+                        isLocalToolsInstalled = isLocalToolsInstalled,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onNavigate = { currentSection = it }
@@ -442,6 +452,17 @@ fun SettingsDialog(
                         onOpenLocalTerminal = onOpenLocalTerminal
                     )
 
+                    SettingsSection.BACKUPS -> BackupsSubScreen(
+                        isServerOnline = isServerOnline,
+                        isBridgeOnline = isBridgeOnline,
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onStopServer = {
+                            LocalServerManager.stopServer()
+                            onToggleServer(false)
+                        }
+                    )
+
                     SettingsSection.COMMANDS -> CommandsSubScreen(
                         commandAutoExecutionPolicy = commandAutoExecutionPolicy,
                         commandSandboxEnabled = commandSandboxEnabled,
@@ -508,6 +529,7 @@ private fun MainSettingsMenu(
     commandAutoExecutionPolicy: String,
     commandSandboxEnabled: Boolean,
     isFloatingDiagnosticsEnabled: Boolean = false,
+    isLocalToolsInstalled: Boolean = false,
     cardBg: Color,
     cardBorder: BorderStroke,
     onNavigate: (SettingsSection) -> Unit
@@ -631,6 +653,21 @@ private fun MainSettingsMenu(
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.TERMINAL) }
         )
+
+        // Section 5.5: Backups & Restore (only for rootfs installed app)
+        if (isLocalToolsInstalled) {
+            SettingsCategoryCard(
+                icon = Icons.Outlined.Backup,
+                iconTint = GeminiBlue,
+                title = "Backups & Restore",
+                subtitle = "Backup rootfs environment and AGY chat histories",
+                badgeText = "Rootfs Active",
+                badgeColor = GeminiBlue,
+                cardBg = cardBg,
+                cardBorder = cardBorder,
+                onClick = { onNavigate(SettingsSection.BACKUPS) }
+            )
+        }
 
         // Section 5: Commands & Permissions
         val (policyBadge, policyColor) = when {
@@ -3917,6 +3954,830 @@ private fun TerminalSubScreen(
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// SUB-SCREEN: BACKUPS & RESTORE
+// ==========================================
+
+data class ScriptExecutionInfo(
+    val title: String,
+    val scriptName: String,
+    val args: List<String> = emptyList()
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BackupsSubScreen(
+    isServerOnline: Boolean,
+    isBridgeOnline: Boolean,
+    cardBg: Color,
+    cardBorder: BorderStroke,
+    onStopServer: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val systemConnectionState by com.example.gemini.data.remote.AgyBridgeService.instance.systemConnectionState.collectAsState()
+    val isAnyServerRunning = systemConnectionState !is com.example.gemini.data.remote.SystemConnectionState.Offline
+
+    var activeScriptExecution by remember { mutableStateOf<ScriptExecutionInfo?>(null) }
+    var showServerRunningAlert by remember { mutableStateOf<String?>(null) }
+
+    var showBackupChatsPasswordDialog by remember { mutableStateOf(false) }
+    var backupChatsPassword by remember { mutableStateOf("") }
+    var showBackupPasswordText by remember { mutableStateOf(false) }
+
+    var showRestoreChatsDialog by remember { mutableStateOf(false) }
+    var restoreFilePath by remember { mutableStateOf("") }
+    var restorePassword by remember { mutableStateOf("") }
+    var showRestorePasswordText by remember { mutableStateOf(false) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val destFile = File(context.cacheDir, "restore_payload_${System.currentTimeMillis()}.zip")
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        destFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        restoreFilePath = destFile.absolutePath
+                    }
+                } catch (e: Exception) {
+                    Log.e("BackupsSubScreen", "Failed copying selected backup file", e)
+                }
+            }
+        }
+    }
+
+    val requestStoragePermission = { onGranted: () -> Unit ->
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                try {
+                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                    }
+                    context.startActivity(intent)
+                } catch (_: Exception) {
+                    val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    context.startActivity(intent)
+                }
+            } else {
+                onGranted()
+            }
+        } else {
+            val permission = ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            if (permission != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(context, "Storage permission needed to save to /sdcard/Download", Toast.LENGTH_SHORT).show()
+            }
+            onGranted()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 1. Server Online Guard / Warning Banner
+        if (isAnyServerRunning) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFF59E0B).copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.WarningAmber,
+                        contentDescription = null,
+                        tint = Color(0xFFF59E0B),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "AGY Server Is Running",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "The daemon is actively accessing databases and processes. Please stop the server before performing backups or restores to prevent corrupted archives.",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                            lineHeight = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = onStopServer,
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Stop Server Now", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Card 1: Rootfs Environment Backup
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFF00ACC1).copy(alpha = 0.15f),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.Inventory2,
+                                contentDescription = null,
+                                tint = Color(0xFF00ACC1),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Rootfs Environment Backup",
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Package entire Linux /usr system and \$HOME into a bootable zip",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Creates a full, portable backup of all installed packages, libraries, binaries, shell configurations, and user home dotfiles. Excludes active sockets, volatile caches, and auth tokens.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    lineHeight = 17.sp
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.Folder, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Saves to: /sdcard/Download/Antigem/backups/bootrapz_<timestamp>.zip",
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Button(
+                    onClick = {
+                        if (isAnyServerRunning) {
+                            showServerRunningAlert = "Backup Rootfs"
+                        } else {
+                            requestStoragePermission {
+                                activeScriptExecution = ScriptExecutionInfo(
+                                    title = "Rootfs System Packager",
+                                    scriptName = "backup_bootstrap",
+                                    args = emptyList()
+                                )
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00ACC1)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Run Rootfs Backup (backup_bootstrap)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+            }
+        }
+
+        // Card 2: AGY Chats & Credentials Backup
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = ClaudeTerracotta.copy(alpha = 0.15f),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.Chat,
+                                contentDescription = null,
+                                tint = ClaudeTerracotta,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "AGY Chats & Credentials Backup",
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Archive conversations, transcripts, auth tokens & configs",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Safely packages your entire ~/.gemini folder (SQLite chat history databases, brain transcripts, summaries index, custom skills, and authentication token). Supports optional zip encryption.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    lineHeight = 17.sp
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFEF4444).copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                        Text(
+                            text = "⚠️ Security Warning: This backup includes your authentication credentials and login tokens. Never share this archive with anyone, as anyone with this file can log in to your account.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.Folder, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Saves to: /sdcard/Download/Antigem/backups/agy_chats_backup_<timestamp>.zip",
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Button(
+                    onClick = {
+                        if (isAnyServerRunning) {
+                            showServerRunningAlert = "Backup Chats"
+                        } else {
+                            showBackupChatsPasswordDialog = true
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Backup AGY Chats (backup_chats)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+            }
+        }
+
+        // Card 3: Restore AGY Chats & Credentials
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = QuotaGreen.copy(alpha = 0.15f),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.SettingsBackupRestore,
+                                contentDescription = null,
+                                tint = QuotaGreen,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Restore AGY Chats & Credentials",
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Restore previous chats and login from a backup zip archive",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Restores your chats, conversations index, and credentials. To prevent any accidental data loss, the restore script automatically creates a safety backup of your existing ~/.gemini directory to ~/.gemini.bak first.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    lineHeight = 17.sp
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+                OutlinedButton(
+                    onClick = {
+                        if (isAnyServerRunning) {
+                            showServerRunningAlert = "Restore Chats"
+                        } else {
+                            showRestoreChatsDialog = true
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, QuotaGreen),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = QuotaGreen),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.SettingsBackupRestore, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Restore AGY Chats (restore_chats)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+
+    // 1. Server Running Alert Dialog
+    showServerRunningAlert?.let { actionName ->
+        AlertDialog(
+            onDismissRequest = { showServerRunningAlert = null },
+            icon = { Icon(Icons.Default.WarningAmber, contentDescription = null, tint = Color(0xFFF59E0B)) },
+            title = { Text("Server Must Be Stopped", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "The AGY IDE Bridge and Hub server must be offline before running '$actionName'. Would you like to stop the server now?",
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onStopServer()
+                        showServerRunningAlert = null
+                        Toast.makeText(context, "Stopping server... Please re-run $actionName once stopped.", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48))
+                ) {
+                    Text("Stop Server", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showServerRunningAlert = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 2. Backup Chats Password Dialog
+    if (showBackupChatsPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupChatsPasswordDialog = false },
+            icon = { Icon(Icons.Outlined.CloudUpload, contentDescription = null, tint = ClaudeTerracotta) },
+            title = { Text("Backup AGY Chats", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Optionally enter a password to encrypt your backup zip archive. Leave empty for an unencrypted standard zip.",
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFEF4444).copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp))
+                            Text(
+                                text = "Do not share this file. Anyone with it can log into your account.",
+                                fontSize = 10.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        value = backupChatsPassword,
+                        onValueChange = { backupChatsPassword = it },
+                        label = { Text("Encryption Password (Optional)") },
+                        singleLine = true,
+                        visualTransformation = if (showBackupPasswordText) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showBackupPasswordText = !showBackupPasswordText }) {
+                                Icon(
+                                    imageVector = if (showBackupPasswordText) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val pass = backupChatsPassword.trim()
+                        showBackupChatsPasswordDialog = false
+                        backupChatsPassword = ""
+                        requestStoragePermission {
+                            activeScriptExecution = ScriptExecutionInfo(
+                                title = "AGY Chats & Credentials Backup",
+                                scriptName = "backup_chats",
+                                args = if (pass.isNotEmpty()) listOf("", pass) else emptyList()
+                            )
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                ) {
+                    Text("Start Backup", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showBackupChatsPasswordDialog = false
+                    backupChatsPassword = ""
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 3. Restore Chats Dialog
+    if (showRestoreChatsDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestoreChatsDialog = false },
+            icon = { Icon(Icons.Outlined.SettingsBackupRestore, contentDescription = null, tint = QuotaGreen) },
+            title = { Text("Restore AGY Chats", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Select your backup zip archive to restore. Note: your existing ~/.gemini directory will be safely renamed to ~/.gemini.bak first.",
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                    )
+
+                    OutlinedTextField(
+                        value = restoreFilePath,
+                        onValueChange = { restoreFilePath = it },
+                        label = { Text("Backup Archive Path") },
+                        placeholder = { Text("/sdcard/Download/agy_chats_backup_....zip") },
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(onClick = { filePickerLauncher.launch("*/*") }) {
+                                Icon(Icons.Outlined.FolderOpen, contentDescription = "Choose File", tint = QuotaGreen)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = restorePassword,
+                        onValueChange = { restorePassword = it },
+                        label = { Text("Archive Password (if encrypted)") },
+                        singleLine = true,
+                        visualTransformation = if (showRestorePasswordText) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showRestorePasswordText = !showRestorePasswordText }) {
+                                Icon(
+                                    imageVector = if (showRestorePasswordText) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val path = restoreFilePath.trim()
+                        val pass = restorePassword.trim()
+                        showRestoreChatsDialog = false
+                        restoreFilePath = ""
+                        restorePassword = ""
+                        activeScriptExecution = ScriptExecutionInfo(
+                            title = "Restore AGY Chats & Credentials",
+                            scriptName = "restore_chats",
+                            args = if (pass.isNotEmpty()) listOf(path, pass) else listOf(path)
+                        )
+                    },
+                    enabled = restoreFilePath.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = QuotaGreen)
+                ) {
+                    Text("Start Restore", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showRestoreChatsDialog = false
+                    restoreFilePath = ""
+                    restorePassword = ""
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 4. Live Script Execution Dialog
+    activeScriptExecution?.let { executionInfo ->
+        ScriptExecutionDialog(
+            info = executionInfo,
+            onDismiss = { activeScriptExecution = null }
+        )
+    }
+}
+
+@Composable
+private fun ScriptExecutionDialog(
+    info: ScriptExecutionInfo,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val logs = remember { mutableStateListOf<String>() }
+    var isRunning by remember { mutableStateOf(true) }
+    var exitCode by remember { mutableStateOf<Int?>(null) }
+    var durationMs by remember { mutableStateOf(0L) }
+    val listState = rememberLazyListState()
+    var executionJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    val activity = (context as? android.app.Activity) ?: ((context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity)
+    DisposableEffect(isRunning) {
+        val window = activity?.window
+        if (isRunning) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    LaunchedEffect(info) {
+        executionJob?.cancel()
+        executionJob = scope.launch {
+            isRunning = true
+            logs.clear()
+            logs.add("⚡ Initializing ${info.scriptName}...")
+            val result = LocalEnvironmentManager.executeScriptLive(
+                context = context,
+                scriptName = info.scriptName,
+                args = info.args
+            ) { line ->
+                val trimmed = line.trim()
+                val isProgressBar = (trimmed.startsWith("[") || trimmed.contains("%")) && trimmed.contains("/")
+                val prevIsProgressBar = logs.isNotEmpty() && logs.last().let { (it.trim().startsWith("[") || it.contains("%")) && it.contains("/") }
+                if (isProgressBar && prevIsProgressBar) {
+                    logs[logs.size - 1] = line
+                } else {
+                    logs.add(line)
+                }
+            }
+            exitCode = result.exitCode
+            durationMs = result.durationMs
+            isRunning = false
+        }
+    }
+
+    LaunchedEffect(logs.size, if (logs.isNotEmpty()) logs.last() else "") {
+        if (logs.isNotEmpty()) {
+            listState.scrollToItem(logs.size - 1)
+        }
+    }
+
+    Dialog(
+        onDismissRequest = {
+            if (!isRunning) onDismiss()
+        },
+        properties = DialogProperties(
+            dismissOnBackPress = !isRunning,
+            dismissOnClickOutside = !isRunning,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .fillMaxHeight(0.80f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (isRunning) {
+                            Icon(
+                                imageVector = Icons.Default.Terminal,
+                                contentDescription = null,
+                                tint = GeminiBlue,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        } else if (exitCode == 0) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = QuotaGreen, modifier = Modifier.size(22.dp))
+                        } else {
+                            Icon(Icons.Default.Error, contentDescription = null, tint = Color.Red, modifier = Modifier.size(22.dp))
+                        }
+
+                        Column {
+                            Text(
+                                text = info.title,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (isRunning) "Executing in rootfs environment..." else if (exitCode == 0) "Completed in ${(durationMs / 1000.0)}s (Exit: 0)" else "Finished with error (Exit: $exitCode)",
+                                fontSize = 11.5.sp,
+                                color = if (isRunning) GeminiBlue else if (exitCode == 0) QuotaGreen else Color.Red
+                            )
+                        }
+                    }
+
+                    if (!isRunning) {
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Terminal output container
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFF090D16),
+                    border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(10.dp)
+                    ) {
+                        items(logs) { line ->
+                            val cleanLine = line.replace(Regex("\u001B\\[[;\\d]*m"), "")
+                            val lineColor = when {
+                                cleanLine.startsWith("❌") || cleanLine.contains("Error", ignoreCase = true) -> Color(0xFFFF5252)
+                                cleanLine.startsWith("✅") || cleanLine.startsWith("🎉") || cleanLine.contains("Success", ignoreCase = true) -> Color(0xFF4CAF50)
+                                cleanLine.startsWith("⚠️") || cleanLine.contains("Note:", ignoreCase = true) || cleanLine.contains("Warning:", ignoreCase = true) -> Color(0xFFFFB74D)
+                                cleanLine.startsWith("=") || cleanLine.startsWith("[") -> Color(0xFF64B5F6)
+                                else -> Color(0xFFE2E8F0)
+                            }
+                            Text(
+                                text = cleanLine,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = lineColor,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Bottom Action Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    if (isRunning) {
+                        Button(
+                            onClick = {
+                                executionJob?.cancel()
+                                isRunning = false
+                                exitCode = 130
+                                logs.add("🛑 Execution cancelled by user.")
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48))
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Stop Execution", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    } else {
+                        Button(
+                            onClick = onDismiss,
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (exitCode == 0) QuotaGreen else MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text("Done", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
                 }
             }
         }
