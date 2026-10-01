@@ -155,8 +155,15 @@ object LocalServerManager {
                 binBridge.setExecutable(true, false)
                 binBridge.setReadable(true, false)
             } catch (_: Exception) {}
-            val token = AuthPreferences(context).getSecurityTokenSync()
-            return "agy_ide_bridge -f --token $token"
+            val authPrefs = AuthPreferences(context)
+            val token = authPrefs.getSecurityTokenSync()
+            val bridgePort = try {
+                java.net.URI(AuthPreferences.currentBridgeHttpUrl).port.takeIf { it > 0 } ?: 1234
+            } catch (_: Exception) { 1234 }
+            val hubPort = try {
+                java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 } ?: 1235
+            } catch (_: Exception) { 1235 }
+            return "agy_ide_bridge -f --token $token -p $bridgePort --hub-port $hubPort"
         }
         return null
     }
