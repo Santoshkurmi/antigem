@@ -163,7 +163,8 @@ object LocalServerManager {
             val hubPort = try {
                 java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 } ?: 1235
             } catch (_: Exception) { 1235 }
-            return "agy_ide_bridge -f --token $token -p $bridgePort --hub-port $hubPort"
+            val tzOffset = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 1000
+            return "agy_ide_bridge -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset"
         }
         return null
     }

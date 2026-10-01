@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -30,13 +31,15 @@ Usage:
   go run main.go [flags]
 
 Flags:
-  -t, --token <token>    12-character security token for API & AGY CSRF obfuscation
-  -f, --force, --f       Force start AGY Hub automatically without prompting
-  -p, --port <port>      Port for the Go IDE Server (default: 1234)
-  --hub-port <port>      Port for the AGY Hub RPC server (default: 1235)
-  --no-hub               Skip launching AGY Hub (run IDE server only)
-  -d, --dir <path>       Custom workspace directory
-  -h, --help             Show help documentation`)
+  -t, --token <token>       12-character security token for API & AGY CSRF obfuscation
+  -f, --force, --f          Force start AGY Hub automatically without prompting
+  -p, --port <port>         Port for the Go IDE Server (default: 1234)
+  --hub-port <port>         Port for the AGY Hub RPC server (default: 1235)
+  --tz-offset <seconds>     Timezone offset in seconds (e.g. 20700 for UTC+05:45)
+  --tz <location>           Timezone location name (e.g. Asia/Kathmandu)
+  --no-hub                  Skip launching AGY Hub (run IDE server only)
+  -d, --dir <path>          Custom workspace directory
+  -h, --help                Show help documentation`)
 }
 
 // statusRecorder intercepts HTTP status code and response body for logging and error reporting
@@ -106,6 +109,8 @@ func main() {
 	var forceStart bool
 	var skipHub bool
 	var cliToken string
+	var tzOffsetSec int
+	var tzName string
 	hubPort := "1235"
 
 	// Parse command line arguments
@@ -137,6 +142,24 @@ func main() {
 				hubPort = os.Args[i+1]
 				i++
 			}
+		case strings.HasPrefix(arg, "--tz-offset="):
+			if val, err := strconv.Atoi(strings.TrimPrefix(arg, "--tz-offset=")); err == nil {
+				tzOffsetSec = val
+			}
+		case arg == "--tz-offset":
+			if i+1 < len(os.Args) {
+				if val, err := strconv.Atoi(os.Args[i+1]); err == nil {
+					tzOffsetSec = val
+				}
+				i++
+			}
+		case strings.HasPrefix(arg, "--tz="):
+			tzName = strings.TrimPrefix(arg, "--tz=")
+		case arg == "--tz":
+			if i+1 < len(os.Args) {
+				tzName = os.Args[i+1]
+				i++
+			}
 		case strings.HasPrefix(arg, "--dir="):
 			cfg.WorkspaceDir = strings.TrimPrefix(arg, "--dir=")
 		case arg == "-d" || arg == "--dir" || arg == "--workspace":
@@ -147,6 +170,22 @@ func main() {
 		case arg == "-h" || arg == "--help":
 			printUsage()
 			os.Exit(0)
+		}
+	}
+
+	// Configure local timezone if offset or name is specified (or in environment)
+	if tzOffsetSec == 0 {
+		if envOff := os.Getenv("TZ_OFFSET"); envOff != "" {
+			if val, err := strconv.Atoi(envOff); err == nil {
+				tzOffsetSec = val
+			}
+		}
+	}
+	if tzOffsetSec != 0 {
+		time.Local = time.FixedZone("Local", tzOffsetSec)
+	} else if tzName != "" {
+		if loc, err := time.LoadLocation(tzName); err == nil {
+			time.Local = loc
 		}
 	}
 
@@ -162,6 +201,7 @@ func main() {
 	fmt.Printf("  \033[1m• Target Hub Port:\033[0m  %s\n", hubPort)
 	fmt.Printf("  \033[1;33m• Security Token:\033[0m   %s\n", secToken)
 	fmt.Printf("  \033[1;36m• Framed Header:\033[0m    %s\n", framedHeader)
+	fmt.Printf("  \033[1m• Local Time:\033[0m       %s\n", time.Now().Format("2006-01-02 15:04:05 MST"))
 	fmt.Println("\033[1;36m============================================================\033[0m")
 
 	var hubMgr *hub.HubManager
