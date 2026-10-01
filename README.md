@@ -24,32 +24,90 @@
 
 ---
 
+## 📸 App Showcase
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="33%">
+        <img src="docs/resources/chat_screen.jpg" alt="Agent Chat Execution" width="100%" />
+        <br /><strong>💬 Agentic Chat & Tool Execution</strong>
+      </td>
+      <td align="center" width="33%">
+        <img src="docs/resources/ide_code_editor.jpg" alt="IDE Code Editor" width="100%" />
+        <br /><strong>💻 Full IDE Code Editor</strong>
+      </td>
+      <td align="center" width="33%">
+        <img src="docs/resources/linux_terminal.jpg" alt="Native Linux Terminal" width="100%" />
+        <br /><strong>🐧 Native Termux Terminal</strong>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" width="33%">
+        <img src="docs/resources/sidebar_navigation.jpg" alt="Sidebar Navigation" width="100%" />
+        <br /><strong>📂 Sidebar & History</strong>
+      </td>
+      <td align="center" width="33%">
+        <img src="docs/resources/account_profile_quota.jpg" alt="Account Profile & Quota" width="100%" />
+        <br /><strong>⚡ Quota & Account Info</strong>
+      </td>
+      <td align="center" width="33%">
+        <img src="docs/resources/settings_preferences.jpg" alt="Settings & Backups" width="100%" />
+        <br /><strong>⚙️ Settings, MCP & Backups</strong>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" colspan="3">
+        <img src="docs/resources/integrated_browser.jpg" alt="Integrated Browser" width="33%" />
+        <br /><strong>🌐 Integrated Web Browser & Automation</strong>
+      </td>
+    </tr>
+  </table>
+</div>
+
+---
+
 ## ✨ Key Features
 
 ### 🤖 1. Autonomous Agentic AI & Language Server Daemon
 - **Direct Wire gRPC Service**: Type-safe, high-speed communication with the local or remote Antigravity (AGY) daemon using Square Wire (`AgyLanguageService`).
-- **Reactive Streaming**: Live token and step streaming directly into Compose UI via Kotlin Coroutines & `Flow`.
+- **Reactive Streaming**: Real-time token and step streaming directly into Compose UI via Kotlin Coroutines & `Flow`.
 - **Automatic CSRF Recovery**: Zero-friction re-authentication interceptor on `401`, `403`, or `grpc-status: 16`.
-- **Tool Execution Engine**: Real-time tool invocation inspection, diff previews, terminal action confirmations, and multi-turn planning.
+- **Model Switcher & Quota Tracking**: Instant switching between Gemini 3.7 Flash, Pro, Ultra, Claude 3.5 Sonnet, GPT-4o, and custom models with real-time prompt/flow quota indicators.
+- **Trajectory & Step Inspector**: Live agent thought process visualization, collapsible reasoning logs, tool call execution status, and subagent monitoring.
 
-### 💻 2. Full-Fledged Termux Subsystem & Terminal
-- **Native Terminal Emulator**: High-throughput terminal engine (`LocalTerminalManager`) with custom font engines, palette support, and swipe actions.
-- **Complete Linux Environment**: Pre-configured with GNU bash, zsh, coreutils, Python, Node.js, Git, Go, and Glibc toolchains in `$HOME`.
-- **Background Execution Service**: `TermuxService` keeps server daemons, builds, and AI background processes running seamlessly in foreground execution.
+### 🌐 2. Integrated Web Browser & Browser Automation MCP
+- **Built-in Web Browser**: Full-featured in-app browser with tab management, URL navigation, search shortcuts, and dev controls.
+- **Autonomous Browser Automation MCP**: Empowers the AI agent to navigate live web pages, interact with DOM elements, click buttons, fill forms, execute scripts, and inspect web app interfaces.
+- **Visual UI Verification**: Captures screenshots of locally running or external web applications directly into the agent's context for visual UI analysis, frontend debugging, and pair programming.
 
-### ⚡ 3. Native Termux CLI & Intent Interoperability
-Full compatibility with standard Termux CLI commands and broadcasts:
-- 📁 **`termux-setup-storage`**: One-click storage permission management and symlink generation (`~/storage/shared`, `downloads`, `dcim`, `pictures`, `music`, `movies`, `documents`, `external-*`).
-- 🌐 **`termux-open` / `termux-open-url` / `xdg-open`**: View or share local files via secure `FileProvider` with automatic MIME-type detection and chooser flags.
-- 🔒 **`termux-wake-lock` / `termux-wake-unlock`**: High-performance Wi-Fi and partial wake locks with automatic **1-hour safety timeout protection**.
-- 🛠️ **Termux:API Subsystem**: Comprehensive support for `termux-toast`, `termux-vibrate`, `termux-clipboard-*`, `termux-notification`, `termux-battery-status`, `termux-tts-speak`, `termux-torch`, and `termux-volume`.
+### 💻 3. Linux Terminal & Terminal Automation MCP
+- **Native Terminal Emulator**: High-throughput PTY terminal engine (`LocalTerminalManager`) with custom font scaling, palette themes, and interactive keybars.
+- **Complete Linux Environment**: Pre-configured GNU bash, zsh, coreutils, Python, Node.js, Git, Go, and Glibc toolchains in `$HOME`.
+- **Live Terminal Automation MCP**: Allows the AI agent to execute shell commands, run tests, compile code, and stream live stdout/stderr directly in front of the user with real-time feedback.
+- **Background Execution Service**: Keeps server daemons, builds, and AI background processes running seamlessly in foreground execution.
 
-### 🎨 4. Modern UI, Floating Bubbles & Dark Aesthetics
-- **Floating Chat Bubble**: Overlay Picture-in-Picture window (`FloatingChatActivity`) to code, prompt, and interact with the AI assistant while multitasking in other apps.
-- **Rich Markdown & Syntax Highlighting**: Custom tokenizers rendering code blocks, tables, inline diffs, alerts, and mermaid diagrams.
-- **Adaptive Dynamic Dark Theme**: Tailored OLED-friendly aesthetic with glassmorphism, micro-animations, and fluid transitions.
+### 📝 4. Full IDE Code Editor & Multi-Tab Workspace
+- **Multi-Language Syntax Highlighting**: Fast, responsive code editor supporting Python, Go, Kotlin, Java, JS/TS, Shell, Rust, C/C++, HTML/CSS, JSON, YAML, and Markdown.
+- **IDE Productivity Controls**: Tab switching, find/replace, undo/redo, line numbering, auto-indentation, and one-tap script execution.
+- **Workspace Navigation**: Instant directory tree explorer, recent file switcher, and project switching.
 
-### 🔄 5. Seamless In-App Auto-Updater
+### 🎨 5. Rich Chat Artifacts & Mermaid Diagrams
+- **Interactive Chat Artifacts**: Dynamic markdown rendering supporting live code viewers, expandable diff blocks, step carousels, and alerts.
+- **Hardware-Accelerated Mermaid Diagrams**: Native rendering for architecture flows, sequence diagrams, state machines, and class hierarchies.
+- **Floating Chat Bubble (PIP/Overlay)**: Overlay Picture-in-Picture window (`FloatingChatActivity`) to prompt and code while multitasking across any Android app.
+
+### 🧩 6. MCP Ecosystem, Skills & Google Plugins
+- **Dynamic MCP Config**: Easily manage, enable, disable, and configure Model Context Protocol (MCP) servers (`mcp_config.json`).
+- **Google Cascade Plugins**: In-app plugin catalog to search, install, and manage specialized assistant plugins.
+- **Custom Skills Hub**: Support for both workspace-level (`.agents/skills`) and global (`~/.gemini/config/skills`) on-demand workflow cheat-sheets.
+
+### 🛡️ 7. Full Rootfs & Chat Backup Suite
+- **Rootfs Environment Backup**: Package your entire installed Linux packages, libraries, binaries, shell configs, and dotfiles into `/sdcard/Download/Antigem/backups/`.
+- **AGY Chats & Auth Backup**: Package conversation history databases, brain transcripts, indexes, and credentials with optional zip encryption.
+- **Safe Timestamped Restore**: Automatic safety backup (`~/.gemini.bak.<timestamp>`) and pre-extraction password validation to prevent data loss.
+
+### 🔄 8. Seamless In-App Auto-Updater
 - Centralized multi-flavor version checking via `version.json`.
 - Live chunked download progress with background resume support.
 - Native Android `PackageInstaller` session integration for one-tap in-app upgrades.
@@ -128,23 +186,6 @@ Compiled APKs will be output to:
 
 ---
 
-## 📖 CLI Intent Reference
-
-AntiGem natively handles the following CLI invocations executed inside the terminal or external scripts:
-
-| Command / Action | Description | Underlying Mechanism |
-| :--- | :--- | :--- |
-| `termux-setup-storage` | Grants storage permissions and sets up `~/storage` symlinks | Broadcast to `TermuxSystemReceiver` |
-| `termux-open <file>` | Opens a local file or URL in the default Android handler | `TermuxOpenReceiver` via `FileProvider` |
-| `termux-open-url <url>` | Opens an HTTP/HTTPS or deep-link URI in browser/app | Activity launch via `TermuxOpenActivity` |
-| `termux-wake-lock` | Acquires Wi-Fi & CPU wake lock (Max 1h safety timeout) | Foreground service start on `TermuxService` |
-| `termux-wake-unlock` | Releases held wake locks | Intent trigger on `TermuxService` |
-| `termux-toast "<msg>"` | Displays native Android toast message | `TermuxApiReceiver` |
-| `termux-clipboard-set` | Sets system clipboard content | `TermuxApiReceiver` |
-| `termux-vibrate` | Triggers device haptic feedback | `TermuxApiReceiver` |
-
----
-
 ## 📂 Project Structure
 
 ```text
@@ -181,4 +222,4 @@ Contributions are welcome! If you'd like to report bugs, suggest features, or su
 
 ## 📄 License
 
-AntiGem is open-source software licensed under the **Apache License 2.0**.
+AntiGem is open-source software licensed under the **Apache License 2.0**(Not sure if adding in readme is enough to say this).
