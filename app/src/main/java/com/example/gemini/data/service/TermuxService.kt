@@ -11,10 +11,13 @@ import android.content.Intent
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -34,7 +37,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val store = ViewModelStore()
@@ -268,6 +271,9 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
 
         requestDisableBatteryOptimizations(this)
         updateNotification()
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(this@TermuxService, "Wake lock activated for 1 hour", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun actionReleaseWakeLock() {
@@ -296,6 +302,9 @@ class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedState
 
         updateNotification()
         Log.d(TAG, "WakeLocks released successfully")
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(this@TermuxService, "Wake lock released", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun actionStopService() {

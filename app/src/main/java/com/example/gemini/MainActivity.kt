@@ -35,6 +35,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         private var instanceRef: java.lang.ref.WeakReference<MainActivity>? = null
 
+        val currentInstance: MainActivity?
+            get() = instanceRef?.get()?.takeIf { !it.isFinishing && !it.isDestroyed }
+
         fun showToast(message: String) {
             com.example.gemini.ui.components.AppToastHelper.showToast(message)
         }
@@ -368,6 +371,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        instanceRef = java.lang.ref.WeakReference(this)
         if (com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(this)) {
             com.example.gemini.data.service.TermuxService.start(this)
             com.example.gemini.data.local.LocalServerManager.autoStartOnAppLaunch(this)

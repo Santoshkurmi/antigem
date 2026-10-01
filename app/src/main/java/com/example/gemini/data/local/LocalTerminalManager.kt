@@ -144,6 +144,7 @@ class LocalPtySession(
             val tmp = LocalEnvironmentManager.getTmpDir(context)
 
             LocalEnvironmentManager.ensureGlibcEnvironment(context)
+            LocalEnvironmentManager.ensureTermuxApiDispatcher(context)
 
             val loginShellBinaries = arrayOf("login", "bash", "zsh", "fish", "sh")
 
@@ -176,26 +177,34 @@ class LocalPtySession(
             val safeCols = if (ptyCols > 0) ptyCols else if (LocalTerminalManager.lastKnownCols > 0) LocalTerminalManager.lastKnownCols else 80
             val safeRows = if (ptyRows > 0) ptyRows else if (LocalTerminalManager.lastKnownRows > 0) LocalTerminalManager.lastKnownRows else 24
 
-            val envList = arrayOf(
-                "PREFIX=${prefix.absolutePath}",
-                "HOME=${home.absolutePath}",
-                "PATH=${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin",
-                "TMPDIR=${tmp.absolutePath}",
-                "TERM=xterm-256color",
-                "COLORTERM=truecolor",
-                "TERMUX_VERSION=0.118.0",
-                "TERMUX_MAIN_PACKAGE_NAME=${context.packageName}",
-                "TERMUX_APK_RELEASE=GITHUB",
-                "TERMUX_APP_PID=${android.os.Process.myPid()}",
-                "SHELL=$shellBinary",
-                "ANDROID_DATA=/data",
-                "ANDROID_ROOT=/system",
-                "LANG=en_US.UTF-8",
-                "LC_ALL=en_US.UTF-8",
-                "COLUMNS=$safeCols",
-                "LINES=$safeRows",
-                "PS1=$ "
-            )
+            val envMap = LinkedHashMap<String, String>()
+            try {
+                System.getenv().forEach { (k, v) ->
+                    if (v != null) envMap[k] = v
+                }
+            } catch (_: Exception) {}
+
+            envMap["PREFIX"] = prefix.absolutePath
+            envMap["HOME"] = home.absolutePath
+            envMap["PATH"] = "${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin"
+            envMap["TMPDIR"] = tmp.absolutePath
+            envMap["TERM"] = "xterm-256color"
+            envMap["COLORTERM"] = "truecolor"
+            envMap["TERMUX_VERSION"] = "0.118.0"
+            envMap["TERMUX_MAIN_PACKAGE_NAME"] = context.packageName
+            envMap["TERMUX_APK_RELEASE"] = "GITHUB"
+            envMap["TERMUX_APP_PID"] = "${android.os.Process.myPid()}"
+            envMap["TERMUX__USER_ID"] = "0"
+            envMap["SHELL"] = shellBinary
+            envMap["ANDROID_DATA"] = "/data"
+            envMap["ANDROID_ROOT"] = "/system"
+            envMap["LANG"] = "en_US.UTF-8"
+            envMap["LC_ALL"] = "en_US.UTF-8"
+            envMap["COLUMNS"] = "$safeCols"
+            envMap["LINES"] = "$safeRows"
+            envMap["PS1"] = "$ "
+
+            val envList = envMap.map { "${it.key}=${it.value}" }.toTypedArray()
 
             val isLoginShell = shellBinary != "/system/bin/sh"
             val processName = (if (isLoginShell) "-" else "") + File(shellBinary).name

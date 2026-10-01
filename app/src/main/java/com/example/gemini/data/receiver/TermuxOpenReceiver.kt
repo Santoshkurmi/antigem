@@ -1,20 +1,29 @@
 package com.example.gemini.data.receiver
 
+import android.app.ActivityOptions
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import android.webkit.MimeTypeMap
 import android.widget.Toast
+import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
+import com.example.gemini.R
 import java.io.File
 
-class TermuxOpenReceiver : BroadcastReceiver() {
+open class TermuxOpenReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "TermuxOpenReceiver"
+        private const val CHANNEL_ID = "antigem_termux_open_channel"
+        private const val NOTIFICATION_ID = 1338
 
         fun handleOpen(context: Context, intent: Intent) {
             val data = intent.data ?: run {
@@ -40,7 +49,7 @@ class TermuxOpenReceiver : BroadcastReceiver() {
                 val urlIntent = Intent(intentAction, data).apply {
                     if (intentAction == Intent.ACTION_SEND) {
                         putExtra(Intent.EXTRA_TEXT, data.toString())
-                        setDataAndType(null, contentTypeExtra ?: "text/plain")
+                        type = contentTypeExtra ?: "text/plain"
                     } else if (contentTypeExtra != null) {
                         setDataAndType(data, contentTypeExtra)
                     }
@@ -53,12 +62,7 @@ class TermuxOpenReceiver : BroadcastReceiver() {
                     urlIntent
                 }
 
-                try {
-                    context.startActivity(finalIntent)
-                } catch (e: ActivityNotFoundException) {
-                    Log.w(TAG, "No app handles url $data")
-                    Toast.makeText(context, "No app found to open: $data", Toast.LENGTH_SHORT).show()
-                }
+                launchSafely(context, finalIntent, "Open Link", data.toString())
                 return
             }
 
@@ -112,11 +116,96 @@ class TermuxOpenReceiver : BroadcastReceiver() {
                 openIntent
             }
 
+            launchSafely(context, finalIntent, "Open File: ${fileToShare.name}", fileToShare.absolutePath)
+        }
+
+        private fun launchSafely(context: Context, intent: Intent, title: String, description: String) {
+            // Priority 1: If user is actively inside the app, launch directly from foreground Activity to bypass BAL
+            val foregroundActivity = com.example.gemini.MainActivity.currentInstance
+            if (foregroundActivity != null) {
+                try {
+                    foregroundActivity.startActivity(intent)
+                    return
+                } catch (e: ActivityNotFoundException) {
+                    Log.w(TAG, "No app handles intent: ${e.message}")
+                    Toast.makeText(foregroundActivity, "No application found to handle this request", Toast.LENGTH_SHORT).show()
+                    return
+                } catch (e: Exception) {
+                    Log.w(TAG, "Activity.startActivity failed: ${e.message}")
+                }
+            }
+
+            // Priority 2: When in background, prepare ActivityOptions with background launch permission
+            val optionsBundle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ActivityOptions.makeBasic().apply {
+                    pendingIntentBackgroundActivityStartMode = ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                }.toBundle()
+            } else {
+                null
+            }
+
+            // Create high-priority pending intent
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                (System.currentTimeMillis() and 0xFFFF).toInt(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            // Try direct launch using PendingIntent with background activity start mode
+            var directLaunched = false
             try {
-                context.startActivity(finalIntent)
-            } catch (e: ActivityNotFoundException) {
-                Log.w(TAG, "No app handles file: ${fileToShare.absolutePath}")
-                Toast.makeText(context, "No application found to open this file", Toast.LENGTH_SHORT).show()
+                if (optionsBundle != null) {
+                    pendingIntent.send(context, 0, null, null, null, null, optionsBundle)
+                    directLaunched = true
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "PendingIntent.send background launch failed: ${e.message}")
+            }
+
+            if (!directLaunched) {
+                try {
+                    context.startActivity(intent, optionsBundle)
+                } catch (e: ActivityNotFoundException) {
+                    Log.w(TAG, "No app handles intent: ${e.message}")
+                    Toast.makeText(context, "No application found to handle this request", Toast.LENGTH_SHORT).show()
+                    return
+                } catch (e: Exception) {
+                    Log.w(TAG, "Direct startActivity failed: ${e.message}")
+                }
+            }
+
+            // High-priority notification fallback in case background activity start was suppressed by OS
+            try {
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                if (nm != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val channel = NotificationChannel(
+                            CHANNEL_ID,
+                            "Termux Open",
+                            NotificationManager.IMPORTANCE_HIGH
+                        ).apply {
+                            this.description = "Terminal open requests"
+                            enableLights(true)
+                            enableVibration(true)
+                        }
+                        nm.createNotificationChannel(channel)
+                    }
+
+                    val notif = NotificationCompat.Builder(context, CHANNEL_ID)
+                        .setSmallIcon(R.mipmap.ic_launcher)
+                        .setContentTitle(title)
+                        .setContentText(description)
+                        .setContentIntent(pendingIntent)
+                        .setAutoCancel(true)
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setCategory(NotificationCompat.CATEGORY_EVENT)
+                        .build()
+
+                    nm.notify(NOTIFICATION_ID, notif)
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "Notification fallback failed: ${e.message}")
             }
         }
     }

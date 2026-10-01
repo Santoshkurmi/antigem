@@ -151,6 +151,62 @@ object LocalEnvironmentManager {
     fun getProjectsDir(context: Context): File = File(getHomeDir(context), "projects")
     fun isTermuxPackage(context: Context): Boolean = context.packageName == "com.termux"
 
+    fun ensureTermuxApiDispatcher(context: Context) {
+        try {
+            val libexecDir = File(getPrefixDir(context), "libexec")
+            if (!libexecDir.exists()) libexecDir.mkdirs()
+            val dispatcherFile = File(libexecDir, "termux-api")
+            val scriptContent = """
+                #!/data/data/com.termux/files/usr/bin/bash
+                METHOD="${'$'}1"
+                shift
+
+                EXTRA_ARGS=()
+                if [ ! -t 0 ]; then
+                    INPUT=${'$'}(timeout 0.1 cat 2>/dev/null || true)
+                    if [ -n "${'$'}INPUT" ]; then
+                        EXTRA_ARGS=(--es text "${'$'}INPUT" --es message "${'$'}INPUT" --es content "${'$'}INPUT")
+                    fi
+                fi
+
+                TMP_DIR="${'$'}{TMPDIR:-/data/data/com.termux/files/usr/tmp}"
+                mkdir -p "${'$'}TMP_DIR"
+                TMP_OUT="${'$'}TMP_DIR/api_out.${'$'}${'$'}"
+
+                am broadcast --user 0 \
+                    -a "com.termux.api" \
+                    -n "com.termux/com.example.gemini.data.receiver.TermuxApiReceiver" \
+                    --es "api_method" "${'$'}METHOD" \
+                    --es "socket_output" "${'$'}TMP_OUT" \
+                    "${'$'}{EXTRA_ARGS[@]}" \
+                    "${'$'}@" > /dev/null 2>&1
+
+                case "${'$'}METHOD" in
+                    Toast|toast|Vibrate|vibrate|Torch|torch|TextToSpeech|tts|tts-speak|Volume|volume|NotificationRemove|notification-remove)
+                        ;;
+                    *)
+                        for i in 1 2 3 4 5 6 7 8 9 10; do
+                            if [ -s "${'$'}TMP_OUT" ]; then
+                                cat "${'$'}TMP_OUT"
+                                echo ""
+                                break
+                            fi
+                            sleep 0.05
+                        done
+                        ;;
+                esac
+
+                rm -f "${'$'}TMP_OUT"
+            """.trimIndent()
+
+            dispatcherFile.writeText(scriptContent)
+            dispatcherFile.setExecutable(true, false)
+            dispatcherFile.setReadable(true, false)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed ensuring termux-api dispatcher: ${e.message}")
+        }
+    }
+
     fun getBootstrapArch(): String {
         val abis = Build.SUPPORTED_ABIS ?: emptyArray()
         for (abi in abis) {

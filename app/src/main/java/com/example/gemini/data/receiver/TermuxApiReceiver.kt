@@ -48,7 +48,15 @@ class TermuxApiReceiver : BroadcastReceiver() {
         when (apiMethod.lowercase()) {
             "toast" -> handleToast(context, intent)
             "vibrate" -> handleVibrate(context, intent)
-            "clipboard", "clipboardset", "clipboard-set" -> handleClipboardSet(context, intent)
+            "clipboard" -> {
+                val isSet = intent.getBooleanExtra("set", false) || intent.hasExtra("text") || intent.hasExtra("clip")
+                if (isSet) {
+                    handleClipboardSet(context, intent)
+                } else {
+                    handleClipboardGet(context, intent)
+                }
+            }
+            "clipboardset", "clipboard-set" -> handleClipboardSet(context, intent)
             "clipboardget", "clipboard-get" -> handleClipboardGet(context, intent)
             "torch" -> handleTorch(context, intent)
             "tts", "texttospeech", "tts-speak" -> handleTts(context, intent)
@@ -63,7 +71,7 @@ class TermuxApiReceiver : BroadcastReceiver() {
     }
 
     private fun handleToast(context: Context, intent: Intent) {
-        val text = intent.getStringExtra("text") ?: intent.getStringExtra("message") ?: return
+        val text = intent.getStringExtra("text") ?: intent.getStringExtra("message") ?: intent.getStringExtra("content") ?: return
         val isShort = intent.getBooleanExtra("short", false)
         val duration = if (isShort) Toast.LENGTH_SHORT else Toast.LENGTH_LONG
         Handler(Looper.getMainLooper()).post {
@@ -72,7 +80,7 @@ class TermuxApiReceiver : BroadcastReceiver() {
     }
 
     private fun handleVibrate(context: Context, intent: Intent) {
-        val durationMs = intent.getIntExtra("duration", 1000).toLong()
+        val durationMs = intent.getIntExtra("duration_ms", intent.getIntExtra("duration", 1000)).toLong()
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
@@ -97,10 +105,10 @@ class TermuxApiReceiver : BroadcastReceiver() {
         val text = intent.getStringExtra("text") ?: intent.getStringExtra("clip") ?: return
         Handler(Looper.getMainLooper()).post {
             try {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                val targetContext = com.example.gemini.MainActivity.currentInstance ?: context
+                val clipboard = targetContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                 val clip = ClipData.newPlainText("Termux Clipboard", text)
                 clipboard?.setPrimaryClip(clip)
-                sendSocketResponse(intent, "ok")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed setting clipboard: ${e.message}")
             }
@@ -110,11 +118,18 @@ class TermuxApiReceiver : BroadcastReceiver() {
     private fun handleClipboardGet(context: Context, intent: Intent) {
         Handler(Looper.getMainLooper()).post {
             try {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                val text = clipboard?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                val targetContext = com.example.gemini.MainActivity.currentInstance ?: context
+                val clipboard = targetContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                val clip = clipboard?.primaryClip
+                val text = if (clip != null && clip.itemCount > 0) {
+                    clip.getItemAt(0)?.coerceToText(targetContext)?.toString() ?: ""
+                } else {
+                    ""
+                }
                 sendSocketResponse(intent, text)
             } catch (e: Exception) {
                 Log.w(TAG, "Failed getting clipboard: ${e.message}")
+                sendSocketResponse(intent, "")
             }
         }
     }

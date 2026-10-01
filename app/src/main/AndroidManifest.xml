@@ -19,6 +19,17 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- Signature-level private permissions to protect internal Termux and API receivers/services -->
+    <permission
+        android:name="${applicationId}.permission.RUN_COMMAND"
+        android:protectionLevel="signature" />
+    <permission
+        android:name="${applicationId}.permission.API"
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="${applicationId}.permission.RUN_COMMAND" />
+    <uses-permission android:name="${applicationId}.permission.API" />
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
@@ -117,20 +128,24 @@
 
         <!-- Termux Open Activity (termux-open / termux-open-url / xdg-open activity intent targets) -->
         <activity
-            android:name=".data.receiver.TermuxOpenActivity"
+            android:name="com.termux.app.TermuxOpenActivity"
             android:exported="true"
+            android:permission="${applicationId}.permission.RUN_COMMAND"
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="com.termux.app.TermuxUrlOpenActivity" />
                 <action android:name="com.termux.app.TermuxOpenActivity" />
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
         <!-- Termux System Receiver (termux-setup-storage, reload_style) -->
         <receiver
-            android:name=".data.receiver.TermuxSystemReceiver"
-            android:exported="true">
+            android:name="com.termux.app.TermuxSystemReceiver"
+            android:exported="true"
+            android:permission="${applicationId}.permission.RUN_COMMAND">
             <intent-filter>
                 <action android:name="com.termux.app.request_storage_permissions" />
                 <action android:name="com.termux.app.reload_style" />
@@ -139,27 +154,34 @@
 
         <!-- Termux Open Receiver (termux-open, termux-open-url, xdg-open) -->
         <receiver
-            android:name=".data.receiver.TermuxOpenReceiver"
-            android:exported="true">
+            android:name="com.termux.app.TermuxOpenReceiver"
+            android:exported="true"
+            android:permission="${applicationId}.permission.RUN_COMMAND">
             <intent-filter>
                 <action android:name="com.termux.app.TermuxOpenReceiver" />
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </receiver>
 
         <!-- Termux:API Subsystem Receiver (termux-toast, termux-vibrate, termux-clipboard, etc.) -->
         <receiver
             android:name=".data.receiver.TermuxApiReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="${applicationId}.permission.API">
             <intent-filter>
                 <action android:name="com.termux.api.ACTION_API" />
                 <action android:name="com.termux.api" />
             </intent-filter>
         </receiver>
 
+        <!-- Termux Service (termux-wake-lock, termux-wake-unlock, termux-service-stop) -->
         <service
-            android:name=".data.service.TermuxService"
+            android:name="com.termux.app.TermuxService"
             android:enabled="true"
             android:exported="true"
+            android:permission="${applicationId}.permission.RUN_COMMAND"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
