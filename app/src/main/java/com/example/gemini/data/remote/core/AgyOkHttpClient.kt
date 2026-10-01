@@ -48,11 +48,7 @@ object AgyOkHttpClient {
                 val request = chain.request().newBuilder()
                     .header("User-Agent", "antiGem-Android-Native")
                     .header("X-Grpc-Web", "1")
-                    .apply {
-                        if (token.isNotBlank()) {
-                            header(AuthPreferences.currentFramedHeader, token)
-                        }
-                    }
+                    .header(AuthPreferences.currentFramedHeader, token.ifBlank { "true" })
                     .build()
 
                 val response = chain.proceed(request)
