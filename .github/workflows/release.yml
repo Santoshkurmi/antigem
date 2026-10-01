@@ -65,6 +65,6 @@ jobs:
           name: ${{ steps.version.outputs.name }}
           body: ${{ steps.version.outputs.changelog }}
           generate_release_notes: true
-          files: output/*.apk
+          files: output/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

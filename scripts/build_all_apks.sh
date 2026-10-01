@@ -40,6 +40,10 @@ if [[ "${MODE}" == "release" ]]; then
     APKS_SRC="${ROOT_DIR}/app/build/outputs/apk"
     find "${APKS_SRC}/standard/release" -name "*.apk" -exec cp {} "${OUTPUT_DIR}/antiGem-standard-v${VERSION_NAME}-release.apk" \;
     find "${APKS_SRC}/termux/release" -name "*.apk" -exec cp {} "${OUTPUT_DIR}/antiGem-termux-v${VERSION_NAME}-release.apk" \;
+
+    if [[ -f "${ROOT_DIR}/app/src/main/assets/bin/agy_ide_bridge" ]]; then
+        cp "${ROOT_DIR}/app/src/main/assets/bin/agy_ide_bridge" "${OUTPUT_DIR}/agy_ide_bridge-v${VERSION_NAME}-android-arm64"
+    fi
 else
     echo "🔨 Compiling Standard Debug (:app:assembleStandardDebug)..."
     "${ROOT_DIR}/gradlew" -p "${ROOT_DIR}" :app:assembleStandardDebug
@@ -50,11 +54,15 @@ else
     APKS_SRC="${ROOT_DIR}/app/build/outputs/apk"
     find "${APKS_SRC}/standard/debug" -name "*.apk" -exec cp {} "${OUTPUT_DIR}/antiGem-standard-v${VERSION_NAME}-debug.apk" \;
     find "${APKS_SRC}/termux/debug" -name "*.apk" -exec cp {} "${OUTPUT_DIR}/antiGem-termux-v${VERSION_NAME}-debug.apk" \;
+
+    if [[ -f "${ROOT_DIR}/app/src/main/assets/bin/agy_ide_bridge" ]]; then
+        cp "${ROOT_DIR}/app/src/main/assets/bin/agy_ide_bridge" "${OUTPUT_DIR}/agy_ide_bridge-v${VERSION_NAME}-android-arm64"
+    fi
 fi
 
 echo ""
 echo "================================================================="
-echo "✅ Build Complete! Generated APKs in: ${OUTPUT_DIR}"
+echo "✅ Build Complete! Generated Artifacts in: ${OUTPUT_DIR}"
 echo "================================================================="
-ls -lh "${OUTPUT_DIR}"/*.apk 2>/dev/null || true
+ls -lh "${OUTPUT_DIR}"/* 2>/dev/null || true
 echo "================================================================="
