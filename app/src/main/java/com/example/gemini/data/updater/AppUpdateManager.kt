@@ -44,7 +44,6 @@ class AppUpdateManager(private val context: Context) {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    private val prefs = context.getSharedPreferences("antigem_updater_prefs", Context.MODE_PRIVATE)
 
     /**
      * Checks if a new version is available by fetching centralized version.json from GitHub.
@@ -54,14 +53,6 @@ class AppUpdateManager(private val context: Context) {
         forceCheck: Boolean = false
     ): Result<AppUpdateInfo?> = withContext(Dispatchers.IO) {
         try {
-            val now = System.currentTimeMillis()
-            val lastCheckTime = prefs.getLong("last_check_timestamp", 0L)
-
-            // Auto-throttle checks to once every 4 hours unless forced by user
-            if (!forceCheck && (now - lastCheckTime < TimeUnit.HOURS.toMillis(4))) {
-                return@withContext Result.success(null)
-            }
-
             val request = Request.Builder()
                 .url(versionJsonUrl)
                 .header("User-Agent", "antiGem-Updater/${BuildConfig.VERSION_NAME}")
@@ -79,7 +70,6 @@ class AppUpdateManager(private val context: Context) {
             }
 
             val rawJson = response.body?.string() ?: return@withContext Result.failure(Exception("Empty version response from server"))
-            prefs.edit().putLong("last_check_timestamp", now).apply()
 
             val json = JSONObject(rawJson)
             val remoteVersionCode = json.optInt("version_code", 0)
@@ -88,23 +78,10 @@ class AppUpdateManager(private val context: Context) {
             val changelog = json.optString("changelog", "• General improvements and bug fixes.")
             val isCritical = json.optBoolean("is_critical", false) || (BuildConfig.VERSION_CODE < minSupportedCode)
 
-            // Resolve package-specific download URL (e.g. com.antigem vs com.termux)
+            // Auto-generate package-specific download URL based on remote version name and flavor
             val currentPkg = context.packageName
-            val downloads = json.optJSONObject("downloads")
-            var downloadUrl = ""
-
-            if (downloads != null) {
-                downloadUrl = downloads.optString(currentPkg)
-                if (downloadUrl.isBlank()) {
-                    downloadUrl = downloads.optString("com.antigem")
-                }
-                if (downloadUrl.isBlank() && downloads.length() > 0) {
-                    val firstKey = downloads.keys().next()
-                    downloadUrl = downloads.optString(firstKey)
-                }
-            } else {
-                downloadUrl = json.optString("download_url", "")
-            }
+            val flavorType = if (currentPkg == "com.termux") "termux" else "standard"
+            val downloadUrl = "https://github.com/santoshkurmi/antigem/releases/download/v$remoteVersionName/antiGem-$flavorType-v$remoteVersionName-release.apk"
 
             if (remoteVersionCode > BuildConfig.VERSION_CODE && downloadUrl.isNotBlank()) {
                 Result.success(

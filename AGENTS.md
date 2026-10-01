@@ -69,3 +69,5 @@ suspend fun streamUpdates(cascadeId: String) {
 - **Kotlin Type Inference**: Do not define unnecessary explicit types when Kotlin can infer types automatically. Rely on Kotlin's type inference and keep code concise unless explicit types are strictly required by the compiler.
 - **Strictly Never Use JSON If Proto Can Be Used**: NEVER use manual JSON builders (`JSONObject`, `JSONArray`, string parsing, JSON serialization/deserialization) when Protobuf definitions (e.g. `AskQuestionEntry`, `Step`, `CascadeUserInteraction`, etc.) or typed models already exist. Always use and pass the typed proto classes directly throughout the pipeline.
 - **Only do what user has told you to do**: Never touch a single line that user has not told to do, if user said to do Task X then do that nothing else not even add a signle extra space somewhere, if need such things to chagne mroe than user has asked for, alwasy explain user that you want to do this too.
+
+-- "Dont try building release build ever"
