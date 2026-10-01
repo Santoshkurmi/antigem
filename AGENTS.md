@@ -71,3 +71,4 @@ suspend fun streamUpdates(cascadeId: String) {
 - **Only do what user has told you to do**: Never touch a single line that user has not told to do, if user said to do Task X then do that nothing else not even add a signle extra space somewhere, if need such things to chagne mroe than user has asked for, alwasy explain user that you want to do this too.
 
 -- "Dont try building release build ever"
+-- "Dont try git push pull commit, stash etc ever"
