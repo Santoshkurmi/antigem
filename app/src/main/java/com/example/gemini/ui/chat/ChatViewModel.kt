@@ -1012,25 +1012,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun checkBridgeHealth() {
         viewModelScope.launch(Dispatchers.IO) {
             val bridgeUrl = authPrefs.agyBridgeHttpUrl.firstOrNull() ?: AuthPreferences.currentBridgeHttpUrl
-            val base = bridgeUrl.trimEnd('/')
-            val endpoints = listOf("$base/api/health", "$base/health", base)
-            var reachable = false
-            for (ep in endpoints) {
-                try {
-                    val conn = (java.net.URL(ep).openConnection() as java.net.HttpURLConnection).apply {
-                        connectTimeout = 2500
-                        readTimeout = 2500
-                        requestMethod = "GET"
-                        instanceFollowRedirects = true
-                    }
-                    val code = conn.responseCode
-                    conn.disconnect()
-                    if (code in 200..399) {
-                        reachable = true
-                        break
-                    }
-                } catch (_: Exception) {}
-            }
+            val reachable = com.example.gemini.data.remote.AgyBridgeService.instance.checkServerHealth(bridgeUrl)
             _isBridgeOnline.value = reachable
         }
     }

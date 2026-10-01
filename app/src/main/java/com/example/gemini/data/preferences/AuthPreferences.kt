@@ -71,6 +71,28 @@ class AuthPreferences(private val context: Context) {
         val IS_FLOATING_DIAGNOSTICS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_diagnostics_enabled")
         val IS_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_network_inspector_enabled")
         val IS_FLOATING_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_network_inspector_enabled")
+        val SECURITY_TOKEN = stringPreferencesKey("security_token")
+
+        const val TOKEN_PREFIX = "x-ag"
+        const val TOKEN_SUFFIX = "_9qx"
+        const val TOKEN_LENGTH = 12
+
+        fun buildFramedHeader(token: String): String {
+            val clean = token.trim().take(TOKEN_LENGTH).padEnd(TOKEN_LENGTH, '0')
+            return "$TOKEN_PREFIX$clean$TOKEN_SUFFIX"
+        }
+
+        fun generateRandomToken(): String {
+            val uuid = java.util.UUID.randomUUID().toString().replace("-", "")
+            return uuid.take(TOKEN_LENGTH)
+        }
+
+        @Volatile
+        var currentSecurityToken: String = ""
+
+        val currentFramedHeader: String
+            get() = buildFramedHeader(currentSecurityToken)
+
         const val DEFAULT_HUB_URL = "http://127.0.0.1:8090"
         const val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:8080"
 
@@ -101,6 +123,13 @@ class AuthPreferences(private val context: Context) {
         val inspectorFloating = syncPrefs.getBoolean("is_floating_network_inspector_enabled", false)
         com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled = inspectorOn
         com.example.gemini.data.remote.inspector.NetworkInspectorManager.isFloatingBubbleEnabled = inspectorFloating
+
+        var token = syncPrefs.getString("security_token", null)
+        if (token.isNullOrBlank() || token.length != TOKEN_LENGTH) {
+            token = generateRandomToken()
+            syncPrefs.edit().putString("security_token", token).apply()
+        }
+        currentSecurityToken = token
     }
 
     val groupChatsByWorkspace: Flow<Boolean> = context.dataStore.data.map { it[GROUP_CHATS_BY_WORKSPACE] ?: false }
@@ -643,6 +672,28 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveFloatingNetworkInspectorEnabled(enabled: Boolean) {
         saveFloatingNetworkInspectorEnabledSync(enabled)
         context.dataStore.edit { it[IS_FLOATING_NETWORK_INSPECTOR_ENABLED] = enabled }
+    }
+
+    val securityToken: Flow<String> = context.dataStore.data.map {
+        it[SECURITY_TOKEN] ?: getSecurityTokenSync()
+    }
+
+    fun getSecurityTokenSync(): String {
+        var token = syncPrefs.getString("security_token", null)
+        if (token.isNullOrBlank() || token.length != TOKEN_LENGTH) {
+            token = generateRandomToken()
+            syncPrefs.edit().putString("security_token", token).apply()
+        }
+        currentSecurityToken = token
+        return token
+    }
+
+    suspend fun saveSecurityToken(token: String) {
+        val clean = token.trim()
+        val validToken = if (clean.length == TOKEN_LENGTH) clean else generateRandomToken()
+        syncPrefs.edit().putString("security_token", validToken).apply()
+        currentSecurityToken = validToken
+        context.dataStore.edit { it[SECURITY_TOKEN] = validToken }
     }
 
     suspend fun clearAuth() {

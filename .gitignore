@@ -24,7 +24,9 @@ server/daemon
 server/gemini-server
 agy_ide_bridge/bin/
 agy_ide_bridge/agy_ide_bridge
+agy_ide_bridge/agy_ide_bridge_android
 agy_ide_bridge/server
+agy_ide_bridge/server_android
 agy_ide_bridge/daemon
 agy_ide_bridge/gemini-server
 gemini-server
@@ -32,6 +34,8 @@ gemini-server
 *.test
 termux-daemon/daemon
 termux-daemon/server
+app/src/main/assets/bin/agy_ide_bridge
+app/src/main/assets/bin/backup_bootstrap
 # Python Cache & Bytecode
 __pycache__/
 *.py[cod]
@@ -46,9 +50,8 @@ proto_generator/*.json
 
 # IDE & Gemini Metadata
 .gemini/
-server_android
-agy_ide_bridge_android
+/server_android
+/agy_ide_bridge_android
 termux-app/
-agy_ide_bridge
-backup_bootstrap
+/backup_bootstrap
 output/

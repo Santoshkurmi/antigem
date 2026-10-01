@@ -155,7 +155,8 @@ object LocalServerManager {
                 binBridge.setExecutable(true, false)
                 binBridge.setReadable(true, false)
             } catch (_: Exception) {}
-            return "agy_ide_bridge -f"
+            val token = AuthPreferences(context).getSecurityTokenSync()
+            return "agy_ide_bridge -f --token $token"
         }
         return null
     }
@@ -305,16 +306,11 @@ object LocalServerManager {
         // 1. Send graceful shutdown HTTP request to the Go IDE bridge
         withContext(Dispatchers.IO) {
             try {
-                val fastClient = OkHttpClient.Builder()
-                    .connectTimeout(800, TimeUnit.MILLISECONDS)
-                    .writeTimeout(800, TimeUnit.MILLISECONDS)
-                    .readTimeout(800, TimeUnit.MILLISECONDS)
-                    .build()
                 val req = Request.Builder()
                     .url("$bridgeUrl/api/shutdown")
                     .post("{}".toRequestBody(null))
                     .build()
-                fastClient.newCall(req).execute().close()
+                AgyBridgeService.instance.fastClient.newCall(req).execute().close()
             } catch (_: Exception) {}
         }
 

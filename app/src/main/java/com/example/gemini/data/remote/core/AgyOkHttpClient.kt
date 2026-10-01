@@ -50,7 +50,7 @@ object AgyOkHttpClient {
                     .header("X-Grpc-Web", "1")
                     .apply {
                         if (token.isNotBlank()) {
-                            header("x-codeium-csrf-token", token)
+                            header(AuthPreferences.currentFramedHeader, token)
                         }
                     }
                     .build()

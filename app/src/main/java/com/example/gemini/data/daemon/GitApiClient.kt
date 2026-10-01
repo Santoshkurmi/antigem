@@ -95,11 +95,7 @@ object GitApiClient {
         get() = AuthPreferences.currentBridgeHttpUrl
         set(value) { AuthPreferences.currentBridgeHttpUrl = value }
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .writeTimeout(20, TimeUnit.SECONDS)
-        .build()
+    private val client: OkHttpClient get() = com.example.gemini.data.remote.AgyBridgeService.instance.client
 
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 

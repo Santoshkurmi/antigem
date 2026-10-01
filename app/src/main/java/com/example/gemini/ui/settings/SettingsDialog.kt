@@ -1412,6 +1412,11 @@ private fun ServersSubScreen(
         return host to port
     }
 
+    val context = LocalContext.current
+    val authPrefs = remember(context) { AuthPreferences(context) }
+    val initSecurityToken = remember { authPrefs.getSecurityTokenSync() }
+    var securityToken by remember { mutableStateOf(initSecurityToken) }
+
     val (initHubHost, initHubPort) = remember { parseHostPort(currentHubUrl, AuthPreferences.DEFAULT_HUB_URL) }
     val (initBridgeHost, initBridgePort) = remember { parseHostPort(currentBridgeUrl, AuthPreferences.DEFAULT_BRIDGE_HTTP_URL) }
 
@@ -1428,7 +1433,6 @@ private fun ServersSubScreen(
 
     var saveFeedback by remember { mutableStateOf<String?>(null) }
 
-    val context = LocalContext.current
     var showRestartDialog by remember { mutableStateOf(false) }
 
     if (showRestartDialog) {
@@ -1451,7 +1455,7 @@ private fun ServersSubScreen(
             },
             text = {
                 Text(
-                    text = "Server URLs have been saved. Reopening the app ensures all daemon connections, gRPC streams, and file monitors cleanly initialize with the new address.",
+                    text = "Server settings and security configuration have been saved. Reopening the app restarts local bridge and daemon processes so all connections cleanly synchronize with the new parameters.",
                     fontSize = 13.5.sp,
                     lineHeight = 19.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
@@ -1665,29 +1669,8 @@ private fun ServersSubScreen(
                         isTestingBridge = true
                         bridgeTestStatus = "Pinging http://$bridgeHost:$bridgePort..."
                         coroutineScope.launch {
-                            val ok = withContext(Dispatchers.IO) {
-                                val base = "http://${bridgeHost.trim()}:${bridgePort.trim()}"
-                                val endpoints = listOf("$base/api/health", "$base/health", base)
-                                var reachable = false
-                                for (ep in endpoints) {
-                                    try {
-                                        val u = URL(ep)
-                                        val conn = (u.openConnection() as HttpURLConnection).apply {
-                                            connectTimeout = 3000
-                                            readTimeout = 3000
-                                            requestMethod = "GET"
-                                            instanceFollowRedirects = true
-                                        }
-                                        val code = conn.responseCode
-                                        conn.disconnect()
-                                        if (code in 200..399) {
-                                            reachable = true
-                                            break
-                                        }
-                                    } catch (_: Exception) {}
-                                }
-                                reachable
-                            }
+                            val base = "http://${bridgeHost.trim()}:${bridgePort.trim()}"
+                            val ok = com.example.gemini.data.remote.AgyBridgeService.instance.checkServerHealth(base)
                             isTestingBridge = false
                             bridgeTestStatus = if (ok) "✓ Connected to IDE Bridge successfully!" else "✗ Failed to reach Bridge on port $bridgePort"
                         }
@@ -1701,6 +1684,90 @@ private fun ServersSubScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                     Text("Test Bridge Connection", fontSize = 12.sp)
+                }
+            }
+        }
+
+        // Security Header & CSRF Obfuscation Section
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Outlined.Security, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Security Token (Header Obfuscation)", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(text = "12-char token framing localhost requests to prevent unauthorized app access", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedTextField(
+                    value = securityToken,
+                    onValueChange = {
+                        val filtered = it.take(AuthPreferences.TOKEN_LENGTH).filter { c -> c.isLetterOrDigit() }
+                        securityToken = filtered
+                        saveFeedback = null
+                    },
+                    label = { Text("12-Character Secret Token") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    trailingIcon = {
+                        Text(
+                            text = "${securityToken.length}/12",
+                            fontSize = 11.sp,
+                            color = if (securityToken.length == AuthPreferences.TOKEN_LENGTH) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(end = 12.dp)
+                        )
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val framedHeader = AuthPreferences.buildFramedHeader(securityToken)
+                Text(
+                    text = "HTTP Framed Header: $framedHeader",
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            securityToken = AuthPreferences.generateRandomToken()
+                            saveFeedback = null
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(imageVector = Icons.Outlined.Shuffle, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Randomize", fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("Framed Security Header", framedHeader)
+                            clipboard?.setPrimaryClip(clip)
+                            Toast.makeText(context, "Copied $framedHeader to clipboard", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(imageVector = Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Copy Header", fontSize = 12.sp)
+                    }
                 }
             }
         }
@@ -1726,7 +1793,11 @@ private fun ServersSubScreen(
                 val fullHub = "http://${hubHost.trim()}:${hubPort.trim()}"
                 val fullBridge = "http://${bridgeHost.trim()}:${bridgePort.trim()}"
                 onSaveServerUrls(fullHub, fullBridge)
-                saveFeedback = "✓ Server addresses saved in settings!"
+                val tokenToSave = if (securityToken.length == AuthPreferences.TOKEN_LENGTH) securityToken else AuthPreferences.generateRandomToken()
+                coroutineScope.launch {
+                    authPrefs.saveSecurityToken(tokenToSave)
+                }
+                saveFeedback = "✓ Server and Security settings saved!"
                 showRestartDialog = true
             },
             modifier = Modifier.fillMaxWidth(),
@@ -1735,7 +1806,7 @@ private fun ServersSubScreen(
         ) {
             Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Save Server URLs", fontWeight = FontWeight.Bold)
+            Text("Save Server & Security Settings", fontWeight = FontWeight.Bold)
         }
     }
 }

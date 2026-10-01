@@ -19,6 +19,7 @@ import (
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/handlers"
 	"gemini-server/pkg/hub"
+	"gemini-server/pkg/security"
 	"gemini-server/pkg/ws"
 )
 
@@ -29,6 +30,7 @@ Usage:
   go run main.go [flags]
 
 Flags:
+  -t, --token <token>    12-character security token for API & AGY CSRF obfuscation
   -f, --force, --f       Force start AGY Hub automatically without prompting
   -p, --port <port>      Port for the Go IDE Server (default: 8080)
   --hub-port <port>      Port for the AGY Hub RPC server (default: 8090)
@@ -103,12 +105,20 @@ func main() {
 
 	var forceStart bool
 	var skipHub bool
+	var cliToken string
 	hubPort := "8090"
 
 	// Parse command line arguments
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
 		switch {
+		case strings.HasPrefix(arg, "--token="):
+			cliToken = strings.TrimPrefix(arg, "--token=")
+		case arg == "-t" || arg == "--token":
+			if i+1 < len(os.Args) {
+				cliToken = os.Args[i+1]
+				i++
+			}
 		case arg == "-f" || arg == "--f" || arg == "--force" || arg == "-force":
 			forceStart = true
 		case arg == "--no-hub" || arg == "-n" || arg == "--skip-hub":
@@ -140,6 +150,9 @@ func main() {
 		}
 	}
 
+	secToken := security.ResolveToken(cliToken)
+	framedHeader := security.BuildFramedHeader(secToken)
+
 	// Stylized Banner
 	fmt.Println("\033[1;36m============================================================\033[0m")
 	fmt.Println("\033[1;32m  ⚡ antiGem Go IDE Server & AGY Hub Supervisor\033[0m")
@@ -147,6 +160,8 @@ func main() {
 	fmt.Printf("  \033[1m• IDE Server Port:\033[0m  http://0.0.0.0:%s\n", cfg.Port)
 	fmt.Printf("  \033[1m• Projects Dir:\033[0m     %s\n", cfg.ProjectsBaseDir)
 	fmt.Printf("  \033[1m• Target Hub Port:\033[0m  %s\n", hubPort)
+	fmt.Printf("  \033[1;33m• Security Token:\033[0m   %s\n", secToken)
+	fmt.Printf("  \033[1;36m• Framed Header:\033[0m    %s\n", framedHeader)
 	fmt.Println("\033[1;36m============================================================\033[0m")
 
 	var hubMgr *hub.HubManager
@@ -270,12 +285,12 @@ func main() {
 	corsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, "+framedHeader)
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		mux.ServeHTTP(w, r)
+		security.AuthMiddleware(secToken, mux).ServeHTTP(w, r)
 	})
 
 	// Global Panic Recovery & Error Logging Middleware:
@@ -415,7 +430,7 @@ func main() {
 	}
 
 	// Always initialize HubManager so background monitoring and status updates work continuously
-	hubMgr = hub.NewHubManager(hubPort, cfg.WorkspaceDir, cfg.AppDataDir)
+	hubMgr = hub.NewHubManager(hubPort, cfg.WorkspaceDir, cfg.AppDataDir, secToken)
 	h.HubManager = hubMgr
 	wsHub.StatusProv = hubMgr
 	wsHub.HubPort = hubPort

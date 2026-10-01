@@ -109,17 +109,7 @@ object IdeApiClient {
         get() = AuthPreferences.currentBridgeHttpUrl
         set(value) { AuthPreferences.currentBridgeHttpUrl = value }
 
-    val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .writeTimeout(10, TimeUnit.SECONDS)
-        .apply {
-            if (com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled) {
-                addInterceptor(com.example.gemini.data.remote.inspector.NetworkInspectorInterceptor("IDE Bridge (HTTP)"))
-            }
-        }
-        .build()
-
+    val okHttpClient: OkHttpClient get() = com.example.gemini.data.remote.AgyBridgeService.instance.client
     private val client: OkHttpClient get() = okHttpClient
 
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()

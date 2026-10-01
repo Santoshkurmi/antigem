@@ -3,6 +3,7 @@ package hub
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"gemini-server/pkg/config"
+	"gemini-server/pkg/security"
 )
 
 var (
@@ -39,6 +41,7 @@ type HubManager struct {
 	WorkspaceDir   string
 	AppDataDir     string
 	AgyBinPath     string
+	SecurityToken  string
 	OnLoginURL     func(url string)
 	OnStatusChange func(status string, csrfToken string, errorMsg string, logs []string)
 
@@ -57,25 +60,37 @@ type HubManager struct {
 }
 
 // NewHubManager initializes a supervisor for AGY Hub.
-func NewHubManager(hubPort, workspaceDir, appDataDir string) *HubManager {
+func NewHubManager(hubPort, workspaceDir, appDataDir, securityToken string) *HubManager {
 	if hubPort == "" {
 		hubPort = "8090"
 	}
 	return &HubManager{
-		HubPort:      hubPort,
-		WorkspaceDir: workspaceDir,
-		AppDataDir:   appDataDir,
-		AgyBinPath:   resolveAgyBinary(),
-		status:       HubStatusIdle,
-		recentLogs:   make([]string, 0, 50),
-		monitorStop:  make(chan struct{}),
+		HubPort:       hubPort,
+		WorkspaceDir:  workspaceDir,
+		AppDataDir:    appDataDir,
+		SecurityToken: securityToken,
+		AgyBinPath:    resolveAgyBinary(),
+		status:        HubStatusIdle,
+		recentLogs:    make([]string, 0, 50),
+		monitorStop:   make(chan struct{}),
 	}
 }
 
 // resolveAgyBinary finds the agy executable in standard locations.
 func resolveAgyBinary() string {
-	if p := config.SafeLookPath("agy"); p != "" {
-		return p
+	candidates := []string{
+		"agy.va39",
+		"agy",
+		"/data/data/com.termux/files/usr/bin/agy.va39",
+		"/data/data/com.termux/files/usr/bin/agy",
+	}
+	for _, c := range candidates {
+		if p := config.SafeLookPath(c); p != "" {
+			return p
+		}
+		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
+			return c
+		}
 	}
 	return "agy"
 }
@@ -263,6 +278,23 @@ func (m *HubManager) Start() error {
 	}
 
 	m.setStatusLocked(HubStatusStarting, "")
+
+	// In-place patch AGY binary with 20-byte framed security header (Strict Fail-Closed Security)
+	if m.SecurityToken != "" {
+		if m.AgyBinPath == "" {
+			err := fmt.Errorf("AGY executable binary not found for security header patching")
+			m.setStatusLocked(HubStatusError, err.Error())
+			return err
+		}
+		patchedHeader, elapsed, err := security.PatchAgyHeader(m.AgyBinPath, m.SecurityToken)
+		if err != nil {
+			errMsg := fmt.Sprintf("Security Error: Failed to patch AGY binary (%s): %v", m.AgyBinPath, err)
+			log.Printf("\033[1;31m[Security Fatal]\033[0m %s", errMsg)
+			m.setStatusLocked(HubStatusError, errMsg)
+			return errors.New(errMsg)
+		}
+		log.Printf("\033[1;32m[Security]\033[0m In-place patched AGY binary (%s) in %v -> Active Header: %s", m.AgyBinPath, elapsed, patchedHeader)
+	}
 
 	args := []string{
 		"--hub",
