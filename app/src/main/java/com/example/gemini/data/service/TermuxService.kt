@@ -63,7 +63,7 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
         const val ACTION_STOP_SERVICE = "com.termux.service_stop"
 
         fun start(context: Context) {
-            val intent = Intent(context, TermuxService::class.java)
+            val intent = Intent(context, com.termux.app.TermuxService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -72,7 +72,7 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, TermuxService::class.java).setAction(ACTION_STOP_SERVICE)
+            val intent = Intent(context, com.termux.app.TermuxService::class.java).setAction(ACTION_STOP_SERVICE)
             context.startService(intent)
         }
 
@@ -208,7 +208,7 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
         )
 
         // Exit action
-        val exitIntent = Intent(this, TermuxService::class.java).setAction(ACTION_STOP_SERVICE)
+        val exitIntent = Intent(this, com.termux.app.TermuxService::class.java).setAction(ACTION_STOP_SERVICE)
         val exitPendingIntent = PendingIntent.getService(
             this, 1, exitIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -216,7 +216,7 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
 
         // WakeLock toggle action
         val wakeAction = if (wakeLockHeld) ACTION_WAKE_UNLOCK else ACTION_WAKE_LOCK
-        val toggleWakeLockIntent = Intent(this, TermuxService::class.java).setAction(wakeAction)
+        val toggleWakeLockIntent = Intent(this, com.termux.app.TermuxService::class.java).setAction(wakeAction)
         val wakePendingIntent = PendingIntent.getService(
             this, 2, toggleWakeLockIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
