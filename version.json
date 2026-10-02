@@ -1,6 +1,6 @@
 {
-  "version_code": 104,
-  "version_name": "1.0.4",
+  "version_code": 105,
+  "version_name": "1.0.5",
   "min_supported_version_code": 1,
   "changelog": "Improved security",
   "is_critical": false

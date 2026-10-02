@@ -1767,6 +1767,85 @@ All files created here persist inside the application.
         Log.d(TAG, "Local environment bootstrap files cleared and reset.")
     }
 
+    suspend fun executeScriptLive(
+        context: Context,
+        scriptName: String,
+        args: List<String> = emptyList(),
+        onLogLine: (String) -> Unit
+    ): LocalCommandResult = withContext(Dispatchers.IO) {
+        val startTime = System.currentTimeMillis()
+        val binDir = getBinDir(context)
+        val prefixDir = getPrefixDir(context)
+        val homeDir = getHomeDir(context)
+        val tmpDir = getTmpDir(context)
+
+        // Find script binary
+        var scriptFile = File(binDir, scriptName)
+        if (!scriptFile.exists() || !scriptFile.canExecute()) {
+            val usrBinFile = File(prefixDir, "bin/$scriptName")
+            if (usrBinFile.exists() && usrBinFile.canExecute()) {
+                scriptFile = usrBinFile
+            }
+        }
+
+        if (!scriptFile.exists()) {
+            val msg = "❌ Error: Script '$scriptName' not found at ${scriptFile.absolutePath}!"
+            withContext(Dispatchers.Main) { onLogLine(msg) }
+            return@withContext LocalCommandResult(1, msg, System.currentTimeMillis() - startTime)
+        }
+        scriptFile.setExecutable(true, false)
+
+        val bashPath = when {
+            File(binDir, "bash").exists() -> File(binDir, "bash").absolutePath
+            File(prefixDir, "bin/bash").exists() -> File(prefixDir, "bin/bash").absolutePath
+            File(binDir, "sh").exists() -> File(binDir, "sh").absolutePath
+            File("/data/data/com.termux/files/usr/bin/bash").exists() -> "/data/data/com.termux/files/usr/bin/bash"
+            else -> "sh"
+        }
+
+        val cmdList = mutableListOf(bashPath, scriptFile.absolutePath)
+        cmdList.addAll(args)
+
+        val pb = ProcessBuilder(cmdList)
+        pb.directory(homeDir)
+        val env = pb.environment()
+        env["PREFIX"] = prefixDir.absolutePath
+        env["HOME"] = homeDir.absolutePath
+        env["TMPDIR"] = tmpDir.absolutePath
+        env["PATH"] = "${binDir.absolutePath}:${prefixDir.absolutePath}/bin:/system/bin:/system/xbin"
+        env["TERM"] = "xterm-256color"
+        env["COLORTERM"] = "truecolor"
+        env["LANG"] = "en_US.UTF-8"
+
+        pb.redirectErrorStream(true)
+        val process = pb.start()
+        try {
+            val outputBuilder = StringBuilder()
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                val currentLine = line ?: continue
+                outputBuilder.appendLine(currentLine)
+                withContext(Dispatchers.Main) {
+                    onLogLine(currentLine)
+                }
+            }
+
+            val exitCode = process.waitFor()
+            LocalCommandResult(
+                exitCode = exitCode,
+                output = outputBuilder.toString(),
+                durationMs = System.currentTimeMillis() - startTime
+            )
+        } finally {
+            if (process.isAlive) {
+                try {
+                    process.destroyForcibly()
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     fun launchInstall(
         context: Context,
         authPreferences: AuthPreferences,

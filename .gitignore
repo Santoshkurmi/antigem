@@ -36,6 +36,8 @@ termux-daemon/daemon
 termux-daemon/server
 app/src/main/assets/bin/agy_ide_bridge
 app/src/main/assets/bin/backup_bootstrap
+app/src/main/assets/bin/backup_chats
+app/src/main/assets/bin/restore_chats
 # Python Cache & Bytecode
 __pycache__/
 *.py[cod]

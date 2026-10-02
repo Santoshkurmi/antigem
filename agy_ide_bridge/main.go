@@ -187,16 +187,18 @@ func main() {
 	}
 
 	if unpatchOnly {
-		agyBin := customAgyBin
-		if agyBin == "" {
-			agyBin = hub.ResolveAgyBinary()
+		resolvedBin, err := hub.ResolveAgyBinaryInteractive(customAgyBin, true)
+		if err != nil {
+			fmt.Printf("  \033[1;31m✗ Unpatch Failed:\033[0m %v\n", err)
+			os.Exit(1)
 		}
+		patchTarget := hub.ResolvePatchTarget(resolvedBin)
 		fmt.Println("\033[1;36m============================================================\033[0m")
 		fmt.Println("\033[1;33m  ⚡ antiGem AGY Binary Header Unpatcher\033[0m")
 		fmt.Println("\033[1;36m============================================================\033[0m")
-		fmt.Printf("  \033[1m• Target Binary:\033[0m  %s\n", agyBin)
+		fmt.Printf("  \033[1m• Target Binary:\033[0m  %s\n", patchTarget)
 
-		restoredHeader, elapsed, err := security.UnpatchAgyHeader(agyBin)
+		restoredHeader, elapsed, err := security.UnpatchAgyHeader(patchTarget)
 		if err != nil {
 			fmt.Printf("  \033[1;31m✗ Unpatch Failed:\033[0m %v\n", err)
 			os.Exit(1)
@@ -225,6 +227,15 @@ func main() {
 	secToken := security.ResolveToken(cliToken)
 	framedHeader := security.BuildFramedHeader(secToken)
 
+	resolvedAgyBin, err := hub.ResolveAgyBinaryInteractive(customAgyBin, forceStart || skipHub)
+	if customAgyBin != "" && err != nil {
+		fmt.Printf(" \033[1;31m✗ Fatal Error:\033[0m %v\n", err)
+		os.Exit(1)
+	}
+	if err != nil && !skipHub {
+		fmt.Printf(" \033[31m[!] AGY Discovery Warning:\033[0m %v\n", err)
+	}
+
 	// Stylized Banner
 	fmt.Println("\033[1;36m============================================================\033[0m")
 	fmt.Println("\033[1;32m  ⚡ antiGem Go IDE Server & AGY Hub Supervisor\033[0m")
@@ -232,6 +243,9 @@ func main() {
 	fmt.Printf("  \033[1m• IDE Server Port:\033[0m  http://0.0.0.0:%s\n", cfg.Port)
 	fmt.Printf("  \033[1m• Projects Dir:\033[0m     %s\n", cfg.ProjectsBaseDir)
 	fmt.Printf("  \033[1m• Target Hub Port:\033[0m  %s\n", hubPort)
+	if resolvedAgyBin != "" {
+		fmt.Printf("  \033[1m• AGY Binary:\033[0m       %s\n", resolvedAgyBin)
+	}
 	fmt.Printf("  \033[1;33m• Security Token:\033[0m   %s\n", secToken)
 	fmt.Printf("  \033[1;36m• Framed Header:\033[0m    %s\n", framedHeader)
 	fmt.Printf("  \033[1m• Local Time:\033[0m       %s\n", time.Now().Format("2006-01-02 15:04:05 MST"))
@@ -503,7 +517,7 @@ func main() {
 	}
 
 	// Always initialize HubManager so background monitoring and status updates work continuously
-	hubMgr = hub.NewHubManager(hubPort, cfg.WorkspaceDir, cfg.AppDataDir, secToken)
+	hubMgr = hub.NewHubManager(hubPort, cfg.WorkspaceDir, cfg.AppDataDir, secToken, resolvedAgyBin)
 	h.HubManager = hubMgr
 	wsHub.StatusProv = hubMgr
 	wsHub.HubPort = hubPort

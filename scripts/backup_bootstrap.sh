@@ -14,15 +14,16 @@ fi
 # Termux Complete Bootstrap Packager (usr + home + dotfiles)
 # ==============================================================================
 set -euo pipefail
+trap 'echo -e "\n\033[1;31m[ERROR]\033[0m Backup failed at line $LINENO: \x27$BASH_COMMAND\x27" >&2' ERR
 
 PREFIX_DIR="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME_DIR="${HOME:-/data/data/com.termux/files/home}"
 FILES_DIR="$(dirname "$PREFIX_DIR")"
 
+BACKUP_DIR="/sdcard/Download/Antigem/backups"
 TIMESTAMP="$(date +"%Y-%m-%d-%H-%M-%S")"
 ZIP_BASENAME="bootrapz_${TIMESTAMP}.zip"
-OUTPUT_ZIP="${1:-/sdcard/${ZIP_BASENAME}}"
-DOWNLOAD_ZIP="/sdcard/Download/${ZIP_BASENAME}"
+OUTPUT_ZIP="${1:-${BACKUP_DIR}/${ZIP_BASENAME}}"
 
 echo "=== Termux Full Environment Packager ==="
 echo "Files root : $FILES_DIR"
@@ -31,6 +32,16 @@ echo "Home       : $HOME_DIR"
 echo "Output     : $OUTPUT_ZIP"
 echo "Timestamp  : $TIMESTAMP"
 echo "========================================"
+
+if ! command -v zip >/dev/null 2>&1; then
+    echo -e "\n\033[1;31m[ERROR]\033[0m 'zip' utility is not installed. Please install it with 'pkg install zip'." >&2
+    exit 1
+fi
+
+if [ ! -d "$FILES_DIR" ]; then
+    echo -e "\n\033[1;31m[ERROR]\033[0m Directory '$FILES_DIR' not found." >&2
+    exit 1
+fi
 
 cd "$FILES_DIR"
 
@@ -60,10 +71,11 @@ EXCLUDE_PATTERNS=(
 
 # Count items for accurate 0-100% progress tracking
 echo "      Calculating total files..."
-TOTAL_FILES=$(find usr home \
+TOTAL_FILES=$( { find usr home \
     \( ! -name "*.sock" \
        -a ! -path "*/cache/*" \
        -a ! -path "*/.cache/*" \
+       -a ! -path "*/.git/*" \
        -a ! -path "home/.ssh/*" \
        -a ! -name "ssh_host_*" \
        -a ! -path "home/.gemini/jetski-standalone-oauth-token*" \
@@ -77,13 +89,14 @@ TOTAL_FILES=$(find usr home \
        -a ! -name "*.pb" \
        -a ! -name ".bash_history" \
        -a ! -name ".zsh_history" \
-    \) 2>/dev/null | wc -l)
+    \) 2>/dev/null || true; } | wc -l)
+TOTAL_FILES=$((TOTAL_FILES + 0))
 echo "      Total entries to package: $TOTAL_FILES"
 
 # Run zip with live progress bar and security exclusions
-zip -r -y "$TEMP_ZIP" usr home -x "${EXCLUDE_PATTERNS[@]}" | awk -v total="$TOTAL_FILES" '
+{ zip -r -y "$TEMP_ZIP" usr home -x "${EXCLUDE_PATTERNS[@]}" 2>/dev/null || true; } | awk -v total="$TOTAL_FILES" '
 BEGIN {
-    cols = 35;
+    cols = 12;
     count = 0;
 }
 /^  adding: / {
@@ -98,29 +111,21 @@ BEGIN {
             bar = bar ">";
             for (i = length(bar); i < cols; i++) bar = bar " ";
         }
-        printf("\r\033[K      [\033[32m%s\033[0m] \033[1;33m%3d%%\033[0m (%d/%d)", bar, pct, count, total);
+        printf("\r\033[K [\033[32m%s\033[0m] \033[1;33m%3d%%\033[0m (%d/%d)", bar, pct, count, total);
         fflush();
     }
 }
 END {
     bar = "";
     for (i = 0; i < cols; i++) bar = bar "=";
-    printf("\r\033[K      [\033[32m%s\033[0m] \033[1;32m100%%\033[0m (%d/%d)\n", bar, count, count);
+    printf("\r\033[K [\033[32m%s\033[0m] \033[1;32m100%%\033[0m (%d/%d)\n", bar, count, count);
 }
 '
 
-echo "[2/3] Exporting archive to SDCard storage..."
-if cp "$TEMP_ZIP" "$OUTPUT_ZIP" 2>/dev/null; then
-    echo "      Saved to $OUTPUT_ZIP"
-else
-    echo "      Note: Direct copy to /sdcard restricted by sandbox. Moving via Termux storage permissions..."
-    cp "$TEMP_ZIP" "$HOME/storage/shared/${ZIP_BASENAME}" 2>/dev/null || true
-fi
-
-# Copy to Download if accessible
-cp "$TEMP_ZIP" "$DOWNLOAD_ZIP" 2>/dev/null || cp "$TEMP_ZIP" "$HOME/storage/downloads/${ZIP_BASENAME}" 2>/dev/null || true
-
+echo "[2/3] Exporting archive to Antigem backups storage..."
+mkdir -p "$(dirname "$OUTPUT_ZIP")"
+cp "$TEMP_ZIP" "$OUTPUT_ZIP"
 rm -f "$TEMP_ZIP"
 
 echo "[3/3] Done! Bootstrap archive ready:"
-ls -lh "$OUTPUT_ZIP" 2>/dev/null || ls -lh "$HOME/storage/shared/${ZIP_BASENAME}" 2>/dev/null || true
+echo "      ✅ Saved to: $OUTPUT_ZIP"

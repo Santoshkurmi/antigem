@@ -223,9 +223,16 @@ val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
 }
 
 val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
-  from(layout.projectDirectory.file("../scripts/backup_bootstrap.sh"))
+  from(layout.projectDirectory.file("../scripts/backup_bootstrap.sh")) {
+    rename { "backup_bootstrap" }
+  }
+  from(layout.projectDirectory.file("../scripts/backup_chats.sh")) {
+    rename { "backup_chats" }
+  }
+  from(layout.projectDirectory.file("../scripts/restore_chats.sh")) {
+    rename { "restore_chats" }
+  }
   into(layout.projectDirectory.dir("src/main/assets/bin"))
-  rename { "backup_bootstrap" }
 }
 
 tasks.named("preBuild") {

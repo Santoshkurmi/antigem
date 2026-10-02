@@ -20,8 +20,12 @@ type Config struct {
 // LoadConfig initializes configuration with sensible defaults and environment overrides.
 func LoadConfig() *Config {
 	home, err := os.UserHomeDir()
-	if err != nil {
-		home = "/data/data/com.termux/files/home"
+	if err != nil || home == "" {
+		if h := os.Getenv("HOME"); h != "" {
+			home = h
+		} else {
+			home = "."
+		}
 	}
 
 	port := os.Getenv("PORT")
@@ -32,7 +36,6 @@ func LoadConfig() *Config {
 	workspace := os.Getenv("WORKSPACE_DIR")
 	if workspace == "" {
 		candidates := []string{
-			"/home/cat/extra",
 			filepath.Join(home, "extra"),
 			filepath.Join(home, "projects", "gemini"),
 			filepath.Join(home, "projects"),
@@ -55,9 +58,7 @@ func LoadConfig() *Config {
 	tokenFile := filepath.Join(appData, "antigravity-oauth-token")
 	projectsBase := filepath.Join(home, "projects")
 	if fi, err := os.Stat(projectsBase); err != nil || !fi.IsDir() {
-		if fi2, err2 := os.Stat("/home/cat/extra"); err2 == nil && fi2.IsDir() {
-			projectsBase = "/home/cat/extra"
-		} else if fi3, err3 := os.Stat(workspace); err3 == nil && fi3.IsDir() {
+		if fi2, err2 := os.Stat(workspace); err2 == nil && fi2.IsDir() {
 			projectsBase = workspace
 		}
 	}
@@ -79,7 +80,7 @@ func ExpandHome(p string) string {
 	if strings.HasPrefix(p, "~/") || p == "~" {
 		home, err := os.UserHomeDir()
 		if err != nil || home == "" {
-			home = "/data/data/com.termux/files/home"
+			home = os.Getenv("HOME")
 		}
 		if p == "~" {
 			return home
@@ -99,20 +100,26 @@ func SafeLookPath(name string) string {
 	}
 
 	home, _ := os.UserHomeDir()
-	candidates := []string{
-		"/data/data/com.termux/files/usr/bin/" + name,
-		"/usr/bin/" + name,
-		"/usr/local/bin/" + name,
-		"/system/bin/" + name,
-		"/system/xbin/" + name,
-		"/bin/" + name,
-	}
+	var candidates []string
 	if home != "" {
-		candidates = append(candidates, filepath.Join(home, ".gemini", "bin", name))
+		candidates = append(candidates,
+			filepath.Join(home, ".local", "bin", name),
+			filepath.Join(home, ".gemini", "bin", name),
+			filepath.Join(home, ".antigravity", "bin", name),
+			filepath.Join(home, "usr", "bin", name),
+			filepath.Join(home, "..", "usr", "bin", name),
+		)
 	}
 	if prefix := os.Getenv("PREFIX"); prefix != "" {
 		candidates = append([]string{filepath.Join(prefix, "bin", name)}, candidates...)
 	}
+	candidates = append(candidates,
+		"/usr/bin/"+name,
+		"/usr/local/bin/"+name,
+		"/system/bin/"+name,
+		"/system/xbin/"+name,
+		"/bin/"+name,
+	)
 
 	for _, c := range candidates {
 		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
