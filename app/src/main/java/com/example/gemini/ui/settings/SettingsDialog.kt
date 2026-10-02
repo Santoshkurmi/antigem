@@ -2417,6 +2417,12 @@ private fun McpSubScreen(
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            val context = LocalContext.current
+            val deviceId = remember(context) {
+                try {
+                    android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: ""
+                } catch (_: Exception) { "" }
+            }
             val termuxEnv = mapOf(
                 "LD_PRELOAD" to "/data/data/com.termux/files/usr/lib/libtermux-exec.so",
                 "PATH" to "/data/data/com.termux/files/usr/bin:/system/bin"
@@ -2424,7 +2430,8 @@ private fun McpSubScreen(
             val presets = listOf(
                 Triple("Browser/Terminal Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(
                     serverName = "browser_terminal_automation",
-                    serverUrl = "http://127.0.0.1:8765/mcp"
+                    serverUrl = "http://127.0.0.1:8765/mcp",
+                    headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
                 )),
                 Triple("Local Tools", "Stdio", com.example.gemini.domain.model.McpServerSpec(
                     serverName = "local_tools",

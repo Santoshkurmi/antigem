@@ -36,12 +36,17 @@ class AndroidLocalBridgeServer private constructor() {
     private val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val clientThreadPool = Executors.newFixedThreadPool(8)
     private var appContext: Context? = null
+    @Volatile
+    private var cachedDeviceId: String = ""
     var boundPort: Int = DEFAULT_PORT
         private set
 
     fun start(context: Context, port: Int = DEFAULT_PORT) {
         if (isRunning) return
         appContext = context.applicationContext
+        cachedDeviceId = try {
+            android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: ""
+        } catch (_: Exception) { "" }
         BrowserSessionManager.instance.init(context)
         LocalTerminalBridge.instance.init(context)
 
@@ -138,6 +143,20 @@ class AndroidLocalBridgeServer private constructor() {
                 return
             }
 
+            // Verify device ID security header for all non-OPTIONS requests
+            if (cachedDeviceId.length <= 5) {
+                Log.e(TAG, "Bridge server security error: cachedDeviceId is not initialized or invalid")
+                sendResponse(output, 500, "application/json", "{\"error\": \"Server security error: Device ID not initialized or invalid\"}")
+                return
+            }
+
+            val clientDeviceId = headers["x-device-id"]
+            if (clientDeviceId.isNullOrBlank() || clientDeviceId != cachedDeviceId) {
+                Log.w(TAG, "Blocked unauthorized request to $path (missing or invalid X-Device-Id header)")
+                sendResponse(output, 401, "application/json", "{\"error\": \"Unauthorized: Invalid or missing X-Device-Id header\"}")
+                return
+            }
+
             // Route request
             runBlocking {
                 when {
@@ -193,7 +212,7 @@ class AndroidLocalBridgeServer private constructor() {
                 "Content-Length: ${bytes.size}\r\n" +
                 "Access-Control-Allow-Origin: *\r\n" +
                 "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
-                "Access-Control-Allow-Headers: Content-Type\r\n" +
+                "Access-Control-Allow-Headers: Content-Type, X-Device-Id\r\n" +
                 "Connection: close\r\n\r\n"
         out.write(header.toByteArray(Charsets.UTF_8))
         out.write(bytes)
