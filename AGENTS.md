@@ -72,3 +72,5 @@ suspend fun streamUpdates(cascadeId: String) {
 
 -- "Dont try building release build ever"
 -- "Dont try git push pull commit, stash etc ever"
+
+-- While running new command for build/etc always check for previous if ther is runnign smae thigns then either kill it then start new or wait for old (Dont run both);

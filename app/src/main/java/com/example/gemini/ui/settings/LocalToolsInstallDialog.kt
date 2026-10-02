@@ -47,6 +47,24 @@ fun LocalToolsInstallDialog(
     val scope = rememberCoroutineScope()
     val installerState by LocalEnvironmentManager.installerState.collectAsState()
 
+    val isInstalling = installerState is LocalInstallerState.Downloading ||
+        installerState is LocalInstallerState.Extracting ||
+        installerState is LocalInstallerState.Configuring ||
+        installerState is LocalInstallerState.Verifying
+
+    val activity = (context as? android.app.Activity) ?: ((context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity)
+    DisposableEffect(isInstalling) {
+        val window = activity?.window
+        if (isInstalling) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     var selectedSourceType by remember { mutableStateOf(0) } // 0: Auto GitHub, 1: Direct URL, 2: Local ZIP File
     var directUrlText by remember { mutableStateOf("") }
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
