@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">AntiGem</string>
     <string name="anti_term_name">AntiTerm</string>
+    <string name="termux_name">Termux</string>
     <string name="accessibility_service_name">AntiGem AI Automation</string>
     <string name="accessibility_service_description">Enables AntiGem AI Assistant to inspect the screen, tap buttons, scroll, input text, and automate tasks natively on your device.</string>
     <string name="copy_text">Copy</string>

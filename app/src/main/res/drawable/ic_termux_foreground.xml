@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Classic Termux Prompt Chevron > -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 33,36 L 51,54 L 33,72 L 41,72 L 59,54 L 41,36 Z" />
+    <!-- Classic Termux Cursor Bar _ -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 60,66 L 76,66 L 76,72 L 60,72 Z" />
+</vector>

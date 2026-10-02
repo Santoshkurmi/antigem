@@ -74,6 +74,9 @@ class AuthPreferences(private val context: Context) {
         val SECURITY_TOKEN = stringPreferencesKey("security_token")
         val AGY_BRIDGE_BINARY_PATH = stringPreferencesKey("agy_bridge_binary_path")
         val AGY_BINARY_PATH = stringPreferencesKey("agy_binary_path")
+        val HAS_SEEN_TERMINAL_LAUNCHER_ONBOARDING = androidx.datastore.preferences.core.booleanPreferencesKey("has_seen_terminal_launcher_onboarding")
+        val TERMINAL_LAUNCHER_STYLE = stringPreferencesKey("terminal_launcher_style") // "ANTITERM" or "TERMUX"
+        val IS_TERMINAL_LAUNCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_launcher_enabled")
 
         const val DEFAULT_BRIDGE_BINARY_PATH = "~/../usr/bin/agy_ide_bridge"
         const val DEFAULT_AGY_BINARY_PATH = "~/../usr/bin/agy"
@@ -731,6 +734,30 @@ class AuthPreferences(private val context: Context) {
         val trimmed = path.trim().ifBlank { DEFAULT_AGY_BINARY_PATH }
         syncPrefs.edit().putString("agy_binary_path", trimmed).apply()
         context.dataStore.edit { it[AGY_BINARY_PATH] = trimmed }
+    }
+
+    val hasSeenTerminalLauncherOnboarding: Flow<Boolean> = context.dataStore.data.map {
+        it[HAS_SEEN_TERMINAL_LAUNCHER_ONBOARDING] ?: false
+    }
+
+    suspend fun setHasSeenTerminalLauncherOnboarding(seen: Boolean) {
+        context.dataStore.edit { it[HAS_SEEN_TERMINAL_LAUNCHER_ONBOARDING] = seen }
+    }
+
+    val terminalLauncherStyle: Flow<String> = context.dataStore.data.map {
+        it[TERMINAL_LAUNCHER_STYLE] ?: "ANTITERM"
+    }
+
+    suspend fun setTerminalLauncherStyle(style: String) {
+        context.dataStore.edit { it[TERMINAL_LAUNCHER_STYLE] = style }
+    }
+
+    val isTerminalLauncherEnabled: Flow<Boolean> = context.dataStore.data.map {
+        it[IS_TERMINAL_LAUNCHER_ENABLED] ?: true
+    }
+
+    suspend fun setTerminalLauncherEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[IS_TERMINAL_LAUNCHER_ENABLED] = enabled }
     }
 
     suspend fun clearAuth() {

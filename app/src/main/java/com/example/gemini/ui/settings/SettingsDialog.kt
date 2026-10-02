@@ -1356,69 +1356,249 @@ private fun AppearanceSubScreen(
             }
         }
 
-        // AntiTerminal Standalone Launcher Icon Switch
+        // Standalone Terminal Launcher Icon & Style Settings (PackageManager as source of truth)
         val context = LocalContext.current
-        val terminalComponentName = remember { ComponentName(context, "com.example.gemini.TermuxActivity") }
-        var isTerminalLauncherEnabled by remember {
-            mutableStateOf(
-                context.packageManager.getComponentEnabledSetting(terminalComponentName).let { state ->
-                    state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ||
-                    state == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
-                }
-            )
+        val authPrefs = remember(context) { com.example.gemini.data.preferences.AuthPreferences(context) }
+        var isTerminalLauncherEnabled by remember(context) {
+            mutableStateOf(com.example.gemini.data.preferences.TerminalLauncherManager.isLauncherEnabled(context))
         }
+        var terminalLauncherStyle by remember(context) {
+            mutableStateOf(com.example.gemini.data.preferences.TerminalLauncherManager.getLauncherStyle(context))
+        }
+        val coroutineScope = rememberCoroutineScope()
 
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(14.dp),
             color = cardBg,
             border = cardBorder,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(16.dp)
             ) {
-                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text(
-                        text = "Separate AntiTerm App Icon",
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Show or hide the standalone AntiTerm launcher icon on your Android home screen and app drawer",
-                        fontSize = 11.5.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Separate Terminal App Icon",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Show a dedicated terminal icon on your Android home screen and app drawer",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = isTerminalLauncherEnabled,
+                        onCheckedChange = { enable ->
+                            isTerminalLauncherEnabled = enable
+                            com.example.gemini.data.preferences.TerminalLauncherManager.applyLauncherSetting(
+                                context = context,
+                                enabled = enable,
+                                style = terminalLauncherStyle
+                            )
+                            coroutineScope.launch {
+                                authPrefs.setTerminalLauncherEnabled(enable)
+                            }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
                     )
                 }
-                Switch(
-                    checked = isTerminalLauncherEnabled,
-                    onCheckedChange = { enable ->
-                        isTerminalLauncherEnabled = enable
-                        try {
-                            val newState = if (enable) {
-                                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                            } else {
-                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+
+                AnimatedVisibility(
+                    visible = isTerminalLauncherEnabled,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                    ) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                        )
+
+                        Text(
+                            text = "Launcher Icon & Name Style",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        // Option 1: AntiTerm
+                        val isAntiTerm = terminalLauncherStyle == com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_ANTITERM
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isAntiTerm) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isAntiTerm) ClaudeTerracotta else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    terminalLauncherStyle = com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_ANTITERM
+                                    com.example.gemini.data.preferences.TerminalLauncherManager.applyLauncherSetting(
+                                        context = context,
+                                        enabled = true,
+                                        style = com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_ANTITERM
+                                    )
+                                    coroutineScope.launch {
+                                        authPrefs.setTerminalLauncherStyle(com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_ANTITERM)
+                                    }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White)
+                                        .padding(3.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.foundation.Image(
+                                        painter = androidx.compose.ui.res.painterResource(id = com.example.gemini.R.drawable.splash_logo),
+                                        contentDescription = "AntiTerm",
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "AntiTerm",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Modern AntiGem styled icon & name",
+                                        fontSize = 10.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+
+                                RadioButton(
+                                    selected = isAntiTerm,
+                                    onClick = {
+                                        terminalLauncherStyle = com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_ANTITERM
+                                        com.example.gemini.data.preferences.TerminalLauncherManager.applyLauncherSetting(
+                                            context = context,
+                                            enabled = true,
+                                            style = com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_ANTITERM
+                                        )
+                                        coroutineScope.launch {
+                                            authPrefs.setTerminalLauncherStyle(com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_ANTITERM)
+                                        }
+                                    },
+                                    colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                                )
                             }
-                            context.packageManager.setComponentEnabledSetting(
-                                terminalComponentName,
-                                newState,
-                                PackageManager.DONT_KILL_APP
-                            )
-                        } catch (e: Exception) {
-                            android.util.Log.e("SettingsDialog", "Failed to update TermuxActivity component enabled state: ${e.message}")
                         }
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = ClaudeTerracotta
-                    )
-                )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Option 2: Termux Classic
+                        val isTermux = terminalLauncherStyle == com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_TERMUX
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isTermux) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isTermux) ClaudeTerracotta else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    terminalLauncherStyle = com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_TERMUX
+                                    com.example.gemini.data.preferences.TerminalLauncherManager.applyLauncherSetting(
+                                        context = context,
+                                        enabled = true,
+                                        style = com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_TERMUX
+                                    )
+                                    coroutineScope.launch {
+                                        authPrefs.setTerminalLauncherStyle(com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_TERMUX)
+                                    }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.Black)
+                                        .padding(3.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.foundation.Image(
+                                        painter = androidx.compose.ui.res.painterResource(id = com.example.gemini.R.drawable.ic_termux_foreground),
+                                        contentDescription = "Termux",
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Termux",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Classic >_ prompt icon & name",
+                                        fontSize = 10.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+
+                                RadioButton(
+                                    selected = isTermux,
+                                    onClick = {
+                                        terminalLauncherStyle = com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_TERMUX
+                                        com.example.gemini.data.preferences.TerminalLauncherManager.applyLauncherSetting(
+                                            context = context,
+                                            enabled = true,
+                                            style = com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_TERMUX
+                                        )
+                                        coroutineScope.launch {
+                                            authPrefs.setTerminalLauncherStyle(com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_TERMUX)
+                                        }
+                                    },
+                                    colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

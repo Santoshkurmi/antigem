@@ -222,6 +222,9 @@ fun ChatScreen(
     val isNetworkInspectorEnabled by viewModel.isNetworkInspectorEnabled.collectAsState()
     val isFloatingNetworkInspectorEnabled by viewModel.isFloatingNetworkInspectorEnabled.collectAsState()
     var showNetworkInspectorDialog by remember { mutableStateOf(false) }
+    val hasSeenTerminalLauncherOnboarding by viewModel.authPreferences.hasSeenTerminalLauncherOnboarding.collectAsState(initial = true)
+    val isTerminalLauncherEnabledPref by viewModel.authPreferences.isTerminalLauncherEnabled.collectAsState(initial = true)
+    val terminalLauncherStylePref by viewModel.authPreferences.terminalLauncherStyle.collectAsState(initial = com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_ANTITERM)
     val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
     val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
     val hubStatus by viewModel.hubStatus.collectAsState()
@@ -2215,6 +2218,31 @@ fun ChatScreen(
         RawPayloadDialog(
             payloadJson = showRawPayloadDialog!!,
             onDismiss = { showRawPayloadDialog = null }
+        )
+    }
+
+    // Terminal Launcher First-Launch Onboarding Dialog
+    if (!hasSeenTerminalLauncherOnboarding && !isInFloatingWindow) {
+        com.example.gemini.ui.onboarding.TerminalLauncherOnboardingDialog(
+            initialEnabled = remember(context) { com.example.gemini.data.preferences.TerminalLauncherManager.isLauncherEnabled(context) },
+            initialStyle = remember(context) { com.example.gemini.data.preferences.TerminalLauncherManager.getLauncherStyle(context) },
+            onConfirm = { enabled, style ->
+                scope.launch {
+                    viewModel.authPreferences.setTerminalLauncherEnabled(enabled)
+                    viewModel.authPreferences.setTerminalLauncherStyle(style)
+                    viewModel.authPreferences.setHasSeenTerminalLauncherOnboarding(true)
+                    com.example.gemini.data.preferences.TerminalLauncherManager.applyLauncherSetting(
+                        context = context,
+                        enabled = enabled,
+                        style = style
+                    )
+                }
+            },
+            onDismiss = {
+                scope.launch {
+                    viewModel.authPreferences.setHasSeenTerminalLauncherOnboarding(true)
+                }
+            }
         )
     }
 
