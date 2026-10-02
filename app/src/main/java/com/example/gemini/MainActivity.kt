@@ -254,9 +254,20 @@ class MainActivity : ComponentActivity() {
                                 IdeScreen(
                                     viewModel = chatViewModel,
                                     isVisible = currentViewMode == AppViewMode.IDE,
-                                    onNavigateToChat = { currentViewMode = AppViewMode.CHAT },
+                                    onNavigateToChat = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.CHAT
+                                    },
                                     onExecuteRunCommand = { cmd ->
                                         // Connect with terminal / chat execution
+                                    },
+                                    onNavigateToTerminal = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.TERMINAL
+                                    },
+                                    onNavigateToBrowser = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.BROWSER
                                     }
                                 )
                             }

@@ -60,6 +60,7 @@ class LocalPtySession(
     initialPaneId: String? = null,
     initialWindowId: String? = null,
     val initialCommand: String? = null,
+    val execShellAfterCommand: Boolean = true,
     val forceShell: String? = null,
     initialCols: Int = 80,
     initialRows: Int = 24,
@@ -210,7 +211,11 @@ class LocalPtySession(
             val processName = (if (isLoginShell) "-" else "") + File(shellBinary).name
             val cwd = if (File(workingDirectory).exists()) workingDirectory else home.absolutePath
             val shellArgs = if (!initialCommand.isNullOrBlank()) {
-                arrayOf(processName, "-c", "$initialCommand; exec $shellBinary")
+                if (execShellAfterCommand) {
+                    arrayOf(processName, "-c", "$initialCommand; exec $shellBinary")
+                } else {
+                    arrayOf(processName, "-c", initialCommand)
+                }
             } else {
                 arrayOf(processName)
             }
@@ -1025,6 +1030,13 @@ class LocalPtySession(
         try {
             sshChannel?.disconnect()
             jschSession?.disconnect()
+            val pid = terminalSession.pid
+            if (pid > 0) {
+                try {
+                    android.os.Process.sendSignal(pid, 9)
+                } catch (_: Exception) {
+                }
+            }
             terminalSession.finishIfRunning()
         } catch (_: Exception) {
         }
@@ -1366,7 +1378,13 @@ object LocalTerminalManager {
         }
     }
 
-    fun createNewSession(context: Context, workingDir: String? = null, forceShell: String? = null) {
+    fun createNewSession(
+        context: Context,
+        workingDir: String? = null,
+        forceShell: String? = null,
+        initialCommand: String? = null,
+        sessionTitle: String? = null
+    ) {
         val authPrefs = AuthPreferences(context)
         managerScope.launch {
             val defaultUseSsh = !LocalEnvironmentManager.isTermuxPackage(context)
@@ -1381,15 +1399,16 @@ object LocalTerminalManager {
                     it.id.removePrefix("session-").substringBefore("-").toIntOrNull()
                 }
                 val nextWinIndex = (existingIndices.maxOrNull() ?: _sessions.value.size) + 1
-                val sessionTitle = if (forceShell == "bash") "Bash $nextWinIndex" else "Session $nextWinIndex"
-                Log.d(TAG, "[Manager] Creating local session $nextWinIndex (forceShell=$forceShell)")
+                val resolvedTitle = sessionTitle ?: if (forceShell == "bash") "Bash $nextWinIndex" else "Session $nextWinIndex"
+                Log.d(TAG, "[Manager] Creating local session $nextWinIndex (forceShell=$forceShell, title=$resolvedTitle)")
                 val newSession = LocalPtySession(
                     id = "session-$nextWinIndex-${System.currentTimeMillis() % 10000}",
-                    initialTitle = sessionTitle,
+                    initialTitle = resolvedTitle,
                     context = context.applicationContext,
                     isSsh = false,
                     initialWorkingDir = workingDir,
                     forceShell = forceShell,
+                    initialCommand = initialCommand,
                     initialCols = lastKnownCols,
                     initialRows = lastKnownRows,
                     initialWidthPx = lastKnownWidthPx,

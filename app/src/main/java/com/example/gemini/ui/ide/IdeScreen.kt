@@ -1,6 +1,7 @@
 package com.example.gemini.ui.ide
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,6 +19,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.material.icons.Icons
@@ -46,7 +48,11 @@ import com.example.gemini.data.daemon.ProjectItem
 import com.example.gemini.data.daemon.TermuxDaemonManager
 import com.example.gemini.theme.ClaudeTerracotta
 import com.example.gemini.ui.components.FileManagerDialog
+import com.example.gemini.ui.components.LocalTerminalContent
+import com.example.gemini.data.local.LocalPtySession
+import androidx.compose.ui.zIndex
 import java.io.File
+import java.util.UUID
 
 import com.example.gemini.data.daemon.mergeProjects
 import com.example.gemini.data.preferences.AuthPreferences
@@ -64,6 +70,12 @@ import com.example.gemini.data.daemon.FileSaveResult
 import kotlinx.coroutines.delay
 
 import com.example.gemini.data.daemon.TabDiskUpdateResult
+import androidx.compose.ui.draw.clip
+import com.example.gemini.theme.GeminiBlue
+import com.example.gemini.data.ide.RunConfigManager
+import com.example.gemini.data.ide.RunConfiguration
+import com.example.gemini.data.local.LocalTerminalManager
+import com.example.gemini.ui.browser.BrowserSessionManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,7 +83,9 @@ fun IdeScreen(
     viewModel: ChatViewModel? = null,
     isVisible: Boolean = true,
     onNavigateToChat: () -> Unit,
-    onExecuteRunCommand: (command: String) -> Unit,
+    onExecuteRunCommand: (command: String) -> Unit = {},
+    onNavigateToTerminal: () -> Unit = {},
+    onNavigateToBrowser: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -101,11 +115,65 @@ fun IdeScreen(
     var currentMatchIndex by remember { mutableIntStateOf(-1) }
     val tabListState = rememberLazyListState()
 
+    var showRunMenu by remember { mutableStateOf(false) }
+    var showAddProfileDialog by remember { mutableStateOf(false) }
+    var selectedProfileName by remember { mutableStateOf<String?>(null) }
+    var runConfigurations by remember { mutableStateOf<List<RunConfiguration>>(emptyList()) }
+    var runnerSession by remember { mutableStateOf<LocalPtySession?>(null) }
+    var runnerHeightFraction by remember { mutableFloatStateOf(0.5f) }
+    var isRunnerMaximized by remember { mutableStateOf(true) }
+    var lastExecutedProfile by remember { mutableStateOf<RunConfiguration?>(null) }
+
+    fun refreshRunConfigurations() {
+        val projPath = activeProject?.path
+        if (!projPath.isNullOrBlank()) {
+            runConfigurations = RunConfigManager.loadConfigurations(projPath)
+        } else {
+            runConfigurations = emptyList()
+        }
+    }
+
+    LaunchedEffect(activeProject?.path, openTabs.size) {
+        refreshRunConfigurations()
+    }
+
+    fun executeRun(profile: RunConfiguration) {
+        lastExecutedProfile = profile
+        val projectPath = activeProject?.path ?: ""
+        val rawCmd = profile.command ?: ""
+        val resolvedCmd = if (rawCmd.isNotBlank()) {
+            RunConfigManager.resolveVariables(rawCmd, activeTabPath, projectPath)
+        } else {
+            val fallback = activeTabPath?.let { RunConfigManager.getDefaultRunnerForFile(it, projectPath) }
+            RunConfigManager.resolveVariables(fallback?.command ?: "bash", activeTabPath, projectPath)
+        }
+        val resolvedCwd = RunConfigManager.resolveWorkingDir(profile.cwd, activeTabPath, projectPath)
+
+        val escapedCmd = resolvedCmd.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$")
+        val wrappedCmd = "echo -e \"\\033[1;32m▶ $escapedCmd\\033[0m\"; $resolvedCmd"
+
+        runnerSession?.close()
+        runnerSession = LocalPtySession(
+            id = "ide_run_${UUID.randomUUID()}",
+            initialTitle = profile.name,
+            context = context,
+            forceShell = "bash",
+            initialWorkingDir = resolvedCwd,
+            initialCommand = wrappedCmd,
+            execShellAfterCommand = false
+        )
+    }
+
     val findFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val composeView = LocalView.current
 
-    androidx.activity.compose.BackHandler(enabled = isVisible && showFindBar) {
+    androidx.activity.compose.BackHandler(enabled = isVisible && runnerSession != null) {
+        runnerSession?.close()
+        runnerSession = null
+    }
+
+    androidx.activity.compose.BackHandler(enabled = isVisible && showFindBar && runnerSession == null) {
         showFindBar = false
         findQuery = ""
         currentEditorView?.stopSearch()
@@ -220,7 +288,7 @@ fun IdeScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = true,
+        gesturesEnabled = isVisible && (drawerState.isOpen || runnerSession == null),
         drawerContent = {
             ModalDrawerSheet(
                 drawerContainerColor = Color(0xFF252526),
@@ -480,22 +548,260 @@ fun IdeScreen(
                             }
                         }
 
-                        // Run Project Button
-                        IconButton(
-                            onClick = {
-                                val projPath = activeProject?.path ?: ""
-                                if (projPath.isNotBlank()) {
-                                    onExecuteRunCommand("cd \"$projPath\" && (python3 main.py || node index.js || bash run.sh || ./gradlew run)")
+                        // Run Action Split Button & Dropdown Menu
+                        Box {
+                            val isCustomMode = selectedProfileName != null
+                            val customProfile = if (isCustomMode) runConfigurations.find { it.name == selectedProfileName } else null
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isCustomMode) GeminiBlue.copy(alpha = 0.18f) else Color(0xFF4CAF50).copy(alpha = 0.14f))
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        if (isCustomMode && customProfile != null) {
+                                            executeRun(customProfile)
+                                        } else {
+                                            val activePath = activeTabPath
+                                            val projectPath = activeProject?.path ?: ""
+                                            if (!activePath.isNullOrBlank()) {
+                                                if (RunConfigManager.hasDefaultRunnerForFile(activePath)) {
+                                                    val runner = RunConfigManager.getDefaultRunnerForFile(activePath, projectPath)
+                                                    if (runner != null) {
+                                                        executeRun(runner)
+                                                    } else {
+                                                        showAddProfileDialog = true
+                                                    }
+                                                } else {
+                                                    val ext = File(activePath).extension
+                                                    Toast.makeText(context, "No default runner for '.$ext'. Configure a run profile.", Toast.LENGTH_SHORT).show()
+                                                    showAddProfileDialog = true
+                                                }
+                                            } else {
+                                                Toast.makeText(context, "Open a file or select a project run profile", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = if (isCustomMode) "Run Profile: $selectedProfileName" else "Run Active File",
+                                            tint = if (isCustomMode) GeminiBlue else Color(0xFF4CAF50),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        if (isCustomMode) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .size(6.dp)
+                                                    .clip(CircleShape)
+                                                    .background(GeminiBlue)
+                                            )
+                                        }
+                                    }
                                 }
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Run",
-                                tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(22.dp)
-                            )
+
+                                IconButton(
+                                    onClick = {
+                                        refreshRunConfigurations()
+                                        showRunMenu = true
+                                    },
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .padding(end = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = "Run Configurations",
+                                        tint = if (isCustomMode) GeminiBlue else Color(0xFF4CAF50),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = showRunMenu,
+                                onDismissRequest = { showRunMenu = false },
+                                modifier = Modifier.widthIn(min = 250.dp)
+                            ) {
+                                val activePath = activeTabPath
+                                val activeFile = activePath?.let { File(it) }
+                                val isAutoMode = selectedProfileName == null
+
+                                // Mode 1: Auto (Active Tab File)
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = "Auto: Run Active File",
+                                                fontWeight = if (isAutoMode) FontWeight.Bold else FontWeight.Normal,
+                                                fontSize = 13.sp
+                                            )
+                                            Text(
+                                                text = if (activeFile != null) activeFile.name else "(No file open)",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            tint = if (isAutoMode) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        if (isAutoMode) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = "Selected",
+                                                tint = Color(0xFF4CAF50),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        showRunMenu = false
+                                        selectedProfileName = null
+                                        if (activePath != null) {
+                                            if (RunConfigManager.hasDefaultRunnerForFile(activePath)) {
+                                                val runner = RunConfigManager.getDefaultRunnerForFile(activePath, activeProject?.path)
+                                                if (runner != null) executeRun(runner)
+                                            } else {
+                                                val ext = File(activePath).extension
+                                                Toast.makeText(context, "No default runner for '.$ext'. Configure a run profile.", Toast.LENGTH_SHORT).show()
+                                                showAddProfileDialog = true
+                                            }
+                                        } else {
+                                            Toast.makeText(context, "Open a file to run", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                )
+
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                                // Mode 2: Project Configurations (Custom Mode)
+                                Text(
+                                    text = "PROJECT PROFILES (CUSTOM MODE)",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                )
+
+                                if (runConfigurations.isNotEmpty()) {
+                                    runConfigurations.forEach { profile ->
+                                        val isSelected = selectedProfileName == profile.name
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = profile.name,
+                                                            fontSize = 13.sp,
+                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                        )
+                                                        val desc = profile.command ?: ""
+                                                        if (desc.isNotBlank()) {
+                                                            Text(
+                                                                text = desc,
+                                                                fontSize = 10.5.sp,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.Tune,
+                                                    contentDescription = null,
+                                                    tint = if (isSelected) GeminiBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            trailingIcon = {
+                                                if (isSelected) {
+                                                    Icon(
+                                                        Icons.Default.Check,
+                                                        contentDescription = "Selected",
+                                                        tint = GeminiBlue,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                showRunMenu = false
+                                                selectedProfileName = profile.name
+                                                executeRun(profile)
+                                            }
+                                        )
+                                    }
+                                } else {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                "No custom profiles configured",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                            )
+                                        },
+                                        enabled = false,
+                                        onClick = {}
+                                    )
+                                }
+
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                                DropdownMenuItem(
+                                    text = { Text("Add Run Configuration...", fontSize = 13.sp) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    },
+                                    onClick = {
+                                        showRunMenu = false
+                                        val projectPath = activeProject?.path ?: ""
+                                        if (projectPath.isBlank()) {
+                                            Toast.makeText(context, "Open a project folder first", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            showAddProfileDialog = true
+                                        }
+                                    }
+                                )
+
+                                DropdownMenuItem(
+                                    text = { Text("Edit launch.json in Editor", fontSize = 13.sp) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    },
+                                    onClick = {
+                                        showRunMenu = false
+                                        val projectPath = activeProject?.path ?: ""
+                                        if (projectPath.isBlank()) {
+                                            Toast.makeText(context, "Open a project folder first", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            val file = RunConfigManager.getOrCreateLaunchJson(projectPath, activeTabPath)
+                                            val content = try { file.readText() } catch (_: Exception) { "{}" }
+                                            TermuxDaemonManager.openOrSelectTab(file.absolutePath, "launch.json", content)
+                                        }
+                                    }
+                                )
+                            }
                         }
 
                         // AI Chat Drawer Toggle Button
@@ -1290,9 +1596,227 @@ fun IdeScreen(
                     }
                 )
             }
+            // Add Run Configuration Dialog
+            if (showAddProfileDialog) {
+                val projPath = activeProject?.path ?: ""
+                AddRunProfileDialog(
+                    projectPath = projPath,
+                    activeFilePath = activeTabPath,
+                    onDismiss = { showAddProfileDialog = false },
+                    onSaveProfile = { newProfile ->
+                        showAddProfileDialog = false
+                        RunConfigManager.addConfiguration(projPath, newProfile)
+                        refreshRunConfigurations()
+                        selectedProfileName = newProfile.name
+                        Toast.makeText(context, "Added run configuration: ${newProfile.name}", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+
+            // In-IDE Full Working Isolated Terminal Overlay (Bottom Sheet / Maximize)
+            runnerSession?.let { session ->
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(100f),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    val density = LocalDensity.current
+                    val maxHeightPx = constraints.maxHeight.toFloat()
+                    val targetHeightFraction = if (isRunnerMaximized) 1.0f else runnerHeightFraction.coerceIn(0.2f, 1.0f)
+                    val panelHeightDp = with(density) { (maxHeightPx * targetHeightFraction).toDp() }
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(panelHeightDp),
+                        shape = if (isRunnerMaximized) RoundedCornerShape(0.dp) else RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp),
+                        color = Color(0xFF1E1E1E),
+                        border = if (isRunnerMaximized) null else BorderStroke(1.dp, Color(0x33FFFFFF)),
+                        shadowElevation = if (isRunnerMaximized) 0.dp else 16.dp
+                    ) {
+                        LocalTerminalContent(
+                            customSession = session,
+                            showFloatingPill = false,
+                            backgroundColor = Color(0xFF1E1E1E),
+                            isMaximized = isRunnerMaximized,
+                            onToggleMaximize = {
+                                if (isRunnerMaximized) {
+                                    isRunnerMaximized = false
+                                    if (runnerHeightFraction >= 0.95f || runnerHeightFraction <= 0.2f) {
+                                        runnerHeightFraction = 0.5f
+                                    }
+                                } else {
+                                    isRunnerMaximized = true
+                                }
+                            },
+                            onDragDelta = { dragAmount ->
+                                val currentPx = if (isRunnerMaximized) maxHeightPx else maxHeightPx * runnerHeightFraction
+                                val newPx = (currentPx - dragAmount).coerceIn(maxHeightPx * 0.2f, maxHeightPx)
+                                val fraction = (newPx / maxHeightPx).coerceIn(0.2f, 1.0f)
+                                if (dragAmount < 0 && fraction >= 0.98f) {
+                                    isRunnerMaximized = true
+                                    runnerHeightFraction = 1.0f
+                                } else {
+                                    isRunnerMaximized = false
+                                    runnerHeightFraction = fraction
+                                }
+                            },
+                            onRetry = {
+                                session.close()
+                                runnerSession = null
+                                lastExecutedProfile?.let { executeRun(it) }
+                            },
+                            onClose = {
+                                session.close()
+                                runnerSession = null
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }
+}
+
+@Composable
+private fun AddRunProfileDialog(
+    projectPath: String,
+    activeFilePath: String?,
+    onDismiss: () -> Unit,
+    onSaveProfile: (RunConfiguration) -> Unit
+) {
+    val defaultRunner = activeFilePath?.let { RunConfigManager.getDefaultRunnerForFile(it, projectPath) }
+
+    var profileName by remember { mutableStateOf(defaultRunner?.name ?: "Custom Run") }
+    var commandInput by remember { mutableStateOf(defaultRunner?.command ?: "python3 \"\${file}\"") }
+    var cwdInput by remember { mutableStateOf(defaultRunner?.cwd ?: "\${workspaceFolder}") }
+    var isDefault by remember { mutableStateOf(false) }
+
+    val presets = listOf(
+        "Python" to "python3 \"\${file}\"",
+        "Node.js" to "node \"\${file}\"",
+        "C Program" to "mkdir -p \"\${TMPDIR:-\$PREFIX/tmp}\" && gcc -Wall -O2 \"\${file}\" -o \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\" && \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\"",
+        "C++" to "mkdir -p \"\${TMPDIR:-\$PREFIX/tmp}\" && g++ -Wall -O2 \"\${file}\" -o \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\" && \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\"",
+        "TypeScript" to "npx tsx \"\${file}\"",
+        "PHP" to "php \"\${file}\"",
+        "Bash Shell" to "bash \"\${file}\"",
+        "Rust" to "mkdir -p \"\${TMPDIR:-\$PREFIX/tmp}\" && rustc \"\${file}\" -o \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\" && \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\"",
+        "Go" to "go run \"\${file}\"",
+        "Dev Server" to "npm run dev"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(Icons.Default.Tune, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(28.dp))
+        },
+        title = {
+            Text("Add Run Configuration", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Saved into .ide/launch.json in your workspace root.",
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Presets row
+                Text("Quick Presets:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(presets) { (presetName, presetCmd) ->
+                        FilterChip(
+                            selected = false,
+                            onClick = {
+                                profileName = presetName
+                                commandInput = presetCmd
+                            },
+                            label = { Text(presetName, fontSize = 11.sp) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = profileName,
+                    onValueChange = { profileName = it },
+                    label = { Text("Profile Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = commandInput,
+                    onValueChange = { commandInput = it },
+                    label = { Text("Command to Execute") },
+                    placeholder = { Text("python3 \"\${file}\"") },
+                    minLines = 2,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = cwdInput,
+                    onValueChange = { cwdInput = it },
+                    label = { Text("Working Directory (CWD)") },
+                    placeholder = { Text("\${workspaceFolder}") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { isDefault = !isDefault }
+                ) {
+                    Checkbox(checked = isDefault, onCheckedChange = { isDefault = it })
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Set as default run profile", fontSize = 12.5.sp)
+                }
+
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("Supported Variables:", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                        Text("\${file} • \${fileBasename} • \${fileBasenameNoExtension} • \${fileDirname} • \${workspaceFolder}", fontSize = 9.5.sp, fontFamily = FontFamily.Monospace)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val config = RunConfiguration(
+                        name = profileName.trim().ifEmpty { "Run Profile" },
+                        type = "terminal",
+                        command = commandInput.trim(),
+                        cwd = cwdInput.trim().ifEmpty { "\${workspaceFolder}" },
+                        isDefault = isDefault
+                    )
+                    onSaveProfile(config)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+            ) {
+                Text("Save Profile", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 data class BinaryWarningTab(

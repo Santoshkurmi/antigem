@@ -200,7 +200,9 @@ fun FloatingChatWindow(
                                 onNavigateToChat = { currentViewMode = AppViewMode.CHAT },
                                 onExecuteRunCommand = { cmd ->
                                     // Connect with terminal / chat execution
-                                }
+                                },
+                                onNavigateToTerminal = { currentViewMode = AppViewMode.TERMINAL },
+                                onNavigateToBrowser = { currentViewMode = AppViewMode.BROWSER }
                             )
                         }
 

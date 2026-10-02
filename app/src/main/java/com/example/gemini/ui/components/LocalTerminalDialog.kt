@@ -9,9 +9,13 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
@@ -78,7 +82,14 @@ fun LocalTerminalDialog(
 
 @Composable
 fun LocalTerminalContent(
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    customSession: LocalPtySession? = null,
+    showFloatingPill: Boolean = true,
+    backgroundColor: Color = Color(0xFF000000),
+    isMaximized: Boolean = true,
+    onToggleMaximize: (() -> Unit)? = null,
+    onDragDelta: ((Float) -> Unit)? = null,
+    onRetry: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -90,29 +101,32 @@ fun LocalTerminalContent(
     var hasEverHadSessions by remember { mutableStateOf(false) }
 
     // Ensure sessions are restored from remote tmux or created
-    LaunchedEffect(Unit) {
-        if (sessions.isEmpty()) {
+    LaunchedEffect(customSession) {
+        if (customSession == null && sessions.isEmpty()) {
             LocalTerminalManager.getOrCreateOrRestoreSessions(context)
         }
     }
 
     // Auto close terminal dialog ONLY when all sessions are closed by the user
-    LaunchedEffect(sessions) {
-        if (sessions.isNotEmpty()) {
-            hasEverHadSessions = true
-        } else if (hasEverHadSessions && !isSyncingTmux) {
-            onClose()
+    LaunchedEffect(sessions, customSession) {
+        if (customSession == null) {
+            if (sessions.isNotEmpty()) {
+                hasEverHadSessions = true
+            } else if (hasEverHadSessions && !isSyncingTmux) {
+                onClose()
+            }
         }
     }
 
-    val activeSession = sessions.find { it.id == activeSessionId }
+    val activeSession = customSession
+        ?: sessions.find { it.id == activeSessionId }
         ?: sessions.firstOrNull()
 
     if (activeSession == null) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF000000)),
+                .background(backgroundColor),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -191,9 +205,13 @@ fun LocalTerminalContent(
     }
 
     val sendKeyToTerminal: (Int, String) -> Unit = sendKey@{ keyCode, fallbackString ->
-        val currentPty = LocalTerminalManager.sessions.value.find { it.id == LocalTerminalManager.activeSessionId.value } ?: activeSession
+        val currentPty = customSession ?: LocalTerminalManager.sessions.value.find { it.id == LocalTerminalManager.activeSessionId.value } ?: activeSession
         if (currentPty.isExited.value && (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER || fallbackString == "\r" || fallbackString == "\n")) {
-            LocalTerminalManager.closeSession(currentPty.id)
+            if (customSession != null) {
+                onClose()
+            } else {
+                LocalTerminalManager.closeSession(currentPty.id)
+            }
             return@sendKey
         }
         val termView = currentTerminalView
@@ -243,28 +261,138 @@ fun LocalTerminalContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(backgroundColor)
             .imePadding()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF000000))
+                .background(backgroundColor)
         ) {
+            if (customSession != null) {
+                val isSessExited by activeSession.isExited.collectAsState()
+                val activeTitle by activeSession.title.collectAsState()
+                val currentOnDragDelta by rememberUpdatedState(onDragDelta)
+                Surface(
+                    color = Color(0xFF252526),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (onDragDelta != null) {
+                                Modifier.draggable(
+                                    state = rememberDraggableState { delta ->
+                                        currentOnDragDelta?.invoke(delta)
+                                    },
+                                    orientation = Orientation.Vertical
+                                )
+                            } else Modifier
+                        )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (isMaximized) Modifier.statusBarsPadding() else Modifier)
+                    ) {
+                        // Small handle pill at the center of the header
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 5.dp, bottom = 2.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(36.dp)
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(Color.White.copy(alpha = 0.35f))
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
+                                .padding(start = 12.dp, end = 8.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isSessExited) Color(0xFFEF5350) else Color(0xFF4CAF50))
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = activeTitle,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            if (onToggleMaximize != null) {
+                                IconButton(
+                                    onClick = onToggleMaximize,
+                                    modifier = Modifier.size(30.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isMaximized) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                                        contentDescription = if (isMaximized) "Minimize / Restore" else "Maximize",
+                                        tint = Color.LightGray,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(2.dp))
+                            }
+
+                            if (onRetry != null) {
+                                IconButton(
+                                    onClick = onRetry,
+                                    modifier = Modifier.size(30.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "Retry",
+                                        tint = Color(0xFF4CAF50),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(2.dp))
+                            }
+
+                            IconButton(
+                                onClick = onClose,
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                HorizontalDivider(color = Color(0xFF333333), thickness = 0.5.dp)
+            }
+
             // NATIVE TERMUX TERMINAL VIEW (Full Screen, spans from the very top pixel)
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .clipToBounds()
-                    .background(Color(0xFF000000))
+                    .background(backgroundColor)
                     .padding(horizontal = 4.dp)
             ) {
                 key(activeSession.id) {
                     AndroidView(
                         factory = { ctx ->
                             TerminalView(ctx, null).apply {
-                                setTopPadding(statusBarHeightPx)
+                                setTopPadding(if (customSession != null) 0 else statusBarHeightPx)
                                 setTextSize(terminalTextSize)
                                 isFocusable = true
                                 isFocusableInTouchMode = true
@@ -309,10 +437,14 @@ fun LocalTerminalContent(
                                         override fun isTerminalViewSelected(): Boolean = true
                                         override fun copyModeChanged(copyMode: Boolean) {}
                                         override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
-                                            val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == session } ?: activeSession
+                                            val targetPty = customSession ?: LocalTerminalManager.sessions.value.find { it.terminalSession == session } ?: activeSession
                                             if (targetPty.isExited.value) {
                                                 if (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER || keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-                                                    LocalTerminalManager.closeSession(targetPty.id)
+                                                    if (customSession != null) {
+                                                        onClose()
+                                                    } else {
+                                                        LocalTerminalManager.closeSession(targetPty.id)
+                                                    }
                                                     return true
                                                 }
                                             }
@@ -341,10 +473,14 @@ fun LocalTerminalContent(
                                         override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
                                         override fun onLongPress(event: MotionEvent): Boolean = false
                                         override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
-                                            val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == session } ?: activeSession
+                                            val targetPty = customSession ?: LocalTerminalManager.sessions.value.find { it.terminalSession == session } ?: activeSession
                                             if (targetPty.isExited.value) {
                                                 if (codePoint == '\n'.code || codePoint == '\r'.code) {
-                                                    LocalTerminalManager.closeSession(targetPty.id)
+                                                    if (customSession != null) {
+                                                        onClose()
+                                                    } else {
+                                                        LocalTerminalManager.closeSession(targetPty.id)
+                                                    }
                                                     return true
                                                 }
                                             }
@@ -399,17 +535,25 @@ fun LocalTerminalContent(
                                 setTerminalViewClient(createClient())
                                 setTerminalInputListener(object : TerminalView.TerminalInputListener {
                                     override fun onTerminalInput(text: String) {
-                                        val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == currentSession } ?: activeSession
+                                        val targetPty = customSession ?: LocalTerminalManager.sessions.value.find { it.terminalSession == currentSession } ?: activeSession
                                         if (targetPty.isExited.value && (text.contains("\n") || text.contains("\r"))) {
-                                            LocalTerminalManager.closeSession(targetPty.id)
+                                            if (customSession != null) {
+                                                onClose()
+                                            } else {
+                                                LocalTerminalManager.closeSession(targetPty.id)
+                                            }
                                             return
                                         }
                                         targetPty.write(text)
                                     }
                                     override fun onTerminalInputCodePoint(prependEscape: Boolean, codePoint: Int) {
-                                        val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == currentSession } ?: activeSession
+                                        val targetPty = customSession ?: LocalTerminalManager.sessions.value.find { it.terminalSession == currentSession } ?: activeSession
                                         if (targetPty.isExited.value && (codePoint == '\n'.code || codePoint == '\r'.code)) {
-                                            LocalTerminalManager.closeSession(targetPty.id)
+                                            if (customSession != null) {
+                                                onClose()
+                                            } else {
+                                                LocalTerminalManager.closeSession(targetPty.id)
+                                            }
                                             return
                                         }
                                         targetPty.writeCodePoint(prependEscape, codePoint)
@@ -429,7 +573,7 @@ fun LocalTerminalContent(
                             }
                         },
                         update = { tv ->
-                            tv.setTopPadding(statusBarHeightPx)
+                            tv.setTopPadding(if (customSession != null) 0 else statusBarHeightPx)
                             tv.setTextSize(terminalTextSize)
                             if (tv.currentSession != activeSession.terminalSession) {
                                 tv.attachSession(activeSession.terminalSession)
@@ -437,17 +581,25 @@ fun LocalTerminalContent(
                             }
                             tv.setTerminalInputListener(object : TerminalView.TerminalInputListener {
                                 override fun onTerminalInput(text: String) {
-                                    val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == tv.currentSession } ?: activeSession
+                                    val targetPty = customSession ?: LocalTerminalManager.sessions.value.find { it.terminalSession == tv.currentSession } ?: activeSession
                                     if (targetPty.isExited.value && (text.contains("\n") || text.contains("\r"))) {
-                                        LocalTerminalManager.closeSession(targetPty.id)
+                                        if (customSession != null) {
+                                            onClose()
+                                        } else {
+                                            LocalTerminalManager.closeSession(targetPty.id)
+                                        }
                                         return
                                     }
                                     targetPty.write(text)
                                 }
                                 override fun onTerminalInputCodePoint(prependEscape: Boolean, codePoint: Int) {
-                                    val targetPty = LocalTerminalManager.sessions.value.find { it.terminalSession == tv.currentSession } ?: activeSession
+                                    val targetPty = customSession ?: LocalTerminalManager.sessions.value.find { it.terminalSession == tv.currentSession } ?: activeSession
                                     if (targetPty.isExited.value && (codePoint == '\n'.code || codePoint == '\r'.code)) {
-                                        LocalTerminalManager.closeSession(targetPty.id)
+                                        if (customSession != null) {
+                                            onClose()
+                                        } else {
+                                            LocalTerminalManager.closeSession(targetPty.id)
+                                        }
                                         return
                                     }
                                     targetPty.writeCodePoint(prependEscape, codePoint)
@@ -564,24 +716,25 @@ fun LocalTerminalContent(
         }
 
         // DRAGGABLE FLOATING TAB PILL (Move anywhere on screen)
-        Surface(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(top = 8.dp, end = 10.dp)
-                .offset { IntOffset(dragOffsetX.roundToInt(), dragOffsetY.roundToInt()) }
-                .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        dragOffsetX += dragAmount.x
-                        dragOffsetY += dragAmount.y
-                    }
-                },
-            shape = RoundedCornerShape(20.dp),
-            color = Color(0xF2181824),
-            border = BorderStroke(1.dp, Color(0x38FFFFFF)),
-            shadowElevation = 8.dp
-        ) {
+        if (showFloatingPill && customSession == null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, end = 10.dp)
+                    .offset { IntOffset(dragOffsetX.roundToInt(), dragOffsetY.roundToInt()) }
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            dragOffsetX += dragAmount.x
+                            dragOffsetY += dragAmount.y
+                        }
+                    },
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xF2181824),
+                border = BorderStroke(1.dp, Color(0x38FFFFFF)),
+                shadowElevation = 8.dp
+            ) {
             Row(
                 modifier = Modifier.padding(start = 8.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -740,6 +893,8 @@ fun LocalTerminalContent(
                 }
             }
         }
+        }
+
 
         if (sessionToClose != null) {
             val targetSession = sessionToClose!!
