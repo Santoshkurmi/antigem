@@ -1118,7 +1118,7 @@ object LocalTerminalManager {
 
         if (LocalServerManager.hasServerScript(context)) {
             Log.d(TAG, "[AutoLaunch] Server script found in home directory, launching local server...")
-            LocalServerManager.startServer(context, forceRestart = true)
+            LocalServerManager.startServer(context, forceRestart = false)
         } else {
             Log.d(TAG, "[AutoLaunch] No server executable in home directory, skipping auto-launch")
         }

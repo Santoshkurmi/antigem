@@ -198,7 +198,7 @@ class MainActivity : ComponentActivity() {
                                 isInstalledState = true
                                 hasSkippedInstaller = true
                                 if (com.example.gemini.data.local.LocalServerManager.hasServerScript(context)) {
-                                    com.example.gemini.data.local.LocalServerManager.startServer(context, forceRestart = true)
+                                    com.example.gemini.data.local.LocalServerManager.startServer(context, forceRestart = false)
                                 }
                             }
                         )
