@@ -36,6 +36,7 @@
     <application
         android:allowBackup="true"
         android:hasFragileUserData="true"
+        android:manageSpaceActivity="com.example.gemini.ui.settings.ManageSpaceActivity"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -206,6 +207,31 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Manage Space Activity (Clear Storage Interceptor) -->
+        <activity
+            android:name="com.example.gemini.ui.settings.ManageSpaceActivity"
+            android:exported="true"
+            android:label="AntiGem Space Manager"
+            android:theme="@style/Theme.Gemini">
+            <intent-filter>
+                <action android:name="android.intent.action.MANAGE_SPACE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Device Admin Receiver for Accidental Uninstall Protection -->
+        <receiver
+            android:name="com.example.gemini.data.admin.AntiGemDeviceAdminReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_policies" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

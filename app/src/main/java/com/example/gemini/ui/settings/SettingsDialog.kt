@@ -70,6 +70,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import android.util.Log
+import com.example.gemini.data.admin.AntiGemDeviceAdminReceiver
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -83,6 +84,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     AUTOMATION("Automation & Device Tools", "Browser & Terminal AI agent permissions"),
     TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling"),
     BACKUPS("Backups & Restore", "Backup rootfs environment and AGY chat histories"),
+    DATA_PROTECTION("Data Loss Protection", "Uninstall shield & App Info clear data protection"),
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
     DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD"),
     ABOUT("About & Info", "App version, package details, and bridge export")
@@ -463,6 +465,11 @@ fun SettingsDialog(
                         }
                     )
 
+                    SettingsSection.DATA_PROTECTION -> DataProtectionSubScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder
+                    )
+
                     SettingsSection.COMMANDS -> CommandsSubScreen(
                         commandAutoExecutionPolicy = commandAutoExecutionPolicy,
                         commandSandboxEnabled = commandSandboxEnabled,
@@ -668,6 +675,19 @@ private fun MainSettingsMenu(
                 onClick = { onNavigate(SettingsSection.BACKUPS) }
             )
         }
+
+        // Section 5.6: Data Loss Protection
+        SettingsCategoryCard(
+            icon = Icons.Outlined.Security,
+            iconTint = Color(0xFF10B981),
+            title = "Data Loss Protection",
+            subtitle = "Accidental uninstall shield & App Info clear data protection",
+            badgeText = "Shield",
+            badgeColor = Color(0xFF10B981),
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.DATA_PROTECTION) }
+        )
 
         // Section 5: Commands & Permissions
         val (policyBadge, policyColor) = when {
@@ -4065,7 +4085,6 @@ private fun TerminalSubScreen(
                         value = resetPasswordInput,
                         onValueChange = { resetPasswordInput = it },
                         singleLine = true,
-                        placeholder = { Text("iknowwhatiamdoing", fontSize = 13.sp) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
                         isError = resetPasswordInput.isNotEmpty() && !isMatch
@@ -4961,6 +4980,333 @@ private fun ScriptExecutionDialog(
                 }
             }
         }
+    }
+}
+
+// ==========================================
+// SUB-SCREEN: DATA LOSS PROTECTION
+// ==========================================
+@Composable
+private fun DataProtectionSubScreen(
+    cardBg: Color,
+    cardBorder: BorderStroke
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isAdminActive by remember { mutableStateOf(AntiGemDeviceAdminReceiver.isAdminActive(context)) }
+    var isShieldEnabled by remember { mutableStateOf(ManageSpaceActivity.isShieldEnabled(context)) }
+    var showDeactivateAdminDialog by remember { mutableStateOf(false) }
+
+    val adminLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        isAdminActive = AntiGemDeviceAdminReceiver.isAdminActive(context)
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                isAdminActive = AntiGemDeviceAdminReceiver.isAdminActive(context)
+                isShieldEnabled = ManageSpaceActivity.isShieldEnabled(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Banner info
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = Color(0xFF10B981).copy(alpha = 0.1f),
+            border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.3f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Security,
+                    contentDescription = null,
+                    tint = Color(0xFF10B981),
+                    modifier = Modifier.size(26.dp)
+                )
+                Column {
+                    Text(
+                        text = "Data Loss Prevention",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Protect your local Linux environment, CLI tools, databases, and AI coding workspaces from accidental wipe or uninstall.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        }
+
+        // Feature 1: Accidental Uninstall Protection (Device Administrator)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isAdminActive) QuotaGreen.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isAdminActive) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
+                                contentDescription = null,
+                                tint = if (isAdminActive) QuotaGreen else Color.Gray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Accidental Uninstall Protection",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (isAdminActive) "Status: Protected (Device Admin Active)" else "Status: Inactive (Optional)",
+                            fontSize = 12.sp,
+                            color = if (isAdminActive) QuotaGreen else Color.Gray,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "Why enable this? AntiGem hosts a full local Linux environment with your Node/Python packages, Git repos, and active coding projects. An accidental drag-to-uninstall from the home screen wipes all of it permanently.\n\nActivating Android Device Administrator greys out the 'Uninstall' button at the OS level across phone launchers. You can safely disable this anytime if you wish to uninstall.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    lineHeight = 16.sp
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+                if (isAdminActive) {
+                    OutlinedButton(
+                        onClick = { showDeactivateAdminDialog = true },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Outlined.LockOpen, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Deactivate Uninstall Protection", fontSize = 13.sp)
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            try {
+                                val intent = AntiGemDeviceAdminReceiver.createActivationIntent(context)
+                                adminLauncher.launch(intent)
+                            } catch (e: Exception) {
+                                Log.w("SettingsDialog", "Direct admin prompt failed, opening Device Admin settings", e)
+                                try {
+                                    context.startActivity(AntiGemDeviceAdminReceiver.createDeviceAdminSettingsIntent())
+                                } catch (e2: Exception) {
+                                    Toast.makeText(context, "Could not open Device Admin: ${e2.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = QuotaGreen)
+                    ) {
+                        Icon(Icons.Outlined.Security, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Activate Uninstall Protection", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                context.startActivity(AntiGemDeviceAdminReceiver.createDeviceAdminSettingsIntent())
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Could not open settings: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Outlined.Settings, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Open System Device Admin Apps List", fontSize = 12.5.sp)
+                    }
+
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "💡 Sideloaded App Tip (Android 13+): If your phone shows 'Restricted setting', open App Info > tap the 3 dots in the top right > select 'Allow restricted settings'.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    lineHeight = 15.sp
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                TextButton(
+                                    onClick = {
+                                        try {
+                                            val appInfoIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                data = Uri.fromParts("package", context.packageName, null)
+                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            }
+                                            context.startActivity(appInfoIntent)
+                                        } catch (_: Exception) {}
+                                    },
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Text("Open App Info", fontSize = 11.5.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Feature 2: Clear Data Shield (ManageSpaceActivity)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isShieldEnabled) GeminiBlue.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.CleaningServices,
+                                contentDescription = null,
+                                tint = if (isShieldEnabled) GeminiBlue else Color.Gray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "App Info Clear Data Shield",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (isShieldEnabled) "Enabled (Replaces Clear Data with Space Manager)" else "Disabled (Standard OS Clear Data)",
+                            fontSize = 12.sp,
+                            color = if (isShieldEnabled) GeminiBlue else Color.Gray
+                        )
+                    }
+                    Switch(
+                        checked = isShieldEnabled,
+                        onCheckedChange = { enabled ->
+                            ManageSpaceActivity.setShieldEnabled(context, enabled)
+                            isShieldEnabled = ManageSpaceActivity.isShieldEnabled(context)
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "When enabled (default), tapping 'Clear Data' in Android's phone Settings > App Info opens AntiGem's Safe Space Manager instead of wiping everything instantly with one click. This prevents accidental wipes and allows safe cache-only cleanup.\n\nYou can toggle this off anytime if you prefer the standard raw Android 'Clear Data' button.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    lineHeight = 16.sp
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = {
+                        try {
+                            context.startActivity(Intent(context, ManageSpaceActivity::class.java))
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Could not open Space Manager: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.Storage, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Open Space Manager Preview", fontSize = 13.sp)
+                }
+            }
+        }
+    }
+
+    if (showDeactivateAdminDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeactivateAdminDialog = false },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Disable Uninstall Protection?") },
+            text = {
+                Text(
+                    "This will remove AntiGem's Device Admin status. The app will become vulnerable to accidental home-screen uninstallation.",
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeactivateAdminDialog = false
+                        AntiGemDeviceAdminReceiver.deactivateAdmin(context)
+                        isAdminActive = false
+                        scope.launch {
+                            delay(300)
+                            isAdminActive = AntiGemDeviceAdminReceiver.isAdminActive(context)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Deactivate")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeactivateAdminDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
