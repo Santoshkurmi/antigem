@@ -48,7 +48,7 @@
             android:launchMode="singleTask"
             android:theme="@style/Theme.Gemini"
             android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="stateUnchanged|adjustResize">
             <intent-filter android:priority="1000">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -118,7 +118,7 @@
             android:name=".ui.bubble.FloatingChatActivity"
             android:exported="false"
             android:theme="@style/Theme.AntiGem.FloatingTranslucent"
-            android:windowSoftInputMode="adjustResize"
+            android:windowSoftInputMode="stateUnchanged|adjustResize"
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:autoRemoveFromRecents="true"
