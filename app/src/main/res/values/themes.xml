@@ -22,14 +22,4 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 
-    <!-- Termux standalone dark splash theme with black background and centered >_ prompt -->
-    <style name="Theme.Termux" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@drawable/splash_termux_background</item>
-        <item name="android:windowSplashScreenBackground">#000000</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_termux_foreground</item>
-        <item name="android:statusBarColor">#000000</item>
-        <item name="android:navigationBarColor">#000000</item>
-        <item name="android:windowLightStatusBar">false</item>
-    </style>
-
 </resources>

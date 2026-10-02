@@ -36,7 +36,7 @@
             android:icon="@mipmap/ic_termux_launcher"
             android:roundIcon="@mipmap/ic_termux_launcher_round"
             android:label="@string/termux_name"
-            android:theme="@style/Theme.Termux"
+            android:theme="@style/Theme.Gemini"
             android:enabled="false"
             android:exported="true">
             <intent-filter android:priority="1">
