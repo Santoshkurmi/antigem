@@ -386,6 +386,15 @@ fun IdeScreen(
                             }
                         }
                     },
+                    onOpenTerminal = { targetPath ->
+                        coroutineScope.launch { drawerState.close() }
+                        val resolvedPath = targetPath.ifBlank { activeProject?.path }
+                        LocalTerminalManager.createNewSession(
+                            context = context,
+                            workingDir = resolvedPath
+                        )
+                        onNavigateToTerminal()
+                    },
                     onRefreshTree = { refreshProjectsAndTree() }
                 )
             }

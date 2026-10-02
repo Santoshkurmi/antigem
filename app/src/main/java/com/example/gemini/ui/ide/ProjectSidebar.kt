@@ -49,6 +49,7 @@ fun ProjectSidebar(
     onCreateFile: (parentPath: String, name: String, isDir: Boolean) -> Unit,
     onRenameFile: (oldPath: String, newPath: String) -> Unit = { _, _ -> },
     onDeleteFile: (path: String) -> Unit,
+    onOpenTerminal: (path: String) -> Unit = {},
     onRefreshTree: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -330,6 +331,20 @@ fun ProjectSidebar(
                         )
                     }
                     IconButton(
+                        onClick = {
+                            val rootPath = activeProject?.path ?: ""
+                            onOpenTerminal(rootPath)
+                        },
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Terminal,
+                            contentDescription = "Terminal",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                    IconButton(
                         onClick = onOpenFileManager,
                         modifier = Modifier.size(26.dp)
                     ) {
@@ -443,7 +458,8 @@ fun ProjectSidebar(
                             },
                             onDeleteRequested = { targetNode ->
                                 showDeleteDialog = targetNode
-                            }
+                            },
+                            onOpenTerminal = onOpenTerminal
                         )
                     }
                 }
@@ -622,7 +638,8 @@ fun FileTreeNodeItem(
     onCreateChildFile: (parentPath: String, isDir: Boolean) -> Unit,
     onRenameRequested: (FileNode) -> Unit,
     onDetailsRequested: (FileNode) -> Unit,
-    onDeleteRequested: (FileNode) -> Unit
+    onDeleteRequested: (FileNode) -> Unit,
+    onOpenTerminal: (path: String) -> Unit = {}
 ) {
     val isExpanded = expandedPaths.contains(node.path)
     var menuExpanded by remember { mutableStateOf(false) }
@@ -739,6 +756,21 @@ fun FileTreeNodeItem(
                                 onCreateChildFile(node.path, true)
                             }
                         )
+                        DropdownMenuItem(
+                            text = { Text("Terminal", fontSize = 13.5.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Terminal,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4CAF50),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onOpenTerminal(node.path)
+                            }
+                        )
                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     }
                     DropdownMenuItem(
@@ -803,7 +835,8 @@ fun FileTreeNodeItem(
                     onCreateChildFile = onCreateChildFile,
                     onRenameRequested = onRenameRequested,
                     onDetailsRequested = onDetailsRequested,
-                    onDeleteRequested = onDeleteRequested
+                    onDeleteRequested = onDeleteRequested,
+                    onOpenTerminal = onOpenTerminal
                 )
             }
         }
