@@ -2422,8 +2422,8 @@ private fun McpSubScreen(
                 "PATH" to "/data/data/com.termux/files/usr/bin:/system/bin"
             )
             val presets = listOf(
-                Triple("Browser Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(
-                    serverName = "android_bridge",
+                Triple("Browser/Terminal Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(
+                    serverName = "browser_terminal_automation",
                     serverUrl = "http://127.0.0.1:8765/mcp"
                 )),
                 Triple("Local Tools", "Stdio", com.example.gemini.domain.model.McpServerSpec(
@@ -6709,6 +6709,42 @@ private fun AutomationSubScreen(
                         fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         lineHeight = 16.sp
+                    )
+                }
+            }
+        }
+
+        // Warning / Notice: MCP Server Configuration Requirement
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = Color(0xFFF59E0B).copy(alpha = 0.12f),
+            border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.35f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(14.dp),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = Color(0xFFF59E0B),
+                    modifier = Modifier.size(22.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "MCP Server Required",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFF59E0B)
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = "To use these automation tools, the \"Browser/Terminal Automation\" server (browser_terminal_automation) must be added in MCP Server Settings (by default it is off/not added). Once added, the switches below control which specific tool permissions are granted to the AI.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        lineHeight = 17.sp
                     )
                 }
             }
