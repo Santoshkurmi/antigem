@@ -36,6 +36,7 @@ Flags:
   --bin <path>              Custom path to AGY binary (for --unpatch or custom setups)
   -t, --token <token>       12-character security token for API & AGY CSRF obfuscation
   -f, --force, --f          Force start AGY Hub automatically without prompting
+  -l, --logs                Enable dumping request/response protos to dump_logs/ directory (disabled by default)
   -p, --port <port>         Port for the Go IDE Server (default: 1234)
   --hub-port <port>         Port for the AGY Hub RPC server (default: 1235)
   --cloudcode-port <port>   Port for the CloudCode reverse proxy server (default: 1236)
@@ -112,6 +113,7 @@ func main() {
 
 	var unpatchOnly bool
 	var proxyOnly bool
+	var enableLogs bool
 	var customAgyBin string
 	var forceStart bool
 	var skipHub bool
@@ -128,6 +130,8 @@ func main() {
 			unpatchOnly = true
 		case arg == "--proxy" || arg == "--proxy-only":
 			proxyOnly = true
+		case arg == "-l" || arg == "--logs" || arg == "--dump-logs" || arg == "--log":
+			enableLogs = true
 		case strings.HasPrefix(arg, "--bin="):
 			customAgyBin = strings.TrimPrefix(arg, "--bin=")
 		case arg == "--bin" || arg == "--agy-bin":
@@ -228,9 +232,9 @@ func main() {
 		fmt.Printf("  \033[1m• Target Upstream:\033[0m    %s\n", cfg.CloudCodeUpstreamHost)
 		fmt.Printf("  \033[1m• Local Time:\033[0m         %s\n", time.Now().Format("2006-01-02 15:04:05 MST"))
 		fmt.Println("\033[1;36m============================================================\033[0m")
-		fmt.Printf(" \033[32m🚀 CloudCode Proxy running at http://0.0.0.0:%s (Forwarding to %s)\033[0m\n\n", cfg.CloudCodePort, cfg.CloudCodeUpstreamHost)
+		fmt.Printf(" \033[32m🚀 CloudCode Proxy running at http://0.0.0.0:%s (Forwarding to %s, Logging: %v)\033[0m\n\n", cfg.CloudCodePort, cfg.CloudCodeUpstreamHost, enableLogs)
 
-		ccProxy := cloudcode.NewProxyServer(cfg.CloudCodePort, cfg.CloudCodeUpstreamHost)
+		ccProxy := cloudcode.NewProxyServer(cfg.CloudCodePort, cfg.CloudCodeUpstreamHost, enableLogs)
 		if err := ccProxy.Start(); err != nil {
 			log.Fatalf("Fatal: failed to start CloudCode proxy: %v", err)
 		}
@@ -557,7 +561,7 @@ func main() {
 	}
 
 	// Start CloudCode reverse proxy service on port 1236
-	ccProxy := cloudcode.NewProxyServer(cfg.CloudCodePort, cfg.CloudCodeUpstreamHost)
+	ccProxy := cloudcode.NewProxyServer(cfg.CloudCodePort, cfg.CloudCodeUpstreamHost, enableLogs)
 	if err := ccProxy.Start(); err != nil {
 		log.Printf(" \033[31m[!] Warning starting CloudCode Proxy:\033[0m %v\n", err)
 	}

@@ -1,6 +1,7 @@
 package cloudcode
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -120,11 +121,12 @@ func (w *responseTracker) Flush() {
 
 // ProxyServer manages the CloudCode reverse proxy service
 type ProxyServer struct {
-	Port         string
-	UpstreamHost string
-	server       *http.Server
-	proxy        *httputil.ReverseProxy
-	mu           sync.Mutex
+	Port          string
+	UpstreamHost  string
+	EnableLogging bool
+	server        *http.Server
+	proxy         *httputil.ReverseProxy
+	mu            sync.Mutex
 }
 
 type contextKey string
@@ -132,7 +134,7 @@ type contextKey string
 const reqLoggerKey contextKey = "cloudcode_req_logger"
 
 // NewProxyServer creates a new CloudCode proxy instance
-func NewProxyServer(port, upstreamHost string) *ProxyServer {
+func NewProxyServer(port, upstreamHost string, enableLogging bool) *ProxyServer {
 	if port == "" {
 		port = "1236"
 	}
@@ -175,9 +177,11 @@ func NewProxyServer(port, upstreamHost string) *ProxyServer {
 	}
 
 	proxy.ModifyResponse = func(resp *http.Response) error {
-		if reqLogger, ok := resp.Request.Context().Value(reqLoggerKey).(*RequestLogger); ok && reqLogger != nil {
-			reqLogger.SetResponseInfo(resp.StatusCode, resp.Header)
-			resp.Body = NewStreamInspectReader(resp.Body, reqLogger)
+		if enableLogging {
+			if reqLogger, ok := resp.Request.Context().Value(reqLoggerKey).(*RequestLogger); ok && reqLogger != nil {
+				reqLogger.SetResponseInfo(resp.StatusCode, resp.Header)
+				resp.Body = NewStreamInspectReader(resp.Body, reqLogger)
+			}
 		}
 		return nil
 	}
@@ -188,9 +192,10 @@ func NewProxyServer(port, upstreamHost string) *ProxyServer {
 	}
 
 	p := &ProxyServer{
-		Port:         port,
-		UpstreamHost: upstreamHost,
-		proxy:        proxy,
+		Port:          port,
+		UpstreamHost:  upstreamHost,
+		EnableLogging: enableLogging,
+		proxy:         proxy,
 	}
 
 	mux := http.NewServeMux()
@@ -222,20 +227,23 @@ func (p *ProxyServer) handleRequest(w http.ResponseWriter, r *http.Request) {
 			now, r.Method, reqPath, r.RemoteAddr)
 	}
 
-	// Capture request body for typed proto dumping
-	var bodyBytes []byte
-	if r.Body != nil {
-		var err error
-		bodyBytes, err = io.ReadAll(r.Body)
-		if err == nil {
-			r.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+	// Capture request body for typed proto dumping only when logging is enabled
+	var reqLogger *RequestLogger
+	if p.EnableLogging {
+		var bodyBytes []byte
+		if r.Body != nil {
+			var err error
+			bodyBytes, err = io.ReadAll(r.Body)
+			if err == nil {
+				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			}
 		}
-	}
 
-	reqLogger := NewRequestLogger(reqPath)
-	if reqLogger != nil {
-		reqLogger.LogRequest(r.Method, reqPath, r.Header, bodyBytes)
-		r = r.WithContext(context.WithValue(r.Context(), reqLoggerKey, reqLogger))
+		reqLogger = NewRequestLogger(reqPath)
+		if reqLogger != nil {
+			reqLogger.LogRequest(r.Method, reqPath, r.Header, bodyBytes)
+			r = r.WithContext(context.WithValue(r.Context(), reqLoggerKey, reqLogger))
+		}
 	}
 
 	tracker := &responseTracker{
@@ -248,16 +256,28 @@ func (p *ProxyServer) handleRequest(w http.ResponseWriter, r *http.Request) {
 	elapsed := time.Since(start)
 	completeNow := time.Now().Format("2006-01-02 15:04:05")
 
+	dumpPath := "none"
 	if reqLogger != nil {
 		reqLogger.LogComplete(tracker.statusCode)
+		dumpPath = reqLogger.LogFilePath
 	}
 
 	if isKnown {
-		log.Printf("\033[1;32m[CloudCode Proxy]\033[0m [%s] \033[1;32m<-- Completed:\033[0m %s %s -> Status: \033[1m%d\033[0m (%v elapsed, %d bytes) [Dump: %s]",
-			completeNow, r.Method, reqPath, tracker.statusCode, elapsed, tracker.bytesWritten, reqLogger.LogFilePath)
+		if dumpPath != "none" {
+			log.Printf("\033[1;32m[CloudCode Proxy]\033[0m [%s] \033[1;32m<-- Completed:\033[0m %s %s -> Status: \033[1m%d\033[0m (%v elapsed, %d bytes) [Dump: %s]",
+				completeNow, r.Method, reqPath, tracker.statusCode, elapsed, tracker.bytesWritten, dumpPath)
+		} else {
+			log.Printf("\033[1;32m[CloudCode Proxy]\033[0m [%s] \033[1;32m<-- Completed:\033[0m %s %s -> Status: \033[1m%d\033[0m (%v elapsed, %d bytes)",
+				completeNow, r.Method, reqPath, tracker.statusCode, elapsed, tracker.bytesWritten)
+		}
 	} else {
-		log.Printf("\033[1;33m[CloudCode Proxy]\033[0m [%s] \033[1;33m<-- Completed (Unexpected):\033[0m %s %s -> Status: %d (%v elapsed, %d bytes) [Dump: %s]",
-			completeNow, r.Method, reqPath, tracker.statusCode, elapsed, tracker.bytesWritten, reqLogger.LogFilePath)
+		if dumpPath != "none" {
+			log.Printf("\033[1;33m[CloudCode Proxy]\033[0m [%s] \033[1;33m<-- Completed (Unexpected):\033[0m %s %s -> Status: %d (%v elapsed, %d bytes) [Dump: %s]",
+				completeNow, r.Method, reqPath, tracker.statusCode, elapsed, tracker.bytesWritten, dumpPath)
+		} else {
+			log.Printf("\033[1;33m[CloudCode Proxy]\033[0m [%s] \033[1;33m<-- Completed (Unexpected):\033[0m %s %s -> Status: %d (%v elapsed, %d bytes)",
+				completeNow, r.Method, reqPath, tracker.statusCode, elapsed, tracker.bytesWritten)
+		}
 	}
 }
 
