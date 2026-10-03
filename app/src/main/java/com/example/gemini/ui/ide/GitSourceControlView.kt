@@ -76,6 +76,7 @@ fun GitSourceControlView(
 
     // Git Config Dialog State
     var showConfigDialog by remember { mutableStateOf(false) }
+    var configPromptReason by remember { mutableStateOf<String?>(null) }
     var configUserName by remember { mutableStateOf("") }
     var configUserEmail by remember { mutableStateOf("") }
     var configPullRebase by remember { mutableStateOf("") }
@@ -247,12 +248,37 @@ fun GitSourceControlView(
                         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = "Pull", modifier = Modifier.size(16.dp))
                     }
 
-                    // Push Button
-                    IconButton(
-                        onClick = { showPushDialog = true },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.CloudUpload, contentDescription = "Push", modifier = Modifier.size(16.dp))
+                    // Push Button with Unpushed Commit Count Badge
+                    val unpushedCount = status?.unpushedCount ?: status?.ahead ?: 0
+                    Box {
+                        IconButton(
+                            onClick = { showPushDialog = true },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudUpload,
+                                contentDescription = "Push",
+                                tint = if (unpushedCount > 0) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        if (unpushedCount > 0) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = ClaudeTerracotta,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 2.dp, y = (-2).dp)
+                            ) {
+                                Text(
+                                    text = if (unpushedCount > 99) "99+" else "$unpushedCount",
+                                    color = Color.White,
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 3.5.dp, vertical = 0.5.dp)
+                                )
+                            }
+                        }
                     }
 
                     // Stash Menu
@@ -451,7 +477,24 @@ fun GitSourceControlView(
                         Toast.makeText(context, "Please enter a commit message", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-                    showCommitDialog = true
+                    val projPath = activeProject?.path ?: return@Button
+                    scope.launch {
+                        isOperating = true
+                        val cfg = GitApiClient.getConfig(projPath)
+                        isOperating = false
+                        if (cfg == null || cfg.userName.isBlank() || cfg.userEmail.isBlank()) {
+                            if (cfg != null) {
+                                configUserName = cfg.userName
+                                configUserEmail = cfg.userEmail
+                                configPullRebase = cfg.pullRebase
+                                configRemoteUrl = cfg.remoteUrl
+                            }
+                            configPromptReason = "Author Name and Email are required to commit in Git. Please configure them below to proceed:"
+                            showConfigDialog = true
+                        } else {
+                            showCommitDialog = true
+                        }
+                    }
                 },
                 enabled = !isOperating && (status?.hasChanges == true || commitMessage.isNotBlank()),
                 shape = RoundedCornerShape(8.dp),
@@ -716,9 +759,18 @@ fun GitSourceControlView(
         var pullRebaseMenuOpen by remember { mutableStateOf(false) }
 
         AlertDialog(
-            onDismissRequest = { showConfigDialog = false },
+            onDismissRequest = {
+                showConfigDialog = false
+                configPromptReason = null
+            },
             icon = { Icon(Icons.Default.Tune, contentDescription = null, tint = ClaudeTerracotta) },
-            title = { Text("Git Configuration", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            title = {
+                Text(
+                    text = if (configPromptReason != null) "Git Author Setup" else "Git Configuration",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
             text = {
                 Column(
                     modifier = Modifier
@@ -726,6 +778,29 @@ fun GitSourceControlView(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    if (configPromptReason != null) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFFFF3E0),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFB74D)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFFE65100), modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = configPromptReason!!,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFBF360C),
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
+                    }
+
                     // user.name
                     Column {
                         Text("Author Name (user.name)", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -850,6 +925,10 @@ fun GitSourceControlView(
                 Button(
                     onClick = {
                         val projPath = activeProject?.path ?: return@Button
+                        if (configUserName.trim().isBlank() || configUserEmail.trim().isBlank()) {
+                            Toast.makeText(context, "Author name and email cannot be empty", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
                         scope.launch {
                             isOperating = true
                             val res = GitApiClient.setConfig(
@@ -862,7 +941,12 @@ fun GitSourceControlView(
                             )
                             if (res.success) {
                                 Toast.makeText(context, "Git configuration saved!", Toast.LENGTH_SHORT).show()
+                                val wasPromptedForCommit = configPromptReason != null
                                 showConfigDialog = false
+                                configPromptReason = null
+                                if (wasPromptedForCommit) {
+                                    showCommitDialog = true
+                                }
                             } else {
                                 executionError = Pair("Config Update Failed", res.error.ifBlank { "Could not save Git configuration." })
                             }
@@ -871,11 +955,14 @@ fun GitSourceControlView(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                 ) {
-                    Text("Save")
+                    Text(if (configPromptReason != null) "Save & Continue" else "Save")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showConfigDialog = false }) {
+                TextButton(onClick = {
+                    showConfigDialog = false
+                    configPromptReason = null
+                }) {
                     Text("Cancel")
                 }
             }
@@ -1233,11 +1320,20 @@ fun GitSourceControlView(
 
     // 8. Git Push Confirmation Dialog
     if (showPushDialog) {
+        val unpushedCount = status?.unpushedCount ?: status?.ahead ?: 0
         AlertDialog(
             onDismissRequest = { showPushDialog = false },
             icon = { Icon(Icons.Default.CloudUpload, contentDescription = null, tint = ClaudeTerracotta) },
             title = { Text("Git Push", fontWeight = FontWeight.Bold) },
-            text = { Text("Push committed changes to the remote repository?") },
+            text = {
+                Column {
+                    if (unpushedCount > 0) {
+                        Text("Push $unpushedCount unpushed commit${if (unpushedCount > 1) "s" else ""} on branch '${status?.branch ?: "HEAD"}' to the remote repository?")
+                    } else {
+                        Text("Push committed changes on branch '${status?.branch ?: "HEAD"}' to the remote repository?")
+                    }
+                }
+            },
             confirmButton = {
                 Button(
                     onClick = {
@@ -1257,7 +1353,7 @@ fun GitSourceControlView(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                 ) {
-                    Text("Push")
+                    Text(if (unpushedCount > 0) "Push ($unpushedCount)" else "Push")
                 }
             },
             dismissButton = {
@@ -1504,6 +1600,33 @@ private fun CommitLogRow(
                         color = ClaudeTerracotta,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
+                }
+                if (commit.isUnpushed) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFFFFF3E0),
+                        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFFFFB74D))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = null,
+                                tint = Color(0xFFE65100),
+                                modifier = Modifier.size(9.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "Not pushed",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFE65100)
+                            )
+                        }
+                    }
                 }
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(

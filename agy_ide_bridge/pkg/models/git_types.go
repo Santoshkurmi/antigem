@@ -15,6 +15,7 @@ type GitStatusResponse struct {
 	Tracking       string          `json:"tracking,omitempty"`
 	Ahead          int             `json:"ahead"`
 	Behind         int             `json:"behind"`
+	UnpushedCount  int             `json:"unpushedCount"`
 	StagedFiles    []GitFileStatus `json:"stagedFiles"`
 	UnstagedFiles  []GitFileStatus `json:"unstagedFiles"`
 	UntrackedFiles []GitFileStatus `json:"untrackedFiles"`
@@ -30,11 +31,12 @@ type GitBranchInfo struct {
 
 // GitCommitLog represents a git commit history entry.
 type GitCommitLog struct {
-	Hash      string `json:"hash"`
-	ShortHash string `json:"shortHash"`
-	Author    string `json:"author"`
-	Date      string `json:"date"`
-	Message   string `json:"message"`
+	Hash       string `json:"hash"`
+	ShortHash  string `json:"shortHash"`
+	Author     string `json:"author"`
+	Date       string `json:"date"`
+	Message    string `json:"message"`
+	IsUnpushed bool   `json:"isUnpushed"`
 }
 
 // GitCommitFileChange represents a file modified in a specific commit.

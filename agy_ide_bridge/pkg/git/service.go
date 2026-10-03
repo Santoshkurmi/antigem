@@ -279,7 +279,64 @@ func GetStatus(projectDir string) (res *models.GitStatusResponse, err error) {
 	stashOut, _ := runGitCmd(projectDir, "stash", "list")
 	res.HasStash = strings.TrimSpace(stashOut) != ""
 
+	// Calculate unpushed commits
+	unpushedMap := GetUnpushedCommitHashes(projectDir)
+	res.UnpushedCount = len(unpushedMap)
+	if res.Ahead == 0 && res.UnpushedCount > 0 {
+		res.Ahead = res.UnpushedCount
+	}
+
 	return res, nil
+}
+
+// GetUnpushedCommitHashes returns a set of commit hashes on the current HEAD that are not present in remote.
+func GetUnpushedCommitHashes(projectDir string) map[string]bool {
+	unpushed := make(map[string]bool)
+	resolvedDir, err := cleanDir(projectDir)
+	if err != nil {
+		return unpushed
+	}
+
+	// 1. Try @{u}..HEAD (if upstream is configured)
+	out, err := runGitCmd(resolvedDir, "rev-list", "@{u}..HEAD")
+	if err == nil {
+		for _, h := range strings.Split(strings.TrimSpace(out), "\n") {
+			h = strings.TrimSpace(h)
+			if h != "" {
+				unpushed[h] = true
+			}
+		}
+		return unpushed
+	}
+
+	// 2. If no upstream set, check if remote(s) exist
+	remotesOut, _ := runGitCmd(resolvedDir, "remote")
+	if strings.TrimSpace(remotesOut) != "" {
+		// Remotes exist, check commits not in any remote
+		out, err = runGitCmd(resolvedDir, "rev-list", "HEAD", "--not", "--remotes")
+		if err == nil {
+			for _, h := range strings.Split(strings.TrimSpace(out), "\n") {
+				h = strings.TrimSpace(h)
+				if h != "" {
+					unpushed[h] = true
+				}
+			}
+			return unpushed
+		}
+	} else {
+		// No remote configured at all: all commits on HEAD are local
+		out, err = runGitCmd(resolvedDir, "rev-list", "HEAD")
+		if err == nil {
+			for _, h := range strings.Split(strings.TrimSpace(out), "\n") {
+				h = strings.TrimSpace(h)
+				if h != "" {
+					unpushed[h] = true
+				}
+			}
+		}
+	}
+
+	return unpushed
 }
 
 // InitRepo initializes a new Git repository and generates a .gitignore if missing.
@@ -522,7 +579,18 @@ func Commit(projectDir, message string) error {
 
 // PushWithOutput pushes commits to remote and returns combined output.
 func PushWithOutput(projectDir string) (string, error) {
-	return runGitCmd(projectDir, "push")
+	out, err := runGitCmd(projectDir, "push")
+	if err != nil {
+		errStr := strings.ToLower(err.Error())
+		if strings.Contains(errStr, "--set-upstream") || strings.Contains(errStr, "no upstream branch") {
+			branchOut, _ := runGitCmd(projectDir, "rev-parse", "--abbrev-ref", "HEAD")
+			branch := strings.TrimSpace(branchOut)
+			if branch != "" && branch != "HEAD" {
+				return runGitCmd(projectDir, "push", "--set-upstream", "origin", branch)
+			}
+		}
+	}
+	return out, err
 }
 
 // PullWithOutput pulls commits from remote and returns combined output.
@@ -621,6 +689,7 @@ func GetLog(projectDir string, limit int, skip int) ([]models.GitCommitLog, erro
 		return []models.GitCommitLog{}, nil
 	}
 
+	unpushedMap := GetUnpushedCommitHashes(projectDir)
 	logs := []models.GitCommitLog{}
 	lines := strings.Split(out, "\n")
 	for _, line := range lines {
@@ -630,12 +699,14 @@ func GetLog(projectDir string, limit int, skip int) ([]models.GitCommitLog, erro
 		}
 		parts := strings.Split(line, "\x00")
 		if len(parts) >= 5 {
+			hash := parts[0]
 			logs = append(logs, models.GitCommitLog{
-				Hash:      parts[0],
-				ShortHash: parts[1],
-				Author:    parts[2],
-				Date:      parts[3],
-				Message:   parts[4],
+				Hash:       hash,
+				ShortHash:  parts[1],
+				Author:     parts[2],
+				Date:       parts[3],
+				Message:    parts[4],
+				IsUnpushed: unpushedMap[hash],
 			})
 		}
 	}

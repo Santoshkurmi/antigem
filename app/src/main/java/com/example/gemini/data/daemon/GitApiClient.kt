@@ -26,6 +26,7 @@ data class GitStatusResponse(
     val tracking: String? = null,
     val ahead: Int = 0,
     val behind: Int = 0,
+    val unpushedCount: Int = 0,
     val stagedFiles: List<GitFileStatus> = emptyList(),
     val unstagedFiles: List<GitFileStatus> = emptyList(),
     val untrackedFiles: List<GitFileStatus> = emptyList(),
@@ -50,7 +51,8 @@ data class GitCommitLog(
     val shortHash: String,
     val author: String,
     val date: String,
-    val message: String
+    val message: String,
+    val isUnpushed: Boolean = false
 )
 
 data class GitCommitFileChange(
@@ -117,12 +119,16 @@ object GitApiClient {
                 val unstaged = parseFileList(json.optJSONArray("unstagedFiles"), staged = false)
                 val untracked = parseFileList(json.optJSONArray("untrackedFiles"), staged = false)
 
+                val ahead = json.optInt("ahead", 0)
+                val unpushed = json.optInt("unpushedCount", ahead)
+
                 GitStatusResponse(
                     isGitRepo = isGitRepo,
                     branch = json.optString("branch", "HEAD"),
                     tracking = json.optString("tracking").takeIf { it.isNotBlank() },
-                    ahead = json.optInt("ahead", 0),
+                    ahead = ahead,
                     behind = json.optInt("behind", 0),
+                    unpushedCount = unpushed,
                     stagedFiles = staged,
                     unstagedFiles = unstaged,
                     untrackedFiles = untracked,
@@ -557,7 +563,8 @@ object GitApiClient {
                             shortHash = obj.getString("shortHash"),
                             author = obj.getString("author"),
                             date = obj.getString("date"),
-                            message = obj.getString("message")
+                            message = obj.getString("message"),
+                            isUnpushed = obj.optBoolean("isUnpushed", false)
                         )
                     )
                 }
