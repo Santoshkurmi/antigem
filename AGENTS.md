@@ -74,3 +74,7 @@ suspend fun streamUpdates(cascadeId: String) {
 -- "Dont try git push pull commit, stash etc ever"
 
 -- While running new command for build/etc always check for previous if ther is runnign smae thigns then either kill it then start new or wait for old (Dont run both);
+
+-- Always check running process before exectuing new task run(so that you dont execute same task twice or more times)
+
+-- Always explain user every single details that you are going to change to fix or add something(Dont need line by line but still enoough) and dont start editing, alwasy explain to user, and stop there, user will respond back with continue,do it or whatever or ask you more question,arguement
