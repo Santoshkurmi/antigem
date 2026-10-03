@@ -205,8 +205,11 @@ class TrajectoryEngine {
             }
         }
 
-        isRunning = daemonRunning || (pendingUserTurn != null)
-        val isIdle = daemonIdle && (pendingUserTurn == null)
+        isRunning = daemonRunning || (pendingUserTurn != null && effectiveSteps.isEmpty() && completedTurns.isEmpty())
+
+        if (daemonIdle && (effectiveSteps.isNotEmpty() || completedTurns.isNotEmpty())) {
+            pendingUserTurn = null
+        }
 
         val hasPendingInteraction = activeStepsMap.any { (stepIdx, step) ->
             val isAskChoice = step.metadata?.tool_call?.name == "ask_question" ||
@@ -218,16 +221,6 @@ class TrajectoryEngine {
             isWaiting && !userRespondedStepIndices.contains(stepIdx)
         }
         isWaitingInteraction = hasPendingInteraction
-
-        if (isIdle && !isWaitingInteraction && !isRunning) {
-            pendingUserTurn?.let { pending ->
-                val alreadyPresent = completedTurns.any { it is ChatTurn.User && it.stepIndex == pending.stepIndex }
-                if (!alreadyPresent) {
-                    completedTurns.add(pending)
-                }
-                pendingUserTurn = null
-            }
-        }
 
         val artifactUpdate = update.artifact_snapshots_update
         if (artifactUpdate != null && artifactUpdate.artifact_snapshots.isNotEmpty()) {
