@@ -56,8 +56,9 @@ class AgyConversationService {
                     val frameList = mutableListOf<Conversation>()
                     val removedIds = response.deletes.toMutableSet()
 
-                    for ((cid, summaryObj) in response.updates) {
-                        if (summaryObj == null) continue
+                    for (entry in response.updates) {
+                        val cid = entry.key
+                        val summaryObj = entry.value_ ?: continue
                         val annotations = summaryObj.annotations
                         val annTitle = annotations?.title?.takeIf { it.isNotBlank() }
                         val rawSummary = summaryObj.summary.takeIf { it.isNotBlank() }
@@ -132,7 +133,7 @@ class AgyConversationService {
         withContext(Dispatchers.IO) {
             val req = GetCascadeTrajectoryStepsRequest(
                 cascade_id = cascadeId,
-                trajectory_verbosity = ClientTrajectoryVerbosity.CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
+                trajectory_verbosity = ClientTrajectoryVerbosity.CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
             )
             AgyLanguageService.GetCascadeTrajectorySteps().executeSafely(req).map { res ->
                 res.steps.size
@@ -183,7 +184,7 @@ class AgyConversationService {
     ): Result<List<Step>> = withContext(Dispatchers.IO) {
         val req = GetCascadeTrajectoryStepsRequest(
             cascade_id = cascadeId,
-            trajectory_verbosity = ClientTrajectoryVerbosity.CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
+            trajectory_verbosity = ClientTrajectoryVerbosity.CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
         )
         AgyLanguageService.GetCascadeTrajectorySteps().executeSafely(req).map { res ->
             res.steps

@@ -114,7 +114,7 @@ class AgyModelService {
             val response = res.getOrThrow().response
                 ?: return@withContext Result.failure(Exception("Empty models response from server"))
 
-            val modelsMap = response.models
+            val modelsMap = response.models.associate { it.key to it.value_ }
             val sorts = response.agent_model_sorts.ifEmpty { response.battle_mode_model_sorts }
             val sortedIds = mutableListOf<String>()
 
@@ -131,9 +131,10 @@ class AgyModelService {
             val keysToProcess = if (sortedIds.isNotEmpty()) {
                 sortedIds
             } else {
-                response.models.mapNotNull { (key, details) ->
+                response.models.mapNotNull { entry ->
+                    val details = entry.value_
                     if (details != null && !details.is_internal && !details.disabled && details.display_name.isNotBlank()) {
-                        key
+                        entry.key
                     } else null
                 }
             }
@@ -162,7 +163,6 @@ class AgyModelService {
                 }
 
                 val family = when {
-                    key.startsWith("openrouter/", ignoreCase = true) || key.contains("openrouter", ignoreCase = true) || details.description.contains("openrouter", ignoreCase = true) -> ModelFamily.OPENROUTER
                     displayName.contains("claude", ignoreCase = true) || key.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
                     else -> ModelFamily.GEMINI
                 }
@@ -243,12 +243,6 @@ class AgyModelService {
                             fiveHourInfo = windowInfo
                         } else if (window.contains("week", ignoreCase = true) || window.contains("7d", ignoreCase = true)) {
                             weeklyInfo = windowInfo
-                        } else {
-                            if (fiveHourInfo == null) {
-                                fiveHourInfo = windowInfo
-                            } else if (weeklyInfo == null) {
-                                weeklyInfo = windowInfo
-                            }
                         }
                     }
 

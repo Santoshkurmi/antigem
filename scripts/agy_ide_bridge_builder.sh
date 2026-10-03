@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# antiGem Go IDE Server - Proto Compiler & Multi-Platform Builder / Deployer
+# antiGem Go IDE Server - Interactive Android ARM64 Builder & ADB Deployer
 # ==============================================================================
 
 set -eo pipefail
@@ -20,11 +20,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SERVER_DIR="$PROJECT_ROOT/agy_ide_bridge"
-LOCAL_BINARY="$SERVER_DIR/agy_ide_bridge"
-ANDROID_BINARY="$SERVER_DIR/agy_ide_bridge_android"
-
-# Add Go bin to PATH
-export PATH="$PATH:$HOME/go/bin"
+OUTPUT_BINARY="$SERVER_DIR/agy_ide_bridge_android"
 
 clear 2>/dev/null || true
 
@@ -42,11 +38,11 @@ cat << 'EOF'
  ▀         ▀  ▀         ▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀       ▀▀▀ 
 EOF
 
-echo -e "${ORANGE}${BOLD}⚡ antiGem Go IDE Server - Proto & Server Builder${NC}"
+echo -e "${ORANGE}${BOLD}⚡ antiGem Go IDE Server Builder & Deployer${NC}"
 echo -e "${DIM}================================================================${NC}"
 
-# --- Step 1: Pre-flight Checks ---
-echo -e "\n${CYAN}🔍 [1/5] Checking Build Environment...${NC}"
+# --- Pre-flight Checks ---
+echo -e "\n${CYAN}🔍 [1/4] Checking Build Environment...${NC}"
 
 if ! command -v go &>/dev/null; then
     echo -e "${RED}❌ Error: 'go' compiler is not installed or not found in PATH.${NC}"
@@ -55,78 +51,79 @@ fi
 GO_VER=$(go version | awk '{print $3}')
 echo -e "   ${GREEN}✔${NC} Go Compiler: ${BOLD}$GO_VER${NC}"
 
-if ! command -v python3 &>/dev/null; then
-    echo -e "${RED}❌ Error: 'python3' is required to compile protos.${NC}"
+if [ ! -d "$SERVER_DIR" ]; then
+    echo -e "${RED}❌ Error: Server source directory not found at '$SERVER_DIR'.${NC}"
     exit 1
 fi
-echo -e "   ${GREEN}✔${NC} Python 3:    ${BOLD}$(python3 --version)${NC}"
+echo -e "   ${GREEN}✔${NC} Source Path: ${DIM}$SERVER_DIR${NC}"
 
-# --- Step 2: Compile & Sync Protobufs ---
-echo -e "\n${CYAN}📦 [2/5] Compiling & Syncing Protobuf Definitions...${NC}"
-python3 "$PROJECT_ROOT/proto_generator/filter_proto.py" --copy
-echo -e "   ${GREEN}✔ Protobuf generation complete.${NC}"
+# --- Compilation ---
+echo -e "\n${CYAN}🛠️  [2/4] Compiling Go Server for Android ARM64...${NC}"
+echo -e "   ${DIM}Target: GOOS=android GOARCH=arm64 (CGO_ENABLED=0)${NC}"
 
-# --- Step 3: Compile Local Host Binary ---
-echo -e "\n${CYAN}💻 [3/5] Compiling Local Host Binary (for current PC)...${NC}"
+START_TIME=$(date +%s%N 2>/dev/null || date +%s)
+
 (
     cd "$SERVER_DIR"
-    go build -ldflags="-s -w" -o "$LOCAL_BINARY" main.go
+    CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags="-s -w" -o "$OUTPUT_BINARY" main.go
 )
-if [ -f "$LOCAL_BINARY" ]; then
-    chmod +x "$LOCAL_BINARY"
-    LOCAL_SIZE=$(ls -lh "$LOCAL_BINARY" | awk '{print $5}')
-    echo -e "   ${GREEN}✔ Local Binary Built: ${BOLD}$(basename "$LOCAL_BINARY")${NC} (${YELLOW}$LOCAL_SIZE${NC})"
-else
-    echo -e "${RED}❌ Failed to build local binary.${NC}"
+
+END_TIME=$(date +%s%N 2>/dev/null || date +%s)
+ELAPSED_MS=$(( (END_TIME - START_TIME) / 1000000 )) 2>/dev/null || ELAPSED_MS=0
+
+if [ ! -f "$OUTPUT_BINARY" ]; then
+    echo -e "${RED}❌ Build failed: '$OUTPUT_BINARY' was not created.${NC}"
     exit 1
 fi
 
-# --- Step 4: Compile Android ARM64 Binary (with Android NDK CGO) ---
-echo -e "\n${CYAN}🛠️  [4/5] Compiling Go Server for Android ARM64 (Android NDK CGO)...${NC}"
-NDK_CLANG=$(find /home/cat/android-sdk/ndk -name "aarch64-linux-android*-clang" 2>/dev/null | grep -E "android(24|28|30|34)-clang" | head -n 1 || true)
-(
-    cd "$SERVER_DIR"
-    if [ -n "$NDK_CLANG" ] && [ -x "$NDK_CLANG" ]; then
-        echo -e "   ${DIM}Using NDK Clang: $NDK_CLANG${NC}"
-        CC="$NDK_CLANG" CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build -ldflags="-s -w" -o "$ANDROID_BINARY" main.go
-    else
-        echo -e "   ${YELLOW}⚠️  NDK Clang not found, falling back to CGO_ENABLED=0${NC}"
-        CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags="-s -w" -o "$ANDROID_BINARY" main.go
-    fi
-)
-if [ -f "$ANDROID_BINARY" ]; then
-    ANDROID_SIZE=$(ls -lh "$ANDROID_BINARY" | awk '{print $5}')
-    echo -e "   ${GREEN}✔ Android Binary Built: ${BOLD}$(basename "$ANDROID_BINARY")${NC} (${YELLOW}$ANDROID_SIZE${NC})"
-else
-    echo -e "${RED}❌ Failed to build Android binary.${NC}"
-    exit 1
+BIN_SIZE=$(ls -lh "$OUTPUT_BINARY" | awk '{print $5}')
+SHA_HASH=$(sha256sum "$OUTPUT_BINARY" | awk '{print $1}' | cut -c 1-12)
+
+echo -e "   ${GREEN}✔ Build Successful!${NC}"
+echo -e "   • Binary:    ${BOLD}$(basename "$OUTPUT_BINARY")${NC}"
+echo -e "   • Size:      ${YELLOW}$BIN_SIZE${NC}"
+echo -e "   • SHA-256:   ${DIM}${SHA_HASH}...${NC}"
+if [ "$ELAPSED_MS" -gt 0 ]; then
+    echo -e "   • Duration:  ${DIM}${ELAPSED_MS}ms${NC}"
 fi
 
-# --- Step 5: ADB Device Detection & Deployment ---
-echo -e "\n${CYAN}📲 [5/5] Checking Connected Android Devices for Auto-Deploy...${NC}"
+# --- ADB Device Detection ---
+echo -e "\n${CYAN}📲 [3/4] Checking Connected Android Devices...${NC}"
 
 if ! command -v adb &>/dev/null; then
-    echo -e "${YELLOW}⚠️  'adb' is not installed. Skipping automatic device deployment.${NC}"
-else
-    DEVICE_LIST=$(adb devices | grep -v "List of devices" | grep "device$" || true)
-    if [ -z "$DEVICE_LIST" ]; then
-        echo -e "${YELLOW}⚠️  No ADB device connected in 'device' mode. Skipping auto-push.${NC}"
-    else
-        DEVICE_ID=$(echo "$DEVICE_LIST" | head -n 1 | awk '{print $1}')
-        DEVICE_MODEL=$(adb -s "$DEVICE_ID" shell getprop ro.product.model 2>/dev/null || echo "Android Device")
-        echo -e "   ${GREEN}✔${NC} Target Device: ${BOLD}$DEVICE_MODEL${NC} (${DIM}$DEVICE_ID${NC})"
-        echo -e "   • Pushing to ${BOLD}/sdcard/agy_ide_bridge${NC}..."
-        adb -s "$DEVICE_ID" push "$ANDROID_BINARY" /sdcard/agy_ide_bridge >/dev/null
-        echo -e "   ${GREEN}✔ Binary deployed to device storage!${NC}"
-    fi
+    echo -e "${YELLOW}⚠️  Warning: 'adb' is not installed. Skipping automatic phone deployment.${NC}"
+    echo -e "   Binary is available locally at: ${BOLD}$OUTPUT_BINARY${NC}"
+    exit 0
 fi
 
-# --- Summary ---
+DEVICE_LIST=$(adb devices | grep -v "List of devices" | grep "device$" || true)
+
+if [ -z "$DEVICE_LIST" ]; then
+    echo -e "${YELLOW}⚠️  No ADB device connected in 'device' mode.${NC}"
+    echo -e "   Connect your phone with USB Debugging enabled to auto-deploy."
+    echo -e "   Binary is available locally at: ${BOLD}$OUTPUT_BINARY${NC}"
+    exit 0
+fi
+
+DEVICE_ID=$(echo "$DEVICE_LIST" | head -n 1 | awk '{print $1}')
+DEVICE_MODEL=$(adb -s "$DEVICE_ID" shell getprop ro.product.model 2>/dev/null || echo "Android Device")
+DEVICE_ABI=$(adb -s "$DEVICE_ID" shell getprop ro.product.cpu.abi 2>/dev/null || echo "arm64-v8a")
+
+echo -e "   ${GREEN}✔${NC} Target Device: ${BOLD}$DEVICE_MODEL${NC} (${DIM}$DEVICE_ID${NC}, ABI: ${YELLOW}$DEVICE_ABI${NC})"
+
+# --- Deployment ---
+echo -e "\n${CYAN}🚀 [4/4] Deploying Binary to Device Storage...${NC}"
+
+# Push to /sdcard/agy_ide_bridge
+echo -e "   • Pushing to ${BOLD}/sdcard/agy_ide_bridge${NC}..."
+adb -s "$DEVICE_ID" push "$OUTPUT_BINARY" /sdcard/agy_ide_bridge >/dev/null
+
+echo -e "   ${GREEN}✔ Binary deployed successfully!${NC}"
+
+# --- Summary & Instructions ---
 echo -e "\n${DIM}================================================================${NC}"
-echo -e "${GREEN}${BOLD}🎉 COMPLETE! Everything built successfully.${NC}"
+echo -e "${GREEN}${BOLD}🎉 COMPLETE! Ready to run on your phone.${NC}"
 echo -e "${DIM}================================================================${NC}"
-echo -e "• To run locally on your PC:"
-echo -e "  ${ORANGE}${BOLD}cd agy_ide_bridge && ./agy_ide_bridge --proxy${NC}"
+echo -e "Inside ${BOLD}Termux${NC}, run this one-liner to install to \$PREFIX/bin and start:"
 echo -e ""
-echo -e "• Inside Termux on your phone:"
 echo -e "  ${ORANGE}${BOLD}pkill -f agy_ide_bridge; cp /sdcard/agy_ide_bridge \$PREFIX/bin/agy_ide_bridge && chmod +x \$PREFIX/bin/agy_ide_bridge && agy_ide_bridge -f${NC}\n"

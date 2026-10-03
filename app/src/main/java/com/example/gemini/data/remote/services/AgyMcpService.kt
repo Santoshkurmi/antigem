@@ -26,8 +26,8 @@ class AgyMcpService {
             res.states.map { state ->
                 val spec = state.spec
                 val name = spec?.server_name?.takeIf { it.isNotBlank() } ?: "mcp_server"
-                val envMap = spec?.env ?: emptyMap()
-                val headersMap = spec?.headers ?: emptyMap()
+                val envMap = spec?.env?.associate { it.key to it.value_ } ?: emptyMap()
+                val headersMap = spec?.headers?.associate { it.key to it.value_ } ?: emptyMap()
                 val disabled = spec?.disabled ?: false
 
                 val domainSpec = McpServerSpec(

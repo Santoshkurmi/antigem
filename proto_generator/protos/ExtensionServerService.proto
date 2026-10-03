@@ -4,8 +4,6 @@ package exa.extension_server_pb;
 
 // ========================================================================
 // Service: ExtensionServerService (53 Methods)
-// Package: exa.extension_server_pb
-// Default Upstream Host: http://127.0.0.1 (Local Extension Bridge)
 // Target Route: /exa.extension_server_pb.ExtensionServerService/<Method>
 // ========================================================================
 
@@ -283,9 +281,9 @@ enum CascadeRunStatus {
 
 // origin: .exa.extension_server_pb.ExecuteNotebookResponse.CellStatus
 enum CellStatus {
-  CELLSTATUS_CELL_STATUS_UNSPECIFIED = 0;
-  CELLSTATUS_CELL_STATUS_SUCCESS = 1;
-  CELLSTATUS_CELL_STATUS_FAILURE = 2;
+  CELL_STATUS_UNSPECIFIED = 0;
+  CELL_STATUS_SUCCESS = 1;
+  CELL_STATUS_FAILURE = 2;
 }
 
 // origin: .exa.chat_client_server_pb.ChatClientRequestStreamClientType
@@ -398,7 +396,7 @@ enum CodeHeuristicFailure {
 
 // origin: .genai.CodeExecutionCallContent.CodeExecutionCallArguments.Language
 enum CodeexecutioncallcontentCodeexecutioncallarguments_Language {
-  CODEEXECUTIONCALLCONTENTCODEEXECUTIONCALLARGUMENTS_LANGUAGE_LANGUAGE_UNSPECIFIED = 0;
+  LANGUAGE_UNSPECIFIED = 0;
   PYTHON = 1;
 }
 
@@ -475,17 +473,17 @@ enum CortexComponentSource {
 
 // origin: .exa.cortex_pb.CortexStepExecuteNotebook.CellStatus
 enum CortexCortexstepexecutenotebook_CellStatus {
-  CORTEXCORTEXSTEPEXECUTENOTEBOOK_CELLSTATUS_CELL_STATUS_UNSPECIFIED = 0;
-  CORTEXCORTEXSTEPEXECUTENOTEBOOK_CELLSTATUS_CELL_STATUS_SUCCESS = 1;
-  CORTEXCORTEXSTEPEXECUTENOTEBOOK_CELLSTATUS_CELL_STATUS_FAILURE = 2;
+  CELL_STATUS_UNSPECIFIED = 0;
+  CELL_STATUS_SUCCESS = 1;
+  CELL_STATUS_FAILURE = 2;
 }
 
 // origin: .exa.cortex_pb.CortexStepExecuteNotebook.ExecutionStatus
 enum CortexCortexstepexecutenotebook_ExecutionStatus {
-  CORTEXCORTEXSTEPEXECUTENOTEBOOK_EXECUTIONSTATUS_EXECUTION_STATUS_UNSPECIFIED = 0;
-  CORTEXCORTEXSTEPEXECUTENOTEBOOK_EXECUTIONSTATUS_EXECUTION_STATUS_SUCCESS = 1;
-  CORTEXCORTEXSTEPEXECUTENOTEBOOK_EXECUTIONSTATUS_EXECUTION_STATUS_FAILURE = 2;
-  CORTEXCORTEXSTEPEXECUTENOTEBOOK_EXECUTIONSTATUS_EXECUTION_STATUS_PARTIAL_SUCCESS = 3;
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_SUCCESS = 1;
+  EXECUTION_STATUS_FAILURE = 2;
+  EXECUTION_STATUS_PARTIAL_SUCCESS = 3;
 }
 
 // origin: .exa.cortex_pb.CortexMemorySource
@@ -738,12 +736,12 @@ enum CortexTrajectoryType {
 
 // origin: .exa.cortex_pb.EditNotebookOperation
 enum Cortex_EditNotebookOperation {
-  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_UNSPECIFIED = 0;
-  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_INSERT_AFTER = 1;
-  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_INSERT_BEFORE = 2;
-  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_REPLACE_CELLS = 3;
-  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_DELETE_CELLS = 4;
-  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_OVERWRITE_NOTEBOOK = 5;
+  EDIT_NOTEBOOK_OPERATION_UNSPECIFIED = 0;
+  EDIT_NOTEBOOK_OPERATION_INSERT_AFTER = 1;
+  EDIT_NOTEBOOK_OPERATION_INSERT_BEFORE = 2;
+  EDIT_NOTEBOOK_OPERATION_REPLACE_CELLS = 3;
+  EDIT_NOTEBOOK_OPERATION_DELETE_CELLS = 4;
+  EDIT_NOTEBOOK_OPERATION_OVERWRITE_NOTEBOOK = 5;
 }
 
 // origin: .google.internal.cloud.code.v1internal.Credits.CreditType
@@ -815,12 +813,12 @@ enum DocumentType {
 
 // origin: .exa.extension_server_pb.EditNotebookOperation
 enum EditNotebookOperation {
-  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_UNSPECIFIED = 0;
-  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_INSERT_AFTER = 1;
-  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_INSERT_BEFORE = 2;
-  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_REPLACE_CELLS = 3;
-  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_DELETE_CELLS = 4;
-  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_OVERWRITE_NOTEBOOK = 5;
+  EDIT_NOTEBOOK_OPERATION_UNSPECIFIED = 0;
+  EDIT_NOTEBOOK_OPERATION_INSERT_AFTER = 1;
+  EDIT_NOTEBOOK_OPERATION_INSERT_BEFORE = 2;
+  EDIT_NOTEBOOK_OPERATION_REPLACE_CELLS = 3;
+  EDIT_NOTEBOOK_OPERATION_DELETE_CELLS = 4;
+  EDIT_NOTEBOOK_OPERATION_OVERWRITE_NOTEBOOK = 5;
 }
 
 // origin: .exa.cortex_pb.EphemeralMessagePersistenceLevel
@@ -832,10 +830,10 @@ enum EphemeralMessagePersistenceLevel {
 
 // origin: .exa.extension_server_pb.ExecuteNotebookResponse.ExecutionStatus
 enum ExecutionStatus {
-  EXECUTIONSTATUS_EXECUTION_STATUS_UNSPECIFIED = 0;
-  EXECUTIONSTATUS_EXECUTION_STATUS_SUCCESS = 1;
-  EXECUTIONSTATUS_EXECUTION_STATUS_FAILURE = 2;
-  EXECUTIONSTATUS_EXECUTION_STATUS_PARTIAL_SUCCESS = 3;
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_SUCCESS = 1;
+  EXECUTION_STATUS_FAILURE = 2;
+  EXECUTION_STATUS_PARTIAL_SUCCESS = 3;
 }
 
 // origin: .exa.cortex_pb.ExecutorTerminationReason
@@ -855,7 +853,7 @@ enum ExecutorTerminationReason {
 
 // origin: .exa.codeium_common_pb.ExperimentKey
 enum ExperimentKey {
-  EXPERIMENTKEY_UNSPECIFIED = 0;
+  UNSPECIFIED = 0;
   USE_INTERNAL_CHAT_MODEL = 36;
   RECORD_FILES = 47;
   NO_SAMPLER_EARLY_STOP = 48;
@@ -1039,7 +1037,7 @@ enum ExperimentSource {
 
 // origin: .exa.cortex_pb.PolicyGuardianConfig.FailMode
 enum FailMode {
-  FAILMODE_UNSPECIFIED = 0;
+  UNSPECIFIED = 0;
   OPEN = 1;
   CLOSED = 2;
 }
@@ -1093,14 +1091,14 @@ enum FirebaseProduct {
 
 // origin: .genai.DocumentContent.MimeType
 enum GenaiDocumentcontent_MimeType {
-  GENAIDOCUMENTCONTENT_MIMETYPE_TYPE_UNSPECIFIED = 0;
+  TYPE_UNSPECIFIED = 0;
   TYPE_PDF = 1;
   TYPE_CSV = 2;
 }
 
 // origin: .genai.ImageContent.MimeType
 enum GenaiImagecontent_MimeType {
-  GENAIIMAGECONTENT_MIMETYPE_TYPE_UNSPECIFIED = 0;
+  TYPE_UNSPECIFIED = 0;
   TYPE_PNG = 1;
   TYPE_JPEG = 2;
   TYPE_WEBP = 3;
@@ -1115,14 +1113,14 @@ enum GenaiImagecontent_MimeType {
 
 // origin: .genai.VideoContent.MimeType
 enum GenaiVideocontent_MimeType {
-  GENAIVIDEOCONTENT_MIMETYPE_TYPE_UNSPECIFIED = 0;
+  TYPE_UNSPECIFIED = 0;
   TYPE_MP4 = 1;
-  GENAIVIDEOCONTENT_MIMETYPE_TYPE_MPEG = 2;
+  TYPE_MPEG = 2;
   TYPE_MPG = 3;
   TYPE_MOV = 4;
   TYPE_AVI = 5;
   TYPE_X_FLV = 6;
-  GENAIVIDEOCONTENT_MIMETYPE_TYPE_WEBM = 7;
+  TYPE_WEBM = 7;
   TYPE_WMV = 8;
   TYPE_3GPP = 9;
   TYPE_YT_BEYOND = 10;
@@ -1320,14 +1318,14 @@ enum MetricsScope {
 
 // origin: .genai.AudioContent.MimeType
 enum MimeType {
-  MIMETYPE_TYPE_UNSPECIFIED = 0;
+  TYPE_UNSPECIFIED = 0;
   TYPE_WAV = 1;
   TYPE_MP3 = 2;
   TYPE_AIFF = 3;
   TYPE_AAC = 4;
   TYPE_OGG = 5;
   TYPE_FLAC = 6;
-  MIMETYPE_TYPE_MPEG = 7;
+  TYPE_MPEG = 7;
   TYPE_M4A = 8;
   TYPE_L16 = 9;
   TYPE_S16LE = 10;
@@ -1335,7 +1333,7 @@ enum MimeType {
   TYPE_ALAW = 12;
   TYPE_MULAW = 13;
   TYPE_VIDEO_AUDIO_S16LE = 14;
-  MIMETYPE_TYPE_WEBM = 15;
+  TYPE_WEBM = 15;
 }
 
 // origin: .exa.codeium_common_pb.Modality
@@ -2791,7 +2789,7 @@ enum UnifiedDiffLineType {
 
 // origin: .genai.UrlContextResultContent.UrlContextResult.Status
 enum UrlcontextresultcontentUrlcontextresult_Status {
-  URLCONTEXTRESULTCONTENTURLCONTEXTRESULT_STATUS_STATUS_UNSPECIFIED = 0;
+  STATUS_UNSPECIFIED = 0;
   SUCCESS = 1;
   ERROR = 2;
   PAYWALL = 3;
@@ -2856,7 +2854,7 @@ message AccumulatedSection {
 
 // origin: .exa.cortex_pb.ActionDebugInfo
 message ActionDebugInfo {
-  map<string, string> entries = 1;
+  repeated DebugInfoEntry entries = 1;
 }
 
 // origin: .exa.codeium_common_pb.ActionPointer
@@ -2930,7 +2928,7 @@ message ActionSpecDeleteFile {
 // origin: .exa.cortex_pb.ActionSpecSed
 message ActionSpecSed {
   repeated string expressions = 1;
-  map<string, string> file_content = 2;
+  repeated FileContentEntry file_content = 2;
   PathScopeItem path = 3;
 }
 
@@ -3025,7 +3023,7 @@ message AgentScriptPythonSpec {
 
 // origin: .exa.cortex_pb.AgenticModeConfig
 message AgenticModeConfig {
-  map<string, int32> inject_artifact_reminder_threshold_map = 1;
+  repeated InjectArtifactReminderThresholdMapEntry inject_artifact_reminder_threshold_map = 1;
   bool disable_artifact_reminders = 2;
   bool use_slash_plan = 3;
 }
@@ -3034,7 +3032,7 @@ message AgenticModeConfig {
 message AllowAlwaysConfig {
   repeated string dangerous_binaries = 1;
   repeated string subcommand_tools = 2;
-  map<string, DangerousSubcommands> dangerous_subcommands = 3;
+  repeated DangerousSubcommandsEntry dangerous_subcommands = 3;
 }
 
 // origin: .exa.cortex_pb.AndroidConfig
@@ -3151,10 +3149,40 @@ message Args {
   bool use_message_bridge = 6;
 }
 
+// origin: .exa.cortex_pb.CortexStepGeneric.ArgsEntry
+message ArgsEntry {
+  string key = 1;
+  string value = 2;
+}
+
+// origin: .exa.cortex_pb.ToolOverrideConfig.ArgumentDescriptionOverridesEntry
+message ArgumentDescriptionOverridesEntry {
+  string key = 1;
+  string value = 2;
+}
+
+// origin: .exa.cortex_pb.ToolOverrideConfig.ArgumentNameOverridesEntry
+message ArgumentNameOverridesEntry {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.cortex_pb.ArgumentOverride
 message ArgumentOverride {
   GoogleProtobuf_Value static_value = 1;
   bool omit = 2;
+}
+
+// origin: .exa.cortex_pb.ToolOverrideConfig.ArgumentValueOverridesEntry
+message ArgumentValueOverridesEntry {
+  string key = 1;
+  ArgumentOverride value = 2;
+}
+
+// origin: .exa.codeium_common_pb.McpPromptScopeItem.ArgumentValuesEntry
+message ArgumentValuesEntry {
+  string key = 1;
+  string value = 2;
 }
 
 // origin: .exa.codeium_common_pb.ArtifactComment
@@ -3266,6 +3294,12 @@ message AskQuestionToolConfig {
   bool enabled = 1;
 }
 
+// origin: .exa.codeium_common_pb.DOMNode.ElementNode.AttributesEntry
+message AttributesEntry {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .genai.AudioContent
 message AudioContent {
   MimeType mime_type = 1;
@@ -3327,7 +3361,7 @@ message BattleModeInfo {
   repeated string children_trajectory_ids = 8;
   BattleEndType end_type = 9;
   repeated Model models = 10;
-  map<string, int32> original_workspace_snapshots = 11;
+  repeated OriginalWorkspaceSnapshotsEntry original_workspace_snapshots = 11;
   repeated CascadeRunStatus children_trajectory_statuses = 12;
   repeated Model original_models = 13;
   repeated bool eliminated = 14;
@@ -3335,7 +3369,7 @@ message BattleModeInfo {
   bool forked_from_history = 16;
   string trigger_tag = 17;
   string reference_conversation_id = 18;
-  map<string, string> metadata = 19;
+  repeated CortexBattlemodeinfo_MetadataEntry metadata = 19;
   CloneStrategy clone_strategy = 20;
   repeated string contrib_variants = 21;
 }
@@ -3806,7 +3840,7 @@ message CascadeToolConfig {
 
 // origin: .exa.jetski_cortex_pb.CascadeTrajectorySummaries
 message CascadeTrajectorySummaries {
-  map<string, CascadeTrajectorySummary> summaries = 1;
+  repeated SummariesEntry summaries = 1;
 }
 
 // origin: .exa.jetski_cortex_pb.CascadeTrajectorySummary
@@ -3968,7 +4002,7 @@ message ChatModelMetadata {
   repeated RetryInfo retry_infos = 17;
   repeated Credits consumed_credits = 18;
   string response_model = 19;
-  map<string, string> custom_metadata = 20;
+  repeated CustomMetadataEntry custom_metadata = 20;
   string model_display_name = 21;
   string response_model_full = 22;
 }
@@ -4117,7 +4151,7 @@ message CodeContextItem {
   uint32 end_line = 6;
   CodeContextType context_type = 7;
   Language language = 10;
-  map<string, SnippetWithWordCount> snippet_by_type = 11;
+  repeated SnippetByTypeEntry snippet_by_type = 11;
   uint32 start_col = 12;
   uint32 end_col = 13;
   GitRepoInfo repo_info = 14;
@@ -4217,6 +4251,12 @@ message CodeToolConfig {
   bool disable_artifact_metadata = 20;
   bool minimize_fs_ops = 21;
   int32 max_stored_diff_bytes = 22;
+}
+
+// origin: .exa.codeium_common_pb.SlashCommandScopeItem.ArgumentValuesEntry
+message CodeiumCommonSlashcommandscopeitem_ArgumentValuesEntry {
+  string key = 1;
+  string value = 2;
 }
 
 // origin: .exa.cortex_pb.CodingAgentConfig
@@ -4506,6 +4546,12 @@ message ConversationScopeItem {
   string source = 4;
 }
 
+// origin: .exa.cortex_pb.BattleModeInfo.MetadataEntry
+message CortexBattlemodeinfo_MetadataEntry {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.cortex_pb.CortexStepEditNotebook.Args
 message CortexCortexstepeditnotebook_Args {
   string absolute_path_uri = 1;
@@ -4536,6 +4582,12 @@ message CortexCortexstepeditnotebook_Reply {
   int32 total_cell_count = 2;
 }
 
+// origin: .exa.cortex_pb.CortexStepEphemeralMessage.MetadataEntry
+message CortexCortexstepephemeralmessage_MetadataEntry {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.cortex_pb.CortexStepExecuteNotebook.CellOutput
 message CortexCortexstepexecutenotebook_CellOutput {
   string cell_id = 1;
@@ -4562,6 +4614,12 @@ message CortexCortexstepreadnotebook_Reply {
   repeated NotebookBlob blobs = 3;
 }
 
+// origin: .exa.cortex_pb.CortexStepSystemMessage.MetadataEntry
+message CortexCortexstepsystemmessage_MetadataEntry {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.cortex_pb.CortexErrorDetails
 message CortexErrorDetails {
   string user_error_message = 1;
@@ -4576,6 +4634,24 @@ message CortexErrorDetails {
   repeated string rpc_error_details = 10;
   string sherlog_link = 11;
   string user_error_number = 12;
+}
+
+// origin: .exa.cortex_pb.GenericStepResult.DataEntry
+message CortexGenericstepresult_DataEntry {
+  string key = 1;
+  Any value = 2;
+}
+
+// origin: .exa.cortex_pb.GenericStepResult.MetadataEntry
+message CortexGenericstepresult_MetadataEntry {
+  string key = 1;
+  string value = 2;
+}
+
+// origin: .exa.cortex_pb.McpServerSpec.EnvEntry
+message CortexMcpserverspec_EnvEntry {
+  string key = 1;
+  string value = 2;
 }
 
 // origin: .exa.cortex_pb.CortexMemory
@@ -4640,6 +4716,12 @@ message CortexMemoryScope {
 // origin: .exa.cortex_pb.CortexMemoryText
 message CortexMemoryText {
   string content = 1;
+}
+
+// origin: .exa.cortex_pb.SidecarConfig.EnvEntry
+message CortexSidecarconfig_EnvEntry {
+  string key = 1;
+  string value = 2;
 }
 
 // origin: .exa.cortex_pb.CortexStepAgencyToolCall
@@ -4878,7 +4960,7 @@ message CortexStepCheckpoint {
   string user_intent = 4;
   string session_summary = 5;
   string code_change_summary = 6;
-  map<string, DiffList> edited_file_map = 7;
+  repeated EditedFileMapEntry edited_file_map = 7;
   string memory_summary = 8;
   bool intent_only = 9;
   string conversation_title = 10;
@@ -5002,7 +5084,7 @@ message CortexStepCommandStatus {
 message CortexStepCompile {
   CortexStepCompileTool tool = 1;
   string input_spec = 2;
-  map<string, string> options = 3;
+  repeated OptionsEntry options = 3;
   string target = 4;
   string artifact_path = 5;
   bool artifact_is_executable = 6;
@@ -5067,7 +5149,7 @@ message CortexStepEphemeralMessage {
   repeated string triggered_heuristics = 3;
   repeated Media attachments = 4;
   string dom_tree_uri = 5;
-  map<string, string> metadata = 6;
+  repeated CortexCortexstepephemeralmessage_MetadataEntry metadata = 6;
 }
 
 // origin: .exa.cortex_pb.CortexStepErrorMessage
@@ -5148,7 +5230,7 @@ message CortexStepFindAllReferences {
 
 // origin: .exa.cortex_pb.CortexStepFinish
 message CortexStepFinish {
-  map<string, string> output = 1;
+  repeated OutputEntry output = 1;
   string output_string = 2;
 }
 
@@ -5179,7 +5261,7 @@ message CortexStepGeneratorMetadata {
 
 // origin: .exa.cortex_pb.CortexStepGeneric
 message CortexStepGeneric {
-  map<string, string> args = 1;
+  repeated ArgsEntry args = 1;
   GenericStepResult result = 2;
 }
 
@@ -5247,7 +5329,7 @@ message CortexStepInvokeSubagent {
 
 // origin: .exa.cortex_pb.CortexStepKIInsertion
 message CortexStepKIInsertion {
-  map<string, KnowledgeReferences> ki_references = 1;
+  repeated KiReferencesEntry ki_references = 1;
 }
 
 // origin: .exa.cortex_pb.CortexStepKnowledgeArtifacts
@@ -5321,7 +5403,7 @@ message CortexStepMcpTool {
   string progress_message = 10;
   double progress = 11;
   double progress_total = 12;
-  map<string, string> metadata = 13;
+  repeated MetadataEntry metadata = 13;
 }
 
 // origin: .exa.cortex_pb.CortexStepMemory
@@ -5661,7 +5743,7 @@ message CortexStepSystemMessage {
   StepRenderInfo render_info = 2;
   string event_type = 3;
   AgentMessage agent_message = 4;
-  map<string, string> metadata = 5;
+  repeated CortexCortexstepsystemmessage_MetadataEntry metadata = 5;
   repeated Media media = 6;
 }
 
@@ -5926,6 +6008,12 @@ message CustomAgentSystemPromptConfig {
 message CustomExtensions {
 }
 
+// origin: .exa.cortex_pb.ChatModelMetadata.CustomMetadataEntry
+message CustomMetadataEntry {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.cortex_pb.CustomPromptSection
 message CustomPromptSection {
   PromptSection prompt_section = 1;
@@ -6002,7 +6090,7 @@ message DOMNode {
 // origin: .exa.codeium_common_pb.DOMTree
 message DOMTree {
   string root_id = 1;
-  map<string, DOMNode> map = 2;
+  repeated MapEntry map = 2;
 }
 
 // origin: .exa.cortex_pb.AllowAlwaysConfig.DangerousSubcommands
@@ -6010,9 +6098,27 @@ message DangerousSubcommands {
   repeated string subcommands = 1;
 }
 
+// origin: .exa.cortex_pb.AllowAlwaysConfig.DangerousSubcommandsEntry
+message DangerousSubcommandsEntry {
+  string key = 1;
+  DangerousSubcommands value = 2;
+}
+
 // origin: .exa.cortex_pb.DataAccessMetadata
 message DataAccessMetadata {
   repeated string depot_paths = 1;
+}
+
+// origin: .exa.unified_state_sync_pb.Topic.DataEntry
+message DataEntry {
+  string key = 1;
+  Row value = 2;
+}
+
+// origin: .exa.cortex_pb.ActionDebugInfo.DebugInfoEntry
+message DebugInfoEntry {
+  string key = 1;
+  string value = 2;
 }
 
 // origin: .exa.cortex_pb.DeclarativeComponentConfig
@@ -6045,6 +6151,18 @@ message DeployTarget {
   string provider_team_id = 3;
   string provider_team_slug = 4;
   string domain = 5;
+}
+
+// origin: .exa.cortex_pb.ToolDescriptionOverrideMap.DescriptionsEntry
+message DescriptionsEntry {
+  string key = 1;
+  SectionOverrideConfig value = 2;
+}
+
+// origin: .exa.codeium_common_pb.MetricsRecord.DetailsEntry
+message DetailsEntry {
+  string key = 1;
+  string value = 2;
 }
 
 // origin: .exa.diff_action_pb.DiffBlock
@@ -6175,6 +6293,12 @@ message EditNotebookResponse {
   int32 total_cell_count = 2;
 }
 
+// origin: .exa.cortex_pb.CortexStepCheckpoint.EditedFileMapEntry
+message EditedFileMapEntry {
+  string key = 1;
+  DiffList value = 2;
+}
+
 // origin: .exa.codeium_common_pb.EditorOptions
 message EditorOptions {
   uint64 tab_size = 1;
@@ -6187,7 +6311,7 @@ message ElementNode {
   string tag_name = 1;
   string xpath = 2;
   repeated string children = 3;
-  map<string, string> attributes = 4;
+  repeated AttributesEntry attributes = 4;
   bool is_interactive = 5;
   bool is_top_element = 6;
   int32 highlight_index = 7;
@@ -6225,6 +6349,12 @@ message EnterpriseToolConfig {
   repeated string custom_workspace = 2;
 }
 
+// origin: .exa.extension_server_pb.ExecuteCommandRequest.EnvEntry
+message EnvEntry {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.cortex_pb.EphemeralMessagesConfig
 message EphemeralMessagesConfig {
   bool enabled = 1;
@@ -6252,6 +6382,12 @@ message ErrorTrace {
   bool is_dev = 9;
 }
 
+// origin: .exa.extension_server_pb.EventMetadataRecord
+message EventMetadataRecord {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.cortex_pb.ExecutableScriptSpec
 message ExecutableScriptSpec {
   AgentScriptCommandSpec command_spec = 1;
@@ -6266,7 +6402,7 @@ message ExecuteCommandRequest {
   bool sandbox_override = 6;
   string conversation_id = 7;
   string terminal_host = 8;
-  map<string, string> env = 9;
+  repeated EnvEntry env = 9;
 }
 
 // origin: .exa.extension_server_pb.ExecuteNotebookRequest
@@ -6339,7 +6475,7 @@ message ExperimentWithVariant {
 
 // origin: .exa.cortex_pb.Experiments
 message Experiments {
-  map<string, ExperimentValue> values = 1;
+  repeated ValuesEntry values = 1;
 }
 
 // origin: .devtools.cider.agent.trajectory_steps.StartCodeReviewStep.Args.ExternalContext
@@ -6373,6 +6509,12 @@ message FastApplyFallbackInfo {
 message Field {
   string name = 1;
   Value value = 2;
+}
+
+// origin: .google.protobuf.Struct.FieldsEntry
+message FieldsEntry {
+  string key = 1;
+  GoogleProtobuf_Value value = 2;
 }
 
 // origin: .exa.cortex_pb.FileAccessPermission
@@ -6412,6 +6554,12 @@ message FileContentData {
   string file_path = 1;
   string content = 2;
   FileVersion file_version = 3;
+}
+
+// origin: .exa.cortex_pb.ActionSpecSed.FileContentEntry
+message FileContentEntry {
+  string key = 1;
+  string value = 2;
 }
 
 // origin: .exa.codeium_common_pb.FileDiffComment
@@ -6606,10 +6754,10 @@ message GenerateImageToolConfig {
 // origin: .exa.cortex_pb.GenericStepResult
 message GenericStepResult {
   string result = 1;
-  map<string, string> metadata = 2;
+  repeated CortexGenericstepresult_MetadataEntry metadata = 2;
   StepRenderInfo step_render_info = 3;
   repeated Media media = 4;
-  map<string, Any> data = 5;
+  repeated CortexGenericstepresult_DataEntry data = 5;
   Any payload = 6;
   string full_output_uri = 7;
 }
@@ -6725,7 +6873,7 @@ message GoogleProtobuf_ListValue {
 
 // origin: .google.protobuf.Struct
 message GoogleProtobuf_Struct {
-  map<string, GoogleProtobuf_Value> fields = 1;
+  repeated FieldsEntry fields = 1;
 }
 
 // origin: .google.protobuf.Value
@@ -6860,6 +7008,12 @@ message HandleStreamingCommandResponse {
   string trace_id = 17;
 }
 
+// origin: .exa.cortex_pb.McpServerSpec.HeadersEntry
+message HeadersEntry {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.extension_server_pb.HeartbeatRequest
 message HeartbeatRequest {
 }
@@ -6909,6 +7063,12 @@ message ImageData {
   string mime_type = 2;
   string caption = 3;
   string uri = 4;
+}
+
+// origin: .exa.cortex_pb.AgenticModeConfig.InjectArtifactReminderThresholdMapEntry
+message InjectArtifactReminderThresholdMapEntry {
+  string key = 1;
+  int32 value = 2;
 }
 
 // origin: .exa.cortex_pb.InjectedResponseMetadata
@@ -6986,6 +7146,12 @@ message Issue {
   string action_label = 3;
   string status = 4;
   string status_detail = 5;
+}
+
+// origin: .exa.cortex_pb.CortexStepKIInsertion.KiReferencesEntry
+message KiReferencesEntry {
+  string key = 1;
+  KnowledgeReferences value = 2;
 }
 
 // origin: .exa.codeium_common_pb.KnowledgeBaseChunk
@@ -7179,7 +7345,7 @@ message LogArtifactsConfig {
 // origin: .exa.extension_server_pb.LogEventRequest
 message LogEventRequest {
   ProductEventType event = 1;
-  map<string, string> metadata = 2;
+  repeated EventMetadataRecord metadata = 2;
   string event_string = 3;
 }
 
@@ -7222,6 +7388,12 @@ message MQueryConfig {
   uint32 min_token_space_for_context = 8;
   uint32 max_target_files = 9;
   uint32 top_cci_count = 10;
+}
+
+// origin: .exa.codeium_common_pb.DOMTree.MapEntry
+message MapEntry {
+  string key = 1;
+  DOMNode value = 2;
 }
 
 // origin: .exa.codeium_common_pb.MarkdownChunk
@@ -7269,7 +7441,7 @@ message McpPromptScopeItem {
   string name = 2;
   string description = 3;
   repeated McpPromptArgument arguments = 4;
-  map<string, string> argument_values = 5;
+  repeated ArgumentValuesEntry argument_values = 5;
   repeated McpPromptMessage messages = 6;
 }
 
@@ -7309,17 +7481,17 @@ message McpServerSpec {
   string server_name = 1;
   string command = 2;
   repeated string args = 3;
-  map<string, string> env = 4;
+  repeated CortexMcpserverspec_EnvEntry env = 4;
   uint32 server_index = 5;
   string server_url = 6;
   bool disabled = 7;
   repeated string disabled_tools = 8;
-  map<string, string> headers = 9;
+  repeated HeadersEntry headers = 9;
   repeated string enabled_tools = 10;
   bool skip_tool_name_prefix = 11;
   bool skip_tool_description_prefix = 12;
   string cwd = 13;
-  map<string, McpServerToolConfig> tool_config = 14;
+  repeated ToolConfigEntry tool_config = 14;
   McpOAuthConfig oauth = 15;
   McpAuthProviderType auth_provider_type = 16;
   string plugin_name = 17;
@@ -7458,6 +7630,12 @@ message Metadata {
   ExperimentConfig experiment_config = 35;
 }
 
+// origin: .exa.cortex_pb.CortexStepMcpTool.MetadataEntry
+message MetadataEntry {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.codeium_common_pb.MetricsMetadata
 message MetricsMetadata {
   int32 version = 1;
@@ -7472,7 +7650,7 @@ message MetricsMetadata {
 message MetricsRecord {
   string name = 1;
   float value = 2;
-  map<string, string> details = 3;
+  repeated DetailsEntry details = 3;
   bool lower_better = 4;
   bool is_bool = 5;
   string error = 6;
@@ -7523,7 +7701,7 @@ message ModelFeatures {
   bool requires_lead_in_generation = 25;
   bool requires_no_xml_tool_examples = 26;
   bool does_not_support_tool_choice = 27;
-  map<string, bool> supported_mime_types = 28;
+  repeated SupportedMimeTypesEntry supported_mime_types = 28;
   bool supports_adaptive_thinking = 29;
   bool supports_thought_circulation = 30;
   bool supports_deferred_tool_loading = 31;
@@ -7581,7 +7759,7 @@ message ModelUsageStats {
   uint64 cache_read_tokens = 5;
   APIProvider api_provider = 6;
   string message_id = 7;
-  map<string, string> response_header = 8;
+  repeated ResponseHeaderEntry response_header = 8;
   uint64 thinking_output_tokens = 9;
   uint64 response_output_tokens = 10;
   string response_id = 11;
@@ -7757,14 +7935,32 @@ message OpenVirtualFileRequest {
 message OpenVirtualFileResponse {
 }
 
+// origin: .exa.cortex_pb.CortexStepCompile.OptionsEntry
+message OptionsEntry {
+  string key = 1;
+  string value = 2;
+}
+
+// origin: .exa.cortex_pb.BattleModeInfo.OriginalWorkspaceSnapshotsEntry
+message OriginalWorkspaceSnapshotsEntry {
+  string key = 1;
+  int32 value = 2;
+}
+
+// origin: .exa.cortex_pb.CortexStepFinish.OutputEntry
+message OutputEntry {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.codeium_common_pb.PathScopeItem
 message PathScopeItem {
   string absolute_path_migrate_me_to_uri = 1;
-  map<string, string> workspace_relative_paths_migrate_me_to_workspace_uris = 2;
+  repeated WorkspaceRelativePathsMigrateMeToWorkspaceUrisEntry workspace_relative_paths_migrate_me_to_workspace_uris = 2;
   uint32 num_files = 3;
   uint64 num_bytes = 4;
   string absolute_uri = 5;
-  map<string, string> workspace_uris_to_relative_paths = 6;
+  repeated WorkspaceUrisToRelativePathsEntry workspace_uris_to_relative_paths = 6;
 }
 
 // origin: .exa.cortex_pb.PermissionConfig
@@ -8006,6 +8202,12 @@ message ProposeAICommentsStep {
   TrajectoryStepsProposeaicommentsstep_Args args = 2;
 }
 
+// origin: .exa.context_module_pb.RetrievedCodeContextItemMetadata.ProviderMetadataEntry
+message ProviderMetadataEntry {
+  string key = 1;
+  CodeContextProviderMetadata value = 2;
+}
+
 // origin: .exa.extension_server_pb.PushUnifiedStateSyncUpdateRequest
 message PushUnifiedStateSyncUpdateRequest {
   UpdateRequest update = 1;
@@ -8205,6 +8407,12 @@ message RequestedInteraction {
   ApprovalInteractionSpec approval_interaction = 23;
 }
 
+// origin: .exa.codeium_common_pb.ModelUsageStats.ResponseHeaderEntry
+message ResponseHeaderEntry {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.extension_server_pb.RestartUserStatusUpdaterRequest
 message RestartUserStatusUpdaterRequest {
 }
@@ -8233,7 +8441,7 @@ message RetrievedCodeContextItemMetadata {
   CodeContextType context_type = 2;
   string scorer = 3;
   float score = 4;
-  map<string, CodeContextProviderMetadata> provider_metadata = 5;
+  repeated ProviderMetadataEntry provider_metadata = 5;
   bool is_in_pinned_scope = 6;
 }
 
@@ -8430,7 +8638,7 @@ message SidecarConfig {
   bool disabled = 4;
   string description = 5;
   bool has_web_ui = 6;
-  map<string, string> env = 7;
+  repeated CortexSidecarconfig_EnvEntry env = 7;
   string display_name = 8;
   string builtin = 9;
   SidecarUIConfig ui_config = 10;
@@ -8494,7 +8702,7 @@ message SlashCommandInfo {
 // origin: .exa.codeium_common_pb.SlashCommandScopeItem
 message SlashCommandScopeItem {
   SlashCommandInfo info = 1;
-  map<string, string> argument_values = 2;
+  repeated CodeiumCommonSlashcommandscopeitem_ArgumentValuesEntry argument_values = 2;
 }
 
 // origin: .exa.language_server_pb.SmartFocusConversationRequest
@@ -8516,10 +8724,16 @@ message SnapshotMetadata {
   string artifact_dir_commit_hash = 6;
 }
 
+// origin: .exa.codeium_common_pb.CodeContextItem.SnippetByTypeEntry
+message SnippetByTypeEntry {
+  string key = 1;
+  SnippetWithWordCount value = 2;
+}
+
 // origin: .exa.codeium_common_pb.SnippetWithWordCount
 message SnippetWithWordCount {
   string snippet = 1;
-  map<string, WordCount> word_count_by_splitter = 2;
+  repeated WordCountBySplitterEntry word_count_by_splitter = 2;
 }
 
 // origin: .exa.codeium_common_pb.Source
@@ -8747,6 +8961,12 @@ message StepStringConverterConfig {
   CodeAcknowledgementConverterConfig code_acknowledgement = 1;
 }
 
+// origin: .exa.extension_server_pb.StoreSecretValueRequest
+message StoreSecretValueRequest {
+  string key = 1;
+  string value = 2;
+}
+
 // origin: .exa.extension_server_pb.StoreSecretValueResponse
 message StoreSecretValueResponse {
 }
@@ -8824,9 +9044,21 @@ message SuggestedResponseConfig {
   bool force_disable = 1;
 }
 
+// origin: .exa.jetski_cortex_pb.CascadeTrajectorySummaries.SummariesEntry
+message SummariesEntry {
+  string key = 1;
+  CascadeTrajectorySummary value = 2;
+}
+
 // origin: .exa.codeium_common_pb.SuperCompleteFilterReason
 message SuperCompleteFilterReason {
   string reason = 1;
+}
+
+// origin: .exa.codeium_common_pb.ModelFeatures.SupportedMimeTypesEntry
+message SupportedMimeTypesEntry {
+  string key = 1;
+  bool value = 2;
 }
 
 // origin: .devtools.cider.agent.trajectory_steps.StartCodeReviewStep.Tag
@@ -9108,10 +9340,16 @@ message ToolCallContent {
   GoogleMapsCallContent google_maps_call = 10;
 }
 
+// origin: .exa.cortex_pb.McpServerSpec.ToolConfigEntry
+message ToolConfigEntry {
+  string key = 1;
+  McpServerToolConfig value = 2;
+}
+
 // origin: .exa.cortex_pb.ToolDescriptionOverrideMap
 message ToolDescriptionOverrideMap {
-  map<string, SectionOverrideConfig> descriptions = 1;
-  map<string, ToolOverrideConfig> tool_overrides = 2;
+  repeated DescriptionsEntry descriptions = 1;
+  repeated ToolOverridesEntry tool_overrides = 2;
 }
 
 // origin: .exa.cortex_pb.ToolOutputConfig
@@ -9122,10 +9360,16 @@ message ToolOutputConfig {
 // origin: .exa.cortex_pb.ToolOverrideConfig
 message ToolOverrideConfig {
   string name_override = 1;
-  map<string, string> argument_name_overrides = 2;
+  repeated ArgumentNameOverridesEntry argument_name_overrides = 2;
   SectionOverrideConfig description_override = 3;
-  map<string, string> argument_description_overrides = 4;
-  map<string, ArgumentOverride> argument_value_overrides = 5;
+  repeated ArgumentDescriptionOverridesEntry argument_description_overrides = 4;
+  repeated ArgumentValueOverridesEntry argument_value_overrides = 5;
+}
+
+// origin: .exa.cortex_pb.ToolDescriptionOverrideMap.ToolOverridesEntry
+message ToolOverridesEntry {
+  string key = 1;
+  ToolOverrideConfig value = 2;
 }
 
 // origin: .genai.ToolResultContent
@@ -9165,7 +9409,7 @@ message TopLevelTokenGroup {
 
 // origin: .exa.unified_state_sync_pb.Topic
 message Topic {
-  map<string, Row> data = 1;
+  repeated DataEntry data = 1;
 }
 
 // origin: .gemini_coder.Trajectory
@@ -9463,6 +9707,12 @@ message Value {
   Function function_value = 9;
 }
 
+// origin: .exa.cortex_pb.Experiments.ValuesEntry
+message ValuesEntry {
+  string key = 1;
+  ExperimentValue value = 2;
+}
+
 // origin: .genai.VideoContent
 message VideoContent {
   GenaiVideocontent_MimeType mime_type = 1;
@@ -9514,7 +9764,19 @@ message WaitToolConfig {
 
 // origin: .exa.codeium_common_pb.WordCount
 message WordCount {
-  map<string, int64> word_count_map = 1;
+  repeated WordCountMapEntry word_count_map = 1;
+}
+
+// origin: .exa.codeium_common_pb.SnippetWithWordCount.WordCountBySplitterEntry
+message WordCountBySplitterEntry {
+  string key = 1;
+  WordCount value = 2;
+}
+
+// origin: .exa.codeium_common_pb.WordCount.WordCountMapEntry
+message WordCountMapEntry {
+  string key = 1;
+  int64 value = 2;
 }
 
 // origin: .genai.WordInfo
@@ -9544,6 +9806,18 @@ message WorkspacePath {
 // origin: .exa.cortex_pb.WorkspacePaths
 message WorkspacePaths {
   repeated string absolute_paths = 1;
+}
+
+// origin: .exa.codeium_common_pb.PathScopeItem.WorkspaceRelativePathsMigrateMeToWorkspaceUrisEntry
+message WorkspaceRelativePathsMigrateMeToWorkspaceUrisEntry {
+  string key = 1;
+  string value = 2;
+}
+
+// origin: .exa.codeium_common_pb.PathScopeItem.WorkspaceUrisToRelativePathsEntry
+message WorkspaceUrisToRelativePathsEntry {
+  string key = 1;
+  string value = 2;
 }
 
 // origin: .exa.extension_server_pb.WriteCascadeEditRequest

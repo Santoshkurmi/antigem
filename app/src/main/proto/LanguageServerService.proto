@@ -375,7 +375,7 @@ enum ChatClientRequestStreamClientType {
 }
 
 enum ChatFeedbackType {
-  CHATFEEDBACKTYPE_FEEDBACK_TYPE_UNSPECIFIED = 0;
+  CHAT_FEEDBACK_TYPE_FEEDBACK_TYPE_UNSPECIFIED = 0;
   FEEDBACK_TYPE_ACCEPT = 1;
   FEEDBACK_TYPE_REJECT = 2;
   FEEDBACK_TYPE_COPIED = 3;
@@ -412,10 +412,10 @@ enum ClickType {
 }
 
 enum ClientTrajectoryVerbosity {
-  CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED = 0;
-  CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_DEBUG = 1;
-  CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_PROD_UI = 2;
-  CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_FULL = 3;
+  CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED = 0;
+  CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_DEBUG = 1;
+  CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_PROD_UI = 2;
+  CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_FULL = 3;
 }
 
 enum CloudSQLUpdateSchemaErrorCode {
@@ -484,7 +484,7 @@ enum CodeHeuristicFailure {
 }
 
 enum CodeexecutioncallcontentCodeexecutioncallarguments_Language {
-  CODEEXECUTIONCALLCONTENTCODEEXECUTIONCALLARGUMENTS_LANGUAGE_LANGUAGE_UNSPECIFIED = 0;
+  CODEEXECUTIONCALLCONTENT_CODEEXECUTIONCALLARGUMENTS__LANGUAGE_LANGUAGE_UNSPECIFIED = 0;
   PYTHON = 1;
 }
 
@@ -885,7 +885,7 @@ enum ExecutorTerminationReason {
 }
 
 enum ExperimentKey {
-  EXPERIMENTKEY_UNSPECIFIED = 0;
+  EXPERIMENT_KEY_UNSPECIFIED = 0;
   USE_INTERNAL_CHAT_MODEL = 36;
   RECORD_FILES = 47;
   NO_SAMPLER_EARLY_STOP = 48;
@@ -1067,13 +1067,13 @@ enum ExperimentSource {
 }
 
 enum FailMode {
-  FAILMODE_UNSPECIFIED = 0;
+  FAIL_MODE_UNSPECIFIED = 0;
   OPEN = 1;
   CLOSED = 2;
 }
 
 enum FeedbackType {
-  FEEDBACKTYPE_FEEDBACK_TYPE_UNSPECIFIED = 0;
+  FEEDBACK_TYPE_VAL_FEEDBACK_TYPE_UNSPECIFIED = 0;
   FEEDBACK_TYPE_DOT = 1;
   FEEDBACK_TYPE_MOUSE_POINTER = 2;
 }
@@ -1135,13 +1135,13 @@ enum ForkType {
 }
 
 enum GenaiDocumentcontent_MimeType {
-  GENAIDOCUMENTCONTENT_MIMETYPE_TYPE_UNSPECIFIED = 0;
+  GENAI_DOCUMENTCONTENT__MIME_TYPE_TYPE_UNSPECIFIED = 0;
   TYPE_PDF = 1;
   TYPE_CSV = 2;
 }
 
 enum GenaiImagecontent_MimeType {
-  GENAIIMAGECONTENT_MIMETYPE_TYPE_UNSPECIFIED = 0;
+  GENAI_IMAGECONTENT__MIME_TYPE_TYPE_UNSPECIFIED = 0;
   TYPE_PNG = 1;
   TYPE_JPEG = 2;
   TYPE_WEBP = 3;
@@ -1155,14 +1155,14 @@ enum GenaiImagecontent_MimeType {
 }
 
 enum GenaiVideocontent_MimeType {
-  GENAIVIDEOCONTENT_MIMETYPE_TYPE_UNSPECIFIED = 0;
+  GENAI_VIDEOCONTENT__MIME_TYPE_TYPE_UNSPECIFIED = 0;
   TYPE_MP4 = 1;
-  GENAIVIDEOCONTENT_MIMETYPE_TYPE_MPEG = 2;
+  GENAI_VIDEOCONTENT__MIME_TYPE_TYPE_MPEG = 2;
   TYPE_MPG = 3;
   TYPE_MOV = 4;
   TYPE_AVI = 5;
   TYPE_X_FLV = 6;
-  GENAIVIDEOCONTENT_MIMETYPE_TYPE_WEBM = 7;
+  GENAI_VIDEOCONTENT__MIME_TYPE_TYPE_WEBM = 7;
   TYPE_WMV = 8;
   TYPE_3GPP = 9;
   TYPE_YT_BEYOND = 10;
@@ -1202,7 +1202,7 @@ enum InteractiveCascadeEditImportance {
 }
 
 enum Language {
-  LANGUAGE_UNSPECIFIED = 0;
+  LANGUAGE_VAL_LANGUAGE_UNSPECIFIED = 0;
   LANGUAGE_C = 1;
   LANGUAGE_CLOJURE = 2;
   LANGUAGE_COFFEESCRIPT = 3;
@@ -1297,10 +1297,10 @@ enum Language {
 }
 
 enum LanguageServer_ClientTrajectoryVerbosity {
-  LANGUAGESERVER_CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED = 0;
-  LANGUAGESERVER_CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_DEBUG = 1;
-  LANGUAGESERVER_CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_PROD_UI = 2;
-  LANGUAGESERVER_CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_FULL = 3;
+  LANGUAGE_SERVER__CLIENT_TRAJECTORY_VERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED = 0;
+  LANGUAGE_SERVER__CLIENT_TRAJECTORY_VERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_DEBUG = 1;
+  LANGUAGE_SERVER__CLIENT_TRAJECTORY_VERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_PROD_UI = 2;
+  LANGUAGE_SERVER__CLIENT_TRAJECTORY_VERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_FULL = 3;
 }
 
 enum LintDiffType {
@@ -1377,14 +1377,14 @@ enum MigrationStatus {
 }
 
 enum MimeType {
-  MIMETYPE_TYPE_UNSPECIFIED = 0;
+  MIME_TYPE_TYPE_UNSPECIFIED = 0;
   TYPE_WAV = 1;
   TYPE_MP3 = 2;
   TYPE_AIFF = 3;
   TYPE_AAC = 4;
   TYPE_OGG = 5;
   TYPE_FLAC = 6;
-  MIMETYPE_TYPE_MPEG = 7;
+  MIME_TYPE_TYPE_MPEG = 7;
   TYPE_M4A = 8;
   TYPE_L16 = 9;
   TYPE_S16LE = 10;
@@ -1392,7 +1392,7 @@ enum MimeType {
   TYPE_ALAW = 12;
   TYPE_MULAW = 13;
   TYPE_VIDEO_AUDIO_S16LE = 14;
-  MIMETYPE_TYPE_WEBM = 15;
+  MIME_TYPE_TYPE_WEBM = 15;
 }
 
 enum Modality {
@@ -2471,7 +2471,7 @@ enum SlashCommandType {
 }
 
 enum StatusEnum {
-  STATUSENUM_STATUS_UNSPECIFIED = 0;
+  STATUS_ENUM_STATUS_UNSPECIFIED = 0;
   STATUS_ENABLED = 1;
   STATUS_DISABLED = 2;
   STATUS_TRUNCATED = 3;
@@ -2649,7 +2649,7 @@ enum TruncationReason {
 }
 
 enum Type {
-  TYPE_UNSPECIFIED = 0;
+  TYPE_VAL_TYPE_UNSPECIFIED = 0;
   TYPE_EFFECTIVE_GRANT = 1;
   TYPE_DEFAULT_GRANT = 2;
   TYPE_CROSS_PROJECT_ISOLATION = 3;
@@ -2674,7 +2674,7 @@ enum UpgradeType {
 }
 
 enum UrlcontextresultcontentUrlcontextresult_Status {
-  URLCONTEXTRESULTCONTENTURLCONTEXTRESULT_STATUS_STATUS_UNSPECIFIED = 0;
+  URLCONTEXTRESULTCONTENT_URLCONTEXTRESULT__STATUS_STATUS_UNSPECIFIED = 0;
   SUCCESS = 1;
   ERROR = 2;
   PAYWALL = 3;
@@ -2765,7 +2765,7 @@ message AccumulatedSectionsUpdate {
 }
 
 message ActionDebugInfo {
-  map<string, string> entries = 1;
+  repeated DebugInfoEntry entries = 1;
 }
 
 message ActionResult {
@@ -2825,7 +2825,7 @@ message ActionSpecDeleteFile {
 
 message ActionSpecSed {
   repeated string expressions = 1;
-  map<string, string> file_content = 2;
+  repeated FileContentEntry file_content = 2;
   PathScopeItem path = 3;
 }
 
@@ -2896,7 +2896,7 @@ message AgentPluginCommand {
 message AgentPluginCommandTemplate {
   string command = 1;
   repeated string args = 2;
-  map<string, string> env = 3;
+  repeated CodeAgentplugincommandtemplate_EnvEntry env = 3;
 }
 
 message AgentPluginCommandVariable {
@@ -2907,7 +2907,7 @@ message AgentPluginCommandVariable {
 }
 
 message AgentPluginLocalConfig {
-  map<string, AgentPluginCommand> commands = 1;
+  repeated CodeAgentpluginlocalconfig_CommandsEntry commands = 1;
 }
 
 message AgentPluginOAuthConfig {
@@ -2926,7 +2926,7 @@ message AgentPluginRemoteConfig {
 
 message AgentPluginRemoteConfigTemplate {
   string server_url = 1;
-  map<string, string> headers = 2;
+  repeated CodeAgentpluginremoteconfigtemplate_HeadersEntry headers = 2;
   string auth_provider_type = 3;
 }
 
@@ -2980,12 +2980,12 @@ message AgentStateUpdate {
   CascadeRunStatus executor_loop_status = 5;
   ExecutorMetadata executor_metadata = 6;
   TrajectoryUpdate main_trajectory_update = 7;
-  map<string, TrajectoryUpdate> subtrajectory_updates = 8;
+  repeated SubtrajectoryUpdatesEntry subtrajectory_updates = 8;
   QueuedStepsUpdate queued_steps_update = 9;
   ArtifactSnapshotsUpdate artifact_snapshots_update = 10;
   TrajectoryFileDiffsUpdate trajectory_file_diffs_update = 11;
   BackgroundCommandsUpdate background_commands_update = 12;
-  map<uint32, TrajectoryUpdate> step_scoped_subtrajectory_updates = 13;
+  repeated StepScopedSubtrajectoryUpdatesEntry step_scoped_subtrajectory_updates = 13;
   bool has_active_children = 14;
   CreditUsageSummary credit_usage_summary = 15;
   ConversationCostSummary cost_summary = 16;
@@ -2996,12 +2996,12 @@ message AgentStateUpdate {
   repeated string bookmarks = 21;
   AccumulatedSectionsUpdate accumulated_sections_update = 22;
   HookStatus active_hook = 23;
-  map<int32, HookStatus> step_hooks = 24;
+  repeated StepHooksEntry step_hooks = 24;
   ExecutionStatus execution_status = 25;
 }
 
 message AgenticModeConfig {
-  map<string, int32> inject_artifact_reminder_threshold_map = 1;
+  repeated InjectArtifactReminderThresholdMapEntry inject_artifact_reminder_threshold_map = 1;
   bool disable_artifact_reminders = 2;
   bool use_slash_plan = 3;
 }
@@ -3009,7 +3009,7 @@ message AgenticModeConfig {
 message AllowAlwaysConfig {
   repeated string dangerous_binaries = 1;
   repeated string subcommand_tools = 2;
-  map<string, DangerousSubcommands> dangerous_subcommands = 3;
+  repeated DangerousSubcommandsEntry dangerous_subcommands = 3;
 }
 
 message AllowedModelConfig {
@@ -3114,9 +3114,29 @@ message Args {
   bool use_message_bridge = 6;
 }
 
+message ArgsEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message ArgumentDescriptionOverridesEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message ArgumentNameOverridesEntry {
+  string key = 1;
+  string value = 2;
+}
+
 message ArgumentOverride {
   GoogleProtobuf_Value static_value = 1;
   bool omit = 2;
+}
+
+message ArgumentValueOverridesEntry {
+  string key = 1;
+  ArgumentOverride value = 2;
 }
 
 message ArtifactComment {
@@ -3217,6 +3237,11 @@ message AskQuestionOption {
 
 message AskQuestionToolConfig {
   bool enabled = 1;
+}
+
+message AttributesEntry {
+  string key = 1;
+  string value = 2;
 }
 
 message AudioContent {
@@ -3327,7 +3352,7 @@ message BattleModeInfo {
   repeated string children_trajectory_ids = 8;
   BattleEndType end_type = 9;
   repeated Model models = 10;
-  map<string, int32> original_workspace_snapshots = 11;
+  repeated OriginalWorkspaceSnapshotsEntry original_workspace_snapshots = 11;
   repeated CascadeRunStatus children_trajectory_statuses = 12;
   repeated Model original_models = 13;
   repeated bool eliminated = 14;
@@ -3335,7 +3360,7 @@ message BattleModeInfo {
   bool forked_from_history = 16;
   string trigger_tag = 17;
   string reference_conversation_id = 18;
-  map<string, string> metadata = 19;
+  repeated MetadataEntry metadata = 19;
   CloneStrategy clone_strategy = 20;
   repeated string contrib_variants = 21;
 }
@@ -3508,7 +3533,7 @@ message BuildTargetsStep {
 message BuildWithGooglePlugin {
   AgentPlugin plugin = 1;
   GStaticSource gstatic = 3;
-  map<string, string> version_shas = 4;
+  repeated VersionShasEntry version_shas = 4;
   CloudCode_Google3Source google3 = 5;
   Visibility visibility = 6;
 }
@@ -3718,7 +3743,7 @@ message CascadePluginCommand {
 message CascadePluginCommandTemplate {
   string command = 1;
   repeated string args = 2;
-  map<string, string> env = 3;
+  repeated CascadePluginsCascadeplugincommandtemplate_EnvEntry env = 3;
 }
 
 message CascadePluginCommandVariable {
@@ -3729,7 +3754,7 @@ message CascadePluginCommandVariable {
 }
 
 message CascadePluginLocalConfig {
-  map<string, CascadePluginCommand> commands = 5;
+  repeated CascadePluginsCascadepluginlocalconfig_CommandsEntry commands = 5;
 }
 
 message CascadePluginRemoteConfig {
@@ -3738,7 +3763,7 @@ message CascadePluginRemoteConfig {
 
 message CascadePluginRemoteConfigTemplate {
   string server_url = 1;
-  map<string, string> headers = 2;
+  repeated CascadePluginsCascadepluginremoteconfigtemplate_HeadersEntry headers = 2;
   string auth_provider_type = 3;
 }
 
@@ -3747,12 +3772,32 @@ message CascadePluginTemplate {
   string id = 2;
   string link = 3;
   string description = 4;
-  map<string, CascadePluginCommand> commands = 5;
+  repeated CascadePluginsCascadeplugintemplate_CommandsEntry commands = 5;
   int64 installation_count = 6;
   string trust_level = 7;
   string readme = 8;
   CascadePluginLocalConfig local = 9;
   CascadePluginRemoteConfig remote = 10;
+}
+
+message CascadePluginsCascadeplugincommandtemplate_EnvEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message CascadePluginsCascadepluginlocalconfig_CommandsEntry {
+  string key = 1;
+  CascadePluginCommand value = 2;
+}
+
+message CascadePluginsCascadepluginremoteconfigtemplate_HeadersEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message CascadePluginsCascadeplugintemplate_CommandsEntry {
+  string key = 1;
+  CascadePluginCommand value = 2;
 }
 
 message CascadeReadUrlContentInteraction {
@@ -3973,7 +4018,7 @@ message ChatModelMetadata {
   repeated RetryInfo retry_infos = 17;
   repeated Credits consumed_credits = 18;
   string response_model = 19;
-  map<string, string> custom_metadata = 20;
+  repeated CustomMetadataEntry custom_metadata = 20;
   string model_display_name = 21;
   string response_model_full = 22;
 }
@@ -4065,6 +4110,11 @@ message CitcWorkspaceDetails {
   int64 citc_id = 3;
 }
 
+message CitcWorkspaceDetailsEntry {
+  string key = 1;
+  CitcWorkspaceDetails value = 2;
+}
+
 message Cli {
   bool enabled = 1;
 }
@@ -4102,7 +4152,7 @@ message ClientModelConfig {
   QuotaInfo quota_info = 15;
   string tag_title = 16;
   string tag_description = 17;
-  map<string, bool> supported_mime_types = 18;
+  repeated SupportedMimeTypesEntry supported_mime_types = 18;
   bool supports_thought_circulation = 19;
   string model_url = 20;
   string model_id = 21;
@@ -4168,6 +4218,21 @@ message CodeAcknowledgementInfo {
   UnifiedDiff diff = 3;
 }
 
+message CodeAgentplugincommandtemplate_EnvEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message CodeAgentpluginlocalconfig_CommandsEntry {
+  string key = 1;
+  AgentPluginCommand value = 2;
+}
+
+message CodeAgentpluginremoteconfigtemplate_HeadersEntry {
+  string key = 1;
+  string value = 2;
+}
+
 message CodeContextItem {
   string absolute_path_migrate_me_to_uri = 1;
   repeated WorkspacePath workspace_paths = 2;
@@ -4177,7 +4242,7 @@ message CodeContextItem {
   uint32 end_line = 6;
   CodeContextType context_type = 7;
   Language language = 10;
-  map<string, SnippetWithWordCount> snippet_by_type = 11;
+  repeated SnippetByTypeEntry snippet_by_type = 11;
   uint32 start_col = 12;
   uint32 end_col = 13;
   GitRepoInfo repo_info = 14;
@@ -4212,6 +4277,16 @@ message CodeExecutionCallContent {
 message CodeExecutionResultContent {
   string result = 1;
   bool is_error = 2;
+}
+
+message CodeModeldetails_SupportedMimeTypesEntry {
+  string key = 1;
+  bool value = 2;
+}
+
+message CodeModelexperiments_ExperimentsEntry {
+  string key = 1;
+  CloudCode_ExperimentValue value = 2;
 }
 
 message CodeSearchMatch {
@@ -4270,6 +4345,36 @@ message CodeToolConfig {
   int32 max_stored_diff_bytes = 22;
 }
 
+message CodeiumCommonMcpcommandtemplate_EnvEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message CodeiumCommonMcplocalserver_EnvEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message CodeiumCommonMcppromptscopeitem_ArgumentValuesEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message CodeiumCommonMcpremoteserver_HeadersEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message CodeiumCommonModelfeatures_SupportedMimeTypesEntry {
+  string key = 1;
+  bool value = 2;
+}
+
+message CodeiumCommonSlashcommandscopeitem_ArgumentValuesEntry {
+  string key = 1;
+  string value = 2;
+}
+
 message CodingAgentConfig {
   bool google_mode = 1;
   bool agentic_mode = 2;
@@ -4303,6 +4408,11 @@ message CommandStatusToolConfig {
   bool enable_input_detection = 6;
   Model input_detection_model = 7;
   bool force_disable = 8;
+}
+
+message CommandsEntry {
+  string key = 1;
+  McpServerCommand value = 2;
 }
 
 message Comment {
@@ -4482,10 +4592,10 @@ message ConversationAnnotations {
 }
 
 message ConversationCostSummary {
-  map<string, TurnCostSummary> turn_costs = 1;
+  repeated TurnCostsEntry turn_costs = 1;
   TurnCostSummary total = 2;
   ModelPricingInfo pricing = 3;
-  map<string, CostDisplaySection> subagent_costs = 4;
+  repeated SubagentCostsEntry subagent_costs = 4;
 }
 
 message ConversationGroupConfig {
@@ -4496,7 +4606,7 @@ message ConversationGroupConfig {
 }
 
 message ConversationGroupRegistry {
-  map<string, ConversationGroupConfig> groups = 1;
+  repeated GroupsEntry groups = 1;
 }
 
 message ConversationHistoryConfig {
@@ -4529,6 +4639,16 @@ message CortexCortexstepeditnotebook_Reply {
   int32 total_cell_count = 2;
 }
 
+message CortexCortexstepephemeralmessage_MetadataEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message CortexCortexstepmcptool_MetadataEntry {
+  string key = 1;
+  string value = 2;
+}
+
 message CortexCortexstepreadnotebook_Args {
   string absolute_path_uri = 1;
   repeated int32 cell_indices = 2;
@@ -4539,6 +4659,11 @@ message CortexCortexstepreadnotebook_Reply {
   string flattened_content = 1;
   int32 read_cell_count = 2;
   repeated NotebookBlob blobs = 3;
+}
+
+message CortexCortexstepsystemmessage_MetadataEntry {
+  string key = 1;
+  string value = 2;
 }
 
 message CortexErrorDetails {
@@ -4554,6 +4679,16 @@ message CortexErrorDetails {
   repeated string rpc_error_details = 10;
   string sherlog_link = 11;
   string user_error_number = 12;
+}
+
+message CortexGenericstepresult_MetadataEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message CortexMcpserverspec_EnvEntry {
+  string key = 1;
+  string value = 2;
 }
 
 message CortexMemory {
@@ -4610,6 +4745,11 @@ message CortexMemoryScope {
 
 message CortexMemoryText {
   string content = 1;
+}
+
+message CortexSidecaruserconfig_ArgumentValuesEntry {
+  string key = 1;
+  string value = 2;
 }
 
 message CortexStepAgencyToolCall {
@@ -4823,7 +4963,7 @@ message CortexStepCheckpoint {
   string user_intent = 4;
   string session_summary = 5;
   string code_change_summary = 6;
-  map<string, DiffList> edited_file_map = 7;
+  repeated EditedFileMapEntry edited_file_map = 7;
   string memory_summary = 8;
   bool intent_only = 9;
   string conversation_title = 10;
@@ -4938,7 +5078,7 @@ message CortexStepCommandStatus {
 message CortexStepCompile {
   CortexStepCompileTool tool = 1;
   string input_spec = 2;
-  map<string, string> options = 3;
+  repeated OptionsEntry options = 3;
   string target = 4;
   string artifact_path = 5;
   bool artifact_is_executable = 6;
@@ -4994,7 +5134,7 @@ message CortexStepEphemeralMessage {
   repeated string triggered_heuristics = 3;
   repeated Media attachments = 4;
   string dom_tree_uri = 5;
-  map<string, string> metadata = 6;
+  repeated CortexCortexstepephemeralmessage_MetadataEntry metadata = 6;
 }
 
 message CortexStepErrorMessage {
@@ -5067,7 +5207,7 @@ message CortexStepFindAllReferences {
 }
 
 message CortexStepFinish {
-  map<string, string> output = 1;
+  repeated OutputEntry output = 1;
   string output_string = 2;
 }
 
@@ -5095,7 +5235,7 @@ message CortexStepGeneratorMetadata {
 }
 
 message CortexStepGeneric {
-  map<string, string> args = 1;
+  repeated ArgsEntry args = 1;
   GenericStepResult result = 2;
 }
 
@@ -5155,7 +5295,7 @@ message CortexStepInvokeSubagent {
 }
 
 message CortexStepKIInsertion {
-  map<string, KnowledgeReferences> ki_references = 1;
+  repeated KiReferencesEntry ki_references = 1;
 }
 
 message CortexStepKnowledgeArtifacts {
@@ -5219,7 +5359,7 @@ message CortexStepMcpTool {
   string progress_message = 10;
   double progress = 11;
   double progress_total = 12;
-  map<string, string> metadata = 13;
+  repeated CortexCortexstepmcptool_MetadataEntry metadata = 13;
 }
 
 message CortexStepMemory {
@@ -5530,7 +5670,7 @@ message CortexStepSystemMessage {
   StepRenderInfo render_info = 2;
   string event_type = 3;
   AgentMessage agent_message = 4;
-  map<string, string> metadata = 5;
+  repeated CortexCortexstepsystemmessage_MetadataEntry metadata = 5;
   repeated Media media = 6;
 }
 
@@ -5726,7 +5866,7 @@ message CostDisplaySection {
   CostCategory thinking = 4;
   CostCategory response = 5;
   CostCategory tools = 6;
-  map<string, CostCategory> tool_breakdown = 7;
+  repeated ToolBreakdownEntry tool_breakdown = 7;
   int32 generation_count = 8;
   float estimated_cost_usd = 9;
   ModelPricingInfo pricing = 10;
@@ -5816,8 +5956,18 @@ message CustomAgentSystemPromptConfig {
 message CustomExtensions {
 }
 
+message CustomMetadataEntry {
+  string key = 1;
+  string value = 2;
+}
+
 message CustomModelsConfig {
-  map<string, ModelInfo> custom_models = 1;
+  repeated JetboxStateCustommodelsconfig_CustomModelsEntry custom_models = 1;
+}
+
+message CustomModelsEntry {
+  string key = 1;
+  ModelInfo value = 2;
 }
 
 message CustomPromptSection {
@@ -5896,15 +6046,30 @@ message DOMNode {
 
 message DOMTree {
   string root_id = 1;
-  map<string, DOMNode> map = 2;
+  repeated MapEntry map = 2;
 }
 
 message DangerousSubcommands {
   repeated string subcommands = 1;
 }
 
+message DangerousSubcommandsEntry {
+  string key = 1;
+  DangerousSubcommands value = 2;
+}
+
 message DataAccessMetadata {
   repeated string depot_paths = 1;
+}
+
+message DataEntry {
+  string key = 1;
+  Any value = 2;
+}
+
+message DebugInfoEntry {
+  string key = 1;
+  string value = 2;
 }
 
 message DeclarativeComponentConfig {
@@ -5934,6 +6099,11 @@ message DefaultOverrideModelConfig {
 }
 
 message DefaultProjectEnvironment {
+}
+
+message DefaultTeamFeaturesEntry {
+  int32 key = 1;
+  TeamsFeaturesMetadata value = 2;
 }
 
 message DeleteCascadeTrajectoryRequest {
@@ -5983,10 +6153,25 @@ message DeployTarget {
   string domain = 5;
 }
 
+message DeprecatedModelIdsEntry {
+  string key = 1;
+  DeprecatedModelReroutingInfo value = 2;
+}
+
 message DeprecatedModelReroutingInfo {
   string new_model_id = 1;
   Model old_model_enum = 2;
   Model new_model_enum = 3;
+}
+
+message DescriptionsEntry {
+  string key = 1;
+  SectionOverrideConfig value = 2;
+}
+
+message DetailsEntry {
+  string key = 1;
+  string value = 2;
 }
 
 message DiffBlock {
@@ -6103,6 +6288,11 @@ message DynamicContextScopeItem {
   string uri = 4;
 }
 
+message EditedFileMapEntry {
+  string key = 1;
+  DiffList value = 2;
+}
+
 message EditorState {
   Document active_document = 1;
   repeated Document other_documents = 2;
@@ -6112,7 +6302,7 @@ message ElementNode {
   string tag_name = 1;
   string xpath = 2;
   repeated string children = 3;
-  map<string, string> attributes = 4;
+  repeated AttributesEntry attributes = 4;
   bool is_interactive = 5;
   bool is_top_element = 6;
   int32 highlight_index = 7;
@@ -6145,6 +6335,11 @@ message EnterpriseToolConfig {
   repeated string custom_workspace = 2;
 }
 
+message EnvEntry {
+  string key = 1;
+  string value = 2;
+}
+
 message Environment {
   string id = 1;
   string name = 2;
@@ -6166,6 +6361,11 @@ message EphemeralMessagesConfig {
   bool use_allowlist = 8;
   repeated string enabled_heuristics = 9;
   repeated string static_messages = 10;
+}
+
+message ErrorMessagesEntry {
+  string key = 1;
+  string value = 2;
 }
 
 message ErrorTrace {
@@ -6251,7 +6451,7 @@ message ExperimentWithVariant {
 }
 
 message Experiments {
-  map<string, ExperimentValue> values = 1;
+  repeated ValuesEntry values = 1;
 }
 
 message ExternalContext {
@@ -6279,7 +6479,7 @@ message FastApplyFallbackInfo {
 }
 
 message FetchAvailableModelsResponse {
-  map<string, ModelDetails> models = 1;
+  repeated ModelsEntry models = 1;
   string default_agent_model_id = 2;
   repeated ModelSort agent_model_sorts = 3;
   repeated string command_model_ids = 4;
@@ -6287,7 +6487,7 @@ message FetchAvailableModelsResponse {
   repeated string image_generation_model_ids = 6;
   repeated string mquery_model_ids = 7;
   repeated string web_search_model_ids = 8;
-  map<string, DeprecatedModelReroutingInfo> deprecated_model_ids = 9;
+  repeated DeprecatedModelIdsEntry deprecated_model_ids = 9;
   repeated string commit_message_model_ids = 10;
   repeated string audio_transcription_model_ids = 11;
   repeated ModelSort battle_mode_model_sorts = 12;
@@ -6306,6 +6506,11 @@ message FieldDiff {
   RepeatedDiff update_repeated = 3;
   MapDiff update_map = 4;
   bool clear = 5;
+}
+
+message FieldsEntry {
+  string key = 1;
+  GoogleProtobuf_Value value = 2;
 }
 
 message FileAccessPermission {
@@ -6340,6 +6545,11 @@ message FileContentData {
   string file_path = 1;
   string content = 2;
   FileVersion file_version = 3;
+}
+
+message FileContentEntry {
+  string key = 1;
+  string value = 2;
 }
 
 message FileDiffComment {
@@ -6514,10 +6724,10 @@ message GeneratorMetadatasUpdate {
 
 message GenericStepResult {
   string result = 1;
-  map<string, string> metadata = 2;
+  repeated CortexGenericstepresult_MetadataEntry metadata = 2;
   StepRenderInfo step_render_info = 3;
   repeated Media media = 4;
-  map<string, Any> data = 5;
+  repeated DataEntry data = 5;
   Any payload = 6;
   string full_output_uri = 7;
 }
@@ -6784,7 +6994,7 @@ message GoogleProtobuf_ListValue {
 }
 
 message GoogleProtobuf_Struct {
-  map<string, GoogleProtobuf_Value> fields = 1;
+  repeated FieldsEntry fields = 1;
 }
 
 message GoogleProtobuf_Value {
@@ -6846,6 +7056,11 @@ message GroundingMetadata {
   repeated Source sources = 1;
 }
 
+message GroupsEntry {
+  string key = 1;
+  ConversationGroupConfig value = 2;
+}
+
 message Guideline {
   repeated GuidelineItem items = 1;
 }
@@ -6860,6 +7075,11 @@ message HandleCascadeUserInteractionRequest {
 }
 
 message HandleCascadeUserInteractionResponse {
+}
+
+message HeadersEntry {
+  string key = 1;
+  string value = 2;
 }
 
 message HeadlessAuthRequired {
@@ -6932,6 +7152,11 @@ message InitializeCascadePanelStateRequest {
 message InitializeCascadePanelStateResponse {
 }
 
+message InjectArtifactReminderThresholdMapEntry {
+  string key = 1;
+  int32 value = 2;
+}
+
 message InjectedResponseMetadata {
 }
 
@@ -6977,7 +7202,7 @@ message JetboxAppState {
   bool sidebar_workspaces_migrated = 3;
   GoogleSpecificSettings google_settings = 4;
   AgentOnboardingState agent_onboarding_completed = 5;
-  map<string, SidebarWorkspaceInfo> sidebar_workspaces = 6;
+  repeated SidebarWorkspacesEntry sidebar_workspaces = 6;
   Model last_selected_agent_model = 10;
   CustomModelsConfig custom_models_config = 11;
   AgentEnvironment agent_environment = 13;
@@ -6987,7 +7212,17 @@ message JetboxAppState {
   MigrationStatus migrate_internal_projects = 18;
   RetroactiveMigrationStatus migrate_retroactive_projects = 19;
   int64 opted_out_best_of_n_auto_trigger_at = 20;
-  map<int32, MigrationStatus> migrations = 21;
+  repeated MigrationsEntry migrations = 21;
+}
+
+message JetboxStateCustommodelsconfig_CustomModelsEntry {
+  string key = 1;
+  ModelInfo value = 2;
+}
+
+message JetboxStateState_SidebarWorkspacesEntry {
+  string key = 1;
+  SidebarWorkspaceInfo value = 2;
 }
 
 message JetboxStateUsersettings_SandboxProxy {
@@ -7054,7 +7289,7 @@ message JetboxSubscribeToSummariesRequest {
 }
 
 message JetboxSubscribeToSummariesResponse {
-  map<string, CascadeTrajectorySummary> updates = 1;
+  repeated UpdatesEntry updates = 1;
   repeated string deletes = 2;
 }
 
@@ -7065,6 +7300,11 @@ message JetboxWriteStateRequest {
 }
 
 message JetboxWriteStateResponse {
+}
+
+message KiReferencesEntry {
+  string key = 1;
+  KnowledgeReferences value = 2;
 }
 
 message KnowledgeBaseChunk {
@@ -7264,6 +7504,11 @@ message MapDiff {
   repeated MapKeyDiff map_key_diffs = 1;
 }
 
+message MapEntry {
+  string key = 1;
+  DOMNode value = 2;
+}
+
 message MapKeyDiff {
   SingularValue map_key = 1;
   SingularValue update_singular = 2;
@@ -7289,7 +7534,7 @@ message MarketplaceInstall {
 message McpCommandTemplate {
   string command = 1;
   repeated string args = 2;
-  map<string, string> env = 3;
+  repeated CodeiumCommonMcpcommandtemplate_EnvEntry env = 3;
 }
 
 message McpCommandVariable {
@@ -7304,10 +7549,15 @@ message McpDiscoveryConfig {
   repeated McpServerSpec servers = 2;
 }
 
+message McpEntry {
+  string key = 1;
+  PluginMcpUserConfig value = 2;
+}
+
 message McpLocalServer {
   string command = 1;
   repeated string args = 2;
-  map<string, string> env = 3;
+  repeated CodeiumCommonMcplocalserver_EnvEntry env = 3;
 }
 
 message McpOAuthConfig {
@@ -7333,14 +7583,14 @@ message McpPromptScopeItem {
   string name = 2;
   string description = 3;
   repeated McpPromptArgument arguments = 4;
-  map<string, string> argument_values = 5;
+  repeated CodeiumCommonMcppromptscopeitem_ArgumentValuesEntry argument_values = 5;
   repeated McpPromptMessage messages = 6;
 }
 
 message McpRemoteServer {
   string type = 1;
   string url = 2;
-  map<string, string> headers = 3;
+  repeated CodeiumCommonMcpremoteserver_HeadersEntry headers = 3;
 }
 
 message McpResource {
@@ -7385,17 +7635,17 @@ message McpServerSpec {
   string server_name = 1;
   string command = 2;
   repeated string args = 3;
-  map<string, string> env = 4;
+  repeated CortexMcpserverspec_EnvEntry env = 4;
   uint32 server_index = 5;
   string server_url = 6;
   bool disabled = 7;
   repeated string disabled_tools = 8;
-  map<string, string> headers = 9;
+  repeated HeadersEntry headers = 9;
   repeated string enabled_tools = 10;
   bool skip_tool_name_prefix = 11;
   bool skip_tool_description_prefix = 12;
   string cwd = 13;
-  map<string, McpServerToolConfig> tool_config = 14;
+  repeated ToolConfigEntry tool_config = 14;
   McpOAuthConfig oauth = 15;
   McpAuthProviderType auth_provider_type = 16;
   string plugin_name = 17;
@@ -7430,7 +7680,7 @@ message McpServerTemplate {
   string id = 2;
   string link = 3;
   string description = 4;
-  map<string, McpServerCommand> commands = 5;
+  repeated CommandsEntry commands = 5;
 }
 
 message McpServerToolCallContent {
@@ -7544,6 +7794,11 @@ message Metadata {
   ExperimentConfig experiment_config = 35;
 }
 
+message MetadataEntry {
+  string key = 1;
+  string value = 2;
+}
+
 message MetricsMetadata {
   int32 version = 1;
   string description = 2;
@@ -7556,13 +7811,18 @@ message MetricsMetadata {
 message MetricsRecord {
   string name = 1;
   float value = 2;
-  map<string, string> details = 3;
+  repeated DetailsEntry details = 3;
   bool lower_better = 4;
   bool is_bool = 5;
   string error = 6;
   string trajectory_id = 7;
   MetricsMetadata metadata = 9;
   string value_breakdown = 10;
+}
+
+message MigrationsEntry {
+  int32 key = 1;
+  MigrationStatus value = 2;
 }
 
 message ModalityTokenCount {
@@ -7611,7 +7871,7 @@ message ModelDetails {
   string tag_title = 29;
   string tag_description = 30;
   bool requires_no_xml_tool_examples = 31;
-  map<string, bool> supported_mime_types = 32;
+  repeated CodeModeldetails_SupportedMimeTypesEntry supported_mime_types = 32;
   bool requires_image_output_outside_function_responses = 33;
   bool preview = 34;
   int32 thinking_level = 35;
@@ -7628,7 +7888,7 @@ message ModelDetails {
 }
 
 message ModelExperiments {
-  map<string, CloudCode_ExperimentValue> experiments = 1;
+  repeated CodeModelexperiments_ExperimentsEntry experiments = 1;
 }
 
 message ModelFeatures {
@@ -7656,7 +7916,7 @@ message ModelFeatures {
   bool requires_lead_in_generation = 25;
   bool requires_no_xml_tool_examples = 26;
   bool does_not_support_tool_choice = 27;
-  map<string, bool> supported_mime_types = 28;
+  repeated CodeiumCommonModelfeatures_SupportedMimeTypesEntry supported_mime_types = 28;
   bool supports_adaptive_thinking = 29;
   bool supports_thought_circulation = 30;
   bool supports_deferred_tool_loading = 31;
@@ -7734,7 +7994,7 @@ message ModelUsageStats {
   uint64 cache_read_tokens = 5;
   APIProvider api_provider = 6;
   string message_id = 7;
-  map<string, string> response_header = 8;
+  repeated ResponseHeaderEntry response_header = 8;
   uint64 thinking_output_tokens = 9;
   uint64 response_output_tokens = 10;
   string response_id = 11;
@@ -7744,6 +8004,11 @@ message ModelUsageStats {
   repeated ModalityTokenCount cache_tokens_details = 15;
   repeated ModalityTokenCount candidates_tokens_details = 16;
   repeated ModalityTokenCount tool_use_prompt_tokens_details = 17;
+}
+
+message ModelsEntry {
+  string key = 1;
+  ModelDetails value = 2;
 }
 
 message ModifiedCell {
@@ -7797,13 +8062,28 @@ message NotifyUserConfig {
   ArtifactReviewMode artifact_review_mode = 1;
 }
 
+message OptionsEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message OriginalWorkspaceSnapshotsEntry {
+  string key = 1;
+  int32 value = 2;
+}
+
+message OutputEntry {
+  string key = 1;
+  string value = 2;
+}
+
 message PathScopeItem {
   string absolute_path_migrate_me_to_uri = 1;
-  map<string, string> workspace_relative_paths_migrate_me_to_workspace_uris = 2;
+  repeated WorkspaceRelativePathsMigrateMeToWorkspaceUrisEntry workspace_relative_paths_migrate_me_to_workspace_uris = 2;
   uint32 num_files = 3;
   uint64 num_bytes = 4;
   string absolute_uri = 5;
-  map<string, string> workspace_uris_to_relative_paths = 6;
+  repeated WorkspaceUrisToRelativePathsEntry workspace_uris_to_relative_paths = 6;
 }
 
 message PendingAgentMessagesUpdate {
@@ -7914,7 +8194,7 @@ message PlanInfo {
   bool knowledge_base_enabled = 27;
   bool can_share_conversations = 28;
   bool can_allow_cascade_in_background = 29;
-  map<int32, TeamsFeaturesMetadata> default_team_features = 30;
+  repeated DefaultTeamFeaturesEntry default_team_features = 30;
   bool browser_enabled = 31;
 }
 
@@ -7978,7 +8258,7 @@ message PluginDiscoveryConfig {
 }
 
 message PluginMcpUserConfig {
-  map<string, string> variables = 1;
+  repeated VariablesEntry variables = 1;
 }
 
 message PluginRef {
@@ -8002,7 +8282,12 @@ message PluginSidecar {
 message PluginUserConfig {
   bool enabled = 1;
   MarketplaceInstall installed_from = 2;
-  map<string, PluginMcpUserConfig> mcp = 3;
+  repeated McpEntry mcp = 3;
+}
+
+message PluginsEntry {
+  string key = 1;
+  PluginUserConfig value = 2;
 }
 
 message Point2 {
@@ -8103,7 +8388,7 @@ message ProjectSettings {
   bool enable_permissioned_github = 6;
   string shell_setup_script = 7;
   AgentPermissionPreset permission_preset = 8;
-  map<string, SecurityPluginSettings> security_plugins = 9;
+  repeated SecurityPluginsEntry security_plugins = 9;
 }
 
 message ProjectUpdatesStreamRequest {
@@ -8161,6 +8446,11 @@ message PromptSectionMetadata {
 
 message ProposeAICommentsStep {
   TrajectoryStepsProposeaicommentsstep_Args args = 2;
+}
+
+message ProviderMetadataEntry {
+  string key = 1;
+  CodeContextProviderMetadata value = 2;
 }
 
 message QueryCorrectionSuggestion {
@@ -8249,7 +8539,7 @@ message ReadProjectsResponse {
   repeated Project projects = 1;
   repeated string not_found_ids = 2;
   repeated string failed_ids = 3;
-  map<string, string> error_messages = 4;
+  repeated ErrorMessagesEntry error_messages = 4;
 }
 
 message ReadUrlContentToolConfig {
@@ -8425,6 +8715,11 @@ message Resources {
   repeated Resource resources = 1;
 }
 
+message ResponseHeaderEntry {
+  string key = 1;
+  string value = 2;
+}
+
 message Result {
   string uri = 1;
   string title = 2;
@@ -8451,7 +8746,7 @@ message RetrievedCodeContextItemMetadata {
   CodeContextType context_type = 2;
   string scorer = 3;
   float score = 4;
-  map<string, CodeContextProviderMetadata> provider_metadata = 5;
+  repeated ProviderMetadataEntry provider_metadata = 5;
   bool is_in_pinned_scope = 6;
 }
 
@@ -8603,6 +8898,11 @@ message SecurityPluginSettings {
   Vetted vetted = 2;
 }
 
+message SecurityPluginsEntry {
+  string key = 1;
+  SecurityPluginSettings value = 2;
+}
+
 message SeenNuxUids {
   repeated int32 uids = 1;
 }
@@ -8682,6 +8982,11 @@ message SidebarWorkspaceInfo {
   bool is_hidden = 2;
 }
 
+message SidebarWorkspacesEntry {
+  string key = 1;
+  SidebarWorkspaceInfo value = 2;
+}
+
 message SidecarAgentPermissions {
   repeated string workspace_uris = 1;
   repeated string access_grants = 2;
@@ -8707,7 +9012,7 @@ message SidecarConfig {
   bool disabled = 4;
   string description = 5;
   bool has_web_ui = 6;
-  map<string, string> env = 7;
+  repeated EnvEntry env = 7;
   string display_name = 8;
   string builtin = 9;
   SidecarUIConfig ui_config = 10;
@@ -8732,9 +9037,14 @@ message SidecarUserConfig {
   bool enabled = 1;
   string project_id = 2;
   bool all_projects = 3;
-  map<string, string> argument_values = 4;
+  repeated CortexSidecaruserconfig_ArgumentValuesEntry argument_values = 4;
   SidecarAgentPermissions resolved_permissions = 5;
   int32 schema_version = 6;
+}
+
+message SidecarsEntry {
+  string key = 1;
+  SidecarUserConfig value = 2;
 }
 
 message SingularValue {
@@ -8784,6 +9094,11 @@ message SkillsConfig {
   repeated string exclude = 6;
 }
 
+message SkillsEntry {
+  string key = 1;
+  SkillUserConfig value = 2;
+}
+
 message SlashCommandArgument {
   string name = 1;
   string description = 2;
@@ -8811,7 +9126,7 @@ message SlashCommandInfo {
 
 message SlashCommandScopeItem {
   SlashCommandInfo info = 1;
-  map<string, string> argument_values = 2;
+  repeated CodeiumCommonSlashcommandscopeitem_ArgumentValuesEntry argument_values = 2;
 }
 
 message Slice {
@@ -8835,9 +9150,14 @@ message SnapshotMetadata {
   string artifact_dir_commit_hash = 6;
 }
 
+message SnippetByTypeEntry {
+  string key = 1;
+  SnippetWithWordCount value = 2;
+}
+
 message SnippetWithWordCount {
   string snippet = 1;
-  map<string, WordCount> word_count_by_splitter = 2;
+  repeated WordCountBySplitterEntry word_count_by_splitter = 2;
 }
 
 message Source {
@@ -8881,7 +9201,7 @@ message StartCascadeRequest {
   string cascade_id = 7;
   repeated string workspace_uris = 8;
   repeated string override_workspace_uris = 9;
-  map<string, CitcWorkspaceDetails> citc_workspace_details = 10;
+  repeated CitcWorkspaceDetailsEntry citc_workspace_details = 10;
   CustomAgentSpec custom_agent_spec = 11;
   string parent_conversation_id = 12;
   SourceMetadata source_metadata = 13;
@@ -8920,7 +9240,7 @@ message StatUriResponse {
 message State {
   PostOnboardingState post_onboarding = 1;
   JetboxState_UserSettings user_settings = 2;
-  map<string, SidebarWorkspaceInfo> sidebar_workspaces = 3;
+  repeated JetboxStateState_SidebarWorkspacesEntry sidebar_workspaces = 3;
   Model last_selected_agent_model = 4;
   CustomModelsConfig custom_models_config = 5;
   repeated uint32 seen_nux_uids = 6;
@@ -9092,6 +9412,11 @@ message StepBlock {
   CortexStepStatus status = 2;
 }
 
+message StepHooksEntry {
+  int32 key = 1;
+  HookStatus value = 2;
+}
+
 message StepProgress {
   double progress = 1;
   double progress_total = 2;
@@ -9108,6 +9433,11 @@ message StepRenderInfo {
   StepProgress progress = 8;
   repeated TitlePart title_parts = 9;
   repeated ContentBlock content_blocks = 10;
+}
+
+message StepScopedSubtrajectoryUpdatesEntry {
+  uint32 key = 1;
+  TrajectoryUpdate value = 2;
 }
 
 message StepStringConverterConfig {
@@ -9189,6 +9519,11 @@ message StructuredErrorPart {
   string code_text = 5;
 }
 
+message SubagentCostsEntry {
+  string key = 1;
+  CostDisplaySection value = 2;
+}
+
 message SubagentDescriptor {
   string type_name = 1;
   string role = 2;
@@ -9235,8 +9570,18 @@ message SubscribeToMcpServerStatesResponse {
   bool is_loading = 2;
 }
 
+message SubtrajectoryUpdatesEntry {
+  string key = 1;
+  TrajectoryUpdate value = 2;
+}
+
 message SuggestedResponseConfig {
   bool force_disable = 1;
+}
+
+message SupportedMimeTypesEntry {
+  string key = 1;
+  bool value = 2;
 }
 
 message Tag {
@@ -9511,6 +9856,11 @@ message TokenGroup {
   int32 num_tokens = 3;
 }
 
+message ToolBreakdownEntry {
+  string key = 1;
+  CostCategory value = 2;
+}
+
 message ToolCallContent {
   string id = 1;
   FunctionCallContent function_call = 2;
@@ -9523,9 +9873,14 @@ message ToolCallContent {
   GoogleMapsCallContent google_maps_call = 10;
 }
 
+message ToolConfigEntry {
+  string key = 1;
+  McpServerToolConfig value = 2;
+}
+
 message ToolDescriptionOverrideMap {
-  map<string, SectionOverrideConfig> descriptions = 1;
-  map<string, ToolOverrideConfig> tool_overrides = 2;
+  repeated DescriptionsEntry descriptions = 1;
+  repeated ToolOverridesEntry tool_overrides = 2;
 }
 
 message ToolOutputConfig {
@@ -9534,10 +9889,15 @@ message ToolOutputConfig {
 
 message ToolOverrideConfig {
   string name_override = 1;
-  map<string, string> argument_name_overrides = 2;
+  repeated ArgumentNameOverridesEntry argument_name_overrides = 2;
   SectionOverrideConfig description_override = 3;
-  map<string, string> argument_description_overrides = 4;
-  map<string, ArgumentOverride> argument_value_overrides = 5;
+  repeated ArgumentDescriptionOverridesEntry argument_description_overrides = 4;
+  repeated ArgumentValueOverridesEntry argument_value_overrides = 5;
+}
+
+message ToolOverridesEntry {
+  string key = 1;
+  ToolOverrideConfig value = 2;
 }
 
 message ToolResultContent {
@@ -9771,6 +10131,11 @@ message TurnCostSummary {
   CostDisplaySection cumulative_total = 3;
 }
 
+message TurnCostsEntry {
+  string key = 1;
+  TurnCostSummary value = 2;
+}
+
 message UnifiedDiff {
   repeated UnifiedDiffLine lines = 3;
 }
@@ -9785,6 +10150,11 @@ message UpdateProjectRequest {
 }
 
 message UpdateProjectResponse {
+}
+
+message UpdatesEntry {
+  string key = 1;
+  CascadeTrajectorySummary value = 2;
 }
 
 message UrlArtifactPayload {
@@ -9822,11 +10192,11 @@ message UserActivityScopeItem {
 }
 
 message UserConfig {
-  map<string, SidecarUserConfig> sidecars = 1;
+  repeated SidecarsEntry sidecars = 1;
   JetboxState_UserSettings user_settings = 2;
-  map<string, PluginUserConfig> plugins = 3;
+  repeated PluginsEntry plugins = 3;
   ConversationGroupRegistry conversation_groups = 4;
-  map<string, SkillUserConfig> skills = 5;
+  repeated SkillsEntry skills = 5;
 }
 
 message UserIdentity {
@@ -9884,7 +10254,7 @@ message UserSettings {
   CascadeInputAutocomplete cascade_input_autocomplete = 65;
   repeated string relative_working_dir_paths = 66;
   TabEnabled tab_enabled = 67;
-  map<string, ModelInfo> custom_models = 68;
+  repeated CustomModelsEntry custom_models = 68;
   bool disable_code_snippet_telemetry = 69;
   PlanningMode planning_mode = 70;
   AgentBrowserTools agent_browser_tools = 71;
@@ -9967,8 +10337,23 @@ message Value {
   Function function_value = 9;
 }
 
+message ValuesEntry {
+  string key = 1;
+  ExperimentValue value = 2;
+}
+
+message VariablesEntry {
+  string key = 1;
+  string value = 2;
+}
+
 message VerificationRequired {
   string verification_url = 1;
+}
+
+message VersionShasEntry {
+  string key = 1;
+  string value = 2;
 }
 
 message Vetted {
@@ -10025,7 +10410,17 @@ message WifLoginInfo {
 }
 
 message WordCount {
-  map<string, int64> word_count_map = 1;
+  repeated WordCountMapEntry word_count_map = 1;
+}
+
+message WordCountBySplitterEntry {
+  string key = 1;
+  WordCount value = 2;
+}
+
+message WordCountMapEntry {
+  string key = 1;
+  int64 value = 2;
 }
 
 message WordInfo {
@@ -10082,6 +10477,16 @@ message WorkspacePath {
 
 message WorkspacePaths {
   repeated string absolute_paths = 1;
+}
+
+message WorkspaceRelativePathsMigrateMeToWorkspaceUrisEntry {
+  string key = 1;
+  string value = 2;
+}
+
+message WorkspaceUrisToRelativePathsEntry {
+  string key = 1;
+  string value = 2;
 }
 
 message WriteFileRequest {

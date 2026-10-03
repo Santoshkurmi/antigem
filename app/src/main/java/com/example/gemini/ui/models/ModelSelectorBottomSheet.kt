@@ -42,8 +42,7 @@ import kotlinx.coroutines.launch
 
 enum class CategoryType {
     GEMINI,
-    CLAUDE,
-    OPENROUTER
+    CLAUDE
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,16 +57,12 @@ fun ModelSelectorBottomSheet(
     onSelectModel: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Group models into three groups: Gemini, Claude, and OpenRouter
-    val openRouterModels = availableModels.filter {
-        it.family == ModelFamily.OPENROUTER || it.id.startsWith("openrouter/", ignoreCase = true) || it.displayName.contains("openrouter", ignoreCase = true)
-    }
+    // Group models into two groups: Claude and Gemini (with GPT-OSS and others under Gemini)
     val claudeModels = availableModels.filter {
-        it !in openRouterModels &&
-        ((it.family == ModelFamily.CLAUDE || it.id.contains("claude", ignoreCase = true) || it.displayName.contains("claude", ignoreCase = true)) &&
-                !it.id.contains("gpt", ignoreCase = true) && !it.displayName.contains("gpt", ignoreCase = true))
+        (it.family == ModelFamily.CLAUDE || it.id.contains("claude", ignoreCase = true) || it.displayName.contains("claude", ignoreCase = true)) &&
+                !it.id.contains("gpt", ignoreCase = true) && !it.displayName.contains("gpt", ignoreCase = true)
     }
-    val geminiModels = availableModels.filter { it !in openRouterModels && it !in claudeModels }
+    val geminiModels = availableModels.filter { it !in claudeModels }
 
     val activeModel = availableModels.find { it.id == selectedModelId }
 
@@ -124,7 +119,6 @@ fun ModelSelectorBottomSheet(
                         availableModels = availableModels,
                         claudeModelsCount = claudeModels.size,
                         geminiModelsCount = geminiModels.size,
-                        openRouterModelsCount = openRouterModels.size,
                         availableModelsCount = availableModels.size,
                         quotas = quotas,
                         quotaSummary = quotaSummary,
@@ -138,7 +132,6 @@ fun ModelSelectorBottomSheet(
                     val (categoryTitle, brandColor, categoryModels) = when (currentCategory) {
                         CategoryType.GEMINI -> Triple("Google Gemini", GeminiBlue, geminiModels)
                         CategoryType.CLAUDE -> Triple("Anthropic Claude", ClaudeTerracotta, claudeModels)
-                        CategoryType.OPENROUTER -> Triple("OpenRouter Free Models", Color(0xFF6366F1), openRouterModels)
                     }
 
                     CategoryModelsSubView(
@@ -266,7 +259,6 @@ private fun MainCategoryListView(
     availableModels: List<AiModel>,
     claudeModelsCount: Int,
     geminiModelsCount: Int,
-    openRouterModelsCount: Int,
     availableModelsCount: Int,
     quotas: List<ModelQuota>,
     quotaSummary: com.example.gemini.domain.model.QuotaSummaryResponse? = null,
@@ -361,18 +353,13 @@ private fun MainCategoryListView(
                 )
             }
         } else {
-            // Category Navigation Tiles: Gemini FIRST, Claude SECOND, OpenRouter THIRD
-            val isOpenRouterActive = activeModel != null && (
-                activeModel.family == ModelFamily.OPENROUTER ||
-                activeModel.id.startsWith("openrouter/", ignoreCase = true) ||
-                activeModel.displayName.contains("openrouter", ignoreCase = true)
-            )
-            val isClaudeActive = activeModel != null && !isOpenRouterActive && (
+            // Category Navigation Tiles: Gemini FIRST, Claude SECOND
+            val isClaudeActive = activeModel != null && (
                 activeModel.family == ModelFamily.CLAUDE ||
                 activeModel.id.contains("claude", ignoreCase = true) ||
                 activeModel.displayName.contains("claude", ignoreCase = true)
             ) && !activeModel.id.contains("gpt", ignoreCase = true) && !activeModel.displayName.contains("gpt", ignoreCase = true)
-            val isGeminiActive = activeModel != null && !isOpenRouterActive && !isClaudeActive
+            val isGeminiActive = activeModel != null && !isClaudeActive
 
             val cleanActiveModelName = activeModel?.displayName
                 ?.replace(Regex("\\s*\\(?Thinking\\)?", RegexOption.IGNORE_CASE), "")
@@ -383,9 +370,6 @@ private fun MainCategoryListView(
             }
             val claudeGroup = quotaSummary?.groups?.find {
                 it.groupId == "claude_gpt" || it.groupName.contains("claude", ignoreCase = true) || it.groupName.contains("gpt", ignoreCase = true)
-            }
-            val openRouterGroup = quotaSummary?.groups?.find {
-                it.groupId == "openrouter" || it.groupName.contains("openrouter", ignoreCase = true)
             }
 
             // 1. Google Gemini (First!)
@@ -452,27 +436,6 @@ private fun MainCategoryListView(
                     count = claudeModelsCount,
                     brandColor = ClaudeTerracotta,
                     onClick = { onSelectCategory(CategoryType.CLAUDE) }
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-            }
-
-            // 3. OpenRouter Free Models (Third!)
-            if (openRouterModelsCount > 0) {
-                val orBucket = openRouterGroup?.fiveHour ?: openRouterGroup?.weekly
-                val orLine = orBucket?.description?.ifBlank { null }
-                    ?: orBucket?.let { "Remaining: ${it.remainingPct}" }
-                val orFraction = orBucket?.remainingFraction
-
-                CategoryNavigationTile(
-                    title = "OpenRouter (Free)",
-                    activeModelName = if (isOpenRouterActive) cleanActiveModelName else null,
-                    line1 = orLine,
-                    fraction1 = orFraction,
-                    line2 = null,
-                    fraction2 = null,
-                    count = openRouterModelsCount,
-                    brandColor = Color(0xFF6366F1),
-                    onClick = { onSelectCategory(CategoryType.OPENROUTER) }
                 )
             }
         }
@@ -640,7 +603,6 @@ private fun TieredModelGroupCard(
     val brandColor = when (group.family) {
         ModelFamily.CLAUDE -> ClaudeTerracotta
         ModelFamily.GEMINI -> GeminiBlue
-        ModelFamily.OPENROUTER -> Color(0xFF6366F1)
         ModelFamily.OTHER -> MaterialTheme.colorScheme.primary
     }
 
@@ -858,11 +820,7 @@ private fun ModelRowItem(
     isSelected: Boolean,
     onSelect: () -> Unit
 ) {
-    val brandColor = when (model.family) {
-        ModelFamily.CLAUDE -> ClaudeTerracotta
-        ModelFamily.OPENROUTER -> Color(0xFF6366F1)
-        else -> GeminiBlue
-    }
+    val brandColor = if (model.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
 
     val isDark = isAppInDarkTheme()
     val cardBg = if (isSelected) {

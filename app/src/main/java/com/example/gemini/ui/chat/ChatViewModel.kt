@@ -2621,26 +2621,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val claudeGroup = summary.groups.find {
             it.groupId == "claude_gpt" || it.groupName.contains("claude", ignoreCase = true) || it.groupName.contains("gpt", ignoreCase = true)
         }
-        val openRouterGroup = summary.groups.find {
-            it.groupId == "openrouter" || it.groupName.contains("openrouter", ignoreCase = true)
-        }
 
         val updatedQuotas = _availableModels.value.map { model ->
-            val isOpenRouter = model.family == com.example.gemini.domain.model.ModelFamily.OPENROUTER ||
-                model.id.startsWith("openrouter/", ignoreCase = true)
             val isClaude = model.family == com.example.gemini.domain.model.ModelFamily.CLAUDE
-            val group = if (isOpenRouter) openRouterGroup else if (isClaude) claudeGroup else geminiGroup
-            val bucket = group?.fiveHour ?: group?.weekly
+            val group = if (isClaude) claudeGroup else geminiGroup
             com.example.gemini.domain.model.ModelQuota(
                 modelId = model.id,
-                remainingFraction = group?.fiveHour?.remainingFraction ?: bucket?.remainingFraction,
-                resetTime = group?.fiveHour?.resetTime ?: bucket?.resetTime,
-                usedPercentage = group?.fiveHour?.usedPct ?: bucket?.usedPct,
-                resetCountdown = group?.fiveHour?.countdown ?: bucket?.countdown,
+                remainingFraction = group?.fiveHour?.remainingFraction,
+                resetTime = group?.fiveHour?.resetTime,
+                usedPercentage = group?.fiveHour?.usedPct,
+                resetCountdown = group?.fiveHour?.countdown,
                 weeklyRemainingFraction = group?.weekly?.remainingFraction,
                 weeklyUsedPercentage = group?.weekly?.usedPct,
-                weeklyResetCountdown = group?.weekly?.countdown,
-                description = bucket?.description.orEmpty()
+                weeklyResetCountdown = group?.weekly?.countdown
             )
         }
         _quotas.value = updatedQuotas

@@ -8,15 +8,13 @@ import (
 
 // Config holds global runtime configuration parameters.
 type Config struct {
-	Port                  string
-	CloudCodePort         string
-	CloudCodeUpstreamHost string
-	HomeDir               string
-	WorkspaceDir          string
-	AppDataDir            string
-	BrainDir              string
-	TokenFile             string
-	ProjectsBaseDir       string
+	Port            string
+	HomeDir         string
+	WorkspaceDir    string
+	AppDataDir      string
+	BrainDir        string
+	TokenFile       string
+	ProjectsBaseDir string
 }
 
 // LoadConfig initializes configuration with sensible defaults and environment overrides.
@@ -33,16 +31,6 @@ func LoadConfig() *Config {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "1234"
-	}
-
-	cloudCodePort := os.Getenv("CLOUD_CODE_PORT")
-	if cloudCodePort == "" {
-		cloudCodePort = "1236"
-	}
-
-	cloudCodeHost := os.Getenv("CLOUD_CODE_UPSTREAM_HOST")
-	if cloudCodeHost == "" {
-		cloudCodeHost = "https://daily-cloudcode-pa.googleapis.com"
 	}
 
 	workspace := os.Getenv("WORKSPACE_DIR")
@@ -76,15 +64,13 @@ func LoadConfig() *Config {
 	}
 
 	return &Config{
-		Port:                  port,
-		CloudCodePort:         cloudCodePort,
-		CloudCodeUpstreamHost: cloudCodeHost,
-		HomeDir:               home,
-		WorkspaceDir:          workspace,
-		AppDataDir:            appData,
-		BrainDir:              brain,
-		TokenFile:             tokenFile,
-		ProjectsBaseDir:       projectsBase,
+		Port:            port,
+		HomeDir:         home,
+		WorkspaceDir:    workspace,
+		AppDataDir:      appData,
+		BrainDir:        brain,
+		TokenFile:       tokenFile,
+		ProjectsBaseDir: projectsBase,
 	}
 }
 

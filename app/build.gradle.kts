@@ -211,15 +211,6 @@ val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
   val binDir = layout.projectDirectory.dir("src/main/assets/bin")
   val bridgeSourceDir = layout.projectDirectory.dir("../agy_ide_bridge")
 
-  val homeDir = System.getProperty("user.home")
-  val ndkDir = File(homeDir, "android-sdk/ndk")
-  val ndkClang = if (ndkDir.exists()) {
-    ndkDir.walkTopDown().firstOrNull {
-      it.name.startsWith("aarch64-linux-android") && it.name.endsWith("-clang") && it.canExecute() &&
-      (it.name.contains("24") || it.name.contains("28") || it.name.contains("30") || it.name.contains("34"))
-    }
-  } else null
-
   doFirst {
     binDir.asFile.mkdirs()
   }
@@ -227,12 +218,7 @@ val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
   workingDir = bridgeSourceDir.asFile
   environment("GOOS", "android")
   environment("GOARCH", "arm64")
-  if (ndkClang != null) {
-    environment("CC", ndkClang.absolutePath)
-    environment("CGO_ENABLED", "1")
-  } else {
-    environment("CGO_ENABLED", "0")
-  }
+  environment("CGO_ENABLED", "0")
   commandLine("go", "build", "-ldflags=-s -w", "-o", binDir.file("agy_ide_bridge").asFile.absolutePath, "main.go")
 }
 

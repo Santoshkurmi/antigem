@@ -77,7 +77,6 @@ import java.util.Locale
 
 enum class SettingsSection(val title: String, val subtitle: String) {
     MAIN("Settings & Preferences", "Configure your AntiGem experience"),
-    OPENROUTER("OpenRouter Config", "Free community models, API key & proxy options"),
     APPEARANCE("Appearance & Theme", "Theme, dark mode, and chat font scaling"),
     SERVERS("Servers & Connectivity", "Configure AGY Hub and IDE Bridge endpoints"),
     MCP("MCP Servers", "Model Context Protocol tools & integrations"),
@@ -348,11 +347,6 @@ fun SettingsDialog(
                         onNavigate = { currentSection = it }
                     )
 
-                    SettingsSection.OPENROUTER -> OpenRouterSubScreen(
-                        cardBg = cardBg,
-                        cardBorder = cardBorder
-                    )
-
                     SettingsSection.APPEARANCE -> AppearanceSubScreen(
                         themeMode = themeMode,
                         chatFontScale = chatFontScale,
@@ -587,23 +581,6 @@ private fun MainSettingsMenu(
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.SERVERS) }
-        )
-
-        // Section 2.5: OpenRouter Configuration
-        val context = LocalContext.current
-        val authPrefs = remember { AuthPreferences(context) }
-        val isOrEnabled = authPrefs.isOpenRouterEnabledSync()
-        val (orBadge, orColor) = if (isOrEnabled) "Enabled" to Color(0xFF6366F1) else "Disabled" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Cloud,
-            iconTint = Color(0xFF6366F1),
-            title = "OpenRouter Config",
-            subtitle = "Free community models (Gemma, DeepSeek R1, Nemotron) & proxy",
-            badgeText = orBadge,
-            badgeColor = orColor,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.OPENROUTER) }
         )
 
         // Section 3: MCP Servers & Tools
