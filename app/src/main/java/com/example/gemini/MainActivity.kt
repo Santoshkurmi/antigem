@@ -8,10 +8,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.lifecycleScope
@@ -56,7 +59,8 @@ class MainActivity : ComponentActivity() {
 
         try {
             android.webkit.WebView.enableSlowWholeDocumentDraw()
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
 
         if (com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(this)) {
             com.example.gemini.data.service.TermuxService.start(this)
@@ -98,14 +102,17 @@ class MainActivity : ComponentActivity() {
                             previousViewMode = currentViewMode
                             currentViewMode = AppViewMode.IDE
                         }
+
                         "CHAT" -> {
                             previousViewMode = currentViewMode
                             currentViewMode = AppViewMode.CHAT
                         }
+
                         "TERMINAL" -> {
                             previousViewMode = currentViewMode
                             currentViewMode = AppViewMode.TERMINAL
                         }
+
                         "BROWSER" -> {
                             previousViewMode = currentViewMode
                             currentViewMode = AppViewMode.BROWSER
@@ -155,7 +162,8 @@ class MainActivity : ComponentActivity() {
                         insetsController.isAppearanceLightStatusBars = false
                         insetsController.isAppearanceLightNavigationBars = false
                     } else {
-                        val bgArgb = if (useDarkTheme) com.example.gemini.theme.ClaudeDarkBg.toArgb() else com.example.gemini.theme.ClaudeCream.toArgb()
+                        val bgArgb =
+                            if (useDarkTheme) com.example.gemini.theme.ClaudeDarkBg.toArgb() else com.example.gemini.theme.ClaudeCream.toArgb()
                         window.statusBarColor = bgArgb
                         window.navigationBarColor = bgArgb
                         insetsController.isAppearanceLightStatusBars = !useDarkTheme
@@ -169,8 +177,15 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf(!com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(context))
             }
 
-            val isTermuxPackage = remember { com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) }
-            var isInstalledState by remember { mutableStateOf(com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context)) }
+            val isTermuxPackage =
+                remember { com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) }
+            var isInstalledState by remember {
+                mutableStateOf(
+                    com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(
+                        context
+                    )
+                )
+            }
             var hasSkippedInstaller by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
 
             val showFullScreenInstaller = isTermuxPackage && !isInstalledState && !hasSkippedInstaller
@@ -199,13 +214,17 @@ class MainActivity : ComponentActivity() {
                                 isInstalledState = true
                                 hasSkippedInstaller = true
                                 if (com.example.gemini.data.local.LocalServerManager.hasServerScript(context)) {
-                                    com.example.gemini.data.local.LocalServerManager.startServer(context, forceRestart = false)
+                                    com.example.gemini.data.local.LocalServerManager.startServer(
+                                        context,
+                                        forceRestart = false
+                                    )
                                 }
                             }
                         )
                     } else {
                         BackHandler(enabled = currentViewMode != AppViewMode.CHAT && currentViewMode != AppViewMode.BROWSER) {
-                            currentViewMode = if (previousViewMode != currentViewMode && previousViewMode != AppViewMode.BROWSER) previousViewMode else AppViewMode.CHAT
+                            currentViewMode =
+                                if (previousViewMode != currentViewMode && previousViewMode != AppViewMode.BROWSER) previousViewMode else AppViewMode.CHAT
                         }
 
                         val terminalSessions by com.example.gemini.data.local.LocalTerminalManager.sessions.collectAsState()
@@ -214,163 +233,186 @@ class MainActivity : ComponentActivity() {
                             hasEverOpenedTerminal = true
                         }
 
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            // Persistent Chat Screen (Never destroyed on toggle)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer {
-                                        val isVisible = currentViewMode == AppViewMode.CHAT
-                                        alpha = if (isVisible) 1f else 0f
-                                        translationX = if (isVisible) 0f else -20000f
-                                    }
-                            ) {
-                                ChatScreen(
-                                    viewModel = chatViewModel,
-                                    onNavigateToIde = {
-                                        previousViewMode = currentViewMode
-                                        currentViewMode = AppViewMode.IDE
-                                    },
-                                    onNavigateToTerminal = {
-                                        previousViewMode = currentViewMode
-                                        currentViewMode = AppViewMode.TERMINAL
-                                    },
-                                    onNavigateToBrowser = {
-                                        previousViewMode = currentViewMode
-                                        currentViewMode = AppViewMode.BROWSER
-                                    }
-                                )
-                            }
+                        val focusCoordinator = remember { com.example.gemini.ui.components.AppFocusCoordinator() }
+                        val density = androidx.compose.ui.platform.LocalDensity.current
+                        val imeInsets = androidx.compose.foundation.layout.WindowInsets.ime
 
-                            // Persistent IDE Screen (Retains open tabs, daemon connection & state)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer {
-                                        val isVisible = currentViewMode == AppViewMode.IDE
-                                        alpha = if (isVisible) 1f else 0f
-                                        translationX = if (isVisible) 0f else 20000f
-                                    }
-                            ) {
-                                IdeScreen(
-                                    viewModel = chatViewModel,
-                                    isVisible = currentViewMode == AppViewMode.IDE,
-                                    onNavigateToChat = {
-                                        previousViewMode = currentViewMode
-                                        currentViewMode = AppViewMode.CHAT
-                                    },
-                                    onExecuteRunCommand = { cmd ->
-                                        // Connect with terminal / chat execution
-                                    },
-                                    onNavigateToTerminal = {
-                                        previousViewMode = currentViewMode
-                                        currentViewMode = AppViewMode.TERMINAL
-                                    },
-                                    onNavigateToBrowser = {
-                                        previousViewMode = currentViewMode
-                                        currentViewMode = AppViewMode.BROWSER
-                                    }
-                                )
-                            }
+                        var previousModeForFocus by remember { mutableStateOf(currentViewMode) }
 
-                            // Persistent Terminal Screen (Retains terminal tmux sessions & state)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer {
-                                        val isVisible = currentViewMode == AppViewMode.TERMINAL
-                                        alpha = if (isVisible) 1f else 0f
-                                        translationX = if (isVisible) 0f else 20000f
-                                    }
-                            ) {
-                                if (currentViewMode == AppViewMode.TERMINAL || (hasEverOpenedTerminal && terminalSessions.isNotEmpty())) {
-                                    com.example.gemini.ui.components.LocalTerminalContent(
-                                        onClose = {
-                                            currentViewMode = if (previousViewMode == AppViewMode.TERMINAL) AppViewMode.CHAT else previousViewMode
+                        LaunchedEffect(currentViewMode) {
+                            if (previousModeForFocus != currentViewMode) {
+                                val isKeyboardOpen = imeInsets.getBottom(density) > 0
+                                focusCoordinator.onScreenLeaving(previousModeForFocus, isKeyboardOpen)
+                                focusCoordinator.onScreenEntering(currentViewMode, isKeyboardOpen)
+                                previousModeForFocus = currentViewMode
+                            }
+                        }
+
+                        CompositionLocalProvider(
+                            com.example.gemini.ui.components.LocalAppFocusCoordinator provides focusCoordinator
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                // Persistent Chat Screen (Never destroyed on toggle)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            val isVisible = currentViewMode == AppViewMode.CHAT
+                                            alpha = if (isVisible) 1f else 0f
+                                            translationX = if (isVisible) 0f else -20000f
+                                        }
+                                ) {
+                                    ChatScreen(
+                                        viewModel = chatViewModel,
+                                        onNavigateToIde = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.IDE
+                                        },
+                                        onNavigateToTerminal = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.TERMINAL
+                                        },
+                                        onNavigateToBrowser = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.BROWSER
                                         }
                                     )
                                 }
-                            }
 
-                            // Persistent Web Preview Browser Screen (Retains open tabs, WebViews, state & navigation)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer {
-                                        val isVisible = currentViewMode == AppViewMode.BROWSER
-                                        alpha = if (isVisible) 1f else 0f
-                                        translationX = if (isVisible) 0f else 20000f
+                                // Persistent IDE Screen (Retains open tabs, daemon connection & state)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            val isVisible = currentViewMode == AppViewMode.IDE
+                                            alpha = if (isVisible) 1f else 0f
+                                            translationX = if (isVisible) 0f else 20000f
+                                        }
+                                ) {
+                                    IdeScreen(
+                                        viewModel = chatViewModel,
+                                        isVisible = currentViewMode == AppViewMode.IDE,
+                                        onNavigateToChat = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.CHAT
+                                        },
+                                        onExecuteRunCommand = { cmd ->
+                                            // Connect with terminal / chat execution
+                                        },
+                                        onNavigateToTerminal = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.TERMINAL
+                                        },
+                                        onNavigateToBrowser = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.BROWSER
+                                        }
+                                    )
+                                }
+
+                                // Persistent Terminal Screen (Retains terminal tmux sessions & state)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            val isVisible = currentViewMode == AppViewMode.TERMINAL
+                                            alpha = if (isVisible) 1f else 0f
+                                            translationX = if (isVisible) 0f else 20000f
+                                        }
+                                ) {
+                                    if (currentViewMode == AppViewMode.TERMINAL || (hasEverOpenedTerminal && terminalSessions.isNotEmpty())) {
+                                        com.example.gemini.ui.components.LocalTerminalContent(
+                                            onClose = {
+                                                currentViewMode =
+                                                    if (previousViewMode == AppViewMode.TERMINAL) AppViewMode.CHAT else previousViewMode
+                                            }
+                                        )
                                     }
-                            ) {
-                                BrowserScreen(
-                                    isVisible = currentViewMode == AppViewMode.BROWSER,
-                                    onClose = { currentViewMode = if (previousViewMode == AppViewMode.BROWSER) AppViewMode.CHAT else previousViewMode }
-                                )
-                            }
+                                }
 
-                            // Floating App Switcher Across Whole App (Renders on top of Chat, IDE, Terminal, Browser)
-                            if (isFloatingSwitcherEnabled) {
-                                com.example.gemini.ui.components.FloatingSwitcherWidget(
-                                    currentViewMode = currentViewMode,
-                                    orientation = floatingSwitcherOrientation,
-                                    items = floatingSwitcherItems,
-                                    autoCollapseTimeoutSec = floatingSwitcherAutoCollapseSec,
-                                    savedPosXRatio = floatingSwitcherPosX,
-                                    savedPosYRatio = floatingSwitcherPosY,
-                                    onNavigateToChat = {
-                                        previousViewMode = currentViewMode
-                                        currentViewMode = AppViewMode.CHAT
-                                    },
-                                    onNavigateToIde = {
-                                        previousViewMode = currentViewMode
-                                        currentViewMode = AppViewMode.IDE
-                                    },
-                                    onNavigateToBrowser = {
-                                        previousViewMode = currentViewMode
-                                        currentViewMode = AppViewMode.BROWSER
-                                    },
-                                    onNavigateToTerminal = {
-                                        previousViewMode = currentViewMode
-                                        currentViewMode = AppViewMode.TERMINAL
-                                    },
-                                    onPositionSaved = { x, y ->
-                                        chatViewModel.saveFloatingSwitcherPosition(x, y)
-                                    }
-                                )
-                            }
+                                // Persistent Web Preview Browser Screen (Retains open tabs, WebViews, state & navigation)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            val isVisible = currentViewMode == AppViewMode.BROWSER
+                                            alpha = if (isVisible) 1f else 0f
+                                            translationX = if (isVisible) 0f else 20000f
+                                        }
+                                ) {
+                                    BrowserScreen(
+                                        isVisible = currentViewMode == AppViewMode.BROWSER,
+                                        onClose = {
+                                            currentViewMode =
+                                                if (previousViewMode == AppViewMode.BROWSER) AppViewMode.CHAT else previousViewMode
+                                        }
+                                    )
+                                }
 
-                            // Floating Video Player Overlay for active background/in-app playback controls
-                            com.example.gemini.ui.components.FloatingVideoPlayerOverlay()
+                                // Floating App Switcher Across Whole App (Renders on top of Chat, IDE, Terminal, Browser)
+                                if (isFloatingSwitcherEnabled) {
+                                    com.example.gemini.ui.components.FloatingSwitcherWidget(
+                                        currentViewMode = currentViewMode,
+                                        orientation = floatingSwitcherOrientation,
+                                        items = floatingSwitcherItems,
+                                        autoCollapseTimeoutSec = floatingSwitcherAutoCollapseSec,
+                                        savedPosXRatio = floatingSwitcherPosX,
+                                        savedPosYRatio = floatingSwitcherPosY,
+                                        onNavigateToChat = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.CHAT
+                                        },
+                                        onNavigateToIde = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.IDE
+                                        },
+                                        onNavigateToBrowser = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.BROWSER
+                                        },
+                                        onNavigateToTerminal = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.TERMINAL
+                                        },
+                                        onPositionSaved = { x, y ->
+                                            chatViewModel.saveFloatingSwitcherPosition(x, y)
+                                        }
+                                    )
+                                }
 
-                            // Real-time floating live diagnostics overlay (JVM Threads, OkHttp queues, connections, lag)
-                            if (isFloatingDiagnosticsEnabled) {
-                                com.example.gemini.ui.components.FloatingDiagnosticsOverlay(
-                                    onDismiss = {
-                                        chatViewModel.setFloatingDiagnosticsEnabled(false)
-                                    }
-                                )
-                            }
+                                // Floating Video Player Overlay for active background/in-app playback controls
+                                com.example.gemini.ui.components.FloatingVideoPlayerOverlay()
 
-                            // Floating Network Inspector Bubble (In-app draggable bubble across all screens)
-                            if (isNetworkInspectorEnabled && isFloatingNetworkInspectorEnabled) {
-                                com.example.gemini.ui.components.FloatingNetworkInspectorBubble(
-                                    onClick = { showNetworkInspectorDialog = true }
-                                )
-                            }
+                                // Real-time floating live diagnostics overlay (JVM Threads, OkHttp queues, connections, lag)
+                                if (isFloatingDiagnosticsEnabled) {
+                                    com.example.gemini.ui.components.FloatingDiagnosticsOverlay(
+                                        onDismiss = {
+                                            chatViewModel.setFloatingDiagnosticsEnabled(false)
+                                        }
+                                    )
+                                }
 
-                            // Global Network Inspector Dialog
-                            if (showNetworkInspectorDialog) {
-                                com.example.gemini.ui.components.NetworkInspectorDialog(
-                                    onDismiss = { showNetworkInspectorDialog = false }
-                                )
-                            }
+                                // Floating Network Inspector Bubble (In-app draggable bubble across all screens)
+                                if (isNetworkInspectorEnabled && isFloatingNetworkInspectorEnabled) {
+                                    com.example.gemini.ui.components.FloatingNetworkInspectorBubble(
+                                        onClick = { showNetworkInspectorDialog = true }
+                                    )
+                                }
 
-                            // Centralized In-App Update Dialog
-                            pendingUpdateInfo?.let { updateInfo ->
-                                com.example.gemini.ui.updater.AppUpdateDialog(
-                                    updateInfo = updateInfo,
-                                    onDismiss = { pendingUpdateInfo = null }
-                                )
+                                // Global Network Inspector Dialog
+                                if (showNetworkInspectorDialog) {
+                                    com.example.gemini.ui.components.NetworkInspectorDialog(
+                                        onDismiss = { showNetworkInspectorDialog = false }
+                                    )
+                                }
+
+                                // Centralized In-App Update Dialog
+                                pendingUpdateInfo?.let { updateInfo ->
+                                    com.example.gemini.ui.updater.AppUpdateDialog(
+                                        updateInfo = updateInfo,
+                                        onDismiss = { pendingUpdateInfo = null }
+                                    )
+                                }
                             }
                         }
                     }
@@ -378,7 +420,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
 
 
     override fun onResume() {
@@ -419,48 +460,65 @@ class MainActivity : ComponentActivity() {
                     intent.getParcelableExtra(Intent.EXTRA_STREAM)
                 }
             }
+
             else -> null
         }
 
         if (uri != null) {
             val intentMime = intent.type?.lowercase() ?: ""
-            val crMime = try { contentResolver.getType(uri)?.lowercase() } catch (_: Exception) { null } ?: ""
+            val crMime = try {
+                contentResolver.getType(uri)?.lowercase()
+            } catch (_: Exception) {
+                null
+            } ?: ""
             val resolvedMime = intentMime.ifBlank { crMime }
             val uriPath = uri.path?.lowercase() ?: ""
 
             var fileName: String? = null
             if (uri.scheme == "content") {
                 try {
-                    contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                            if (nameIdx != -1) {
-                                fileName = cursor.getString(nameIdx)?.lowercase()
+                    contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                                if (nameIdx != -1) {
+                                    fileName = cursor.getString(nameIdx)?.lowercase()
+                                }
                             }
                         }
-                    }
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                }
             }
-            val displayName = fileName ?: uri.lastPathSegment?.substringAfterLast('/')?.lowercase() ?: uriPath.substringAfterLast('/')
+            val displayName =
+                fileName ?: uri.lastPathSegment?.substringAfterLast('/')?.lowercase() ?: uriPath.substringAfterLast('/')
 
-            val isMarkdown = resolvedMime.contains("markdown") || displayName.endsWith(".md") || displayName.endsWith(".markdown") || uriPath.endsWith(".md") || uriPath.endsWith(".markdown")
-            val isAntigem = displayName.endsWith(".antigem") || displayName.endsWith(".jsonl.antigem") || uriPath.endsWith(".antigem") || uriPath.endsWith(".jsonl.antigem")
+            val isMarkdown =
+                resolvedMime.contains("markdown") || displayName.endsWith(".md") || displayName.endsWith(".markdown") || uriPath.endsWith(
+                    ".md"
+                ) || uriPath.endsWith(".markdown")
+            val isAntigem =
+                displayName.endsWith(".antigem") || displayName.endsWith(".jsonl.antigem") || uriPath.endsWith(".antigem") || uriPath.endsWith(
+                    ".jsonl.antigem"
+                )
 
             when {
                 isMarkdown -> {
                     chatViewModel.loadMarkdownFromUri(this, uri)
                 }
+
                 isAntigem -> {
                     chatViewModel.loadSharedConversationFromUri(this, uri)
                 }
+
                 resolvedMime.startsWith("text/") || resolvedMime.contains("json") || resolvedMime.contains("javascript") ||
-                resolvedMime.contains("xml") || resolvedMime.contains("sql") || resolvedMime.contains("html") ||
-                resolvedMime.contains("css") || resolvedMime.contains("x-sh") || resolvedMime.contains("script") ||
-                resolvedMime.contains("code") || displayName.endsWith(".html") || displayName.endsWith(".htm") ||
-                displayName.endsWith(".js") || displayName.endsWith(".ts") || displayName.endsWith(".py") ||
-                displayName.endsWith(".json") || displayName.endsWith(".txt") || displayName.endsWith(".xml") -> {
+                        resolvedMime.contains("xml") || resolvedMime.contains("sql") || resolvedMime.contains("html") ||
+                        resolvedMime.contains("css") || resolvedMime.contains("x-sh") || resolvedMime.contains("script") ||
+                        resolvedMime.contains("code") || displayName.endsWith(".html") || displayName.endsWith(".htm") ||
+                        displayName.endsWith(".js") || displayName.endsWith(".ts") || displayName.endsWith(".py") ||
+                        displayName.endsWith(".json") || displayName.endsWith(".txt") || displayName.endsWith(".xml") -> {
                     chatViewModel.openFileInIdeDirectly(this, uri)
                 }
+
                 else -> {
                     // Probe if text or antigem trajectory header
                     try {

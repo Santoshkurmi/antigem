@@ -167,6 +167,34 @@ fun IdeScreen(
     val findFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val composeView = LocalView.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val focusCoordinator = com.example.gemini.ui.components.LocalAppFocusCoordinator.current
+
+    DisposableEffect(focusCoordinator, showFindBar, currentEditorView) {
+        focusCoordinator.registerScreen(
+            mode = com.example.gemini.AppViewMode.IDE,
+            onRequestFocus = {
+                if (showFindBar) {
+                    try { findFocusRequester.requestFocus() } catch (_: Exception) {}
+                } else {
+                    val editor = currentEditorView?.editor ?: currentEditorView
+                    if (editor != null) {
+                        editor.requestFocus()
+                        val imm = editor.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                        imm?.showSoftInput(editor, InputMethodManager.SHOW_IMPLICIT)
+                    }
+                }
+            },
+            onClearFocus = {
+                currentEditorView?.editor?.clearFocus()
+                currentEditorView?.clearFocus()
+                focusManager.clearFocus(force = true)
+            }
+        )
+        onDispose {
+            focusCoordinator.unregisterScreen(com.example.gemini.AppViewMode.IDE)
+        }
+    }
 
     androidx.activity.compose.BackHandler(enabled = isVisible && runnerSession != null) {
         runnerSession?.close()
@@ -1302,6 +1330,13 @@ fun IdeScreen(
                                 },
                                 update = { view ->
                                     currentEditorView = view
+                                    view.editor.isFocusable = isVisible
+                                    view.editor.isFocusableInTouchMode = isVisible
+                                    view.isFocusable = isVisible
+                                    view.isFocusableInTouchMode = isVisible
+                                    if (!isVisible && view.hasFocus()) {
+                                        view.clearFocus()
+                                    }
                                     view.isWordWrapEnabled = isWordWrap
                                     view.isReadOnly = activeTab.isReadOnly
                                     view.setFile(activeTab.name, activeTab.content)

@@ -50,6 +50,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import android.net.Uri
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -169,6 +171,7 @@ fun ChatInputBar(
     cascadeId: String = "",
     isOnline: Boolean = true,
     isAuth: Boolean = true,
+    focusRequester: FocusRequester = remember { FocusRequester() },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -876,6 +879,7 @@ fun ChatInputBar(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
+                            .focusRequester(focusRequester)
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,

@@ -464,6 +464,26 @@ fun ChatScreen(
     val imeInsets = WindowInsets.ime
     var isKeyboardAnimating by remember { mutableStateOf(false) }
 
+    val focusCoordinator = com.example.gemini.ui.components.LocalAppFocusCoordinator.current
+    val chatInputFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+
+    DisposableEffect(focusCoordinator) {
+        focusCoordinator.registerScreen(
+            mode = com.example.gemini.AppViewMode.CHAT,
+            onRequestFocus = {
+                try {
+                    chatInputFocusRequester.requestFocus()
+                } catch (_: Exception) {}
+            },
+            onClearFocus = {
+                focusManager.clearFocus(force = true)
+            }
+        )
+        onDispose {
+            focusCoordinator.unregisterScreen(com.example.gemini.AppViewMode.CHAT)
+        }
+    }
+
     val emptyScrollState = rememberScrollState()
 
     // Track user drag interactions so programmatic scrolling never turns off shouldAutoScroll
@@ -1769,7 +1789,8 @@ fun ChatScreen(
                     },
                     isTranscribingAudio = isTranscribingAudio,
                     speechManager = viewModel.speechManager,
-                    cascadeId = activeConversationKey
+                    cascadeId = activeConversationKey,
+                    focusRequester = chatInputFocusRequester
                 )
             }
         }

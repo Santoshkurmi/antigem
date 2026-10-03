@@ -181,6 +181,29 @@ fun LocalTerminalContent(
     }
 
     var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
+    val focusCoordinator = LocalAppFocusCoordinator.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
+    DisposableEffect(focusCoordinator, currentTerminalView) {
+        focusCoordinator.registerScreen(
+            mode = com.example.gemini.AppViewMode.TERMINAL,
+            onRequestFocus = {
+                val tv = currentTerminalView
+                if (tv != null) {
+                    tv.requestFocus()
+                    val imm = tv.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                    imm?.showSoftInput(tv, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                }
+            },
+            onClearFocus = {
+                currentTerminalView?.clearFocus()
+                focusManager.clearFocus(force = true)
+            }
+        )
+        onDispose {
+            focusCoordinator.unregisterScreen(com.example.gemini.AppViewMode.TERMINAL)
+        }
+    }
 
     LaunchedEffect(savedFontSize) {
         val currentSp = (terminalTextSize / density.density).roundToInt()
