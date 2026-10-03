@@ -574,8 +574,6 @@ class TrajectoryEngine {
                                 if (thoughtText.isNotBlank()) {
                                     contentParts.add("<!-- thought$streamTag$durTag -->\n$thoughtText\n<!-- /thought -->")
                                     thoughts.add(thoughtText)
-                                } else if (block.isStreaming) {
-                                    contentParts.add("<!-- thought:streaming -->\nThinking...\n<!-- /thought -->")
                                 }
                                 if (block.durationMs != null && block.durationMs > 0) {
                                     maxDuration = maxOf(maxDuration ?: 0L, block.durationMs)
@@ -695,8 +693,6 @@ class TrajectoryEngine {
             }
             if (!response.isNullOrBlank()) {
                 blocks.add(TurnBlock.Text(stepIndex = stepIndex, markdown = response, isStreaming = isStreaming))
-            } else if (thinking.isNullOrBlank() && (step.status == CortexStepStatus.CORTEX_STEP_STATUS_GENERATING || isStreaming)) {
-                blocks.add(TurnBlock.Thinking(stepIndex = stepIndex, thought = "", durationMs = thinkingDurationMs, isStreaming = true))
             }
             return
         }
@@ -779,20 +775,33 @@ class TrajectoryEngine {
         val argsMap: Map<String, String> = step.generic?.args?.associate { (it.key) to (it.value_) } ?: emptyMap()
 
         val rawName = tcMeta?.name?.takeIf { it.isNotBlank() }
-            ?: when {
-                step.run_command != null -> "run_command"
-                step.view_file != null -> "view_file"
-                step.code_action != null -> "code_action"
-                step.write_to_file != null -> "write_to_file"
-                step.list_directory != null -> "list_dir"
-                step.grep_search != null -> "grep_search"
-                step.find != null -> "find"
-                step.search_web != null -> "search_web"
-                step.read_url_content != null -> "read_url"
-                step.generate_image != null -> "generate_image"
-                step.mcp_tool != null -> "call_mcp_tool"
-                step.ask_question != null || step.requested_interaction?.ask_question != null -> "ask_question"
-                else -> meta?.tool_summary?.takeIf { it.isNotBlank() } ?: "unknown_tool"
+            ?: when (step.type) {
+                CortexStepType.CORTEX_STEP_TYPE_RUN_COMMAND -> "run_command"
+                CortexStepType.CORTEX_STEP_TYPE_VIEW_FILE -> "view_file"
+                CortexStepType.CORTEX_STEP_TYPE_CODE_ACTION -> "code_action"
+                CortexStepType.CORTEX_STEP_TYPE_LIST_DIRECTORY -> "list_dir"
+                CortexStepType.CORTEX_STEP_TYPE_GREP_SEARCH -> "grep_search"
+                CortexStepType.CORTEX_STEP_TYPE_FIND -> "find"
+                CortexStepType.CORTEX_STEP_TYPE_SEARCH_WEB -> "search_web"
+                CortexStepType.CORTEX_STEP_TYPE_READ_URL_CONTENT, CortexStepType.CORTEX_STEP_TYPE_READ_RESOURCE -> "read_url"
+                CortexStepType.CORTEX_STEP_TYPE_GENERATE_IMAGE -> "generate_image"
+                CortexStepType.CORTEX_STEP_TYPE_MCP_TOOL -> "call_mcp_tool"
+                CortexStepType.CORTEX_STEP_TYPE_ASK_QUESTION -> "ask_question"
+                else -> when {
+                    step.run_command != null -> "run_command"
+                    step.view_file != null -> "view_file"
+                    step.code_action != null -> "code_action"
+                    step.write_to_file != null -> "write_to_file"
+                    step.list_directory != null -> "list_dir"
+                    step.grep_search != null -> "grep_search"
+                    step.find != null -> "find"
+                    step.search_web != null -> "search_web"
+                    step.read_url_content != null -> "read_url"
+                    step.generate_image != null -> "generate_image"
+                    step.mcp_tool != null -> "call_mcp_tool"
+                    step.ask_question != null || step.requested_interaction?.ask_question != null -> "ask_question"
+                    else -> meta?.tool_summary?.takeIf { it.isNotBlank() } ?: "unknown_tool"
+                }
             }
 
         val toolType = when (rawName) {
