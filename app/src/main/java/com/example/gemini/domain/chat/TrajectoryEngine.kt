@@ -13,11 +13,13 @@ import com.example.gemini.domain.model.ToolType
 import com.example.gemini.domain.model.TurnBlock
 import exa.language_server_pb.AgentStateUpdate
 import exa.language_server_pb.CascadeRunStatus
+import exa.language_server_pb.CortexErrorDetails
 import exa.language_server_pb.CortexStepErrorMessage
 import exa.language_server_pb.CortexStepStatus
 import exa.language_server_pb.CortexStepType
 import exa.language_server_pb.CortexStepUserInput
 import exa.language_server_pb.Duration
+import exa.language_server_pb.ExecutorTerminationReason
 import exa.language_server_pb.Step
 import exa.language_server_pb.Timestamp
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -154,8 +156,14 @@ class TrajectoryEngine {
         if (!convId.isNullOrBlank()) conversationId = convId
         if (!trajId.isNullOrBlank()) trajectoryId = trajId
 
-        val daemonRunning = status == CascadeRunStatus.CASCADE_RUN_STATUS_RUNNING
-        val daemonIdle = status == CascadeRunStatus.CASCADE_RUN_STATUS_IDLE || update.fully_idle
+        val executorMeta = update.main_trajectory_update?.executor_metadatas_update?.executor_metadatas?.lastOrNull()
+        val liveTerminationReason = executorMeta?.termination_reason
+        val executionError = executorMeta?.execution_error
+        val isTerminated = liveTerminationReason != null &&
+                liveTerminationReason != ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_UNSPECIFIED
+
+        val daemonRunning = (status == CascadeRunStatus.CASCADE_RUN_STATUS_RUNNING) && !isTerminated
+        val daemonIdle = status == CascadeRunStatus.CASCADE_RUN_STATUS_IDLE || update.fully_idle || isTerminated
 
         val stepsUpdate = update.main_trajectory_update?.steps_update
 
@@ -163,7 +171,7 @@ class TrajectoryEngine {
         val effectiveIndices = stepsUpdate?.indices ?: effectiveSteps.indices.toList()
         val totalLength = stepsUpdate?.total_length ?: effectiveSteps.size
 
-        Log.d("CHAT_OPEN_DEBUG", "⚙️ [TrajectoryEngine.ingestAgentStateUpdate] convId=$conversationId, trajId=$trajectoryId, status=$status, stepsCount=${effectiveSteps.size}")
+        Log.d("CHAT_OPEN_DEBUG", "⚙️ [TrajectoryEngine.ingestAgentStateUpdate] convId=$conversationId, trajId=$trajectoryId, status=$status, termination=$liveTerminationReason, stepsCount=${effectiveSteps.size}")
 
         if (effectiveSteps.isNotEmpty()) {
             val isInitialFullSync = (effectiveIndices.firstOrNull() == 0) || (completedTurns.isEmpty() && activeStepsMap.isEmpty())
@@ -176,20 +184,52 @@ class TrajectoryEngine {
 
         val frameLastStepError = update.main_trajectory_update?.last_step_error
 
-        if (frameLastStepError != null) {
-            val errStepIdx = activeStepsMap.keys.maxOrNull() ?: activeTurnStartStep
-            val existingStep = activeStepsMap[errStepIdx]
+        val terminationErrorMsg = when (liveTerminationReason) {
+            ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_ERROR -> {
+                executionError?.takeIf { it.isNotBlank() } ?: "Execution encountered an error"
+            }
+            ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_USER_CANCELED -> {
+                "Generation stopped by user"
+            }
+            ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_MAX_INVOCATIONS -> {
+                "Maximum step limit reached (max generator invocations)"
+            }
+            ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_MAX_FORCED_INVOCATIONS -> {
+                "Maximum forced invocation limit reached"
+            }
+            ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_MAX_TOKEN_BUDGET_EXCEEDED -> {
+                "Maximum token budget exceeded"
+            }
+            else -> null
+        }
+
+        val effectiveError = frameLastStepError ?: terminationErrorMsg?.let { msg ->
+            CortexErrorDetails(
+                user_error_message = msg,
+                short_error = msg,
+                full_error = msg
+            )
+        }
+
+        val targetIdx = executorMeta?.last_step_idx?.takeIf { it >= 0 }
+            ?: activeStepsMap.keys.maxOrNull()
+            ?: activeTurnStartStep
+
+        val isTargetInActiveTurn = targetIdx >= activeTurnStartStep || activeStepsMap.containsKey(targetIdx)
+
+        if (effectiveError != null && isTargetInActiveTurn) {
+            val existingStep = activeStepsMap[targetIdx]
             if (existingStep != null && (existingStep.error_message != null || existingStep.error != null)) {
                 val curErr = existingStep.error_message?.error ?: existingStep.error
-                val baseErr = curErr ?: frameLastStepError
+                val baseErr = curErr ?: effectiveError
                 val enrichedErr = baseErr.copy(
-                    full_error = if (curErr?.full_error.isNullOrBlank()) frameLastStepError.full_error else curErr?.full_error ?: "",
-                    short_error = if (curErr?.short_error.isNullOrBlank()) frameLastStepError.short_error else curErr?.short_error ?: "",
-                    user_error_message = if (curErr?.user_error_message.isNullOrBlank()) frameLastStepError.user_error_message else curErr?.user_error_message ?: "",
-                    error_code = curErr?.error_code ?: frameLastStepError.error_code,
-                    error_id = if (curErr?.error_id.isNullOrBlank()) frameLastStepError.error_id else curErr?.error_id ?: ""
+                    full_error = if (curErr?.full_error.isNullOrBlank()) effectiveError.full_error else curErr?.full_error ?: "",
+                    short_error = if (curErr?.short_error.isNullOrBlank()) effectiveError.short_error else curErr?.short_error ?: "",
+                    user_error_message = if (curErr?.user_error_message.isNullOrBlank()) effectiveError.user_error_message else curErr?.user_error_message ?: "",
+                    error_code = curErr?.error_code ?: effectiveError.error_code,
+                    error_id = if (curErr?.error_id.isNullOrBlank()) effectiveError.error_id else curErr?.error_id ?: ""
                 )
-                activeStepsMap[errStepIdx] = existingStep.copy(
+                activeStepsMap[targetIdx] = existingStep.copy(
                     error_message = CortexStepErrorMessage(error = enrichedErr, should_show_user = true),
                     error = enrichedErr
                 )
@@ -197,10 +237,10 @@ class TrajectoryEngine {
                 val newErrorStep = Step(
                     type = CortexStepType.CORTEX_STEP_TYPE_ERROR_MESSAGE,
                     status = CortexStepStatus.CORTEX_STEP_STATUS_DONE,
-                    error_message = CortexStepErrorMessage(error = frameLastStepError, should_show_user = true),
-                    error = frameLastStepError
+                    error_message = CortexStepErrorMessage(error = effectiveError, should_show_user = true),
+                    error = effectiveError
                 )
-                activeStepsMap[errStepIdx] = newErrorStep
+                activeStepsMap[targetIdx] = newErrorStep
             }
         }
 
@@ -736,6 +776,7 @@ class TrajectoryEngine {
             val errId = stepError?.error_id ?: ""
 
             val title = when {
+                shortErr.contains("cancel", ignoreCase = true) || userMsg.contains("cancel", ignoreCase = true) || userMsg.contains("stopped by user", ignoreCase = true) -> "Generation Stopped by User"
                 shortErr.contains("auth", ignoreCase = true) || userMsg.contains("auth", ignoreCase = true) -> "Authentication Required"
                 shortErr.contains("quota", ignoreCase = true) || shortErr.contains("credit", ignoreCase = true) || code == 429 -> "Quota / Usage Limit Exceeded"
                 shortErr.contains("model not found", ignoreCase = true) || shortErr.contains("unknown model", ignoreCase = true) -> "Model Configuration Error"
