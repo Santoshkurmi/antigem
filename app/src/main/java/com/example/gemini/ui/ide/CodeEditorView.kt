@@ -178,9 +178,19 @@ class CodeEditorView @JvmOverloads constructor(
 
     fun updateContentIfDifferent(content: String) {
         if (editor.text.toString() != content) {
+            val targetBottomLine = editor.lastVisibleLine
             isSettingContentProgrammatically = true
             try {
                 editor.setText(content)
+                if (targetBottomLine > 0) {
+                    editor.post {
+                        try {
+                            val safeLine = targetBottomLine.coerceIn(0, (editor.lineCount - 1).coerceAtLeast(0))
+                            editor.setSelection(safeLine, 0)
+                            editor.ensureSelectionVisible()
+                        } catch (_: Exception) {}
+                    }
+                }
             } finally {
                 isSettingContentProgrammatically = false
             }
