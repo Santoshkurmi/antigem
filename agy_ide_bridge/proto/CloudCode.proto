@@ -1,0 +1,1332 @@
+syntax = "proto3";
+
+package google.internal.cloud.code.v1internal.cloudcode;
+
+option go_package = "gemini-server/pkg/proto/cloudcode";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+
+// ========================================================================
+// Service: CloudCode (23 Methods)
+// Package: google.internal.cloud.code.v1internal.cloudcode
+// Default Upstream Host: https://daily-cloudcode-pa.googleapis.com
+// Target Route: /google.internal.cloud.code.v1internal.cloudcode.CloudCode/<Method>
+// ========================================================================
+
+service CloudCode {
+  rpc GenerateCode (GenerateCodeRequest) returns (GenerateCodeResponse);
+  rpc CompleteCode (CompleteCodeRequest) returns (CompleteCodeResponse);
+  rpc TransformCode (TransformCodeRequest) returns (TransformCodeResponse);
+  rpc SearchSnippets (SearchSnippetsRequest) returns (SearchSnippetsResponse);
+  rpc FetchCodeCustomizationState (FetchCodeCustomizationStateRequest) returns (FetchCodeCustomizationStateResponse);
+  rpc GenerateChat (GenerateChatRequest) returns (GenerateChatResponse);
+  rpc StreamGenerateChat (GenerateChatRequest) returns (stream GenerateChatResponse);
+  rpc InternalAtomicAgenticChat (InternalAtomicAgenticChatRequest) returns (InternalAtomicAgenticChatResponse);
+  rpc MigrateDatabaseCode (MigrateDatabaseCodeRequest) returns (MigrateDatabaseCodeResponse);
+  rpc ListExperiments (ListExperimentsRequest) returns (ListExperimentsResponse);
+  rpc LoadCodeAssist (LoadCodeAssistRequest) returns (LoadCodeAssistResponse);
+  rpc ListCloudAICompanionProjects (ListCloudAICompanionProjectsRequest) returns (ListCloudAICompanionProjectsResponse);
+  rpc ListAgents (ListAgentsRequest) returns (ListAgentsResponse);
+  rpc ListRemoteRepositories (ListRemoteRepositoriesRequest) returns (ListRemoteRepositoriesResponse);
+  rpc ListModelConfigs (ListModelConfigsRequest) returns (ListModelConfigsResponse);
+  rpc OnboardUser (OnboardUserRequest) returns (Operation);
+  rpc OnboardUserBackgroundTasks (OnboardUserBackgroundTasksRequest) returns (google.protobuf.Empty);
+  rpc RecordSmartchoicesFeedback (RecordSmartchoicesFeedbackRequest) returns (RecordSmartchoicesFeedbackResponse);
+  rpc RecordCodeAssistMetrics (RecordCodeAssistMetricsRequest) returns (google.protobuf.Empty);
+  rpc RecordClientEvent (RecordClientEventRequest) returns (google.protobuf.Empty);
+  rpc GetCodeAssistGlobalUserSetting (GetCodeAssistGlobalUserSettingRequest) returns (CodeAssistGlobalUserSettingResponse);
+  rpc SetCodeAssistGlobalUserSetting (SetCodeAssistGlobalUserSettingRequest) returns (CodeAssistGlobalUserSettingResponse);
+  rpc FetchAdminControls (FetchAdminControlsRequest) returns (FetchAdminControlsResponse);
+}
+
+// ========================================================================
+// Enumerations
+// ========================================================================
+
+// origin: .google.internal.cloud.code.v1internal.ActionStatus
+enum ActionStatus {
+  ACTION_STATUS_UNSPECIFIED = 0;
+  ACTION_STATUS_NO_ERROR = 1;
+  ACTION_STATUS_ERROR_UNKNOWN = 2;
+  ACTION_STATUS_CANCELLED = 3;
+  ACTION_STATUS_EMPTY = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Agent.AgentType
+enum AgentType {
+  AGENTTYPE_UNSPECIFIED = 0;
+  TOOL_AGENT = 1;
+  AGENTTYPE_AGENT = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.CCRagStatus
+enum CCRagStatus {
+  CC_RAG_STATUS_UNSPECIFIED = 0;
+  CC_RAG_STATUS_REPOSITORIES_FOUND = 1;
+  CC_RAG_STATUS_NOT_FOUND = 2;
+  CC_RAG_STATUS_NO_REPOSITORIES = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ReleaseChannel.ChannelType
+enum ChannelType {
+  CHANNELTYPE_UNKNOWN = 0;
+  STABLE = 1;
+  EXPERIMENTAL = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.AgenticChatMessage.EntityType
+enum CodeAgenticchatmessage_EntityType {
+  CODEAGENTICCHATMESSAGE_ENTITYTYPE_UNKNOWN = 0;
+  CODEAGENTICCHATMESSAGE_ENTITYTYPE_USER = 1;
+  CODEAGENTICCHATMESSAGE_ENTITYTYPE_SYSTEM = 2;
+  TOOL_USE = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.AiCharactersReport.EditType
+enum CodeAicharactersreport_EditType {
+  EDIT_TYPE_UNSPECIFIED = 0;
+  USER_ADD = 1;
+  CODEAICHARACTERSREPORT_EDITTYPE_PASTE = 2;
+  CODEAICHARACTERSREPORT_EDITTYPE_DELETE = 3;
+  OTHER = 4;
+  AI_COMPLETION = 5;
+  AI_COMPLETION_PARTIAL = 6;
+  AI_GENERATION = 7;
+  AI_GENERATION_PARTIAL = 8;
+}
+
+// origin: .google.internal.cloud.code.v1internal.InlineCompletionAccepted.CompletionMethod
+enum CodeInlinecompletionaccepted_CompletionMethod {
+  CODEINLINECOMPLETIONACCEPTED_COMPLETIONMETHOD_UNKNOWN = 0;
+  GENERATE_CODE = 1;
+  COMPLETE_CODE = 2;
+  CODEINLINECOMPLETIONACCEPTED_COMPLETIONMETHOD_TRANSFORM_CODE = 3;
+  AUTOMATIC_GENERATION = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.InlineCompletionOffered.CompletionMethod
+enum CodeInlinecompletionoffered_CompletionMethod {
+  COMPLETION_METHOD_UNKNOWN = 0;
+  COMPLETION_METHOD_GENERATE_CODE = 1;
+  COMPLETION_METHOD_COMPLETE_CODE = 2;
+  COMPLETION_METHOD_TRANSFORM_CODE = 3;
+  COMPLETION_METHOD_AUTOMATIC_GENERATION = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.TransformCodeRequest.Command
+enum Command {
+  COMMAND_UNSPECIFIED = 0;
+  NO_COMMAND = 1;
+  GENERATE = 2;
+  EDIT = 3;
+  GENERATE_UNIT_TESTS = 4;
+  GENERATE_DB_CODE = 5;
+  MIGRATE_DB_CODE = 6;
+  FINISH_CHANGES = 7;
+  OUTLINES = 8;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ServerProcessingDetails.CompletionMethod
+enum CompletionMethod {
+  COMPLETIONMETHOD_UNSPECIFIED = 0;
+  GENERATION = 2;
+  COMPLETIONMETHOD_COMPLETION = 3;
+  TRANSFORMATION = 4;
+  CHAT = 5;
+  UNIT_TEST_GENERATION = 6;
+  DATABASE_MIGRATION = 7;
+}
+
+// origin: .google.internal.cloud.code.v1internal.InlineCompletionOffered.CompletionMode
+enum CompletionMode {
+  COMPLETIONMODE_UNKNOWN = 0;
+  LANGUAGE_CLIENT = 1;
+  TYPEOVER = 2;
+  TYPEOVER_NEWLINE = 3;
+  COMPLETIONMODE_TRANSFORM_CODE = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Credits.CreditType
+enum CreditType {
+  CREDIT_TYPE_UNSPECIFIED = 0;
+  GOOGLE_ONE_AI = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListModelConfigsRequest.Domain
+enum Domain {
+  DOMAIN_UNSPECIFIED = 0;
+  DOMAIN_STREAMING_CHAT = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.File.EditType
+enum EditType {
+  EDITTYPE_UNSPECIFIED = 0;
+  NONE = 1;
+  EDITTYPE_PASTE = 2;
+  UNDO = 3;
+  REDO = 4;
+  EDITTYPE_COMPLETION = 5;
+  EDITTYPE_DELETE = 6;
+  ADD = 7;
+  UNKNOWN_EDIT = 8;
+  INTELLISENSE = 9;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ChatMessage.EntityType
+enum EntityType {
+  ENTITYTYPE_UNKNOWN = 0;
+  ENTITYTYPE_USER = 1;
+  ENTITYTYPE_SYSTEM = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.FinishReason
+enum FinishReason {
+  FINISH_REASON_UNSPECIFIED = 0;
+  FINISH_REASON_STOP = 1;
+  FINISH_REASON_RECITATION = 2;
+  FINISH_REASON_PROHIBITED_CONTENT = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.FetchAdminControlsResponse.GroundingType
+enum GroundingType {
+  GROUNDING_TYPE_UNSPECIFIED = 0;
+  GROUNDING_WITH_GOOGLE_SEARCH = 1;
+  WEB_GROUNDING_FOR_ENTERPRISE = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ClientMetadata.IdeType
+enum IdeType {
+  IDE_UNSPECIFIED = 0;
+  VSCODE = 1;
+  INTELLIJ = 2;
+  VSCODE_CLOUD_WORKSTATION = 3;
+  INTELLIJ_CLOUD_WORKSTATION = 4;
+  CLOUD_SHELL = 5;
+  CIDER = 6;
+  CLOUD_RUN = 7;
+  ANDROID_STUDIO = 8;
+  ANTIGRAVITY = 9;
+  JETSKI = 10;
+  COLAB = 11;
+  FIREBASE = 12;
+  CHROME_DEVTOOLS = 13;
+  GEMINI_CLI = 14;
+}
+
+// origin: .google.internal.cloud.code.v1internal.IneligibleTier.IneligibleTierReasonCodes
+enum IneligibleTierReasonCodes {
+  INELIGIBLETIERREASONCODES_UNKNOWN = 0;
+  INELIGIBLE_ACCOUNT = 1;
+  UNKNOWN_LOCATION = 2;
+  UNSUPPORTED_LOCATION = 3;
+  RESTRICTED_NETWORK = 4;
+  RESTRICTED_AGE = 5;
+  NON_USER_ACCOUNT = 6;
+  DASHER_USER = 7;
+  BYOID_USER = 8;
+  RESTRICTED_DASHER_USER = 9;
+  VALIDATION_REQUIRED = 10;
+  GOOGLE_TOS_NOT_SUPPORTED_BY_CLIENT = 11;
+  UNSUPPORTED_CLIENT = 12;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ConversationOffered.InitiationMethod
+enum InitiationMethod {
+  INITIATION_METHOD_UNSPECIFIED = 0;
+  TAB = 1;
+  COMMAND = 2;
+  INITIATIONMETHOD_AGENT = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ConversationInteraction.Interaction
+enum Interaction {
+  INTERACTION_UNKNOWN = 0;
+  THUMBSUP = 1;
+  THUMBSDOWN = 2;
+  COPY = 3;
+  INSERT = 4;
+  ACCEPT_CODE_BLOCK = 5;
+  ACCEPT_ALL = 6;
+  ACCEPT_FILE = 7;
+  DIFF = 8;
+  ACCEPT_RANGE = 9;
+}
+
+// origin: .google.internal.cloud.code.v1internal.LoadCodeAssistRequest.Mode
+enum Mode {
+  MODE_UNSPECIFIED = 0;
+  FULL_ELIGIBILITY_CHECK = 1;
+  HEALTH_CHECK = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ClientMetadata.Platform
+enum Platform {
+  PLATFORM_UNSPECIFIED = 0;
+  DARWIN_AMD64 = 1;
+  DARWIN_ARM64 = 2;
+  LINUX_AMD64 = 3;
+  LINUX_ARM64 = 4;
+  WINDOWS_AMD64 = 5;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ClientMetadata.PluginType
+enum PluginType {
+  PLUGIN_UNSPECIFIED = 0;
+  CLOUD_CODE = 1;
+  GEMINI = 2;
+  AIPLUGIN_INTELLIJ = 3;
+  AIPLUGIN_STUDIO = 4;
+  PANTHEON = 6;
+}
+
+// origin: .google.internal.cloud.code.v1internal.RagStatus
+enum RagStatus {
+  RAG_STATUS_UNSPECIFIED = 0;
+  RAG_DISABLED = 1;
+  RAG_FOUND = 2;
+  RAG_NOT_FOUND = 3;
+  RAG_ERROR = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.File.Reason
+enum Reason {
+  REASON_UNKNOWN = 0;
+  CURRENTLY_OPEN = 1;
+  RECENTLY_OPENED = 2;
+  RECENTLY_EDITED = 3;
+  COLOCATED = 4;
+  RELATED_FILE = 5;
+  USER_SELECTED = 6;
+  RAG_R = 7;
+  IS_DOC_FILE = 8;
+  IS_TEST_FILE = 9;
+  CHAT_SUGGESTED_EDIT = 10;
+  CHAT_FILE_REFERENCED = 11;
+  WORKSPACE_BM25_SEARCH = 12;
+}
+
+// origin: .google.internal.cloud.code.v1internal.RetryDetails.RetryReason
+enum RetryReason {
+  RETRY_REASON_UNSPECIFIED = 0;
+  RETRY_REASON_REGENERATE = 1;
+  RETRY_REASON_EDIT = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.FetchCodeCustomizationStateResponse.State
+enum State {
+  STATE_UNSPECIFIED = 0;
+  DISABLED = 1;
+  ENABLED = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.GenerateChatResponse.TextType
+enum TextType {
+  TEXTTYPE_UNSPECIFIED = 0;
+  RESPONSE = 1;
+  SUMMARY = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.UserTier.UpgradeType
+enum UpgradeType {
+  UPGRADE_TYPE_UNSPECIFIED = 0;
+  GDP = 1;
+  GOOGLE_ONE = 2;
+  GDP_HELIUM = 3;
+  GOOGLE_ONE_HELIUM = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.YieldInfo.YieldType
+enum YieldType {
+  YIELD_TYPE_UNSPECIFIED = 0;
+  MUTATING_OPERATION = 1;
+  LOCAL_AGENT = 2;
+}
+
+// ========================================================================
+// Messages & Structs
+// ========================================================================
+
+// origin: .google.internal.cloud.code.v1internal.Agent
+message Agent {
+  string handle = 1;
+  DisplayProperties display_properties = 2;
+  string agent_id = 3;
+  AgentType agent_type = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.AgentInitiatedRPC
+message AgentInitiatedRPC {
+  string extension_id = 1;
+  string base_uri = 2;
+  string operation_id = 3;
+  string operation_summary = 4;
+  map<string, string> params = 5;
+  int32 elapsed_ms = 6;
+  int32 http_status = 7;
+}
+
+// origin: .google.internal.cloud.code.v1internal.AgentProcessingDetails
+message AgentProcessingDetails {
+  string agent_id = 1;
+  repeated AgentInitiatedRPC rpcs = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.AgentSetting
+message AgentSetting {
+  repeated string agy_allowed_models = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.AgenticChatMessage
+message AgenticChatMessage {
+  CodeAgenticchatmessage_EntityType author = 1;
+  string text = 2;
+  repeated ToolRequest tool_requests = 3;
+  ToolResult tool_result = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.AiCharactersReport
+message AiCharactersReport {
+  string language = 1;
+  CodeAicharactersreport_EditType edit_type = 2;
+  int64 total_chars = 3;
+  int64 whitespace_chars = 4;
+  int64 time_interval_index = 5;
+}
+
+// origin: .google.internal.cloud.code.v1internal.AiCharactersReports
+message AiCharactersReports {
+  repeated AiCharactersReport reports = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ChatMessage.Blob
+message Blob {
+  string mime_type = 1;
+  bytes data = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.BrowserSetting
+message BrowserSetting {
+  bool browser_enabled = 1;
+  repeated string allowed_websites = 2;
+  repeated string denied_websites = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.MoaWorkerInfo.BucketConfig
+message BucketConfig {
+  string bucket_name = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ChatMessage
+message ChatMessage {
+  EntityType author = 1;
+  string content = 2;
+  WorkspaceChange workspace_change = 3;
+  FunctionCall function_call = 4;
+  FunctionResponse function_response = 5;
+  Blob blob = 6;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Citation
+message Citation {
+  int64 start_index = 1;
+  int64 end_index = 2;
+  string license = 3;
+  string uri = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.CliFeatureSetting
+message CliFeatureSetting {
+  ExtensionsSetting extensions_setting = 1;
+  bool unmanaged_capabilities_enabled = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ClientMetadata
+message ClientMetadata {
+  IdeType ide_type = 1;
+  string ide_version = 2;
+  string plugin_version = 3;
+  Platform platform = 4;
+  string update_channel = 5;
+  string duet_project = 6;
+  PluginType plugin_type = 7;
+  string ide_name = 8;
+}
+
+// origin: .google.internal.cloud.code.v1internal.MoaWorkerInfo.ClientToWorkerPubSub
+message ClientToWorkerPubSub {
+  string topic_id = 1;
+  string subscription_id = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.CodeAssistGlobalUserSettingResponse
+message CodeAssistGlobalUserSettingResponse {
+  string cloudaicompanion_project = 1;
+  bool free_tier_data_collection_optin = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.CodeAssistMetric
+message CodeAssistMetric {
+  google.protobuf.Timestamp timestamp = 1;
+  InlineCompletionAccepted inline_completion_accepted = 2;
+  InlineCompletionOffered inline_completion_offered = 3;
+  ConversationOffered conversation_offered = 4;
+  GenerateCodeUI generate_code_ui = 5;
+  ConversationExplainUI conversation_explain_ui = 6;
+  ConversationGenerateTestUI conversation_generate_test_ui = 7;
+  ConversationInteraction conversation_interaction = 8;
+  AiCharactersReports ai_characters_reports = 9;
+  map<string, string> metric_metadata = 10;
+}
+
+// origin: .google.internal.cloud.code.v1internal.CompleteCodeRequest
+message CompleteCodeRequest {
+  string project = 1;
+  string request_id = 2;
+  IDEContext ide_context = 3;
+  ClientMetadata metadata = 4;
+  bool enable_prompt_enhancement = 5;
+  UserContext user_context = 6;
+  string tier_id = 7;
+}
+
+// origin: .google.internal.cloud.code.v1internal.CompleteCodeResponse
+message CompleteCodeResponse {
+  repeated Suggestion suggestions = 1;
+  ServerProcessingDetails processing_details = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ConversationExplainUI
+message ConversationExplainUI {
+}
+
+// origin: .google.internal.cloud.code.v1internal.ConversationGenerateTestUI
+message ConversationGenerateTestUI {
+}
+
+// origin: .google.internal.cloud.code.v1internal.ConversationInteraction
+message ConversationInteraction {
+  string trace_id = 1;
+  ActionStatus status = 2;
+  Interaction interaction = 3;
+  int64 accepted_lines = 4;
+  string language = 5;
+  bool is_agentic = 6;
+  int64 removed_lines = 7;
+  InitiationMethod initiation_method = 8;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ConversationOffered
+message ConversationOffered {
+  int64 citation_count = 1;
+  bool included_code = 2;
+  ActionStatus status = 3;
+  string trace_id = 4;
+  StreamingLatency streaming_latency = 5;
+  bool is_agentic = 6;
+  InitiationMethod initiation_method = 7;
+  string trajectory_id = 8;
+  string language = 9;
+}
+
+// origin: .google.internal.cloud.code.v1internal.MoaWorkerInfo.CreateWorker
+message CreateWorker {
+  string worker_id = 1;
+  WorkerToClientPubSub worker_to_client_pubsub = 2;
+  ClientToWorkerPubSub client_to_worker_pubsub = 3;
+  BucketConfig bucket_config = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Credits
+message Credits {
+  CreditType credit_type = 1;
+  int64 credit_amount = 2;
+  int64 minimum_credit_amount_for_usage = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.MoaWorkerInfo.DeleteWorker
+message DeleteWorker {
+  string worker_id = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Agent.DisplayProperties
+message DisplayProperties {
+  string display_name = 1;
+  string logo_uri = 2;
+  string display_description = 3;
+  repeated string suggested_prompts = 4;
+  string help_message = 5;
+}
+
+// origin: .google.internal.cloud.code.v1internal.EditableRegion
+message EditableRegion {
+  int32 first_line = 1;
+  int32 last_line = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.CliFeatureSetting.ExtensionsSetting
+message ExtensionsSetting {
+  bool extensions_enabled = 1;
+}
+
+// origin: .smartchoices.FeedbackId
+message FeedbackId {
+}
+
+// origin: .google.internal.cloud.code.v1internal.FetchAdminControlsRequest
+message FetchAdminControlsRequest {
+  string project = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.FetchAdminControlsResponse
+message FetchAdminControlsResponse {
+  bool disable_telemetry = 1;
+  bool disable_feedback = 2;
+  RecitationPolicy recitation_policy = 3;
+  GroundingType grounding_type = 4;
+  bool secure_mode_enabled = 5;
+  McpSetting mcp_setting = 6;
+  TurboModeSetting turbo_mode_setting = 7;
+  BrowserSetting browser_setting = 8;
+  PreviewFeatureSetting preview_feature_setting = 9;
+  AgentSetting agent_setting = 10;
+  CliFeatureSetting cli_feature_setting = 11;
+  bool strict_mode_disabled = 12;
+  bool admin_controls_applicable = 13;
+}
+
+// origin: .google.internal.cloud.code.v1internal.FetchCodeCustomizationStateRequest
+message FetchCodeCustomizationStateRequest {
+  string project = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.FetchCodeCustomizationStateResponse
+message FetchCodeCustomizationStateResponse {
+  State state = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.File
+message File {
+  string file_path = 1;
+  string code_language = 2;
+  string content = 3;
+  Range selection = 4;
+  repeated FileSegment segments = 5;
+  Reason included_reason = 6;
+  repeated EditType last_edit = 7;
+  Repository repository = 8;
+  ScmSystem scm_system = 9;
+  bytes binary_content = 10;
+}
+
+// origin: .google.internal.cloud.code.v1internal.WorkspaceChange.FileChange
+message FileChange {
+  string file_path = 1;
+  Range range = 2;
+  string new_text = 3;
+  repeated Citation citations = 4;
+  repeated PromptCitation prompt_citations = 5;
+  FileChangeTelemetry telemetry = 6;
+  int64 code_block_index = 7;
+  string language = 8;
+  repeated int64 failed_diff_hunks = 9;
+}
+
+// origin: .google.internal.cloud.code.v1internal.WorkspaceChange.FileChange.FileChangeTelemetry
+message FileChangeTelemetry {
+  Int64Value comment_lines = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.FileSegment
+message FileSegment {
+  string content = 1;
+  bool is_selected = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.FileUsage
+message FileUsage {
+  repeated string included_files = 1;
+  repeated string partially_included_files = 2;
+  repeated string excluded_files = 3;
+  repeated string unsupported_files = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListExperimentsResponse.FilteredFlag
+message FilteredFlag {
+  string name = 1;
+  string reason = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListExperimentsResponse.Flag
+message Flag {
+  string name = 1;
+  bool bool_value = 2;
+  double float_value = 3;
+  int64 int_value = 4;
+  string string_value = 5;
+  Int32List int32_list_value = 6;
+  StringList string_list_value = 7;
+  int32 flag_id = 9;
+}
+
+// origin: .google.cloud.aiplatform.master.FunctionCall
+message FunctionCall {
+}
+
+// origin: .google.cloud.aiplatform.master.FunctionDeclaration
+message FunctionDeclaration {
+}
+
+// origin: .google.cloud.aiplatform.master.FunctionResponse
+message FunctionResponse {
+}
+
+// origin: .google.internal.cloud.code.v1internal.GenerateChatRequest
+message GenerateChatRequest {
+  string project = 1;
+  string request_id = 2;
+  string user_message = 3;
+  repeated ChatMessage history = 4;
+  IDEContext ide_context = 5;
+  ClientMetadata metadata = 6;
+  bool enable_prompt_enhancement = 7;
+  YieldInfo yield_info = 8;
+  YieldedUserInput yielded_user_input = 9;
+  RetryDetails retry_details = 10;
+  repeated FunctionDeclaration function_declarations = 11;
+  bool include_thinking_summaries = 12;
+  string tier_id = 13;
+  string model_config_id = 14;
+  string user_prompt_id = 15;
+}
+
+// origin: .google.internal.cloud.code.v1internal.GenerateChatResponse
+message GenerateChatResponse {
+  string markdown = 1;
+  repeated Citation citations = 2;
+  ServerProcessingDetails processing_details = 3;
+  IntentMetadata detected_intent = 4;
+  int64 remaining_fca_quota = 6;
+  repeated PromptCitation prompt_citations = 7;
+  FileUsage file_usage = 8;
+  AgentProcessingDetails agent_processing_details = 9;
+  YieldInfo yield_info = 10;
+  bool blocked = 11;
+  WorkspaceChange workspace_change = 12;
+  string moa_info = 13;
+  repeated MoaWorkerInfo moa_worker_info = 14;
+  string disclaimer = 15;
+  FinishReason finish_reason = 16;
+  repeated string suggested_prompts = 17;
+  TextType text_type = 18;
+  repeated FunctionCall function_calls = 19;
+  UsageMetadata usage_metadata = 20;
+}
+
+// origin: .google.internal.cloud.code.v1internal.GenerateCodeRequest
+message GenerateCodeRequest {
+  string project = 1;
+  string request_id = 2;
+  IDEContext ide_context = 3;
+  ClientMetadata metadata = 4;
+  bool enable_prompt_enhancement = 5;
+  string tier_id = 6;
+}
+
+// origin: .google.internal.cloud.code.v1internal.GenerateCodeResponse
+message GenerateCodeResponse {
+  repeated Suggestion suggestions = 1;
+  ServerProcessingDetails processing_details = 2;
+  FileUsage file_usage = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.GenerateCodeUI
+message GenerateCodeUI {
+}
+
+// origin: .google.internal.cloud.code.v1internal.GetCodeAssistGlobalUserSettingRequest
+message GetCodeAssistGlobalUserSettingRequest {
+  string cloudaicompanion_project = 1;
+  bool use_read_api = 2;
+}
+
+// origin: .google.longrunning.GetOperationRequest
+message GetOperationRequest {
+  string name = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.IDEContext
+message IDEContext {
+  File current_file = 1;
+  repeated File other_files = 2;
+  repeated Rule rules = 3;
+  WorkspaceStructure workspace_structure = 4;
+  repeated string remote_repositories = 5;
+  EditableRegion editable_region = 6;
+  repeated RecentUserAction recent_user_actions = 7;
+}
+
+// origin: .google.internal.cloud.code.v1internal.IneligibleTier
+message IneligibleTier {
+  IneligibleTierReasonCodes reason_code = 1;
+  string reason_message = 2;
+  string tier_id = 3;
+  string tier_name = 4;
+  string validation_error_message = 5;
+  string validation_url_link_text = 6;
+  string validation_url = 7;
+  string validation_learn_more_link_text = 8;
+  string validation_learn_more_url = 9;
+}
+
+// origin: .google.internal.cloud.code.v1internal.InlineCompletionAccepted
+message InlineCompletionAccepted {
+  string trace_id = 1;
+  float score = 2;
+  int64 response_size = 3;
+  int64 response_lines = 4;
+  string language = 5;
+  CodeInlinecompletionaccepted_CompletionMethod completion_method = 6;
+  int64 partial_accepted_characters = 7;
+  int64 partial_accepted_lines = 8;
+  ActionStatus status = 9;
+  int64 accepted_comment_lines = 10;
+  int64 response_accepted_index = 11;
+}
+
+// origin: .google.internal.cloud.code.v1internal.InlineCompletionOffered
+message InlineCompletionOffered {
+  string trace_id = 1;
+  int64 result_count = 2;
+  string language = 3;
+  CompletionMode completion_mode = 4;
+  google.protobuf.Duration display_length = 5;
+  ActionStatus status = 6;
+  CodeInlinecompletionoffered_CompletionMethod completion_method = 7;
+  google.protobuf.Duration response_latency = 8;
+  int64 response_received_index = 9;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListExperimentsResponse.Flag.Int32List
+message Int32List {
+  repeated int32 values = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Int64Value
+message Int64Value {
+  int64 value = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.IntentMetadata
+message IntentMetadata {
+  string label = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.InternalAtomicAgenticChatRequest
+message InternalAtomicAgenticChatRequest {
+  string project = 1;
+  string request_id = 2;
+  string user_message = 3;
+  repeated AgenticChatMessage history = 4;
+  IDEContext ide_context = 5;
+  ClientMetadata metadata = 6;
+  bool enable_prompt_enhancement = 7;
+  repeated ToolDefinition tool_definitions = 8;
+}
+
+// origin: .google.internal.cloud.code.v1internal.InternalAtomicAgenticChatResponse
+message InternalAtomicAgenticChatResponse {
+  string markdown = 1;
+  AgenticChatMessage response = 2;
+  bool done = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListAgentsRequest
+message ListAgentsRequest {
+  string project = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListAgentsResponse
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListCloudAICompanionProjectsRequest
+message ListCloudAICompanionProjectsRequest {
+  string page_token = 1;
+  int32 page_size = 2;
+  string filter = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListCloudAICompanionProjectsResponse
+message ListCloudAICompanionProjectsResponse {
+  repeated Project projects = 1;
+  string next_page_token = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListExperimentsRequest
+message ListExperimentsRequest {
+  string project = 1;
+  ClientMetadata metadata = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListExperimentsResponse
+message ListExperimentsResponse {
+  repeated int32 experiment_ids = 1;
+  repeated Flag flags = 2;
+  repeated FilteredFlag filtered_flags = 3;
+  string debug_string = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListModelConfigsRequest
+message ListModelConfigsRequest {
+  ClientMetadata metadata = 1;
+  Domain domain = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListModelConfigsResponse
+message ListModelConfigsResponse {
+  repeated ModelConfig allowed_model_configs = 1;
+  ModelConfig default_agent_model_config = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListRemoteRepositoriesRequest
+message ListRemoteRepositoriesRequest {
+  string project = 1;
+  string page_token = 2;
+  int32 page_size = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListRemoteRepositoriesResponse
+message ListRemoteRepositoriesResponse {
+  repeated Repository repositories = 1;
+  repeated ScmSystem scm_systems = 2;
+  string next_page_token = 3;
+  CCRagStatus rag_status = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.LoadCodeAssistRequest
+message LoadCodeAssistRequest {
+  string cloudaicompanion_project = 1;
+  ClientMetadata metadata = 2;
+  Mode mode = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.LoadCodeAssistResponse
+message LoadCodeAssistResponse {
+  UserTier current_tier = 1;
+  repeated UserTier allowed_tiers = 2;
+  string cloudaicompanion_project = 3;
+  Status project_validation_error = 4;
+  repeated IneligibleTier ineligible_tiers = 5;
+  bool gcp_managed = 6;
+  string manage_subscription_uri = 7;
+  ReleaseChannel release_channel = 8;
+  string upgrade_subscription_uri = 9;
+  string g1_tier = 11;
+  UserTier paid_tier = 12;
+}
+
+// origin: .google.internal.cloud.code.v1internal.McpSetting
+message McpSetting {
+  bool mcp_enabled = 1;
+  string override_mcp_config_json = 2;
+  string mcp_config_json = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.MigrateDatabaseCodeRequest
+message MigrateDatabaseCodeRequest {
+  string project = 1;
+  string request_id = 2;
+  IDEContext ide_context = 3;
+  ClientMetadata metadata = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.MigrateDatabaseCodeResponse
+message MigrateDatabaseCodeResponse {
+  repeated WorkspaceChange workspace_changes = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.MoaWorkerInfo
+message MoaWorkerInfo {
+  string worker_id = 1;
+  WorkerToClientPubSub worker_to_client_pubsub = 2;
+  ClientToWorkerPubSub client_to_worker_pubsub = 3;
+  BucketConfig bucket_config = 4;
+  CreateWorker create_worker = 5;
+  DeleteWorker delete_worker = 6;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ModelConfig
+message ModelConfig {
+  string id = 1;
+  string display_name = 2;
+  string description_text = 3;
+  string vertex_model_id = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.OnboardUserBackgroundTasksRequest
+message OnboardUserBackgroundTasksRequest {
+  int64 project_number = 1;
+  GetOperationRequest operation = 2;
+  string tier_id = 3;
+  bool is_antigravity_user = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.OnboardUserRequest
+message OnboardUserRequest {
+  string tier_id = 1;
+  string cloudaicompanion_project = 2;
+  ClientMetadata metadata = 3;
+}
+
+// origin: .google.longrunning.Operation
+message Operation {
+  string name = 1;
+  google.protobuf.Any metadata = 2;
+  bool done = 3;
+  Status error = 4;
+  google.protobuf.Any response = 5;
+}
+
+// origin: .google.internal.cloud.code.v1internal.PreviewFeatureSetting
+message PreviewFeatureSetting {
+  bool preview_models_enabled = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.UserContext.PreviousSuggestion
+message PreviousSuggestion {
+  float model_score = 1;
+  float classifier_score = 2;
+  float acceptance_fraction = 3;
+  int32 suggestion_length = 4;
+  int64 suggestion_shown_time_millis = 5;
+  int64 suggestion_resolved_time_millis = 6;
+}
+
+// origin: .google.internal.cloud.code.v1internal.UserTier.PrivacyNotice
+message PrivacyNotice {
+  bool show_notice = 1;
+  string notice_text = 2;
+  bool minor_notice = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Project
+message Project {
+  string id = 1;
+  string name = 2;
+  int64 project_number = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.PromptCitation
+message PromptCitation {
+  int64 start_index = 1;
+  int64 end_index = 2;
+  string repository_uri = 3;
+  string filepath = 4;
+  string file_uri = 5;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Range
+message Range {
+  int64 start = 1;
+  int64 end = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.UserContext.RecentChange
+message RecentChange {
+  int64 change_time_millis = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.RecentUserAction
+message RecentUserAction {
+  string file_path = 1;
+  string diff = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.RecitationPolicy
+message RecitationPolicy {
+  bool disable_citations = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.RecordClientEventRequest
+message RecordClientEventRequest {
+  string project = 1;
+  IdeType ide_type = 2;
+  CodeAssistMetric metric = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.RecordCodeAssistMetricsRequest
+message RecordCodeAssistMetricsRequest {
+  string project = 1;
+  string request_id = 2;
+  ClientMetadata metadata = 3;
+  repeated CodeAssistMetric metrics = 4;
+}
+
+// origin: .google.internal.cloud.code.v1internal.RecordSmartchoicesFeedbackRequest
+message RecordSmartchoicesFeedbackRequest {
+  FeedbackId feedback_id = 1;
+  ShowCompletionFeedback show_completion_feedback = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.RecordSmartchoicesFeedbackResponse
+message RecordSmartchoicesFeedbackResponse {
+}
+
+// origin: .google.internal.cloud.code.v1internal.ReleaseChannel
+message ReleaseChannel {
+  ChannelType type = 1;
+  string name = 2;
+  string description = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Repository
+message Repository {
+  string name = 1;
+  string display_name = 2;
+  string display_path = 3;
+  string scm_id = 4;
+  string repository_uri = 5;
+}
+
+// origin: .google.internal.cloud.code.v1internal.RetryDetails
+message RetryDetails {
+  RetryReason reason = 1;
+  int32 attempt = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Rule
+message Rule {
+  string instruction = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ScmSystem
+message ScmSystem {
+  string id = 1;
+  string display_name = 2;
+  string logo_uri = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.SearchSnippetsRequest
+message SearchSnippetsRequest {
+  string project = 1;
+  string query = 2;
+  string request_id = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.SearchSnippetsResponse
+message SearchSnippetsResponse {
+  repeated Snippet snippets = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ServerProcessingDetails
+message ServerProcessingDetails {
+  string atlas_experience_hash = 1;
+  RagStatus rag_status = 2;
+  CompletionMethod completion_method = 4;
+  string chat_client_id_hash = 5;
+  string experiment_debug_string_fingerprint = 6;
+  string rag_error = 7;
+  string model_uri = 8;
+  string trace_id = 9;
+  map<string, string> metric_metadata = 10;
+  int32 continuation_call_count = 11;
+  ModelConfig model_config = 12;
+}
+
+// origin: .google.internal.cloud.code.v1internal.SetCodeAssistGlobalUserSettingRequest
+message SetCodeAssistGlobalUserSettingRequest {
+  string cloudaicompanion_project = 1;
+  bool free_tier_data_collection_optin = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.RecordSmartchoicesFeedbackRequest.ShowCompletionFeedback
+message ShowCompletionFeedback {
+  int32 shown_chars = 1;
+  int32 accepted_chars = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Snippet
+message Snippet {
+  string content = 1;
+  double distance = 2;
+  string repo_uri = 3;
+  string file_path = 4;
+}
+
+// origin: .google.rpc.Status
+message Status {
+  int32 code = 1;
+  string message = 2;
+  repeated google.protobuf.Any details = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.YieldInfo.Step
+message Step {
+  string tool = 1;
+  string prompt = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.YieldInfo.StepResponse
+message StepResponse {
+  Step step = 1;
+  string response = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ConversationOffered.StreamingLatency
+message StreamingLatency {
+  google.protobuf.Duration first_message_latency = 1;
+  google.protobuf.Duration total_latency = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ListExperimentsResponse.Flag.StringList
+message StringList {
+  repeated string values = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Suggestion
+message Suggestion {
+  string content = 1;
+  repeated Citation citations = 2;
+  float score = 3;
+  repeated PromptCitation prompt_citations = 4;
+  SuggestionTelemetry telemetry = 5;
+  float classifier_score = 6;
+  FeedbackId feedback_id = 7;
+}
+
+// origin: .google.internal.cloud.code.v1internal.Suggestion.SuggestionTelemetry
+message SuggestionTelemetry {
+  Int64Value comment_lines = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ToolAnnotations
+message ToolAnnotations {
+  string title = 1;
+  bool read_only_hint = 2;
+  bool destructive_hint = 3;
+  bool idempotent_hint = 4;
+  bool open_world_hint = 5;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ToolDefinition
+message ToolDefinition {
+  string server = 1;
+  string name = 2;
+  string description = 3;
+  google.protobuf.Struct input_schema = 4;
+  ToolAnnotations annotations = 5;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ToolRequest
+message ToolRequest {
+  string name = 1;
+  google.protobuf.Struct tool_call_json = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.ToolResult
+message ToolResult {
+  bool is_error = 1;
+  google.protobuf.Struct content = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.TransformCodeRequest
+message TransformCodeRequest {
+  string project = 1;
+  string request_id = 2;
+  IDEContext ide_context = 3;
+  string user_prompt = 4;
+  Command command = 5;
+  ClientMetadata metadata = 6;
+  bool enable_prompt_enhancement = 7;
+  string tier_id = 8;
+}
+
+// origin: .google.internal.cloud.code.v1internal.TransformCodeResponse
+message TransformCodeResponse {
+  WorkspaceChange workspace_change = 1;
+  IntentMetadata detected_intent = 2;
+  repeated WorkspaceChange workspace_changes = 3;
+  ServerProcessingDetails processing_details = 4;
+  FileUsage file_usage = 5;
+}
+
+// origin: .google.internal.cloud.code.v1internal.TurboModeSetting
+message TurboModeSetting {
+  bool terminal_auto_execution_enabled = 1;
+  bool browser_js_execution_enabled = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.UsageMetadata
+message UsageMetadata {
+  int64 prompt_token_count = 1;
+  int64 candidates_token_count = 2;
+  int64 total_token_count = 3;
+  int64 tool_use_prompt_token_count = 4;
+  int64 thoughts_token_count = 5;
+  int64 cached_content_token_count = 6;
+}
+
+// origin: .google.internal.cloud.code.v1internal.UserContext
+message UserContext {
+  repeated PreviousSuggestion previous_suggestions = 1;
+  float user_acceptance_rate = 2;
+  repeated RecentChange recent_changes = 3;
+  int64 current_time_millis = 5;
+  int32 previous_suggestion_count = 6;
+}
+
+// origin: .google.internal.cloud.code.v1internal.UserTier
+message UserTier {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  bool user_defined_cloudaicompanion_project = 4;
+  PrivacyNotice privacy_notice = 5;
+  bool is_default = 6;
+  string upgrade_subscription_uri = 7;
+  string upgrade_subscription_text = 8;
+  UpgradeType upgrade_subscription_type = 9;
+  string upgrade_button_text = 11;
+  string client_experience_tag = 12;
+  bool uses_gcp_tos = 13;
+  repeated Credits available_credits = 14;
+}
+
+// origin: .google.internal.cloud.code.v1internal.MoaWorkerInfo.WorkerToClientPubSub
+message WorkerToClientPubSub {
+  string topic_id = 1;
+  string subscription_id = 2;
+}
+
+// origin: .google.internal.cloud.code.v1internal.WorkspaceChange
+message WorkspaceChange {
+  repeated FileChange files = 1;
+}
+
+// origin: .google.internal.cloud.code.v1internal.WorkspaceStructure
+message WorkspaceStructure {
+  string workspace = 1;
+  string root_dir_path = 2;
+  repeated string modules = 3;
+}
+
+// origin: .google.internal.cloud.code.v1internal.YieldInfo
+message YieldInfo {
+  AgentInitiatedRPC rpc = 1;
+  repeated Step remaining_steps = 2;
+  YieldType yield_type = 3;
+  repeated StepResponse completed_step_responses = 4;
+  string button_text = 5;
+}
+
+// origin: .google.internal.cloud.code.v1internal.GenerateChatRequest.YieldedUserInput
+message YieldedUserInput {
+  bool consented = 1;
+}
+

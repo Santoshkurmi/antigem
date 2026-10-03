@@ -3,12 +3,39 @@ import os
 import sys
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 PROTOS_DIR = BASE_DIR / "protos"
 FILTERS_DIR = BASE_DIR / "proto_filters"
 APP_PROTO_DIR = BASE_DIR.parent / "app" / "src" / "main" / "proto"
+BRIDGE_DIR = BASE_DIR.parent / "agy_ide_bridge"
+BRIDGE_PROTO_DIR = BRIDGE_DIR / "proto"
+BRIDGE_PKG_PROTO_DIR = BRIDGE_DIR / "pkg" / "proto"
+
+LOCALHOST_PROTOS = {
+    "LanguageServerService.proto",
+    "ExtensionServerService.proto",
+    "RemotingService.proto",
+}
+
+WKT_IMPORTS = {
+    "Timestamp": "google/protobuf/timestamp.proto",
+    "Struct": "google/protobuf/struct.proto",
+    "Value": "google/protobuf/struct.proto",
+    "ListValue": "google/protobuf/struct.proto",
+    "NullValue": "google/protobuf/struct.proto",
+    "Any": "google/protobuf/any.proto",
+    "Duration": "google/protobuf/duration.proto",
+    "Empty": "google/protobuf/empty.proto",
+}
+
+GO_PKG_OVERRIDES = {
+    "CloudCode.proto": "gemini-server/pkg/proto/cloudcode",
+    "CloudCode_PredictionService.proto": "gemini-server/pkg/proto/prediction",
+    "JetskiService.proto": "gemini-server/pkg/proto/jetski",
+}
 
 PRIMITIVE_TYPES = {
     "double", "float", "int32", "int64", "uint32", "uint64", "sint32", "sint64",
@@ -231,67 +258,146 @@ def filter_proto(proto_file: Path, selected_rpcs: set) -> str:
 
     return "\n".join(out_lines)
 
+def remove_dummy_block(text: str, block_name: str, kind: str = 'message') -> str:
+    pattern = re.compile(rf'(?://[^\n]*\n)*\s*{kind}\s+{block_name}\s*\{{[^}}]*\}}\n*', re.MULTILINE)
+    return pattern.sub('', text)
+
+def convert_proto_for_go_bridge(proto_name: str, raw_content: str) -> str:
+    content = raw_content
+    needed_imports = set()
+
+    for wkt, imp in WKT_IMPORTS.items():
+        if re.search(rf'\b{wkt}\b', content):
+            needed_imports.add(imp)
+            if wkt == 'NullValue':
+                content = remove_dummy_block(content, wkt, kind='enum')
+            else:
+                content = remove_dummy_block(content, wkt, kind='message')
+
+    # Replace field usages with standard google.protobuf types
+    for wkt in ['Timestamp', 'Struct', 'ListValue', 'NullValue', 'Any', 'Duration', 'Empty']:
+        content = re.sub(rf'(?<![A-Za-z0-9_.])\b{wkt}\b', f'google.protobuf.{wkt}', content)
+    # Value specifically
+    content = re.sub(r'(?<![A-Za-z0-9_.])\bValue\b', 'google.protobuf.Value', content)
+
+    # Determine Go package
+    go_pkg = GO_PKG_OVERRIDES.get(proto_name)
+    if not go_pkg:
+        stem = proto_name[:-6] if proto_name.endswith(".proto") else proto_name
+        pkg_suffix = stem.split('_')[-1].lower()
+        go_pkg = f"gemini-server/pkg/proto/{pkg_suffix}"
+
+    # Build imports and go_package option
+    import_lines = '\n'.join([f'import "{imp}";' for imp in sorted(needed_imports)])
+    go_opt = f'option go_package = "{go_pkg}";'
+
+    # Insert after package declaration
+    pkg_match = re.search(r'package\s+[^;]+;', content)
+    if pkg_match:
+        idx = pkg_match.end()
+        insert_block = f'\n\n{go_opt}\n\n{import_lines}\n'
+        content = content[:idx] + insert_block + content[idx:]
+    else:
+        content = f'{go_opt}\n{import_lines}\n\n' + content
+
+    return content
+
+def sync_bridge_internal_protos():
+    print("\n🌉 Syncing internal cloud protos to agy_ide_bridge/proto...")
+    BRIDGE_PROTO_DIR.mkdir(parents=True, exist_ok=True)
+    BRIDGE_PKG_PROTO_DIR.mkdir(parents=True, exist_ok=True)
+
+    all_proto_files = sorted(list(PROTOS_DIR.glob("*.proto")))
+    internal_proto_files = [p for p in all_proto_files if p.name not in LOCALHOST_PROTOS]
+
+    if not internal_proto_files:
+        print("ℹ️ No internal proto files found to sync.")
+        return
+
+    written_files = []
+    for proto_file in internal_proto_files:
+        raw_text = proto_file.read_text(encoding="utf-8")
+        converted_text = convert_proto_for_go_bridge(proto_file.name, raw_text)
+        dest_path = BRIDGE_PROTO_DIR / proto_file.name
+        dest_path.write_text(converted_text, encoding="utf-8")
+        written_files.append(dest_path)
+        print(f"  ✓ Processed: {proto_file.name} -> {dest_path.relative_to(BASE_DIR.parent)}")
+
+    # Compile with protoc for Go
+    print("\n🛠️ Compiling Go protobufs with protoc...")
+    env = os.environ.copy()
+    go_bin = str(Path.home() / "go" / "bin")
+    if go_bin not in env.get("PATH", ""):
+        env["PATH"] = f"{env.get('PATH', '')}:{go_bin}"
+
+    proto_paths = [str(f) for f in written_files]
+    cmd = [
+        "protoc",
+        f"-I={BRIDGE_PROTO_DIR}",
+        "-I=/usr/include",
+        f"--go_out={BRIDGE_DIR}",
+        "--go_opt=module=gemini-server",
+    ] + proto_paths
+
+    res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    if res.returncode != 0:
+        print(f"❌ protoc compilation failed:\n{res.stderr}")
+    else:
+        print("✅ Go protobuf packages compiled successfully into agy_ide_bridge/pkg/proto/!")
+
 def main():
-    if not FILTERS_DIR.exists():
-        print(f"ℹ️ No '{FILTERS_DIR.name}' directory found. Nothing to filter.")
-        return
-
-    filter_files = list(FILTERS_DIR.glob("*.filter")) + list(FILTERS_DIR.glob("*.proto.filter"))
-    filter_files = sorted(list(set(filter_files)))
-
-    if not filter_files:
-        print(f"ℹ️ No .filter files found in '{FILTERS_DIR.name}'. Nothing to do.")
-        return
-
     auto_copy = "--copy" in sys.argv or "-y" in sys.argv
-    processed = 0
 
-    for filter_path in filter_files:
-        # Resolve target proto file name
-        proto_name = filter_path.name
-        if proto_name.endswith(".proto.filter"):
-            proto_name = proto_name[:-7]  # e.g. LanguageServerService.proto
-        elif proto_name.endswith(".filter"):
-            proto_name = proto_name[:-7]
-            if not proto_name.endswith(".proto"):
-                proto_name += ".proto"
+    # 1. Filter and copy localhost protos to Android app if filters exist
+    if FILTERS_DIR.exists():
+        filter_files = list(FILTERS_DIR.glob("*.filter")) + list(FILTERS_DIR.glob("*.proto.filter"))
+        filter_files = sorted(list(set(filter_files)))
 
-        proto_path = PROTOS_DIR / proto_name
-        if not proto_path.exists():
-            print(f"⚠️ Filter '{filter_path.name}' found, but '{proto_name}' does not exist in '{PROTOS_DIR.name}/'. Skipping.")
-            continue
+        processed = 0
+        for filter_path in filter_files:
+            proto_name = filter_path.name
+            if proto_name.endswith(".proto.filter"):
+                proto_name = proto_name[:-7]
+            elif proto_name.endswith(".filter"):
+                proto_name = proto_name[:-7]
+                if not proto_name.endswith(".proto"):
+                    proto_name += ".proto"
 
-        # Read filter RPC names
-        selected_rpcs = set()
-        for line in filter_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith('#'):
-                selected_rpcs.add(line)
+            proto_path = PROTOS_DIR / proto_name
+            if not proto_path.exists():
+                print(f"⚠️ Filter '{filter_path.name}' found, but '{proto_name}' does not exist in '{PROTOS_DIR.name}/'. Skipping.")
+                continue
 
-        filtered_content = filter_proto(proto_path, selected_rpcs)
-        if not filtered_content:
-            continue
+            selected_rpcs = set()
+            for line in filter_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    selected_rpcs.add(line)
 
-        processed += 1
-        dest_file = APP_PROTO_DIR / proto_name
+            filtered_content = filter_proto(proto_path, selected_rpcs)
+            if not filtered_content:
+                continue
 
-        should_copy = auto_copy
-        if not should_copy:
-            try:
-                ans = input(f"\n❓ Do you want to copy '{proto_name}' to app/src/main/proto/? (y/N): ").strip().lower()
-                should_copy = (ans == 'y' or ans == 'yes')
-            except EOFError:
-                should_copy = False
+            processed += 1
+            dest_file = APP_PROTO_DIR / proto_name
 
-        if should_copy:
-            APP_PROTO_DIR.mkdir(parents=True, exist_ok=True)
-            dest_file.write_text(filtered_content, encoding="utf-8")
-            print(f"🚀 Successfully updated: {dest_file}")
-        else:
-            print(f"⏭️ Skipped copying '{proto_name}'.")
+            should_copy = auto_copy
+            if not should_copy:
+                try:
+                    ans = input(f"\n❓ Do you want to copy '{proto_name}' to app/src/main/proto/? (y/N): ").strip().lower()
+                    should_copy = (ans == 'y' or ans == 'yes')
+                except EOFError:
+                    should_copy = False
 
-    if processed == 0:
-        print("ℹ️ No proto files processed.")
+            if should_copy:
+                APP_PROTO_DIR.mkdir(parents=True, exist_ok=True)
+                dest_file.write_text(filtered_content, encoding="utf-8")
+                print(f"🚀 Successfully updated: {dest_file}")
+            else:
+                print(f"⏭️ Skipped copying '{proto_name}'.")
+
+    # 2. Sync internal cloud protos to agy_ide_bridge
+    sync_bridge_internal_protos()
 
 if __name__ == "__main__":
     main()

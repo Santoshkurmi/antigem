@@ -21,6 +21,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // DumpLogDir is the directory where request/response .jsonl dumps are stored
@@ -145,7 +146,7 @@ var MethodRegistry = map[string]ProtoFactory{
 	},
 	"onboarduserbackgroundtasks": {
 		NewRequest:  func() proto.Message { return &cloudcode.OnboardUserBackgroundTasksRequest{} },
-		NewResponse: func() proto.Message { return &cloudcode.Empty{} },
+		NewResponse: func() proto.Message { return &emptypb.Empty{} },
 	},
 	"recordsmartchoicesfeedback": {
 		NewRequest:  func() proto.Message { return &cloudcode.RecordSmartchoicesFeedbackRequest{} },
@@ -153,11 +154,11 @@ var MethodRegistry = map[string]ProtoFactory{
 	},
 	"recordcodeassistmetrics": {
 		NewRequest:  func() proto.Message { return &cloudcode.RecordCodeAssistMetricsRequest{} },
-		NewResponse: func() proto.Message { return &cloudcode.Empty{} },
+		NewResponse: func() proto.Message { return &emptypb.Empty{} },
 	},
 	"recordclientevent": {
 		NewRequest:  func() proto.Message { return &cloudcode.RecordClientEventRequest{} },
-		NewResponse: func() proto.Message { return &cloudcode.Empty{} },
+		NewResponse: func() proto.Message { return &emptypb.Empty{} },
 	},
 	"getcodeassistglobalusersetting": {
 		NewRequest:  func() proto.Message { return &cloudcode.GetCodeAssistGlobalUserSettingRequest{} },

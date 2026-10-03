@@ -9,6 +9,8 @@ package jetski
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	structpb "google.golang.org/protobuf/types/known/structpb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -2587,50 +2589,6 @@ func (NUXInteractionType) EnumDescriptor() ([]byte, []int) {
 	return file_JetskiService_proto_rawDescGZIP(), []int{7}
 }
 
-// origin: .google.protobuf.NullValue
-type NullValue int32
-
-const (
-	NullValue_NULL_VALUE NullValue = 0
-)
-
-// Enum value maps for NullValue.
-var (
-	NullValue_name = map[int32]string{
-		0: "NULL_VALUE",
-	}
-	NullValue_value = map[string]int32{
-		"NULL_VALUE": 0,
-	}
-)
-
-func (x NullValue) Enum() *NullValue {
-	p := new(NullValue)
-	*p = x
-	return p
-}
-
-func (x NullValue) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (NullValue) Descriptor() protoreflect.EnumDescriptor {
-	return file_JetskiService_proto_enumTypes[8].Descriptor()
-}
-
-func (NullValue) Type() protoreflect.EnumType {
-	return &file_JetskiService_proto_enumTypes[8]
-}
-
-func (x NullValue) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use NullValue.Descriptor instead.
-func (NullValue) EnumDescriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{8}
-}
-
 // origin: .google.internal.cloud.code.v1internal.NuxClient
 type NuxClient int32
 
@@ -2665,11 +2623,11 @@ func (x NuxClient) String() string {
 }
 
 func (NuxClient) Descriptor() protoreflect.EnumDescriptor {
-	return file_JetskiService_proto_enumTypes[9].Descriptor()
+	return file_JetskiService_proto_enumTypes[8].Descriptor()
 }
 
 func (NuxClient) Type() protoreflect.EnumType {
-	return &file_JetskiService_proto_enumTypes[9]
+	return &file_JetskiService_proto_enumTypes[8]
 }
 
 func (x NuxClient) Number() protoreflect.EnumNumber {
@@ -2678,7 +2636,7 @@ func (x NuxClient) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use NuxClient.Descriptor instead.
 func (NuxClient) EnumDescriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{9}
+	return file_JetskiService_proto_rawDescGZIP(), []int{8}
 }
 
 // origin: .exa.codeium_common_pb.PromptTemplaterType
@@ -2727,11 +2685,11 @@ func (x PromptTemplaterType) String() string {
 }
 
 func (PromptTemplaterType) Descriptor() protoreflect.EnumDescriptor {
-	return file_JetskiService_proto_enumTypes[10].Descriptor()
+	return file_JetskiService_proto_enumTypes[9].Descriptor()
 }
 
 func (PromptTemplaterType) Type() protoreflect.EnumType {
-	return &file_JetskiService_proto_enumTypes[10]
+	return &file_JetskiService_proto_enumTypes[9]
 }
 
 func (x PromptTemplaterType) Number() protoreflect.EnumNumber {
@@ -2740,7 +2698,7 @@ func (x PromptTemplaterType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PromptTemplaterType.Descriptor instead.
 func (PromptTemplaterType) EnumDescriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{10}
+	return file_JetskiService_proto_rawDescGZIP(), []int{9}
 }
 
 // origin: .exa.codeium_common_pb.ToolFormatterType
@@ -2786,11 +2744,11 @@ func (x ToolFormatterType) String() string {
 }
 
 func (ToolFormatterType) Descriptor() protoreflect.EnumDescriptor {
-	return file_JetskiService_proto_enumTypes[11].Descriptor()
+	return file_JetskiService_proto_enumTypes[10].Descriptor()
 }
 
 func (ToolFormatterType) Type() protoreflect.EnumType {
-	return &file_JetskiService_proto_enumTypes[11]
+	return &file_JetskiService_proto_enumTypes[10]
 }
 
 func (x ToolFormatterType) Number() protoreflect.EnumNumber {
@@ -2799,7 +2757,7 @@ func (x ToolFormatterType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ToolFormatterType.Descriptor instead.
 func (ToolFormatterType) EnumDescriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{11}
+	return file_JetskiService_proto_rawDescGZIP(), []int{10}
 }
 
 // origin: .google.internal.cloud.code.v1internal.PerformanceProfile.Type
@@ -2839,11 +2797,11 @@ func (x Type) String() string {
 }
 
 func (Type) Descriptor() protoreflect.EnumDescriptor {
-	return file_JetskiService_proto_enumTypes[12].Descriptor()
+	return file_JetskiService_proto_enumTypes[11].Descriptor()
 }
 
 func (Type) Type() protoreflect.EnumType {
-	return &file_JetskiService_proto_enumTypes[12]
+	return &file_JetskiService_proto_enumTypes[11]
 }
 
 func (x Type) Number() protoreflect.EnumNumber {
@@ -2852,7 +2810,7 @@ func (x Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Type.Descriptor instead.
 func (Type) EnumDescriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{12}
+	return file_JetskiService_proto_rawDescGZIP(), []int{11}
 }
 
 // origin: .google.internal.cloud.code.v1internal.BuildWithGooglePlugin.Visibility
@@ -2889,11 +2847,11 @@ func (x Visibility) String() string {
 }
 
 func (Visibility) Descriptor() protoreflect.EnumDescriptor {
-	return file_JetskiService_proto_enumTypes[13].Descriptor()
+	return file_JetskiService_proto_enumTypes[12].Descriptor()
 }
 
 func (Visibility) Type() protoreflect.EnumType {
-	return &file_JetskiService_proto_enumTypes[13]
+	return &file_JetskiService_proto_enumTypes[12]
 }
 
 func (x Visibility) Number() protoreflect.EnumNumber {
@@ -2902,7 +2860,7 @@ func (x Visibility) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Visibility.Descriptor instead.
 func (Visibility) EnumDescriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{13}
+	return file_JetskiService_proto_rawDescGZIP(), []int{12}
 }
 
 // origin: .google.internal.cloud.code.v1internal.AgentPlugin
@@ -3468,7 +3426,7 @@ func (x *AgentPluginRemoteConfigTemplate) GetAuthProviderType() string {
 // origin: .google.internal.cloud.code.v1internal.BattleModeAutoTriggerRequest
 type BattleModeAutoTriggerRequest struct {
 	state                      protoimpl.MessageState `protogen:"open.v1"`
-	LastAutoTriggerRequestTime *Timestamp             `protobuf:"bytes,1,opt,name=last_auto_trigger_request_time,json=lastAutoTriggerRequestTime,proto3" json:"last_auto_trigger_request_time,omitempty"`
+	LastAutoTriggerRequestTime *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=last_auto_trigger_request_time,json=lastAutoTriggerRequestTime,proto3" json:"last_auto_trigger_request_time,omitempty"`
 	ModelId                    string                 `protobuf:"bytes,2,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
 	Prompt                     string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	unknownFields              protoimpl.UnknownFields
@@ -3505,7 +3463,7 @@ func (*BattleModeAutoTriggerRequest) Descriptor() ([]byte, []int) {
 	return file_JetskiService_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *BattleModeAutoTriggerRequest) GetLastAutoTriggerRequestTime() *Timestamp {
+func (x *BattleModeAutoTriggerRequest) GetLastAutoTriggerRequestTime() *timestamppb.Timestamp {
 	if x != nil {
 		return x.LastAutoTriggerRequestTime
 	}
@@ -4629,7 +4587,7 @@ type GetBundleWriteMintResponse struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	BundleDir       string                 `protobuf:"bytes,1,opt,name=bundle_dir,json=bundleDir,proto3" json:"bundle_dir,omitempty"`
 	BundleWriteMint []byte                 `protobuf:"bytes,2,opt,name=bundle_write_mint,json=bundleWriteMint,proto3" json:"bundle_write_mint,omitempty"`
-	MintExpiryTime  *Timestamp             `protobuf:"bytes,3,opt,name=mint_expiry_time,json=mintExpiryTime,proto3" json:"mint_expiry_time,omitempty"`
+	MintExpiryTime  *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=mint_expiry_time,json=mintExpiryTime,proto3" json:"mint_expiry_time,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -4678,7 +4636,7 @@ func (x *GetBundleWriteMintResponse) GetBundleWriteMint() []byte {
 	return nil
 }
 
-func (x *GetBundleWriteMintResponse) GetMintExpiryTime() *Timestamp {
+func (x *GetBundleWriteMintResponse) GetMintExpiryTime() *timestamppb.Timestamp {
 	if x != nil {
 		return x.MintExpiryTime
 	}
@@ -5281,51 +5239,6 @@ func (x *ListCascadeNuxesResponse) GetNextPageToken() string {
 	return ""
 }
 
-// origin: .google.protobuf.ListValue
-type ListValue struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Values        []*Value               `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListValue) Reset() {
-	*x = ListValue{}
-	mi := &file_JetskiService_proto_msgTypes[40]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListValue) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListValue) ProtoMessage() {}
-
-func (x *ListValue) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[40]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListValue.ProtoReflect.Descriptor instead.
-func (*ListValue) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{40}
-}
-
-func (x *ListValue) GetValues() []*Value {
-	if x != nil {
-		return x.Values
-	}
-	return nil
-}
-
 // origin: .google.internal.cloud.code.v1internal.ListWebDocsOptionsRequest
 type ListWebDocsOptionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -5337,7 +5250,7 @@ type ListWebDocsOptionsRequest struct {
 
 func (x *ListWebDocsOptionsRequest) Reset() {
 	*x = ListWebDocsOptionsRequest{}
-	mi := &file_JetskiService_proto_msgTypes[41]
+	mi := &file_JetskiService_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5349,7 +5262,7 @@ func (x *ListWebDocsOptionsRequest) String() string {
 func (*ListWebDocsOptionsRequest) ProtoMessage() {}
 
 func (x *ListWebDocsOptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[41]
+	mi := &file_JetskiService_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5362,7 +5275,7 @@ func (x *ListWebDocsOptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWebDocsOptionsRequest.ProtoReflect.Descriptor instead.
 func (*ListWebDocsOptionsRequest) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{41}
+	return file_JetskiService_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ListWebDocsOptionsRequest) GetPageSize() int32 {
@@ -5390,7 +5303,7 @@ type ListWebDocsOptionsResponse struct {
 
 func (x *ListWebDocsOptionsResponse) Reset() {
 	*x = ListWebDocsOptionsResponse{}
-	mi := &file_JetskiService_proto_msgTypes[42]
+	mi := &file_JetskiService_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5402,7 +5315,7 @@ func (x *ListWebDocsOptionsResponse) String() string {
 func (*ListWebDocsOptionsResponse) ProtoMessage() {}
 
 func (x *ListWebDocsOptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[42]
+	mi := &file_JetskiService_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5415,7 +5328,7 @@ func (x *ListWebDocsOptionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWebDocsOptionsResponse.ProtoReflect.Descriptor instead.
 func (*ListWebDocsOptionsResponse) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{42}
+	return file_JetskiService_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ListWebDocsOptionsResponse) GetWebDocsOptions() []*WebDocsOption {
@@ -5486,7 +5399,7 @@ type ModelDetails struct {
 
 func (x *ModelDetails) Reset() {
 	*x = ModelDetails{}
-	mi := &file_JetskiService_proto_msgTypes[43]
+	mi := &file_JetskiService_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5498,7 +5411,7 @@ func (x *ModelDetails) String() string {
 func (*ModelDetails) ProtoMessage() {}
 
 func (x *ModelDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[43]
+	mi := &file_JetskiService_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5511,7 +5424,7 @@ func (x *ModelDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModelDetails.ProtoReflect.Descriptor instead.
 func (*ModelDetails) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{43}
+	return file_JetskiService_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ModelDetails) GetDisplayName() string {
@@ -5839,7 +5752,7 @@ type ModelExperiments struct {
 
 func (x *ModelExperiments) Reset() {
 	*x = ModelExperiments{}
-	mi := &file_JetskiService_proto_msgTypes[44]
+	mi := &file_JetskiService_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5851,7 +5764,7 @@ func (x *ModelExperiments) String() string {
 func (*ModelExperiments) ProtoMessage() {}
 
 func (x *ModelExperiments) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[44]
+	mi := &file_JetskiService_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5864,7 +5777,7 @@ func (x *ModelExperiments) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModelExperiments.ProtoReflect.Descriptor instead.
 func (*ModelExperiments) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{44}
+	return file_JetskiService_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ModelExperiments) GetExperiments() map[string]*ExperimentValue {
@@ -5885,7 +5798,7 @@ type NUXInteraction struct {
 
 func (x *NUXInteraction) Reset() {
 	*x = NUXInteraction{}
-	mi := &file_JetskiService_proto_msgTypes[45]
+	mi := &file_JetskiService_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5897,7 +5810,7 @@ func (x *NUXInteraction) String() string {
 func (*NUXInteraction) ProtoMessage() {}
 
 func (x *NUXInteraction) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[45]
+	mi := &file_JetskiService_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5910,7 +5823,7 @@ func (x *NUXInteraction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NUXInteraction.ProtoReflect.Descriptor instead.
 func (*NUXInteraction) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{45}
+	return file_JetskiService_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *NUXInteraction) GetNuxId() int32 {
@@ -5942,7 +5855,7 @@ type NuxFilter struct {
 
 func (x *NuxFilter) Reset() {
 	*x = NuxFilter{}
-	mi := &file_JetskiService_proto_msgTypes[46]
+	mi := &file_JetskiService_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5954,7 +5867,7 @@ func (x *NuxFilter) String() string {
 func (*NuxFilter) ProtoMessage() {}
 
 func (x *NuxFilter) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[46]
+	mi := &file_JetskiService_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5967,7 +5880,7 @@ func (x *NuxFilter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NuxFilter.ProtoReflect.Descriptor instead.
 func (*NuxFilter) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{46}
+	return file_JetskiService_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *NuxFilter) GetClients() []NuxClient {
@@ -6024,7 +5937,7 @@ type NuxVersionFilter struct {
 
 func (x *NuxVersionFilter) Reset() {
 	*x = NuxVersionFilter{}
-	mi := &file_JetskiService_proto_msgTypes[47]
+	mi := &file_JetskiService_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6036,7 +5949,7 @@ func (x *NuxVersionFilter) String() string {
 func (*NuxVersionFilter) ProtoMessage() {}
 
 func (x *NuxVersionFilter) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[47]
+	mi := &file_JetskiService_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6049,7 +5962,7 @@ func (x *NuxVersionFilter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NuxVersionFilter.ProtoReflect.Descriptor instead.
 func (*NuxVersionFilter) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{47}
+	return file_JetskiService_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *NuxVersionFilter) GetMinVersion() string {
@@ -6085,7 +5998,7 @@ type PerformanceProfile struct {
 
 func (x *PerformanceProfile) Reset() {
 	*x = PerformanceProfile{}
-	mi := &file_JetskiService_proto_msgTypes[48]
+	mi := &file_JetskiService_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6097,7 +6010,7 @@ func (x *PerformanceProfile) String() string {
 func (*PerformanceProfile) ProtoMessage() {}
 
 func (x *PerformanceProfile) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[48]
+	mi := &file_JetskiService_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6110,7 +6023,7 @@ func (x *PerformanceProfile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerformanceProfile.ProtoReflect.Descriptor instead.
 func (*PerformanceProfile) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{48}
+	return file_JetskiService_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *PerformanceProfile) GetProfileBytes() []byte {
@@ -6143,7 +6056,7 @@ type ProvisionConversationBundleDirRequest struct {
 
 func (x *ProvisionConversationBundleDirRequest) Reset() {
 	*x = ProvisionConversationBundleDirRequest{}
-	mi := &file_JetskiService_proto_msgTypes[49]
+	mi := &file_JetskiService_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6155,7 +6068,7 @@ func (x *ProvisionConversationBundleDirRequest) String() string {
 func (*ProvisionConversationBundleDirRequest) ProtoMessage() {}
 
 func (x *ProvisionConversationBundleDirRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[49]
+	mi := &file_JetskiService_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6168,7 +6081,7 @@ func (x *ProvisionConversationBundleDirRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ProvisionConversationBundleDirRequest.ProtoReflect.Descriptor instead.
 func (*ProvisionConversationBundleDirRequest) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{49}
+	return file_JetskiService_proto_rawDescGZIP(), []int{48}
 }
 
 // origin: .google.internal.cloud.code.v1internal.ProvisionConversationBundleDirResponse
@@ -6181,7 +6094,7 @@ type ProvisionConversationBundleDirResponse struct {
 
 func (x *ProvisionConversationBundleDirResponse) Reset() {
 	*x = ProvisionConversationBundleDirResponse{}
-	mi := &file_JetskiService_proto_msgTypes[50]
+	mi := &file_JetskiService_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6193,7 +6106,7 @@ func (x *ProvisionConversationBundleDirResponse) String() string {
 func (*ProvisionConversationBundleDirResponse) ProtoMessage() {}
 
 func (x *ProvisionConversationBundleDirResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[50]
+	mi := &file_JetskiService_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6206,7 +6119,7 @@ func (x *ProvisionConversationBundleDirResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ProvisionConversationBundleDirResponse.ProtoReflect.Descriptor instead.
 func (*ProvisionConversationBundleDirResponse) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{50}
+	return file_JetskiService_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ProvisionConversationBundleDirResponse) GetBundleDir() string {
@@ -6220,14 +6133,14 @@ func (x *ProvisionConversationBundleDirResponse) GetBundleDir() string {
 type QuotaInfo struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	RemainingFraction float32                `protobuf:"fixed32,1,opt,name=remaining_fraction,json=remainingFraction,proto3" json:"remaining_fraction,omitempty"`
-	ResetTime         *Timestamp             `protobuf:"bytes,2,opt,name=reset_time,json=resetTime,proto3" json:"reset_time,omitempty"`
+	ResetTime         *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=reset_time,json=resetTime,proto3" json:"reset_time,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
 func (x *QuotaInfo) Reset() {
 	*x = QuotaInfo{}
-	mi := &file_JetskiService_proto_msgTypes[51]
+	mi := &file_JetskiService_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6239,7 +6152,7 @@ func (x *QuotaInfo) String() string {
 func (*QuotaInfo) ProtoMessage() {}
 
 func (x *QuotaInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[51]
+	mi := &file_JetskiService_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6252,7 +6165,7 @@ func (x *QuotaInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuotaInfo.ProtoReflect.Descriptor instead.
 func (*QuotaInfo) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{51}
+	return file_JetskiService_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *QuotaInfo) GetRemainingFraction() float32 {
@@ -6262,7 +6175,7 @@ func (x *QuotaInfo) GetRemainingFraction() float32 {
 	return 0
 }
 
-func (x *QuotaInfo) GetResetTime() *Timestamp {
+func (x *QuotaInfo) GetResetTime() *timestamppb.Timestamp {
 	if x != nil {
 		return x.ResetTime
 	}
@@ -6274,8 +6187,8 @@ type RecordTrajectoryAnalyticsRequest struct {
 	state                       protoimpl.MessageState `protogen:"open.v1"`
 	StartStepIndex              int32                  `protobuf:"varint,2,opt,name=start_step_index,json=startStepIndex,proto3" json:"start_step_index,omitempty"`
 	StartGeneratorMetadataIndex int32                  `protobuf:"varint,3,opt,name=start_generator_metadata_index,json=startGeneratorMetadataIndex,proto3" json:"start_generator_metadata_index,omitempty"`
-	Trajectory                  *Struct                `protobuf:"bytes,5,opt,name=trajectory,proto3" json:"trajectory,omitempty"`
-	Metadata                    *Struct                `protobuf:"bytes,6,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Trajectory                  *structpb.Struct       `protobuf:"bytes,5,opt,name=trajectory,proto3" json:"trajectory,omitempty"`
+	Metadata                    *structpb.Struct       `protobuf:"bytes,6,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	MendelExperimentIds         []int32                `protobuf:"varint,7,rep,packed,name=mendel_experiment_ids,json=mendelExperimentIds,proto3" json:"mendel_experiment_ids,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
@@ -6283,7 +6196,7 @@ type RecordTrajectoryAnalyticsRequest struct {
 
 func (x *RecordTrajectoryAnalyticsRequest) Reset() {
 	*x = RecordTrajectoryAnalyticsRequest{}
-	mi := &file_JetskiService_proto_msgTypes[52]
+	mi := &file_JetskiService_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6295,7 +6208,7 @@ func (x *RecordTrajectoryAnalyticsRequest) String() string {
 func (*RecordTrajectoryAnalyticsRequest) ProtoMessage() {}
 
 func (x *RecordTrajectoryAnalyticsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[52]
+	mi := &file_JetskiService_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6308,7 +6221,7 @@ func (x *RecordTrajectoryAnalyticsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordTrajectoryAnalyticsRequest.ProtoReflect.Descriptor instead.
 func (*RecordTrajectoryAnalyticsRequest) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{52}
+	return file_JetskiService_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *RecordTrajectoryAnalyticsRequest) GetStartStepIndex() int32 {
@@ -6325,14 +6238,14 @@ func (x *RecordTrajectoryAnalyticsRequest) GetStartGeneratorMetadataIndex() int3
 	return 0
 }
 
-func (x *RecordTrajectoryAnalyticsRequest) GetTrajectory() *Struct {
+func (x *RecordTrajectoryAnalyticsRequest) GetTrajectory() *structpb.Struct {
 	if x != nil {
 		return x.Trajectory
 	}
 	return nil
 }
 
-func (x *RecordTrajectoryAnalyticsRequest) GetMetadata() *Struct {
+func (x *RecordTrajectoryAnalyticsRequest) GetMetadata() *structpb.Struct {
 	if x != nil {
 		return x.Metadata
 	}
@@ -6355,7 +6268,7 @@ type RecordTrajectoryAnalyticsResponse struct {
 
 func (x *RecordTrajectoryAnalyticsResponse) Reset() {
 	*x = RecordTrajectoryAnalyticsResponse{}
-	mi := &file_JetskiService_proto_msgTypes[53]
+	mi := &file_JetskiService_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6367,7 +6280,7 @@ func (x *RecordTrajectoryAnalyticsResponse) String() string {
 func (*RecordTrajectoryAnalyticsResponse) ProtoMessage() {}
 
 func (x *RecordTrajectoryAnalyticsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[53]
+	mi := &file_JetskiService_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6380,7 +6293,7 @@ func (x *RecordTrajectoryAnalyticsResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use RecordTrajectoryAnalyticsResponse.ProtoReflect.Descriptor instead.
 func (*RecordTrajectoryAnalyticsResponse) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{53}
+	return file_JetskiService_proto_rawDescGZIP(), []int{52}
 }
 
 // origin: .google.internal.cloud.code.v1internal.RegisterInteractionRequest
@@ -6393,7 +6306,7 @@ type RegisterInteractionRequest struct {
 
 func (x *RegisterInteractionRequest) Reset() {
 	*x = RegisterInteractionRequest{}
-	mi := &file_JetskiService_proto_msgTypes[54]
+	mi := &file_JetskiService_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6405,7 +6318,7 @@ func (x *RegisterInteractionRequest) String() string {
 func (*RegisterInteractionRequest) ProtoMessage() {}
 
 func (x *RegisterInteractionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[54]
+	mi := &file_JetskiService_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6418,7 +6331,7 @@ func (x *RegisterInteractionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterInteractionRequest.ProtoReflect.Descriptor instead.
 func (*RegisterInteractionRequest) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{54}
+	return file_JetskiService_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *RegisterInteractionRequest) GetInteraction() *Interaction {
@@ -6438,7 +6351,7 @@ type RegisterInteractionResponse struct {
 
 func (x *RegisterInteractionResponse) Reset() {
 	*x = RegisterInteractionResponse{}
-	mi := &file_JetskiService_proto_msgTypes[55]
+	mi := &file_JetskiService_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6450,7 +6363,7 @@ func (x *RegisterInteractionResponse) String() string {
 func (*RegisterInteractionResponse) ProtoMessage() {}
 
 func (x *RegisterInteractionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[55]
+	mi := &file_JetskiService_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6463,7 +6376,7 @@ func (x *RegisterInteractionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterInteractionResponse.ProtoReflect.Descriptor instead.
 func (*RegisterInteractionResponse) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{55}
+	return file_JetskiService_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *RegisterInteractionResponse) GetMessage() string {
@@ -6483,7 +6396,7 @@ type RewriteUriRequest struct {
 
 func (x *RewriteUriRequest) Reset() {
 	*x = RewriteUriRequest{}
-	mi := &file_JetskiService_proto_msgTypes[56]
+	mi := &file_JetskiService_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6495,7 +6408,7 @@ func (x *RewriteUriRequest) String() string {
 func (*RewriteUriRequest) ProtoMessage() {}
 
 func (x *RewriteUriRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[56]
+	mi := &file_JetskiService_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6508,7 +6421,7 @@ func (x *RewriteUriRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RewriteUriRequest.ProtoReflect.Descriptor instead.
 func (*RewriteUriRequest) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{56}
+	return file_JetskiService_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *RewriteUriRequest) GetOriginalUri() string {
@@ -6528,7 +6441,7 @@ type RewriteUriResponse struct {
 
 func (x *RewriteUriResponse) Reset() {
 	*x = RewriteUriResponse{}
-	mi := &file_JetskiService_proto_msgTypes[57]
+	mi := &file_JetskiService_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6540,7 +6453,7 @@ func (x *RewriteUriResponse) String() string {
 func (*RewriteUriResponse) ProtoMessage() {}
 
 func (x *RewriteUriResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[57]
+	mi := &file_JetskiService_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6553,7 +6466,7 @@ func (x *RewriteUriResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RewriteUriResponse.ProtoReflect.Descriptor instead.
 func (*RewriteUriResponse) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{57}
+	return file_JetskiService_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *RewriteUriResponse) GetRedirectUri() string {
@@ -6573,7 +6486,7 @@ type SetUserSettingsRequest struct {
 
 func (x *SetUserSettingsRequest) Reset() {
 	*x = SetUserSettingsRequest{}
-	mi := &file_JetskiService_proto_msgTypes[58]
+	mi := &file_JetskiService_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6585,7 +6498,7 @@ func (x *SetUserSettingsRequest) String() string {
 func (*SetUserSettingsRequest) ProtoMessage() {}
 
 func (x *SetUserSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[58]
+	mi := &file_JetskiService_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6598,7 +6511,7 @@ func (x *SetUserSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetUserSettingsRequest.ProtoReflect.Descriptor instead.
 func (*SetUserSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{58}
+	return file_JetskiService_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *SetUserSettingsRequest) GetUserSettings() *UserSettings {
@@ -6618,7 +6531,7 @@ type SetUserSettingsResponse struct {
 
 func (x *SetUserSettingsResponse) Reset() {
 	*x = SetUserSettingsResponse{}
-	mi := &file_JetskiService_proto_msgTypes[59]
+	mi := &file_JetskiService_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6630,7 +6543,7 @@ func (x *SetUserSettingsResponse) String() string {
 func (*SetUserSettingsResponse) ProtoMessage() {}
 
 func (x *SetUserSettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[59]
+	mi := &file_JetskiService_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6643,57 +6556,12 @@ func (x *SetUserSettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetUserSettingsResponse.ProtoReflect.Descriptor instead.
 func (*SetUserSettingsResponse) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{59}
+	return file_JetskiService_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *SetUserSettingsResponse) GetUserSettings() *UserSettings {
 	if x != nil {
 		return x.UserSettings
-	}
-	return nil
-}
-
-// origin: .google.protobuf.Struct
-type Struct struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Fields        map[string]*Value      `protobuf:"bytes,1,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Struct) Reset() {
-	*x = Struct{}
-	mi := &file_JetskiService_proto_msgTypes[60]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Struct) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Struct) ProtoMessage() {}
-
-func (x *Struct) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[60]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Struct.ProtoReflect.Descriptor instead.
-func (*Struct) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{60}
-}
-
-func (x *Struct) GetFields() map[string]*Value {
-	if x != nil {
-		return x.Fields
 	}
 	return nil
 }
@@ -6709,7 +6577,7 @@ type TabChatRequest struct {
 
 func (x *TabChatRequest) Reset() {
 	*x = TabChatRequest{}
-	mi := &file_JetskiService_proto_msgTypes[61]
+	mi := &file_JetskiService_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6721,7 +6589,7 @@ func (x *TabChatRequest) String() string {
 func (*TabChatRequest) ProtoMessage() {}
 
 func (x *TabChatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[61]
+	mi := &file_JetskiService_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6734,7 +6602,7 @@ func (x *TabChatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TabChatRequest.ProtoReflect.Descriptor instead.
 func (*TabChatRequest) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{61}
+	return file_JetskiService_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *TabChatRequest) GetProject() string {
@@ -6761,7 +6629,7 @@ type TabChatResponse struct {
 
 func (x *TabChatResponse) Reset() {
 	*x = TabChatResponse{}
-	mi := &file_JetskiService_proto_msgTypes[62]
+	mi := &file_JetskiService_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6773,7 +6641,7 @@ func (x *TabChatResponse) String() string {
 func (*TabChatResponse) ProtoMessage() {}
 
 func (x *TabChatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[62]
+	mi := &file_JetskiService_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6786,7 +6654,7 @@ func (x *TabChatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TabChatResponse.ProtoReflect.Descriptor instead.
 func (*TabChatResponse) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{62}
+	return file_JetskiService_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *TabChatResponse) GetResponse() *GetChatMessageResponse {
@@ -6794,59 +6662,6 @@ func (x *TabChatResponse) GetResponse() *GetChatMessageResponse {
 		return x.Response
 	}
 	return nil
-}
-
-// origin: .google.protobuf.Timestamp
-type Timestamp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Seconds       int64                  `protobuf:"varint,1,opt,name=seconds,proto3" json:"seconds,omitempty"`
-	Nanos         int32                  `protobuf:"varint,2,opt,name=nanos,proto3" json:"nanos,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Timestamp) Reset() {
-	*x = Timestamp{}
-	mi := &file_JetskiService_proto_msgTypes[63]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Timestamp) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Timestamp) ProtoMessage() {}
-
-func (x *Timestamp) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[63]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Timestamp.ProtoReflect.Descriptor instead.
-func (*Timestamp) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{63}
-}
-
-func (x *Timestamp) GetSeconds() int64 {
-	if x != nil {
-		return x.Seconds
-	}
-	return 0
-}
-
-func (x *Timestamp) GetNanos() int32 {
-	if x != nil {
-		return x.Nanos
-	}
-	return 0
 }
 
 // origin: .google.internal.cloud.code.v1internal.UploadPerformanceProfileRequest
@@ -6859,7 +6674,7 @@ type UploadPerformanceProfileRequest struct {
 
 func (x *UploadPerformanceProfileRequest) Reset() {
 	*x = UploadPerformanceProfileRequest{}
-	mi := &file_JetskiService_proto_msgTypes[64]
+	mi := &file_JetskiService_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6871,7 +6686,7 @@ func (x *UploadPerformanceProfileRequest) String() string {
 func (*UploadPerformanceProfileRequest) ProtoMessage() {}
 
 func (x *UploadPerformanceProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[64]
+	mi := &file_JetskiService_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6884,7 +6699,7 @@ func (x *UploadPerformanceProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadPerformanceProfileRequest.ProtoReflect.Descriptor instead.
 func (*UploadPerformanceProfileRequest) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{64}
+	return file_JetskiService_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *UploadPerformanceProfileRequest) GetPerformanceProfile() *PerformanceProfile {
@@ -6903,7 +6718,7 @@ type UploadPerformanceProfileResponse struct {
 
 func (x *UploadPerformanceProfileResponse) Reset() {
 	*x = UploadPerformanceProfileResponse{}
-	mi := &file_JetskiService_proto_msgTypes[65]
+	mi := &file_JetskiService_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6915,7 +6730,7 @@ func (x *UploadPerformanceProfileResponse) String() string {
 func (*UploadPerformanceProfileResponse) ProtoMessage() {}
 
 func (x *UploadPerformanceProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[65]
+	mi := &file_JetskiService_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6928,7 +6743,7 @@ func (x *UploadPerformanceProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadPerformanceProfileResponse.ProtoReflect.Descriptor instead.
 func (*UploadPerformanceProfileResponse) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{65}
+	return file_JetskiService_proto_rawDescGZIP(), []int{62}
 }
 
 // origin: .google.internal.cloud.code.v1internal.UserSettings
@@ -6943,7 +6758,7 @@ type UserSettings struct {
 
 func (x *UserSettings) Reset() {
 	*x = UserSettings{}
-	mi := &file_JetskiService_proto_msgTypes[66]
+	mi := &file_JetskiService_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6955,7 +6770,7 @@ func (x *UserSettings) String() string {
 func (*UserSettings) ProtoMessage() {}
 
 func (x *UserSettings) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[66]
+	mi := &file_JetskiService_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6968,7 +6783,7 @@ func (x *UserSettings) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserSettings.ProtoReflect.Descriptor instead.
 func (*UserSettings) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{66}
+	return file_JetskiService_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *UserSettings) GetTelemetryEnabled() bool {
@@ -6992,91 +6807,6 @@ func (x *UserSettings) GetMarketingEmailsEnabled() bool {
 	return false
 }
 
-// origin: .google.protobuf.Value
-type Value struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NullValue     NullValue              `protobuf:"varint,1,opt,name=null_value,json=nullValue,proto3,enum=google.internal.cloud.code.v1internal.jetski.NullValue" json:"null_value,omitempty"`
-	NumberValue   float64                `protobuf:"fixed64,2,opt,name=number_value,json=numberValue,proto3" json:"number_value,omitempty"`
-	StringValue   string                 `protobuf:"bytes,3,opt,name=string_value,json=stringValue,proto3" json:"string_value,omitempty"`
-	BoolValue     bool                   `protobuf:"varint,4,opt,name=bool_value,json=boolValue,proto3" json:"bool_value,omitempty"`
-	StructValue   *Struct                `protobuf:"bytes,5,opt,name=struct_value,json=structValue,proto3" json:"struct_value,omitempty"`
-	ListValue     *ListValue             `protobuf:"bytes,6,opt,name=list_value,json=listValue,proto3" json:"list_value,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Value) Reset() {
-	*x = Value{}
-	mi := &file_JetskiService_proto_msgTypes[67]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Value) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Value) ProtoMessage() {}
-
-func (x *Value) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[67]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Value.ProtoReflect.Descriptor instead.
-func (*Value) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{67}
-}
-
-func (x *Value) GetNullValue() NullValue {
-	if x != nil {
-		return x.NullValue
-	}
-	return NullValue_NULL_VALUE
-}
-
-func (x *Value) GetNumberValue() float64 {
-	if x != nil {
-		return x.NumberValue
-	}
-	return 0
-}
-
-func (x *Value) GetStringValue() string {
-	if x != nil {
-		return x.StringValue
-	}
-	return ""
-}
-
-func (x *Value) GetBoolValue() bool {
-	if x != nil {
-		return x.BoolValue
-	}
-	return false
-}
-
-func (x *Value) GetStructValue() *Struct {
-	if x != nil {
-		return x.StructValue
-	}
-	return nil
-}
-
-func (x *Value) GetListValue() *ListValue {
-	if x != nil {
-		return x.ListValue
-	}
-	return nil
-}
-
 // origin: .google.internal.cloud.code.v1internal.WebDocsOption
 type WebDocsOption struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
@@ -7091,7 +6821,7 @@ type WebDocsOption struct {
 
 func (x *WebDocsOption) Reset() {
 	*x = WebDocsOption{}
-	mi := &file_JetskiService_proto_msgTypes[68]
+	mi := &file_JetskiService_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7103,7 +6833,7 @@ func (x *WebDocsOption) String() string {
 func (*WebDocsOption) ProtoMessage() {}
 
 func (x *WebDocsOption) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[68]
+	mi := &file_JetskiService_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7116,7 +6846,7 @@ func (x *WebDocsOption) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebDocsOption.ProtoReflect.Descriptor instead.
 func (*WebDocsOption) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{68}
+	return file_JetskiService_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *WebDocsOption) GetLabel() string {
@@ -7165,7 +6895,7 @@ type WriteTrajectoryACLsRequest struct {
 
 func (x *WriteTrajectoryACLsRequest) Reset() {
 	*x = WriteTrajectoryACLsRequest{}
-	mi := &file_JetskiService_proto_msgTypes[69]
+	mi := &file_JetskiService_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7177,7 +6907,7 @@ func (x *WriteTrajectoryACLsRequest) String() string {
 func (*WriteTrajectoryACLsRequest) ProtoMessage() {}
 
 func (x *WriteTrajectoryACLsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[69]
+	mi := &file_JetskiService_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7190,7 +6920,7 @@ func (x *WriteTrajectoryACLsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WriteTrajectoryACLsRequest.ProtoReflect.Descriptor instead.
 func (*WriteTrajectoryACLsRequest) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{69}
+	return file_JetskiService_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *WriteTrajectoryACLsRequest) GetTrajectoryId() string {
@@ -7216,7 +6946,7 @@ type WriteTrajectoryACLsResponse struct {
 
 func (x *WriteTrajectoryACLsResponse) Reset() {
 	*x = WriteTrajectoryACLsResponse{}
-	mi := &file_JetskiService_proto_msgTypes[70]
+	mi := &file_JetskiService_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7228,7 +6958,7 @@ func (x *WriteTrajectoryACLsResponse) String() string {
 func (*WriteTrajectoryACLsResponse) ProtoMessage() {}
 
 func (x *WriteTrajectoryACLsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_JetskiService_proto_msgTypes[70]
+	mi := &file_JetskiService_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7241,14 +6971,14 @@ func (x *WriteTrajectoryACLsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WriteTrajectoryACLsResponse.ProtoReflect.Descriptor instead.
 func (*WriteTrajectoryACLsResponse) Descriptor() ([]byte, []int) {
-	return file_JetskiService_proto_rawDescGZIP(), []int{70}
+	return file_JetskiService_proto_rawDescGZIP(), []int{66}
 }
 
 var File_JetskiService_proto protoreflect.FileDescriptor
 
 const file_JetskiService_proto_rawDesc = "" +
 	"\n" +
-	"\x13JetskiService.proto\x12,google.internal.cloud.code.v1internal.jetski\"\xb9\x04\n" +
+	"\x13JetskiService.proto\x12,google.internal.cloud.code.v1internal.jetski\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb9\x04\n" +
 	"\vAgentPlugin\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03uid\x18\x02 \x01(\tR\x03uid\x12\x12\n" +
@@ -7302,9 +7032,9 @@ const file_JetskiService_proto_rawDesc = "" +
 	"\x12auth_provider_type\x18\x03 \x01(\tR\x10authProviderType\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xce\x01\n" +
-	"\x1cBattleModeAutoTriggerRequest\x12{\n" +
-	"\x1elast_auto_trigger_request_time\x18\x01 \x01(\v27.google.internal.cloud.code.v1internal.jetski.TimestampR\x1alastAutoTriggerRequestTime\x12\x19\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb1\x01\n" +
+	"\x1cBattleModeAutoTriggerRequest\x12^\n" +
+	"\x1elast_auto_trigger_request_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x1alastAutoTriggerRequestTime\x12\x19\n" +
 	"\bmodel_id\x18\x02 \x01(\tR\amodelId\x12\x16\n" +
 	"\x06prompt\x18\x03 \x01(\tR\x06prompt\"\x89\x01\n" +
 	"\x1dBattleModeAutoTriggerResponse\x12&\n" +
@@ -7392,12 +7122,12 @@ const file_JetskiService_proto_rawDesc = "" +
 	"\x04link\x18\x01 \x01(\tR\x04link\"+\n" +
 	"\x15GetAgentPluginRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x1b\n" +
-	"\x19GetBundleWriteMintRequest\"\xca\x01\n" +
+	"\x19GetBundleWriteMintRequest\"\xad\x01\n" +
 	"\x1aGetBundleWriteMintResponse\x12\x1d\n" +
 	"\n" +
 	"bundle_dir\x18\x01 \x01(\tR\tbundleDir\x12*\n" +
-	"\x11bundle_write_mint\x18\x02 \x01(\fR\x0fbundleWriteMint\x12a\n" +
-	"\x10mint_expiry_time\x18\x03 \x01(\v27.google.internal.cloud.code.v1internal.jetski.TimestampR\x0emintExpiryTime\"\x17\n" +
+	"\x11bundle_write_mint\x18\x02 \x01(\fR\x0fbundleWriteMint\x12D\n" +
+	"\x10mint_expiry_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x0emintExpiryTime\"\x17\n" +
 	"\x15GetChatMessageRequest\"\x18\n" +
 	"\x16GetChatMessageResponse\"&\n" +
 	"\x10GetHealthRequest\x12\x12\n" +
@@ -7432,9 +7162,7 @@ const file_JetskiService_proto_rawDesc = "" +
 	"page_token\x18\x03 \x01(\tR\tpageToken\"\xa1\x01\n" +
 	"\x18ListCascadeNuxesResponse\x12]\n" +
 	"\rcascade_nuxes\x18\x01 \x03(\v28.google.internal.cloud.code.v1internal.jetski.CascadeNuxR\fcascadeNuxes\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"X\n" +
-	"\tListValue\x12K\n" +
-	"\x06values\x18\x01 \x03(\v23.google.internal.cloud.code.v1internal.jetski.ValueR\x06values\"W\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"W\n" +
 	"\x19ListWebDocsOptionsRequest\x12\x1b\n" +
 	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
@@ -7526,18 +7254,18 @@ const file_JetskiService_proto_rawDesc = "" +
 	"%ProvisionConversationBundleDirRequest\"G\n" +
 	"&ProvisionConversationBundleDirResponse\x12\x1d\n" +
 	"\n" +
-	"bundle_dir\x18\x01 \x01(\tR\tbundleDir\"\x92\x01\n" +
+	"bundle_dir\x18\x01 \x01(\tR\tbundleDir\"u\n" +
 	"\tQuotaInfo\x12-\n" +
-	"\x12remaining_fraction\x18\x01 \x01(\x02R\x11remainingFraction\x12V\n" +
+	"\x12remaining_fraction\x18\x01 \x01(\x02R\x11remainingFraction\x129\n" +
 	"\n" +
-	"reset_time\x18\x02 \x01(\v27.google.internal.cloud.code.v1internal.jetski.TimestampR\tresetTime\"\xed\x02\n" +
+	"reset_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tresetTime\"\xb3\x02\n" +
 	" RecordTrajectoryAnalyticsRequest\x12(\n" +
 	"\x10start_step_index\x18\x02 \x01(\x05R\x0estartStepIndex\x12C\n" +
-	"\x1estart_generator_metadata_index\x18\x03 \x01(\x05R\x1bstartGeneratorMetadataIndex\x12T\n" +
+	"\x1estart_generator_metadata_index\x18\x03 \x01(\x05R\x1bstartGeneratorMetadataIndex\x127\n" +
 	"\n" +
-	"trajectory\x18\x05 \x01(\v24.google.internal.cloud.code.v1internal.jetski.StructR\n" +
-	"trajectory\x12P\n" +
-	"\bmetadata\x18\x06 \x01(\v24.google.internal.cloud.code.v1internal.jetski.StructR\bmetadata\x122\n" +
+	"trajectory\x18\x05 \x01(\v2\x17.google.protobuf.StructR\n" +
+	"trajectory\x123\n" +
+	"\bmetadata\x18\x06 \x01(\v2\x17.google.protobuf.StructR\bmetadata\x122\n" +
 	"\x15mendel_experiment_ids\x18\a \x03(\x05R\x13mendelExperimentIds\"#\n" +
 	"!RecordTrajectoryAnalyticsResponse\"y\n" +
 	"\x1aRegisterInteractionRequest\x12[\n" +
@@ -7551,37 +7279,19 @@ const file_JetskiService_proto_rawDesc = "" +
 	"\x16SetUserSettingsRequest\x12_\n" +
 	"\ruser_settings\x18\x01 \x01(\v2:.google.internal.cloud.code.v1internal.jetski.UserSettingsR\fuserSettings\"z\n" +
 	"\x17SetUserSettingsResponse\x12_\n" +
-	"\ruser_settings\x18\x01 \x01(\v2:.google.internal.cloud.code.v1internal.jetski.UserSettingsR\fuserSettings\"\xd2\x01\n" +
-	"\x06Struct\x12X\n" +
-	"\x06fields\x18\x01 \x03(\v2@.google.internal.cloud.code.v1internal.jetski.Struct.FieldsEntryR\x06fields\x1an\n" +
-	"\vFieldsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12I\n" +
-	"\x05value\x18\x02 \x01(\v23.google.internal.cloud.code.v1internal.jetski.ValueR\x05value:\x028\x01\"\x89\x01\n" +
+	"\ruser_settings\x18\x01 \x01(\v2:.google.internal.cloud.code.v1internal.jetski.UserSettingsR\fuserSettings\"\x89\x01\n" +
 	"\x0eTabChatRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12]\n" +
 	"\arequest\x18\x02 \x01(\v2C.google.internal.cloud.code.v1internal.jetski.GetChatMessageRequestR\arequest\"s\n" +
 	"\x0fTabChatResponse\x12`\n" +
-	"\bresponse\x18\x01 \x01(\v2D.google.internal.cloud.code.v1internal.jetski.GetChatMessageResponseR\bresponse\";\n" +
-	"\tTimestamp\x12\x18\n" +
-	"\aseconds\x18\x01 \x01(\x03R\aseconds\x12\x14\n" +
-	"\x05nanos\x18\x02 \x01(\x05R\x05nanos\"\x94\x01\n" +
+	"\bresponse\x18\x01 \x01(\v2D.google.internal.cloud.code.v1internal.jetski.GetChatMessageResponseR\bresponse\"\x94\x01\n" +
 	"\x1fUploadPerformanceProfileRequest\x12q\n" +
 	"\x13performance_profile\x18\x01 \x01(\v2@.google.internal.cloud.code.v1internal.jetski.PerformanceProfileR\x12performanceProfile\"\"\n" +
 	" UploadPerformanceProfileResponse\"\xc3\x01\n" +
 	"\fUserSettings\x12+\n" +
 	"\x11telemetry_enabled\x18\x01 \x01(\bR\x10telemetryEnabled\x12L\n" +
 	"#user_data_collection_force_disabled\x18\x02 \x01(\bR\x1fuserDataCollectionForceDisabled\x128\n" +
-	"\x18marketing_emails_enabled\x18\x03 \x01(\bR\x16marketingEmailsEnabled\"\xf5\x02\n" +
-	"\x05Value\x12V\n" +
-	"\n" +
-	"null_value\x18\x01 \x01(\x0e27.google.internal.cloud.code.v1internal.jetski.NullValueR\tnullValue\x12!\n" +
-	"\fnumber_value\x18\x02 \x01(\x01R\vnumberValue\x12!\n" +
-	"\fstring_value\x18\x03 \x01(\tR\vstringValue\x12\x1d\n" +
-	"\n" +
-	"bool_value\x18\x04 \x01(\bR\tboolValue\x12W\n" +
-	"\fstruct_value\x18\x05 \x01(\v24.google.internal.cloud.code.v1internal.jetski.StructR\vstructValue\x12V\n" +
-	"\n" +
-	"list_value\x18\x06 \x01(\v27.google.internal.cloud.code.v1internal.jetski.ListValueR\tlistValue\"\xab\x01\n" +
+	"\x18marketing_emails_enabled\x18\x03 \x01(\bR\x16marketingEmailsEnabled\"\xab\x01\n" +
 	"\rWebDocsOption\x12\x14\n" +
 	"\x05label\x18\x01 \x01(\tR\x05label\x12\x19\n" +
 	"\bdocs_uri\x18\x02 \x01(\tR\adocsUri\x12,\n" +
@@ -8476,10 +8186,7 @@ const file_JetskiService_proto_rawDesc = "" +
 	"\x12NUXInteractionType\x12$\n" +
 	" NUX_INTERACTION_TYPE_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eNUX_INTERACTION_TYPE_DISMISSED\x10\x01\x12!\n" +
-	"\x1dNUX_INTERACTION_TYPE_ACCEPTED\x10\x02*\x1b\n" +
-	"\tNullValue\x12\x0e\n" +
-	"\n" +
-	"NULL_VALUE\x10\x00*Z\n" +
+	"\x1dNUX_INTERACTION_TYPE_ACCEPTED\x10\x02*Z\n" +
 	"\tNuxClient\x12\x1a\n" +
 	"\x16NUX_CLIENT_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11NUX_CLIENT_JETSKI\x10\x01\x12\x1a\n" +
@@ -8532,7 +8239,7 @@ const file_JetskiService_proto_rawDesc = "" +
 	"\x15BattleModeAutoTrigger\x12J.google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerRequest\x1aK.google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerResponse\x12\xb9\x01\n" +
 	"\x18UploadPerformanceProfile\x12M.google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileRequest\x1aN.google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileResponse\x12\xcb\x01\n" +
 	"\x1eProvisionConversationBundleDir\x12S.google.internal.cloud.code.v1internal.jetski.ProvisionConversationBundleDirRequest\x1aT.google.internal.cloud.code.v1internal.jetski.ProvisionConversationBundleDirResponse\x12\xa7\x01\n" +
-	"\x12GetBundleWriteMint\x12G.google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintRequest\x1aH.google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintResponseb\x06proto3"
+	"\x12GetBundleWriteMint\x12G.google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintRequest\x1aH.google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintResponseB Z\x1egemini-server/pkg/proto/jetskib\x06proto3"
 
 var (
 	file_JetskiService_proto_rawDescOnce sync.Once
@@ -8546,8 +8253,8 @@ func file_JetskiService_proto_rawDescGZIP() []byte {
 	return file_JetskiService_proto_rawDescData
 }
 
-var file_JetskiService_proto_enumTypes = make([]protoimpl.EnumInfo, 14)
-var file_JetskiService_proto_msgTypes = make([]protoimpl.MessageInfo, 78)
+var file_JetskiService_proto_enumTypes = make([]protoimpl.EnumInfo, 13)
+var file_JetskiService_proto_msgTypes = make([]protoimpl.MessageInfo, 73)
 var file_JetskiService_proto_goTypes = []any{
 	(APIProvider)(0),                               // 0: google.internal.cloud.code.v1internal.jetski.APIProvider
 	(CaptureReason)(0),                             // 1: google.internal.cloud.code.v1internal.jetski.CaptureReason
@@ -8557,199 +8264,189 @@ var file_JetskiService_proto_goTypes = []any{
 	(Model)(0),                                     // 5: google.internal.cloud.code.v1internal.jetski.Model
 	(ModelProvider)(0),                             // 6: google.internal.cloud.code.v1internal.jetski.ModelProvider
 	(NUXInteractionType)(0),                        // 7: google.internal.cloud.code.v1internal.jetski.NUXInteractionType
-	(NullValue)(0),                                 // 8: google.internal.cloud.code.v1internal.jetski.NullValue
-	(NuxClient)(0),                                 // 9: google.internal.cloud.code.v1internal.jetski.NuxClient
-	(PromptTemplaterType)(0),                       // 10: google.internal.cloud.code.v1internal.jetski.PromptTemplaterType
-	(ToolFormatterType)(0),                         // 11: google.internal.cloud.code.v1internal.jetski.ToolFormatterType
-	(Type)(0),                                      // 12: google.internal.cloud.code.v1internal.jetski.Type
-	(Visibility)(0),                                // 13: google.internal.cloud.code.v1internal.jetski.Visibility
-	(*AgentPlugin)(nil),                            // 14: google.internal.cloud.code.v1internal.jetski.AgentPlugin
-	(*AgentPluginCommand)(nil),                     // 15: google.internal.cloud.code.v1internal.jetski.AgentPluginCommand
-	(*AgentPluginCommandTemplate)(nil),             // 16: google.internal.cloud.code.v1internal.jetski.AgentPluginCommandTemplate
-	(*AgentPluginCommandVariable)(nil),             // 17: google.internal.cloud.code.v1internal.jetski.AgentPluginCommandVariable
-	(*AgentPluginLocalConfig)(nil),                 // 18: google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig
-	(*AgentPluginOAuthConfig)(nil),                 // 19: google.internal.cloud.code.v1internal.jetski.AgentPluginOAuthConfig
-	(*AgentPluginRemoteConfig)(nil),                // 20: google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfig
-	(*AgentPluginRemoteConfigTemplate)(nil),        // 21: google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfigTemplate
-	(*BattleModeAutoTriggerRequest)(nil),           // 22: google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerRequest
-	(*BattleModeAutoTriggerResponse)(nil),          // 23: google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerResponse
-	(*BattleModeOverridesRequest)(nil),             // 24: google.internal.cloud.code.v1internal.jetski.BattleModeOverridesRequest
-	(*BattleModeOverridesResponse)(nil),            // 25: google.internal.cloud.code.v1internal.jetski.BattleModeOverridesResponse
-	(*BeyondModelInfo)(nil),                        // 26: google.internal.cloud.code.v1internal.jetski.BeyondModelInfo
-	(*BuildWithGooglePlugin)(nil),                  // 27: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin
-	(*CascadeNux)(nil),                             // 28: google.internal.cloud.code.v1internal.jetski.CascadeNux
-	(*CheckUrlAntivirusRequest)(nil),               // 29: google.internal.cloud.code.v1internal.jetski.CheckUrlAntivirusRequest
-	(*CheckUrlAntivirusResponse)(nil),              // 30: google.internal.cloud.code.v1internal.jetski.CheckUrlAntivirusResponse
-	(*CheckUrlDenylistRequest)(nil),                // 31: google.internal.cloud.code.v1internal.jetski.CheckUrlDenylistRequest
-	(*CheckUrlDenylistResponse)(nil),               // 32: google.internal.cloud.code.v1internal.jetski.CheckUrlDenylistResponse
-	(*ExperimentValue)(nil),                        // 33: google.internal.cloud.code.v1internal.jetski.ExperimentValue
-	(*FetchFromTrawlerCacheRequest)(nil),           // 34: google.internal.cloud.code.v1internal.jetski.FetchFromTrawlerCacheRequest
-	(*FetchFromTrawlerCacheResponse)(nil),          // 35: google.internal.cloud.code.v1internal.jetski.FetchFromTrawlerCacheResponse
-	(*FetchUserInfoRequest)(nil),                   // 36: google.internal.cloud.code.v1internal.jetski.FetchUserInfoRequest
-	(*FetchUserInfoResponse)(nil),                  // 37: google.internal.cloud.code.v1internal.jetski.FetchUserInfoResponse
-	(*GStaticSource)(nil),                          // 38: google.internal.cloud.code.v1internal.jetski.GStaticSource
-	(*GetAgentPluginRequest)(nil),                  // 39: google.internal.cloud.code.v1internal.jetski.GetAgentPluginRequest
-	(*GetBundleWriteMintRequest)(nil),              // 40: google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintRequest
-	(*GetBundleWriteMintResponse)(nil),             // 41: google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintResponse
-	(*GetChatMessageRequest)(nil),                  // 42: google.internal.cloud.code.v1internal.jetski.GetChatMessageRequest
-	(*GetChatMessageResponse)(nil),                 // 43: google.internal.cloud.code.v1internal.jetski.GetChatMessageResponse
-	(*GetHealthRequest)(nil),                       // 44: google.internal.cloud.code.v1internal.jetski.GetHealthRequest
-	(*Google3Source)(nil),                          // 45: google.internal.cloud.code.v1internal.jetski.Google3Source
-	(*Health)(nil),                                 // 46: google.internal.cloud.code.v1internal.jetski.Health
-	(*Interaction)(nil),                            // 47: google.internal.cloud.code.v1internal.jetski.Interaction
-	(*ListAgentPluginsRequest)(nil),                // 48: google.internal.cloud.code.v1internal.jetski.ListAgentPluginsRequest
-	(*ListAgentPluginsResponse)(nil),               // 49: google.internal.cloud.code.v1internal.jetski.ListAgentPluginsResponse
-	(*ListBuildWithGooglePluginsRequest)(nil),      // 50: google.internal.cloud.code.v1internal.jetski.ListBuildWithGooglePluginsRequest
-	(*ListBuildWithGooglePluginsResponse)(nil),     // 51: google.internal.cloud.code.v1internal.jetski.ListBuildWithGooglePluginsResponse
-	(*ListCascadeNuxesRequest)(nil),                // 52: google.internal.cloud.code.v1internal.jetski.ListCascadeNuxesRequest
-	(*ListCascadeNuxesResponse)(nil),               // 53: google.internal.cloud.code.v1internal.jetski.ListCascadeNuxesResponse
-	(*ListValue)(nil),                              // 54: google.internal.cloud.code.v1internal.jetski.ListValue
-	(*ListWebDocsOptionsRequest)(nil),              // 55: google.internal.cloud.code.v1internal.jetski.ListWebDocsOptionsRequest
-	(*ListWebDocsOptionsResponse)(nil),             // 56: google.internal.cloud.code.v1internal.jetski.ListWebDocsOptionsResponse
-	(*ModelDetails)(nil),                           // 57: google.internal.cloud.code.v1internal.jetski.ModelDetails
-	(*ModelExperiments)(nil),                       // 58: google.internal.cloud.code.v1internal.jetski.ModelExperiments
-	(*NUXInteraction)(nil),                         // 59: google.internal.cloud.code.v1internal.jetski.NUXInteraction
-	(*NuxFilter)(nil),                              // 60: google.internal.cloud.code.v1internal.jetski.NuxFilter
-	(*NuxVersionFilter)(nil),                       // 61: google.internal.cloud.code.v1internal.jetski.NuxVersionFilter
-	(*PerformanceProfile)(nil),                     // 62: google.internal.cloud.code.v1internal.jetski.PerformanceProfile
-	(*ProvisionConversationBundleDirRequest)(nil),  // 63: google.internal.cloud.code.v1internal.jetski.ProvisionConversationBundleDirRequest
-	(*ProvisionConversationBundleDirResponse)(nil), // 64: google.internal.cloud.code.v1internal.jetski.ProvisionConversationBundleDirResponse
-	(*QuotaInfo)(nil),                              // 65: google.internal.cloud.code.v1internal.jetski.QuotaInfo
-	(*RecordTrajectoryAnalyticsRequest)(nil),       // 66: google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsRequest
-	(*RecordTrajectoryAnalyticsResponse)(nil),      // 67: google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsResponse
-	(*RegisterInteractionRequest)(nil),             // 68: google.internal.cloud.code.v1internal.jetski.RegisterInteractionRequest
-	(*RegisterInteractionResponse)(nil),            // 69: google.internal.cloud.code.v1internal.jetski.RegisterInteractionResponse
-	(*RewriteUriRequest)(nil),                      // 70: google.internal.cloud.code.v1internal.jetski.RewriteUriRequest
-	(*RewriteUriResponse)(nil),                     // 71: google.internal.cloud.code.v1internal.jetski.RewriteUriResponse
-	(*SetUserSettingsRequest)(nil),                 // 72: google.internal.cloud.code.v1internal.jetski.SetUserSettingsRequest
-	(*SetUserSettingsResponse)(nil),                // 73: google.internal.cloud.code.v1internal.jetski.SetUserSettingsResponse
-	(*Struct)(nil),                                 // 74: google.internal.cloud.code.v1internal.jetski.Struct
-	(*TabChatRequest)(nil),                         // 75: google.internal.cloud.code.v1internal.jetski.TabChatRequest
-	(*TabChatResponse)(nil),                        // 76: google.internal.cloud.code.v1internal.jetski.TabChatResponse
-	(*Timestamp)(nil),                              // 77: google.internal.cloud.code.v1internal.jetski.Timestamp
-	(*UploadPerformanceProfileRequest)(nil),        // 78: google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileRequest
-	(*UploadPerformanceProfileResponse)(nil),       // 79: google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileResponse
-	(*UserSettings)(nil),                           // 80: google.internal.cloud.code.v1internal.jetski.UserSettings
-	(*Value)(nil),                                  // 81: google.internal.cloud.code.v1internal.jetski.Value
-	(*WebDocsOption)(nil),                          // 82: google.internal.cloud.code.v1internal.jetski.WebDocsOption
-	(*WriteTrajectoryACLsRequest)(nil),             // 83: google.internal.cloud.code.v1internal.jetski.WriteTrajectoryACLsRequest
-	(*WriteTrajectoryACLsResponse)(nil),            // 84: google.internal.cloud.code.v1internal.jetski.WriteTrajectoryACLsResponse
-	nil,                                            // 85: google.internal.cloud.code.v1internal.jetski.AgentPluginCommandTemplate.EnvEntry
-	nil,                                            // 86: google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig.CommandsEntry
-	nil,                                            // 87: google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfigTemplate.HeadersEntry
-	nil,                                            // 88: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.VersionShasEntry
-	nil,                                            // 89: google.internal.cloud.code.v1internal.jetski.ModelDetails.SupportedMimeTypesEntry
-	nil,                                            // 90: google.internal.cloud.code.v1internal.jetski.ModelExperiments.ExperimentsEntry
-	nil,                                            // 91: google.internal.cloud.code.v1internal.jetski.Struct.FieldsEntry
+	(NuxClient)(0),                                 // 8: google.internal.cloud.code.v1internal.jetski.NuxClient
+	(PromptTemplaterType)(0),                       // 9: google.internal.cloud.code.v1internal.jetski.PromptTemplaterType
+	(ToolFormatterType)(0),                         // 10: google.internal.cloud.code.v1internal.jetski.ToolFormatterType
+	(Type)(0),                                      // 11: google.internal.cloud.code.v1internal.jetski.Type
+	(Visibility)(0),                                // 12: google.internal.cloud.code.v1internal.jetski.Visibility
+	(*AgentPlugin)(nil),                            // 13: google.internal.cloud.code.v1internal.jetski.AgentPlugin
+	(*AgentPluginCommand)(nil),                     // 14: google.internal.cloud.code.v1internal.jetski.AgentPluginCommand
+	(*AgentPluginCommandTemplate)(nil),             // 15: google.internal.cloud.code.v1internal.jetski.AgentPluginCommandTemplate
+	(*AgentPluginCommandVariable)(nil),             // 16: google.internal.cloud.code.v1internal.jetski.AgentPluginCommandVariable
+	(*AgentPluginLocalConfig)(nil),                 // 17: google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig
+	(*AgentPluginOAuthConfig)(nil),                 // 18: google.internal.cloud.code.v1internal.jetski.AgentPluginOAuthConfig
+	(*AgentPluginRemoteConfig)(nil),                // 19: google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfig
+	(*AgentPluginRemoteConfigTemplate)(nil),        // 20: google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfigTemplate
+	(*BattleModeAutoTriggerRequest)(nil),           // 21: google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerRequest
+	(*BattleModeAutoTriggerResponse)(nil),          // 22: google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerResponse
+	(*BattleModeOverridesRequest)(nil),             // 23: google.internal.cloud.code.v1internal.jetski.BattleModeOverridesRequest
+	(*BattleModeOverridesResponse)(nil),            // 24: google.internal.cloud.code.v1internal.jetski.BattleModeOverridesResponse
+	(*BeyondModelInfo)(nil),                        // 25: google.internal.cloud.code.v1internal.jetski.BeyondModelInfo
+	(*BuildWithGooglePlugin)(nil),                  // 26: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin
+	(*CascadeNux)(nil),                             // 27: google.internal.cloud.code.v1internal.jetski.CascadeNux
+	(*CheckUrlAntivirusRequest)(nil),               // 28: google.internal.cloud.code.v1internal.jetski.CheckUrlAntivirusRequest
+	(*CheckUrlAntivirusResponse)(nil),              // 29: google.internal.cloud.code.v1internal.jetski.CheckUrlAntivirusResponse
+	(*CheckUrlDenylistRequest)(nil),                // 30: google.internal.cloud.code.v1internal.jetski.CheckUrlDenylistRequest
+	(*CheckUrlDenylistResponse)(nil),               // 31: google.internal.cloud.code.v1internal.jetski.CheckUrlDenylistResponse
+	(*ExperimentValue)(nil),                        // 32: google.internal.cloud.code.v1internal.jetski.ExperimentValue
+	(*FetchFromTrawlerCacheRequest)(nil),           // 33: google.internal.cloud.code.v1internal.jetski.FetchFromTrawlerCacheRequest
+	(*FetchFromTrawlerCacheResponse)(nil),          // 34: google.internal.cloud.code.v1internal.jetski.FetchFromTrawlerCacheResponse
+	(*FetchUserInfoRequest)(nil),                   // 35: google.internal.cloud.code.v1internal.jetski.FetchUserInfoRequest
+	(*FetchUserInfoResponse)(nil),                  // 36: google.internal.cloud.code.v1internal.jetski.FetchUserInfoResponse
+	(*GStaticSource)(nil),                          // 37: google.internal.cloud.code.v1internal.jetski.GStaticSource
+	(*GetAgentPluginRequest)(nil),                  // 38: google.internal.cloud.code.v1internal.jetski.GetAgentPluginRequest
+	(*GetBundleWriteMintRequest)(nil),              // 39: google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintRequest
+	(*GetBundleWriteMintResponse)(nil),             // 40: google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintResponse
+	(*GetChatMessageRequest)(nil),                  // 41: google.internal.cloud.code.v1internal.jetski.GetChatMessageRequest
+	(*GetChatMessageResponse)(nil),                 // 42: google.internal.cloud.code.v1internal.jetski.GetChatMessageResponse
+	(*GetHealthRequest)(nil),                       // 43: google.internal.cloud.code.v1internal.jetski.GetHealthRequest
+	(*Google3Source)(nil),                          // 44: google.internal.cloud.code.v1internal.jetski.Google3Source
+	(*Health)(nil),                                 // 45: google.internal.cloud.code.v1internal.jetski.Health
+	(*Interaction)(nil),                            // 46: google.internal.cloud.code.v1internal.jetski.Interaction
+	(*ListAgentPluginsRequest)(nil),                // 47: google.internal.cloud.code.v1internal.jetski.ListAgentPluginsRequest
+	(*ListAgentPluginsResponse)(nil),               // 48: google.internal.cloud.code.v1internal.jetski.ListAgentPluginsResponse
+	(*ListBuildWithGooglePluginsRequest)(nil),      // 49: google.internal.cloud.code.v1internal.jetski.ListBuildWithGooglePluginsRequest
+	(*ListBuildWithGooglePluginsResponse)(nil),     // 50: google.internal.cloud.code.v1internal.jetski.ListBuildWithGooglePluginsResponse
+	(*ListCascadeNuxesRequest)(nil),                // 51: google.internal.cloud.code.v1internal.jetski.ListCascadeNuxesRequest
+	(*ListCascadeNuxesResponse)(nil),               // 52: google.internal.cloud.code.v1internal.jetski.ListCascadeNuxesResponse
+	(*ListWebDocsOptionsRequest)(nil),              // 53: google.internal.cloud.code.v1internal.jetski.ListWebDocsOptionsRequest
+	(*ListWebDocsOptionsResponse)(nil),             // 54: google.internal.cloud.code.v1internal.jetski.ListWebDocsOptionsResponse
+	(*ModelDetails)(nil),                           // 55: google.internal.cloud.code.v1internal.jetski.ModelDetails
+	(*ModelExperiments)(nil),                       // 56: google.internal.cloud.code.v1internal.jetski.ModelExperiments
+	(*NUXInteraction)(nil),                         // 57: google.internal.cloud.code.v1internal.jetski.NUXInteraction
+	(*NuxFilter)(nil),                              // 58: google.internal.cloud.code.v1internal.jetski.NuxFilter
+	(*NuxVersionFilter)(nil),                       // 59: google.internal.cloud.code.v1internal.jetski.NuxVersionFilter
+	(*PerformanceProfile)(nil),                     // 60: google.internal.cloud.code.v1internal.jetski.PerformanceProfile
+	(*ProvisionConversationBundleDirRequest)(nil),  // 61: google.internal.cloud.code.v1internal.jetski.ProvisionConversationBundleDirRequest
+	(*ProvisionConversationBundleDirResponse)(nil), // 62: google.internal.cloud.code.v1internal.jetski.ProvisionConversationBundleDirResponse
+	(*QuotaInfo)(nil),                              // 63: google.internal.cloud.code.v1internal.jetski.QuotaInfo
+	(*RecordTrajectoryAnalyticsRequest)(nil),       // 64: google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsRequest
+	(*RecordTrajectoryAnalyticsResponse)(nil),      // 65: google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsResponse
+	(*RegisterInteractionRequest)(nil),             // 66: google.internal.cloud.code.v1internal.jetski.RegisterInteractionRequest
+	(*RegisterInteractionResponse)(nil),            // 67: google.internal.cloud.code.v1internal.jetski.RegisterInteractionResponse
+	(*RewriteUriRequest)(nil),                      // 68: google.internal.cloud.code.v1internal.jetski.RewriteUriRequest
+	(*RewriteUriResponse)(nil),                     // 69: google.internal.cloud.code.v1internal.jetski.RewriteUriResponse
+	(*SetUserSettingsRequest)(nil),                 // 70: google.internal.cloud.code.v1internal.jetski.SetUserSettingsRequest
+	(*SetUserSettingsResponse)(nil),                // 71: google.internal.cloud.code.v1internal.jetski.SetUserSettingsResponse
+	(*TabChatRequest)(nil),                         // 72: google.internal.cloud.code.v1internal.jetski.TabChatRequest
+	(*TabChatResponse)(nil),                        // 73: google.internal.cloud.code.v1internal.jetski.TabChatResponse
+	(*UploadPerformanceProfileRequest)(nil),        // 74: google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileRequest
+	(*UploadPerformanceProfileResponse)(nil),       // 75: google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileResponse
+	(*UserSettings)(nil),                           // 76: google.internal.cloud.code.v1internal.jetski.UserSettings
+	(*WebDocsOption)(nil),                          // 77: google.internal.cloud.code.v1internal.jetski.WebDocsOption
+	(*WriteTrajectoryACLsRequest)(nil),             // 78: google.internal.cloud.code.v1internal.jetski.WriteTrajectoryACLsRequest
+	(*WriteTrajectoryACLsResponse)(nil),            // 79: google.internal.cloud.code.v1internal.jetski.WriteTrajectoryACLsResponse
+	nil,                                            // 80: google.internal.cloud.code.v1internal.jetski.AgentPluginCommandTemplate.EnvEntry
+	nil,                                            // 81: google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig.CommandsEntry
+	nil,                                            // 82: google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfigTemplate.HeadersEntry
+	nil,                                            // 83: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.VersionShasEntry
+	nil,                                            // 84: google.internal.cloud.code.v1internal.jetski.ModelDetails.SupportedMimeTypesEntry
+	nil,                                            // 85: google.internal.cloud.code.v1internal.jetski.ModelExperiments.ExperimentsEntry
+	(*timestamppb.Timestamp)(nil),                  // 86: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),                        // 87: google.protobuf.Struct
 }
 var file_JetskiService_proto_depIdxs = []int32{
-	18, // 0: google.internal.cloud.code.v1internal.jetski.AgentPlugin.local:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig
-	20, // 1: google.internal.cloud.code.v1internal.jetski.AgentPlugin.remote:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfig
-	19, // 2: google.internal.cloud.code.v1internal.jetski.AgentPlugin.oauth_config:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginOAuthConfig
-	16, // 3: google.internal.cloud.code.v1internal.jetski.AgentPluginCommand.command_template:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginCommandTemplate
-	17, // 4: google.internal.cloud.code.v1internal.jetski.AgentPluginCommand.variables:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginCommandVariable
-	85, // 5: google.internal.cloud.code.v1internal.jetski.AgentPluginCommandTemplate.env:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginCommandTemplate.EnvEntry
-	86, // 6: google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig.commands:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig.CommandsEntry
-	21, // 7: google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfig.remote_template:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfigTemplate
-	87, // 8: google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfigTemplate.headers:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfigTemplate.HeadersEntry
-	77, // 9: google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerRequest.last_auto_trigger_request_time:type_name -> google.internal.cloud.code.v1internal.jetski.Timestamp
-	57, // 10: google.internal.cloud.code.v1internal.jetski.BattleModeOverridesResponse.override_model_details:type_name -> google.internal.cloud.code.v1internal.jetski.ModelDetails
-	14, // 11: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.plugin:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPlugin
-	38, // 12: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.gstatic:type_name -> google.internal.cloud.code.v1internal.jetski.GStaticSource
-	88, // 13: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.version_shas:type_name -> google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.VersionShasEntry
-	45, // 14: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.google3:type_name -> google.internal.cloud.code.v1internal.jetski.Google3Source
-	13, // 15: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.visibility:type_name -> google.internal.cloud.code.v1internal.jetski.Visibility
+	17, // 0: google.internal.cloud.code.v1internal.jetski.AgentPlugin.local:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig
+	19, // 1: google.internal.cloud.code.v1internal.jetski.AgentPlugin.remote:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfig
+	18, // 2: google.internal.cloud.code.v1internal.jetski.AgentPlugin.oauth_config:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginOAuthConfig
+	15, // 3: google.internal.cloud.code.v1internal.jetski.AgentPluginCommand.command_template:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginCommandTemplate
+	16, // 4: google.internal.cloud.code.v1internal.jetski.AgentPluginCommand.variables:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginCommandVariable
+	80, // 5: google.internal.cloud.code.v1internal.jetski.AgentPluginCommandTemplate.env:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginCommandTemplate.EnvEntry
+	81, // 6: google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig.commands:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig.CommandsEntry
+	20, // 7: google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfig.remote_template:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfigTemplate
+	82, // 8: google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfigTemplate.headers:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginRemoteConfigTemplate.HeadersEntry
+	86, // 9: google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerRequest.last_auto_trigger_request_time:type_name -> google.protobuf.Timestamp
+	55, // 10: google.internal.cloud.code.v1internal.jetski.BattleModeOverridesResponse.override_model_details:type_name -> google.internal.cloud.code.v1internal.jetski.ModelDetails
+	13, // 11: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.plugin:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPlugin
+	37, // 12: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.gstatic:type_name -> google.internal.cloud.code.v1internal.jetski.GStaticSource
+	83, // 13: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.version_shas:type_name -> google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.VersionShasEntry
+	44, // 14: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.google3:type_name -> google.internal.cloud.code.v1internal.jetski.Google3Source
+	12, // 15: google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin.visibility:type_name -> google.internal.cloud.code.v1internal.jetski.Visibility
 	3,  // 16: google.internal.cloud.code.v1internal.jetski.CascadeNux.location:type_name -> google.internal.cloud.code.v1internal.jetski.CascadeNuxLocation
 	4,  // 17: google.internal.cloud.code.v1internal.jetski.CascadeNux.trigger:type_name -> google.internal.cloud.code.v1internal.jetski.CascadeNuxTrigger
 	2,  // 18: google.internal.cloud.code.v1internal.jetski.CascadeNux.icon:type_name -> google.internal.cloud.code.v1internal.jetski.CascadeNuxIcon
-	60, // 19: google.internal.cloud.code.v1internal.jetski.CascadeNux.filter:type_name -> google.internal.cloud.code.v1internal.jetski.NuxFilter
+	58, // 19: google.internal.cloud.code.v1internal.jetski.CascadeNux.filter:type_name -> google.internal.cloud.code.v1internal.jetski.NuxFilter
 	7,  // 20: google.internal.cloud.code.v1internal.jetski.CascadeNux.available_interactions:type_name -> google.internal.cloud.code.v1internal.jetski.NUXInteractionType
-	80, // 21: google.internal.cloud.code.v1internal.jetski.FetchUserInfoResponse.user_settings:type_name -> google.internal.cloud.code.v1internal.jetski.UserSettings
-	77, // 22: google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintResponse.mint_expiry_time:type_name -> google.internal.cloud.code.v1internal.jetski.Timestamp
-	59, // 23: google.internal.cloud.code.v1internal.jetski.Interaction.nux_interaction:type_name -> google.internal.cloud.code.v1internal.jetski.NUXInteraction
-	14, // 24: google.internal.cloud.code.v1internal.jetski.ListAgentPluginsResponse.agent_plugins:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPlugin
-	27, // 25: google.internal.cloud.code.v1internal.jetski.ListBuildWithGooglePluginsResponse.build_with_google_plugins:type_name -> google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin
-	28, // 26: google.internal.cloud.code.v1internal.jetski.ListCascadeNuxesResponse.cascade_nuxes:type_name -> google.internal.cloud.code.v1internal.jetski.CascadeNux
-	81, // 27: google.internal.cloud.code.v1internal.jetski.ListValue.values:type_name -> google.internal.cloud.code.v1internal.jetski.Value
-	82, // 28: google.internal.cloud.code.v1internal.jetski.ListWebDocsOptionsResponse.web_docs_options:type_name -> google.internal.cloud.code.v1internal.jetski.WebDocsOption
-	65, // 29: google.internal.cloud.code.v1internal.jetski.ModelDetails.quota_info:type_name -> google.internal.cloud.code.v1internal.jetski.QuotaInfo
-	5,  // 30: google.internal.cloud.code.v1internal.jetski.ModelDetails.model:type_name -> google.internal.cloud.code.v1internal.jetski.Model
-	0,  // 31: google.internal.cloud.code.v1internal.jetski.ModelDetails.api_provider:type_name -> google.internal.cloud.code.v1internal.jetski.APIProvider
-	6,  // 32: google.internal.cloud.code.v1internal.jetski.ModelDetails.model_provider:type_name -> google.internal.cloud.code.v1internal.jetski.ModelProvider
-	10, // 33: google.internal.cloud.code.v1internal.jetski.ModelDetails.prompt_templater_type:type_name -> google.internal.cloud.code.v1internal.jetski.PromptTemplaterType
-	11, // 34: google.internal.cloud.code.v1internal.jetski.ModelDetails.tool_formatter_type:type_name -> google.internal.cloud.code.v1internal.jetski.ToolFormatterType
-	89, // 35: google.internal.cloud.code.v1internal.jetski.ModelDetails.supported_mime_types:type_name -> google.internal.cloud.code.v1internal.jetski.ModelDetails.SupportedMimeTypesEntry
-	58, // 36: google.internal.cloud.code.v1internal.jetski.ModelDetails.model_experiments:type_name -> google.internal.cloud.code.v1internal.jetski.ModelExperiments
-	26, // 37: google.internal.cloud.code.v1internal.jetski.ModelDetails.beyond_model_info:type_name -> google.internal.cloud.code.v1internal.jetski.BeyondModelInfo
-	90, // 38: google.internal.cloud.code.v1internal.jetski.ModelExperiments.experiments:type_name -> google.internal.cloud.code.v1internal.jetski.ModelExperiments.ExperimentsEntry
-	7,  // 39: google.internal.cloud.code.v1internal.jetski.NUXInteraction.interaction_type:type_name -> google.internal.cloud.code.v1internal.jetski.NUXInteractionType
-	9,  // 40: google.internal.cloud.code.v1internal.jetski.NuxFilter.clients:type_name -> google.internal.cloud.code.v1internal.jetski.NuxClient
-	61, // 41: google.internal.cloud.code.v1internal.jetski.NuxFilter.version_filter:type_name -> google.internal.cloud.code.v1internal.jetski.NuxVersionFilter
-	12, // 42: google.internal.cloud.code.v1internal.jetski.PerformanceProfile.profile_type:type_name -> google.internal.cloud.code.v1internal.jetski.Type
-	1,  // 43: google.internal.cloud.code.v1internal.jetski.PerformanceProfile.capture_reason:type_name -> google.internal.cloud.code.v1internal.jetski.CaptureReason
-	77, // 44: google.internal.cloud.code.v1internal.jetski.QuotaInfo.reset_time:type_name -> google.internal.cloud.code.v1internal.jetski.Timestamp
-	74, // 45: google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsRequest.trajectory:type_name -> google.internal.cloud.code.v1internal.jetski.Struct
-	74, // 46: google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsRequest.metadata:type_name -> google.internal.cloud.code.v1internal.jetski.Struct
-	47, // 47: google.internal.cloud.code.v1internal.jetski.RegisterInteractionRequest.interaction:type_name -> google.internal.cloud.code.v1internal.jetski.Interaction
-	80, // 48: google.internal.cloud.code.v1internal.jetski.SetUserSettingsRequest.user_settings:type_name -> google.internal.cloud.code.v1internal.jetski.UserSettings
-	80, // 49: google.internal.cloud.code.v1internal.jetski.SetUserSettingsResponse.user_settings:type_name -> google.internal.cloud.code.v1internal.jetski.UserSettings
-	91, // 50: google.internal.cloud.code.v1internal.jetski.Struct.fields:type_name -> google.internal.cloud.code.v1internal.jetski.Struct.FieldsEntry
-	42, // 51: google.internal.cloud.code.v1internal.jetski.TabChatRequest.request:type_name -> google.internal.cloud.code.v1internal.jetski.GetChatMessageRequest
-	43, // 52: google.internal.cloud.code.v1internal.jetski.TabChatResponse.response:type_name -> google.internal.cloud.code.v1internal.jetski.GetChatMessageResponse
-	62, // 53: google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileRequest.performance_profile:type_name -> google.internal.cloud.code.v1internal.jetski.PerformanceProfile
-	8,  // 54: google.internal.cloud.code.v1internal.jetski.Value.null_value:type_name -> google.internal.cloud.code.v1internal.jetski.NullValue
-	74, // 55: google.internal.cloud.code.v1internal.jetski.Value.struct_value:type_name -> google.internal.cloud.code.v1internal.jetski.Struct
-	54, // 56: google.internal.cloud.code.v1internal.jetski.Value.list_value:type_name -> google.internal.cloud.code.v1internal.jetski.ListValue
-	15, // 57: google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig.CommandsEntry.value:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginCommand
-	33, // 58: google.internal.cloud.code.v1internal.jetski.ModelExperiments.ExperimentsEntry.value:type_name -> google.internal.cloud.code.v1internal.jetski.ExperimentValue
-	81, // 59: google.internal.cloud.code.v1internal.jetski.Struct.FieldsEntry.value:type_name -> google.internal.cloud.code.v1internal.jetski.Value
-	48, // 60: google.internal.cloud.code.v1internal.jetski.JetskiService.ListAgentPlugins:input_type -> google.internal.cloud.code.v1internal.jetski.ListAgentPluginsRequest
-	50, // 61: google.internal.cloud.code.v1internal.jetski.JetskiService.ListBuildWithGooglePlugins:input_type -> google.internal.cloud.code.v1internal.jetski.ListBuildWithGooglePluginsRequest
-	39, // 62: google.internal.cloud.code.v1internal.jetski.JetskiService.GetAgentPlugin:input_type -> google.internal.cloud.code.v1internal.jetski.GetAgentPluginRequest
-	52, // 63: google.internal.cloud.code.v1internal.jetski.JetskiService.ListCascadeNuxes:input_type -> google.internal.cloud.code.v1internal.jetski.ListCascadeNuxesRequest
-	55, // 64: google.internal.cloud.code.v1internal.jetski.JetskiService.ListWebDocsOptions:input_type -> google.internal.cloud.code.v1internal.jetski.ListWebDocsOptionsRequest
-	70, // 65: google.internal.cloud.code.v1internal.jetski.JetskiService.RewriteUri:input_type -> google.internal.cloud.code.v1internal.jetski.RewriteUriRequest
-	36, // 66: google.internal.cloud.code.v1internal.jetski.JetskiService.FetchUserInfo:input_type -> google.internal.cloud.code.v1internal.jetski.FetchUserInfoRequest
-	72, // 67: google.internal.cloud.code.v1internal.jetski.JetskiService.SetUserSettings:input_type -> google.internal.cloud.code.v1internal.jetski.SetUserSettingsRequest
-	75, // 68: google.internal.cloud.code.v1internal.jetski.JetskiService.TabChat:input_type -> google.internal.cloud.code.v1internal.jetski.TabChatRequest
-	31, // 69: google.internal.cloud.code.v1internal.jetski.JetskiService.CheckUrlDenylist:input_type -> google.internal.cloud.code.v1internal.jetski.CheckUrlDenylistRequest
-	29, // 70: google.internal.cloud.code.v1internal.jetski.JetskiService.CheckUrlAntivirus:input_type -> google.internal.cloud.code.v1internal.jetski.CheckUrlAntivirusRequest
-	44, // 71: google.internal.cloud.code.v1internal.jetski.JetskiService.GetHealth:input_type -> google.internal.cloud.code.v1internal.jetski.GetHealthRequest
-	66, // 72: google.internal.cloud.code.v1internal.jetski.JetskiService.RecordTrajectoryAnalytics:input_type -> google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsRequest
-	83, // 73: google.internal.cloud.code.v1internal.jetski.JetskiService.WriteTrajectoryACLs:input_type -> google.internal.cloud.code.v1internal.jetski.WriteTrajectoryACLsRequest
-	34, // 74: google.internal.cloud.code.v1internal.jetski.JetskiService.FetchFromTrawlerCache:input_type -> google.internal.cloud.code.v1internal.jetski.FetchFromTrawlerCacheRequest
-	68, // 75: google.internal.cloud.code.v1internal.jetski.JetskiService.RegisterInteraction:input_type -> google.internal.cloud.code.v1internal.jetski.RegisterInteractionRequest
-	24, // 76: google.internal.cloud.code.v1internal.jetski.JetskiService.BattleModeOverrides:input_type -> google.internal.cloud.code.v1internal.jetski.BattleModeOverridesRequest
-	22, // 77: google.internal.cloud.code.v1internal.jetski.JetskiService.BattleModeAutoTrigger:input_type -> google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerRequest
-	78, // 78: google.internal.cloud.code.v1internal.jetski.JetskiService.UploadPerformanceProfile:input_type -> google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileRequest
-	63, // 79: google.internal.cloud.code.v1internal.jetski.JetskiService.ProvisionConversationBundleDir:input_type -> google.internal.cloud.code.v1internal.jetski.ProvisionConversationBundleDirRequest
-	40, // 80: google.internal.cloud.code.v1internal.jetski.JetskiService.GetBundleWriteMint:input_type -> google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintRequest
-	49, // 81: google.internal.cloud.code.v1internal.jetski.JetskiService.ListAgentPlugins:output_type -> google.internal.cloud.code.v1internal.jetski.ListAgentPluginsResponse
-	51, // 82: google.internal.cloud.code.v1internal.jetski.JetskiService.ListBuildWithGooglePlugins:output_type -> google.internal.cloud.code.v1internal.jetski.ListBuildWithGooglePluginsResponse
-	14, // 83: google.internal.cloud.code.v1internal.jetski.JetskiService.GetAgentPlugin:output_type -> google.internal.cloud.code.v1internal.jetski.AgentPlugin
-	53, // 84: google.internal.cloud.code.v1internal.jetski.JetskiService.ListCascadeNuxes:output_type -> google.internal.cloud.code.v1internal.jetski.ListCascadeNuxesResponse
-	56, // 85: google.internal.cloud.code.v1internal.jetski.JetskiService.ListWebDocsOptions:output_type -> google.internal.cloud.code.v1internal.jetski.ListWebDocsOptionsResponse
-	71, // 86: google.internal.cloud.code.v1internal.jetski.JetskiService.RewriteUri:output_type -> google.internal.cloud.code.v1internal.jetski.RewriteUriResponse
-	37, // 87: google.internal.cloud.code.v1internal.jetski.JetskiService.FetchUserInfo:output_type -> google.internal.cloud.code.v1internal.jetski.FetchUserInfoResponse
-	73, // 88: google.internal.cloud.code.v1internal.jetski.JetskiService.SetUserSettings:output_type -> google.internal.cloud.code.v1internal.jetski.SetUserSettingsResponse
-	76, // 89: google.internal.cloud.code.v1internal.jetski.JetskiService.TabChat:output_type -> google.internal.cloud.code.v1internal.jetski.TabChatResponse
-	32, // 90: google.internal.cloud.code.v1internal.jetski.JetskiService.CheckUrlDenylist:output_type -> google.internal.cloud.code.v1internal.jetski.CheckUrlDenylistResponse
-	30, // 91: google.internal.cloud.code.v1internal.jetski.JetskiService.CheckUrlAntivirus:output_type -> google.internal.cloud.code.v1internal.jetski.CheckUrlAntivirusResponse
-	46, // 92: google.internal.cloud.code.v1internal.jetski.JetskiService.GetHealth:output_type -> google.internal.cloud.code.v1internal.jetski.Health
-	67, // 93: google.internal.cloud.code.v1internal.jetski.JetskiService.RecordTrajectoryAnalytics:output_type -> google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsResponse
-	84, // 94: google.internal.cloud.code.v1internal.jetski.JetskiService.WriteTrajectoryACLs:output_type -> google.internal.cloud.code.v1internal.jetski.WriteTrajectoryACLsResponse
-	35, // 95: google.internal.cloud.code.v1internal.jetski.JetskiService.FetchFromTrawlerCache:output_type -> google.internal.cloud.code.v1internal.jetski.FetchFromTrawlerCacheResponse
-	69, // 96: google.internal.cloud.code.v1internal.jetski.JetskiService.RegisterInteraction:output_type -> google.internal.cloud.code.v1internal.jetski.RegisterInteractionResponse
-	25, // 97: google.internal.cloud.code.v1internal.jetski.JetskiService.BattleModeOverrides:output_type -> google.internal.cloud.code.v1internal.jetski.BattleModeOverridesResponse
-	23, // 98: google.internal.cloud.code.v1internal.jetski.JetskiService.BattleModeAutoTrigger:output_type -> google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerResponse
-	79, // 99: google.internal.cloud.code.v1internal.jetski.JetskiService.UploadPerformanceProfile:output_type -> google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileResponse
-	64, // 100: google.internal.cloud.code.v1internal.jetski.JetskiService.ProvisionConversationBundleDir:output_type -> google.internal.cloud.code.v1internal.jetski.ProvisionConversationBundleDirResponse
-	41, // 101: google.internal.cloud.code.v1internal.jetski.JetskiService.GetBundleWriteMint:output_type -> google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintResponse
-	81, // [81:102] is the sub-list for method output_type
-	60, // [60:81] is the sub-list for method input_type
-	60, // [60:60] is the sub-list for extension type_name
-	60, // [60:60] is the sub-list for extension extendee
-	0,  // [0:60] is the sub-list for field type_name
+	76, // 21: google.internal.cloud.code.v1internal.jetski.FetchUserInfoResponse.user_settings:type_name -> google.internal.cloud.code.v1internal.jetski.UserSettings
+	86, // 22: google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintResponse.mint_expiry_time:type_name -> google.protobuf.Timestamp
+	57, // 23: google.internal.cloud.code.v1internal.jetski.Interaction.nux_interaction:type_name -> google.internal.cloud.code.v1internal.jetski.NUXInteraction
+	13, // 24: google.internal.cloud.code.v1internal.jetski.ListAgentPluginsResponse.agent_plugins:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPlugin
+	26, // 25: google.internal.cloud.code.v1internal.jetski.ListBuildWithGooglePluginsResponse.build_with_google_plugins:type_name -> google.internal.cloud.code.v1internal.jetski.BuildWithGooglePlugin
+	27, // 26: google.internal.cloud.code.v1internal.jetski.ListCascadeNuxesResponse.cascade_nuxes:type_name -> google.internal.cloud.code.v1internal.jetski.CascadeNux
+	77, // 27: google.internal.cloud.code.v1internal.jetski.ListWebDocsOptionsResponse.web_docs_options:type_name -> google.internal.cloud.code.v1internal.jetski.WebDocsOption
+	63, // 28: google.internal.cloud.code.v1internal.jetski.ModelDetails.quota_info:type_name -> google.internal.cloud.code.v1internal.jetski.QuotaInfo
+	5,  // 29: google.internal.cloud.code.v1internal.jetski.ModelDetails.model:type_name -> google.internal.cloud.code.v1internal.jetski.Model
+	0,  // 30: google.internal.cloud.code.v1internal.jetski.ModelDetails.api_provider:type_name -> google.internal.cloud.code.v1internal.jetski.APIProvider
+	6,  // 31: google.internal.cloud.code.v1internal.jetski.ModelDetails.model_provider:type_name -> google.internal.cloud.code.v1internal.jetski.ModelProvider
+	9,  // 32: google.internal.cloud.code.v1internal.jetski.ModelDetails.prompt_templater_type:type_name -> google.internal.cloud.code.v1internal.jetski.PromptTemplaterType
+	10, // 33: google.internal.cloud.code.v1internal.jetski.ModelDetails.tool_formatter_type:type_name -> google.internal.cloud.code.v1internal.jetski.ToolFormatterType
+	84, // 34: google.internal.cloud.code.v1internal.jetski.ModelDetails.supported_mime_types:type_name -> google.internal.cloud.code.v1internal.jetski.ModelDetails.SupportedMimeTypesEntry
+	56, // 35: google.internal.cloud.code.v1internal.jetski.ModelDetails.model_experiments:type_name -> google.internal.cloud.code.v1internal.jetski.ModelExperiments
+	25, // 36: google.internal.cloud.code.v1internal.jetski.ModelDetails.beyond_model_info:type_name -> google.internal.cloud.code.v1internal.jetski.BeyondModelInfo
+	85, // 37: google.internal.cloud.code.v1internal.jetski.ModelExperiments.experiments:type_name -> google.internal.cloud.code.v1internal.jetski.ModelExperiments.ExperimentsEntry
+	7,  // 38: google.internal.cloud.code.v1internal.jetski.NUXInteraction.interaction_type:type_name -> google.internal.cloud.code.v1internal.jetski.NUXInteractionType
+	8,  // 39: google.internal.cloud.code.v1internal.jetski.NuxFilter.clients:type_name -> google.internal.cloud.code.v1internal.jetski.NuxClient
+	59, // 40: google.internal.cloud.code.v1internal.jetski.NuxFilter.version_filter:type_name -> google.internal.cloud.code.v1internal.jetski.NuxVersionFilter
+	11, // 41: google.internal.cloud.code.v1internal.jetski.PerformanceProfile.profile_type:type_name -> google.internal.cloud.code.v1internal.jetski.Type
+	1,  // 42: google.internal.cloud.code.v1internal.jetski.PerformanceProfile.capture_reason:type_name -> google.internal.cloud.code.v1internal.jetski.CaptureReason
+	86, // 43: google.internal.cloud.code.v1internal.jetski.QuotaInfo.reset_time:type_name -> google.protobuf.Timestamp
+	87, // 44: google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsRequest.trajectory:type_name -> google.protobuf.Struct
+	87, // 45: google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsRequest.metadata:type_name -> google.protobuf.Struct
+	46, // 46: google.internal.cloud.code.v1internal.jetski.RegisterInteractionRequest.interaction:type_name -> google.internal.cloud.code.v1internal.jetski.Interaction
+	76, // 47: google.internal.cloud.code.v1internal.jetski.SetUserSettingsRequest.user_settings:type_name -> google.internal.cloud.code.v1internal.jetski.UserSettings
+	76, // 48: google.internal.cloud.code.v1internal.jetski.SetUserSettingsResponse.user_settings:type_name -> google.internal.cloud.code.v1internal.jetski.UserSettings
+	41, // 49: google.internal.cloud.code.v1internal.jetski.TabChatRequest.request:type_name -> google.internal.cloud.code.v1internal.jetski.GetChatMessageRequest
+	42, // 50: google.internal.cloud.code.v1internal.jetski.TabChatResponse.response:type_name -> google.internal.cloud.code.v1internal.jetski.GetChatMessageResponse
+	60, // 51: google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileRequest.performance_profile:type_name -> google.internal.cloud.code.v1internal.jetski.PerformanceProfile
+	14, // 52: google.internal.cloud.code.v1internal.jetski.AgentPluginLocalConfig.CommandsEntry.value:type_name -> google.internal.cloud.code.v1internal.jetski.AgentPluginCommand
+	32, // 53: google.internal.cloud.code.v1internal.jetski.ModelExperiments.ExperimentsEntry.value:type_name -> google.internal.cloud.code.v1internal.jetski.ExperimentValue
+	47, // 54: google.internal.cloud.code.v1internal.jetski.JetskiService.ListAgentPlugins:input_type -> google.internal.cloud.code.v1internal.jetski.ListAgentPluginsRequest
+	49, // 55: google.internal.cloud.code.v1internal.jetski.JetskiService.ListBuildWithGooglePlugins:input_type -> google.internal.cloud.code.v1internal.jetski.ListBuildWithGooglePluginsRequest
+	38, // 56: google.internal.cloud.code.v1internal.jetski.JetskiService.GetAgentPlugin:input_type -> google.internal.cloud.code.v1internal.jetski.GetAgentPluginRequest
+	51, // 57: google.internal.cloud.code.v1internal.jetski.JetskiService.ListCascadeNuxes:input_type -> google.internal.cloud.code.v1internal.jetski.ListCascadeNuxesRequest
+	53, // 58: google.internal.cloud.code.v1internal.jetski.JetskiService.ListWebDocsOptions:input_type -> google.internal.cloud.code.v1internal.jetski.ListWebDocsOptionsRequest
+	68, // 59: google.internal.cloud.code.v1internal.jetski.JetskiService.RewriteUri:input_type -> google.internal.cloud.code.v1internal.jetski.RewriteUriRequest
+	35, // 60: google.internal.cloud.code.v1internal.jetski.JetskiService.FetchUserInfo:input_type -> google.internal.cloud.code.v1internal.jetski.FetchUserInfoRequest
+	70, // 61: google.internal.cloud.code.v1internal.jetski.JetskiService.SetUserSettings:input_type -> google.internal.cloud.code.v1internal.jetski.SetUserSettingsRequest
+	72, // 62: google.internal.cloud.code.v1internal.jetski.JetskiService.TabChat:input_type -> google.internal.cloud.code.v1internal.jetski.TabChatRequest
+	30, // 63: google.internal.cloud.code.v1internal.jetski.JetskiService.CheckUrlDenylist:input_type -> google.internal.cloud.code.v1internal.jetski.CheckUrlDenylistRequest
+	28, // 64: google.internal.cloud.code.v1internal.jetski.JetskiService.CheckUrlAntivirus:input_type -> google.internal.cloud.code.v1internal.jetski.CheckUrlAntivirusRequest
+	43, // 65: google.internal.cloud.code.v1internal.jetski.JetskiService.GetHealth:input_type -> google.internal.cloud.code.v1internal.jetski.GetHealthRequest
+	64, // 66: google.internal.cloud.code.v1internal.jetski.JetskiService.RecordTrajectoryAnalytics:input_type -> google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsRequest
+	78, // 67: google.internal.cloud.code.v1internal.jetski.JetskiService.WriteTrajectoryACLs:input_type -> google.internal.cloud.code.v1internal.jetski.WriteTrajectoryACLsRequest
+	33, // 68: google.internal.cloud.code.v1internal.jetski.JetskiService.FetchFromTrawlerCache:input_type -> google.internal.cloud.code.v1internal.jetski.FetchFromTrawlerCacheRequest
+	66, // 69: google.internal.cloud.code.v1internal.jetski.JetskiService.RegisterInteraction:input_type -> google.internal.cloud.code.v1internal.jetski.RegisterInteractionRequest
+	23, // 70: google.internal.cloud.code.v1internal.jetski.JetskiService.BattleModeOverrides:input_type -> google.internal.cloud.code.v1internal.jetski.BattleModeOverridesRequest
+	21, // 71: google.internal.cloud.code.v1internal.jetski.JetskiService.BattleModeAutoTrigger:input_type -> google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerRequest
+	74, // 72: google.internal.cloud.code.v1internal.jetski.JetskiService.UploadPerformanceProfile:input_type -> google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileRequest
+	61, // 73: google.internal.cloud.code.v1internal.jetski.JetskiService.ProvisionConversationBundleDir:input_type -> google.internal.cloud.code.v1internal.jetski.ProvisionConversationBundleDirRequest
+	39, // 74: google.internal.cloud.code.v1internal.jetski.JetskiService.GetBundleWriteMint:input_type -> google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintRequest
+	48, // 75: google.internal.cloud.code.v1internal.jetski.JetskiService.ListAgentPlugins:output_type -> google.internal.cloud.code.v1internal.jetski.ListAgentPluginsResponse
+	50, // 76: google.internal.cloud.code.v1internal.jetski.JetskiService.ListBuildWithGooglePlugins:output_type -> google.internal.cloud.code.v1internal.jetski.ListBuildWithGooglePluginsResponse
+	13, // 77: google.internal.cloud.code.v1internal.jetski.JetskiService.GetAgentPlugin:output_type -> google.internal.cloud.code.v1internal.jetski.AgentPlugin
+	52, // 78: google.internal.cloud.code.v1internal.jetski.JetskiService.ListCascadeNuxes:output_type -> google.internal.cloud.code.v1internal.jetski.ListCascadeNuxesResponse
+	54, // 79: google.internal.cloud.code.v1internal.jetski.JetskiService.ListWebDocsOptions:output_type -> google.internal.cloud.code.v1internal.jetski.ListWebDocsOptionsResponse
+	69, // 80: google.internal.cloud.code.v1internal.jetski.JetskiService.RewriteUri:output_type -> google.internal.cloud.code.v1internal.jetski.RewriteUriResponse
+	36, // 81: google.internal.cloud.code.v1internal.jetski.JetskiService.FetchUserInfo:output_type -> google.internal.cloud.code.v1internal.jetski.FetchUserInfoResponse
+	71, // 82: google.internal.cloud.code.v1internal.jetski.JetskiService.SetUserSettings:output_type -> google.internal.cloud.code.v1internal.jetski.SetUserSettingsResponse
+	73, // 83: google.internal.cloud.code.v1internal.jetski.JetskiService.TabChat:output_type -> google.internal.cloud.code.v1internal.jetski.TabChatResponse
+	31, // 84: google.internal.cloud.code.v1internal.jetski.JetskiService.CheckUrlDenylist:output_type -> google.internal.cloud.code.v1internal.jetski.CheckUrlDenylistResponse
+	29, // 85: google.internal.cloud.code.v1internal.jetski.JetskiService.CheckUrlAntivirus:output_type -> google.internal.cloud.code.v1internal.jetski.CheckUrlAntivirusResponse
+	45, // 86: google.internal.cloud.code.v1internal.jetski.JetskiService.GetHealth:output_type -> google.internal.cloud.code.v1internal.jetski.Health
+	65, // 87: google.internal.cloud.code.v1internal.jetski.JetskiService.RecordTrajectoryAnalytics:output_type -> google.internal.cloud.code.v1internal.jetski.RecordTrajectoryAnalyticsResponse
+	79, // 88: google.internal.cloud.code.v1internal.jetski.JetskiService.WriteTrajectoryACLs:output_type -> google.internal.cloud.code.v1internal.jetski.WriteTrajectoryACLsResponse
+	34, // 89: google.internal.cloud.code.v1internal.jetski.JetskiService.FetchFromTrawlerCache:output_type -> google.internal.cloud.code.v1internal.jetski.FetchFromTrawlerCacheResponse
+	67, // 90: google.internal.cloud.code.v1internal.jetski.JetskiService.RegisterInteraction:output_type -> google.internal.cloud.code.v1internal.jetski.RegisterInteractionResponse
+	24, // 91: google.internal.cloud.code.v1internal.jetski.JetskiService.BattleModeOverrides:output_type -> google.internal.cloud.code.v1internal.jetski.BattleModeOverridesResponse
+	22, // 92: google.internal.cloud.code.v1internal.jetski.JetskiService.BattleModeAutoTrigger:output_type -> google.internal.cloud.code.v1internal.jetski.BattleModeAutoTriggerResponse
+	75, // 93: google.internal.cloud.code.v1internal.jetski.JetskiService.UploadPerformanceProfile:output_type -> google.internal.cloud.code.v1internal.jetski.UploadPerformanceProfileResponse
+	62, // 94: google.internal.cloud.code.v1internal.jetski.JetskiService.ProvisionConversationBundleDir:output_type -> google.internal.cloud.code.v1internal.jetski.ProvisionConversationBundleDirResponse
+	40, // 95: google.internal.cloud.code.v1internal.jetski.JetskiService.GetBundleWriteMint:output_type -> google.internal.cloud.code.v1internal.jetski.GetBundleWriteMintResponse
+	75, // [75:96] is the sub-list for method output_type
+	54, // [54:75] is the sub-list for method input_type
+	54, // [54:54] is the sub-list for extension type_name
+	54, // [54:54] is the sub-list for extension extendee
+	0,  // [0:54] is the sub-list for field type_name
 }
 
 func init() { file_JetskiService_proto_init() }
@@ -8762,8 +8459,8 @@ func file_JetskiService_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_JetskiService_proto_rawDesc), len(file_JetskiService_proto_rawDesc)),
-			NumEnums:      14,
-			NumMessages:   78,
+			NumEnums:      13,
+			NumMessages:   73,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

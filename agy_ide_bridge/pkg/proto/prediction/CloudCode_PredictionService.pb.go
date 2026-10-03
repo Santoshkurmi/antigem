@@ -9,6 +9,7 @@ package prediction
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -2659,7 +2660,7 @@ func (x *BeyondModelInfo) GetQuotaBucketName() string {
 type BucketInfo struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	RemainingAmount   int64                  `protobuf:"varint,1,opt,name=remaining_amount,json=remainingAmount,proto3" json:"remaining_amount,omitempty"`
-	ResetTime         *Timestamp             `protobuf:"bytes,2,opt,name=reset_time,json=resetTime,proto3" json:"reset_time,omitempty"`
+	ResetTime         *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=reset_time,json=resetTime,proto3" json:"reset_time,omitempty"`
 	TokenType         TokenType              `protobuf:"varint,3,opt,name=token_type,json=tokenType,proto3,enum=google.internal.cloud.code.v1internal.prediction.TokenType" json:"token_type,omitempty"`
 	ModelId           string                 `protobuf:"bytes,4,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
 	RemainingFraction float32                `protobuf:"fixed32,5,opt,name=remaining_fraction,json=remainingFraction,proto3" json:"remaining_fraction,omitempty"`
@@ -2704,7 +2705,7 @@ func (x *BucketInfo) GetRemainingAmount() int64 {
 	return 0
 }
 
-func (x *BucketInfo) GetResetTime() *Timestamp {
+func (x *BucketInfo) GetResetTime() *timestamppb.Timestamp {
 	if x != nil {
 		return x.ResetTime
 	}
@@ -4051,7 +4052,7 @@ func (x *ModelSort) GetGroups() []*ModelGroup {
 type QuotaInfo struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	RemainingFraction float32                `protobuf:"fixed32,1,opt,name=remaining_fraction,json=remainingFraction,proto3" json:"remaining_fraction,omitempty"`
-	ResetTime         *Timestamp             `protobuf:"bytes,2,opt,name=reset_time,json=resetTime,proto3" json:"reset_time,omitempty"`
+	ResetTime         *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=reset_time,json=resetTime,proto3" json:"reset_time,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -4093,7 +4094,7 @@ func (x *QuotaInfo) GetRemainingFraction() float32 {
 	return 0
 }
 
-func (x *QuotaInfo) GetResetTime() *Timestamp {
+func (x *QuotaInfo) GetResetTime() *timestamppb.Timestamp {
 	if x != nil {
 		return x.ResetTime
 	}
@@ -4108,7 +4109,7 @@ type QuotaSummaryBucket struct {
 	Window            string                 `protobuf:"bytes,3,opt,name=window,proto3" json:"window,omitempty"`
 	RemainingFraction float32                `protobuf:"fixed32,4,opt,name=remaining_fraction,json=remainingFraction,proto3" json:"remaining_fraction,omitempty"`
 	RemainingAmount   int64                  `protobuf:"varint,5,opt,name=remaining_amount,json=remainingAmount,proto3" json:"remaining_amount,omitempty"`
-	ResetTime         *Timestamp             `protobuf:"bytes,6,opt,name=reset_time,json=resetTime,proto3" json:"reset_time,omitempty"`
+	ResetTime         *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=reset_time,json=resetTime,proto3" json:"reset_time,omitempty"`
 	Description       string                 `protobuf:"bytes,7,opt,name=description,proto3" json:"description,omitempty"`
 	Disabled          bool                   `protobuf:"varint,8,opt,name=disabled,proto3" json:"disabled,omitempty"`
 	unknownFields     protoimpl.UnknownFields
@@ -4180,7 +4181,7 @@ func (x *QuotaSummaryBucket) GetRemainingAmount() int64 {
 	return 0
 }
 
-func (x *QuotaSummaryBucket) GetResetTime() *Timestamp {
+func (x *QuotaSummaryBucket) GetResetTime() *timestamppb.Timestamp {
 	if x != nil {
 		return x.ResetTime
 	}
@@ -4556,76 +4557,23 @@ func (x *TieredModelConfig) GetPro() []string {
 	return nil
 }
 
-// origin: .google.protobuf.Timestamp
-type Timestamp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Seconds       int64                  `protobuf:"varint,1,opt,name=seconds,proto3" json:"seconds,omitempty"`
-	Nanos         int32                  `protobuf:"varint,2,opt,name=nanos,proto3" json:"nanos,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Timestamp) Reset() {
-	*x = Timestamp{}
-	mi := &file_CloudCode_PredictionService_proto_msgTypes[29]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Timestamp) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Timestamp) ProtoMessage() {}
-
-func (x *Timestamp) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_PredictionService_proto_msgTypes[29]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Timestamp.ProtoReflect.Descriptor instead.
-func (*Timestamp) Descriptor() ([]byte, []int) {
-	return file_CloudCode_PredictionService_proto_rawDescGZIP(), []int{29}
-}
-
-func (x *Timestamp) GetSeconds() int64 {
-	if x != nil {
-		return x.Seconds
-	}
-	return 0
-}
-
-func (x *Timestamp) GetNanos() int32 {
-	if x != nil {
-		return x.Nanos
-	}
-	return 0
-}
-
 var File_CloudCode_PredictionService_proto protoreflect.FileDescriptor
 
 const file_CloudCode_PredictionService_proto_rawDesc = "" +
 	"\n" +
-	"!CloudCode_PredictionService.proto\x120google.internal.cloud.code.v1internal.prediction\"%\n" +
+	"!CloudCode_PredictionService.proto\x120google.internal.cloud.code.v1internal.prediction\x1a\x1fgoogle/protobuf/timestamp.proto\"%\n" +
 	"#AiplatformMaster_CountTokensRequest\")\n" +
 	"'AiplatformMaster_GenerateContentRequest\"*\n" +
 	"(AiplatformMaster_GenerateContentResponse\"\x84\x01\n" +
 	"\x0fBeyondModelInfo\x12\x19\n" +
 	"\bmodel_id\x18\x01 \x01(\tR\amodelId\x12*\n" +
 	"\x11quota_bucket_team\x18\x02 \x01(\tR\x0fquotaBucketTeam\x12*\n" +
-	"\x11quota_bucket_name\x18\x03 \x01(\tR\x0fquotaBucketName\"\xb9\x02\n" +
+	"\x11quota_bucket_name\x18\x03 \x01(\tR\x0fquotaBucketName\"\x98\x02\n" +
 	"\n" +
 	"BucketInfo\x12)\n" +
-	"\x10remaining_amount\x18\x01 \x01(\x03R\x0fremainingAmount\x12Z\n" +
+	"\x10remaining_amount\x18\x01 \x01(\x03R\x0fremainingAmount\x129\n" +
 	"\n" +
-	"reset_time\x18\x02 \x01(\v2;.google.internal.cloud.code.v1internal.prediction.TimestampR\tresetTime\x12Z\n" +
+	"reset_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tresetTime\x12Z\n" +
 	"\n" +
 	"token_type\x18\x03 \x01(\x0e2;.google.internal.cloud.code.v1internal.prediction.TokenTypeR\ttokenType\x12\x19\n" +
 	"\bmodel_id\x18\x04 \x01(\tR\amodelId\x12-\n" +
@@ -4765,19 +4713,19 @@ const file_CloudCode_PredictionService_proto_rawDesc = "" +
 	"\tmodel_ids\x18\x02 \x03(\tR\bmodelIds\"\x84\x01\n" +
 	"\tModelSort\x12!\n" +
 	"\fdisplay_name\x18\x01 \x01(\tR\vdisplayName\x12T\n" +
-	"\x06groups\x18\x02 \x03(\v2<.google.internal.cloud.code.v1internal.prediction.ModelGroupR\x06groups\"\x96\x01\n" +
+	"\x06groups\x18\x02 \x03(\v2<.google.internal.cloud.code.v1internal.prediction.ModelGroupR\x06groups\"u\n" +
 	"\tQuotaInfo\x12-\n" +
-	"\x12remaining_fraction\x18\x01 \x01(\x02R\x11remainingFraction\x12Z\n" +
+	"\x12remaining_fraction\x18\x01 \x01(\x02R\x11remainingFraction\x129\n" +
 	"\n" +
-	"reset_time\x18\x02 \x01(\v2;.google.internal.cloud.code.v1internal.prediction.TimestampR\tresetTime\"\xe0\x02\n" +
+	"reset_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tresetTime\"\xbf\x02\n" +
 	"\x12QuotaSummaryBucket\x12\x1b\n" +
 	"\tbucket_id\x18\x01 \x01(\tR\bbucketId\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x16\n" +
 	"\x06window\x18\x03 \x01(\tR\x06window\x12-\n" +
 	"\x12remaining_fraction\x18\x04 \x01(\x02R\x11remainingFraction\x12)\n" +
-	"\x10remaining_amount\x18\x05 \x01(\x03R\x0fremainingAmount\x12Z\n" +
+	"\x10remaining_amount\x18\x05 \x01(\x03R\x0fremainingAmount\x129\n" +
 	"\n" +
-	"reset_time\x18\x06 \x01(\v2;.google.internal.cloud.code.v1internal.prediction.TimestampR\tresetTime\x12 \n" +
+	"reset_time\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tresetTime\x12 \n" +
 	"\vdescription\x18\a \x01(\tR\vdescription\x12\x1a\n" +
 	"\bdisabled\x18\b \x01(\bR\bdisabled\"\xb8\x01\n" +
 	"\x11QuotaSummaryGroup\x12^\n" +
@@ -4799,10 +4747,7 @@ const file_CloudCode_PredictionService_proto_rawDesc = "" +
 	"\n" +
 	"flash_lite\x18\x01 \x03(\tR\tflashLite\x12\x14\n" +
 	"\x05flash\x18\x02 \x03(\tR\x05flash\x12\x10\n" +
-	"\x03pro\x18\x03 \x03(\tR\x03pro\";\n" +
-	"\tTimestamp\x12\x18\n" +
-	"\aseconds\x18\x01 \x01(\x03R\aseconds\x12\x14\n" +
-	"\x05nanos\x18\x02 \x01(\x05R\x05nanos*\xec\x01\n" +
+	"\x03pro\x18\x03 \x03(\tR\x03pro*\xec\x01\n" +
 	"\vAPIProvider\x12\x1c\n" +
 	"\x18API_PROVIDER_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15API_PROVIDER_INTERNAL\x10\x01\x12\x1e\n" +
@@ -5670,7 +5615,7 @@ const file_CloudCode_PredictionService_proto_rawDesc = "" +
 	"\vCountTokens\x12D.google.internal.cloud.code.v1internal.prediction.CountTokensRequest\x1aE.google.internal.cloud.code.v1internal.prediction.CountTokensResponse\x12\xac\x01\n" +
 	"\x11RetrieveUserQuota\x12J.google.internal.cloud.code.v1internal.prediction.RetrieveUserQuotaRequest\x1aK.google.internal.cloud.code.v1internal.prediction.RetrieveUserQuotaResponse\x12\xb5\x01\n" +
 	"\x14FetchAvailableModels\x12M.google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsRequest\x1aN.google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse\x12\xc1\x01\n" +
-	"\x18RetrieveUserQuotaSummary\x12Q.google.internal.cloud.code.v1internal.prediction.RetrieveUserQuotaSummaryRequest\x1aR.google.internal.cloud.code.v1internal.prediction.RetrieveUserQuotaSummaryResponseb\x06proto3"
+	"\x18RetrieveUserQuotaSummary\x12Q.google.internal.cloud.code.v1internal.prediction.RetrieveUserQuotaSummaryRequest\x1aR.google.internal.cloud.code.v1internal.prediction.RetrieveUserQuotaSummaryResponseB$Z\"gemini-server/pkg/proto/predictionb\x06proto3"
 
 var (
 	file_CloudCode_PredictionService_proto_rawDescOnce sync.Once
@@ -5685,7 +5630,7 @@ func file_CloudCode_PredictionService_proto_rawDescGZIP() []byte {
 }
 
 var file_CloudCode_PredictionService_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_CloudCode_PredictionService_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_CloudCode_PredictionService_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_CloudCode_PredictionService_proto_goTypes = []any{
 	(APIProvider)(0),         // 0: google.internal.cloud.code.v1internal.prediction.APIProvider
 	(CreditType)(0),          // 1: google.internal.cloud.code.v1internal.prediction.CreditType
@@ -5723,23 +5668,23 @@ var file_CloudCode_PredictionService_proto_goTypes = []any{
 	(*RetrieveUserQuotaSummaryRequest)(nil),          // 33: google.internal.cloud.code.v1internal.prediction.RetrieveUserQuotaSummaryRequest
 	(*RetrieveUserQuotaSummaryResponse)(nil),         // 34: google.internal.cloud.code.v1internal.prediction.RetrieveUserQuotaSummaryResponse
 	(*TieredModelConfig)(nil),                        // 35: google.internal.cloud.code.v1internal.prediction.TieredModelConfig
-	(*Timestamp)(nil),                                // 36: google.internal.cloud.code.v1internal.prediction.Timestamp
-	nil,                                              // 37: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.ModelsEntry
-	nil,                                              // 38: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.DeprecatedModelIdsEntry
-	nil,                                              // 39: google.internal.cloud.code.v1internal.prediction.ModelDetails.SupportedMimeTypesEntry
-	nil,                                              // 40: google.internal.cloud.code.v1internal.prediction.ModelExperiments.ExperimentsEntry
+	nil,                                              // 36: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.ModelsEntry
+	nil,                                              // 37: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.DeprecatedModelIdsEntry
+	nil,                                              // 38: google.internal.cloud.code.v1internal.prediction.ModelDetails.SupportedMimeTypesEntry
+	nil,                                              // 39: google.internal.cloud.code.v1internal.prediction.ModelExperiments.ExperimentsEntry
+	(*timestamppb.Timestamp)(nil),                    // 40: google.protobuf.Timestamp
 }
 var file_CloudCode_PredictionService_proto_depIdxs = []int32{
-	36, // 0: google.internal.cloud.code.v1internal.prediction.BucketInfo.reset_time:type_name -> google.internal.cloud.code.v1internal.prediction.Timestamp
+	40, // 0: google.internal.cloud.code.v1internal.prediction.BucketInfo.reset_time:type_name -> google.protobuf.Timestamp
 	5,  // 1: google.internal.cloud.code.v1internal.prediction.BucketInfo.token_type:type_name -> google.internal.cloud.code.v1internal.prediction.TokenType
 	7,  // 2: google.internal.cloud.code.v1internal.prediction.CountTokensRequest.request:type_name -> google.internal.cloud.code.v1internal.prediction.AiplatformMaster_CountTokensRequest
 	1,  // 3: google.internal.cloud.code.v1internal.prediction.Credits.credit_type:type_name -> google.internal.cloud.code.v1internal.prediction.CreditType
 	2,  // 4: google.internal.cloud.code.v1internal.prediction.DeprecatedModelReroutingInfo.old_model_enum:type_name -> google.internal.cloud.code.v1internal.prediction.Model
 	2,  // 5: google.internal.cloud.code.v1internal.prediction.DeprecatedModelReroutingInfo.new_model_enum:type_name -> google.internal.cloud.code.v1internal.prediction.Model
 	16, // 6: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsRequest.entitlement:type_name -> google.internal.cloud.code.v1internal.prediction.Entitlement
-	37, // 7: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.models:type_name -> google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.ModelsEntry
+	36, // 7: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.models:type_name -> google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.ModelsEntry
 	26, // 8: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.agent_model_sorts:type_name -> google.internal.cloud.code.v1internal.prediction.ModelSort
-	38, // 9: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.deprecated_model_ids:type_name -> google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.DeprecatedModelIdsEntry
+	37, // 9: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.deprecated_model_ids:type_name -> google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.DeprecatedModelIdsEntry
 	26, // 10: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.battle_mode_model_sorts:type_name -> google.internal.cloud.code.v1internal.prediction.ModelSort
 	35, // 11: google.internal.cloud.code.v1internal.prediction.FetchAvailableModelsResponse.tiered_model_ids:type_name -> google.internal.cloud.code.v1internal.prediction.TieredModelConfig
 	8,  // 12: google.internal.cloud.code.v1internal.prediction.GenerateContentRequest.request:type_name -> google.internal.cloud.code.v1internal.prediction.AiplatformMaster_GenerateContentRequest
@@ -5755,13 +5700,13 @@ var file_CloudCode_PredictionService_proto_depIdxs = []int32{
 	3,  // 22: google.internal.cloud.code.v1internal.prediction.ModelDetails.model_provider:type_name -> google.internal.cloud.code.v1internal.prediction.ModelProvider
 	4,  // 23: google.internal.cloud.code.v1internal.prediction.ModelDetails.prompt_templater_type:type_name -> google.internal.cloud.code.v1internal.prediction.PromptTemplaterType
 	6,  // 24: google.internal.cloud.code.v1internal.prediction.ModelDetails.tool_formatter_type:type_name -> google.internal.cloud.code.v1internal.prediction.ToolFormatterType
-	39, // 25: google.internal.cloud.code.v1internal.prediction.ModelDetails.supported_mime_types:type_name -> google.internal.cloud.code.v1internal.prediction.ModelDetails.SupportedMimeTypesEntry
+	38, // 25: google.internal.cloud.code.v1internal.prediction.ModelDetails.supported_mime_types:type_name -> google.internal.cloud.code.v1internal.prediction.ModelDetails.SupportedMimeTypesEntry
 	24, // 26: google.internal.cloud.code.v1internal.prediction.ModelDetails.model_experiments:type_name -> google.internal.cloud.code.v1internal.prediction.ModelExperiments
 	10, // 27: google.internal.cloud.code.v1internal.prediction.ModelDetails.beyond_model_info:type_name -> google.internal.cloud.code.v1internal.prediction.BeyondModelInfo
-	40, // 28: google.internal.cloud.code.v1internal.prediction.ModelExperiments.experiments:type_name -> google.internal.cloud.code.v1internal.prediction.ModelExperiments.ExperimentsEntry
+	39, // 28: google.internal.cloud.code.v1internal.prediction.ModelExperiments.experiments:type_name -> google.internal.cloud.code.v1internal.prediction.ModelExperiments.ExperimentsEntry
 	25, // 29: google.internal.cloud.code.v1internal.prediction.ModelSort.groups:type_name -> google.internal.cloud.code.v1internal.prediction.ModelGroup
-	36, // 30: google.internal.cloud.code.v1internal.prediction.QuotaInfo.reset_time:type_name -> google.internal.cloud.code.v1internal.prediction.Timestamp
-	36, // 31: google.internal.cloud.code.v1internal.prediction.QuotaSummaryBucket.reset_time:type_name -> google.internal.cloud.code.v1internal.prediction.Timestamp
+	40, // 30: google.internal.cloud.code.v1internal.prediction.QuotaInfo.reset_time:type_name -> google.protobuf.Timestamp
+	40, // 31: google.internal.cloud.code.v1internal.prediction.QuotaSummaryBucket.reset_time:type_name -> google.protobuf.Timestamp
 	28, // 32: google.internal.cloud.code.v1internal.prediction.QuotaSummaryGroup.buckets:type_name -> google.internal.cloud.code.v1internal.prediction.QuotaSummaryBucket
 	11, // 33: google.internal.cloud.code.v1internal.prediction.RetrieveUserQuotaResponse.buckets:type_name -> google.internal.cloud.code.v1internal.prediction.BucketInfo
 	28, // 34: google.internal.cloud.code.v1internal.prediction.RetrieveUserQuotaSummaryResponse.buckets:type_name -> google.internal.cloud.code.v1internal.prediction.QuotaSummaryBucket
@@ -5799,7 +5744,7 @@ func file_CloudCode_PredictionService_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_CloudCode_PredictionService_proto_rawDesc), len(file_CloudCode_PredictionService_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   34,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

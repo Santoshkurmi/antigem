@@ -9,6 +9,11 @@ package cloudcode
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	structpb "google.golang.org/protobuf/types/known/structpb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -1307,50 +1312,6 @@ func (Mode) EnumDescriptor() ([]byte, []int) {
 	return file_CloudCode_proto_rawDescGZIP(), []int{21}
 }
 
-// origin: .google.protobuf.NullValue
-type NullValue int32
-
-const (
-	NullValue_NULL_VALUE NullValue = 0
-)
-
-// Enum value maps for NullValue.
-var (
-	NullValue_name = map[int32]string{
-		0: "NULL_VALUE",
-	}
-	NullValue_value = map[string]int32{
-		"NULL_VALUE": 0,
-	}
-)
-
-func (x NullValue) Enum() *NullValue {
-	p := new(NullValue)
-	*p = x
-	return p
-}
-
-func (x NullValue) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (NullValue) Descriptor() protoreflect.EnumDescriptor {
-	return file_CloudCode_proto_enumTypes[22].Descriptor()
-}
-
-func (NullValue) Type() protoreflect.EnumType {
-	return &file_CloudCode_proto_enumTypes[22]
-}
-
-func (x NullValue) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use NullValue.Descriptor instead.
-func (NullValue) EnumDescriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{22}
-}
-
 // origin: .google.internal.cloud.code.v1internal.ClientMetadata.Platform
 type Platform int32
 
@@ -1394,11 +1355,11 @@ func (x Platform) String() string {
 }
 
 func (Platform) Descriptor() protoreflect.EnumDescriptor {
-	return file_CloudCode_proto_enumTypes[23].Descriptor()
+	return file_CloudCode_proto_enumTypes[22].Descriptor()
 }
 
 func (Platform) Type() protoreflect.EnumType {
-	return &file_CloudCode_proto_enumTypes[23]
+	return &file_CloudCode_proto_enumTypes[22]
 }
 
 func (x Platform) Number() protoreflect.EnumNumber {
@@ -1407,7 +1368,7 @@ func (x Platform) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Platform.Descriptor instead.
 func (Platform) EnumDescriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{23}
+	return file_CloudCode_proto_rawDescGZIP(), []int{22}
 }
 
 // origin: .google.internal.cloud.code.v1internal.ClientMetadata.PluginType
@@ -1453,11 +1414,11 @@ func (x PluginType) String() string {
 }
 
 func (PluginType) Descriptor() protoreflect.EnumDescriptor {
-	return file_CloudCode_proto_enumTypes[24].Descriptor()
+	return file_CloudCode_proto_enumTypes[23].Descriptor()
 }
 
 func (PluginType) Type() protoreflect.EnumType {
-	return &file_CloudCode_proto_enumTypes[24]
+	return &file_CloudCode_proto_enumTypes[23]
 }
 
 func (x PluginType) Number() protoreflect.EnumNumber {
@@ -1466,7 +1427,7 @@ func (x PluginType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PluginType.Descriptor instead.
 func (PluginType) EnumDescriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{24}
+	return file_CloudCode_proto_rawDescGZIP(), []int{23}
 }
 
 // origin: .google.internal.cloud.code.v1internal.RagStatus
@@ -1509,11 +1470,11 @@ func (x RagStatus) String() string {
 }
 
 func (RagStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_CloudCode_proto_enumTypes[25].Descriptor()
+	return file_CloudCode_proto_enumTypes[24].Descriptor()
 }
 
 func (RagStatus) Type() protoreflect.EnumType {
-	return &file_CloudCode_proto_enumTypes[25]
+	return &file_CloudCode_proto_enumTypes[24]
 }
 
 func (x RagStatus) Number() protoreflect.EnumNumber {
@@ -1522,7 +1483,7 @@ func (x RagStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RagStatus.Descriptor instead.
 func (RagStatus) EnumDescriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{25}
+	return file_CloudCode_proto_rawDescGZIP(), []int{24}
 }
 
 // origin: .google.internal.cloud.code.v1internal.File.Reason
@@ -1589,11 +1550,11 @@ func (x Reason) String() string {
 }
 
 func (Reason) Descriptor() protoreflect.EnumDescriptor {
-	return file_CloudCode_proto_enumTypes[26].Descriptor()
+	return file_CloudCode_proto_enumTypes[25].Descriptor()
 }
 
 func (Reason) Type() protoreflect.EnumType {
-	return &file_CloudCode_proto_enumTypes[26]
+	return &file_CloudCode_proto_enumTypes[25]
 }
 
 func (x Reason) Number() protoreflect.EnumNumber {
@@ -1602,7 +1563,7 @@ func (x Reason) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Reason.Descriptor instead.
 func (Reason) EnumDescriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{26}
+	return file_CloudCode_proto_rawDescGZIP(), []int{25}
 }
 
 // origin: .google.internal.cloud.code.v1internal.RetryDetails.RetryReason
@@ -1639,11 +1600,11 @@ func (x RetryReason) String() string {
 }
 
 func (RetryReason) Descriptor() protoreflect.EnumDescriptor {
-	return file_CloudCode_proto_enumTypes[27].Descriptor()
+	return file_CloudCode_proto_enumTypes[26].Descriptor()
 }
 
 func (RetryReason) Type() protoreflect.EnumType {
-	return &file_CloudCode_proto_enumTypes[27]
+	return &file_CloudCode_proto_enumTypes[26]
 }
 
 func (x RetryReason) Number() protoreflect.EnumNumber {
@@ -1652,7 +1613,7 @@ func (x RetryReason) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RetryReason.Descriptor instead.
 func (RetryReason) EnumDescriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{27}
+	return file_CloudCode_proto_rawDescGZIP(), []int{26}
 }
 
 // origin: .google.internal.cloud.code.v1internal.FetchCodeCustomizationStateResponse.State
@@ -1689,11 +1650,11 @@ func (x State) String() string {
 }
 
 func (State) Descriptor() protoreflect.EnumDescriptor {
-	return file_CloudCode_proto_enumTypes[28].Descriptor()
+	return file_CloudCode_proto_enumTypes[27].Descriptor()
 }
 
 func (State) Type() protoreflect.EnumType {
-	return &file_CloudCode_proto_enumTypes[28]
+	return &file_CloudCode_proto_enumTypes[27]
 }
 
 func (x State) Number() protoreflect.EnumNumber {
@@ -1702,7 +1663,7 @@ func (x State) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use State.Descriptor instead.
 func (State) EnumDescriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{28}
+	return file_CloudCode_proto_rawDescGZIP(), []int{27}
 }
 
 // origin: .google.internal.cloud.code.v1internal.GenerateChatResponse.TextType
@@ -1739,11 +1700,11 @@ func (x TextType) String() string {
 }
 
 func (TextType) Descriptor() protoreflect.EnumDescriptor {
-	return file_CloudCode_proto_enumTypes[29].Descriptor()
+	return file_CloudCode_proto_enumTypes[28].Descriptor()
 }
 
 func (TextType) Type() protoreflect.EnumType {
-	return &file_CloudCode_proto_enumTypes[29]
+	return &file_CloudCode_proto_enumTypes[28]
 }
 
 func (x TextType) Number() protoreflect.EnumNumber {
@@ -1752,7 +1713,7 @@ func (x TextType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TextType.Descriptor instead.
 func (TextType) EnumDescriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{29}
+	return file_CloudCode_proto_rawDescGZIP(), []int{28}
 }
 
 // origin: .google.internal.cloud.code.v1internal.UserTier.UpgradeType
@@ -1795,11 +1756,11 @@ func (x UpgradeType) String() string {
 }
 
 func (UpgradeType) Descriptor() protoreflect.EnumDescriptor {
-	return file_CloudCode_proto_enumTypes[30].Descriptor()
+	return file_CloudCode_proto_enumTypes[29].Descriptor()
 }
 
 func (UpgradeType) Type() protoreflect.EnumType {
-	return &file_CloudCode_proto_enumTypes[30]
+	return &file_CloudCode_proto_enumTypes[29]
 }
 
 func (x UpgradeType) Number() protoreflect.EnumNumber {
@@ -1808,7 +1769,7 @@ func (x UpgradeType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UpgradeType.Descriptor instead.
 func (UpgradeType) EnumDescriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{30}
+	return file_CloudCode_proto_rawDescGZIP(), []int{29}
 }
 
 // origin: .google.internal.cloud.code.v1internal.YieldInfo.YieldType
@@ -1845,11 +1806,11 @@ func (x YieldType) String() string {
 }
 
 func (YieldType) Descriptor() protoreflect.EnumDescriptor {
-	return file_CloudCode_proto_enumTypes[31].Descriptor()
+	return file_CloudCode_proto_enumTypes[30].Descriptor()
 }
 
 func (YieldType) Type() protoreflect.EnumType {
-	return &file_CloudCode_proto_enumTypes[31]
+	return &file_CloudCode_proto_enumTypes[30]
 }
 
 func (x YieldType) Number() protoreflect.EnumNumber {
@@ -1858,7 +1819,7 @@ func (x YieldType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use YieldType.Descriptor instead.
 func (YieldType) EnumDescriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{31}
+	return file_CloudCode_proto_rawDescGZIP(), []int{30}
 }
 
 // origin: .google.internal.cloud.code.v1internal.Agent
@@ -2312,59 +2273,6 @@ func (x *AiCharactersReports) GetReports() []*AiCharactersReport {
 	return nil
 }
 
-// origin: .google.protobuf.Any
-type Any struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TypeUrl       string                 `protobuf:"bytes,1,opt,name=type_url,json=typeUrl,proto3" json:"type_url,omitempty"`
-	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Any) Reset() {
-	*x = Any{}
-	mi := &file_CloudCode_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Any) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Any) ProtoMessage() {}
-
-func (x *Any) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Any.ProtoReflect.Descriptor instead.
-func (*Any) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *Any) GetTypeUrl() string {
-	if x != nil {
-		return x.TypeUrl
-	}
-	return ""
-}
-
-func (x *Any) GetValue() []byte {
-	if x != nil {
-		return x.Value
-	}
-	return nil
-}
-
 // origin: .google.internal.cloud.code.v1internal.ChatMessage.Blob
 type Blob struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2376,7 +2284,7 @@ type Blob struct {
 
 func (x *Blob) Reset() {
 	*x = Blob{}
-	mi := &file_CloudCode_proto_msgTypes[8]
+	mi := &file_CloudCode_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2388,7 +2296,7 @@ func (x *Blob) String() string {
 func (*Blob) ProtoMessage() {}
 
 func (x *Blob) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[8]
+	mi := &file_CloudCode_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2401,7 +2309,7 @@ func (x *Blob) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Blob.ProtoReflect.Descriptor instead.
 func (*Blob) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{8}
+	return file_CloudCode_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Blob) GetMimeType() string {
@@ -2430,7 +2338,7 @@ type BrowserSetting struct {
 
 func (x *BrowserSetting) Reset() {
 	*x = BrowserSetting{}
-	mi := &file_CloudCode_proto_msgTypes[9]
+	mi := &file_CloudCode_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2442,7 +2350,7 @@ func (x *BrowserSetting) String() string {
 func (*BrowserSetting) ProtoMessage() {}
 
 func (x *BrowserSetting) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[9]
+	mi := &file_CloudCode_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2455,7 +2363,7 @@ func (x *BrowserSetting) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrowserSetting.ProtoReflect.Descriptor instead.
 func (*BrowserSetting) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{9}
+	return file_CloudCode_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *BrowserSetting) GetBrowserEnabled() bool {
@@ -2489,7 +2397,7 @@ type BucketConfig struct {
 
 func (x *BucketConfig) Reset() {
 	*x = BucketConfig{}
-	mi := &file_CloudCode_proto_msgTypes[10]
+	mi := &file_CloudCode_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2501,7 +2409,7 @@ func (x *BucketConfig) String() string {
 func (*BucketConfig) ProtoMessage() {}
 
 func (x *BucketConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[10]
+	mi := &file_CloudCode_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2514,7 +2422,7 @@ func (x *BucketConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BucketConfig.ProtoReflect.Descriptor instead.
 func (*BucketConfig) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{10}
+	return file_CloudCode_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *BucketConfig) GetBucketName() string {
@@ -2539,7 +2447,7 @@ type ChatMessage struct {
 
 func (x *ChatMessage) Reset() {
 	*x = ChatMessage{}
-	mi := &file_CloudCode_proto_msgTypes[11]
+	mi := &file_CloudCode_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2551,7 +2459,7 @@ func (x *ChatMessage) String() string {
 func (*ChatMessage) ProtoMessage() {}
 
 func (x *ChatMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[11]
+	mi := &file_CloudCode_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2564,7 +2472,7 @@ func (x *ChatMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatMessage.ProtoReflect.Descriptor instead.
 func (*ChatMessage) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{11}
+	return file_CloudCode_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ChatMessage) GetAuthor() EntityType {
@@ -2622,7 +2530,7 @@ type Citation struct {
 
 func (x *Citation) Reset() {
 	*x = Citation{}
-	mi := &file_CloudCode_proto_msgTypes[12]
+	mi := &file_CloudCode_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2634,7 +2542,7 @@ func (x *Citation) String() string {
 func (*Citation) ProtoMessage() {}
 
 func (x *Citation) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[12]
+	mi := &file_CloudCode_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2647,7 +2555,7 @@ func (x *Citation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Citation.ProtoReflect.Descriptor instead.
 func (*Citation) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{12}
+	return file_CloudCode_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Citation) GetStartIndex() int64 {
@@ -2689,7 +2597,7 @@ type CliFeatureSetting struct {
 
 func (x *CliFeatureSetting) Reset() {
 	*x = CliFeatureSetting{}
-	mi := &file_CloudCode_proto_msgTypes[13]
+	mi := &file_CloudCode_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2701,7 +2609,7 @@ func (x *CliFeatureSetting) String() string {
 func (*CliFeatureSetting) ProtoMessage() {}
 
 func (x *CliFeatureSetting) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[13]
+	mi := &file_CloudCode_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2714,7 +2622,7 @@ func (x *CliFeatureSetting) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CliFeatureSetting.ProtoReflect.Descriptor instead.
 func (*CliFeatureSetting) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{13}
+	return file_CloudCode_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CliFeatureSetting) GetExtensionsSetting() *ExtensionsSetting {
@@ -2748,7 +2656,7 @@ type ClientMetadata struct {
 
 func (x *ClientMetadata) Reset() {
 	*x = ClientMetadata{}
-	mi := &file_CloudCode_proto_msgTypes[14]
+	mi := &file_CloudCode_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2760,7 +2668,7 @@ func (x *ClientMetadata) String() string {
 func (*ClientMetadata) ProtoMessage() {}
 
 func (x *ClientMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[14]
+	mi := &file_CloudCode_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2773,7 +2681,7 @@ func (x *ClientMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientMetadata.ProtoReflect.Descriptor instead.
 func (*ClientMetadata) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{14}
+	return file_CloudCode_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ClientMetadata) GetIdeType() IdeType {
@@ -2843,7 +2751,7 @@ type ClientToWorkerPubSub struct {
 
 func (x *ClientToWorkerPubSub) Reset() {
 	*x = ClientToWorkerPubSub{}
-	mi := &file_CloudCode_proto_msgTypes[15]
+	mi := &file_CloudCode_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2855,7 +2763,7 @@ func (x *ClientToWorkerPubSub) String() string {
 func (*ClientToWorkerPubSub) ProtoMessage() {}
 
 func (x *ClientToWorkerPubSub) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[15]
+	mi := &file_CloudCode_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2868,7 +2776,7 @@ func (x *ClientToWorkerPubSub) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientToWorkerPubSub.ProtoReflect.Descriptor instead.
 func (*ClientToWorkerPubSub) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{15}
+	return file_CloudCode_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ClientToWorkerPubSub) GetTopicId() string {
@@ -2896,7 +2804,7 @@ type CodeAssistGlobalUserSettingResponse struct {
 
 func (x *CodeAssistGlobalUserSettingResponse) Reset() {
 	*x = CodeAssistGlobalUserSettingResponse{}
-	mi := &file_CloudCode_proto_msgTypes[16]
+	mi := &file_CloudCode_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2908,7 +2816,7 @@ func (x *CodeAssistGlobalUserSettingResponse) String() string {
 func (*CodeAssistGlobalUserSettingResponse) ProtoMessage() {}
 
 func (x *CodeAssistGlobalUserSettingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[16]
+	mi := &file_CloudCode_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2921,7 +2829,7 @@ func (x *CodeAssistGlobalUserSettingResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use CodeAssistGlobalUserSettingResponse.ProtoReflect.Descriptor instead.
 func (*CodeAssistGlobalUserSettingResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{16}
+	return file_CloudCode_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CodeAssistGlobalUserSettingResponse) GetCloudaicompanionProject() string {
@@ -2941,7 +2849,7 @@ func (x *CodeAssistGlobalUserSettingResponse) GetFreeTierDataCollectionOptin() b
 // origin: .google.internal.cloud.code.v1internal.CodeAssistMetric
 type CodeAssistMetric struct {
 	state                      protoimpl.MessageState      `protogen:"open.v1"`
-	Timestamp                  *Timestamp                  `protobuf:"bytes,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Timestamp                  *timestamppb.Timestamp      `protobuf:"bytes,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	InlineCompletionAccepted   *InlineCompletionAccepted   `protobuf:"bytes,2,opt,name=inline_completion_accepted,json=inlineCompletionAccepted,proto3" json:"inline_completion_accepted,omitempty"`
 	InlineCompletionOffered    *InlineCompletionOffered    `protobuf:"bytes,3,opt,name=inline_completion_offered,json=inlineCompletionOffered,proto3" json:"inline_completion_offered,omitempty"`
 	ConversationOffered        *ConversationOffered        `protobuf:"bytes,4,opt,name=conversation_offered,json=conversationOffered,proto3" json:"conversation_offered,omitempty"`
@@ -2957,7 +2865,7 @@ type CodeAssistMetric struct {
 
 func (x *CodeAssistMetric) Reset() {
 	*x = CodeAssistMetric{}
-	mi := &file_CloudCode_proto_msgTypes[17]
+	mi := &file_CloudCode_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2969,7 +2877,7 @@ func (x *CodeAssistMetric) String() string {
 func (*CodeAssistMetric) ProtoMessage() {}
 
 func (x *CodeAssistMetric) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[17]
+	mi := &file_CloudCode_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2982,10 +2890,10 @@ func (x *CodeAssistMetric) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CodeAssistMetric.ProtoReflect.Descriptor instead.
 func (*CodeAssistMetric) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{17}
+	return file_CloudCode_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *CodeAssistMetric) GetTimestamp() *Timestamp {
+func (x *CodeAssistMetric) GetTimestamp() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Timestamp
 	}
@@ -3071,7 +2979,7 @@ type CompleteCodeRequest struct {
 
 func (x *CompleteCodeRequest) Reset() {
 	*x = CompleteCodeRequest{}
-	mi := &file_CloudCode_proto_msgTypes[18]
+	mi := &file_CloudCode_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3083,7 +2991,7 @@ func (x *CompleteCodeRequest) String() string {
 func (*CompleteCodeRequest) ProtoMessage() {}
 
 func (x *CompleteCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[18]
+	mi := &file_CloudCode_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3096,7 +3004,7 @@ func (x *CompleteCodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteCodeRequest.ProtoReflect.Descriptor instead.
 func (*CompleteCodeRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{18}
+	return file_CloudCode_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *CompleteCodeRequest) GetProject() string {
@@ -3159,7 +3067,7 @@ type CompleteCodeResponse struct {
 
 func (x *CompleteCodeResponse) Reset() {
 	*x = CompleteCodeResponse{}
-	mi := &file_CloudCode_proto_msgTypes[19]
+	mi := &file_CloudCode_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3171,7 +3079,7 @@ func (x *CompleteCodeResponse) String() string {
 func (*CompleteCodeResponse) ProtoMessage() {}
 
 func (x *CompleteCodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[19]
+	mi := &file_CloudCode_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3184,7 +3092,7 @@ func (x *CompleteCodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteCodeResponse.ProtoReflect.Descriptor instead.
 func (*CompleteCodeResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{19}
+	return file_CloudCode_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CompleteCodeResponse) GetSuggestions() []*Suggestion {
@@ -3210,7 +3118,7 @@ type ConversationExplainUI struct {
 
 func (x *ConversationExplainUI) Reset() {
 	*x = ConversationExplainUI{}
-	mi := &file_CloudCode_proto_msgTypes[20]
+	mi := &file_CloudCode_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3222,7 +3130,7 @@ func (x *ConversationExplainUI) String() string {
 func (*ConversationExplainUI) ProtoMessage() {}
 
 func (x *ConversationExplainUI) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[20]
+	mi := &file_CloudCode_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3235,7 +3143,7 @@ func (x *ConversationExplainUI) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConversationExplainUI.ProtoReflect.Descriptor instead.
 func (*ConversationExplainUI) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{20}
+	return file_CloudCode_proto_rawDescGZIP(), []int{19}
 }
 
 // origin: .google.internal.cloud.code.v1internal.ConversationGenerateTestUI
@@ -3247,7 +3155,7 @@ type ConversationGenerateTestUI struct {
 
 func (x *ConversationGenerateTestUI) Reset() {
 	*x = ConversationGenerateTestUI{}
-	mi := &file_CloudCode_proto_msgTypes[21]
+	mi := &file_CloudCode_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3259,7 +3167,7 @@ func (x *ConversationGenerateTestUI) String() string {
 func (*ConversationGenerateTestUI) ProtoMessage() {}
 
 func (x *ConversationGenerateTestUI) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[21]
+	mi := &file_CloudCode_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3272,7 +3180,7 @@ func (x *ConversationGenerateTestUI) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConversationGenerateTestUI.ProtoReflect.Descriptor instead.
 func (*ConversationGenerateTestUI) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{21}
+	return file_CloudCode_proto_rawDescGZIP(), []int{20}
 }
 
 // origin: .google.internal.cloud.code.v1internal.ConversationInteraction
@@ -3292,7 +3200,7 @@ type ConversationInteraction struct {
 
 func (x *ConversationInteraction) Reset() {
 	*x = ConversationInteraction{}
-	mi := &file_CloudCode_proto_msgTypes[22]
+	mi := &file_CloudCode_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3304,7 +3212,7 @@ func (x *ConversationInteraction) String() string {
 func (*ConversationInteraction) ProtoMessage() {}
 
 func (x *ConversationInteraction) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[22]
+	mi := &file_CloudCode_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3317,7 +3225,7 @@ func (x *ConversationInteraction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConversationInteraction.ProtoReflect.Descriptor instead.
 func (*ConversationInteraction) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{22}
+	return file_CloudCode_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ConversationInteraction) GetTraceId() string {
@@ -3394,7 +3302,7 @@ type ConversationOffered struct {
 
 func (x *ConversationOffered) Reset() {
 	*x = ConversationOffered{}
-	mi := &file_CloudCode_proto_msgTypes[23]
+	mi := &file_CloudCode_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3406,7 +3314,7 @@ func (x *ConversationOffered) String() string {
 func (*ConversationOffered) ProtoMessage() {}
 
 func (x *ConversationOffered) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[23]
+	mi := &file_CloudCode_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3419,7 +3327,7 @@ func (x *ConversationOffered) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConversationOffered.ProtoReflect.Descriptor instead.
 func (*ConversationOffered) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{23}
+	return file_CloudCode_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ConversationOffered) GetCitationCount() int64 {
@@ -3498,7 +3406,7 @@ type CreateWorker struct {
 
 func (x *CreateWorker) Reset() {
 	*x = CreateWorker{}
-	mi := &file_CloudCode_proto_msgTypes[24]
+	mi := &file_CloudCode_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3510,7 +3418,7 @@ func (x *CreateWorker) String() string {
 func (*CreateWorker) ProtoMessage() {}
 
 func (x *CreateWorker) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[24]
+	mi := &file_CloudCode_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3523,7 +3431,7 @@ func (x *CreateWorker) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateWorker.ProtoReflect.Descriptor instead.
 func (*CreateWorker) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{24}
+	return file_CloudCode_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CreateWorker) GetWorkerId() string {
@@ -3566,7 +3474,7 @@ type Credits struct {
 
 func (x *Credits) Reset() {
 	*x = Credits{}
-	mi := &file_CloudCode_proto_msgTypes[25]
+	mi := &file_CloudCode_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3578,7 +3486,7 @@ func (x *Credits) String() string {
 func (*Credits) ProtoMessage() {}
 
 func (x *Credits) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[25]
+	mi := &file_CloudCode_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3591,7 +3499,7 @@ func (x *Credits) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Credits.ProtoReflect.Descriptor instead.
 func (*Credits) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{25}
+	return file_CloudCode_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *Credits) GetCreditType() CreditType {
@@ -3625,7 +3533,7 @@ type DeleteWorker struct {
 
 func (x *DeleteWorker) Reset() {
 	*x = DeleteWorker{}
-	mi := &file_CloudCode_proto_msgTypes[26]
+	mi := &file_CloudCode_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3637,7 +3545,7 @@ func (x *DeleteWorker) String() string {
 func (*DeleteWorker) ProtoMessage() {}
 
 func (x *DeleteWorker) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[26]
+	mi := &file_CloudCode_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3650,7 +3558,7 @@ func (x *DeleteWorker) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWorker.ProtoReflect.Descriptor instead.
 func (*DeleteWorker) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{26}
+	return file_CloudCode_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *DeleteWorker) GetWorkerId() string {
@@ -3674,7 +3582,7 @@ type DisplayProperties struct {
 
 func (x *DisplayProperties) Reset() {
 	*x = DisplayProperties{}
-	mi := &file_CloudCode_proto_msgTypes[27]
+	mi := &file_CloudCode_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3686,7 +3594,7 @@ func (x *DisplayProperties) String() string {
 func (*DisplayProperties) ProtoMessage() {}
 
 func (x *DisplayProperties) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[27]
+	mi := &file_CloudCode_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3699,7 +3607,7 @@ func (x *DisplayProperties) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisplayProperties.ProtoReflect.Descriptor instead.
 func (*DisplayProperties) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{27}
+	return file_CloudCode_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *DisplayProperties) GetDisplayName() string {
@@ -3737,59 +3645,6 @@ func (x *DisplayProperties) GetHelpMessage() string {
 	return ""
 }
 
-// origin: .google.protobuf.Duration
-type Duration struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Seconds       int64                  `protobuf:"varint,1,opt,name=seconds,proto3" json:"seconds,omitempty"`
-	Nanos         int32                  `protobuf:"varint,2,opt,name=nanos,proto3" json:"nanos,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Duration) Reset() {
-	*x = Duration{}
-	mi := &file_CloudCode_proto_msgTypes[28]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Duration) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Duration) ProtoMessage() {}
-
-func (x *Duration) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[28]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Duration.ProtoReflect.Descriptor instead.
-func (*Duration) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{28}
-}
-
-func (x *Duration) GetSeconds() int64 {
-	if x != nil {
-		return x.Seconds
-	}
-	return 0
-}
-
-func (x *Duration) GetNanos() int32 {
-	if x != nil {
-		return x.Nanos
-	}
-	return 0
-}
-
 // origin: .google.internal.cloud.code.v1internal.EditableRegion
 type EditableRegion struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -3801,7 +3656,7 @@ type EditableRegion struct {
 
 func (x *EditableRegion) Reset() {
 	*x = EditableRegion{}
-	mi := &file_CloudCode_proto_msgTypes[29]
+	mi := &file_CloudCode_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3813,7 +3668,7 @@ func (x *EditableRegion) String() string {
 func (*EditableRegion) ProtoMessage() {}
 
 func (x *EditableRegion) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[29]
+	mi := &file_CloudCode_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3826,7 +3681,7 @@ func (x *EditableRegion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EditableRegion.ProtoReflect.Descriptor instead.
 func (*EditableRegion) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{29}
+	return file_CloudCode_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *EditableRegion) GetFirstLine() int32 {
@@ -3843,43 +3698,6 @@ func (x *EditableRegion) GetLastLine() int32 {
 	return 0
 }
 
-// origin: .google.protobuf.Empty
-type Empty struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Empty) Reset() {
-	*x = Empty{}
-	mi := &file_CloudCode_proto_msgTypes[30]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Empty) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Empty) ProtoMessage() {}
-
-func (x *Empty) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[30]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Empty.ProtoReflect.Descriptor instead.
-func (*Empty) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{30}
-}
-
 // origin: .google.internal.cloud.code.v1internal.CliFeatureSetting.ExtensionsSetting
 type ExtensionsSetting struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
@@ -3890,7 +3708,7 @@ type ExtensionsSetting struct {
 
 func (x *ExtensionsSetting) Reset() {
 	*x = ExtensionsSetting{}
-	mi := &file_CloudCode_proto_msgTypes[31]
+	mi := &file_CloudCode_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3902,7 +3720,7 @@ func (x *ExtensionsSetting) String() string {
 func (*ExtensionsSetting) ProtoMessage() {}
 
 func (x *ExtensionsSetting) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[31]
+	mi := &file_CloudCode_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3915,7 +3733,7 @@ func (x *ExtensionsSetting) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExtensionsSetting.ProtoReflect.Descriptor instead.
 func (*ExtensionsSetting) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{31}
+	return file_CloudCode_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ExtensionsSetting) GetExtensionsEnabled() bool {
@@ -3934,7 +3752,7 @@ type FeedbackId struct {
 
 func (x *FeedbackId) Reset() {
 	*x = FeedbackId{}
-	mi := &file_CloudCode_proto_msgTypes[32]
+	mi := &file_CloudCode_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3946,7 +3764,7 @@ func (x *FeedbackId) String() string {
 func (*FeedbackId) ProtoMessage() {}
 
 func (x *FeedbackId) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[32]
+	mi := &file_CloudCode_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3959,7 +3777,7 @@ func (x *FeedbackId) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeedbackId.ProtoReflect.Descriptor instead.
 func (*FeedbackId) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{32}
+	return file_CloudCode_proto_rawDescGZIP(), []int{29}
 }
 
 // origin: .google.internal.cloud.code.v1internal.FetchAdminControlsRequest
@@ -3972,7 +3790,7 @@ type FetchAdminControlsRequest struct {
 
 func (x *FetchAdminControlsRequest) Reset() {
 	*x = FetchAdminControlsRequest{}
-	mi := &file_CloudCode_proto_msgTypes[33]
+	mi := &file_CloudCode_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3984,7 +3802,7 @@ func (x *FetchAdminControlsRequest) String() string {
 func (*FetchAdminControlsRequest) ProtoMessage() {}
 
 func (x *FetchAdminControlsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[33]
+	mi := &file_CloudCode_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3997,7 +3815,7 @@ func (x *FetchAdminControlsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchAdminControlsRequest.ProtoReflect.Descriptor instead.
 func (*FetchAdminControlsRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{33}
+	return file_CloudCode_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *FetchAdminControlsRequest) GetProject() string {
@@ -4029,7 +3847,7 @@ type FetchAdminControlsResponse struct {
 
 func (x *FetchAdminControlsResponse) Reset() {
 	*x = FetchAdminControlsResponse{}
-	mi := &file_CloudCode_proto_msgTypes[34]
+	mi := &file_CloudCode_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4041,7 +3859,7 @@ func (x *FetchAdminControlsResponse) String() string {
 func (*FetchAdminControlsResponse) ProtoMessage() {}
 
 func (x *FetchAdminControlsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[34]
+	mi := &file_CloudCode_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4054,7 +3872,7 @@ func (x *FetchAdminControlsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchAdminControlsResponse.ProtoReflect.Descriptor instead.
 func (*FetchAdminControlsResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{34}
+	return file_CloudCode_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *FetchAdminControlsResponse) GetDisableTelemetry() bool {
@@ -4158,7 +3976,7 @@ type FetchCodeCustomizationStateRequest struct {
 
 func (x *FetchCodeCustomizationStateRequest) Reset() {
 	*x = FetchCodeCustomizationStateRequest{}
-	mi := &file_CloudCode_proto_msgTypes[35]
+	mi := &file_CloudCode_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4170,7 +3988,7 @@ func (x *FetchCodeCustomizationStateRequest) String() string {
 func (*FetchCodeCustomizationStateRequest) ProtoMessage() {}
 
 func (x *FetchCodeCustomizationStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[35]
+	mi := &file_CloudCode_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4183,7 +4001,7 @@ func (x *FetchCodeCustomizationStateRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use FetchCodeCustomizationStateRequest.ProtoReflect.Descriptor instead.
 func (*FetchCodeCustomizationStateRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{35}
+	return file_CloudCode_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *FetchCodeCustomizationStateRequest) GetProject() string {
@@ -4203,7 +4021,7 @@ type FetchCodeCustomizationStateResponse struct {
 
 func (x *FetchCodeCustomizationStateResponse) Reset() {
 	*x = FetchCodeCustomizationStateResponse{}
-	mi := &file_CloudCode_proto_msgTypes[36]
+	mi := &file_CloudCode_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4215,7 +4033,7 @@ func (x *FetchCodeCustomizationStateResponse) String() string {
 func (*FetchCodeCustomizationStateResponse) ProtoMessage() {}
 
 func (x *FetchCodeCustomizationStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[36]
+	mi := &file_CloudCode_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4228,7 +4046,7 @@ func (x *FetchCodeCustomizationStateResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use FetchCodeCustomizationStateResponse.ProtoReflect.Descriptor instead.
 func (*FetchCodeCustomizationStateResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{36}
+	return file_CloudCode_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *FetchCodeCustomizationStateResponse) GetState() State {
@@ -4257,7 +4075,7 @@ type File struct {
 
 func (x *File) Reset() {
 	*x = File{}
-	mi := &file_CloudCode_proto_msgTypes[37]
+	mi := &file_CloudCode_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4269,7 +4087,7 @@ func (x *File) String() string {
 func (*File) ProtoMessage() {}
 
 func (x *File) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[37]
+	mi := &file_CloudCode_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4282,7 +4100,7 @@ func (x *File) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use File.ProtoReflect.Descriptor instead.
 func (*File) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{37}
+	return file_CloudCode_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *File) GetFilePath() string {
@@ -4373,7 +4191,7 @@ type FileChange struct {
 
 func (x *FileChange) Reset() {
 	*x = FileChange{}
-	mi := &file_CloudCode_proto_msgTypes[38]
+	mi := &file_CloudCode_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4385,7 +4203,7 @@ func (x *FileChange) String() string {
 func (*FileChange) ProtoMessage() {}
 
 func (x *FileChange) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[38]
+	mi := &file_CloudCode_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4398,7 +4216,7 @@ func (x *FileChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileChange.ProtoReflect.Descriptor instead.
 func (*FileChange) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{38}
+	return file_CloudCode_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *FileChange) GetFilePath() string {
@@ -4474,7 +4292,7 @@ type FileChangeTelemetry struct {
 
 func (x *FileChangeTelemetry) Reset() {
 	*x = FileChangeTelemetry{}
-	mi := &file_CloudCode_proto_msgTypes[39]
+	mi := &file_CloudCode_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4486,7 +4304,7 @@ func (x *FileChangeTelemetry) String() string {
 func (*FileChangeTelemetry) ProtoMessage() {}
 
 func (x *FileChangeTelemetry) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[39]
+	mi := &file_CloudCode_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4499,7 +4317,7 @@ func (x *FileChangeTelemetry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileChangeTelemetry.ProtoReflect.Descriptor instead.
 func (*FileChangeTelemetry) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{39}
+	return file_CloudCode_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *FileChangeTelemetry) GetCommentLines() *Int64Value {
@@ -4520,7 +4338,7 @@ type FileSegment struct {
 
 func (x *FileSegment) Reset() {
 	*x = FileSegment{}
-	mi := &file_CloudCode_proto_msgTypes[40]
+	mi := &file_CloudCode_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4532,7 +4350,7 @@ func (x *FileSegment) String() string {
 func (*FileSegment) ProtoMessage() {}
 
 func (x *FileSegment) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[40]
+	mi := &file_CloudCode_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4545,7 +4363,7 @@ func (x *FileSegment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileSegment.ProtoReflect.Descriptor instead.
 func (*FileSegment) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{40}
+	return file_CloudCode_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *FileSegment) GetContent() string {
@@ -4575,7 +4393,7 @@ type FileUsage struct {
 
 func (x *FileUsage) Reset() {
 	*x = FileUsage{}
-	mi := &file_CloudCode_proto_msgTypes[41]
+	mi := &file_CloudCode_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4587,7 +4405,7 @@ func (x *FileUsage) String() string {
 func (*FileUsage) ProtoMessage() {}
 
 func (x *FileUsage) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[41]
+	mi := &file_CloudCode_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4600,7 +4418,7 @@ func (x *FileUsage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileUsage.ProtoReflect.Descriptor instead.
 func (*FileUsage) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{41}
+	return file_CloudCode_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *FileUsage) GetIncludedFiles() []string {
@@ -4642,7 +4460,7 @@ type FilteredFlag struct {
 
 func (x *FilteredFlag) Reset() {
 	*x = FilteredFlag{}
-	mi := &file_CloudCode_proto_msgTypes[42]
+	mi := &file_CloudCode_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4654,7 +4472,7 @@ func (x *FilteredFlag) String() string {
 func (*FilteredFlag) ProtoMessage() {}
 
 func (x *FilteredFlag) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[42]
+	mi := &file_CloudCode_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4667,7 +4485,7 @@ func (x *FilteredFlag) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FilteredFlag.ProtoReflect.Descriptor instead.
 func (*FilteredFlag) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{42}
+	return file_CloudCode_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *FilteredFlag) GetName() string {
@@ -4701,7 +4519,7 @@ type Flag struct {
 
 func (x *Flag) Reset() {
 	*x = Flag{}
-	mi := &file_CloudCode_proto_msgTypes[43]
+	mi := &file_CloudCode_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4713,7 +4531,7 @@ func (x *Flag) String() string {
 func (*Flag) ProtoMessage() {}
 
 func (x *Flag) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[43]
+	mi := &file_CloudCode_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4726,7 +4544,7 @@ func (x *Flag) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Flag.ProtoReflect.Descriptor instead.
 func (*Flag) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{43}
+	return file_CloudCode_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *Flag) GetName() string {
@@ -4794,7 +4612,7 @@ type FunctionCall struct {
 
 func (x *FunctionCall) Reset() {
 	*x = FunctionCall{}
-	mi := &file_CloudCode_proto_msgTypes[44]
+	mi := &file_CloudCode_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4806,7 +4624,7 @@ func (x *FunctionCall) String() string {
 func (*FunctionCall) ProtoMessage() {}
 
 func (x *FunctionCall) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[44]
+	mi := &file_CloudCode_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4819,7 +4637,7 @@ func (x *FunctionCall) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FunctionCall.ProtoReflect.Descriptor instead.
 func (*FunctionCall) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{44}
+	return file_CloudCode_proto_rawDescGZIP(), []int{41}
 }
 
 // origin: .google.cloud.aiplatform.master.FunctionDeclaration
@@ -4831,7 +4649,7 @@ type FunctionDeclaration struct {
 
 func (x *FunctionDeclaration) Reset() {
 	*x = FunctionDeclaration{}
-	mi := &file_CloudCode_proto_msgTypes[45]
+	mi := &file_CloudCode_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4843,7 +4661,7 @@ func (x *FunctionDeclaration) String() string {
 func (*FunctionDeclaration) ProtoMessage() {}
 
 func (x *FunctionDeclaration) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[45]
+	mi := &file_CloudCode_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4856,7 +4674,7 @@ func (x *FunctionDeclaration) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FunctionDeclaration.ProtoReflect.Descriptor instead.
 func (*FunctionDeclaration) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{45}
+	return file_CloudCode_proto_rawDescGZIP(), []int{42}
 }
 
 // origin: .google.cloud.aiplatform.master.FunctionResponse
@@ -4868,7 +4686,7 @@ type FunctionResponse struct {
 
 func (x *FunctionResponse) Reset() {
 	*x = FunctionResponse{}
-	mi := &file_CloudCode_proto_msgTypes[46]
+	mi := &file_CloudCode_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4880,7 +4698,7 @@ func (x *FunctionResponse) String() string {
 func (*FunctionResponse) ProtoMessage() {}
 
 func (x *FunctionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[46]
+	mi := &file_CloudCode_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4893,7 +4711,7 @@ func (x *FunctionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FunctionResponse.ProtoReflect.Descriptor instead.
 func (*FunctionResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{46}
+	return file_CloudCode_proto_rawDescGZIP(), []int{43}
 }
 
 // origin: .google.internal.cloud.code.v1internal.GenerateChatRequest
@@ -4920,7 +4738,7 @@ type GenerateChatRequest struct {
 
 func (x *GenerateChatRequest) Reset() {
 	*x = GenerateChatRequest{}
-	mi := &file_CloudCode_proto_msgTypes[47]
+	mi := &file_CloudCode_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4932,7 +4750,7 @@ func (x *GenerateChatRequest) String() string {
 func (*GenerateChatRequest) ProtoMessage() {}
 
 func (x *GenerateChatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[47]
+	mi := &file_CloudCode_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4945,7 +4763,7 @@ func (x *GenerateChatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateChatRequest.ProtoReflect.Descriptor instead.
 func (*GenerateChatRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{47}
+	return file_CloudCode_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *GenerateChatRequest) GetProject() string {
@@ -5081,7 +4899,7 @@ type GenerateChatResponse struct {
 
 func (x *GenerateChatResponse) Reset() {
 	*x = GenerateChatResponse{}
-	mi := &file_CloudCode_proto_msgTypes[48]
+	mi := &file_CloudCode_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5093,7 +4911,7 @@ func (x *GenerateChatResponse) String() string {
 func (*GenerateChatResponse) ProtoMessage() {}
 
 func (x *GenerateChatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[48]
+	mi := &file_CloudCode_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5106,7 +4924,7 @@ func (x *GenerateChatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateChatResponse.ProtoReflect.Descriptor instead.
 func (*GenerateChatResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{48}
+	return file_CloudCode_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *GenerateChatResponse) GetMarkdown() string {
@@ -5257,7 +5075,7 @@ type GenerateCodeRequest struct {
 
 func (x *GenerateCodeRequest) Reset() {
 	*x = GenerateCodeRequest{}
-	mi := &file_CloudCode_proto_msgTypes[49]
+	mi := &file_CloudCode_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5269,7 +5087,7 @@ func (x *GenerateCodeRequest) String() string {
 func (*GenerateCodeRequest) ProtoMessage() {}
 
 func (x *GenerateCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[49]
+	mi := &file_CloudCode_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5282,7 +5100,7 @@ func (x *GenerateCodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateCodeRequest.ProtoReflect.Descriptor instead.
 func (*GenerateCodeRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{49}
+	return file_CloudCode_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *GenerateCodeRequest) GetProject() string {
@@ -5339,7 +5157,7 @@ type GenerateCodeResponse struct {
 
 func (x *GenerateCodeResponse) Reset() {
 	*x = GenerateCodeResponse{}
-	mi := &file_CloudCode_proto_msgTypes[50]
+	mi := &file_CloudCode_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5351,7 +5169,7 @@ func (x *GenerateCodeResponse) String() string {
 func (*GenerateCodeResponse) ProtoMessage() {}
 
 func (x *GenerateCodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[50]
+	mi := &file_CloudCode_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5364,7 +5182,7 @@ func (x *GenerateCodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateCodeResponse.ProtoReflect.Descriptor instead.
 func (*GenerateCodeResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{50}
+	return file_CloudCode_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *GenerateCodeResponse) GetSuggestions() []*Suggestion {
@@ -5397,7 +5215,7 @@ type GenerateCodeUI struct {
 
 func (x *GenerateCodeUI) Reset() {
 	*x = GenerateCodeUI{}
-	mi := &file_CloudCode_proto_msgTypes[51]
+	mi := &file_CloudCode_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5409,7 +5227,7 @@ func (x *GenerateCodeUI) String() string {
 func (*GenerateCodeUI) ProtoMessage() {}
 
 func (x *GenerateCodeUI) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[51]
+	mi := &file_CloudCode_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5422,7 +5240,7 @@ func (x *GenerateCodeUI) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateCodeUI.ProtoReflect.Descriptor instead.
 func (*GenerateCodeUI) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{51}
+	return file_CloudCode_proto_rawDescGZIP(), []int{48}
 }
 
 // origin: .google.internal.cloud.code.v1internal.GetCodeAssistGlobalUserSettingRequest
@@ -5436,7 +5254,7 @@ type GetCodeAssistGlobalUserSettingRequest struct {
 
 func (x *GetCodeAssistGlobalUserSettingRequest) Reset() {
 	*x = GetCodeAssistGlobalUserSettingRequest{}
-	mi := &file_CloudCode_proto_msgTypes[52]
+	mi := &file_CloudCode_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5448,7 +5266,7 @@ func (x *GetCodeAssistGlobalUserSettingRequest) String() string {
 func (*GetCodeAssistGlobalUserSettingRequest) ProtoMessage() {}
 
 func (x *GetCodeAssistGlobalUserSettingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[52]
+	mi := &file_CloudCode_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5461,7 +5279,7 @@ func (x *GetCodeAssistGlobalUserSettingRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use GetCodeAssistGlobalUserSettingRequest.ProtoReflect.Descriptor instead.
 func (*GetCodeAssistGlobalUserSettingRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{52}
+	return file_CloudCode_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *GetCodeAssistGlobalUserSettingRequest) GetCloudaicompanionProject() string {
@@ -5488,7 +5306,7 @@ type GetOperationRequest struct {
 
 func (x *GetOperationRequest) Reset() {
 	*x = GetOperationRequest{}
-	mi := &file_CloudCode_proto_msgTypes[53]
+	mi := &file_CloudCode_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5500,7 +5318,7 @@ func (x *GetOperationRequest) String() string {
 func (*GetOperationRequest) ProtoMessage() {}
 
 func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[53]
+	mi := &file_CloudCode_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5513,7 +5331,7 @@ func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOperationRequest.ProtoReflect.Descriptor instead.
 func (*GetOperationRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{53}
+	return file_CloudCode_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *GetOperationRequest) GetName() string {
@@ -5539,7 +5357,7 @@ type IDEContext struct {
 
 func (x *IDEContext) Reset() {
 	*x = IDEContext{}
-	mi := &file_CloudCode_proto_msgTypes[54]
+	mi := &file_CloudCode_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5551,7 +5369,7 @@ func (x *IDEContext) String() string {
 func (*IDEContext) ProtoMessage() {}
 
 func (x *IDEContext) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[54]
+	mi := &file_CloudCode_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5564,7 +5382,7 @@ func (x *IDEContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IDEContext.ProtoReflect.Descriptor instead.
 func (*IDEContext) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{54}
+	return file_CloudCode_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *IDEContext) GetCurrentFile() *File {
@@ -5634,7 +5452,7 @@ type IneligibleTier struct {
 
 func (x *IneligibleTier) Reset() {
 	*x = IneligibleTier{}
-	mi := &file_CloudCode_proto_msgTypes[55]
+	mi := &file_CloudCode_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5646,7 +5464,7 @@ func (x *IneligibleTier) String() string {
 func (*IneligibleTier) ProtoMessage() {}
 
 func (x *IneligibleTier) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[55]
+	mi := &file_CloudCode_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5659,7 +5477,7 @@ func (x *IneligibleTier) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IneligibleTier.ProtoReflect.Descriptor instead.
 func (*IneligibleTier) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{55}
+	return file_CloudCode_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *IneligibleTier) GetReasonCode() IneligibleTierReasonCodes {
@@ -5745,7 +5563,7 @@ type InlineCompletionAccepted struct {
 
 func (x *InlineCompletionAccepted) Reset() {
 	*x = InlineCompletionAccepted{}
-	mi := &file_CloudCode_proto_msgTypes[56]
+	mi := &file_CloudCode_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5757,7 +5575,7 @@ func (x *InlineCompletionAccepted) String() string {
 func (*InlineCompletionAccepted) ProtoMessage() {}
 
 func (x *InlineCompletionAccepted) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[56]
+	mi := &file_CloudCode_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5770,7 +5588,7 @@ func (x *InlineCompletionAccepted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InlineCompletionAccepted.ProtoReflect.Descriptor instead.
 func (*InlineCompletionAccepted) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{56}
+	return file_CloudCode_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *InlineCompletionAccepted) GetTraceId() string {
@@ -5857,10 +5675,10 @@ type InlineCompletionOffered struct {
 	ResultCount           int64                                        `protobuf:"varint,2,opt,name=result_count,json=resultCount,proto3" json:"result_count,omitempty"`
 	Language              string                                       `protobuf:"bytes,3,opt,name=language,proto3" json:"language,omitempty"`
 	CompletionMode        CompletionMode                               `protobuf:"varint,4,opt,name=completion_mode,json=completionMode,proto3,enum=google.internal.cloud.code.v1internal.cloudcode.CompletionMode" json:"completion_mode,omitempty"`
-	DisplayLength         *Duration                                    `protobuf:"bytes,5,opt,name=display_length,json=displayLength,proto3" json:"display_length,omitempty"`
+	DisplayLength         *durationpb.Duration                         `protobuf:"bytes,5,opt,name=display_length,json=displayLength,proto3" json:"display_length,omitempty"`
 	Status                ActionStatus                                 `protobuf:"varint,6,opt,name=status,proto3,enum=google.internal.cloud.code.v1internal.cloudcode.ActionStatus" json:"status,omitempty"`
 	CompletionMethod      CodeInlinecompletionoffered_CompletionMethod `protobuf:"varint,7,opt,name=completion_method,json=completionMethod,proto3,enum=google.internal.cloud.code.v1internal.cloudcode.CodeInlinecompletionoffered_CompletionMethod" json:"completion_method,omitempty"`
-	ResponseLatency       *Duration                                    `protobuf:"bytes,8,opt,name=response_latency,json=responseLatency,proto3" json:"response_latency,omitempty"`
+	ResponseLatency       *durationpb.Duration                         `protobuf:"bytes,8,opt,name=response_latency,json=responseLatency,proto3" json:"response_latency,omitempty"`
 	ResponseReceivedIndex int64                                        `protobuf:"varint,9,opt,name=response_received_index,json=responseReceivedIndex,proto3" json:"response_received_index,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
@@ -5868,7 +5686,7 @@ type InlineCompletionOffered struct {
 
 func (x *InlineCompletionOffered) Reset() {
 	*x = InlineCompletionOffered{}
-	mi := &file_CloudCode_proto_msgTypes[57]
+	mi := &file_CloudCode_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5880,7 +5698,7 @@ func (x *InlineCompletionOffered) String() string {
 func (*InlineCompletionOffered) ProtoMessage() {}
 
 func (x *InlineCompletionOffered) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[57]
+	mi := &file_CloudCode_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5893,7 +5711,7 @@ func (x *InlineCompletionOffered) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InlineCompletionOffered.ProtoReflect.Descriptor instead.
 func (*InlineCompletionOffered) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{57}
+	return file_CloudCode_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *InlineCompletionOffered) GetTraceId() string {
@@ -5924,7 +5742,7 @@ func (x *InlineCompletionOffered) GetCompletionMode() CompletionMode {
 	return CompletionMode_COMPLETIONMODE_UNKNOWN
 }
 
-func (x *InlineCompletionOffered) GetDisplayLength() *Duration {
+func (x *InlineCompletionOffered) GetDisplayLength() *durationpb.Duration {
 	if x != nil {
 		return x.DisplayLength
 	}
@@ -5945,7 +5763,7 @@ func (x *InlineCompletionOffered) GetCompletionMethod() CodeInlinecompletionoffe
 	return CodeInlinecompletionoffered_CompletionMethod_COMPLETION_METHOD_UNKNOWN
 }
 
-func (x *InlineCompletionOffered) GetResponseLatency() *Duration {
+func (x *InlineCompletionOffered) GetResponseLatency() *durationpb.Duration {
 	if x != nil {
 		return x.ResponseLatency
 	}
@@ -5969,7 +5787,7 @@ type Int32List struct {
 
 func (x *Int32List) Reset() {
 	*x = Int32List{}
-	mi := &file_CloudCode_proto_msgTypes[58]
+	mi := &file_CloudCode_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5981,7 +5799,7 @@ func (x *Int32List) String() string {
 func (*Int32List) ProtoMessage() {}
 
 func (x *Int32List) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[58]
+	mi := &file_CloudCode_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5994,7 +5812,7 @@ func (x *Int32List) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Int32List.ProtoReflect.Descriptor instead.
 func (*Int32List) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{58}
+	return file_CloudCode_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *Int32List) GetValues() []int32 {
@@ -6014,7 +5832,7 @@ type Int64Value struct {
 
 func (x *Int64Value) Reset() {
 	*x = Int64Value{}
-	mi := &file_CloudCode_proto_msgTypes[59]
+	mi := &file_CloudCode_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6026,7 +5844,7 @@ func (x *Int64Value) String() string {
 func (*Int64Value) ProtoMessage() {}
 
 func (x *Int64Value) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[59]
+	mi := &file_CloudCode_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6039,7 +5857,7 @@ func (x *Int64Value) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Int64Value.ProtoReflect.Descriptor instead.
 func (*Int64Value) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{59}
+	return file_CloudCode_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *Int64Value) GetValue() int64 {
@@ -6059,7 +5877,7 @@ type IntentMetadata struct {
 
 func (x *IntentMetadata) Reset() {
 	*x = IntentMetadata{}
-	mi := &file_CloudCode_proto_msgTypes[60]
+	mi := &file_CloudCode_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6071,7 +5889,7 @@ func (x *IntentMetadata) String() string {
 func (*IntentMetadata) ProtoMessage() {}
 
 func (x *IntentMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[60]
+	mi := &file_CloudCode_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6084,7 +5902,7 @@ func (x *IntentMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IntentMetadata.ProtoReflect.Descriptor instead.
 func (*IntentMetadata) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{60}
+	return file_CloudCode_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *IntentMetadata) GetLabel() string {
@@ -6111,7 +5929,7 @@ type InternalAtomicAgenticChatRequest struct {
 
 func (x *InternalAtomicAgenticChatRequest) Reset() {
 	*x = InternalAtomicAgenticChatRequest{}
-	mi := &file_CloudCode_proto_msgTypes[61]
+	mi := &file_CloudCode_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6123,7 +5941,7 @@ func (x *InternalAtomicAgenticChatRequest) String() string {
 func (*InternalAtomicAgenticChatRequest) ProtoMessage() {}
 
 func (x *InternalAtomicAgenticChatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[61]
+	mi := &file_CloudCode_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6136,7 +5954,7 @@ func (x *InternalAtomicAgenticChatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InternalAtomicAgenticChatRequest.ProtoReflect.Descriptor instead.
 func (*InternalAtomicAgenticChatRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{61}
+	return file_CloudCode_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *InternalAtomicAgenticChatRequest) GetProject() string {
@@ -6207,7 +6025,7 @@ type InternalAtomicAgenticChatResponse struct {
 
 func (x *InternalAtomicAgenticChatResponse) Reset() {
 	*x = InternalAtomicAgenticChatResponse{}
-	mi := &file_CloudCode_proto_msgTypes[62]
+	mi := &file_CloudCode_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6219,7 +6037,7 @@ func (x *InternalAtomicAgenticChatResponse) String() string {
 func (*InternalAtomicAgenticChatResponse) ProtoMessage() {}
 
 func (x *InternalAtomicAgenticChatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[62]
+	mi := &file_CloudCode_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6232,7 +6050,7 @@ func (x *InternalAtomicAgenticChatResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use InternalAtomicAgenticChatResponse.ProtoReflect.Descriptor instead.
 func (*InternalAtomicAgenticChatResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{62}
+	return file_CloudCode_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *InternalAtomicAgenticChatResponse) GetMarkdown() string {
@@ -6266,7 +6084,7 @@ type ListAgentsRequest struct {
 
 func (x *ListAgentsRequest) Reset() {
 	*x = ListAgentsRequest{}
-	mi := &file_CloudCode_proto_msgTypes[63]
+	mi := &file_CloudCode_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6278,7 +6096,7 @@ func (x *ListAgentsRequest) String() string {
 func (*ListAgentsRequest) ProtoMessage() {}
 
 func (x *ListAgentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[63]
+	mi := &file_CloudCode_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6291,7 +6109,7 @@ func (x *ListAgentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentsRequest.ProtoReflect.Descriptor instead.
 func (*ListAgentsRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{63}
+	return file_CloudCode_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ListAgentsRequest) GetProject() string {
@@ -6311,7 +6129,7 @@ type ListAgentsResponse struct {
 
 func (x *ListAgentsResponse) Reset() {
 	*x = ListAgentsResponse{}
-	mi := &file_CloudCode_proto_msgTypes[64]
+	mi := &file_CloudCode_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6323,7 +6141,7 @@ func (x *ListAgentsResponse) String() string {
 func (*ListAgentsResponse) ProtoMessage() {}
 
 func (x *ListAgentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[64]
+	mi := &file_CloudCode_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6336,7 +6154,7 @@ func (x *ListAgentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentsResponse.ProtoReflect.Descriptor instead.
 func (*ListAgentsResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{64}
+	return file_CloudCode_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ListAgentsResponse) GetAgents() []*Agent {
@@ -6358,7 +6176,7 @@ type ListCloudAICompanionProjectsRequest struct {
 
 func (x *ListCloudAICompanionProjectsRequest) Reset() {
 	*x = ListCloudAICompanionProjectsRequest{}
-	mi := &file_CloudCode_proto_msgTypes[65]
+	mi := &file_CloudCode_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6370,7 +6188,7 @@ func (x *ListCloudAICompanionProjectsRequest) String() string {
 func (*ListCloudAICompanionProjectsRequest) ProtoMessage() {}
 
 func (x *ListCloudAICompanionProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[65]
+	mi := &file_CloudCode_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6383,7 +6201,7 @@ func (x *ListCloudAICompanionProjectsRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ListCloudAICompanionProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListCloudAICompanionProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{65}
+	return file_CloudCode_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *ListCloudAICompanionProjectsRequest) GetPageToken() string {
@@ -6418,7 +6236,7 @@ type ListCloudAICompanionProjectsResponse struct {
 
 func (x *ListCloudAICompanionProjectsResponse) Reset() {
 	*x = ListCloudAICompanionProjectsResponse{}
-	mi := &file_CloudCode_proto_msgTypes[66]
+	mi := &file_CloudCode_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6430,7 +6248,7 @@ func (x *ListCloudAICompanionProjectsResponse) String() string {
 func (*ListCloudAICompanionProjectsResponse) ProtoMessage() {}
 
 func (x *ListCloudAICompanionProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[66]
+	mi := &file_CloudCode_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6443,7 +6261,7 @@ func (x *ListCloudAICompanionProjectsResponse) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ListCloudAICompanionProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListCloudAICompanionProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{66}
+	return file_CloudCode_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *ListCloudAICompanionProjectsResponse) GetProjects() []*Project {
@@ -6471,7 +6289,7 @@ type ListExperimentsRequest struct {
 
 func (x *ListExperimentsRequest) Reset() {
 	*x = ListExperimentsRequest{}
-	mi := &file_CloudCode_proto_msgTypes[67]
+	mi := &file_CloudCode_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6483,7 +6301,7 @@ func (x *ListExperimentsRequest) String() string {
 func (*ListExperimentsRequest) ProtoMessage() {}
 
 func (x *ListExperimentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[67]
+	mi := &file_CloudCode_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6496,7 +6314,7 @@ func (x *ListExperimentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListExperimentsRequest.ProtoReflect.Descriptor instead.
 func (*ListExperimentsRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{67}
+	return file_CloudCode_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *ListExperimentsRequest) GetProject() string {
@@ -6526,7 +6344,7 @@ type ListExperimentsResponse struct {
 
 func (x *ListExperimentsResponse) Reset() {
 	*x = ListExperimentsResponse{}
-	mi := &file_CloudCode_proto_msgTypes[68]
+	mi := &file_CloudCode_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6538,7 +6356,7 @@ func (x *ListExperimentsResponse) String() string {
 func (*ListExperimentsResponse) ProtoMessage() {}
 
 func (x *ListExperimentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[68]
+	mi := &file_CloudCode_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6551,7 +6369,7 @@ func (x *ListExperimentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListExperimentsResponse.ProtoReflect.Descriptor instead.
 func (*ListExperimentsResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{68}
+	return file_CloudCode_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *ListExperimentsResponse) GetExperimentIds() []int32 {
@@ -6593,7 +6411,7 @@ type ListModelConfigsRequest struct {
 
 func (x *ListModelConfigsRequest) Reset() {
 	*x = ListModelConfigsRequest{}
-	mi := &file_CloudCode_proto_msgTypes[69]
+	mi := &file_CloudCode_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6605,7 +6423,7 @@ func (x *ListModelConfigsRequest) String() string {
 func (*ListModelConfigsRequest) ProtoMessage() {}
 
 func (x *ListModelConfigsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[69]
+	mi := &file_CloudCode_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6618,7 +6436,7 @@ func (x *ListModelConfigsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListModelConfigsRequest.ProtoReflect.Descriptor instead.
 func (*ListModelConfigsRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{69}
+	return file_CloudCode_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ListModelConfigsRequest) GetMetadata() *ClientMetadata {
@@ -6646,7 +6464,7 @@ type ListModelConfigsResponse struct {
 
 func (x *ListModelConfigsResponse) Reset() {
 	*x = ListModelConfigsResponse{}
-	mi := &file_CloudCode_proto_msgTypes[70]
+	mi := &file_CloudCode_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6658,7 +6476,7 @@ func (x *ListModelConfigsResponse) String() string {
 func (*ListModelConfigsResponse) ProtoMessage() {}
 
 func (x *ListModelConfigsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[70]
+	mi := &file_CloudCode_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6671,7 +6489,7 @@ func (x *ListModelConfigsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListModelConfigsResponse.ProtoReflect.Descriptor instead.
 func (*ListModelConfigsResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{70}
+	return file_CloudCode_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *ListModelConfigsResponse) GetAllowedModelConfigs() []*ModelConfig {
@@ -6700,7 +6518,7 @@ type ListRemoteRepositoriesRequest struct {
 
 func (x *ListRemoteRepositoriesRequest) Reset() {
 	*x = ListRemoteRepositoriesRequest{}
-	mi := &file_CloudCode_proto_msgTypes[71]
+	mi := &file_CloudCode_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6712,7 +6530,7 @@ func (x *ListRemoteRepositoriesRequest) String() string {
 func (*ListRemoteRepositoriesRequest) ProtoMessage() {}
 
 func (x *ListRemoteRepositoriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[71]
+	mi := &file_CloudCode_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6725,7 +6543,7 @@ func (x *ListRemoteRepositoriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRemoteRepositoriesRequest.ProtoReflect.Descriptor instead.
 func (*ListRemoteRepositoriesRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{71}
+	return file_CloudCode_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *ListRemoteRepositoriesRequest) GetProject() string {
@@ -6762,7 +6580,7 @@ type ListRemoteRepositoriesResponse struct {
 
 func (x *ListRemoteRepositoriesResponse) Reset() {
 	*x = ListRemoteRepositoriesResponse{}
-	mi := &file_CloudCode_proto_msgTypes[72]
+	mi := &file_CloudCode_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6774,7 +6592,7 @@ func (x *ListRemoteRepositoriesResponse) String() string {
 func (*ListRemoteRepositoriesResponse) ProtoMessage() {}
 
 func (x *ListRemoteRepositoriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[72]
+	mi := &file_CloudCode_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6787,7 +6605,7 @@ func (x *ListRemoteRepositoriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRemoteRepositoriesResponse.ProtoReflect.Descriptor instead.
 func (*ListRemoteRepositoriesResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{72}
+	return file_CloudCode_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *ListRemoteRepositoriesResponse) GetRepositories() []*Repository {
@@ -6818,51 +6636,6 @@ func (x *ListRemoteRepositoriesResponse) GetRagStatus() CCRagStatus {
 	return CCRagStatus_CC_RAG_STATUS_UNSPECIFIED
 }
 
-// origin: .google.protobuf.ListValue
-type ListValue struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Values        []*Value               `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListValue) Reset() {
-	*x = ListValue{}
-	mi := &file_CloudCode_proto_msgTypes[73]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListValue) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListValue) ProtoMessage() {}
-
-func (x *ListValue) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[73]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListValue.ProtoReflect.Descriptor instead.
-func (*ListValue) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{73}
-}
-
-func (x *ListValue) GetValues() []*Value {
-	if x != nil {
-		return x.Values
-	}
-	return nil
-}
-
 // origin: .google.internal.cloud.code.v1internal.LoadCodeAssistRequest
 type LoadCodeAssistRequest struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
@@ -6875,7 +6648,7 @@ type LoadCodeAssistRequest struct {
 
 func (x *LoadCodeAssistRequest) Reset() {
 	*x = LoadCodeAssistRequest{}
-	mi := &file_CloudCode_proto_msgTypes[74]
+	mi := &file_CloudCode_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6887,7 +6660,7 @@ func (x *LoadCodeAssistRequest) String() string {
 func (*LoadCodeAssistRequest) ProtoMessage() {}
 
 func (x *LoadCodeAssistRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[74]
+	mi := &file_CloudCode_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6900,7 +6673,7 @@ func (x *LoadCodeAssistRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoadCodeAssistRequest.ProtoReflect.Descriptor instead.
 func (*LoadCodeAssistRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{74}
+	return file_CloudCode_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *LoadCodeAssistRequest) GetCloudaicompanionProject() string {
@@ -6944,7 +6717,7 @@ type LoadCodeAssistResponse struct {
 
 func (x *LoadCodeAssistResponse) Reset() {
 	*x = LoadCodeAssistResponse{}
-	mi := &file_CloudCode_proto_msgTypes[75]
+	mi := &file_CloudCode_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6956,7 +6729,7 @@ func (x *LoadCodeAssistResponse) String() string {
 func (*LoadCodeAssistResponse) ProtoMessage() {}
 
 func (x *LoadCodeAssistResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[75]
+	mi := &file_CloudCode_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6969,7 +6742,7 @@ func (x *LoadCodeAssistResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoadCodeAssistResponse.ProtoReflect.Descriptor instead.
 func (*LoadCodeAssistResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{75}
+	return file_CloudCode_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *LoadCodeAssistResponse) GetCurrentTier() *UserTier {
@@ -7061,7 +6834,7 @@ type McpSetting struct {
 
 func (x *McpSetting) Reset() {
 	*x = McpSetting{}
-	mi := &file_CloudCode_proto_msgTypes[76]
+	mi := &file_CloudCode_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7073,7 +6846,7 @@ func (x *McpSetting) String() string {
 func (*McpSetting) ProtoMessage() {}
 
 func (x *McpSetting) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[76]
+	mi := &file_CloudCode_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7086,7 +6859,7 @@ func (x *McpSetting) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use McpSetting.ProtoReflect.Descriptor instead.
 func (*McpSetting) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{76}
+	return file_CloudCode_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *McpSetting) GetMcpEnabled() bool {
@@ -7123,7 +6896,7 @@ type MigrateDatabaseCodeRequest struct {
 
 func (x *MigrateDatabaseCodeRequest) Reset() {
 	*x = MigrateDatabaseCodeRequest{}
-	mi := &file_CloudCode_proto_msgTypes[77]
+	mi := &file_CloudCode_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7135,7 +6908,7 @@ func (x *MigrateDatabaseCodeRequest) String() string {
 func (*MigrateDatabaseCodeRequest) ProtoMessage() {}
 
 func (x *MigrateDatabaseCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[77]
+	mi := &file_CloudCode_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7148,7 +6921,7 @@ func (x *MigrateDatabaseCodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MigrateDatabaseCodeRequest.ProtoReflect.Descriptor instead.
 func (*MigrateDatabaseCodeRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{77}
+	return file_CloudCode_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *MigrateDatabaseCodeRequest) GetProject() string {
@@ -7189,7 +6962,7 @@ type MigrateDatabaseCodeResponse struct {
 
 func (x *MigrateDatabaseCodeResponse) Reset() {
 	*x = MigrateDatabaseCodeResponse{}
-	mi := &file_CloudCode_proto_msgTypes[78]
+	mi := &file_CloudCode_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7201,7 +6974,7 @@ func (x *MigrateDatabaseCodeResponse) String() string {
 func (*MigrateDatabaseCodeResponse) ProtoMessage() {}
 
 func (x *MigrateDatabaseCodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[78]
+	mi := &file_CloudCode_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7214,7 +6987,7 @@ func (x *MigrateDatabaseCodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MigrateDatabaseCodeResponse.ProtoReflect.Descriptor instead.
 func (*MigrateDatabaseCodeResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{78}
+	return file_CloudCode_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *MigrateDatabaseCodeResponse) GetWorkspaceChanges() []*WorkspaceChange {
@@ -7239,7 +7012,7 @@ type MoaWorkerInfo struct {
 
 func (x *MoaWorkerInfo) Reset() {
 	*x = MoaWorkerInfo{}
-	mi := &file_CloudCode_proto_msgTypes[79]
+	mi := &file_CloudCode_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7251,7 +7024,7 @@ func (x *MoaWorkerInfo) String() string {
 func (*MoaWorkerInfo) ProtoMessage() {}
 
 func (x *MoaWorkerInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[79]
+	mi := &file_CloudCode_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7264,7 +7037,7 @@ func (x *MoaWorkerInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoaWorkerInfo.ProtoReflect.Descriptor instead.
 func (*MoaWorkerInfo) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{79}
+	return file_CloudCode_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *MoaWorkerInfo) GetWorkerId() string {
@@ -7322,7 +7095,7 @@ type ModelConfig struct {
 
 func (x *ModelConfig) Reset() {
 	*x = ModelConfig{}
-	mi := &file_CloudCode_proto_msgTypes[80]
+	mi := &file_CloudCode_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7334,7 +7107,7 @@ func (x *ModelConfig) String() string {
 func (*ModelConfig) ProtoMessage() {}
 
 func (x *ModelConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[80]
+	mi := &file_CloudCode_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7347,7 +7120,7 @@ func (x *ModelConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModelConfig.ProtoReflect.Descriptor instead.
 func (*ModelConfig) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{80}
+	return file_CloudCode_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *ModelConfig) GetId() string {
@@ -7391,7 +7164,7 @@ type OnboardUserBackgroundTasksRequest struct {
 
 func (x *OnboardUserBackgroundTasksRequest) Reset() {
 	*x = OnboardUserBackgroundTasksRequest{}
-	mi := &file_CloudCode_proto_msgTypes[81]
+	mi := &file_CloudCode_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7403,7 +7176,7 @@ func (x *OnboardUserBackgroundTasksRequest) String() string {
 func (*OnboardUserBackgroundTasksRequest) ProtoMessage() {}
 
 func (x *OnboardUserBackgroundTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[81]
+	mi := &file_CloudCode_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7416,7 +7189,7 @@ func (x *OnboardUserBackgroundTasksRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use OnboardUserBackgroundTasksRequest.ProtoReflect.Descriptor instead.
 func (*OnboardUserBackgroundTasksRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{81}
+	return file_CloudCode_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *OnboardUserBackgroundTasksRequest) GetProjectNumber() int64 {
@@ -7459,7 +7232,7 @@ type OnboardUserRequest struct {
 
 func (x *OnboardUserRequest) Reset() {
 	*x = OnboardUserRequest{}
-	mi := &file_CloudCode_proto_msgTypes[82]
+	mi := &file_CloudCode_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7471,7 +7244,7 @@ func (x *OnboardUserRequest) String() string {
 func (*OnboardUserRequest) ProtoMessage() {}
 
 func (x *OnboardUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[82]
+	mi := &file_CloudCode_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7484,7 +7257,7 @@ func (x *OnboardUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnboardUserRequest.ProtoReflect.Descriptor instead.
 func (*OnboardUserRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{82}
+	return file_CloudCode_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *OnboardUserRequest) GetTierId() string {
@@ -7512,17 +7285,17 @@ func (x *OnboardUserRequest) GetMetadata() *ClientMetadata {
 type Operation struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Metadata      *Any                   `protobuf:"bytes,2,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Metadata      *anypb.Any             `protobuf:"bytes,2,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	Done          bool                   `protobuf:"varint,3,opt,name=done,proto3" json:"done,omitempty"`
 	Error         *Status                `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
-	Response      *Any                   `protobuf:"bytes,5,opt,name=response,proto3" json:"response,omitempty"`
+	Response      *anypb.Any             `protobuf:"bytes,5,opt,name=response,proto3" json:"response,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Operation) Reset() {
 	*x = Operation{}
-	mi := &file_CloudCode_proto_msgTypes[83]
+	mi := &file_CloudCode_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7534,7 +7307,7 @@ func (x *Operation) String() string {
 func (*Operation) ProtoMessage() {}
 
 func (x *Operation) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[83]
+	mi := &file_CloudCode_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7547,7 +7320,7 @@ func (x *Operation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Operation.ProtoReflect.Descriptor instead.
 func (*Operation) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{83}
+	return file_CloudCode_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *Operation) GetName() string {
@@ -7557,7 +7330,7 @@ func (x *Operation) GetName() string {
 	return ""
 }
 
-func (x *Operation) GetMetadata() *Any {
+func (x *Operation) GetMetadata() *anypb.Any {
 	if x != nil {
 		return x.Metadata
 	}
@@ -7578,7 +7351,7 @@ func (x *Operation) GetError() *Status {
 	return nil
 }
 
-func (x *Operation) GetResponse() *Any {
+func (x *Operation) GetResponse() *anypb.Any {
 	if x != nil {
 		return x.Response
 	}
@@ -7595,7 +7368,7 @@ type PreviewFeatureSetting struct {
 
 func (x *PreviewFeatureSetting) Reset() {
 	*x = PreviewFeatureSetting{}
-	mi := &file_CloudCode_proto_msgTypes[84]
+	mi := &file_CloudCode_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7607,7 +7380,7 @@ func (x *PreviewFeatureSetting) String() string {
 func (*PreviewFeatureSetting) ProtoMessage() {}
 
 func (x *PreviewFeatureSetting) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[84]
+	mi := &file_CloudCode_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7620,7 +7393,7 @@ func (x *PreviewFeatureSetting) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewFeatureSetting.ProtoReflect.Descriptor instead.
 func (*PreviewFeatureSetting) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{84}
+	return file_CloudCode_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *PreviewFeatureSetting) GetPreviewModelsEnabled() bool {
@@ -7645,7 +7418,7 @@ type PreviousSuggestion struct {
 
 func (x *PreviousSuggestion) Reset() {
 	*x = PreviousSuggestion{}
-	mi := &file_CloudCode_proto_msgTypes[85]
+	mi := &file_CloudCode_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7657,7 +7430,7 @@ func (x *PreviousSuggestion) String() string {
 func (*PreviousSuggestion) ProtoMessage() {}
 
 func (x *PreviousSuggestion) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[85]
+	mi := &file_CloudCode_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7670,7 +7443,7 @@ func (x *PreviousSuggestion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviousSuggestion.ProtoReflect.Descriptor instead.
 func (*PreviousSuggestion) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{85}
+	return file_CloudCode_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *PreviousSuggestion) GetModelScore() float32 {
@@ -7727,7 +7500,7 @@ type PrivacyNotice struct {
 
 func (x *PrivacyNotice) Reset() {
 	*x = PrivacyNotice{}
-	mi := &file_CloudCode_proto_msgTypes[86]
+	mi := &file_CloudCode_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7739,7 +7512,7 @@ func (x *PrivacyNotice) String() string {
 func (*PrivacyNotice) ProtoMessage() {}
 
 func (x *PrivacyNotice) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[86]
+	mi := &file_CloudCode_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7752,7 +7525,7 @@ func (x *PrivacyNotice) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrivacyNotice.ProtoReflect.Descriptor instead.
 func (*PrivacyNotice) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{86}
+	return file_CloudCode_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *PrivacyNotice) GetShowNotice() bool {
@@ -7788,7 +7561,7 @@ type Project struct {
 
 func (x *Project) Reset() {
 	*x = Project{}
-	mi := &file_CloudCode_proto_msgTypes[87]
+	mi := &file_CloudCode_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7800,7 +7573,7 @@ func (x *Project) String() string {
 func (*Project) ProtoMessage() {}
 
 func (x *Project) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[87]
+	mi := &file_CloudCode_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7813,7 +7586,7 @@ func (x *Project) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Project.ProtoReflect.Descriptor instead.
 func (*Project) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{87}
+	return file_CloudCode_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *Project) GetId() string {
@@ -7851,7 +7624,7 @@ type PromptCitation struct {
 
 func (x *PromptCitation) Reset() {
 	*x = PromptCitation{}
-	mi := &file_CloudCode_proto_msgTypes[88]
+	mi := &file_CloudCode_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7863,7 +7636,7 @@ func (x *PromptCitation) String() string {
 func (*PromptCitation) ProtoMessage() {}
 
 func (x *PromptCitation) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[88]
+	mi := &file_CloudCode_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7876,7 +7649,7 @@ func (x *PromptCitation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptCitation.ProtoReflect.Descriptor instead.
 func (*PromptCitation) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{88}
+	return file_CloudCode_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *PromptCitation) GetStartIndex() int64 {
@@ -7925,7 +7698,7 @@ type Range struct {
 
 func (x *Range) Reset() {
 	*x = Range{}
-	mi := &file_CloudCode_proto_msgTypes[89]
+	mi := &file_CloudCode_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7937,7 +7710,7 @@ func (x *Range) String() string {
 func (*Range) ProtoMessage() {}
 
 func (x *Range) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[89]
+	mi := &file_CloudCode_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7950,7 +7723,7 @@ func (x *Range) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Range.ProtoReflect.Descriptor instead.
 func (*Range) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{89}
+	return file_CloudCode_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *Range) GetStart() int64 {
@@ -7977,7 +7750,7 @@ type RecentChange struct {
 
 func (x *RecentChange) Reset() {
 	*x = RecentChange{}
-	mi := &file_CloudCode_proto_msgTypes[90]
+	mi := &file_CloudCode_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7989,7 +7762,7 @@ func (x *RecentChange) String() string {
 func (*RecentChange) ProtoMessage() {}
 
 func (x *RecentChange) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[90]
+	mi := &file_CloudCode_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8002,7 +7775,7 @@ func (x *RecentChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecentChange.ProtoReflect.Descriptor instead.
 func (*RecentChange) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{90}
+	return file_CloudCode_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *RecentChange) GetChangeTimeMillis() int64 {
@@ -8023,7 +7796,7 @@ type RecentUserAction struct {
 
 func (x *RecentUserAction) Reset() {
 	*x = RecentUserAction{}
-	mi := &file_CloudCode_proto_msgTypes[91]
+	mi := &file_CloudCode_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8035,7 +7808,7 @@ func (x *RecentUserAction) String() string {
 func (*RecentUserAction) ProtoMessage() {}
 
 func (x *RecentUserAction) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[91]
+	mi := &file_CloudCode_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8048,7 +7821,7 @@ func (x *RecentUserAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecentUserAction.ProtoReflect.Descriptor instead.
 func (*RecentUserAction) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{91}
+	return file_CloudCode_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *RecentUserAction) GetFilePath() string {
@@ -8075,7 +7848,7 @@ type RecitationPolicy struct {
 
 func (x *RecitationPolicy) Reset() {
 	*x = RecitationPolicy{}
-	mi := &file_CloudCode_proto_msgTypes[92]
+	mi := &file_CloudCode_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8087,7 +7860,7 @@ func (x *RecitationPolicy) String() string {
 func (*RecitationPolicy) ProtoMessage() {}
 
 func (x *RecitationPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[92]
+	mi := &file_CloudCode_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8100,7 +7873,7 @@ func (x *RecitationPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecitationPolicy.ProtoReflect.Descriptor instead.
 func (*RecitationPolicy) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{92}
+	return file_CloudCode_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *RecitationPolicy) GetDisableCitations() bool {
@@ -8122,7 +7895,7 @@ type RecordClientEventRequest struct {
 
 func (x *RecordClientEventRequest) Reset() {
 	*x = RecordClientEventRequest{}
-	mi := &file_CloudCode_proto_msgTypes[93]
+	mi := &file_CloudCode_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8134,7 +7907,7 @@ func (x *RecordClientEventRequest) String() string {
 func (*RecordClientEventRequest) ProtoMessage() {}
 
 func (x *RecordClientEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[93]
+	mi := &file_CloudCode_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8147,7 +7920,7 @@ func (x *RecordClientEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordClientEventRequest.ProtoReflect.Descriptor instead.
 func (*RecordClientEventRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{93}
+	return file_CloudCode_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *RecordClientEventRequest) GetProject() string {
@@ -8184,7 +7957,7 @@ type RecordCodeAssistMetricsRequest struct {
 
 func (x *RecordCodeAssistMetricsRequest) Reset() {
 	*x = RecordCodeAssistMetricsRequest{}
-	mi := &file_CloudCode_proto_msgTypes[94]
+	mi := &file_CloudCode_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8196,7 +7969,7 @@ func (x *RecordCodeAssistMetricsRequest) String() string {
 func (*RecordCodeAssistMetricsRequest) ProtoMessage() {}
 
 func (x *RecordCodeAssistMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[94]
+	mi := &file_CloudCode_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8209,7 +7982,7 @@ func (x *RecordCodeAssistMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordCodeAssistMetricsRequest.ProtoReflect.Descriptor instead.
 func (*RecordCodeAssistMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{94}
+	return file_CloudCode_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *RecordCodeAssistMetricsRequest) GetProject() string {
@@ -8251,7 +8024,7 @@ type RecordSmartchoicesFeedbackRequest struct {
 
 func (x *RecordSmartchoicesFeedbackRequest) Reset() {
 	*x = RecordSmartchoicesFeedbackRequest{}
-	mi := &file_CloudCode_proto_msgTypes[95]
+	mi := &file_CloudCode_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8263,7 +8036,7 @@ func (x *RecordSmartchoicesFeedbackRequest) String() string {
 func (*RecordSmartchoicesFeedbackRequest) ProtoMessage() {}
 
 func (x *RecordSmartchoicesFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[95]
+	mi := &file_CloudCode_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8276,7 +8049,7 @@ func (x *RecordSmartchoicesFeedbackRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use RecordSmartchoicesFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*RecordSmartchoicesFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{95}
+	return file_CloudCode_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *RecordSmartchoicesFeedbackRequest) GetFeedbackId() *FeedbackId {
@@ -8302,7 +8075,7 @@ type RecordSmartchoicesFeedbackResponse struct {
 
 func (x *RecordSmartchoicesFeedbackResponse) Reset() {
 	*x = RecordSmartchoicesFeedbackResponse{}
-	mi := &file_CloudCode_proto_msgTypes[96]
+	mi := &file_CloudCode_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8314,7 +8087,7 @@ func (x *RecordSmartchoicesFeedbackResponse) String() string {
 func (*RecordSmartchoicesFeedbackResponse) ProtoMessage() {}
 
 func (x *RecordSmartchoicesFeedbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[96]
+	mi := &file_CloudCode_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8327,7 +8100,7 @@ func (x *RecordSmartchoicesFeedbackResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use RecordSmartchoicesFeedbackResponse.ProtoReflect.Descriptor instead.
 func (*RecordSmartchoicesFeedbackResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{96}
+	return file_CloudCode_proto_rawDescGZIP(), []int{92}
 }
 
 // origin: .google.internal.cloud.code.v1internal.ReleaseChannel
@@ -8342,7 +8115,7 @@ type ReleaseChannel struct {
 
 func (x *ReleaseChannel) Reset() {
 	*x = ReleaseChannel{}
-	mi := &file_CloudCode_proto_msgTypes[97]
+	mi := &file_CloudCode_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8354,7 +8127,7 @@ func (x *ReleaseChannel) String() string {
 func (*ReleaseChannel) ProtoMessage() {}
 
 func (x *ReleaseChannel) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[97]
+	mi := &file_CloudCode_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8367,7 +8140,7 @@ func (x *ReleaseChannel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseChannel.ProtoReflect.Descriptor instead.
 func (*ReleaseChannel) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{97}
+	return file_CloudCode_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *ReleaseChannel) GetType() ChannelType {
@@ -8405,7 +8178,7 @@ type Repository struct {
 
 func (x *Repository) Reset() {
 	*x = Repository{}
-	mi := &file_CloudCode_proto_msgTypes[98]
+	mi := &file_CloudCode_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8417,7 +8190,7 @@ func (x *Repository) String() string {
 func (*Repository) ProtoMessage() {}
 
 func (x *Repository) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[98]
+	mi := &file_CloudCode_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8430,7 +8203,7 @@ func (x *Repository) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Repository.ProtoReflect.Descriptor instead.
 func (*Repository) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{98}
+	return file_CloudCode_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *Repository) GetName() string {
@@ -8479,7 +8252,7 @@ type RetryDetails struct {
 
 func (x *RetryDetails) Reset() {
 	*x = RetryDetails{}
-	mi := &file_CloudCode_proto_msgTypes[99]
+	mi := &file_CloudCode_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8491,7 +8264,7 @@ func (x *RetryDetails) String() string {
 func (*RetryDetails) ProtoMessage() {}
 
 func (x *RetryDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[99]
+	mi := &file_CloudCode_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8504,7 +8277,7 @@ func (x *RetryDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetryDetails.ProtoReflect.Descriptor instead.
 func (*RetryDetails) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{99}
+	return file_CloudCode_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *RetryDetails) GetReason() RetryReason {
@@ -8531,7 +8304,7 @@ type Rule struct {
 
 func (x *Rule) Reset() {
 	*x = Rule{}
-	mi := &file_CloudCode_proto_msgTypes[100]
+	mi := &file_CloudCode_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8543,7 +8316,7 @@ func (x *Rule) String() string {
 func (*Rule) ProtoMessage() {}
 
 func (x *Rule) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[100]
+	mi := &file_CloudCode_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8556,7 +8329,7 @@ func (x *Rule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Rule.ProtoReflect.Descriptor instead.
 func (*Rule) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{100}
+	return file_CloudCode_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *Rule) GetInstruction() string {
@@ -8578,7 +8351,7 @@ type ScmSystem struct {
 
 func (x *ScmSystem) Reset() {
 	*x = ScmSystem{}
-	mi := &file_CloudCode_proto_msgTypes[101]
+	mi := &file_CloudCode_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8590,7 +8363,7 @@ func (x *ScmSystem) String() string {
 func (*ScmSystem) ProtoMessage() {}
 
 func (x *ScmSystem) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[101]
+	mi := &file_CloudCode_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8603,7 +8376,7 @@ func (x *ScmSystem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScmSystem.ProtoReflect.Descriptor instead.
 func (*ScmSystem) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{101}
+	return file_CloudCode_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *ScmSystem) GetId() string {
@@ -8639,7 +8412,7 @@ type SearchSnippetsRequest struct {
 
 func (x *SearchSnippetsRequest) Reset() {
 	*x = SearchSnippetsRequest{}
-	mi := &file_CloudCode_proto_msgTypes[102]
+	mi := &file_CloudCode_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8651,7 +8424,7 @@ func (x *SearchSnippetsRequest) String() string {
 func (*SearchSnippetsRequest) ProtoMessage() {}
 
 func (x *SearchSnippetsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[102]
+	mi := &file_CloudCode_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8664,7 +8437,7 @@ func (x *SearchSnippetsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchSnippetsRequest.ProtoReflect.Descriptor instead.
 func (*SearchSnippetsRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{102}
+	return file_CloudCode_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *SearchSnippetsRequest) GetProject() string {
@@ -8698,7 +8471,7 @@ type SearchSnippetsResponse struct {
 
 func (x *SearchSnippetsResponse) Reset() {
 	*x = SearchSnippetsResponse{}
-	mi := &file_CloudCode_proto_msgTypes[103]
+	mi := &file_CloudCode_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8710,7 +8483,7 @@ func (x *SearchSnippetsResponse) String() string {
 func (*SearchSnippetsResponse) ProtoMessage() {}
 
 func (x *SearchSnippetsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[103]
+	mi := &file_CloudCode_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8723,7 +8496,7 @@ func (x *SearchSnippetsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchSnippetsResponse.ProtoReflect.Descriptor instead.
 func (*SearchSnippetsResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{103}
+	return file_CloudCode_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *SearchSnippetsResponse) GetSnippets() []*Snippet {
@@ -8753,7 +8526,7 @@ type ServerProcessingDetails struct {
 
 func (x *ServerProcessingDetails) Reset() {
 	*x = ServerProcessingDetails{}
-	mi := &file_CloudCode_proto_msgTypes[104]
+	mi := &file_CloudCode_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8765,7 +8538,7 @@ func (x *ServerProcessingDetails) String() string {
 func (*ServerProcessingDetails) ProtoMessage() {}
 
 func (x *ServerProcessingDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[104]
+	mi := &file_CloudCode_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8778,7 +8551,7 @@ func (x *ServerProcessingDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerProcessingDetails.ProtoReflect.Descriptor instead.
 func (*ServerProcessingDetails) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{104}
+	return file_CloudCode_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *ServerProcessingDetails) GetAtlasExperienceHash() string {
@@ -8869,7 +8642,7 @@ type SetCodeAssistGlobalUserSettingRequest struct {
 
 func (x *SetCodeAssistGlobalUserSettingRequest) Reset() {
 	*x = SetCodeAssistGlobalUserSettingRequest{}
-	mi := &file_CloudCode_proto_msgTypes[105]
+	mi := &file_CloudCode_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8881,7 +8654,7 @@ func (x *SetCodeAssistGlobalUserSettingRequest) String() string {
 func (*SetCodeAssistGlobalUserSettingRequest) ProtoMessage() {}
 
 func (x *SetCodeAssistGlobalUserSettingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[105]
+	mi := &file_CloudCode_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8894,7 +8667,7 @@ func (x *SetCodeAssistGlobalUserSettingRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use SetCodeAssistGlobalUserSettingRequest.ProtoReflect.Descriptor instead.
 func (*SetCodeAssistGlobalUserSettingRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{105}
+	return file_CloudCode_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *SetCodeAssistGlobalUserSettingRequest) GetCloudaicompanionProject() string {
@@ -8922,7 +8695,7 @@ type ShowCompletionFeedback struct {
 
 func (x *ShowCompletionFeedback) Reset() {
 	*x = ShowCompletionFeedback{}
-	mi := &file_CloudCode_proto_msgTypes[106]
+	mi := &file_CloudCode_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8934,7 +8707,7 @@ func (x *ShowCompletionFeedback) String() string {
 func (*ShowCompletionFeedback) ProtoMessage() {}
 
 func (x *ShowCompletionFeedback) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[106]
+	mi := &file_CloudCode_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8947,7 +8720,7 @@ func (x *ShowCompletionFeedback) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShowCompletionFeedback.ProtoReflect.Descriptor instead.
 func (*ShowCompletionFeedback) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{106}
+	return file_CloudCode_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *ShowCompletionFeedback) GetShownChars() int32 {
@@ -8977,7 +8750,7 @@ type Snippet struct {
 
 func (x *Snippet) Reset() {
 	*x = Snippet{}
-	mi := &file_CloudCode_proto_msgTypes[107]
+	mi := &file_CloudCode_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8989,7 +8762,7 @@ func (x *Snippet) String() string {
 func (*Snippet) ProtoMessage() {}
 
 func (x *Snippet) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[107]
+	mi := &file_CloudCode_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9002,7 +8775,7 @@ func (x *Snippet) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Snippet.ProtoReflect.Descriptor instead.
 func (*Snippet) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{107}
+	return file_CloudCode_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *Snippet) GetContent() string {
@@ -9038,14 +8811,14 @@ type Status struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	Details       []*Any                 `protobuf:"bytes,3,rep,name=details,proto3" json:"details,omitempty"`
+	Details       []*anypb.Any           `protobuf:"bytes,3,rep,name=details,proto3" json:"details,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Status) Reset() {
 	*x = Status{}
-	mi := &file_CloudCode_proto_msgTypes[108]
+	mi := &file_CloudCode_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9057,7 +8830,7 @@ func (x *Status) String() string {
 func (*Status) ProtoMessage() {}
 
 func (x *Status) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[108]
+	mi := &file_CloudCode_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9070,7 +8843,7 @@ func (x *Status) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Status.ProtoReflect.Descriptor instead.
 func (*Status) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{108}
+	return file_CloudCode_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *Status) GetCode() int32 {
@@ -9087,7 +8860,7 @@ func (x *Status) GetMessage() string {
 	return ""
 }
 
-func (x *Status) GetDetails() []*Any {
+func (x *Status) GetDetails() []*anypb.Any {
 	if x != nil {
 		return x.Details
 	}
@@ -9105,7 +8878,7 @@ type Step struct {
 
 func (x *Step) Reset() {
 	*x = Step{}
-	mi := &file_CloudCode_proto_msgTypes[109]
+	mi := &file_CloudCode_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9117,7 +8890,7 @@ func (x *Step) String() string {
 func (*Step) ProtoMessage() {}
 
 func (x *Step) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[109]
+	mi := &file_CloudCode_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9130,7 +8903,7 @@ func (x *Step) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Step.ProtoReflect.Descriptor instead.
 func (*Step) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{109}
+	return file_CloudCode_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *Step) GetTool() string {
@@ -9158,7 +8931,7 @@ type StepResponse struct {
 
 func (x *StepResponse) Reset() {
 	*x = StepResponse{}
-	mi := &file_CloudCode_proto_msgTypes[110]
+	mi := &file_CloudCode_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9170,7 +8943,7 @@ func (x *StepResponse) String() string {
 func (*StepResponse) ProtoMessage() {}
 
 func (x *StepResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[110]
+	mi := &file_CloudCode_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9183,7 +8956,7 @@ func (x *StepResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StepResponse.ProtoReflect.Descriptor instead.
 func (*StepResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{110}
+	return file_CloudCode_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *StepResponse) GetStep() *Step {
@@ -9203,15 +8976,15 @@ func (x *StepResponse) GetResponse() string {
 // origin: .google.internal.cloud.code.v1internal.ConversationOffered.StreamingLatency
 type StreamingLatency struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
-	FirstMessageLatency *Duration              `protobuf:"bytes,1,opt,name=first_message_latency,json=firstMessageLatency,proto3" json:"first_message_latency,omitempty"`
-	TotalLatency        *Duration              `protobuf:"bytes,2,opt,name=total_latency,json=totalLatency,proto3" json:"total_latency,omitempty"`
+	FirstMessageLatency *durationpb.Duration   `protobuf:"bytes,1,opt,name=first_message_latency,json=firstMessageLatency,proto3" json:"first_message_latency,omitempty"`
+	TotalLatency        *durationpb.Duration   `protobuf:"bytes,2,opt,name=total_latency,json=totalLatency,proto3" json:"total_latency,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
 
 func (x *StreamingLatency) Reset() {
 	*x = StreamingLatency{}
-	mi := &file_CloudCode_proto_msgTypes[111]
+	mi := &file_CloudCode_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9223,7 +8996,7 @@ func (x *StreamingLatency) String() string {
 func (*StreamingLatency) ProtoMessage() {}
 
 func (x *StreamingLatency) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[111]
+	mi := &file_CloudCode_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9236,17 +9009,17 @@ func (x *StreamingLatency) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamingLatency.ProtoReflect.Descriptor instead.
 func (*StreamingLatency) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{111}
+	return file_CloudCode_proto_rawDescGZIP(), []int{107}
 }
 
-func (x *StreamingLatency) GetFirstMessageLatency() *Duration {
+func (x *StreamingLatency) GetFirstMessageLatency() *durationpb.Duration {
 	if x != nil {
 		return x.FirstMessageLatency
 	}
 	return nil
 }
 
-func (x *StreamingLatency) GetTotalLatency() *Duration {
+func (x *StreamingLatency) GetTotalLatency() *durationpb.Duration {
 	if x != nil {
 		return x.TotalLatency
 	}
@@ -9263,7 +9036,7 @@ type StringList struct {
 
 func (x *StringList) Reset() {
 	*x = StringList{}
-	mi := &file_CloudCode_proto_msgTypes[112]
+	mi := &file_CloudCode_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9275,7 +9048,7 @@ func (x *StringList) String() string {
 func (*StringList) ProtoMessage() {}
 
 func (x *StringList) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[112]
+	mi := &file_CloudCode_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9288,57 +9061,12 @@ func (x *StringList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StringList.ProtoReflect.Descriptor instead.
 func (*StringList) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{112}
+	return file_CloudCode_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *StringList) GetValues() []string {
 	if x != nil {
 		return x.Values
-	}
-	return nil
-}
-
-// origin: .google.protobuf.Struct
-type Struct struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Fields        map[string]*Value      `protobuf:"bytes,1,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Struct) Reset() {
-	*x = Struct{}
-	mi := &file_CloudCode_proto_msgTypes[113]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Struct) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Struct) ProtoMessage() {}
-
-func (x *Struct) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[113]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Struct.ProtoReflect.Descriptor instead.
-func (*Struct) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{113}
-}
-
-func (x *Struct) GetFields() map[string]*Value {
-	if x != nil {
-		return x.Fields
 	}
 	return nil
 }
@@ -9359,7 +9087,7 @@ type Suggestion struct {
 
 func (x *Suggestion) Reset() {
 	*x = Suggestion{}
-	mi := &file_CloudCode_proto_msgTypes[114]
+	mi := &file_CloudCode_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9371,7 +9099,7 @@ func (x *Suggestion) String() string {
 func (*Suggestion) ProtoMessage() {}
 
 func (x *Suggestion) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[114]
+	mi := &file_CloudCode_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9384,7 +9112,7 @@ func (x *Suggestion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Suggestion.ProtoReflect.Descriptor instead.
 func (*Suggestion) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{114}
+	return file_CloudCode_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *Suggestion) GetContent() string {
@@ -9446,7 +9174,7 @@ type SuggestionTelemetry struct {
 
 func (x *SuggestionTelemetry) Reset() {
 	*x = SuggestionTelemetry{}
-	mi := &file_CloudCode_proto_msgTypes[115]
+	mi := &file_CloudCode_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9458,7 +9186,7 @@ func (x *SuggestionTelemetry) String() string {
 func (*SuggestionTelemetry) ProtoMessage() {}
 
 func (x *SuggestionTelemetry) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[115]
+	mi := &file_CloudCode_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9471,7 +9199,7 @@ func (x *SuggestionTelemetry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuggestionTelemetry.ProtoReflect.Descriptor instead.
 func (*SuggestionTelemetry) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{115}
+	return file_CloudCode_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *SuggestionTelemetry) GetCommentLines() *Int64Value {
@@ -9479,59 +9207,6 @@ func (x *SuggestionTelemetry) GetCommentLines() *Int64Value {
 		return x.CommentLines
 	}
 	return nil
-}
-
-// origin: .google.protobuf.Timestamp
-type Timestamp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Seconds       int64                  `protobuf:"varint,1,opt,name=seconds,proto3" json:"seconds,omitempty"`
-	Nanos         int32                  `protobuf:"varint,2,opt,name=nanos,proto3" json:"nanos,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Timestamp) Reset() {
-	*x = Timestamp{}
-	mi := &file_CloudCode_proto_msgTypes[116]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Timestamp) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Timestamp) ProtoMessage() {}
-
-func (x *Timestamp) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[116]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Timestamp.ProtoReflect.Descriptor instead.
-func (*Timestamp) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{116}
-}
-
-func (x *Timestamp) GetSeconds() int64 {
-	if x != nil {
-		return x.Seconds
-	}
-	return 0
-}
-
-func (x *Timestamp) GetNanos() int32 {
-	if x != nil {
-		return x.Nanos
-	}
-	return 0
 }
 
 // origin: .google.internal.cloud.code.v1internal.ToolAnnotations
@@ -9548,7 +9223,7 @@ type ToolAnnotations struct {
 
 func (x *ToolAnnotations) Reset() {
 	*x = ToolAnnotations{}
-	mi := &file_CloudCode_proto_msgTypes[117]
+	mi := &file_CloudCode_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9560,7 +9235,7 @@ func (x *ToolAnnotations) String() string {
 func (*ToolAnnotations) ProtoMessage() {}
 
 func (x *ToolAnnotations) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[117]
+	mi := &file_CloudCode_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9573,7 +9248,7 @@ func (x *ToolAnnotations) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolAnnotations.ProtoReflect.Descriptor instead.
 func (*ToolAnnotations) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{117}
+	return file_CloudCode_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *ToolAnnotations) GetTitle() string {
@@ -9617,7 +9292,7 @@ type ToolDefinition struct {
 	Server        string                 `protobuf:"bytes,1,opt,name=server,proto3" json:"server,omitempty"`
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	InputSchema   *Struct                `protobuf:"bytes,4,opt,name=input_schema,json=inputSchema,proto3" json:"input_schema,omitempty"`
+	InputSchema   *structpb.Struct       `protobuf:"bytes,4,opt,name=input_schema,json=inputSchema,proto3" json:"input_schema,omitempty"`
 	Annotations   *ToolAnnotations       `protobuf:"bytes,5,opt,name=annotations,proto3" json:"annotations,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -9625,7 +9300,7 @@ type ToolDefinition struct {
 
 func (x *ToolDefinition) Reset() {
 	*x = ToolDefinition{}
-	mi := &file_CloudCode_proto_msgTypes[118]
+	mi := &file_CloudCode_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9637,7 +9312,7 @@ func (x *ToolDefinition) String() string {
 func (*ToolDefinition) ProtoMessage() {}
 
 func (x *ToolDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[118]
+	mi := &file_CloudCode_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9650,7 +9325,7 @@ func (x *ToolDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolDefinition.ProtoReflect.Descriptor instead.
 func (*ToolDefinition) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{118}
+	return file_CloudCode_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *ToolDefinition) GetServer() string {
@@ -9674,7 +9349,7 @@ func (x *ToolDefinition) GetDescription() string {
 	return ""
 }
 
-func (x *ToolDefinition) GetInputSchema() *Struct {
+func (x *ToolDefinition) GetInputSchema() *structpb.Struct {
 	if x != nil {
 		return x.InputSchema
 	}
@@ -9692,14 +9367,14 @@ func (x *ToolDefinition) GetAnnotations() *ToolAnnotations {
 type ToolRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	ToolCallJson  *Struct                `protobuf:"bytes,2,opt,name=tool_call_json,json=toolCallJson,proto3" json:"tool_call_json,omitempty"`
+	ToolCallJson  *structpb.Struct       `protobuf:"bytes,2,opt,name=tool_call_json,json=toolCallJson,proto3" json:"tool_call_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ToolRequest) Reset() {
 	*x = ToolRequest{}
-	mi := &file_CloudCode_proto_msgTypes[119]
+	mi := &file_CloudCode_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9711,7 +9386,7 @@ func (x *ToolRequest) String() string {
 func (*ToolRequest) ProtoMessage() {}
 
 func (x *ToolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[119]
+	mi := &file_CloudCode_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9724,7 +9399,7 @@ func (x *ToolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolRequest.ProtoReflect.Descriptor instead.
 func (*ToolRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{119}
+	return file_CloudCode_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *ToolRequest) GetName() string {
@@ -9734,7 +9409,7 @@ func (x *ToolRequest) GetName() string {
 	return ""
 }
 
-func (x *ToolRequest) GetToolCallJson() *Struct {
+func (x *ToolRequest) GetToolCallJson() *structpb.Struct {
 	if x != nil {
 		return x.ToolCallJson
 	}
@@ -9745,14 +9420,14 @@ func (x *ToolRequest) GetToolCallJson() *Struct {
 type ToolResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	IsError       bool                   `protobuf:"varint,1,opt,name=is_error,json=isError,proto3" json:"is_error,omitempty"`
-	Content       *Struct                `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	Content       *structpb.Struct       `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ToolResult) Reset() {
 	*x = ToolResult{}
-	mi := &file_CloudCode_proto_msgTypes[120]
+	mi := &file_CloudCode_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9764,7 +9439,7 @@ func (x *ToolResult) String() string {
 func (*ToolResult) ProtoMessage() {}
 
 func (x *ToolResult) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[120]
+	mi := &file_CloudCode_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9777,7 +9452,7 @@ func (x *ToolResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolResult.ProtoReflect.Descriptor instead.
 func (*ToolResult) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{120}
+	return file_CloudCode_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *ToolResult) GetIsError() bool {
@@ -9787,7 +9462,7 @@ func (x *ToolResult) GetIsError() bool {
 	return false
 }
 
-func (x *ToolResult) GetContent() *Struct {
+func (x *ToolResult) GetContent() *structpb.Struct {
 	if x != nil {
 		return x.Content
 	}
@@ -9811,7 +9486,7 @@ type TransformCodeRequest struct {
 
 func (x *TransformCodeRequest) Reset() {
 	*x = TransformCodeRequest{}
-	mi := &file_CloudCode_proto_msgTypes[121]
+	mi := &file_CloudCode_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9823,7 +9498,7 @@ func (x *TransformCodeRequest) String() string {
 func (*TransformCodeRequest) ProtoMessage() {}
 
 func (x *TransformCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[121]
+	mi := &file_CloudCode_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9836,7 +9511,7 @@ func (x *TransformCodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransformCodeRequest.ProtoReflect.Descriptor instead.
 func (*TransformCodeRequest) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{121}
+	return file_CloudCode_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *TransformCodeRequest) GetProject() string {
@@ -9909,7 +9584,7 @@ type TransformCodeResponse struct {
 
 func (x *TransformCodeResponse) Reset() {
 	*x = TransformCodeResponse{}
-	mi := &file_CloudCode_proto_msgTypes[122]
+	mi := &file_CloudCode_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9921,7 +9596,7 @@ func (x *TransformCodeResponse) String() string {
 func (*TransformCodeResponse) ProtoMessage() {}
 
 func (x *TransformCodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[122]
+	mi := &file_CloudCode_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9934,7 +9609,7 @@ func (x *TransformCodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransformCodeResponse.ProtoReflect.Descriptor instead.
 func (*TransformCodeResponse) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{122}
+	return file_CloudCode_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *TransformCodeResponse) GetWorkspaceChange() *WorkspaceChange {
@@ -9983,7 +9658,7 @@ type TurboModeSetting struct {
 
 func (x *TurboModeSetting) Reset() {
 	*x = TurboModeSetting{}
-	mi := &file_CloudCode_proto_msgTypes[123]
+	mi := &file_CloudCode_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9995,7 +9670,7 @@ func (x *TurboModeSetting) String() string {
 func (*TurboModeSetting) ProtoMessage() {}
 
 func (x *TurboModeSetting) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[123]
+	mi := &file_CloudCode_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10008,7 +9683,7 @@ func (x *TurboModeSetting) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TurboModeSetting.ProtoReflect.Descriptor instead.
 func (*TurboModeSetting) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{123}
+	return file_CloudCode_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *TurboModeSetting) GetTerminalAutoExecutionEnabled() bool {
@@ -10040,7 +9715,7 @@ type UsageMetadata struct {
 
 func (x *UsageMetadata) Reset() {
 	*x = UsageMetadata{}
-	mi := &file_CloudCode_proto_msgTypes[124]
+	mi := &file_CloudCode_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10052,7 +9727,7 @@ func (x *UsageMetadata) String() string {
 func (*UsageMetadata) ProtoMessage() {}
 
 func (x *UsageMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[124]
+	mi := &file_CloudCode_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10065,7 +9740,7 @@ func (x *UsageMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UsageMetadata.ProtoReflect.Descriptor instead.
 func (*UsageMetadata) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{124}
+	return file_CloudCode_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *UsageMetadata) GetPromptTokenCount() int64 {
@@ -10124,7 +9799,7 @@ type UserContext struct {
 
 func (x *UserContext) Reset() {
 	*x = UserContext{}
-	mi := &file_CloudCode_proto_msgTypes[125]
+	mi := &file_CloudCode_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10136,7 +9811,7 @@ func (x *UserContext) String() string {
 func (*UserContext) ProtoMessage() {}
 
 func (x *UserContext) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[125]
+	mi := &file_CloudCode_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10149,7 +9824,7 @@ func (x *UserContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserContext.ProtoReflect.Descriptor instead.
 func (*UserContext) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{125}
+	return file_CloudCode_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *UserContext) GetPreviousSuggestions() []*PreviousSuggestion {
@@ -10209,7 +9884,7 @@ type UserTier struct {
 
 func (x *UserTier) Reset() {
 	*x = UserTier{}
-	mi := &file_CloudCode_proto_msgTypes[126]
+	mi := &file_CloudCode_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10221,7 +9896,7 @@ func (x *UserTier) String() string {
 func (*UserTier) ProtoMessage() {}
 
 func (x *UserTier) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[126]
+	mi := &file_CloudCode_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10234,7 +9909,7 @@ func (x *UserTier) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserTier.ProtoReflect.Descriptor instead.
 func (*UserTier) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{126}
+	return file_CloudCode_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *UserTier) GetId() string {
@@ -10328,91 +10003,6 @@ func (x *UserTier) GetAvailableCredits() []*Credits {
 	return nil
 }
 
-// origin: .google.protobuf.Value
-type Value struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NullValue     NullValue              `protobuf:"varint,1,opt,name=null_value,json=nullValue,proto3,enum=google.internal.cloud.code.v1internal.cloudcode.NullValue" json:"null_value,omitempty"`
-	NumberValue   float64                `protobuf:"fixed64,2,opt,name=number_value,json=numberValue,proto3" json:"number_value,omitempty"`
-	StringValue   string                 `protobuf:"bytes,3,opt,name=string_value,json=stringValue,proto3" json:"string_value,omitempty"`
-	BoolValue     bool                   `protobuf:"varint,4,opt,name=bool_value,json=boolValue,proto3" json:"bool_value,omitempty"`
-	StructValue   *Struct                `protobuf:"bytes,5,opt,name=struct_value,json=structValue,proto3" json:"struct_value,omitempty"`
-	ListValue     *ListValue             `protobuf:"bytes,6,opt,name=list_value,json=listValue,proto3" json:"list_value,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Value) Reset() {
-	*x = Value{}
-	mi := &file_CloudCode_proto_msgTypes[127]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Value) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Value) ProtoMessage() {}
-
-func (x *Value) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[127]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Value.ProtoReflect.Descriptor instead.
-func (*Value) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{127}
-}
-
-func (x *Value) GetNullValue() NullValue {
-	if x != nil {
-		return x.NullValue
-	}
-	return NullValue_NULL_VALUE
-}
-
-func (x *Value) GetNumberValue() float64 {
-	if x != nil {
-		return x.NumberValue
-	}
-	return 0
-}
-
-func (x *Value) GetStringValue() string {
-	if x != nil {
-		return x.StringValue
-	}
-	return ""
-}
-
-func (x *Value) GetBoolValue() bool {
-	if x != nil {
-		return x.BoolValue
-	}
-	return false
-}
-
-func (x *Value) GetStructValue() *Struct {
-	if x != nil {
-		return x.StructValue
-	}
-	return nil
-}
-
-func (x *Value) GetListValue() *ListValue {
-	if x != nil {
-		return x.ListValue
-	}
-	return nil
-}
-
 // origin: .google.internal.cloud.code.v1internal.MoaWorkerInfo.WorkerToClientPubSub
 type WorkerToClientPubSub struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -10424,7 +10014,7 @@ type WorkerToClientPubSub struct {
 
 func (x *WorkerToClientPubSub) Reset() {
 	*x = WorkerToClientPubSub{}
-	mi := &file_CloudCode_proto_msgTypes[128]
+	mi := &file_CloudCode_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10436,7 +10026,7 @@ func (x *WorkerToClientPubSub) String() string {
 func (*WorkerToClientPubSub) ProtoMessage() {}
 
 func (x *WorkerToClientPubSub) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[128]
+	mi := &file_CloudCode_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10449,7 +10039,7 @@ func (x *WorkerToClientPubSub) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerToClientPubSub.ProtoReflect.Descriptor instead.
 func (*WorkerToClientPubSub) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{128}
+	return file_CloudCode_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *WorkerToClientPubSub) GetTopicId() string {
@@ -10476,7 +10066,7 @@ type WorkspaceChange struct {
 
 func (x *WorkspaceChange) Reset() {
 	*x = WorkspaceChange{}
-	mi := &file_CloudCode_proto_msgTypes[129]
+	mi := &file_CloudCode_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10488,7 +10078,7 @@ func (x *WorkspaceChange) String() string {
 func (*WorkspaceChange) ProtoMessage() {}
 
 func (x *WorkspaceChange) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[129]
+	mi := &file_CloudCode_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10501,7 +10091,7 @@ func (x *WorkspaceChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspaceChange.ProtoReflect.Descriptor instead.
 func (*WorkspaceChange) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{129}
+	return file_CloudCode_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *WorkspaceChange) GetFiles() []*FileChange {
@@ -10523,7 +10113,7 @@ type WorkspaceStructure struct {
 
 func (x *WorkspaceStructure) Reset() {
 	*x = WorkspaceStructure{}
-	mi := &file_CloudCode_proto_msgTypes[130]
+	mi := &file_CloudCode_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10535,7 +10125,7 @@ func (x *WorkspaceStructure) String() string {
 func (*WorkspaceStructure) ProtoMessage() {}
 
 func (x *WorkspaceStructure) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[130]
+	mi := &file_CloudCode_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10548,7 +10138,7 @@ func (x *WorkspaceStructure) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspaceStructure.ProtoReflect.Descriptor instead.
 func (*WorkspaceStructure) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{130}
+	return file_CloudCode_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *WorkspaceStructure) GetWorkspace() string {
@@ -10586,7 +10176,7 @@ type YieldInfo struct {
 
 func (x *YieldInfo) Reset() {
 	*x = YieldInfo{}
-	mi := &file_CloudCode_proto_msgTypes[131]
+	mi := &file_CloudCode_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10598,7 +10188,7 @@ func (x *YieldInfo) String() string {
 func (*YieldInfo) ProtoMessage() {}
 
 func (x *YieldInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[131]
+	mi := &file_CloudCode_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10611,7 +10201,7 @@ func (x *YieldInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use YieldInfo.ProtoReflect.Descriptor instead.
 func (*YieldInfo) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{131}
+	return file_CloudCode_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *YieldInfo) GetRpc() *AgentInitiatedRPC {
@@ -10659,7 +10249,7 @@ type YieldedUserInput struct {
 
 func (x *YieldedUserInput) Reset() {
 	*x = YieldedUserInput{}
-	mi := &file_CloudCode_proto_msgTypes[132]
+	mi := &file_CloudCode_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10671,7 +10261,7 @@ func (x *YieldedUserInput) String() string {
 func (*YieldedUserInput) ProtoMessage() {}
 
 func (x *YieldedUserInput) ProtoReflect() protoreflect.Message {
-	mi := &file_CloudCode_proto_msgTypes[132]
+	mi := &file_CloudCode_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10684,7 +10274,7 @@ func (x *YieldedUserInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use YieldedUserInput.ProtoReflect.Descriptor instead.
 func (*YieldedUserInput) Descriptor() ([]byte, []int) {
-	return file_CloudCode_proto_rawDescGZIP(), []int{132}
+	return file_CloudCode_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *YieldedUserInput) GetConsented() bool {
@@ -10698,7 +10288,7 @@ var File_CloudCode_proto protoreflect.FileDescriptor
 
 const file_CloudCode_proto_rawDesc = "" +
 	"\n" +
-	"\x0fCloudCode.proto\x12/google.internal.cloud.code.v1internal.cloudcode\"\x88\x02\n" +
+	"\x0fCloudCode.proto\x12/google.internal.cloud.code.v1internal.cloudcode\x1a\x19google/protobuf/any.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x88\x02\n" +
 	"\x05Agent\x12\x16\n" +
 	"\x06handle\x18\x01 \x01(\tR\x06handle\x12q\n" +
 	"\x12display_properties\x18\x02 \x01(\v2B.google.internal.cloud.code.v1internal.cloudcode.DisplayPropertiesR\x11displayProperties\x12\x19\n" +
@@ -10737,10 +10327,7 @@ const file_CloudCode_proto_rawDesc = "" +
 	"\x10whitespace_chars\x18\x04 \x01(\x03R\x0fwhitespaceChars\x12.\n" +
 	"\x13time_interval_index\x18\x05 \x01(\x03R\x11timeIntervalIndex\"t\n" +
 	"\x13AiCharactersReports\x12]\n" +
-	"\areports\x18\x01 \x03(\v2C.google.internal.cloud.code.v1internal.cloudcode.AiCharactersReportR\areports\"6\n" +
-	"\x03Any\x12\x19\n" +
-	"\btype_url\x18\x01 \x01(\tR\atypeUrl\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value\"7\n" +
+	"\areports\x18\x01 \x03(\v2C.google.internal.cloud.code.v1internal.cloudcode.AiCharactersReportR\areports\"7\n" +
 	"\x04Blob\x12\x1b\n" +
 	"\tmime_type\x18\x01 \x01(\tR\bmimeType\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\"\x8d\x01\n" +
@@ -10783,10 +10370,10 @@ const file_CloudCode_proto_rawDesc = "" +
 	"\x0fsubscription_id\x18\x02 \x01(\tR\x0esubscriptionId\"\xa6\x01\n" +
 	"#CodeAssistGlobalUserSettingResponse\x129\n" +
 	"\x18cloudaicompanion_project\x18\x01 \x01(\tR\x17cloudaicompanionProject\x12D\n" +
-	"\x1ffree_tier_data_collection_optin\x18\x02 \x01(\bR\x1bfreeTierDataCollectionOptin\"\xb5\n" +
+	"\x1ffree_tier_data_collection_optin\x18\x02 \x01(\bR\x1bfreeTierDataCollectionOptin\"\x95\n" +
 	"\n" +
-	"\x10CodeAssistMetric\x12X\n" +
-	"\ttimestamp\x18\x01 \x01(\v2:.google.internal.cloud.code.v1internal.cloudcode.TimestampR\ttimestamp\x12\x87\x01\n" +
+	"\x10CodeAssistMetric\x128\n" +
+	"\ttimestamp\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x87\x01\n" +
 	"\x1ainline_completion_accepted\x18\x02 \x01(\v2I.google.internal.cloud.code.v1internal.cloudcode.InlineCompletionAcceptedR\x18inlineCompletionAccepted\x12\x84\x01\n" +
 	"\x19inline_completion_offered\x18\x03 \x01(\v2H.google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOfferedR\x17inlineCompletionOffered\x12w\n" +
 	"\x14conversation_offered\x18\x04 \x01(\v2D.google.internal.cloud.code.v1internal.cloudcode.ConversationOfferedR\x13conversationOffered\x12i\n" +
@@ -10853,15 +10440,11 @@ const file_CloudCode_proto_rawDesc = "" +
 	"\blogo_uri\x18\x02 \x01(\tR\alogoUri\x12/\n" +
 	"\x13display_description\x18\x03 \x01(\tR\x12displayDescription\x12+\n" +
 	"\x11suggested_prompts\x18\x04 \x03(\tR\x10suggestedPrompts\x12!\n" +
-	"\fhelp_message\x18\x05 \x01(\tR\vhelpMessage\":\n" +
-	"\bDuration\x12\x18\n" +
-	"\aseconds\x18\x01 \x01(\x03R\aseconds\x12\x14\n" +
-	"\x05nanos\x18\x02 \x01(\x05R\x05nanos\"L\n" +
+	"\fhelp_message\x18\x05 \x01(\tR\vhelpMessage\"L\n" +
 	"\x0eEditableRegion\x12\x1d\n" +
 	"\n" +
 	"first_line\x18\x01 \x01(\x05R\tfirstLine\x12\x1b\n" +
-	"\tlast_line\x18\x02 \x01(\x05R\blastLine\"\a\n" +
-	"\x05Empty\"B\n" +
+	"\tlast_line\x18\x02 \x01(\x05R\blastLine\"B\n" +
 	"\x11ExtensionsSetting\x12-\n" +
 	"\x12extensions_enabled\x18\x01 \x01(\bR\x11extensionsEnabled\"\f\n" +
 	"\n" +
@@ -11041,16 +10624,16 @@ const file_CloudCode_proto_rawDesc = "" +
 	"\x06status\x18\t \x01(\x0e2=.google.internal.cloud.code.v1internal.cloudcode.ActionStatusR\x06status\x124\n" +
 	"\x16accepted_comment_lines\x18\n" +
 	" \x01(\x03R\x14acceptedCommentLines\x126\n" +
-	"\x17response_accepted_index\x18\v \x01(\x03R\x15responseAcceptedIndex\"\xc1\x05\n" +
+	"\x17response_accepted_index\x18\v \x01(\x03R\x15responseAcceptedIndex\"\x81\x05\n" +
 	"\x17InlineCompletionOffered\x12\x19\n" +
 	"\btrace_id\x18\x01 \x01(\tR\atraceId\x12!\n" +
 	"\fresult_count\x18\x02 \x01(\x03R\vresultCount\x12\x1a\n" +
 	"\blanguage\x18\x03 \x01(\tR\blanguage\x12h\n" +
-	"\x0fcompletion_mode\x18\x04 \x01(\x0e2?.google.internal.cloud.code.v1internal.cloudcode.CompletionModeR\x0ecompletionMode\x12`\n" +
-	"\x0edisplay_length\x18\x05 \x01(\v29.google.internal.cloud.code.v1internal.cloudcode.DurationR\rdisplayLength\x12U\n" +
+	"\x0fcompletion_mode\x18\x04 \x01(\x0e2?.google.internal.cloud.code.v1internal.cloudcode.CompletionModeR\x0ecompletionMode\x12@\n" +
+	"\x0edisplay_length\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\rdisplayLength\x12U\n" +
 	"\x06status\x18\x06 \x01(\x0e2=.google.internal.cloud.code.v1internal.cloudcode.ActionStatusR\x06status\x12\x8a\x01\n" +
-	"\x11completion_method\x18\a \x01(\x0e2].google.internal.cloud.code.v1internal.cloudcode.CodeInlinecompletionoffered_CompletionMethodR\x10completionMethod\x12d\n" +
-	"\x10response_latency\x18\b \x01(\v29.google.internal.cloud.code.v1internal.cloudcode.DurationR\x0fresponseLatency\x126\n" +
+	"\x11completion_method\x18\a \x01(\x0e2].google.internal.cloud.code.v1internal.cloudcode.CodeInlinecompletionoffered_CompletionMethodR\x10completionMethod\x12D\n" +
+	"\x10response_latency\x18\b \x01(\v2\x19.google.protobuf.DurationR\x0fresponseLatency\x126\n" +
 	"\x17response_received_index\x18\t \x01(\x03R\x15responseReceivedIndex\"#\n" +
 	"\tInt32List\x12\x16\n" +
 	"\x06values\x18\x01 \x03(\x05R\x06values\"\"\n" +
@@ -11111,9 +10694,7 @@ const file_CloudCode_proto_rawDesc = "" +
 	"scmSystems\x12&\n" +
 	"\x0fnext_page_token\x18\x03 \x01(\tR\rnextPageToken\x12[\n" +
 	"\n" +
-	"rag_status\x18\x04 \x01(\x0e2<.google.internal.cloud.code.v1internal.cloudcode.CCRagStatusR\tragStatus\"[\n" +
-	"\tListValue\x12N\n" +
-	"\x06values\x18\x01 \x03(\v26.google.internal.cloud.code.v1internal.cloudcode.ValueR\x06values\"\xfa\x01\n" +
+	"rag_status\x18\x04 \x01(\x0e2<.google.internal.cloud.code.v1internal.cloudcode.CCRagStatusR\tragStatus\"\xfa\x01\n" +
 	"\x15LoadCodeAssistRequest\x129\n" +
 	"\x18cloudaicompanion_project\x18\x01 \x01(\tR\x17cloudaicompanionProject\x12[\n" +
 	"\bmetadata\x18\x02 \x01(\v2?.google.internal.cloud.code.v1internal.cloudcode.ClientMetadataR\bmetadata\x12I\n" +
@@ -11166,13 +10747,13 @@ const file_CloudCode_proto_rawDesc = "" +
 	"\x12OnboardUserRequest\x12\x17\n" +
 	"\atier_id\x18\x01 \x01(\tR\x06tierId\x129\n" +
 	"\x18cloudaicompanion_project\x18\x02 \x01(\tR\x17cloudaicompanionProject\x12[\n" +
-	"\bmetadata\x18\x03 \x01(\v2?.google.internal.cloud.code.v1internal.cloudcode.ClientMetadataR\bmetadata\"\xa6\x02\n" +
+	"\bmetadata\x18\x03 \x01(\v2?.google.internal.cloud.code.v1internal.cloudcode.ClientMetadataR\bmetadata\"\xe6\x01\n" +
 	"\tOperation\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12P\n" +
-	"\bmetadata\x18\x02 \x01(\v24.google.internal.cloud.code.v1internal.cloudcode.AnyR\bmetadata\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x120\n" +
+	"\bmetadata\x18\x02 \x01(\v2\x14.google.protobuf.AnyR\bmetadata\x12\x12\n" +
 	"\x04done\x18\x03 \x01(\bR\x04done\x12M\n" +
-	"\x05error\x18\x04 \x01(\v27.google.internal.cloud.code.v1internal.cloudcode.StatusR\x05error\x12P\n" +
-	"\bresponse\x18\x05 \x01(\v24.google.internal.cloud.code.v1internal.cloudcode.AnyR\bresponse\"M\n" +
+	"\x05error\x18\x04 \x01(\v27.google.internal.cloud.code.v1internal.cloudcode.StatusR\x05error\x120\n" +
+	"\bresponse\x18\x05 \x01(\v2\x14.google.protobuf.AnyR\bresponse\"M\n" +
 	"\x15PreviewFeatureSetting\x124\n" +
 	"\x16preview_models_enabled\x18\x01 \x01(\bR\x14previewModelsEnabled\"\xc6\x02\n" +
 	"\x12PreviousSuggestion\x12\x1f\n" +
@@ -11280,28 +10861,23 @@ const file_CloudCode_proto_rawDesc = "" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12\x1a\n" +
 	"\bdistance\x18\x02 \x01(\x01R\bdistance\x12\x19\n" +
 	"\brepo_uri\x18\x03 \x01(\tR\arepoUri\x12\x1b\n" +
-	"\tfile_path\x18\x04 \x01(\tR\bfilePath\"\x86\x01\n" +
+	"\tfile_path\x18\x04 \x01(\tR\bfilePath\"f\n" +
 	"\x06Status\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\x12N\n" +
-	"\adetails\x18\x03 \x03(\v24.google.internal.cloud.code.v1internal.cloudcode.AnyR\adetails\"2\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12.\n" +
+	"\adetails\x18\x03 \x03(\v2\x14.google.protobuf.AnyR\adetails\"2\n" +
 	"\x04Step\x12\x12\n" +
 	"\x04tool\x18\x01 \x01(\tR\x04tool\x12\x16\n" +
 	"\x06prompt\x18\x02 \x01(\tR\x06prompt\"u\n" +
 	"\fStepResponse\x12I\n" +
 	"\x04step\x18\x01 \x01(\v25.google.internal.cloud.code.v1internal.cloudcode.StepR\x04step\x12\x1a\n" +
-	"\bresponse\x18\x02 \x01(\tR\bresponse\"\xe1\x01\n" +
-	"\x10StreamingLatency\x12m\n" +
-	"\x15first_message_latency\x18\x01 \x01(\v29.google.internal.cloud.code.v1internal.cloudcode.DurationR\x13firstMessageLatency\x12^\n" +
-	"\rtotal_latency\x18\x02 \x01(\v29.google.internal.cloud.code.v1internal.cloudcode.DurationR\ftotalLatency\"$\n" +
+	"\bresponse\x18\x02 \x01(\tR\bresponse\"\xa1\x01\n" +
+	"\x10StreamingLatency\x12M\n" +
+	"\x15first_message_latency\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x13firstMessageLatency\x12>\n" +
+	"\rtotal_latency\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\ftotalLatency\"$\n" +
 	"\n" +
 	"StringList\x12\x16\n" +
-	"\x06values\x18\x01 \x03(\tR\x06values\"\xd8\x01\n" +
-	"\x06Struct\x12[\n" +
-	"\x06fields\x18\x01 \x03(\v2C.google.internal.cloud.code.v1internal.cloudcode.Struct.FieldsEntryR\x06fields\x1aq\n" +
-	"\vFieldsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12L\n" +
-	"\x05value\x18\x02 \x01(\v26.google.internal.cloud.code.v1internal.cloudcode.ValueR\x05value:\x028\x01\"\xee\x03\n" +
+	"\x06values\x18\x01 \x03(\tR\x06values\"\xee\x03\n" +
 	"\n" +
 	"Suggestion\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12W\n" +
@@ -11313,29 +10889,26 @@ const file_CloudCode_proto_rawDesc = "" +
 	"\vfeedback_id\x18\a \x01(\v2;.google.internal.cloud.code.v1internal.cloudcode.FeedbackIdR\n" +
 	"feedbackId\"w\n" +
 	"\x13SuggestionTelemetry\x12`\n" +
-	"\rcomment_lines\x18\x01 \x01(\v2;.google.internal.cloud.code.v1internal.cloudcode.Int64ValueR\fcommentLines\";\n" +
-	"\tTimestamp\x12\x18\n" +
-	"\aseconds\x18\x01 \x01(\x03R\aseconds\x12\x14\n" +
-	"\x05nanos\x18\x02 \x01(\x05R\x05nanos\"\xc9\x01\n" +
+	"\rcomment_lines\x18\x01 \x01(\v2;.google.internal.cloud.code.v1internal.cloudcode.Int64ValueR\fcommentLines\"\xc9\x01\n" +
 	"\x0fToolAnnotations\x12\x14\n" +
 	"\x05title\x18\x01 \x01(\tR\x05title\x12$\n" +
 	"\x0eread_only_hint\x18\x02 \x01(\bR\freadOnlyHint\x12)\n" +
 	"\x10destructive_hint\x18\x03 \x01(\bR\x0fdestructiveHint\x12'\n" +
 	"\x0fidempotent_hint\x18\x04 \x01(\bR\x0eidempotentHint\x12&\n" +
-	"\x0fopen_world_hint\x18\x05 \x01(\bR\ropenWorldHint\"\x9e\x02\n" +
+	"\x0fopen_world_hint\x18\x05 \x01(\bR\ropenWorldHint\"\xfe\x01\n" +
 	"\x0eToolDefinition\x12\x16\n" +
 	"\x06server\x18\x01 \x01(\tR\x06server\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\x12Z\n" +
-	"\finput_schema\x18\x04 \x01(\v27.google.internal.cloud.code.v1internal.cloudcode.StructR\vinputSchema\x12b\n" +
-	"\vannotations\x18\x05 \x01(\v2@.google.internal.cloud.code.v1internal.cloudcode.ToolAnnotationsR\vannotations\"\x80\x01\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12:\n" +
+	"\finput_schema\x18\x04 \x01(\v2\x17.google.protobuf.StructR\vinputSchema\x12b\n" +
+	"\vannotations\x18\x05 \x01(\v2@.google.internal.cloud.code.v1internal.cloudcode.ToolAnnotationsR\vannotations\"`\n" +
 	"\vToolRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12]\n" +
-	"\x0etool_call_json\x18\x02 \x01(\v27.google.internal.cloud.code.v1internal.cloudcode.StructR\ftoolCallJson\"z\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12=\n" +
+	"\x0etool_call_json\x18\x02 \x01(\v2\x17.google.protobuf.StructR\ftoolCallJson\"Z\n" +
 	"\n" +
 	"ToolResult\x12\x19\n" +
-	"\bis_error\x18\x01 \x01(\bR\aisError\x12Q\n" +
-	"\acontent\x18\x02 \x01(\v27.google.internal.cloud.code.v1internal.cloudcode.StructR\acontent\"\xd4\x03\n" +
+	"\bis_error\x18\x01 \x01(\bR\aisError\x121\n" +
+	"\acontent\x18\x02 \x01(\v2\x17.google.protobuf.StructR\acontent\"\xd4\x03\n" +
 	"\x14TransformCodeRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x1d\n" +
 	"\n" +
@@ -11386,17 +10959,7 @@ const file_CloudCode_proto_rawDesc = "" +
 	"\x15client_experience_tag\x18\f \x01(\tR\x13clientExperienceTag\x12 \n" +
 	"\fuses_gcp_tos\x18\r \x01(\bR\n" +
 	"usesGcpTos\x12e\n" +
-	"\x11available_credits\x18\x0e \x03(\v28.google.internal.cloud.code.v1internal.cloudcode.CreditsR\x10availableCredits\"\xfe\x02\n" +
-	"\x05Value\x12Y\n" +
-	"\n" +
-	"null_value\x18\x01 \x01(\x0e2:.google.internal.cloud.code.v1internal.cloudcode.NullValueR\tnullValue\x12!\n" +
-	"\fnumber_value\x18\x02 \x01(\x01R\vnumberValue\x12!\n" +
-	"\fstring_value\x18\x03 \x01(\tR\vstringValue\x12\x1d\n" +
-	"\n" +
-	"bool_value\x18\x04 \x01(\bR\tboolValue\x12Z\n" +
-	"\fstruct_value\x18\x05 \x01(\v27.google.internal.cloud.code.v1internal.cloudcode.StructR\vstructValue\x12Y\n" +
-	"\n" +
-	"list_value\x18\x06 \x01(\v2:.google.internal.cloud.code.v1internal.cloudcode.ListValueR\tlistValue\"Z\n" +
+	"\x11available_credits\x18\x0e \x03(\v28.google.internal.cloud.code.v1internal.cloudcode.CreditsR\x10availableCredits\"Z\n" +
 	"\x14WorkerToClientPubSub\x12\x19\n" +
 	"\btopic_id\x18\x01 \x01(\tR\atopicId\x12'\n" +
 	"\x0fsubscription_id\x18\x02 \x01(\tR\x0esubscriptionId\"d\n" +
@@ -11580,10 +11143,7 @@ const file_CloudCode_proto_rawDesc = "" +
 	"\x04Mode\x12\x14\n" +
 	"\x10MODE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16FULL_ELIGIBILITY_CHECK\x10\x01\x12\x10\n" +
-	"\fHEALTH_CHECK\x10\x02*\x1b\n" +
-	"\tNullValue\x12\x0e\n" +
-	"\n" +
-	"NULL_VALUE\x10\x00*}\n" +
+	"\fHEALTH_CHECK\x10\x02*}\n" +
 	"\bPlatform\x12\x18\n" +
 	"\x14PLATFORM_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fDARWIN_AMD64\x10\x01\x12\x10\n" +
@@ -11645,7 +11205,7 @@ const file_CloudCode_proto_rawDesc = "" +
 	"\tYieldType\x12\x1a\n" +
 	"\x16YIELD_TYPE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12MUTATING_OPERATION\x10\x01\x12\x0f\n" +
-	"\vLOCAL_AGENT\x10\x022\xbe\x1f\n" +
+	"\vLOCAL_AGENT\x10\x022\xdd\x1e\n" +
 	"\tCloudCode\x12\x9b\x01\n" +
 	"\fGenerateCode\x12D.google.internal.cloud.code.v1internal.cloudcode.GenerateCodeRequest\x1aE.google.internal.cloud.code.v1internal.cloudcode.GenerateCodeResponse\x12\x9b\x01\n" +
 	"\fCompleteCode\x12D.google.internal.cloud.code.v1internal.cloudcode.CompleteCodeRequest\x1aE.google.internal.cloud.code.v1internal.cloudcode.CompleteCodeResponse\x12\x9e\x01\n" +
@@ -11663,14 +11223,14 @@ const file_CloudCode_proto_rawDesc = "" +
 	"ListAgents\x12B.google.internal.cloud.code.v1internal.cloudcode.ListAgentsRequest\x1aC.google.internal.cloud.code.v1internal.cloudcode.ListAgentsResponse\x12\xb9\x01\n" +
 	"\x16ListRemoteRepositories\x12N.google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesRequest\x1aO.google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesResponse\x12\xa7\x01\n" +
 	"\x10ListModelConfigs\x12H.google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsRequest\x1aI.google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsResponse\x12\x8e\x01\n" +
-	"\vOnboardUser\x12C.google.internal.cloud.code.v1internal.cloudcode.OnboardUserRequest\x1a:.google.internal.cloud.code.v1internal.cloudcode.Operation\x12\xa8\x01\n" +
-	"\x1aOnboardUserBackgroundTasks\x12R.google.internal.cloud.code.v1internal.cloudcode.OnboardUserBackgroundTasksRequest\x1a6.google.internal.cloud.code.v1internal.cloudcode.Empty\x12\xc5\x01\n" +
-	"\x1aRecordSmartchoicesFeedback\x12R.google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackRequest\x1aS.google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackResponse\x12\xa2\x01\n" +
-	"\x17RecordCodeAssistMetrics\x12O.google.internal.cloud.code.v1internal.cloudcode.RecordCodeAssistMetricsRequest\x1a6.google.internal.cloud.code.v1internal.cloudcode.Empty\x12\x96\x01\n" +
-	"\x11RecordClientEvent\x12I.google.internal.cloud.code.v1internal.cloudcode.RecordClientEventRequest\x1a6.google.internal.cloud.code.v1internal.cloudcode.Empty\x12\xce\x01\n" +
+	"\vOnboardUser\x12C.google.internal.cloud.code.v1internal.cloudcode.OnboardUserRequest\x1a:.google.internal.cloud.code.v1internal.cloudcode.Operation\x12\x88\x01\n" +
+	"\x1aOnboardUserBackgroundTasks\x12R.google.internal.cloud.code.v1internal.cloudcode.OnboardUserBackgroundTasksRequest\x1a\x16.google.protobuf.Empty\x12\xc5\x01\n" +
+	"\x1aRecordSmartchoicesFeedback\x12R.google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackRequest\x1aS.google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackResponse\x12\x82\x01\n" +
+	"\x17RecordCodeAssistMetrics\x12O.google.internal.cloud.code.v1internal.cloudcode.RecordCodeAssistMetricsRequest\x1a\x16.google.protobuf.Empty\x12v\n" +
+	"\x11RecordClientEvent\x12I.google.internal.cloud.code.v1internal.cloudcode.RecordClientEventRequest\x1a\x16.google.protobuf.Empty\x12\xce\x01\n" +
 	"\x1eGetCodeAssistGlobalUserSetting\x12V.google.internal.cloud.code.v1internal.cloudcode.GetCodeAssistGlobalUserSettingRequest\x1aT.google.internal.cloud.code.v1internal.cloudcode.CodeAssistGlobalUserSettingResponse\x12\xce\x01\n" +
 	"\x1eSetCodeAssistGlobalUserSetting\x12V.google.internal.cloud.code.v1internal.cloudcode.SetCodeAssistGlobalUserSettingRequest\x1aT.google.internal.cloud.code.v1internal.cloudcode.CodeAssistGlobalUserSettingResponse\x12\xad\x01\n" +
-	"\x12FetchAdminControls\x12J.google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsRequest\x1aK.google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponseb\x06proto3"
+	"\x12FetchAdminControls\x12J.google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsRequest\x1aK.google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponseB#Z!gemini-server/pkg/proto/cloudcodeb\x06proto3"
 
 var (
 	file_CloudCode_proto_rawDescOnce sync.Once
@@ -11684,8 +11244,8 @@ func file_CloudCode_proto_rawDescGZIP() []byte {
 	return file_CloudCode_proto_rawDescData
 }
 
-var file_CloudCode_proto_enumTypes = make([]protoimpl.EnumInfo, 32)
-var file_CloudCode_proto_msgTypes = make([]protoimpl.MessageInfo, 137)
+var file_CloudCode_proto_enumTypes = make([]protoimpl.EnumInfo, 31)
+var file_CloudCode_proto_msgTypes = make([]protoimpl.MessageInfo, 129)
 var file_CloudCode_proto_goTypes = []any{
 	(ActionStatus)(0),                                  // 0: google.internal.cloud.code.v1internal.cloudcode.ActionStatus
 	(AgentType)(0),                                     // 1: google.internal.cloud.code.v1internal.cloudcode.AgentType
@@ -11709,398 +11269,388 @@ var file_CloudCode_proto_goTypes = []any{
 	(InitiationMethod)(0),                              // 19: google.internal.cloud.code.v1internal.cloudcode.InitiationMethod
 	(Interaction)(0),                                   // 20: google.internal.cloud.code.v1internal.cloudcode.Interaction
 	(Mode)(0),                                          // 21: google.internal.cloud.code.v1internal.cloudcode.Mode
-	(NullValue)(0),                                     // 22: google.internal.cloud.code.v1internal.cloudcode.NullValue
-	(Platform)(0),                                      // 23: google.internal.cloud.code.v1internal.cloudcode.Platform
-	(PluginType)(0),                                    // 24: google.internal.cloud.code.v1internal.cloudcode.PluginType
-	(RagStatus)(0),                                     // 25: google.internal.cloud.code.v1internal.cloudcode.RagStatus
-	(Reason)(0),                                        // 26: google.internal.cloud.code.v1internal.cloudcode.Reason
-	(RetryReason)(0),                                   // 27: google.internal.cloud.code.v1internal.cloudcode.RetryReason
-	(State)(0),                                         // 28: google.internal.cloud.code.v1internal.cloudcode.State
-	(TextType)(0),                                      // 29: google.internal.cloud.code.v1internal.cloudcode.TextType
-	(UpgradeType)(0),                                   // 30: google.internal.cloud.code.v1internal.cloudcode.UpgradeType
-	(YieldType)(0),                                     // 31: google.internal.cloud.code.v1internal.cloudcode.YieldType
-	(*Agent)(nil),                                      // 32: google.internal.cloud.code.v1internal.cloudcode.Agent
-	(*AgentInitiatedRPC)(nil),                          // 33: google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC
-	(*AgentProcessingDetails)(nil),                     // 34: google.internal.cloud.code.v1internal.cloudcode.AgentProcessingDetails
-	(*AgentSetting)(nil),                               // 35: google.internal.cloud.code.v1internal.cloudcode.AgentSetting
-	(*AgenticChatMessage)(nil),                         // 36: google.internal.cloud.code.v1internal.cloudcode.AgenticChatMessage
-	(*AiCharactersReport)(nil),                         // 37: google.internal.cloud.code.v1internal.cloudcode.AiCharactersReport
-	(*AiCharactersReports)(nil),                        // 38: google.internal.cloud.code.v1internal.cloudcode.AiCharactersReports
-	(*Any)(nil),                                        // 39: google.internal.cloud.code.v1internal.cloudcode.Any
-	(*Blob)(nil),                                       // 40: google.internal.cloud.code.v1internal.cloudcode.Blob
-	(*BrowserSetting)(nil),                             // 41: google.internal.cloud.code.v1internal.cloudcode.BrowserSetting
-	(*BucketConfig)(nil),                               // 42: google.internal.cloud.code.v1internal.cloudcode.BucketConfig
-	(*ChatMessage)(nil),                                // 43: google.internal.cloud.code.v1internal.cloudcode.ChatMessage
-	(*Citation)(nil),                                   // 44: google.internal.cloud.code.v1internal.cloudcode.Citation
-	(*CliFeatureSetting)(nil),                          // 45: google.internal.cloud.code.v1internal.cloudcode.CliFeatureSetting
-	(*ClientMetadata)(nil),                             // 46: google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
-	(*ClientToWorkerPubSub)(nil),                       // 47: google.internal.cloud.code.v1internal.cloudcode.ClientToWorkerPubSub
-	(*CodeAssistGlobalUserSettingResponse)(nil),        // 48: google.internal.cloud.code.v1internal.cloudcode.CodeAssistGlobalUserSettingResponse
-	(*CodeAssistMetric)(nil),                           // 49: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric
-	(*CompleteCodeRequest)(nil),                        // 50: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeRequest
-	(*CompleteCodeResponse)(nil),                       // 51: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeResponse
-	(*ConversationExplainUI)(nil),                      // 52: google.internal.cloud.code.v1internal.cloudcode.ConversationExplainUI
-	(*ConversationGenerateTestUI)(nil),                 // 53: google.internal.cloud.code.v1internal.cloudcode.ConversationGenerateTestUI
-	(*ConversationInteraction)(nil),                    // 54: google.internal.cloud.code.v1internal.cloudcode.ConversationInteraction
-	(*ConversationOffered)(nil),                        // 55: google.internal.cloud.code.v1internal.cloudcode.ConversationOffered
-	(*CreateWorker)(nil),                               // 56: google.internal.cloud.code.v1internal.cloudcode.CreateWorker
-	(*Credits)(nil),                                    // 57: google.internal.cloud.code.v1internal.cloudcode.Credits
-	(*DeleteWorker)(nil),                               // 58: google.internal.cloud.code.v1internal.cloudcode.DeleteWorker
-	(*DisplayProperties)(nil),                          // 59: google.internal.cloud.code.v1internal.cloudcode.DisplayProperties
-	(*Duration)(nil),                                   // 60: google.internal.cloud.code.v1internal.cloudcode.Duration
-	(*EditableRegion)(nil),                             // 61: google.internal.cloud.code.v1internal.cloudcode.EditableRegion
-	(*Empty)(nil),                                      // 62: google.internal.cloud.code.v1internal.cloudcode.Empty
-	(*ExtensionsSetting)(nil),                          // 63: google.internal.cloud.code.v1internal.cloudcode.ExtensionsSetting
-	(*FeedbackId)(nil),                                 // 64: google.internal.cloud.code.v1internal.cloudcode.FeedbackId
-	(*FetchAdminControlsRequest)(nil),                  // 65: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsRequest
-	(*FetchAdminControlsResponse)(nil),                 // 66: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse
-	(*FetchCodeCustomizationStateRequest)(nil),         // 67: google.internal.cloud.code.v1internal.cloudcode.FetchCodeCustomizationStateRequest
-	(*FetchCodeCustomizationStateResponse)(nil),        // 68: google.internal.cloud.code.v1internal.cloudcode.FetchCodeCustomizationStateResponse
-	(*File)(nil),                                       // 69: google.internal.cloud.code.v1internal.cloudcode.File
-	(*FileChange)(nil),                                 // 70: google.internal.cloud.code.v1internal.cloudcode.FileChange
-	(*FileChangeTelemetry)(nil),                        // 71: google.internal.cloud.code.v1internal.cloudcode.FileChangeTelemetry
-	(*FileSegment)(nil),                                // 72: google.internal.cloud.code.v1internal.cloudcode.FileSegment
-	(*FileUsage)(nil),                                  // 73: google.internal.cloud.code.v1internal.cloudcode.FileUsage
-	(*FilteredFlag)(nil),                               // 74: google.internal.cloud.code.v1internal.cloudcode.FilteredFlag
-	(*Flag)(nil),                                       // 75: google.internal.cloud.code.v1internal.cloudcode.Flag
-	(*FunctionCall)(nil),                               // 76: google.internal.cloud.code.v1internal.cloudcode.FunctionCall
-	(*FunctionDeclaration)(nil),                        // 77: google.internal.cloud.code.v1internal.cloudcode.FunctionDeclaration
-	(*FunctionResponse)(nil),                           // 78: google.internal.cloud.code.v1internal.cloudcode.FunctionResponse
-	(*GenerateChatRequest)(nil),                        // 79: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest
-	(*GenerateChatResponse)(nil),                       // 80: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse
-	(*GenerateCodeRequest)(nil),                        // 81: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeRequest
-	(*GenerateCodeResponse)(nil),                       // 82: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeResponse
-	(*GenerateCodeUI)(nil),                             // 83: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeUI
-	(*GetCodeAssistGlobalUserSettingRequest)(nil),      // 84: google.internal.cloud.code.v1internal.cloudcode.GetCodeAssistGlobalUserSettingRequest
-	(*GetOperationRequest)(nil),                        // 85: google.internal.cloud.code.v1internal.cloudcode.GetOperationRequest
-	(*IDEContext)(nil),                                 // 86: google.internal.cloud.code.v1internal.cloudcode.IDEContext
-	(*IneligibleTier)(nil),                             // 87: google.internal.cloud.code.v1internal.cloudcode.IneligibleTier
-	(*InlineCompletionAccepted)(nil),                   // 88: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionAccepted
-	(*InlineCompletionOffered)(nil),                    // 89: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOffered
-	(*Int32List)(nil),                                  // 90: google.internal.cloud.code.v1internal.cloudcode.Int32List
-	(*Int64Value)(nil),                                 // 91: google.internal.cloud.code.v1internal.cloudcode.Int64Value
-	(*IntentMetadata)(nil),                             // 92: google.internal.cloud.code.v1internal.cloudcode.IntentMetadata
-	(*InternalAtomicAgenticChatRequest)(nil),           // 93: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest
-	(*InternalAtomicAgenticChatResponse)(nil),          // 94: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatResponse
-	(*ListAgentsRequest)(nil),                          // 95: google.internal.cloud.code.v1internal.cloudcode.ListAgentsRequest
-	(*ListAgentsResponse)(nil),                         // 96: google.internal.cloud.code.v1internal.cloudcode.ListAgentsResponse
-	(*ListCloudAICompanionProjectsRequest)(nil),        // 97: google.internal.cloud.code.v1internal.cloudcode.ListCloudAICompanionProjectsRequest
-	(*ListCloudAICompanionProjectsResponse)(nil),       // 98: google.internal.cloud.code.v1internal.cloudcode.ListCloudAICompanionProjectsResponse
-	(*ListExperimentsRequest)(nil),                     // 99: google.internal.cloud.code.v1internal.cloudcode.ListExperimentsRequest
-	(*ListExperimentsResponse)(nil),                    // 100: google.internal.cloud.code.v1internal.cloudcode.ListExperimentsResponse
-	(*ListModelConfigsRequest)(nil),                    // 101: google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsRequest
-	(*ListModelConfigsResponse)(nil),                   // 102: google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsResponse
-	(*ListRemoteRepositoriesRequest)(nil),              // 103: google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesRequest
-	(*ListRemoteRepositoriesResponse)(nil),             // 104: google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesResponse
-	(*ListValue)(nil),                                  // 105: google.internal.cloud.code.v1internal.cloudcode.ListValue
-	(*LoadCodeAssistRequest)(nil),                      // 106: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistRequest
-	(*LoadCodeAssistResponse)(nil),                     // 107: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse
-	(*McpSetting)(nil),                                 // 108: google.internal.cloud.code.v1internal.cloudcode.McpSetting
-	(*MigrateDatabaseCodeRequest)(nil),                 // 109: google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeRequest
-	(*MigrateDatabaseCodeResponse)(nil),                // 110: google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeResponse
-	(*MoaWorkerInfo)(nil),                              // 111: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo
-	(*ModelConfig)(nil),                                // 112: google.internal.cloud.code.v1internal.cloudcode.ModelConfig
-	(*OnboardUserBackgroundTasksRequest)(nil),          // 113: google.internal.cloud.code.v1internal.cloudcode.OnboardUserBackgroundTasksRequest
-	(*OnboardUserRequest)(nil),                         // 114: google.internal.cloud.code.v1internal.cloudcode.OnboardUserRequest
-	(*Operation)(nil),                                  // 115: google.internal.cloud.code.v1internal.cloudcode.Operation
-	(*PreviewFeatureSetting)(nil),                      // 116: google.internal.cloud.code.v1internal.cloudcode.PreviewFeatureSetting
-	(*PreviousSuggestion)(nil),                         // 117: google.internal.cloud.code.v1internal.cloudcode.PreviousSuggestion
-	(*PrivacyNotice)(nil),                              // 118: google.internal.cloud.code.v1internal.cloudcode.PrivacyNotice
-	(*Project)(nil),                                    // 119: google.internal.cloud.code.v1internal.cloudcode.Project
-	(*PromptCitation)(nil),                             // 120: google.internal.cloud.code.v1internal.cloudcode.PromptCitation
-	(*Range)(nil),                                      // 121: google.internal.cloud.code.v1internal.cloudcode.Range
-	(*RecentChange)(nil),                               // 122: google.internal.cloud.code.v1internal.cloudcode.RecentChange
-	(*RecentUserAction)(nil),                           // 123: google.internal.cloud.code.v1internal.cloudcode.RecentUserAction
-	(*RecitationPolicy)(nil),                           // 124: google.internal.cloud.code.v1internal.cloudcode.RecitationPolicy
-	(*RecordClientEventRequest)(nil),                   // 125: google.internal.cloud.code.v1internal.cloudcode.RecordClientEventRequest
-	(*RecordCodeAssistMetricsRequest)(nil),             // 126: google.internal.cloud.code.v1internal.cloudcode.RecordCodeAssistMetricsRequest
-	(*RecordSmartchoicesFeedbackRequest)(nil),          // 127: google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackRequest
-	(*RecordSmartchoicesFeedbackResponse)(nil),         // 128: google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackResponse
-	(*ReleaseChannel)(nil),                             // 129: google.internal.cloud.code.v1internal.cloudcode.ReleaseChannel
-	(*Repository)(nil),                                 // 130: google.internal.cloud.code.v1internal.cloudcode.Repository
-	(*RetryDetails)(nil),                               // 131: google.internal.cloud.code.v1internal.cloudcode.RetryDetails
-	(*Rule)(nil),                                       // 132: google.internal.cloud.code.v1internal.cloudcode.Rule
-	(*ScmSystem)(nil),                                  // 133: google.internal.cloud.code.v1internal.cloudcode.ScmSystem
-	(*SearchSnippetsRequest)(nil),                      // 134: google.internal.cloud.code.v1internal.cloudcode.SearchSnippetsRequest
-	(*SearchSnippetsResponse)(nil),                     // 135: google.internal.cloud.code.v1internal.cloudcode.SearchSnippetsResponse
-	(*ServerProcessingDetails)(nil),                    // 136: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails
-	(*SetCodeAssistGlobalUserSettingRequest)(nil),      // 137: google.internal.cloud.code.v1internal.cloudcode.SetCodeAssistGlobalUserSettingRequest
-	(*ShowCompletionFeedback)(nil),                     // 138: google.internal.cloud.code.v1internal.cloudcode.ShowCompletionFeedback
-	(*Snippet)(nil),                                    // 139: google.internal.cloud.code.v1internal.cloudcode.Snippet
-	(*Status)(nil),                                     // 140: google.internal.cloud.code.v1internal.cloudcode.Status
-	(*Step)(nil),                                       // 141: google.internal.cloud.code.v1internal.cloudcode.Step
-	(*StepResponse)(nil),                               // 142: google.internal.cloud.code.v1internal.cloudcode.StepResponse
-	(*StreamingLatency)(nil),                           // 143: google.internal.cloud.code.v1internal.cloudcode.StreamingLatency
-	(*StringList)(nil),                                 // 144: google.internal.cloud.code.v1internal.cloudcode.StringList
-	(*Struct)(nil),                                     // 145: google.internal.cloud.code.v1internal.cloudcode.Struct
-	(*Suggestion)(nil),                                 // 146: google.internal.cloud.code.v1internal.cloudcode.Suggestion
-	(*SuggestionTelemetry)(nil),                        // 147: google.internal.cloud.code.v1internal.cloudcode.SuggestionTelemetry
-	(*Timestamp)(nil),                                  // 148: google.internal.cloud.code.v1internal.cloudcode.Timestamp
-	(*ToolAnnotations)(nil),                            // 149: google.internal.cloud.code.v1internal.cloudcode.ToolAnnotations
-	(*ToolDefinition)(nil),                             // 150: google.internal.cloud.code.v1internal.cloudcode.ToolDefinition
-	(*ToolRequest)(nil),                                // 151: google.internal.cloud.code.v1internal.cloudcode.ToolRequest
-	(*ToolResult)(nil),                                 // 152: google.internal.cloud.code.v1internal.cloudcode.ToolResult
-	(*TransformCodeRequest)(nil),                       // 153: google.internal.cloud.code.v1internal.cloudcode.TransformCodeRequest
-	(*TransformCodeResponse)(nil),                      // 154: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse
-	(*TurboModeSetting)(nil),                           // 155: google.internal.cloud.code.v1internal.cloudcode.TurboModeSetting
-	(*UsageMetadata)(nil),                              // 156: google.internal.cloud.code.v1internal.cloudcode.UsageMetadata
-	(*UserContext)(nil),                                // 157: google.internal.cloud.code.v1internal.cloudcode.UserContext
-	(*UserTier)(nil),                                   // 158: google.internal.cloud.code.v1internal.cloudcode.UserTier
-	(*Value)(nil),                                      // 159: google.internal.cloud.code.v1internal.cloudcode.Value
-	(*WorkerToClientPubSub)(nil),                       // 160: google.internal.cloud.code.v1internal.cloudcode.WorkerToClientPubSub
-	(*WorkspaceChange)(nil),                            // 161: google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
-	(*WorkspaceStructure)(nil),                         // 162: google.internal.cloud.code.v1internal.cloudcode.WorkspaceStructure
-	(*YieldInfo)(nil),                                  // 163: google.internal.cloud.code.v1internal.cloudcode.YieldInfo
-	(*YieldedUserInput)(nil),                           // 164: google.internal.cloud.code.v1internal.cloudcode.YieldedUserInput
-	nil,                                                // 165: google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC.ParamsEntry
-	nil,                                                // 166: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.MetricMetadataEntry
-	nil,                                                // 167: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.MetricMetadataEntry
-	nil,                                                // 168: google.internal.cloud.code.v1internal.cloudcode.Struct.FieldsEntry
+	(Platform)(0),                                      // 22: google.internal.cloud.code.v1internal.cloudcode.Platform
+	(PluginType)(0),                                    // 23: google.internal.cloud.code.v1internal.cloudcode.PluginType
+	(RagStatus)(0),                                     // 24: google.internal.cloud.code.v1internal.cloudcode.RagStatus
+	(Reason)(0),                                        // 25: google.internal.cloud.code.v1internal.cloudcode.Reason
+	(RetryReason)(0),                                   // 26: google.internal.cloud.code.v1internal.cloudcode.RetryReason
+	(State)(0),                                         // 27: google.internal.cloud.code.v1internal.cloudcode.State
+	(TextType)(0),                                      // 28: google.internal.cloud.code.v1internal.cloudcode.TextType
+	(UpgradeType)(0),                                   // 29: google.internal.cloud.code.v1internal.cloudcode.UpgradeType
+	(YieldType)(0),                                     // 30: google.internal.cloud.code.v1internal.cloudcode.YieldType
+	(*Agent)(nil),                                      // 31: google.internal.cloud.code.v1internal.cloudcode.Agent
+	(*AgentInitiatedRPC)(nil),                          // 32: google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC
+	(*AgentProcessingDetails)(nil),                     // 33: google.internal.cloud.code.v1internal.cloudcode.AgentProcessingDetails
+	(*AgentSetting)(nil),                               // 34: google.internal.cloud.code.v1internal.cloudcode.AgentSetting
+	(*AgenticChatMessage)(nil),                         // 35: google.internal.cloud.code.v1internal.cloudcode.AgenticChatMessage
+	(*AiCharactersReport)(nil),                         // 36: google.internal.cloud.code.v1internal.cloudcode.AiCharactersReport
+	(*AiCharactersReports)(nil),                        // 37: google.internal.cloud.code.v1internal.cloudcode.AiCharactersReports
+	(*Blob)(nil),                                       // 38: google.internal.cloud.code.v1internal.cloudcode.Blob
+	(*BrowserSetting)(nil),                             // 39: google.internal.cloud.code.v1internal.cloudcode.BrowserSetting
+	(*BucketConfig)(nil),                               // 40: google.internal.cloud.code.v1internal.cloudcode.BucketConfig
+	(*ChatMessage)(nil),                                // 41: google.internal.cloud.code.v1internal.cloudcode.ChatMessage
+	(*Citation)(nil),                                   // 42: google.internal.cloud.code.v1internal.cloudcode.Citation
+	(*CliFeatureSetting)(nil),                          // 43: google.internal.cloud.code.v1internal.cloudcode.CliFeatureSetting
+	(*ClientMetadata)(nil),                             // 44: google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	(*ClientToWorkerPubSub)(nil),                       // 45: google.internal.cloud.code.v1internal.cloudcode.ClientToWorkerPubSub
+	(*CodeAssistGlobalUserSettingResponse)(nil),        // 46: google.internal.cloud.code.v1internal.cloudcode.CodeAssistGlobalUserSettingResponse
+	(*CodeAssistMetric)(nil),                           // 47: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric
+	(*CompleteCodeRequest)(nil),                        // 48: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeRequest
+	(*CompleteCodeResponse)(nil),                       // 49: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeResponse
+	(*ConversationExplainUI)(nil),                      // 50: google.internal.cloud.code.v1internal.cloudcode.ConversationExplainUI
+	(*ConversationGenerateTestUI)(nil),                 // 51: google.internal.cloud.code.v1internal.cloudcode.ConversationGenerateTestUI
+	(*ConversationInteraction)(nil),                    // 52: google.internal.cloud.code.v1internal.cloudcode.ConversationInteraction
+	(*ConversationOffered)(nil),                        // 53: google.internal.cloud.code.v1internal.cloudcode.ConversationOffered
+	(*CreateWorker)(nil),                               // 54: google.internal.cloud.code.v1internal.cloudcode.CreateWorker
+	(*Credits)(nil),                                    // 55: google.internal.cloud.code.v1internal.cloudcode.Credits
+	(*DeleteWorker)(nil),                               // 56: google.internal.cloud.code.v1internal.cloudcode.DeleteWorker
+	(*DisplayProperties)(nil),                          // 57: google.internal.cloud.code.v1internal.cloudcode.DisplayProperties
+	(*EditableRegion)(nil),                             // 58: google.internal.cloud.code.v1internal.cloudcode.EditableRegion
+	(*ExtensionsSetting)(nil),                          // 59: google.internal.cloud.code.v1internal.cloudcode.ExtensionsSetting
+	(*FeedbackId)(nil),                                 // 60: google.internal.cloud.code.v1internal.cloudcode.FeedbackId
+	(*FetchAdminControlsRequest)(nil),                  // 61: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsRequest
+	(*FetchAdminControlsResponse)(nil),                 // 62: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse
+	(*FetchCodeCustomizationStateRequest)(nil),         // 63: google.internal.cloud.code.v1internal.cloudcode.FetchCodeCustomizationStateRequest
+	(*FetchCodeCustomizationStateResponse)(nil),        // 64: google.internal.cloud.code.v1internal.cloudcode.FetchCodeCustomizationStateResponse
+	(*File)(nil),                                       // 65: google.internal.cloud.code.v1internal.cloudcode.File
+	(*FileChange)(nil),                                 // 66: google.internal.cloud.code.v1internal.cloudcode.FileChange
+	(*FileChangeTelemetry)(nil),                        // 67: google.internal.cloud.code.v1internal.cloudcode.FileChangeTelemetry
+	(*FileSegment)(nil),                                // 68: google.internal.cloud.code.v1internal.cloudcode.FileSegment
+	(*FileUsage)(nil),                                  // 69: google.internal.cloud.code.v1internal.cloudcode.FileUsage
+	(*FilteredFlag)(nil),                               // 70: google.internal.cloud.code.v1internal.cloudcode.FilteredFlag
+	(*Flag)(nil),                                       // 71: google.internal.cloud.code.v1internal.cloudcode.Flag
+	(*FunctionCall)(nil),                               // 72: google.internal.cloud.code.v1internal.cloudcode.FunctionCall
+	(*FunctionDeclaration)(nil),                        // 73: google.internal.cloud.code.v1internal.cloudcode.FunctionDeclaration
+	(*FunctionResponse)(nil),                           // 74: google.internal.cloud.code.v1internal.cloudcode.FunctionResponse
+	(*GenerateChatRequest)(nil),                        // 75: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest
+	(*GenerateChatResponse)(nil),                       // 76: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse
+	(*GenerateCodeRequest)(nil),                        // 77: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeRequest
+	(*GenerateCodeResponse)(nil),                       // 78: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeResponse
+	(*GenerateCodeUI)(nil),                             // 79: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeUI
+	(*GetCodeAssistGlobalUserSettingRequest)(nil),      // 80: google.internal.cloud.code.v1internal.cloudcode.GetCodeAssistGlobalUserSettingRequest
+	(*GetOperationRequest)(nil),                        // 81: google.internal.cloud.code.v1internal.cloudcode.GetOperationRequest
+	(*IDEContext)(nil),                                 // 82: google.internal.cloud.code.v1internal.cloudcode.IDEContext
+	(*IneligibleTier)(nil),                             // 83: google.internal.cloud.code.v1internal.cloudcode.IneligibleTier
+	(*InlineCompletionAccepted)(nil),                   // 84: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionAccepted
+	(*InlineCompletionOffered)(nil),                    // 85: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOffered
+	(*Int32List)(nil),                                  // 86: google.internal.cloud.code.v1internal.cloudcode.Int32List
+	(*Int64Value)(nil),                                 // 87: google.internal.cloud.code.v1internal.cloudcode.Int64Value
+	(*IntentMetadata)(nil),                             // 88: google.internal.cloud.code.v1internal.cloudcode.IntentMetadata
+	(*InternalAtomicAgenticChatRequest)(nil),           // 89: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest
+	(*InternalAtomicAgenticChatResponse)(nil),          // 90: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatResponse
+	(*ListAgentsRequest)(nil),                          // 91: google.internal.cloud.code.v1internal.cloudcode.ListAgentsRequest
+	(*ListAgentsResponse)(nil),                         // 92: google.internal.cloud.code.v1internal.cloudcode.ListAgentsResponse
+	(*ListCloudAICompanionProjectsRequest)(nil),        // 93: google.internal.cloud.code.v1internal.cloudcode.ListCloudAICompanionProjectsRequest
+	(*ListCloudAICompanionProjectsResponse)(nil),       // 94: google.internal.cloud.code.v1internal.cloudcode.ListCloudAICompanionProjectsResponse
+	(*ListExperimentsRequest)(nil),                     // 95: google.internal.cloud.code.v1internal.cloudcode.ListExperimentsRequest
+	(*ListExperimentsResponse)(nil),                    // 96: google.internal.cloud.code.v1internal.cloudcode.ListExperimentsResponse
+	(*ListModelConfigsRequest)(nil),                    // 97: google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsRequest
+	(*ListModelConfigsResponse)(nil),                   // 98: google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsResponse
+	(*ListRemoteRepositoriesRequest)(nil),              // 99: google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesRequest
+	(*ListRemoteRepositoriesResponse)(nil),             // 100: google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesResponse
+	(*LoadCodeAssistRequest)(nil),                      // 101: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistRequest
+	(*LoadCodeAssistResponse)(nil),                     // 102: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse
+	(*McpSetting)(nil),                                 // 103: google.internal.cloud.code.v1internal.cloudcode.McpSetting
+	(*MigrateDatabaseCodeRequest)(nil),                 // 104: google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeRequest
+	(*MigrateDatabaseCodeResponse)(nil),                // 105: google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeResponse
+	(*MoaWorkerInfo)(nil),                              // 106: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo
+	(*ModelConfig)(nil),                                // 107: google.internal.cloud.code.v1internal.cloudcode.ModelConfig
+	(*OnboardUserBackgroundTasksRequest)(nil),          // 108: google.internal.cloud.code.v1internal.cloudcode.OnboardUserBackgroundTasksRequest
+	(*OnboardUserRequest)(nil),                         // 109: google.internal.cloud.code.v1internal.cloudcode.OnboardUserRequest
+	(*Operation)(nil),                                  // 110: google.internal.cloud.code.v1internal.cloudcode.Operation
+	(*PreviewFeatureSetting)(nil),                      // 111: google.internal.cloud.code.v1internal.cloudcode.PreviewFeatureSetting
+	(*PreviousSuggestion)(nil),                         // 112: google.internal.cloud.code.v1internal.cloudcode.PreviousSuggestion
+	(*PrivacyNotice)(nil),                              // 113: google.internal.cloud.code.v1internal.cloudcode.PrivacyNotice
+	(*Project)(nil),                                    // 114: google.internal.cloud.code.v1internal.cloudcode.Project
+	(*PromptCitation)(nil),                             // 115: google.internal.cloud.code.v1internal.cloudcode.PromptCitation
+	(*Range)(nil),                                      // 116: google.internal.cloud.code.v1internal.cloudcode.Range
+	(*RecentChange)(nil),                               // 117: google.internal.cloud.code.v1internal.cloudcode.RecentChange
+	(*RecentUserAction)(nil),                           // 118: google.internal.cloud.code.v1internal.cloudcode.RecentUserAction
+	(*RecitationPolicy)(nil),                           // 119: google.internal.cloud.code.v1internal.cloudcode.RecitationPolicy
+	(*RecordClientEventRequest)(nil),                   // 120: google.internal.cloud.code.v1internal.cloudcode.RecordClientEventRequest
+	(*RecordCodeAssistMetricsRequest)(nil),             // 121: google.internal.cloud.code.v1internal.cloudcode.RecordCodeAssistMetricsRequest
+	(*RecordSmartchoicesFeedbackRequest)(nil),          // 122: google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackRequest
+	(*RecordSmartchoicesFeedbackResponse)(nil),         // 123: google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackResponse
+	(*ReleaseChannel)(nil),                             // 124: google.internal.cloud.code.v1internal.cloudcode.ReleaseChannel
+	(*Repository)(nil),                                 // 125: google.internal.cloud.code.v1internal.cloudcode.Repository
+	(*RetryDetails)(nil),                               // 126: google.internal.cloud.code.v1internal.cloudcode.RetryDetails
+	(*Rule)(nil),                                       // 127: google.internal.cloud.code.v1internal.cloudcode.Rule
+	(*ScmSystem)(nil),                                  // 128: google.internal.cloud.code.v1internal.cloudcode.ScmSystem
+	(*SearchSnippetsRequest)(nil),                      // 129: google.internal.cloud.code.v1internal.cloudcode.SearchSnippetsRequest
+	(*SearchSnippetsResponse)(nil),                     // 130: google.internal.cloud.code.v1internal.cloudcode.SearchSnippetsResponse
+	(*ServerProcessingDetails)(nil),                    // 131: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails
+	(*SetCodeAssistGlobalUserSettingRequest)(nil),      // 132: google.internal.cloud.code.v1internal.cloudcode.SetCodeAssistGlobalUserSettingRequest
+	(*ShowCompletionFeedback)(nil),                     // 133: google.internal.cloud.code.v1internal.cloudcode.ShowCompletionFeedback
+	(*Snippet)(nil),                                    // 134: google.internal.cloud.code.v1internal.cloudcode.Snippet
+	(*Status)(nil),                                     // 135: google.internal.cloud.code.v1internal.cloudcode.Status
+	(*Step)(nil),                                       // 136: google.internal.cloud.code.v1internal.cloudcode.Step
+	(*StepResponse)(nil),                               // 137: google.internal.cloud.code.v1internal.cloudcode.StepResponse
+	(*StreamingLatency)(nil),                           // 138: google.internal.cloud.code.v1internal.cloudcode.StreamingLatency
+	(*StringList)(nil),                                 // 139: google.internal.cloud.code.v1internal.cloudcode.StringList
+	(*Suggestion)(nil),                                 // 140: google.internal.cloud.code.v1internal.cloudcode.Suggestion
+	(*SuggestionTelemetry)(nil),                        // 141: google.internal.cloud.code.v1internal.cloudcode.SuggestionTelemetry
+	(*ToolAnnotations)(nil),                            // 142: google.internal.cloud.code.v1internal.cloudcode.ToolAnnotations
+	(*ToolDefinition)(nil),                             // 143: google.internal.cloud.code.v1internal.cloudcode.ToolDefinition
+	(*ToolRequest)(nil),                                // 144: google.internal.cloud.code.v1internal.cloudcode.ToolRequest
+	(*ToolResult)(nil),                                 // 145: google.internal.cloud.code.v1internal.cloudcode.ToolResult
+	(*TransformCodeRequest)(nil),                       // 146: google.internal.cloud.code.v1internal.cloudcode.TransformCodeRequest
+	(*TransformCodeResponse)(nil),                      // 147: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse
+	(*TurboModeSetting)(nil),                           // 148: google.internal.cloud.code.v1internal.cloudcode.TurboModeSetting
+	(*UsageMetadata)(nil),                              // 149: google.internal.cloud.code.v1internal.cloudcode.UsageMetadata
+	(*UserContext)(nil),                                // 150: google.internal.cloud.code.v1internal.cloudcode.UserContext
+	(*UserTier)(nil),                                   // 151: google.internal.cloud.code.v1internal.cloudcode.UserTier
+	(*WorkerToClientPubSub)(nil),                       // 152: google.internal.cloud.code.v1internal.cloudcode.WorkerToClientPubSub
+	(*WorkspaceChange)(nil),                            // 153: google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
+	(*WorkspaceStructure)(nil),                         // 154: google.internal.cloud.code.v1internal.cloudcode.WorkspaceStructure
+	(*YieldInfo)(nil),                                  // 155: google.internal.cloud.code.v1internal.cloudcode.YieldInfo
+	(*YieldedUserInput)(nil),                           // 156: google.internal.cloud.code.v1internal.cloudcode.YieldedUserInput
+	nil,                                                // 157: google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC.ParamsEntry
+	nil,                                                // 158: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.MetricMetadataEntry
+	nil,                                                // 159: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.MetricMetadataEntry
+	(*timestamppb.Timestamp)(nil),                      // 160: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),                        // 161: google.protobuf.Duration
+	(*anypb.Any)(nil),                                  // 162: google.protobuf.Any
+	(*structpb.Struct)(nil),                            // 163: google.protobuf.Struct
+	(*emptypb.Empty)(nil),                              // 164: google.protobuf.Empty
 }
 var file_CloudCode_proto_depIdxs = []int32{
-	59,  // 0: google.internal.cloud.code.v1internal.cloudcode.Agent.display_properties:type_name -> google.internal.cloud.code.v1internal.cloudcode.DisplayProperties
+	57,  // 0: google.internal.cloud.code.v1internal.cloudcode.Agent.display_properties:type_name -> google.internal.cloud.code.v1internal.cloudcode.DisplayProperties
 	1,   // 1: google.internal.cloud.code.v1internal.cloudcode.Agent.agent_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgentType
-	165, // 2: google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC.params:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC.ParamsEntry
-	33,  // 3: google.internal.cloud.code.v1internal.cloudcode.AgentProcessingDetails.rpcs:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC
+	157, // 2: google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC.params:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC.ParamsEntry
+	32,  // 3: google.internal.cloud.code.v1internal.cloudcode.AgentProcessingDetails.rpcs:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC
 	4,   // 4: google.internal.cloud.code.v1internal.cloudcode.AgenticChatMessage.author:type_name -> google.internal.cloud.code.v1internal.cloudcode.CodeAgenticchatmessage_EntityType
-	151, // 5: google.internal.cloud.code.v1internal.cloudcode.AgenticChatMessage.tool_requests:type_name -> google.internal.cloud.code.v1internal.cloudcode.ToolRequest
-	152, // 6: google.internal.cloud.code.v1internal.cloudcode.AgenticChatMessage.tool_result:type_name -> google.internal.cloud.code.v1internal.cloudcode.ToolResult
+	144, // 5: google.internal.cloud.code.v1internal.cloudcode.AgenticChatMessage.tool_requests:type_name -> google.internal.cloud.code.v1internal.cloudcode.ToolRequest
+	145, // 6: google.internal.cloud.code.v1internal.cloudcode.AgenticChatMessage.tool_result:type_name -> google.internal.cloud.code.v1internal.cloudcode.ToolResult
 	5,   // 7: google.internal.cloud.code.v1internal.cloudcode.AiCharactersReport.edit_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.CodeAicharactersreport_EditType
-	37,  // 8: google.internal.cloud.code.v1internal.cloudcode.AiCharactersReports.reports:type_name -> google.internal.cloud.code.v1internal.cloudcode.AiCharactersReport
+	36,  // 8: google.internal.cloud.code.v1internal.cloudcode.AiCharactersReports.reports:type_name -> google.internal.cloud.code.v1internal.cloudcode.AiCharactersReport
 	14,  // 9: google.internal.cloud.code.v1internal.cloudcode.ChatMessage.author:type_name -> google.internal.cloud.code.v1internal.cloudcode.EntityType
-	161, // 10: google.internal.cloud.code.v1internal.cloudcode.ChatMessage.workspace_change:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
-	76,  // 11: google.internal.cloud.code.v1internal.cloudcode.ChatMessage.function_call:type_name -> google.internal.cloud.code.v1internal.cloudcode.FunctionCall
-	78,  // 12: google.internal.cloud.code.v1internal.cloudcode.ChatMessage.function_response:type_name -> google.internal.cloud.code.v1internal.cloudcode.FunctionResponse
-	40,  // 13: google.internal.cloud.code.v1internal.cloudcode.ChatMessage.blob:type_name -> google.internal.cloud.code.v1internal.cloudcode.Blob
-	63,  // 14: google.internal.cloud.code.v1internal.cloudcode.CliFeatureSetting.extensions_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.ExtensionsSetting
+	153, // 10: google.internal.cloud.code.v1internal.cloudcode.ChatMessage.workspace_change:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
+	72,  // 11: google.internal.cloud.code.v1internal.cloudcode.ChatMessage.function_call:type_name -> google.internal.cloud.code.v1internal.cloudcode.FunctionCall
+	74,  // 12: google.internal.cloud.code.v1internal.cloudcode.ChatMessage.function_response:type_name -> google.internal.cloud.code.v1internal.cloudcode.FunctionResponse
+	38,  // 13: google.internal.cloud.code.v1internal.cloudcode.ChatMessage.blob:type_name -> google.internal.cloud.code.v1internal.cloudcode.Blob
+	59,  // 14: google.internal.cloud.code.v1internal.cloudcode.CliFeatureSetting.extensions_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.ExtensionsSetting
 	17,  // 15: google.internal.cloud.code.v1internal.cloudcode.ClientMetadata.ide_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.IdeType
-	23,  // 16: google.internal.cloud.code.v1internal.cloudcode.ClientMetadata.platform:type_name -> google.internal.cloud.code.v1internal.cloudcode.Platform
-	24,  // 17: google.internal.cloud.code.v1internal.cloudcode.ClientMetadata.plugin_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.PluginType
-	148, // 18: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.timestamp:type_name -> google.internal.cloud.code.v1internal.cloudcode.Timestamp
-	88,  // 19: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.inline_completion_accepted:type_name -> google.internal.cloud.code.v1internal.cloudcode.InlineCompletionAccepted
-	89,  // 20: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.inline_completion_offered:type_name -> google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOffered
-	55,  // 21: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.conversation_offered:type_name -> google.internal.cloud.code.v1internal.cloudcode.ConversationOffered
-	83,  // 22: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.generate_code_ui:type_name -> google.internal.cloud.code.v1internal.cloudcode.GenerateCodeUI
-	52,  // 23: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.conversation_explain_ui:type_name -> google.internal.cloud.code.v1internal.cloudcode.ConversationExplainUI
-	53,  // 24: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.conversation_generate_test_ui:type_name -> google.internal.cloud.code.v1internal.cloudcode.ConversationGenerateTestUI
-	54,  // 25: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.conversation_interaction:type_name -> google.internal.cloud.code.v1internal.cloudcode.ConversationInteraction
-	38,  // 26: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.ai_characters_reports:type_name -> google.internal.cloud.code.v1internal.cloudcode.AiCharactersReports
-	166, // 27: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.metric_metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.MetricMetadataEntry
-	86,  // 28: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
-	46,  // 29: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
-	157, // 30: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeRequest.user_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.UserContext
-	146, // 31: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeResponse.suggestions:type_name -> google.internal.cloud.code.v1internal.cloudcode.Suggestion
-	136, // 32: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeResponse.processing_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails
+	22,  // 16: google.internal.cloud.code.v1internal.cloudcode.ClientMetadata.platform:type_name -> google.internal.cloud.code.v1internal.cloudcode.Platform
+	23,  // 17: google.internal.cloud.code.v1internal.cloudcode.ClientMetadata.plugin_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.PluginType
+	160, // 18: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.timestamp:type_name -> google.protobuf.Timestamp
+	84,  // 19: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.inline_completion_accepted:type_name -> google.internal.cloud.code.v1internal.cloudcode.InlineCompletionAccepted
+	85,  // 20: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.inline_completion_offered:type_name -> google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOffered
+	53,  // 21: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.conversation_offered:type_name -> google.internal.cloud.code.v1internal.cloudcode.ConversationOffered
+	79,  // 22: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.generate_code_ui:type_name -> google.internal.cloud.code.v1internal.cloudcode.GenerateCodeUI
+	50,  // 23: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.conversation_explain_ui:type_name -> google.internal.cloud.code.v1internal.cloudcode.ConversationExplainUI
+	51,  // 24: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.conversation_generate_test_ui:type_name -> google.internal.cloud.code.v1internal.cloudcode.ConversationGenerateTestUI
+	52,  // 25: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.conversation_interaction:type_name -> google.internal.cloud.code.v1internal.cloudcode.ConversationInteraction
+	37,  // 26: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.ai_characters_reports:type_name -> google.internal.cloud.code.v1internal.cloudcode.AiCharactersReports
+	158, // 27: google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.metric_metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric.MetricMetadataEntry
+	82,  // 28: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
+	44,  // 29: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	150, // 30: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeRequest.user_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.UserContext
+	140, // 31: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeResponse.suggestions:type_name -> google.internal.cloud.code.v1internal.cloudcode.Suggestion
+	131, // 32: google.internal.cloud.code.v1internal.cloudcode.CompleteCodeResponse.processing_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails
 	0,   // 33: google.internal.cloud.code.v1internal.cloudcode.ConversationInteraction.status:type_name -> google.internal.cloud.code.v1internal.cloudcode.ActionStatus
 	20,  // 34: google.internal.cloud.code.v1internal.cloudcode.ConversationInteraction.interaction:type_name -> google.internal.cloud.code.v1internal.cloudcode.Interaction
 	19,  // 35: google.internal.cloud.code.v1internal.cloudcode.ConversationInteraction.initiation_method:type_name -> google.internal.cloud.code.v1internal.cloudcode.InitiationMethod
 	0,   // 36: google.internal.cloud.code.v1internal.cloudcode.ConversationOffered.status:type_name -> google.internal.cloud.code.v1internal.cloudcode.ActionStatus
-	143, // 37: google.internal.cloud.code.v1internal.cloudcode.ConversationOffered.streaming_latency:type_name -> google.internal.cloud.code.v1internal.cloudcode.StreamingLatency
+	138, // 37: google.internal.cloud.code.v1internal.cloudcode.ConversationOffered.streaming_latency:type_name -> google.internal.cloud.code.v1internal.cloudcode.StreamingLatency
 	19,  // 38: google.internal.cloud.code.v1internal.cloudcode.ConversationOffered.initiation_method:type_name -> google.internal.cloud.code.v1internal.cloudcode.InitiationMethod
-	160, // 39: google.internal.cloud.code.v1internal.cloudcode.CreateWorker.worker_to_client_pubsub:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkerToClientPubSub
-	47,  // 40: google.internal.cloud.code.v1internal.cloudcode.CreateWorker.client_to_worker_pubsub:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientToWorkerPubSub
-	42,  // 41: google.internal.cloud.code.v1internal.cloudcode.CreateWorker.bucket_config:type_name -> google.internal.cloud.code.v1internal.cloudcode.BucketConfig
+	152, // 39: google.internal.cloud.code.v1internal.cloudcode.CreateWorker.worker_to_client_pubsub:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkerToClientPubSub
+	45,  // 40: google.internal.cloud.code.v1internal.cloudcode.CreateWorker.client_to_worker_pubsub:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientToWorkerPubSub
+	40,  // 41: google.internal.cloud.code.v1internal.cloudcode.CreateWorker.bucket_config:type_name -> google.internal.cloud.code.v1internal.cloudcode.BucketConfig
 	11,  // 42: google.internal.cloud.code.v1internal.cloudcode.Credits.credit_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.CreditType
-	124, // 43: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.recitation_policy:type_name -> google.internal.cloud.code.v1internal.cloudcode.RecitationPolicy
+	119, // 43: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.recitation_policy:type_name -> google.internal.cloud.code.v1internal.cloudcode.RecitationPolicy
 	16,  // 44: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.grounding_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.GroundingType
-	108, // 45: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.mcp_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.McpSetting
-	155, // 46: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.turbo_mode_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.TurboModeSetting
-	41,  // 47: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.browser_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.BrowserSetting
-	116, // 48: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.preview_feature_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.PreviewFeatureSetting
-	35,  // 49: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.agent_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgentSetting
-	45,  // 50: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.cli_feature_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.CliFeatureSetting
-	28,  // 51: google.internal.cloud.code.v1internal.cloudcode.FetchCodeCustomizationStateResponse.state:type_name -> google.internal.cloud.code.v1internal.cloudcode.State
-	121, // 52: google.internal.cloud.code.v1internal.cloudcode.File.selection:type_name -> google.internal.cloud.code.v1internal.cloudcode.Range
-	72,  // 53: google.internal.cloud.code.v1internal.cloudcode.File.segments:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileSegment
-	26,  // 54: google.internal.cloud.code.v1internal.cloudcode.File.included_reason:type_name -> google.internal.cloud.code.v1internal.cloudcode.Reason
+	103, // 45: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.mcp_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.McpSetting
+	148, // 46: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.turbo_mode_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.TurboModeSetting
+	39,  // 47: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.browser_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.BrowserSetting
+	111, // 48: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.preview_feature_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.PreviewFeatureSetting
+	34,  // 49: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.agent_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgentSetting
+	43,  // 50: google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse.cli_feature_setting:type_name -> google.internal.cloud.code.v1internal.cloudcode.CliFeatureSetting
+	27,  // 51: google.internal.cloud.code.v1internal.cloudcode.FetchCodeCustomizationStateResponse.state:type_name -> google.internal.cloud.code.v1internal.cloudcode.State
+	116, // 52: google.internal.cloud.code.v1internal.cloudcode.File.selection:type_name -> google.internal.cloud.code.v1internal.cloudcode.Range
+	68,  // 53: google.internal.cloud.code.v1internal.cloudcode.File.segments:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileSegment
+	25,  // 54: google.internal.cloud.code.v1internal.cloudcode.File.included_reason:type_name -> google.internal.cloud.code.v1internal.cloudcode.Reason
 	13,  // 55: google.internal.cloud.code.v1internal.cloudcode.File.last_edit:type_name -> google.internal.cloud.code.v1internal.cloudcode.EditType
-	130, // 56: google.internal.cloud.code.v1internal.cloudcode.File.repository:type_name -> google.internal.cloud.code.v1internal.cloudcode.Repository
-	133, // 57: google.internal.cloud.code.v1internal.cloudcode.File.scm_system:type_name -> google.internal.cloud.code.v1internal.cloudcode.ScmSystem
-	121, // 58: google.internal.cloud.code.v1internal.cloudcode.FileChange.range:type_name -> google.internal.cloud.code.v1internal.cloudcode.Range
-	44,  // 59: google.internal.cloud.code.v1internal.cloudcode.FileChange.citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.Citation
-	120, // 60: google.internal.cloud.code.v1internal.cloudcode.FileChange.prompt_citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.PromptCitation
-	71,  // 61: google.internal.cloud.code.v1internal.cloudcode.FileChange.telemetry:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileChangeTelemetry
-	91,  // 62: google.internal.cloud.code.v1internal.cloudcode.FileChangeTelemetry.comment_lines:type_name -> google.internal.cloud.code.v1internal.cloudcode.Int64Value
-	90,  // 63: google.internal.cloud.code.v1internal.cloudcode.Flag.int32_list_value:type_name -> google.internal.cloud.code.v1internal.cloudcode.Int32List
-	144, // 64: google.internal.cloud.code.v1internal.cloudcode.Flag.string_list_value:type_name -> google.internal.cloud.code.v1internal.cloudcode.StringList
-	43,  // 65: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.history:type_name -> google.internal.cloud.code.v1internal.cloudcode.ChatMessage
-	86,  // 66: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
-	46,  // 67: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
-	163, // 68: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.yield_info:type_name -> google.internal.cloud.code.v1internal.cloudcode.YieldInfo
-	164, // 69: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.yielded_user_input:type_name -> google.internal.cloud.code.v1internal.cloudcode.YieldedUserInput
-	131, // 70: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.retry_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.RetryDetails
-	77,  // 71: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.function_declarations:type_name -> google.internal.cloud.code.v1internal.cloudcode.FunctionDeclaration
-	44,  // 72: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.Citation
-	136, // 73: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.processing_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails
-	92,  // 74: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.detected_intent:type_name -> google.internal.cloud.code.v1internal.cloudcode.IntentMetadata
-	120, // 75: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.prompt_citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.PromptCitation
-	73,  // 76: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.file_usage:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileUsage
-	34,  // 77: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.agent_processing_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgentProcessingDetails
-	163, // 78: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.yield_info:type_name -> google.internal.cloud.code.v1internal.cloudcode.YieldInfo
-	161, // 79: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.workspace_change:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
-	111, // 80: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.moa_worker_info:type_name -> google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo
+	125, // 56: google.internal.cloud.code.v1internal.cloudcode.File.repository:type_name -> google.internal.cloud.code.v1internal.cloudcode.Repository
+	128, // 57: google.internal.cloud.code.v1internal.cloudcode.File.scm_system:type_name -> google.internal.cloud.code.v1internal.cloudcode.ScmSystem
+	116, // 58: google.internal.cloud.code.v1internal.cloudcode.FileChange.range:type_name -> google.internal.cloud.code.v1internal.cloudcode.Range
+	42,  // 59: google.internal.cloud.code.v1internal.cloudcode.FileChange.citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.Citation
+	115, // 60: google.internal.cloud.code.v1internal.cloudcode.FileChange.prompt_citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.PromptCitation
+	67,  // 61: google.internal.cloud.code.v1internal.cloudcode.FileChange.telemetry:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileChangeTelemetry
+	87,  // 62: google.internal.cloud.code.v1internal.cloudcode.FileChangeTelemetry.comment_lines:type_name -> google.internal.cloud.code.v1internal.cloudcode.Int64Value
+	86,  // 63: google.internal.cloud.code.v1internal.cloudcode.Flag.int32_list_value:type_name -> google.internal.cloud.code.v1internal.cloudcode.Int32List
+	139, // 64: google.internal.cloud.code.v1internal.cloudcode.Flag.string_list_value:type_name -> google.internal.cloud.code.v1internal.cloudcode.StringList
+	41,  // 65: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.history:type_name -> google.internal.cloud.code.v1internal.cloudcode.ChatMessage
+	82,  // 66: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
+	44,  // 67: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	155, // 68: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.yield_info:type_name -> google.internal.cloud.code.v1internal.cloudcode.YieldInfo
+	156, // 69: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.yielded_user_input:type_name -> google.internal.cloud.code.v1internal.cloudcode.YieldedUserInput
+	126, // 70: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.retry_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.RetryDetails
+	73,  // 71: google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest.function_declarations:type_name -> google.internal.cloud.code.v1internal.cloudcode.FunctionDeclaration
+	42,  // 72: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.Citation
+	131, // 73: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.processing_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails
+	88,  // 74: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.detected_intent:type_name -> google.internal.cloud.code.v1internal.cloudcode.IntentMetadata
+	115, // 75: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.prompt_citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.PromptCitation
+	69,  // 76: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.file_usage:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileUsage
+	33,  // 77: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.agent_processing_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgentProcessingDetails
+	155, // 78: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.yield_info:type_name -> google.internal.cloud.code.v1internal.cloudcode.YieldInfo
+	153, // 79: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.workspace_change:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
+	106, // 80: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.moa_worker_info:type_name -> google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo
 	15,  // 81: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.finish_reason:type_name -> google.internal.cloud.code.v1internal.cloudcode.FinishReason
-	29,  // 82: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.text_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.TextType
-	76,  // 83: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.function_calls:type_name -> google.internal.cloud.code.v1internal.cloudcode.FunctionCall
-	156, // 84: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.usage_metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.UsageMetadata
-	86,  // 85: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
-	46,  // 86: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
-	146, // 87: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeResponse.suggestions:type_name -> google.internal.cloud.code.v1internal.cloudcode.Suggestion
-	136, // 88: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeResponse.processing_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails
-	73,  // 89: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeResponse.file_usage:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileUsage
-	69,  // 90: google.internal.cloud.code.v1internal.cloudcode.IDEContext.current_file:type_name -> google.internal.cloud.code.v1internal.cloudcode.File
-	69,  // 91: google.internal.cloud.code.v1internal.cloudcode.IDEContext.other_files:type_name -> google.internal.cloud.code.v1internal.cloudcode.File
-	132, // 92: google.internal.cloud.code.v1internal.cloudcode.IDEContext.rules:type_name -> google.internal.cloud.code.v1internal.cloudcode.Rule
-	162, // 93: google.internal.cloud.code.v1internal.cloudcode.IDEContext.workspace_structure:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceStructure
-	61,  // 94: google.internal.cloud.code.v1internal.cloudcode.IDEContext.editable_region:type_name -> google.internal.cloud.code.v1internal.cloudcode.EditableRegion
-	123, // 95: google.internal.cloud.code.v1internal.cloudcode.IDEContext.recent_user_actions:type_name -> google.internal.cloud.code.v1internal.cloudcode.RecentUserAction
+	28,  // 82: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.text_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.TextType
+	72,  // 83: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.function_calls:type_name -> google.internal.cloud.code.v1internal.cloudcode.FunctionCall
+	149, // 84: google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse.usage_metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.UsageMetadata
+	82,  // 85: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
+	44,  // 86: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	140, // 87: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeResponse.suggestions:type_name -> google.internal.cloud.code.v1internal.cloudcode.Suggestion
+	131, // 88: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeResponse.processing_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails
+	69,  // 89: google.internal.cloud.code.v1internal.cloudcode.GenerateCodeResponse.file_usage:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileUsage
+	65,  // 90: google.internal.cloud.code.v1internal.cloudcode.IDEContext.current_file:type_name -> google.internal.cloud.code.v1internal.cloudcode.File
+	65,  // 91: google.internal.cloud.code.v1internal.cloudcode.IDEContext.other_files:type_name -> google.internal.cloud.code.v1internal.cloudcode.File
+	127, // 92: google.internal.cloud.code.v1internal.cloudcode.IDEContext.rules:type_name -> google.internal.cloud.code.v1internal.cloudcode.Rule
+	154, // 93: google.internal.cloud.code.v1internal.cloudcode.IDEContext.workspace_structure:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceStructure
+	58,  // 94: google.internal.cloud.code.v1internal.cloudcode.IDEContext.editable_region:type_name -> google.internal.cloud.code.v1internal.cloudcode.EditableRegion
+	118, // 95: google.internal.cloud.code.v1internal.cloudcode.IDEContext.recent_user_actions:type_name -> google.internal.cloud.code.v1internal.cloudcode.RecentUserAction
 	18,  // 96: google.internal.cloud.code.v1internal.cloudcode.IneligibleTier.reason_code:type_name -> google.internal.cloud.code.v1internal.cloudcode.IneligibleTierReasonCodes
 	6,   // 97: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionAccepted.completion_method:type_name -> google.internal.cloud.code.v1internal.cloudcode.CodeInlinecompletionaccepted_CompletionMethod
 	0,   // 98: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionAccepted.status:type_name -> google.internal.cloud.code.v1internal.cloudcode.ActionStatus
 	10,  // 99: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOffered.completion_mode:type_name -> google.internal.cloud.code.v1internal.cloudcode.CompletionMode
-	60,  // 100: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOffered.display_length:type_name -> google.internal.cloud.code.v1internal.cloudcode.Duration
+	161, // 100: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOffered.display_length:type_name -> google.protobuf.Duration
 	0,   // 101: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOffered.status:type_name -> google.internal.cloud.code.v1internal.cloudcode.ActionStatus
 	7,   // 102: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOffered.completion_method:type_name -> google.internal.cloud.code.v1internal.cloudcode.CodeInlinecompletionoffered_CompletionMethod
-	60,  // 103: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOffered.response_latency:type_name -> google.internal.cloud.code.v1internal.cloudcode.Duration
-	36,  // 104: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest.history:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgenticChatMessage
-	86,  // 105: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
-	46,  // 106: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
-	150, // 107: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest.tool_definitions:type_name -> google.internal.cloud.code.v1internal.cloudcode.ToolDefinition
-	36,  // 108: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatResponse.response:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgenticChatMessage
-	32,  // 109: google.internal.cloud.code.v1internal.cloudcode.ListAgentsResponse.agents:type_name -> google.internal.cloud.code.v1internal.cloudcode.Agent
-	119, // 110: google.internal.cloud.code.v1internal.cloudcode.ListCloudAICompanionProjectsResponse.projects:type_name -> google.internal.cloud.code.v1internal.cloudcode.Project
-	46,  // 111: google.internal.cloud.code.v1internal.cloudcode.ListExperimentsRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
-	75,  // 112: google.internal.cloud.code.v1internal.cloudcode.ListExperimentsResponse.flags:type_name -> google.internal.cloud.code.v1internal.cloudcode.Flag
-	74,  // 113: google.internal.cloud.code.v1internal.cloudcode.ListExperimentsResponse.filtered_flags:type_name -> google.internal.cloud.code.v1internal.cloudcode.FilteredFlag
-	46,  // 114: google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	161, // 103: google.internal.cloud.code.v1internal.cloudcode.InlineCompletionOffered.response_latency:type_name -> google.protobuf.Duration
+	35,  // 104: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest.history:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgenticChatMessage
+	82,  // 105: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
+	44,  // 106: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	143, // 107: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest.tool_definitions:type_name -> google.internal.cloud.code.v1internal.cloudcode.ToolDefinition
+	35,  // 108: google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatResponse.response:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgenticChatMessage
+	31,  // 109: google.internal.cloud.code.v1internal.cloudcode.ListAgentsResponse.agents:type_name -> google.internal.cloud.code.v1internal.cloudcode.Agent
+	114, // 110: google.internal.cloud.code.v1internal.cloudcode.ListCloudAICompanionProjectsResponse.projects:type_name -> google.internal.cloud.code.v1internal.cloudcode.Project
+	44,  // 111: google.internal.cloud.code.v1internal.cloudcode.ListExperimentsRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	71,  // 112: google.internal.cloud.code.v1internal.cloudcode.ListExperimentsResponse.flags:type_name -> google.internal.cloud.code.v1internal.cloudcode.Flag
+	70,  // 113: google.internal.cloud.code.v1internal.cloudcode.ListExperimentsResponse.filtered_flags:type_name -> google.internal.cloud.code.v1internal.cloudcode.FilteredFlag
+	44,  // 114: google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
 	12,  // 115: google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsRequest.domain:type_name -> google.internal.cloud.code.v1internal.cloudcode.Domain
-	112, // 116: google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsResponse.allowed_model_configs:type_name -> google.internal.cloud.code.v1internal.cloudcode.ModelConfig
-	112, // 117: google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsResponse.default_agent_model_config:type_name -> google.internal.cloud.code.v1internal.cloudcode.ModelConfig
-	130, // 118: google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesResponse.repositories:type_name -> google.internal.cloud.code.v1internal.cloudcode.Repository
-	133, // 119: google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesResponse.scm_systems:type_name -> google.internal.cloud.code.v1internal.cloudcode.ScmSystem
+	107, // 116: google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsResponse.allowed_model_configs:type_name -> google.internal.cloud.code.v1internal.cloudcode.ModelConfig
+	107, // 117: google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsResponse.default_agent_model_config:type_name -> google.internal.cloud.code.v1internal.cloudcode.ModelConfig
+	125, // 118: google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesResponse.repositories:type_name -> google.internal.cloud.code.v1internal.cloudcode.Repository
+	128, // 119: google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesResponse.scm_systems:type_name -> google.internal.cloud.code.v1internal.cloudcode.ScmSystem
 	2,   // 120: google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesResponse.rag_status:type_name -> google.internal.cloud.code.v1internal.cloudcode.CCRagStatus
-	159, // 121: google.internal.cloud.code.v1internal.cloudcode.ListValue.values:type_name -> google.internal.cloud.code.v1internal.cloudcode.Value
-	46,  // 122: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
-	21,  // 123: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistRequest.mode:type_name -> google.internal.cloud.code.v1internal.cloudcode.Mode
-	158, // 124: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.current_tier:type_name -> google.internal.cloud.code.v1internal.cloudcode.UserTier
-	158, // 125: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.allowed_tiers:type_name -> google.internal.cloud.code.v1internal.cloudcode.UserTier
-	140, // 126: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.project_validation_error:type_name -> google.internal.cloud.code.v1internal.cloudcode.Status
-	87,  // 127: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.ineligible_tiers:type_name -> google.internal.cloud.code.v1internal.cloudcode.IneligibleTier
-	129, // 128: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.release_channel:type_name -> google.internal.cloud.code.v1internal.cloudcode.ReleaseChannel
-	158, // 129: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.paid_tier:type_name -> google.internal.cloud.code.v1internal.cloudcode.UserTier
-	86,  // 130: google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
-	46,  // 131: google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
-	161, // 132: google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeResponse.workspace_changes:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
-	160, // 133: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo.worker_to_client_pubsub:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkerToClientPubSub
-	47,  // 134: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo.client_to_worker_pubsub:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientToWorkerPubSub
-	42,  // 135: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo.bucket_config:type_name -> google.internal.cloud.code.v1internal.cloudcode.BucketConfig
-	56,  // 136: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo.create_worker:type_name -> google.internal.cloud.code.v1internal.cloudcode.CreateWorker
-	58,  // 137: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo.delete_worker:type_name -> google.internal.cloud.code.v1internal.cloudcode.DeleteWorker
-	85,  // 138: google.internal.cloud.code.v1internal.cloudcode.OnboardUserBackgroundTasksRequest.operation:type_name -> google.internal.cloud.code.v1internal.cloudcode.GetOperationRequest
-	46,  // 139: google.internal.cloud.code.v1internal.cloudcode.OnboardUserRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
-	39,  // 140: google.internal.cloud.code.v1internal.cloudcode.Operation.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.Any
-	140, // 141: google.internal.cloud.code.v1internal.cloudcode.Operation.error:type_name -> google.internal.cloud.code.v1internal.cloudcode.Status
-	39,  // 142: google.internal.cloud.code.v1internal.cloudcode.Operation.response:type_name -> google.internal.cloud.code.v1internal.cloudcode.Any
-	17,  // 143: google.internal.cloud.code.v1internal.cloudcode.RecordClientEventRequest.ide_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.IdeType
-	49,  // 144: google.internal.cloud.code.v1internal.cloudcode.RecordClientEventRequest.metric:type_name -> google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric
-	46,  // 145: google.internal.cloud.code.v1internal.cloudcode.RecordCodeAssistMetricsRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
-	49,  // 146: google.internal.cloud.code.v1internal.cloudcode.RecordCodeAssistMetricsRequest.metrics:type_name -> google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric
-	64,  // 147: google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackRequest.feedback_id:type_name -> google.internal.cloud.code.v1internal.cloudcode.FeedbackId
-	138, // 148: google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackRequest.show_completion_feedback:type_name -> google.internal.cloud.code.v1internal.cloudcode.ShowCompletionFeedback
-	3,   // 149: google.internal.cloud.code.v1internal.cloudcode.ReleaseChannel.type:type_name -> google.internal.cloud.code.v1internal.cloudcode.ChannelType
-	27,  // 150: google.internal.cloud.code.v1internal.cloudcode.RetryDetails.reason:type_name -> google.internal.cloud.code.v1internal.cloudcode.RetryReason
-	139, // 151: google.internal.cloud.code.v1internal.cloudcode.SearchSnippetsResponse.snippets:type_name -> google.internal.cloud.code.v1internal.cloudcode.Snippet
-	25,  // 152: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.rag_status:type_name -> google.internal.cloud.code.v1internal.cloudcode.RagStatus
-	9,   // 153: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.completion_method:type_name -> google.internal.cloud.code.v1internal.cloudcode.CompletionMethod
-	167, // 154: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.metric_metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.MetricMetadataEntry
-	112, // 155: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.model_config:type_name -> google.internal.cloud.code.v1internal.cloudcode.ModelConfig
-	39,  // 156: google.internal.cloud.code.v1internal.cloudcode.Status.details:type_name -> google.internal.cloud.code.v1internal.cloudcode.Any
-	141, // 157: google.internal.cloud.code.v1internal.cloudcode.StepResponse.step:type_name -> google.internal.cloud.code.v1internal.cloudcode.Step
-	60,  // 158: google.internal.cloud.code.v1internal.cloudcode.StreamingLatency.first_message_latency:type_name -> google.internal.cloud.code.v1internal.cloudcode.Duration
-	60,  // 159: google.internal.cloud.code.v1internal.cloudcode.StreamingLatency.total_latency:type_name -> google.internal.cloud.code.v1internal.cloudcode.Duration
-	168, // 160: google.internal.cloud.code.v1internal.cloudcode.Struct.fields:type_name -> google.internal.cloud.code.v1internal.cloudcode.Struct.FieldsEntry
-	44,  // 161: google.internal.cloud.code.v1internal.cloudcode.Suggestion.citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.Citation
-	120, // 162: google.internal.cloud.code.v1internal.cloudcode.Suggestion.prompt_citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.PromptCitation
-	147, // 163: google.internal.cloud.code.v1internal.cloudcode.Suggestion.telemetry:type_name -> google.internal.cloud.code.v1internal.cloudcode.SuggestionTelemetry
-	64,  // 164: google.internal.cloud.code.v1internal.cloudcode.Suggestion.feedback_id:type_name -> google.internal.cloud.code.v1internal.cloudcode.FeedbackId
-	91,  // 165: google.internal.cloud.code.v1internal.cloudcode.SuggestionTelemetry.comment_lines:type_name -> google.internal.cloud.code.v1internal.cloudcode.Int64Value
-	145, // 166: google.internal.cloud.code.v1internal.cloudcode.ToolDefinition.input_schema:type_name -> google.internal.cloud.code.v1internal.cloudcode.Struct
-	149, // 167: google.internal.cloud.code.v1internal.cloudcode.ToolDefinition.annotations:type_name -> google.internal.cloud.code.v1internal.cloudcode.ToolAnnotations
-	145, // 168: google.internal.cloud.code.v1internal.cloudcode.ToolRequest.tool_call_json:type_name -> google.internal.cloud.code.v1internal.cloudcode.Struct
-	145, // 169: google.internal.cloud.code.v1internal.cloudcode.ToolResult.content:type_name -> google.internal.cloud.code.v1internal.cloudcode.Struct
-	86,  // 170: google.internal.cloud.code.v1internal.cloudcode.TransformCodeRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
-	8,   // 171: google.internal.cloud.code.v1internal.cloudcode.TransformCodeRequest.command:type_name -> google.internal.cloud.code.v1internal.cloudcode.Command
-	46,  // 172: google.internal.cloud.code.v1internal.cloudcode.TransformCodeRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
-	161, // 173: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse.workspace_change:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
-	92,  // 174: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse.detected_intent:type_name -> google.internal.cloud.code.v1internal.cloudcode.IntentMetadata
-	161, // 175: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse.workspace_changes:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
-	136, // 176: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse.processing_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails
-	73,  // 177: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse.file_usage:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileUsage
-	117, // 178: google.internal.cloud.code.v1internal.cloudcode.UserContext.previous_suggestions:type_name -> google.internal.cloud.code.v1internal.cloudcode.PreviousSuggestion
-	122, // 179: google.internal.cloud.code.v1internal.cloudcode.UserContext.recent_changes:type_name -> google.internal.cloud.code.v1internal.cloudcode.RecentChange
-	118, // 180: google.internal.cloud.code.v1internal.cloudcode.UserTier.privacy_notice:type_name -> google.internal.cloud.code.v1internal.cloudcode.PrivacyNotice
-	30,  // 181: google.internal.cloud.code.v1internal.cloudcode.UserTier.upgrade_subscription_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.UpgradeType
-	57,  // 182: google.internal.cloud.code.v1internal.cloudcode.UserTier.available_credits:type_name -> google.internal.cloud.code.v1internal.cloudcode.Credits
-	22,  // 183: google.internal.cloud.code.v1internal.cloudcode.Value.null_value:type_name -> google.internal.cloud.code.v1internal.cloudcode.NullValue
-	145, // 184: google.internal.cloud.code.v1internal.cloudcode.Value.struct_value:type_name -> google.internal.cloud.code.v1internal.cloudcode.Struct
-	105, // 185: google.internal.cloud.code.v1internal.cloudcode.Value.list_value:type_name -> google.internal.cloud.code.v1internal.cloudcode.ListValue
-	70,  // 186: google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange.files:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileChange
-	33,  // 187: google.internal.cloud.code.v1internal.cloudcode.YieldInfo.rpc:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC
-	141, // 188: google.internal.cloud.code.v1internal.cloudcode.YieldInfo.remaining_steps:type_name -> google.internal.cloud.code.v1internal.cloudcode.Step
-	31,  // 189: google.internal.cloud.code.v1internal.cloudcode.YieldInfo.yield_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.YieldType
-	142, // 190: google.internal.cloud.code.v1internal.cloudcode.YieldInfo.completed_step_responses:type_name -> google.internal.cloud.code.v1internal.cloudcode.StepResponse
-	159, // 191: google.internal.cloud.code.v1internal.cloudcode.Struct.FieldsEntry.value:type_name -> google.internal.cloud.code.v1internal.cloudcode.Value
-	81,  // 192: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GenerateCode:input_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateCodeRequest
-	50,  // 193: google.internal.cloud.code.v1internal.cloudcode.CloudCode.CompleteCode:input_type -> google.internal.cloud.code.v1internal.cloudcode.CompleteCodeRequest
-	153, // 194: google.internal.cloud.code.v1internal.cloudcode.CloudCode.TransformCode:input_type -> google.internal.cloud.code.v1internal.cloudcode.TransformCodeRequest
-	134, // 195: google.internal.cloud.code.v1internal.cloudcode.CloudCode.SearchSnippets:input_type -> google.internal.cloud.code.v1internal.cloudcode.SearchSnippetsRequest
-	67,  // 196: google.internal.cloud.code.v1internal.cloudcode.CloudCode.FetchCodeCustomizationState:input_type -> google.internal.cloud.code.v1internal.cloudcode.FetchCodeCustomizationStateRequest
-	79,  // 197: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GenerateChat:input_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest
-	79,  // 198: google.internal.cloud.code.v1internal.cloudcode.CloudCode.StreamGenerateChat:input_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest
-	93,  // 199: google.internal.cloud.code.v1internal.cloudcode.CloudCode.InternalAtomicAgenticChat:input_type -> google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest
-	109, // 200: google.internal.cloud.code.v1internal.cloudcode.CloudCode.MigrateDatabaseCode:input_type -> google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeRequest
-	99,  // 201: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListExperiments:input_type -> google.internal.cloud.code.v1internal.cloudcode.ListExperimentsRequest
-	106, // 202: google.internal.cloud.code.v1internal.cloudcode.CloudCode.LoadCodeAssist:input_type -> google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistRequest
-	97,  // 203: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListCloudAICompanionProjects:input_type -> google.internal.cloud.code.v1internal.cloudcode.ListCloudAICompanionProjectsRequest
-	95,  // 204: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListAgents:input_type -> google.internal.cloud.code.v1internal.cloudcode.ListAgentsRequest
-	103, // 205: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListRemoteRepositories:input_type -> google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesRequest
-	101, // 206: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListModelConfigs:input_type -> google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsRequest
-	114, // 207: google.internal.cloud.code.v1internal.cloudcode.CloudCode.OnboardUser:input_type -> google.internal.cloud.code.v1internal.cloudcode.OnboardUserRequest
-	113, // 208: google.internal.cloud.code.v1internal.cloudcode.CloudCode.OnboardUserBackgroundTasks:input_type -> google.internal.cloud.code.v1internal.cloudcode.OnboardUserBackgroundTasksRequest
-	127, // 209: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordSmartchoicesFeedback:input_type -> google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackRequest
-	126, // 210: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordCodeAssistMetrics:input_type -> google.internal.cloud.code.v1internal.cloudcode.RecordCodeAssistMetricsRequest
-	125, // 211: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordClientEvent:input_type -> google.internal.cloud.code.v1internal.cloudcode.RecordClientEventRequest
-	84,  // 212: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GetCodeAssistGlobalUserSetting:input_type -> google.internal.cloud.code.v1internal.cloudcode.GetCodeAssistGlobalUserSettingRequest
-	137, // 213: google.internal.cloud.code.v1internal.cloudcode.CloudCode.SetCodeAssistGlobalUserSetting:input_type -> google.internal.cloud.code.v1internal.cloudcode.SetCodeAssistGlobalUserSettingRequest
-	65,  // 214: google.internal.cloud.code.v1internal.cloudcode.CloudCode.FetchAdminControls:input_type -> google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsRequest
-	82,  // 215: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GenerateCode:output_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateCodeResponse
-	51,  // 216: google.internal.cloud.code.v1internal.cloudcode.CloudCode.CompleteCode:output_type -> google.internal.cloud.code.v1internal.cloudcode.CompleteCodeResponse
-	154, // 217: google.internal.cloud.code.v1internal.cloudcode.CloudCode.TransformCode:output_type -> google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse
-	135, // 218: google.internal.cloud.code.v1internal.cloudcode.CloudCode.SearchSnippets:output_type -> google.internal.cloud.code.v1internal.cloudcode.SearchSnippetsResponse
-	68,  // 219: google.internal.cloud.code.v1internal.cloudcode.CloudCode.FetchCodeCustomizationState:output_type -> google.internal.cloud.code.v1internal.cloudcode.FetchCodeCustomizationStateResponse
-	80,  // 220: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GenerateChat:output_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse
-	80,  // 221: google.internal.cloud.code.v1internal.cloudcode.CloudCode.StreamGenerateChat:output_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse
-	94,  // 222: google.internal.cloud.code.v1internal.cloudcode.CloudCode.InternalAtomicAgenticChat:output_type -> google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatResponse
-	110, // 223: google.internal.cloud.code.v1internal.cloudcode.CloudCode.MigrateDatabaseCode:output_type -> google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeResponse
-	100, // 224: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListExperiments:output_type -> google.internal.cloud.code.v1internal.cloudcode.ListExperimentsResponse
-	107, // 225: google.internal.cloud.code.v1internal.cloudcode.CloudCode.LoadCodeAssist:output_type -> google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse
-	98,  // 226: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListCloudAICompanionProjects:output_type -> google.internal.cloud.code.v1internal.cloudcode.ListCloudAICompanionProjectsResponse
-	96,  // 227: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListAgents:output_type -> google.internal.cloud.code.v1internal.cloudcode.ListAgentsResponse
-	104, // 228: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListRemoteRepositories:output_type -> google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesResponse
-	102, // 229: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListModelConfigs:output_type -> google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsResponse
-	115, // 230: google.internal.cloud.code.v1internal.cloudcode.CloudCode.OnboardUser:output_type -> google.internal.cloud.code.v1internal.cloudcode.Operation
-	62,  // 231: google.internal.cloud.code.v1internal.cloudcode.CloudCode.OnboardUserBackgroundTasks:output_type -> google.internal.cloud.code.v1internal.cloudcode.Empty
-	128, // 232: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordSmartchoicesFeedback:output_type -> google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackResponse
-	62,  // 233: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordCodeAssistMetrics:output_type -> google.internal.cloud.code.v1internal.cloudcode.Empty
-	62,  // 234: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordClientEvent:output_type -> google.internal.cloud.code.v1internal.cloudcode.Empty
-	48,  // 235: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GetCodeAssistGlobalUserSetting:output_type -> google.internal.cloud.code.v1internal.cloudcode.CodeAssistGlobalUserSettingResponse
-	48,  // 236: google.internal.cloud.code.v1internal.cloudcode.CloudCode.SetCodeAssistGlobalUserSetting:output_type -> google.internal.cloud.code.v1internal.cloudcode.CodeAssistGlobalUserSettingResponse
-	66,  // 237: google.internal.cloud.code.v1internal.cloudcode.CloudCode.FetchAdminControls:output_type -> google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse
-	215, // [215:238] is the sub-list for method output_type
-	192, // [192:215] is the sub-list for method input_type
-	192, // [192:192] is the sub-list for extension type_name
-	192, // [192:192] is the sub-list for extension extendee
-	0,   // [0:192] is the sub-list for field type_name
+	44,  // 121: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	21,  // 122: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistRequest.mode:type_name -> google.internal.cloud.code.v1internal.cloudcode.Mode
+	151, // 123: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.current_tier:type_name -> google.internal.cloud.code.v1internal.cloudcode.UserTier
+	151, // 124: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.allowed_tiers:type_name -> google.internal.cloud.code.v1internal.cloudcode.UserTier
+	135, // 125: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.project_validation_error:type_name -> google.internal.cloud.code.v1internal.cloudcode.Status
+	83,  // 126: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.ineligible_tiers:type_name -> google.internal.cloud.code.v1internal.cloudcode.IneligibleTier
+	124, // 127: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.release_channel:type_name -> google.internal.cloud.code.v1internal.cloudcode.ReleaseChannel
+	151, // 128: google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse.paid_tier:type_name -> google.internal.cloud.code.v1internal.cloudcode.UserTier
+	82,  // 129: google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
+	44,  // 130: google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	153, // 131: google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeResponse.workspace_changes:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
+	152, // 132: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo.worker_to_client_pubsub:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkerToClientPubSub
+	45,  // 133: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo.client_to_worker_pubsub:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientToWorkerPubSub
+	40,  // 134: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo.bucket_config:type_name -> google.internal.cloud.code.v1internal.cloudcode.BucketConfig
+	54,  // 135: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo.create_worker:type_name -> google.internal.cloud.code.v1internal.cloudcode.CreateWorker
+	56,  // 136: google.internal.cloud.code.v1internal.cloudcode.MoaWorkerInfo.delete_worker:type_name -> google.internal.cloud.code.v1internal.cloudcode.DeleteWorker
+	81,  // 137: google.internal.cloud.code.v1internal.cloudcode.OnboardUserBackgroundTasksRequest.operation:type_name -> google.internal.cloud.code.v1internal.cloudcode.GetOperationRequest
+	44,  // 138: google.internal.cloud.code.v1internal.cloudcode.OnboardUserRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	162, // 139: google.internal.cloud.code.v1internal.cloudcode.Operation.metadata:type_name -> google.protobuf.Any
+	135, // 140: google.internal.cloud.code.v1internal.cloudcode.Operation.error:type_name -> google.internal.cloud.code.v1internal.cloudcode.Status
+	162, // 141: google.internal.cloud.code.v1internal.cloudcode.Operation.response:type_name -> google.protobuf.Any
+	17,  // 142: google.internal.cloud.code.v1internal.cloudcode.RecordClientEventRequest.ide_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.IdeType
+	47,  // 143: google.internal.cloud.code.v1internal.cloudcode.RecordClientEventRequest.metric:type_name -> google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric
+	44,  // 144: google.internal.cloud.code.v1internal.cloudcode.RecordCodeAssistMetricsRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	47,  // 145: google.internal.cloud.code.v1internal.cloudcode.RecordCodeAssistMetricsRequest.metrics:type_name -> google.internal.cloud.code.v1internal.cloudcode.CodeAssistMetric
+	60,  // 146: google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackRequest.feedback_id:type_name -> google.internal.cloud.code.v1internal.cloudcode.FeedbackId
+	133, // 147: google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackRequest.show_completion_feedback:type_name -> google.internal.cloud.code.v1internal.cloudcode.ShowCompletionFeedback
+	3,   // 148: google.internal.cloud.code.v1internal.cloudcode.ReleaseChannel.type:type_name -> google.internal.cloud.code.v1internal.cloudcode.ChannelType
+	26,  // 149: google.internal.cloud.code.v1internal.cloudcode.RetryDetails.reason:type_name -> google.internal.cloud.code.v1internal.cloudcode.RetryReason
+	134, // 150: google.internal.cloud.code.v1internal.cloudcode.SearchSnippetsResponse.snippets:type_name -> google.internal.cloud.code.v1internal.cloudcode.Snippet
+	24,  // 151: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.rag_status:type_name -> google.internal.cloud.code.v1internal.cloudcode.RagStatus
+	9,   // 152: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.completion_method:type_name -> google.internal.cloud.code.v1internal.cloudcode.CompletionMethod
+	159, // 153: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.metric_metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.MetricMetadataEntry
+	107, // 154: google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails.model_config:type_name -> google.internal.cloud.code.v1internal.cloudcode.ModelConfig
+	162, // 155: google.internal.cloud.code.v1internal.cloudcode.Status.details:type_name -> google.protobuf.Any
+	136, // 156: google.internal.cloud.code.v1internal.cloudcode.StepResponse.step:type_name -> google.internal.cloud.code.v1internal.cloudcode.Step
+	161, // 157: google.internal.cloud.code.v1internal.cloudcode.StreamingLatency.first_message_latency:type_name -> google.protobuf.Duration
+	161, // 158: google.internal.cloud.code.v1internal.cloudcode.StreamingLatency.total_latency:type_name -> google.protobuf.Duration
+	42,  // 159: google.internal.cloud.code.v1internal.cloudcode.Suggestion.citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.Citation
+	115, // 160: google.internal.cloud.code.v1internal.cloudcode.Suggestion.prompt_citations:type_name -> google.internal.cloud.code.v1internal.cloudcode.PromptCitation
+	141, // 161: google.internal.cloud.code.v1internal.cloudcode.Suggestion.telemetry:type_name -> google.internal.cloud.code.v1internal.cloudcode.SuggestionTelemetry
+	60,  // 162: google.internal.cloud.code.v1internal.cloudcode.Suggestion.feedback_id:type_name -> google.internal.cloud.code.v1internal.cloudcode.FeedbackId
+	87,  // 163: google.internal.cloud.code.v1internal.cloudcode.SuggestionTelemetry.comment_lines:type_name -> google.internal.cloud.code.v1internal.cloudcode.Int64Value
+	163, // 164: google.internal.cloud.code.v1internal.cloudcode.ToolDefinition.input_schema:type_name -> google.protobuf.Struct
+	142, // 165: google.internal.cloud.code.v1internal.cloudcode.ToolDefinition.annotations:type_name -> google.internal.cloud.code.v1internal.cloudcode.ToolAnnotations
+	163, // 166: google.internal.cloud.code.v1internal.cloudcode.ToolRequest.tool_call_json:type_name -> google.protobuf.Struct
+	163, // 167: google.internal.cloud.code.v1internal.cloudcode.ToolResult.content:type_name -> google.protobuf.Struct
+	82,  // 168: google.internal.cloud.code.v1internal.cloudcode.TransformCodeRequest.ide_context:type_name -> google.internal.cloud.code.v1internal.cloudcode.IDEContext
+	8,   // 169: google.internal.cloud.code.v1internal.cloudcode.TransformCodeRequest.command:type_name -> google.internal.cloud.code.v1internal.cloudcode.Command
+	44,  // 170: google.internal.cloud.code.v1internal.cloudcode.TransformCodeRequest.metadata:type_name -> google.internal.cloud.code.v1internal.cloudcode.ClientMetadata
+	153, // 171: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse.workspace_change:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
+	88,  // 172: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse.detected_intent:type_name -> google.internal.cloud.code.v1internal.cloudcode.IntentMetadata
+	153, // 173: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse.workspace_changes:type_name -> google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange
+	131, // 174: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse.processing_details:type_name -> google.internal.cloud.code.v1internal.cloudcode.ServerProcessingDetails
+	69,  // 175: google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse.file_usage:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileUsage
+	112, // 176: google.internal.cloud.code.v1internal.cloudcode.UserContext.previous_suggestions:type_name -> google.internal.cloud.code.v1internal.cloudcode.PreviousSuggestion
+	117, // 177: google.internal.cloud.code.v1internal.cloudcode.UserContext.recent_changes:type_name -> google.internal.cloud.code.v1internal.cloudcode.RecentChange
+	113, // 178: google.internal.cloud.code.v1internal.cloudcode.UserTier.privacy_notice:type_name -> google.internal.cloud.code.v1internal.cloudcode.PrivacyNotice
+	29,  // 179: google.internal.cloud.code.v1internal.cloudcode.UserTier.upgrade_subscription_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.UpgradeType
+	55,  // 180: google.internal.cloud.code.v1internal.cloudcode.UserTier.available_credits:type_name -> google.internal.cloud.code.v1internal.cloudcode.Credits
+	66,  // 181: google.internal.cloud.code.v1internal.cloudcode.WorkspaceChange.files:type_name -> google.internal.cloud.code.v1internal.cloudcode.FileChange
+	32,  // 182: google.internal.cloud.code.v1internal.cloudcode.YieldInfo.rpc:type_name -> google.internal.cloud.code.v1internal.cloudcode.AgentInitiatedRPC
+	136, // 183: google.internal.cloud.code.v1internal.cloudcode.YieldInfo.remaining_steps:type_name -> google.internal.cloud.code.v1internal.cloudcode.Step
+	30,  // 184: google.internal.cloud.code.v1internal.cloudcode.YieldInfo.yield_type:type_name -> google.internal.cloud.code.v1internal.cloudcode.YieldType
+	137, // 185: google.internal.cloud.code.v1internal.cloudcode.YieldInfo.completed_step_responses:type_name -> google.internal.cloud.code.v1internal.cloudcode.StepResponse
+	77,  // 186: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GenerateCode:input_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateCodeRequest
+	48,  // 187: google.internal.cloud.code.v1internal.cloudcode.CloudCode.CompleteCode:input_type -> google.internal.cloud.code.v1internal.cloudcode.CompleteCodeRequest
+	146, // 188: google.internal.cloud.code.v1internal.cloudcode.CloudCode.TransformCode:input_type -> google.internal.cloud.code.v1internal.cloudcode.TransformCodeRequest
+	129, // 189: google.internal.cloud.code.v1internal.cloudcode.CloudCode.SearchSnippets:input_type -> google.internal.cloud.code.v1internal.cloudcode.SearchSnippetsRequest
+	63,  // 190: google.internal.cloud.code.v1internal.cloudcode.CloudCode.FetchCodeCustomizationState:input_type -> google.internal.cloud.code.v1internal.cloudcode.FetchCodeCustomizationStateRequest
+	75,  // 191: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GenerateChat:input_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest
+	75,  // 192: google.internal.cloud.code.v1internal.cloudcode.CloudCode.StreamGenerateChat:input_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateChatRequest
+	89,  // 193: google.internal.cloud.code.v1internal.cloudcode.CloudCode.InternalAtomicAgenticChat:input_type -> google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatRequest
+	104, // 194: google.internal.cloud.code.v1internal.cloudcode.CloudCode.MigrateDatabaseCode:input_type -> google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeRequest
+	95,  // 195: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListExperiments:input_type -> google.internal.cloud.code.v1internal.cloudcode.ListExperimentsRequest
+	101, // 196: google.internal.cloud.code.v1internal.cloudcode.CloudCode.LoadCodeAssist:input_type -> google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistRequest
+	93,  // 197: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListCloudAICompanionProjects:input_type -> google.internal.cloud.code.v1internal.cloudcode.ListCloudAICompanionProjectsRequest
+	91,  // 198: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListAgents:input_type -> google.internal.cloud.code.v1internal.cloudcode.ListAgentsRequest
+	99,  // 199: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListRemoteRepositories:input_type -> google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesRequest
+	97,  // 200: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListModelConfigs:input_type -> google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsRequest
+	109, // 201: google.internal.cloud.code.v1internal.cloudcode.CloudCode.OnboardUser:input_type -> google.internal.cloud.code.v1internal.cloudcode.OnboardUserRequest
+	108, // 202: google.internal.cloud.code.v1internal.cloudcode.CloudCode.OnboardUserBackgroundTasks:input_type -> google.internal.cloud.code.v1internal.cloudcode.OnboardUserBackgroundTasksRequest
+	122, // 203: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordSmartchoicesFeedback:input_type -> google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackRequest
+	121, // 204: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordCodeAssistMetrics:input_type -> google.internal.cloud.code.v1internal.cloudcode.RecordCodeAssistMetricsRequest
+	120, // 205: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordClientEvent:input_type -> google.internal.cloud.code.v1internal.cloudcode.RecordClientEventRequest
+	80,  // 206: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GetCodeAssistGlobalUserSetting:input_type -> google.internal.cloud.code.v1internal.cloudcode.GetCodeAssistGlobalUserSettingRequest
+	132, // 207: google.internal.cloud.code.v1internal.cloudcode.CloudCode.SetCodeAssistGlobalUserSetting:input_type -> google.internal.cloud.code.v1internal.cloudcode.SetCodeAssistGlobalUserSettingRequest
+	61,  // 208: google.internal.cloud.code.v1internal.cloudcode.CloudCode.FetchAdminControls:input_type -> google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsRequest
+	78,  // 209: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GenerateCode:output_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateCodeResponse
+	49,  // 210: google.internal.cloud.code.v1internal.cloudcode.CloudCode.CompleteCode:output_type -> google.internal.cloud.code.v1internal.cloudcode.CompleteCodeResponse
+	147, // 211: google.internal.cloud.code.v1internal.cloudcode.CloudCode.TransformCode:output_type -> google.internal.cloud.code.v1internal.cloudcode.TransformCodeResponse
+	130, // 212: google.internal.cloud.code.v1internal.cloudcode.CloudCode.SearchSnippets:output_type -> google.internal.cloud.code.v1internal.cloudcode.SearchSnippetsResponse
+	64,  // 213: google.internal.cloud.code.v1internal.cloudcode.CloudCode.FetchCodeCustomizationState:output_type -> google.internal.cloud.code.v1internal.cloudcode.FetchCodeCustomizationStateResponse
+	76,  // 214: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GenerateChat:output_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse
+	76,  // 215: google.internal.cloud.code.v1internal.cloudcode.CloudCode.StreamGenerateChat:output_type -> google.internal.cloud.code.v1internal.cloudcode.GenerateChatResponse
+	90,  // 216: google.internal.cloud.code.v1internal.cloudcode.CloudCode.InternalAtomicAgenticChat:output_type -> google.internal.cloud.code.v1internal.cloudcode.InternalAtomicAgenticChatResponse
+	105, // 217: google.internal.cloud.code.v1internal.cloudcode.CloudCode.MigrateDatabaseCode:output_type -> google.internal.cloud.code.v1internal.cloudcode.MigrateDatabaseCodeResponse
+	96,  // 218: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListExperiments:output_type -> google.internal.cloud.code.v1internal.cloudcode.ListExperimentsResponse
+	102, // 219: google.internal.cloud.code.v1internal.cloudcode.CloudCode.LoadCodeAssist:output_type -> google.internal.cloud.code.v1internal.cloudcode.LoadCodeAssistResponse
+	94,  // 220: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListCloudAICompanionProjects:output_type -> google.internal.cloud.code.v1internal.cloudcode.ListCloudAICompanionProjectsResponse
+	92,  // 221: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListAgents:output_type -> google.internal.cloud.code.v1internal.cloudcode.ListAgentsResponse
+	100, // 222: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListRemoteRepositories:output_type -> google.internal.cloud.code.v1internal.cloudcode.ListRemoteRepositoriesResponse
+	98,  // 223: google.internal.cloud.code.v1internal.cloudcode.CloudCode.ListModelConfigs:output_type -> google.internal.cloud.code.v1internal.cloudcode.ListModelConfigsResponse
+	110, // 224: google.internal.cloud.code.v1internal.cloudcode.CloudCode.OnboardUser:output_type -> google.internal.cloud.code.v1internal.cloudcode.Operation
+	164, // 225: google.internal.cloud.code.v1internal.cloudcode.CloudCode.OnboardUserBackgroundTasks:output_type -> google.protobuf.Empty
+	123, // 226: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordSmartchoicesFeedback:output_type -> google.internal.cloud.code.v1internal.cloudcode.RecordSmartchoicesFeedbackResponse
+	164, // 227: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordCodeAssistMetrics:output_type -> google.protobuf.Empty
+	164, // 228: google.internal.cloud.code.v1internal.cloudcode.CloudCode.RecordClientEvent:output_type -> google.protobuf.Empty
+	46,  // 229: google.internal.cloud.code.v1internal.cloudcode.CloudCode.GetCodeAssistGlobalUserSetting:output_type -> google.internal.cloud.code.v1internal.cloudcode.CodeAssistGlobalUserSettingResponse
+	46,  // 230: google.internal.cloud.code.v1internal.cloudcode.CloudCode.SetCodeAssistGlobalUserSetting:output_type -> google.internal.cloud.code.v1internal.cloudcode.CodeAssistGlobalUserSettingResponse
+	62,  // 231: google.internal.cloud.code.v1internal.cloudcode.CloudCode.FetchAdminControls:output_type -> google.internal.cloud.code.v1internal.cloudcode.FetchAdminControlsResponse
+	209, // [209:232] is the sub-list for method output_type
+	186, // [186:209] is the sub-list for method input_type
+	186, // [186:186] is the sub-list for extension type_name
+	186, // [186:186] is the sub-list for extension extendee
+	0,   // [0:186] is the sub-list for field type_name
 }
 
 func init() { file_CloudCode_proto_init() }
@@ -12113,8 +11663,8 @@ func file_CloudCode_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_CloudCode_proto_rawDesc), len(file_CloudCode_proto_rawDesc)),
-			NumEnums:      32,
-			NumMessages:   137,
+			NumEnums:      31,
+			NumMessages:   129,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
