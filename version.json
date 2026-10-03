@@ -1,7 +1,7 @@
 {
-  "version_code": 105,
-  "version_name": "1.0.5",
+  "version_code": 106,
+  "version_name": "1.0.6",
   "min_supported_version_code": 1,
-  "changelog": "Improved security",
+  "changelog": "Almost finalilzed all the stuff",
   "is_critical": false
 }
