@@ -769,6 +769,12 @@ def generate_per_service_protos(output_dir=None, binary_path=None, full=False):
     print(f"\nAll service proto files updated in: {output_dir}")
     print(f"Service Catalog saved to: {catalog_path}")
 
+    # Automatically run filter_proto.py to filter Android protos and sync/compile Bridge Go protos
+    filter_script = os.path.join(os.path.dirname(__file__), "filter_proto.py")
+    if os.path.exists(filter_script):
+        print("\n🚀 Triggering filter_proto.py to sync Android & Bridge Go protos...")
+        subprocess.run([sys.executable, filter_script, "--copy"], check=False)
+
 if __name__ == "__main__":
     custom_bin = None
     full_scan = False
