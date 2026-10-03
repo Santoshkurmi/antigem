@@ -114,7 +114,7 @@ class AgyModelService {
             val response = res.getOrThrow().response
                 ?: return@withContext Result.failure(Exception("Empty models response from server"))
 
-            val modelsMap = response.models.associate { it.key to it.value_ }
+            val modelsMap = response.models
             val sorts = response.agent_model_sorts.ifEmpty { response.battle_mode_model_sorts }
             val sortedIds = mutableListOf<String>()
 
@@ -131,10 +131,9 @@ class AgyModelService {
             val keysToProcess = if (sortedIds.isNotEmpty()) {
                 sortedIds
             } else {
-                response.models.mapNotNull { entry ->
-                    val details = entry.value_
+                response.models.mapNotNull { (key, details) ->
                     if (details != null && !details.is_internal && !details.disabled && details.display_name.isNotBlank()) {
-                        entry.key
+                        key
                     } else null
                 }
             }

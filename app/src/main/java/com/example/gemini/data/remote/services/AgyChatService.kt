@@ -206,7 +206,7 @@ class AgyChatService {
         val req = exa.language_server_pb.StreamAgentStateUpdatesRequest(
             conversation_id = cascadeId,
             subscriber_id = UUID.randomUUID().toString(),
-            trajectory_verbosity = exa.language_server_pb.ClientTrajectoryVerbosity.CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_PROD_UI
+            trajectory_verbosity = exa.language_server_pb.ClientTrajectoryVerbosity.CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_PROD_UI
         )
         return AgyLanguageService.StreamAgentStateUpdates().asFlowSafely(req)
     }

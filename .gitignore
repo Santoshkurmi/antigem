@@ -57,3 +57,4 @@ proto_generator/*.json
 termux-app/
 /backup_bootstrap
 output/
+agy_ide_bridge/dump_logs/

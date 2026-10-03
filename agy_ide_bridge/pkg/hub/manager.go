@@ -40,6 +40,7 @@ const (
 // HubManager supervises the background `agy --hub` process on port 1235.
 type HubManager struct {
 	HubPort        string
+	CloudCodePort  string
 	WorkspaceDir   string
 	AppDataDir     string
 	AgyBinPath     string

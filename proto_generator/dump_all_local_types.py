@@ -84,6 +84,17 @@ def parse_message_descriptor(data):
         elif fn == 4: enum_types.append(parse_enum(val))
     return {"name": name, "fields": msg_fields, "nested_types": nested_types, "enum_types": enum_types}
 
+def check_is_map_entry(msg):
+    if not msg:
+        return False, None, None
+    fields = msg.get('fields', [])
+    if len(fields) == 2:
+        f1 = next((f for f in fields if f['name'] == 'key' and f['number'] == 1), None)
+        f2 = next((f for f in fields if f['name'] == 'value' and f['number'] == 2), None)
+        if f1 and f2:
+            return True, f1, f2
+    return False, None, None
+
 def parse_method(data):
     fields = parse_proto(BytesIO(data))
     name, in_t, out_t, cs, ss = "", "", "", False, False
@@ -134,6 +145,9 @@ SERVICE_PACKAGE_MAP = {
     "LanguageServerService":  "exa.language_server_pb",
     "ExtensionServerService": "exa.extension_server_pb",
     "RemotingService":        "exa.remoting",
+    "CloudCode":              "google.internal.cloud.code.v1internal.cloudcode",
+    "JetskiService":          "google.internal.cloud.code.v1internal.jetski",
+    "PredictionService":      "google.internal.cloud.code.v1internal.prediction",
 }
 
 # ---------------------------------------------------------------------------
@@ -479,7 +493,7 @@ def assign_display_names(full_names, current_package=None):
 # Main generation
 # ---------------------------------------------------------------------------
 
-def generate_per_service_protos(output_dir=None, binary_path=None):
+def generate_per_service_protos(output_dir=None, binary_path=None, full=False):
     # Always output next to this script file regardless of cwd
     if output_dir is None:
         output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "protos")
@@ -489,16 +503,32 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
     print(f"Discovered {len(registry.services)} services, "
           f"{len(registry.messages)} messages, {len(registry.enums)} enums.\n")
 
-    target_service_keys = [
-        s for s in registry.services.keys()
-        if any(k in s for k in ['LanguageServerService', 'ExtensionServerService', 'RemotingService'])
-    ]
+    from collections import defaultdict
+    service_counts = defaultdict(list)
+    for k, v in registry.services.items():
+        service_counts[v["service"]].append(k)
+
+    if not full:
+        default_services = ['LanguageServerService', 'ExtensionServerService', 'RemotingService', 'v1internal']
+        target_service_keys = [
+            s for s in registry.services.keys()
+            if any(k in s for k in default_services)
+        ]
+    else:
+        target_service_keys = list(registry.services.keys())
 
     for s_key in sorted(target_service_keys):
         s_info       = registry.services[s_key]
         service_name = s_info["service"]
         s_pkg        = s_info["package"] or "exa.local_grpc"
         package_name = SERVICE_PACKAGE_MAP.get(service_name, s_pkg)
+
+        # File naming: unique service name or clean prefix on collision
+        clean_file_stem = service_name
+        if len(service_counts[service_name]) > 1:
+            pkg_prefix = get_clean_package_prefix(s_key, package_name)
+            clean_file_stem = f"{pkg_prefix}_{service_name}"
+        proto_file_path = os.path.join(output_dir, f"{clean_file_stem}.proto")
 
         # ------------------------------------------------------------------
         # PHASE 1: Dependency walk — use FULL names throughout.
@@ -576,16 +606,35 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
         for fn, dn in enum_display.items():
             type_name_map[fn] = dn
 
+        # Upstream Host Resolution from Discovered Endpoints
+        HOST_MAP = {
+            'google.internal.cloud.code.v1internal': 'https://daily-cloudcode-pa.googleapis.com',
+            'google.cloud.aiplatform.v1beta1':       'https://aiplatform.googleapis.com',
+            'google.cloud.businessaicode.v1main':    'https://businessaicode.googleapis.com',
+            'google.cloud.businessaicode.v1beta':    'https://businessaicode.googleapis.com',
+            'google.cloud.speech.v1p1beta1':         'https://speech.googleapis.com',
+            'google.longrunning':                    'https://daily-cloudcode-pa.googleapis.com',
+            'devtools_jetski_boq_api_proto':         'https://daily-cloudcode-pa.googleapis.com',
+            'jetski.product.v1':                     'https://daily-cloudcode-pa.googleapis.com',
+            'exa.language_server_pb':                'http://127.0.0.1 (Local Hub / LSP)',
+            'exa.extension_server_pb':               'http://127.0.0.1 (Local Extension Bridge)',
+            'exa.remoting':                          'http://127.0.0.1 (Local Remoting)',
+            'exa.analytics_pb':                      'https://daily-cloudcode-pa.googleapis.com',
+            'genai':                                 'https://generativelanguage.googleapis.com',
+        }
+        upstream_host = HOST_MAP.get(package_name, 'https://daily-cloudcode-pa.googleapis.com' if 'google' in package_name else 'http://127.0.0.1 (Local)')
+
         # ------------------------------------------------------------------
         # PHASE 3: Write .proto file
         # ------------------------------------------------------------------
-        proto_file_path = os.path.join(output_dir, f"{service_name}.proto")
         with open(proto_file_path, "w") as f:
             f.write('syntax = "proto3";\n\n')
             f.write(f'package {package_name};\n\n')
 
             f.write(f'// {"=" * 72}\n')
             f.write(f'// Service: {service_name} ({len(s_info["methods"])} Methods)\n')
+            f.write(f'// Package: {package_name}\n')
+            f.write(f'// Default Upstream Host: {upstream_host}\n')
             f.write(f'// Target Route: /{package_name}.{service_name}/<Method>\n')
             f.write(f'// {"=" * 72}\n\n')
 
@@ -602,6 +651,12 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
             if resolved_enums:
                 f.write(f'// {"=" * 72}\n// Enumerations\n// {"=" * 72}\n\n')
                 written_enums = set()
+                from collections import Counter
+                val_counts = Counter()
+                for fn, e in resolved_enums.items():
+                    for v in e.get("values", []):
+                        val_counts[v["name"]] += 1
+
                 for fn in sorted(resolved_enums.keys(), key=lambda x: enum_display[x]):
                     dn = enum_display[fn]
                     if dn in written_enums: continue
@@ -610,8 +665,15 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
                     # Comment shows the exact origin full name from the binary
                     f.write(f'// origin: {fn}\n')
                     f.write(f'enum {dn} {{\n')
+                    seen_val_names = set()
                     for v in sorted(e["values"], key=lambda x: x["number"]):
-                        f.write(f'  {v["name"]} = {v["number"]};\n')
+                        v_name = v["name"]
+                        if val_counts[v_name] > 1 and not v_name.upper().startswith(dn.upper() + "_"):
+                            v_name = f"{dn.upper()}_{v_name}"
+                        if v_name in seen_val_names:
+                            continue
+                        seen_val_names.add(v_name)
+                        f.write(f'  {v_name} = {v["number"]};\n')
                     f.write('}\n\n')
 
             # Messages
@@ -621,19 +683,34 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
                 for fn in sorted(resolved_messages.keys(), key=lambda x: msg_display[x]):
                     dn = msg_display[fn]
                     if dn in written_msgs: continue
-                    written_msgs.add(dn)
                     m = resolved_messages[fn]
+                    if check_is_map_entry(m)[0]:
+                        continue
+                    written_msgs.add(dn)
                     # Comment shows the exact origin full name from the binary
                     f.write(f'// origin: {fn}\n')
                     f.write(f'message {dn} {{\n')
                     for field in sorted(m["fields"], key=lambda x: x["number"]):
-                        lbl = "repeated " if field["label"] == 3 else ""
-                        if field["type_name"]:
-                            t_str = type_name_map.get(field["type_name"],
-                                                       field["type_name"].split('.')[-1])
-                        else:
-                            t_str = TYPE_MAP.get(field["type"], "bytes")
-                        f.write(f'  {lbl}{t_str} {field["name"]} = {field["number"]};\n')
+                        is_map = False
+                        if field["label"] == 3 and field.get("type_name") in resolved_messages:
+                            target_m = resolved_messages[field["type_name"]]
+                            is_map_entry, f_key, f_val = check_is_map_entry(target_m)
+                            if is_map_entry:
+                                is_map = True
+                                k_str = TYPE_MAP.get(f_key["type"], "string")
+                                if f_val.get("type_name"):
+                                    v_str = type_name_map.get(f_val["type_name"], f_val["type_name"].split('.')[-1])
+                                else:
+                                    v_str = TYPE_MAP.get(f_val["type"], "bytes")
+                                f.write(f'  map<{k_str}, {v_str}> {field["name"]} = {field["number"]};\n')
+                        if not is_map:
+                            lbl = "repeated " if field["label"] == 3 else ""
+                            if field["type_name"]:
+                                t_str = type_name_map.get(field["type_name"],
+                                                           field["type_name"].split('.')[-1])
+                            else:
+                                t_str = TYPE_MAP.get(field["type"], "bytes")
+                            f.write(f'  {lbl}{t_str} {field["name"]} = {field["number"]};\n')
                     f.write('}\n\n')
 
         # ------------------------------------------------------------------
@@ -643,8 +720,19 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
         primitive_types = set(TYPE_MAP.values())
         errors = []
         for full_name, m in resolved_messages.items():
+            if check_is_map_entry(m)[0]:
+                continue
             m_dn = msg_display[full_name]
             for field in m["fields"]:
+                if field["label"] == 3 and field.get("type_name") in resolved_messages:
+                    target_m = resolved_messages[field["type_name"]]
+                    is_map_entry, f_key, f_val = check_is_map_entry(target_m)
+                    if is_map_entry:
+                        if f_val.get("type_name"):
+                            v_str = type_name_map.get(f_val["type_name"], f_val["type_name"].split('.')[-1])
+                            if v_str not in all_defined and v_str not in primitive_types:
+                                errors.append(f"  '{m_dn}'.{field['name']} → '{v_str}' (from {f_val['type_name']})")
+                        continue
                 if field["type_name"]:
                     t_str = type_name_map.get(field["type_name"],
                                                field["type_name"].split('.')[-1])
@@ -657,17 +745,33 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
         coll_msgs  = sum(1 for dn in msg_display.values()  if '_' in dn and '.' not in dn)
         coll_enums = sum(1 for dn in enum_display.values() if '_' in dn and '.' not in dn)
         coll_str   = f", Collisions: {coll_msgs}msg/{coll_enums}enum" if (coll_msgs or coll_enums) else ""
-        print(f"Generated: {service_name}.proto → {len(s_info['methods'])} RPCs, "
+        print(f"Generated: {clean_file_stem}.proto → {len(s_info['methods'])} RPCs, "
               f"{len(resolved_messages)} Messages, {len(resolved_enums)} Enums"
               f"{coll_str} [{status_str}]")
-        if errors:
-            for e in errors[:10]:
-                print(e)
+    # Export service catalog JSON for proxy routing
+    import json
+    catalog_path = os.path.join(output_dir, "service_catalog.json")
+    service_catalog = {}
+    for s_key in target_service_keys:
+        s_info = registry.services[s_key]
+        pkg = SERVICE_PACKAGE_MAP.get(s_info["service"], s_info["package"] or "exa.local_grpc")
+        host = HOST_MAP.get(pkg, "https://daily-cloudcode-pa.googleapis.com" if "google" in pkg else "http://127.0.0.1")
+        service_catalog[s_key] = {
+            "service": s_info["service"],
+            "package": pkg,
+            "upstream_host": host,
+            "route_prefix": f"/{pkg}.{s_info['service']}/",
+            "methods": [m["name"] for m in s_info["methods"]]
+        }
+    with open(catalog_path, "w") as f:
+        json.dump(service_catalog, f, indent=2)
 
     print(f"\nAll service proto files updated in: {output_dir}")
+    print(f"Service Catalog saved to: {catalog_path}")
 
 if __name__ == "__main__":
     custom_bin = None
+    full_scan = False
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -677,9 +781,11 @@ if __name__ == "__main__":
         elif a in ("--bin", "-b") and i + 1 < len(args):
             custom_bin = args[i + 1]
             i += 1
+        elif a in ("--full", "-f"):
+            full_scan = True
         elif not a.startswith("-") and custom_bin is None:
             custom_bin = a
         i += 1
 
-    generate_per_service_protos(binary_path=custom_bin)
+    generate_per_service_protos(binary_path=custom_bin, full=full_scan)
 

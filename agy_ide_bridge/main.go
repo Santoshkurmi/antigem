@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"gemini-server/pkg/cloudcode"
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/handlers"
 	"gemini-server/pkg/hub"
@@ -37,6 +38,7 @@ Flags:
   -f, --force, --f          Force start AGY Hub automatically without prompting
   -p, --port <port>         Port for the Go IDE Server (default: 1234)
   --hub-port <port>         Port for the AGY Hub RPC server (default: 1235)
+  --cloudcode-port <port>   Port for the CloudCode reverse proxy server (default: 1236)
   --tz-offset <seconds>     Timezone offset in seconds (e.g. 20700 for UTC+05:45)
   --tz <location>           Timezone location name (e.g. Asia/Kathmandu)
   --no-hub                  Skip launching AGY Hub (run IDE server only)
@@ -109,6 +111,7 @@ func main() {
 	cfg := config.LoadConfig()
 
 	var unpatchOnly bool
+	var proxyOnly bool
 	var customAgyBin string
 	var forceStart bool
 	var skipHub bool
@@ -123,6 +126,8 @@ func main() {
 		switch {
 		case arg == "-u" || arg == "--unpatch":
 			unpatchOnly = true
+		case arg == "--proxy" || arg == "--proxy-only":
+			proxyOnly = true
 		case strings.HasPrefix(arg, "--bin="):
 			customAgyBin = strings.TrimPrefix(arg, "--bin=")
 		case arg == "--bin" || arg == "--agy-bin":
@@ -153,6 +158,13 @@ func main() {
 		case arg == "--hub-port":
 			if i+1 < len(os.Args) {
 				hubPort = os.Args[i+1]
+				i++
+			}
+		case strings.HasPrefix(arg, "--cloudcode-port="):
+			cfg.CloudCodePort = strings.TrimPrefix(arg, "--cloudcode-port=")
+		case arg == "--cloudcode-port" || arg == "-cp" || arg == "--cloud-code-port":
+			if i+1 < len(os.Args) {
+				cfg.CloudCodePort = os.Args[i+1]
 				i++
 			}
 		case strings.HasPrefix(arg, "--tz-offset="):
@@ -208,6 +220,33 @@ func main() {
 		os.Exit(0)
 	}
 
+	if proxyOnly {
+		fmt.Println("\033[1;36m============================================================\033[0m")
+		fmt.Println("\033[1;32m  ⚡ antiGem CloudCode Reverse Proxy Standalone Server\033[0m")
+		fmt.Println("\033[1;36m============================================================\033[0m")
+		fmt.Printf("  \033[1m• Listening Address:\033[0m  http://0.0.0.0:%s\n", cfg.CloudCodePort)
+		fmt.Printf("  \033[1m• Target Upstream:\033[0m    %s\n", cfg.CloudCodeUpstreamHost)
+		fmt.Printf("  \033[1m• Local Time:\033[0m         %s\n", time.Now().Format("2006-01-02 15:04:05 MST"))
+		fmt.Println("\033[1;36m============================================================\033[0m")
+		fmt.Printf(" \033[32m🚀 CloudCode Proxy running at http://0.0.0.0:%s (Forwarding to %s)\033[0m\n\n", cfg.CloudCodePort, cfg.CloudCodeUpstreamHost)
+
+		ccProxy := cloudcode.NewProxyServer(cfg.CloudCodePort, cfg.CloudCodeUpstreamHost)
+		if err := ccProxy.Start(); err != nil {
+			log.Fatalf("Fatal: failed to start CloudCode proxy: %v", err)
+		}
+
+		stopChan := make(chan os.Signal, 1)
+		signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+		<-stopChan
+
+		fmt.Println("\n🛑 Shutting down CloudCode proxy gracefully...")
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		_ = ccProxy.Shutdown(ctx)
+		fmt.Println("✅ CloudCode proxy stopped.")
+		os.Exit(0)
+	}
+
 	// Configure local timezone if offset or name is specified (or in environment)
 	if tzOffsetSec == 0 {
 		if envOff := os.Getenv("TZ_OFFSET"); envOff != "" {
@@ -243,6 +282,7 @@ func main() {
 	fmt.Printf("  \033[1m• IDE Server Port:\033[0m  http://0.0.0.0:%s\n", cfg.Port)
 	fmt.Printf("  \033[1m• Projects Dir:\033[0m     %s\n", cfg.ProjectsBaseDir)
 	fmt.Printf("  \033[1m• Target Hub Port:\033[0m  %s\n", hubPort)
+	fmt.Printf("  \033[1m• CloudCode Proxy:\033[0m  http://0.0.0.0:%s -> %s\n", cfg.CloudCodePort, cfg.CloudCodeUpstreamHost)
 	if resolvedAgyBin != "" {
 		fmt.Printf("  \033[1m• AGY Binary:\033[0m       %s\n", resolvedAgyBin)
 	}
@@ -516,8 +556,15 @@ func main() {
 		}
 	}
 
+	// Start CloudCode reverse proxy service on port 1236
+	ccProxy := cloudcode.NewProxyServer(cfg.CloudCodePort, cfg.CloudCodeUpstreamHost)
+	if err := ccProxy.Start(); err != nil {
+		log.Printf(" \033[31m[!] Warning starting CloudCode Proxy:\033[0m %v\n", err)
+	}
+
 	// Always initialize HubManager so background monitoring and status updates work continuously
 	hubMgr = hub.NewHubManager(hubPort, cfg.WorkspaceDir, cfg.AppDataDir, secToken, resolvedAgyBin)
+	hubMgr.CloudCodePort = cfg.CloudCodePort
 	h.HubManager = hubMgr
 	wsHub.StatusProv = hubMgr
 	wsHub.HubPort = hubPort
@@ -544,7 +591,14 @@ func main() {
 		hubMgr.Stop()
 	}
 
-	// 3. Close the HTTP listener without hanging on lingering connections
+	// 3. Stop CloudCode Proxy
+	if ccProxy != nil {
+		ctxCC, cancelCC := context.WithTimeout(context.Background(), 1*time.Second)
+		_ = ccProxy.Shutdown(ctxCC)
+		cancelCC()
+	}
+
+	// 4. Close the HTTP listener without hanging on lingering connections
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	_ = server.Shutdown(ctx)

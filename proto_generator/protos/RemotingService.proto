@@ -4,6 +4,8 @@ package exa.remoting;
 
 // ========================================================================
 // Service: RemotingService (7 Methods)
+// Package: exa.remoting
+// Default Upstream Host: http://127.0.0.1 (Local Remoting)
 // Target Route: /exa.remoting.RemotingService/<Method>
 // ========================================================================
 
@@ -63,7 +65,7 @@ message ListConnectedRemotesRequest {
 
 // origin: .exa.remoting.ListConnectedRemotesResponse
 message ListConnectedRemotesResponse {
-  repeated RemotesEntry remotes = 1;
+  map<string, RemoteDescriptor> remotes = 1;
 }
 
 // origin: .exa.remoting.ListRemotesRequest
@@ -89,12 +91,6 @@ message RemoteDescriptor {
   string name = 2;
   string description = 3;
   string type = 4;
-}
-
-// origin: .exa.remoting.ListConnectedRemotesResponse.RemotesEntry
-message RemotesEntry {
-  string key = 1;
-  RemoteDescriptor value = 2;
 }
 
 // origin: .exa.remoting.RespondToPromptRequest
