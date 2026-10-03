@@ -1805,7 +1805,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             _isLoadingConversation.value = false
                             _isReconnecting.value = false
 
-                            val isRunning = trajectoryEngine.isRunning || isPromptInFlight
+                            val isRunning = trajectoryEngine.isRunning
                             val isWaiting = trajectoryEngine.isWaitingInteraction
                             _isStreaming.value = isRunning && !isWaiting
 
@@ -2298,8 +2298,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         priorTextPrefix: String = "",
         mediaItems: List<com.example.gemini.data.remote.AgyHubClient.AgyMediaItem> = emptyList()
     ) {
-        _isStreaming.value = true
-        isPromptInFlight = true
         _bridgeStatusMessage.value = null
 
         val assistantMsgId = existingAssistantMsgId ?: UUID.randomUUID().toString()
@@ -2908,7 +2906,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         trajectoryEngine.markStepResponded(stepIndex)
         trajectoryEngine.optimisticUpdateStepStatus(stepIndex, com.example.gemini.data.remote.dto.CortexStepStatuses.RUNNING)
         _messages.value = trajectoryEngine.toChatMessages(conv.id)
-        _isStreaming.value = true
 
         viewModelScope.launch {
             val hubUrl = AuthPreferences.currentHubUrl

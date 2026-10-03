@@ -20,7 +20,7 @@ sealed class ChatFeedItem(val key: String, val contentType: String) {
     @Immutable
     data class AssistantBlock(val messageId: String, val blockIndex: Int, val block: MarkdownBlock, val isFirst: Boolean, val isLast: Boolean) : ChatFeedItem("block_${messageId}_$blockIndex", block.javaClass.simpleName)
     @Immutable
-    data class AssistantTyping(val messageId: String, val modelId: String) : ChatFeedItem("typing_$messageId", "TYPING")
+    data class AssistantTyping(val messageId: String, val modelId: String) : ChatFeedItem("active_assistant_typing", "TYPING")
     @Immutable
     data class AssistantFooter(val message: ChatMessage) : ChatFeedItem("footer_${message.id}", "FOOTER")
     @Immutable

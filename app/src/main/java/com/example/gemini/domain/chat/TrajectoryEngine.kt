@@ -100,7 +100,6 @@ class TrajectoryEngine {
             text = text,
             attachments = attachments
         )
-        isRunning = true
         _turns.value = getTurns()
     }
 
@@ -205,9 +204,9 @@ class TrajectoryEngine {
             }
         }
 
-        isRunning = daemonRunning || (pendingUserTurn != null && effectiveSteps.isEmpty() && completedTurns.isEmpty())
+        isRunning = daemonRunning
 
-        if (daemonIdle && (effectiveSteps.isNotEmpty() || completedTurns.isNotEmpty())) {
+        if (daemonIdle && effectiveSteps.isNotEmpty()) {
             pendingUserTurn = null
         }
 
@@ -462,7 +461,7 @@ class TrajectoryEngine {
         val existingAssistantIdx = baseTurns.indexOfLast { it is ChatTurn.Assistant && it.turnId == turnId }
 
         if (activeStepsMap.isEmpty()) {
-            if (isRunning && !isWaitingInteraction) {
+            if ((isRunning || pendingUserTurn != null) && !isWaitingInteraction) {
                 if (existingAssistantIdx >= 0) {
                     val existingTurn = baseTurns[existingAssistantIdx] as ChatTurn.Assistant
                     val updatedTurn = existingTurn.copy(isStreaming = true)

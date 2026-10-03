@@ -643,7 +643,17 @@ fun ModelTypingIndicator(
     modelId: String,
     modifier: Modifier = Modifier
 ) {
-    val phrase = remember(modelId) { WAITING_PHRASES.random() }
+    var phraseIndex by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        phraseIndex = (0 until WAITING_PHRASES.size).random()
+        while (true) {
+            delay(3500L)
+            phraseIndex = (phraseIndex + 1) % WAITING_PHRASES.size
+        }
+    }
+
+    val phrase = WAITING_PHRASES.getOrElse(phraseIndex) { WAITING_PHRASES[0] }
 
     Surface(
         modifier = modifier,
@@ -665,7 +675,7 @@ private fun WaitingDotsText(phrase: String) {
     val dots by produceState(initialValue = ".") {
         var count = 1
         while (true) {
-            delay(1000L)
+            delay(500L)
             count = (count % 3) + 1
             value = ".".repeat(count)
         }
