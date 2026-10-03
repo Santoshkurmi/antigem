@@ -200,7 +200,9 @@ fun FileManagerDialog(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .systemBarsPadding()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .imePadding()
             ) {
                 // --- 1. Top Compact Header Bar ---
                 Surface(
