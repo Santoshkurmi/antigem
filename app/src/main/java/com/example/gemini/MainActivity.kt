@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         instanceRef = java.lang.ref.WeakReference(this)
         com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled =
             chatViewModel.authPreferences.getNetworkInspectorEnabledSync()

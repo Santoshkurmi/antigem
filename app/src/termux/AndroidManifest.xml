@@ -11,7 +11,7 @@
             android:taskAffinity="com.termux.terminal"
             android:theme="@style/Theme.Gemini"
             android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize"
-            android:windowSoftInputMode="stateUnchanged|adjustResize" />
+            android:windowSoftInputMode="stateHidden|adjustResize" />
 
         <!-- AntiTerm Default Style Launcher Alias -->
         <activity-alias
