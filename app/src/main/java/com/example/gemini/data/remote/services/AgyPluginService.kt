@@ -49,18 +49,17 @@ class AgyPluginService(
             res.plugins.map { p ->
                 val localDto = p.local?.let { loc ->
                     CascadePluginLocalDto(
-                        commands = loc.commands.mapNotNull { cmdEntry ->
-                            val cmdVal = cmdEntry.value_ ?: return@mapNotNull null
-                            cmdEntry.key to CascadePluginCommandWrapperDto(
+                        commands = loc.commands.mapValues { (_, cmdVal) ->
+                            CascadePluginCommandWrapperDto(
                                 template = cmdVal.template?.let { t ->
                                     CascadePluginCommandTemplateDto(
                                         command = t.command,
                                         args = t.args,
-                                        env = t.env.associate { it.key to it.value_ }
+                                        env = t.env
                                     )
                                 }
                             )
-                        }.toMap()
+                        }
                     )
                 }
 
@@ -263,14 +262,13 @@ class AgyPluginService(
                 val pluginDto = item.plugin?.let { p ->
                     val localDto = p.local?.let { loc ->
                         PluginLocalConfigDto(
-                            commands = loc.commands.mapNotNull { cmdEntry ->
-                                val cmdVal = cmdEntry.value_ ?: return@mapNotNull null
-                                cmdEntry.key to PluginCommandSpecDto(
+                            commands = loc.commands.mapValues { (_, cmdVal) ->
+                                PluginCommandSpecDto(
                                     commandTemplate = cmdVal.command_template?.let { t ->
                                         PluginCommandTemplateDto(
                                             command = t.command,
                                             args = t.args,
-                                            env = t.env.associate { it.key to it.value_ }
+                                            env = t.env
                                         )
                                     },
                                     variables = cmdVal.variables.map { v ->
@@ -281,7 +279,7 @@ class AgyPluginService(
                                         )
                                     }
                                 )
-                            }.toMap()
+                            }
                         )
                     }
 
@@ -306,7 +304,7 @@ class AgyPluginService(
                 BuildWithGooglePluginItemDto(
                     plugin = pluginDto,
                     gstatic = item.gstatic?.let { GstaticLinkDto(link = it.link) },
-                    versionShas = item.version_shas.associate { it.key to it.value_ },
+                    versionShas = item.version_shas,
                     visibility = item.visibility.name
                 )
             }

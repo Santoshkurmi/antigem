@@ -771,7 +771,7 @@ class TrajectoryEngine {
         val meta = step.metadata
         val tcMeta = meta?.tool_call
 
-        val argsMap: Map<String, String> = step.generic?.args?.associate { (it.key) to (it.value_) } ?: emptyMap()
+        val argsMap: Map<String, String> = step.generic?.args ?: emptyMap()
 
         val rawName = tcMeta?.name?.takeIf { it.isNotBlank() }
             ?: when (step.type) {

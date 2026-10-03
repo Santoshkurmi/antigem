@@ -1747,18 +1747,6 @@ enum GenaiImagecontent_MimeType {
   TYPE_VIDEO_JPEG2000 = 11;
 }
 
-// origin: .genai.Interaction.Status
-enum GenaiInteraction_Status {
-  GENAIINTERACTION_STATUS_UNSPECIFIED = 0;
-  IN_PROGRESS = 2;
-  COMPLETED = 3;
-  FAILED = 4;
-  REQUIRES_ACTION = 5;
-  CANCELLED = 10;
-  INCOMPLETE = 11;
-  BUDGET_EXCEEDED = 12;
-}
-
 // origin: .genai.VideoContent.MimeType
 enum GenaiVideocontent_MimeType {
   GENAIVIDEOCONTENT_MIMETYPE_TYPE_UNSPECIFIED = 0;
@@ -3271,7 +3259,7 @@ enum SetupChatState {
 }
 
 // origin: .devtools.cider.agent.trajectory_steps.ProposeAICommentsStep.AIComment.Side
-enum Side {
+enum SideEnum {
   SIDE_UNSPECIFIED = 0;
   SIDE_LEFT = 1;
   SIDE_RIGHT = 2;
@@ -3577,6 +3565,15 @@ enum UnifiedDiffLineType {
   UNIFIED_DIFF_LINE_TYPE_UNCHANGED = 3;
 }
 
+// origin: .genai.UserTier.UpgradeType
+enum UpgradeType {
+  UPGRADE_TYPE_UNSPECIFIED = 0;
+  GDP = 1;
+  GOOGLE_ONE = 2;
+  GDP_HELIUM = 3;
+  GOOGLE_ONE_HELIUM = 4;
+}
+
 // origin: .genai.UrlContextResultContent.UrlContextResult.Status
 enum UrlcontextresultcontentUrlcontextresult_Status {
   URLCONTEXTRESULTCONTENTURLCONTEXTRESULT_STATUS_STATUS_UNSPECIFIED = 0;
@@ -3599,42 +3596,6 @@ enum UserTeamStatus {
   USER_TEAM_STATUS_PENDING = 1;
   USER_TEAM_STATUS_APPROVED = 2;
   USER_TEAM_STATUS_REJECTED = 3;
-}
-
-// origin: .logs.proto.wireless.performance.mobile.desktop.AntigravityExtension.UserTier
-enum UserTier {
-  USER_TIER_UNSPECIFIED = 0;
-  AIDA_TIER = 1;
-  CS_STANDARD_TIER = 2;
-  AGY_BUSINESS_PAYGO_TIER = 3;
-  ENTERPRISE_AGENT_TIER = 4;
-  FREE_TIER = 5;
-  G1_PRO_TIER = 6;
-  G1_ULTRA_TIER = 7;
-  G1_ULTRA_LITE_TIER = 8;
-  GCP_ENTERPRISE_TIER = 9;
-  GCP_GE_PLUS_TIER = 10;
-  GCP_GE_STANDARD_TIER = 12;
-  GCP_STANDARD_TIER = 13;
-  GDP_PREMIUM_TIER = 14;
-  GE_BUSINESS_TIER = 15;
-  GE_BUSINESS_TRIAL_TIER = 16;
-  GOOGLER_DOGFOOD_TIER = 17;
-  GOOGLER_TIER = 18;
-  LEGACY_TIER = 19;
-  STANDARD_TIER = 20;
-  UNLICENSED_TIER = 21;
-  WS_AI_ULTRA_BUSINESS_TIER = 22;
-  GCP_GE_PAYGO_TIER = 29;
-  G1_PLUS_TIER = 30;
-  GCP_GE_STANDARD_EMERGING_TIER = 31;
-  GCP_GE_EDU_TIER = 32;
-  GCP_GE_EDU_PRO_TIER = 33;
-  GCP_GE_EDU_EMERGING_TIER = 34;
-  GCP_GE_EDU_PRO_EMERGING_TIER = 35;
-  GCP_GE_EDU_GOV_EMERGING_TIER = 36;
-  GCP_GE_FRONTLINE_WORKER_TIER = 37;
-  GCP_GE_FRONTLINE_STARTER_TIER = 38;
 }
 
 // origin: .genai.VcsType
@@ -3696,7 +3657,7 @@ enum WorkspaceType {
 // origin: .devtools.cider.agent.trajectory_steps.ProposeAICommentsStep.AIComment
 message AIComment {
   string file_path = 1;
-  Side side = 2;
+  SideEnum side = 2;
   int32 line_number = 3;
   string comment = 4;
 }
@@ -8925,6 +8886,16 @@ message GcertStatus {
   Timestamp expires_at = 3;
 }
 
+// origin: .genai.VcsCommit.Status
+message GenaiVcscommit_Status {
+  bool is_active = 1;
+  bool is_submitted = 2;
+  bool is_draft = 3;
+  bool is_secret = 4;
+  bool is_empty = 5;
+  bool has_conflict = 6;
+}
+
 // origin: .genai.Struct
 message Genai_Struct {
   repeated Field fields = 1;
@@ -12237,6 +12208,13 @@ message PreToolHookResult {
   repeated string permission_overrides = 6;
 }
 
+// origin: .genai.UserTier.PrivacyNotice
+message PrivacyNotice {
+  bool show_notice = 1;
+  string notice_text = 2;
+  bool minor_notice = 4;
+}
+
 // origin: .exa.cortex_pb.ProfileConfig
 message ProfileConfig {
   string name = 1;
@@ -13733,6 +13711,11 @@ message ShouldEnableUnleashRequest {
 // origin: .exa.cortex_pb.ShouldEnableUnleashResponse
 message ShouldEnableUnleashResponse {
   bool should_enable = 1;
+}
+
+// origin: .genai.VcsConflictFile.Side
+message Side {
+  string label = 2;
 }
 
 // origin: .jetbox_state_pb.SidebarWorkspaceInfo
@@ -15486,6 +15469,23 @@ message UserStepAnnotations {
 // origin: .exa.cortex_pb.UserStepSnapshot
 message UserStepSnapshot {
   string name = 1;
+}
+
+// origin: .genai.UserTier
+message UserTier {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  bool user_defined_cloudaicompanion_project = 4;
+  PrivacyNotice privacy_notice = 5;
+  bool is_default = 6;
+  string upgrade_subscription_uri = 7;
+  string upgrade_subscription_text = 8;
+  UpgradeType upgrade_subscription_type = 9;
+  string upgrade_button_text = 11;
+  string client_experience_tag = 12;
+  bool uses_gcp_tos = 13;
+  repeated Credits available_credits = 14;
 }
 
 // origin: .jetbox_state_pb.UserSettings.SandboxProxy.Http

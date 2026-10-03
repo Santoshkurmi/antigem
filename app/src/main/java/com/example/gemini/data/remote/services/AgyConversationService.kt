@@ -56,9 +56,7 @@ class AgyConversationService {
                     val frameList = mutableListOf<Conversation>()
                     val removedIds = response.deletes.toMutableSet()
 
-                    for (entry in response.updates) {
-                        val cid = entry.key
-                        val summaryObj = entry.value_ ?: continue
+                    for ((cid, summaryObj) in response.updates) {
                         val annotations = summaryObj.annotations
                         val annTitle = annotations?.title?.takeIf { it.isNotBlank() }
                         val rawSummary = summaryObj.summary.takeIf { it.isNotBlank() }
@@ -133,7 +131,7 @@ class AgyConversationService {
         withContext(Dispatchers.IO) {
             val req = GetCascadeTrajectoryStepsRequest(
                 cascade_id = cascadeId,
-                trajectory_verbosity = ClientTrajectoryVerbosity.CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
+                trajectory_verbosity = ClientTrajectoryVerbosity.CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
             )
             AgyLanguageService.GetCascadeTrajectorySteps().executeSafely(req).map { res ->
                 res.steps.size
@@ -184,7 +182,7 @@ class AgyConversationService {
     ): Result<List<Step>> = withContext(Dispatchers.IO) {
         val req = GetCascadeTrajectoryStepsRequest(
             cascade_id = cascadeId,
-            trajectory_verbosity = ClientTrajectoryVerbosity.CLIENT_TRAJECTORY_VERBOSITY_VAL_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
+            trajectory_verbosity = ClientTrajectoryVerbosity.CLIENTTRAJECTORYVERBOSITY_CLIENT_TRAJECTORY_VERBOSITY_UNSPECIFIED
         )
         AgyLanguageService.GetCascadeTrajectorySteps().executeSafely(req).map { res ->
             res.steps
@@ -223,13 +221,15 @@ class AgyConversationService {
         } else {
             val stepsRes = getCascadeTrajectorySteps(cascadeId, hubUrl)
             if (!stepsRes.isSuccess) {
-                return@withContext Result.failure(stepsRes.exceptionOrNull() ?: Exception("Failed to get trajectory steps"))
+                return@withContext Result.failure(
+                    stepsRes.exceptionOrNull() ?: Exception("Failed to get trajectory steps")
+                )
             }
             val steps = stepsRes.getOrThrow()
             var lastUserIdx = -1
             for (i in (steps.size - 1) downTo 0) {
-                val st = steps[i]
-                if (st.type == CortexStepType.CORTEX_STEP_TYPE_USER_INPUT || st.user_input != null) {
+                val step = steps[i]
+                if (step.type == CortexStepType.CORTEX_STEP_TYPE_USER_INPUT || step.user_input != null) {
                     lastUserIdx = i
                     break
                 }
@@ -248,7 +248,7 @@ class AgyConversationService {
             conversation_only = true,
             override_config = CascadeConfig(
                 planner_config = CascadePlannerConfig(
-                    requested_model = ModelOrAlias(model = modelProto ?: Model.MODEL_UNSPECIFIED)
+                    requested_model = if (modelProto != null) ModelOrAlias(model = modelProto) else null
                 )
             )
         )

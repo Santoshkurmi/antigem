@@ -36,6 +36,7 @@ class AgyModelService {
         private val keyToModelEnum = ConcurrentHashMap<String, String>()
         private val nameToModelEnum = ConcurrentHashMap<String, String>()
         private val allValidEnums = CopyOnWriteArraySet<String>()
+
         @Volatile
         private var defaultModelEnum: String = ""
 
@@ -114,7 +115,7 @@ class AgyModelService {
             val response = res.getOrThrow().response
                 ?: return@withContext Result.failure(Exception("Empty models response from server"))
 
-            val modelsMap = response.models.associate { it.key to it.value_ }
+            val modelsMap = response.models
             val sorts = response.agent_model_sorts.ifEmpty { response.battle_mode_model_sorts }
             val sortedIds = mutableListOf<String>()
 
@@ -131,10 +132,9 @@ class AgyModelService {
             val keysToProcess = if (sortedIds.isNotEmpty()) {
                 sortedIds
             } else {
-                response.models.mapNotNull { entry ->
-                    val details = entry.value_
-                    if (details != null && !details.is_internal && !details.disabled && details.display_name.isNotBlank()) {
-                        entry.key
+                response.models.mapNotNull { (key, details) ->
+                    if (!details.is_internal && !details.disabled && details.display_name.isNotBlank()) {
+                        key
                     } else null
                 }
             }
@@ -156,14 +156,20 @@ class AgyModelService {
 
                 var baseName = displayName
                 var tier: String? = null
-                val tierMatch = Regex("^(.*?)\\s*\\((High|Medium|Low|Med|Thinking)\\)$", RegexOption.IGNORE_CASE).find(baseName)
+                val tierMatch =
+                    Regex("^(.*?)\\s*\\((High|Medium|Low|Med|Thinking)\\)$", RegexOption.IGNORE_CASE).find(baseName)
                 if (tierMatch != null) {
                     baseName = tierMatch.groupValues[1].trim()
-                    tier = tierMatch.groupValues[2].replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                    tier =
+                        tierMatch.groupValues[2].replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
                 }
 
                 val family = when {
-                    displayName.contains("claude", ignoreCase = true) || key.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
+                    displayName.contains("claude", ignoreCase = true) || key.contains(
+                        "claude",
+                        ignoreCase = true
+                    ) -> ModelFamily.CLAUDE
+
                     else -> ModelFamily.GEMINI
                 }
 
@@ -200,7 +206,9 @@ class AgyModelService {
             val req = RetrieveUserQuotaSummaryRequest(force_refresh = forceRefresh)
             val res = AgyLanguageService.RetrieveUserQuotaSummary().executeSafely(req)
             if (!res.isSuccess) {
-                return@withContext Result.failure(res.exceptionOrNull() ?: Exception("Failed to retrieve quota summary"))
+                return@withContext Result.failure(
+                    res.exceptionOrNull() ?: Exception("Failed to retrieve quota summary")
+                )
             }
             val rawResponse = res.getOrThrow()
             Log.d(TAG, "retrieveUserQuotaSummary response: $rawResponse")
@@ -241,16 +249,24 @@ class AgyModelService {
 
                         if (window.contains("5h", ignoreCase = true)) {
                             fiveHourInfo = windowInfo
-                        } else if (window.contains("week", ignoreCase = true) || window.contains("7d", ignoreCase = true)) {
+                        } else if (window.contains("week", ignoreCase = true) || window.contains(
+                                "7d",
+                                ignoreCase = true
+                            )
+                        ) {
                             weeklyInfo = windowInfo
                         }
                     }
 
-                val gId = when {
-                    dispName.contains("gemini", ignoreCase = true) -> "gemini"
-                    dispName.contains("claude", ignoreCase = true) || dispName.contains("gpt", ignoreCase = true) -> "claude_gpt"
-                    else -> dispName.lowercase().replace(" ", "_")
-                }
+                    val gId = when {
+                        dispName.contains("gemini", ignoreCase = true) -> "gemini"
+                        dispName.contains("claude", ignoreCase = true) || dispName.contains(
+                            "gpt",
+                            ignoreCase = true
+                        ) -> "claude_gpt"
+
+                        else -> dispName.lowercase().replace(" ", "_")
+                    }
 
                     groupsList.add(
                         ModelQuotaGroup(

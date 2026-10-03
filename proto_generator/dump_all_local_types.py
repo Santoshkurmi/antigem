@@ -227,14 +227,27 @@ class ProtoRegistry:
     # In protobuf descriptors, field type_name is always fully qualified
     # (starts with '.').  We just look it up.
     # ------------------------------------------------------------------
-    def find_type(self, type_name):
+    def find_type(self, type_name, expected_kind=None):
         if not type_name:
             return None, None, type_name
         key = type_name if type_name.startswith('.') else f".{type_name}"
-        if key in self.messages:
-            return "message", self.messages[key], key
-        if key in self.enums:
-            return "enum", self.enums[key], key
+
+        # If expected_kind is explicitly message, check messages first
+        if expected_kind == "message":
+            if key in self.messages:
+                return "message", self.messages[key], key
+            if key in self.enums:
+                return "enum", self.enums[key], key
+        elif expected_kind == "enum":
+            if key in self.enums:
+                return "enum", self.enums[key], key
+            if key in self.messages:
+                return "message", self.messages[key], key
+        else:
+            if key in self.messages:
+                return "message", self.messages[key], key
+            if key in self.enums:
+                return "enum", self.enums[key], key
 
         # Resolve internal package aliases
         aliases = [
@@ -242,24 +255,43 @@ class ProtoRegistry:
             (".exa.cortex_pb.", ".exa.codeium_common_pb."),
             (".exa.language_server_pb.", ".exa.cortex_pb."),
             (".exa.cortex_pb.", ".exa.language_server_pb."),
+            (".google.internal.cloud.code.v1internal.", ".genai."),
             (".google.internal.cloud.code.v1internal.", ".exa.cortex_pb."),
         ]
         for src, dst in aliases:
             if key.startswith(src):
                 alt_key = dst + key[len(src):]
-                if alt_key in self.messages:
-                    return "message", self.messages[alt_key], alt_key
-                if alt_key in self.enums:
-                    return "enum", self.enums[alt_key], alt_key
+                if expected_kind == "message":
+                    if alt_key in self.messages:
+                        return "message", self.messages[alt_key], alt_key
+                    if alt_key in self.enums:
+                        return "enum", self.enums[alt_key], alt_key
+                elif expected_kind == "enum":
+                    if alt_key in self.enums:
+                        return "enum", self.enums[alt_key], alt_key
+                    if alt_key in self.messages:
+                        return "message", self.messages[alt_key], alt_key
+                else:
+                    if alt_key in self.messages:
+                        return "message", self.messages[alt_key], alt_key
+                    if alt_key in self.enums:
+                        return "enum", self.enums[alt_key], alt_key
 
-        # Leaf-based resolution (matches richest enum/message definition)
+        # Leaf-based resolution (respects expected_kind if provided)
         leaf = key.split('.')[-1]
         matching_enums = [k for k in self.enums if k.endswith(f".{leaf}")]
-        if matching_enums:
+        matching_msgs = [k for k in self.messages if k.endswith(f".{leaf}")]
+
+        if expected_kind == "message" and matching_msgs:
+            best_k = max(matching_msgs, key=lambda k: len(self.messages[k].get("fields", [])))
+            return "message", self.messages[best_k], best_k
+        elif expected_kind == "enum" and matching_enums:
             best_k = max(matching_enums, key=lambda k: len(self.enums[k].get("values", [])))
             return "enum", self.enums[best_k], best_k
 
-        matching_msgs = [k for k in self.messages if k.endswith(f".{leaf}")]
+        if matching_enums:
+            best_k = max(matching_enums, key=lambda k: len(self.enums[k].get("values", [])))
+            return "enum", self.enums[best_k], best_k
         if matching_msgs:
             best_k = max(matching_msgs, key=lambda k: len(self.messages[k].get("fields", [])))
             return "message", self.messages[best_k], best_k
@@ -595,7 +627,7 @@ def generate_per_service_protos(output_dir=None, binary_path=None, full=False):
                 continue
             processed.add(type_ref)
 
-            kind, desc, full_name = registry.find_type(type_ref)
+            kind, desc, full_name = registry.find_type(type_ref, expected_kind=expected_kind)
 
             if not kind or not desc:
                 # Unknown type — emit a stub so the file is still valid
