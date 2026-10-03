@@ -443,6 +443,12 @@ func (m *HubManager) Start() error {
 		usrBin = filepath.Join(prefix, "bin")
 	}
 
+	ccPort := m.CloudCodePort
+	if ccPort == "" {
+		ccPort = "1236"
+	}
+	ccURL := "http://127.0.0.1:" + ccPort
+
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
 		"USERPROFILE="+home,
@@ -453,6 +459,7 @@ func (m *HubManager) Start() error {
 		"CI=1",
 		"AGY_NO_UPDATE_PROMPT=1",
 		"DEBIAN_FRONTEND=noninteractive",
+		"CLOUD_CODE_URL="+ccURL,
 	)
 
 	stdoutPipe, errOut := cmd.StdoutPipe()

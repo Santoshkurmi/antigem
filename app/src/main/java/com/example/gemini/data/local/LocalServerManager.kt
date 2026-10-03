@@ -196,7 +196,18 @@ object LocalServerManager {
             ""
         }
 
-        return "$bridgeCmd -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset$binParam"
+        val isOrEnabled = authPrefs.isOpenRouterEnabledSync()
+        val orKey = authPrefs.getOpenRouterApiKeySync().trim()
+        val orParam = if (isOrEnabled && orKey.isNotBlank()) {
+            " --proxy --openrouter-key=\"$orKey\""
+        } else {
+            ""
+        }
+
+        val isVerbose = authPrefs.isVerboseLoggingEnabledSync()
+        val verboseParam = if (isVerbose) " --verbose" else ""
+
+        return "$bridgeCmd -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset$binParam$orParam$verboseParam"
     }
 
     /**

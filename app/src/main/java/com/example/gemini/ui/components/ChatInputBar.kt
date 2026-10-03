@@ -566,7 +566,11 @@ fun ChatInputBar(
     }
 
     val canSend = textFieldValue.text.trim().isNotEmpty() || attachments.isNotEmpty()
-    val familyColor = if (selectedModel.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
+    val familyColor = when (selectedModel.family) {
+        ModelFamily.CLAUDE -> ClaudeTerracotta
+        ModelFamily.OPENROUTER -> Color(0xFF6366F1)
+        else -> if (selectedModel.id.startsWith("openrouter/", ignoreCase = true)) Color(0xFF6366F1) else GeminiBlue
+    }
     val fileLinkHandler = LocalFileLinkHandler.current
     var previewImageUrl by remember { mutableStateOf<String?>(null) }
 
@@ -1133,22 +1137,65 @@ fun ChatInputBar(
                                         modifier = Modifier.weight(1f, fill = false)
                                     )
 
-                                    val pct = quota?.percentage
-                                    if (pct != null) {
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(badgeColor.copy(alpha = 0.15f))
-                                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                                        ) {
-                                            Text(
-                                                text = "$pct%",
-                                                fontSize = 9.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = badgeColor
-                                            )
+                                    val isOpenRouter = selectedModel.family == ModelFamily.OPENROUTER ||
+                                        selectedModel.id.startsWith("openrouter/", ignoreCase = true)
+                                    if (isOpenRouter) {
+                                        val reqBadgeText = remember(quota?.description, quota?.remainingFraction) {
+                                            val desc = quota?.description.orEmpty()
+                                            val remMatch = Regex("(\\d+)\\s*remaining", RegexOption.IGNORE_CASE).find(desc)
+                                            if (remMatch != null) {
+                                                "${remMatch.groupValues[1]} req"
+                                            } else {
+                                                val reqMatch = Regex("(\\d+)/(\\d+)", RegexOption.IGNORE_CASE).find(desc)
+                                                if (reqMatch != null) {
+                                                    val used = reqMatch.groupValues[1].toIntOrNull() ?: 0
+                                                    val limit = reqMatch.groupValues[2].toIntOrNull() ?: 50
+                                                    "${maxOf(0, limit - used)} req"
+                                                } else if (desc.isNotBlank()) {
+                                                    desc
+                                                } else if (quota?.remainingFraction != null) {
+                                                    "${(quota.remainingFraction * 50).toInt()} req"
+                                                } else {
+                                                    null
+                                                }
+                                            }
+                                        }
+                                        if (reqBadgeText != null) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            val fraction = quota?.remainingFraction ?: 1f
+                                            val badgeColor = if (fraction > 0.5f) QuotaGreen else if (fraction > 0.2f) QuotaAmber else QuotaRed
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(badgeColor.copy(alpha = 0.15f))
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                                            ) {
+                                                Text(
+                                                    text = reqBadgeText,
+                                                    fontSize = 9.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = badgeColor
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        val pct = quota?.percentage
+                                        if (pct != null) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(badgeColor.copy(alpha = 0.15f))
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                                            ) {
+                                                Text(
+                                                    text = "$pct%",
+                                                    fontSize = 9.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = badgeColor
+                                                )
+                                            }
                                         }
                                     }
 

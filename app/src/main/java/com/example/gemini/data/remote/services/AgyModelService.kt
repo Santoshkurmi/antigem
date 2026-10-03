@@ -162,6 +162,7 @@ class AgyModelService {
                 }
 
                 val family = when {
+                    key.startsWith("openrouter/", ignoreCase = true) || key.contains("openrouter", ignoreCase = true) || details.description.contains("openrouter", ignoreCase = true) -> ModelFamily.OPENROUTER
                     displayName.contains("claude", ignoreCase = true) || key.contains("claude", ignoreCase = true) -> ModelFamily.CLAUDE
                     else -> ModelFamily.GEMINI
                 }
@@ -242,6 +243,12 @@ class AgyModelService {
                             fiveHourInfo = windowInfo
                         } else if (window.contains("week", ignoreCase = true) || window.contains("7d", ignoreCase = true)) {
                             weeklyInfo = windowInfo
+                        } else {
+                            if (fiveHourInfo == null) {
+                                fiveHourInfo = windowInfo
+                            } else if (weeklyInfo == null) {
+                                weeklyInfo = windowInfo
+                            }
                         }
                     }
 

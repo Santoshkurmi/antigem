@@ -21,6 +21,7 @@ import (
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/handlers"
 	"gemini-server/pkg/hub"
+	"gemini-server/pkg/openrouter"
 	"gemini-server/pkg/security"
 	"gemini-server/pkg/ws"
 )
@@ -37,6 +38,11 @@ Flags:
   -t, --token <token>       12-character security token for API & AGY CSRF obfuscation
   -f, --force, --f          Force start AGY Hub automatically without prompting
   -l, --logs                Enable dumping request/response protos to dump_logs/ directory (disabled by default)
+  -v, --verbose             Enable detailed request logs for CloudCode proxy
+  --proxy                   Enable CloudCode reverse proxy alongside IDE server (default: enabled)
+  --proxy-only              Run CloudCode reverse proxy standalone only (skip IDE bridge and AGY hub)
+  --no-proxy                Disable CloudCode reverse proxy
+  --openrouter-key <key>    OpenRouter API Key to bridge free community models
   -p, --port <port>         Port for the Go IDE Server (default: 1234)
   --hub-port <port>         Port for the AGY Hub RPC server (default: 1235)
   --cloudcode-port <port>   Port for the CloudCode reverse proxy server (default: 1236)
@@ -113,7 +119,10 @@ func main() {
 
 	var unpatchOnly bool
 	var proxyOnly bool
+	var enableProxy bool = true
 	var enableLogs bool
+	var verboseLogs bool
+	var openRouterKey string = os.Getenv("OPENROUTER_API_KEY")
 	var customAgyBin string
 	var forceStart bool
 	var skipHub bool
@@ -128,10 +137,25 @@ func main() {
 		switch {
 		case arg == "-u" || arg == "--unpatch":
 			unpatchOnly = true
-		case arg == "--proxy" || arg == "--proxy-only":
+		case arg == "--proxy-only" || arg == "--proxy-standalone" || arg == "--standalone-proxy":
 			proxyOnly = true
+		case arg == "--proxy":
+			enableProxy = true
+		case arg == "--no-proxy":
+			enableProxy = false
+		case arg == "-v" || arg == "--verbose":
+			verboseLogs = true
 		case arg == "-l" || arg == "--logs" || arg == "--dump-logs" || arg == "--log":
 			enableLogs = true
+		case strings.HasPrefix(arg, "--openrouter-key="):
+			openRouterKey = strings.TrimPrefix(arg, "--openrouter-key=")
+		case strings.HasPrefix(arg, "--or-key="):
+			openRouterKey = strings.TrimPrefix(arg, "--or-key=")
+		case arg == "--openrouter-key" || arg == "--or-key" || arg == "--openrouter_key":
+			if i+1 < len(os.Args) {
+				openRouterKey = os.Args[i+1]
+				i++
+			}
 		case strings.HasPrefix(arg, "--bin="):
 			customAgyBin = strings.TrimPrefix(arg, "--bin=")
 		case arg == "--bin" || arg == "--agy-bin":
@@ -230,11 +254,16 @@ func main() {
 		fmt.Println("\033[1;36m============================================================\033[0m")
 		fmt.Printf("  \033[1m• Listening Address:\033[0m  http://0.0.0.0:%s\n", cfg.CloudCodePort)
 		fmt.Printf("  \033[1m• Target Upstream:\033[0m    %s\n", cfg.CloudCodeUpstreamHost)
-		fmt.Printf("  \033[1m• Local Time:\033[0m         %s\n", time.Now().Format("2006-01-02 15:04:05 MST"))
+		orClient := openrouter.NewClient(openRouterKey)
+		if orClient.IsEnabled() {
+			fmt.Printf("  \033[1m• OpenRouter:\033[0m        Enabled (Key: %s...%s)\n", openRouterKey[:8], openRouterKey[len(openRouterKey)-4:])
+		} else {
+			fmt.Println("  \033[1m• OpenRouter:\033[0m        Disabled (No API key provided)")
+		}
 		fmt.Println("\033[1;36m============================================================\033[0m")
 		fmt.Printf(" \033[32m🚀 CloudCode Proxy running at http://0.0.0.0:%s (Forwarding to %s, Logging: %v)\033[0m\n\n", cfg.CloudCodePort, cfg.CloudCodeUpstreamHost, enableLogs)
 
-		ccProxy := cloudcode.NewProxyServer(cfg.CloudCodePort, cfg.CloudCodeUpstreamHost, enableLogs)
+		ccProxy := cloudcode.NewProxyServer(cfg.CloudCodePort, cfg.CloudCodeUpstreamHost, enableLogs, verboseLogs, orClient)
 		if err := ccProxy.Start(); err != nil {
 			log.Fatalf("Fatal: failed to start CloudCode proxy: %v", err)
 		}
@@ -287,6 +316,15 @@ func main() {
 	fmt.Printf("  \033[1m• Projects Dir:\033[0m     %s\n", cfg.ProjectsBaseDir)
 	fmt.Printf("  \033[1m• Target Hub Port:\033[0m  %s\n", hubPort)
 	fmt.Printf("  \033[1m• CloudCode Proxy:\033[0m  http://0.0.0.0:%s -> %s\n", cfg.CloudCodePort, cfg.CloudCodeUpstreamHost)
+	if openRouterKey != "" {
+		maskedKey := openRouterKey
+		if len(maskedKey) > 12 {
+			maskedKey = maskedKey[:8] + "..." + maskedKey[len(maskedKey)-4:]
+		}
+		fmt.Printf("  \033[1;32m• OpenRouter:\033[0m        Enabled (Key: %s)\n", maskedKey)
+	} else {
+		fmt.Printf("  \033[90m• OpenRouter:\033[0m        Disabled (No API key provided)\n")
+	}
 	if resolvedAgyBin != "" {
 		fmt.Printf("  \033[1m• AGY Binary:\033[0m       %s\n", resolvedAgyBin)
 	}
@@ -533,7 +571,25 @@ func main() {
 		}
 	}()
 
-	fmt.Printf(" \033[32m🚀 antiGem IDE Server running at http://0.0.0.0:%s\033[0m\n\n", cfg.Port)
+	fmt.Printf(" \033[32m🚀 antiGem IDE Server running at http://0.0.0.0:%s\033[0m\n", cfg.Port)
+
+	// Start CloudCode reverse proxy service on port 1236
+	var ccProxy *cloudcode.ProxyServer
+	if enableProxy {
+		orClient := openrouter.NewClient(openRouterKey)
+		ccProxy = cloudcode.NewProxyServer(cfg.CloudCodePort, cfg.CloudCodeUpstreamHost, enableLogs, verboseLogs, orClient)
+		if err := ccProxy.Start(); err != nil {
+			log.Printf(" \033[31m[!] Warning starting CloudCode Proxy:\033[0m %v\n", err)
+		} else {
+			orStatus := "Disabled"
+			if orClient.IsEnabled() {
+				orStatus = "Enabled"
+			}
+			fmt.Printf(" \033[32m🚀 CloudCode Proxy running at http://0.0.0.0:%s (OpenRouter: %s, Logging: %v)\033[0m\n",
+				cfg.CloudCodePort, orStatus, enableLogs)
+		}
+	}
+	fmt.Println()
 
 	// Determine if AGY Hub should be started
 	shouldStartHub := false
@@ -558,12 +614,6 @@ func main() {
 				shouldStartHub = true
 			}
 		}
-	}
-
-	// Start CloudCode reverse proxy service on port 1236
-	ccProxy := cloudcode.NewProxyServer(cfg.CloudCodePort, cfg.CloudCodeUpstreamHost, enableLogs)
-	if err := ccProxy.Start(); err != nil {
-		log.Printf(" \033[31m[!] Warning starting CloudCode Proxy:\033[0m %v\n", err)
 	}
 
 	// Always initialize HubManager so background monitoring and status updates work continuously

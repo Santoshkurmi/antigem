@@ -77,6 +77,9 @@ class AuthPreferences(private val context: Context) {
         val HAS_SEEN_TERMINAL_LAUNCHER_ONBOARDING = androidx.datastore.preferences.core.booleanPreferencesKey("has_seen_terminal_launcher_onboarding")
         val TERMINAL_LAUNCHER_STYLE = stringPreferencesKey("terminal_launcher_style") // "ANTITERM" or "TERMUX"
         val IS_TERMINAL_LAUNCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_launcher_enabled")
+        val IS_OPENROUTER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_openrouter_enabled")
+        val OPENROUTER_API_KEY = stringPreferencesKey("openrouter_api_key")
+        val IS_VERBOSE_LOGGING_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_verbose_logging_enabled")
 
         const val DEFAULT_BRIDGE_BINARY_PATH = "~/../usr/bin/agy_ide_bridge"
         const val DEFAULT_AGY_BINARY_PATH = "~/../usr/bin/agy"
@@ -757,8 +760,42 @@ class AuthPreferences(private val context: Context) {
     }
 
     suspend fun setTerminalLauncherEnabled(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("is_terminal_launcher_enabled", enabled).apply()
         context.dataStore.edit { it[IS_TERMINAL_LAUNCHER_ENABLED] = enabled }
     }
+
+    val isOpenRouterEnabled: Flow<Boolean> = context.dataStore.data.map {
+        it[IS_OPENROUTER_ENABLED] ?: false
+    }
+
+    val openRouterApiKey: Flow<String> = context.dataStore.data.map {
+        it[OPENROUTER_API_KEY] ?: ""
+    }
+
+    val isVerboseLoggingEnabled: Flow<Boolean> = context.dataStore.data.map {
+        it[IS_VERBOSE_LOGGING_ENABLED] ?: false
+    }
+
+    suspend fun setOpenRouterEnabled(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("is_openrouter_enabled", enabled).apply()
+        context.dataStore.edit { it[IS_OPENROUTER_ENABLED] = enabled }
+    }
+
+    suspend fun setOpenRouterApiKey(key: String) {
+        syncPrefs.edit().putString("openrouter_api_key", key).apply()
+        context.dataStore.edit { it[OPENROUTER_API_KEY] = key }
+    }
+
+    suspend fun setVerboseLoggingEnabled(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("is_verbose_logging_enabled", enabled).apply()
+        context.dataStore.edit { it[IS_VERBOSE_LOGGING_ENABLED] = enabled }
+    }
+
+    fun isOpenRouterEnabledSync(): Boolean = syncPrefs.getBoolean("is_openrouter_enabled", false)
+
+    fun getOpenRouterApiKeySync(): String = syncPrefs.getString("openrouter_api_key", "") ?: ""
+
+    fun isVerboseLoggingEnabledSync(): Boolean = syncPrefs.getBoolean("is_verbose_logging_enabled", false)
 
     suspend fun clearAuth() {
         context.dataStore.edit { prefs ->

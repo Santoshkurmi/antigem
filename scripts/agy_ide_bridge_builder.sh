@@ -81,11 +81,18 @@ else
     exit 1
 fi
 
-# --- Step 4: Compile Android ARM64 Binary ---
-echo -e "\n${CYAN}🛠️  [4/5] Compiling Go Server for Android ARM64...${NC}"
+# --- Step 4: Compile Android ARM64 Binary (with Android NDK CGO) ---
+echo -e "\n${CYAN}🛠️  [4/5] Compiling Go Server for Android ARM64 (Android NDK CGO)...${NC}"
+NDK_CLANG=$(find /home/cat/android-sdk/ndk -name "aarch64-linux-android*-clang" 2>/dev/null | grep -E "android(24|28|30|34)-clang" | head -n 1 || true)
 (
     cd "$SERVER_DIR"
-    CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags="-s -w" -o "$ANDROID_BINARY" main.go
+    if [ -n "$NDK_CLANG" ] && [ -x "$NDK_CLANG" ]; then
+        echo -e "   ${DIM}Using NDK Clang: $NDK_CLANG${NC}"
+        CC="$NDK_CLANG" CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build -ldflags="-s -w" -o "$ANDROID_BINARY" main.go
+    else
+        echo -e "   ${YELLOW}⚠️  NDK Clang not found, falling back to CGO_ENABLED=0${NC}"
+        CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags="-s -w" -o "$ANDROID_BINARY" main.go
+    fi
 )
 if [ -f "$ANDROID_BINARY" ]; then
     ANDROID_SIZE=$(ls -lh "$ANDROID_BINARY" | awk '{print $5}')
