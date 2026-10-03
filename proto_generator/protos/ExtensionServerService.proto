@@ -4,6 +4,8 @@ package exa.extension_server_pb;
 
 // ========================================================================
 // Service: ExtensionServerService (53 Methods)
+// Package: exa.extension_server_pb
+// Default Upstream Host: http://127.0.0.1 (Local Extension Bridge)
 // Target Route: /exa.extension_server_pb.ExtensionServerService/<Method>
 // ========================================================================
 
@@ -67,7 +69,7 @@ service ExtensionServerService {
 // Enumerations
 // ========================================================================
 
-// origin: .exa.codeium_common_pb.APIProvider
+// origin: .exa.cortex_pb.APIProvider
 enum APIProvider {
   API_PROVIDER_UNSPECIFIED = 0;
   API_PROVIDER_INTERNAL = 1;
@@ -102,7 +104,7 @@ enum AgentMode {
   AGENT_MODE_VERIFICATION = 3;
 }
 
-// origin: .exa.codeium_common_pb.AgentPermissionPreset
+// origin: .exa.cortex_pb.AgentPermissionPreset
 enum AgentPermissionPreset {
   AGENT_PERMISSION_PRESET_UNSPECIFIED = 0;
   AGENT_PERMISSION_PRESET_DEFAULT = 1;
@@ -113,14 +115,14 @@ enum AgentPermissionPreset {
   AGENT_PERMISSION_PRESET_AUTO = 6;
 }
 
-// origin: .exa.codeium_common_pb.ArtifactApprovalStatus
+// origin: .exa.cortex_pb.ArtifactApprovalStatus
 enum ArtifactApprovalStatus {
   ARTIFACT_APPROVAL_STATUS_UNSPECIFIED = 0;
   ARTIFACT_APPROVAL_STATUS_APPROVED = 1;
   ARTIFACT_APPROVAL_STATUS_REQUESTED_CHANGES = 2;
 }
 
-// origin: .exa.codeium_common_pb.ArtifactReviewMode
+// origin: .exa.cortex_pb.ArtifactReviewMode
 enum ArtifactReviewMode {
   ARTIFACT_REVIEW_MODE_UNSPECIFIED = 0;
   ARTIFACT_REVIEW_MODE_ALWAYS = 1;
@@ -136,7 +138,7 @@ enum ArtifactReviewStatus {
   ARTIFACT_REVIEW_STATUS_MODIFIED = 3;
 }
 
-// origin: .exa.codeium_common_pb.ArtifactType
+// origin: .exa.cortex_pb.ArtifactType
 enum ArtifactType {
   ARTIFACT_TYPE_UNSPECIFIED = 0;
   ARTIFACT_TYPE_IMPLEMENTATION_PLAN = 1;
@@ -176,7 +178,7 @@ enum BattleEndType {
   BATTLE_END_TYPE_START_ERROR = 6;
 }
 
-// origin: .exa.codeium_common_pb.BetterDirection
+// origin: .exa.cortex_pb.BetterDirection
 enum BetterDirection {
   BETTER_DIRECTION_UNSPECIFIED = 0;
   BETTER_DIRECTION_LOWER = 1;
@@ -221,7 +223,7 @@ enum BrowserEphemeralOption {
   BROWSER_EPHEMERAL_OPTION_DOM = 2;
 }
 
-// origin: .exa.codeium_common_pb.BrowserJsAutoRunPolicy
+// origin: .exa.cortex_pb.BrowserJsAutoRunPolicy
 enum BrowserJsAutoRunPolicy {
   BROWSER_JS_AUTO_RUN_POLICY_UNSPECIFIED = 0;
   BROWSER_JS_AUTO_RUN_POLICY_DISABLED = 1;
@@ -229,7 +231,7 @@ enum BrowserJsAutoRunPolicy {
   BROWSER_JS_AUTO_RUN_POLICY_ENABLED = 3;
 }
 
-// origin: .exa.codeium_common_pb.BrowserJsExecutionPolicy
+// origin: .exa.cortex_pb.BrowserJsExecutionPolicy
 enum BrowserJsExecutionPolicy {
   BROWSER_JS_EXECUTION_POLICY_UNSPECIFIED = 0;
   BROWSER_JS_EXECUTION_POLICY_DISABLED = 1;
@@ -261,7 +263,7 @@ enum CacheControlType {
   CACHE_CONTROL_TYPE_EPHEMERAL = 1;
 }
 
-// origin: .exa.codeium_common_pb.CascadeCommandsAutoExecution
+// origin: .exa.cortex_pb.CascadeCommandsAutoExecution
 enum CascadeCommandsAutoExecution {
   CASCADE_COMMANDS_AUTO_EXECUTION_UNSPECIFIED = 0;
   CASCADE_COMMANDS_AUTO_EXECUTION_OFF = 1;
@@ -281,9 +283,9 @@ enum CascadeRunStatus {
 
 // origin: .exa.extension_server_pb.ExecuteNotebookResponse.CellStatus
 enum CellStatus {
-  CELL_STATUS_UNSPECIFIED = 0;
-  CELL_STATUS_SUCCESS = 1;
-  CELL_STATUS_FAILURE = 2;
+  CELLSTATUS_CELL_STATUS_UNSPECIFIED = 0;
+  CELLSTATUS_CELL_STATUS_SUCCESS = 1;
+  CELLSTATUS_CELL_STATUS_FAILURE = 2;
 }
 
 // origin: .exa.chat_client_server_pb.ChatClientRequestStreamClientType
@@ -293,7 +295,7 @@ enum ChatClientRequestStreamClientType {
   CHAT_CLIENT_REQUEST_STREAM_CLIENT_TYPE_BROWSER = 2;
 }
 
-// origin: .exa.codeium_common_pb.ChatMessageSource
+// origin: .exa.cortex_pb.ChatMessageSource
 enum ChatMessageSource {
   CHAT_MESSAGE_SOURCE_UNSPECIFIED = 0;
   CHAT_MESSAGE_SOURCE_USER = 1;
@@ -359,7 +361,7 @@ enum CodeAcknowledgementScope {
   CODE_ACKNOWLEDGEMENT_SCOPE_HUNK = 3;
 }
 
-// origin: .exa.codeium_common_pb.CodeContextSource
+// origin: .exa.cortex_pb.CodeContextSource
 enum CodeContextSource {
   CODE_CONTEXT_SOURCE_UNSPECIFIED = 0;
   CODE_CONTEXT_SOURCE_OPEN_DOCS = 1;
@@ -374,7 +376,7 @@ enum CodeContextSource {
   CODE_CONTEXT_SOURCE_COMMIT_GRAPH = 10;
 }
 
-// origin: .exa.codeium_common_pb.CodeContextType
+// origin: .exa.cortex_pb.CodeContextType
 enum CodeContextType {
   CODE_CONTEXT_TYPE_UNSPECIFIED = 0;
   CODE_CONTEXT_TYPE_FUNCTION = 1;
@@ -396,7 +398,7 @@ enum CodeHeuristicFailure {
 
 // origin: .genai.CodeExecutionCallContent.CodeExecutionCallArguments.Language
 enum CodeexecutioncallcontentCodeexecutioncallarguments_Language {
-  LANGUAGE_UNSPECIFIED = 0;
+  CODEEXECUTIONCALLCONTENTCODEEXECUTIONCALLARGUMENTS_LANGUAGE_LANGUAGE_UNSPECIFIED = 0;
   PYTHON = 1;
 }
 
@@ -408,7 +410,7 @@ enum CommandOutputPriority {
   COMMAND_OUTPUT_PRIORITY_SPLIT = 3;
 }
 
-// origin: .exa.codeium_common_pb.CommandRequestSource
+// origin: .exa.cortex_pb.CommandRequestSource
 enum CommandRequestSource {
   COMMAND_REQUEST_SOURCE_UNSPECIFIED = 0;
   COMMAND_REQUEST_SOURCE_DEFAULT = 1;
@@ -420,7 +422,7 @@ enum CommandRequestSource {
   COMMAND_REQUEST_SOURCE_CASCADE_CHAT = 16;
 }
 
-// origin: .exa.codeium_common_pb.CompletionType
+// origin: .exa.cortex_pb.CompletionType
 enum CompletionType {
   COMPLETION_TYPE_UNSPECIFIED = 0;
   COMPLETION_TYPE_SINGLE = 1;
@@ -441,7 +443,7 @@ enum ConnectorType {
   CONNECTOR_TYPE_GITHUB_OAUTH = 7;
 }
 
-// origin: .exa.codeium_common_pb.ContextSnippetType
+// origin: .exa.cortex_pb.ContextSnippetType
 enum ContextSnippetType {
   CONTEXT_SNIPPET_TYPE_UNSPECIFIED = 0;
   CONTEXT_SNIPPET_TYPE_RAW_SOURCE = 1;
@@ -456,7 +458,7 @@ enum ContextType {
   CONTEXT_TYPE_TASK_ONLY = 2;
 }
 
-// origin: .exa.codeium_common_pb.ConversationalPlannerMode
+// origin: .exa.cortex_pb.ConversationalPlannerMode
 enum ConversationalPlannerMode {
   CONVERSATIONAL_PLANNER_MODE_UNSPECIFIED = 0;
   CONVERSATIONAL_PLANNER_MODE_DEFAULT = 1;
@@ -473,17 +475,17 @@ enum CortexComponentSource {
 
 // origin: .exa.cortex_pb.CortexStepExecuteNotebook.CellStatus
 enum CortexCortexstepexecutenotebook_CellStatus {
-  CELL_STATUS_UNSPECIFIED = 0;
-  CELL_STATUS_SUCCESS = 1;
-  CELL_STATUS_FAILURE = 2;
+  CORTEXCORTEXSTEPEXECUTENOTEBOOK_CELLSTATUS_CELL_STATUS_UNSPECIFIED = 0;
+  CORTEXCORTEXSTEPEXECUTENOTEBOOK_CELLSTATUS_CELL_STATUS_SUCCESS = 1;
+  CORTEXCORTEXSTEPEXECUTENOTEBOOK_CELLSTATUS_CELL_STATUS_FAILURE = 2;
 }
 
 // origin: .exa.cortex_pb.CortexStepExecuteNotebook.ExecutionStatus
 enum CortexCortexstepexecutenotebook_ExecutionStatus {
-  EXECUTION_STATUS_UNSPECIFIED = 0;
-  EXECUTION_STATUS_SUCCESS = 1;
-  EXECUTION_STATUS_FAILURE = 2;
-  EXECUTION_STATUS_PARTIAL_SUCCESS = 3;
+  CORTEXCORTEXSTEPEXECUTENOTEBOOK_EXECUTIONSTATUS_EXECUTION_STATUS_UNSPECIFIED = 0;
+  CORTEXCORTEXSTEPEXECUTENOTEBOOK_EXECUTIONSTATUS_EXECUTION_STATUS_SUCCESS = 1;
+  CORTEXCORTEXSTEPEXECUTENOTEBOOK_EXECUTIONSTATUS_EXECUTION_STATUS_FAILURE = 2;
+  CORTEXCORTEXSTEPEXECUTENOTEBOOK_EXECUTIONSTATUS_EXECUTION_STATUS_PARTIAL_SUCCESS = 3;
 }
 
 // origin: .exa.cortex_pb.CortexMemorySource
@@ -736,21 +738,21 @@ enum CortexTrajectoryType {
 
 // origin: .exa.cortex_pb.EditNotebookOperation
 enum Cortex_EditNotebookOperation {
-  EDIT_NOTEBOOK_OPERATION_UNSPECIFIED = 0;
-  EDIT_NOTEBOOK_OPERATION_INSERT_AFTER = 1;
-  EDIT_NOTEBOOK_OPERATION_INSERT_BEFORE = 2;
-  EDIT_NOTEBOOK_OPERATION_REPLACE_CELLS = 3;
-  EDIT_NOTEBOOK_OPERATION_DELETE_CELLS = 4;
-  EDIT_NOTEBOOK_OPERATION_OVERWRITE_NOTEBOOK = 5;
+  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_UNSPECIFIED = 0;
+  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_INSERT_AFTER = 1;
+  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_INSERT_BEFORE = 2;
+  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_REPLACE_CELLS = 3;
+  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_DELETE_CELLS = 4;
+  CORTEX_EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_OVERWRITE_NOTEBOOK = 5;
 }
 
-// origin: .google.internal.cloud.code.v1internal.Credits.CreditType
+// origin: .google.rpc.context.Credits.CreditType
 enum CreditType {
   CREDIT_TYPE_UNSPECIFIED = 0;
   GOOGLE_ONE_AI = 1;
 }
 
-// origin: .exa.codeium_common_pb.DeploymentBuildStatus
+// origin: .exa.cortex_pb.DeploymentBuildStatus
 enum DeploymentBuildStatus {
   DEPLOYMENT_BUILD_STATUS_UNSPECIFIED = 0;
   DEPLOYMENT_BUILD_STATUS_QUEUED = 1;
@@ -761,7 +763,7 @@ enum DeploymentBuildStatus {
   DEPLOYMENT_BUILD_STATUS_CANCELED = 6;
 }
 
-// origin: .exa.codeium_common_pb.DeploymentProvider
+// origin: .exa.cortex_pb.DeploymentProvider
 enum DeploymentProvider {
   DEPLOYMENT_PROVIDER_UNSPECIFIED = 0;
   DEPLOYMENT_PROVIDER_VERCEL = 1;
@@ -797,7 +799,7 @@ enum DiscoveryCategory {
   DISCOVERY_CATEGORY_WORKSPACE = 5;
 }
 
-// origin: .exa.codeium_common_pb.DocumentType
+// origin: .exa.cortex_pb.DocumentType
 enum DocumentType {
   DOCUMENT_TYPE_UNSPECIFIED = 0;
   DOCUMENT_TYPE_SLACK_MESSAGE = 1;
@@ -813,12 +815,12 @@ enum DocumentType {
 
 // origin: .exa.extension_server_pb.EditNotebookOperation
 enum EditNotebookOperation {
-  EDIT_NOTEBOOK_OPERATION_UNSPECIFIED = 0;
-  EDIT_NOTEBOOK_OPERATION_INSERT_AFTER = 1;
-  EDIT_NOTEBOOK_OPERATION_INSERT_BEFORE = 2;
-  EDIT_NOTEBOOK_OPERATION_REPLACE_CELLS = 3;
-  EDIT_NOTEBOOK_OPERATION_DELETE_CELLS = 4;
-  EDIT_NOTEBOOK_OPERATION_OVERWRITE_NOTEBOOK = 5;
+  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_UNSPECIFIED = 0;
+  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_INSERT_AFTER = 1;
+  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_INSERT_BEFORE = 2;
+  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_REPLACE_CELLS = 3;
+  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_DELETE_CELLS = 4;
+  EDITNOTEBOOKOPERATION_EDIT_NOTEBOOK_OPERATION_OVERWRITE_NOTEBOOK = 5;
 }
 
 // origin: .exa.cortex_pb.EphemeralMessagePersistenceLevel
@@ -830,10 +832,10 @@ enum EphemeralMessagePersistenceLevel {
 
 // origin: .exa.extension_server_pb.ExecuteNotebookResponse.ExecutionStatus
 enum ExecutionStatus {
-  EXECUTION_STATUS_UNSPECIFIED = 0;
-  EXECUTION_STATUS_SUCCESS = 1;
-  EXECUTION_STATUS_FAILURE = 2;
-  EXECUTION_STATUS_PARTIAL_SUCCESS = 3;
+  EXECUTIONSTATUS_EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTIONSTATUS_EXECUTION_STATUS_SUCCESS = 1;
+  EXECUTIONSTATUS_EXECUTION_STATUS_FAILURE = 2;
+  EXECUTIONSTATUS_EXECUTION_STATUS_PARTIAL_SUCCESS = 3;
 }
 
 // origin: .exa.cortex_pb.ExecutorTerminationReason
@@ -851,9 +853,9 @@ enum ExecutorTerminationReason {
   EXECUTOR_TERMINATION_REASON_MAX_TOKEN_BUDGET_EXCEEDED = 11;
 }
 
-// origin: .exa.codeium_common_pb.ExperimentKey
+// origin: .exa.cortex_pb.ExperimentKey
 enum ExperimentKey {
-  UNSPECIFIED = 0;
+  EXPERIMENTKEY_UNSPECIFIED = 0;
   USE_INTERNAL_CHAT_MODEL = 36;
   RECORD_FILES = 47;
   NO_SAMPLER_EARLY_STOP = 48;
@@ -1027,7 +1029,7 @@ enum ExperimentKey {
   TEST_ONLY = 999;
 }
 
-// origin: .exa.codeium_common_pb.ExperimentSource
+// origin: .exa.cortex_pb.ExperimentSource
 enum ExperimentSource {
   EXPERIMENT_SOURCE_UNSPECIFIED = 0;
   EXPERIMENT_SOURCE_EXTENSION = 1;
@@ -1037,7 +1039,7 @@ enum ExperimentSource {
 
 // origin: .exa.cortex_pb.PolicyGuardianConfig.FailMode
 enum FailMode {
-  UNSPECIFIED = 0;
+  FAILMODE_UNSPECIFIED = 0;
   OPEN = 1;
   CLOSED = 2;
 }
@@ -1091,14 +1093,14 @@ enum FirebaseProduct {
 
 // origin: .genai.DocumentContent.MimeType
 enum GenaiDocumentcontent_MimeType {
-  TYPE_UNSPECIFIED = 0;
+  GENAIDOCUMENTCONTENT_MIMETYPE_TYPE_UNSPECIFIED = 0;
   TYPE_PDF = 1;
   TYPE_CSV = 2;
 }
 
 // origin: .genai.ImageContent.MimeType
 enum GenaiImagecontent_MimeType {
-  TYPE_UNSPECIFIED = 0;
+  GENAIIMAGECONTENT_MIMETYPE_TYPE_UNSPECIFIED = 0;
   TYPE_PNG = 1;
   TYPE_JPEG = 2;
   TYPE_WEBP = 3;
@@ -1113,18 +1115,27 @@ enum GenaiImagecontent_MimeType {
 
 // origin: .genai.VideoContent.MimeType
 enum GenaiVideocontent_MimeType {
-  TYPE_UNSPECIFIED = 0;
+  GENAIVIDEOCONTENT_MIMETYPE_TYPE_UNSPECIFIED = 0;
   TYPE_MP4 = 1;
-  TYPE_MPEG = 2;
+  GENAIVIDEOCONTENT_MIMETYPE_TYPE_MPEG = 2;
   TYPE_MPG = 3;
   TYPE_MOV = 4;
   TYPE_AVI = 5;
   TYPE_X_FLV = 6;
-  TYPE_WEBM = 7;
+  GENAIVIDEOCONTENT_MIMETYPE_TYPE_WEBM = 7;
   TYPE_WMV = 8;
   TYPE_3GPP = 9;
   TYPE_YT_BEYOND = 10;
   TYPE_JPEG2000 = 11;
+}
+
+// origin: .genai.MediaResolution
+enum Genai_MediaResolution {
+  GENAI_MEDIARESOLUTION_MEDIA_RESOLUTION_UNSPECIFIED = 0;
+  LOW = 1;
+  MEDIUM = 2;
+  HIGH = 3;
+  ULTRA_HIGH = 4;
 }
 
 // origin: .exa.cortex_pb.GitCloneStrategy
@@ -1134,7 +1145,7 @@ enum GitCloneStrategy {
   GIT_CLONE_STRATEGY_CLONE = 2;
 }
 
-// origin: .exa.codeium_common_pb.IndexChoice
+// origin: .exa.cortex_pb.IndexChoice
 enum IndexChoice {
   INDEX_CHOICE_UNSPECIFIED = 0;
   INDEX_CHOICE_GITHUB_BASE = 1;
@@ -1153,7 +1164,7 @@ enum InteractiveCascadeEditImportance {
   INTERACTIVE_CASCADE_EDIT_IMPORTANCE_HIGH = 3;
 }
 
-// origin: .exa.codeium_common_pb.Language
+// origin: .exa.cortex_pb.Language
 enum Language {
   LANGUAGE_UNSPECIFIED = 0;
   LANGUAGE_C = 1;
@@ -1257,7 +1268,7 @@ enum LintDiffType {
   LINT_DIFF_TYPE_UNCHANGED = 3;
 }
 
-// origin: .exa.codeium_common_pb.MarkdownNodeType
+// origin: .exa.cortex_pb.MarkdownNodeType
 enum MarkdownNodeType {
   MARKDOWN_NODE_TYPE_UNSPECIFIED = 0;
   MARKDOWN_NODE_TYPE_HEADER_1 = 1;
@@ -1281,9 +1292,13 @@ enum McpToolBackgroundMode {
   MCP_TOOL_BACKGROUND_MODE_ALWAYS = 2;
 }
 
-// origin: .genai.MediaResolution
+// origin: .exa.cortex_pb.MediaResolution
 enum MediaResolution {
-  MEDIARESOLUTION_UNSPECIFIED = 0;
+  MEDIARESOLUTION_MEDIA_RESOLUTION_UNSPECIFIED = 0;
+  MEDIA_RESOLUTION_LOW = 1;
+  MEDIA_RESOLUTION_MEDIUM = 2;
+  MEDIA_RESOLUTION_HIGH = 3;
+  MEDIA_RESOLUTION_ULTRA_HIGH = 4;
 }
 
 // origin: .exa.cortex_pb.MemoryActionType
@@ -1309,7 +1324,7 @@ enum MessagePriority {
   MESSAGE_PRIORITY_HIGH = 3;
 }
 
-// origin: .exa.codeium_common_pb.MetricsScope
+// origin: .exa.cortex_pb.MetricsScope
 enum MetricsScope {
   METRICS_SCOPE_UNSPECIFIED = 0;
   METRICS_SCOPE_EXECUTION_SEGMENT = 1;
@@ -1318,14 +1333,14 @@ enum MetricsScope {
 
 // origin: .genai.AudioContent.MimeType
 enum MimeType {
-  TYPE_UNSPECIFIED = 0;
+  MIMETYPE_TYPE_UNSPECIFIED = 0;
   TYPE_WAV = 1;
   TYPE_MP3 = 2;
   TYPE_AIFF = 3;
   TYPE_AAC = 4;
   TYPE_OGG = 5;
   TYPE_FLAC = 6;
-  TYPE_MPEG = 7;
+  MIMETYPE_TYPE_MPEG = 7;
   TYPE_M4A = 8;
   TYPE_L16 = 9;
   TYPE_S16LE = 10;
@@ -1333,10 +1348,10 @@ enum MimeType {
   TYPE_ALAW = 12;
   TYPE_MULAW = 13;
   TYPE_VIDEO_AUDIO_S16LE = 14;
-  TYPE_WEBM = 15;
+  MIMETYPE_TYPE_WEBM = 15;
 }
 
-// origin: .exa.codeium_common_pb.Modality
+// origin: .exa.cortex_pb.Modality
 enum Modality {
   MODALITY_UNSPECIFIED = 0;
   TEXT = 1;
@@ -1346,7 +1361,7 @@ enum Modality {
   DOCUMENT = 5;
 }
 
-// origin: .exa.codeium_common_pb.Model
+// origin: .exa.cortex_pb.Model
 enum Model {
   MODEL_UNSPECIFIED = 0;
   MODEL_CHAT_20706 = 235;
@@ -2041,7 +2056,7 @@ enum Model {
   MODEL_PLACEHOLDER_M650 = 1650;
 }
 
-// origin: .exa.codeium_common_pb.ModelAlias
+// origin: .exa.cortex_pb.ModelAlias
 enum ModelAlias {
   MODEL_ALIAS_UNSPECIFIED = 0;
   MODEL_ALIAS_CASCADE_BASE = 1;
@@ -2063,7 +2078,7 @@ enum ModelNativeToolType {
   MODEL_NATIVE_TOOL_TYPE_GOOGLE_CODE_EXECUTION = 5;
 }
 
-// origin: .exa.codeium_common_pb.ModelProvider
+// origin: .exa.cortex_pb.ModelProvider
 enum ModelProvider {
   MODEL_PROVIDER_UNSPECIFIED = 0;
   MODEL_PROVIDER_ANTIGRAVITY = 1;
@@ -2085,7 +2100,7 @@ enum ModelTier {
   MODEL_TIER_PRO = 4;
 }
 
-// origin: .exa.codeium_common_pb.ModelType
+// origin: .exa.cortex_pb.ModelType
 enum ModelType {
   MODEL_TYPE_UNSPECIFIED = 0;
   MODEL_TYPE_COMPLETION = 1;
@@ -2123,7 +2138,7 @@ enum Processing {
   AGENTIC = 2;
 }
 
-// origin: .exa.codeium_common_pb.ProductEventType
+// origin: .exa.cortex_pb.ProductEventType
 enum ProductEventType {
   EVENT_UNSPECIFIED = 0;
   LS_DOWNLOAD_START = 1;
@@ -2359,14 +2374,14 @@ enum ProductEventType {
   ANTIGRAVITY_EXTENSION_START = 253;
 }
 
-// origin: .exa.codeium_common_pb.PromptAnnotationKind
+// origin: .exa.cortex_pb.PromptAnnotationKind
 enum PromptAnnotationKind {
   PROMPT_ANNOTATION_KIND_UNSPECIFIED = 0;
   PROMPT_ANNOTATION_KIND_COPY = 1;
   PROMPT_ANNOTATION_KIND_PROMPT_CACHE = 2;
 }
 
-// origin: .exa.codeium_common_pb.PromptElementKind
+// origin: .exa.cortex_pb.PromptElementKind
 enum PromptElementKind {
   PROMPT_ELEMENT_KIND_UNSPECIFIED = 0;
   PROMPT_ELEMENT_KIND_FILE_MARKER = 2;
@@ -2393,7 +2408,7 @@ enum PromptSectionSourceType {
   PROMPT_SECTION_SOURCE_TYPE_TEMPLATE_OVERRIDE = 4;
 }
 
-// origin: .exa.codeium_common_pb.PromptTemplaterType
+// origin: .exa.cortex_pb.PromptTemplaterType
 enum PromptTemplaterType {
   PROMPT_TEMPLATER_TYPE_UNSPECIFIED = 0;
   PROMPT_TEMPLATER_TYPE_LLAMA_2 = 1;
@@ -2418,7 +2433,7 @@ enum RecordingGenerationStatus {
   RECORDING_GENERATION_STATUS_COMPLETED = 3;
 }
 
-// origin: .exa.codeium_common_pb.RefreshCustomizationType
+// origin: .exa.cortex_pb.RefreshCustomizationType
 enum RefreshCustomizationType {
   REFRESH_CUSTOMIZATION_TYPE_UNSPECIFIED = 0;
   REFRESH_CUSTOMIZATION_TYPE_RULE = 1;
@@ -2470,7 +2485,7 @@ enum RunExtensionCodeAutoRunDecision {
   RUN_EXTENSION_CODE_AUTO_RUN_DECISION_MODEL_DENIED = 4;
 }
 
-// origin: .exa.codeium_common_pb.ScmProvider
+// origin: .exa.cortex_pb.ScmProvider
 enum ScmProvider {
   SCM_PROVIDER_UNSPECIFIED = 0;
   SCM_PROVIDER_GITHUB = 1;
@@ -2616,7 +2631,7 @@ enum SidecarUIEntrypoint {
   SIDECAR_UI_ENTRYPOINT_FULL_PANE = 2;
 }
 
-// origin: .exa.codeium_common_pb.SlashCommandType
+// origin: .exa.cortex_pb.SlashCommandType
 enum SlashCommandType {
   SLASH_COMMAND_TYPE_UNSPECIFIED = 0;
   SLASH_COMMAND_TYPE_SYSTEM = 1;
@@ -2638,7 +2653,7 @@ enum Status {
   STATUS_ERROR = 4;
 }
 
-// origin: .exa.codeium_common_pb.StopReason
+// origin: .exa.cortex_pb.StopReason
 enum StopReason {
   STOP_REASON_UNSPECIFIED = 0;
   STOP_REASON_INCOMPLETE = 1;
@@ -2663,7 +2678,7 @@ enum StopReason {
   STOP_REASON_CLIENT_INVALID_MESSAGE_ORDER = 20;
 }
 
-// origin: .exa.codeium_common_pb.SupercompleteTriggerCondition
+// origin: .exa.cortex_pb.SupercompleteTriggerCondition
 enum SupercompleteTriggerCondition {
   SUPERCOMPLETE_TRIGGER_CONDITION_UNSPECIFIED = 0;
   SUPERCOMPLETE_TRIGGER_CONDITION_AUTOCOMPLETE_ACCEPT = 1;
@@ -2696,21 +2711,21 @@ enum TaskStatus {
   TASK_STATUS_DONE = 3;
 }
 
-// origin: .exa.codeium_common_pb.TerminalShellCommandSource
+// origin: .exa.cortex_pb.TerminalShellCommandSource
 enum TerminalShellCommandSource {
   TERMINAL_SHELL_COMMAND_SOURCE_UNSPECIFIED = 0;
   TERMINAL_SHELL_COMMAND_SOURCE_USER = 1;
   TERMINAL_SHELL_COMMAND_SOURCE_CASCADE = 2;
 }
 
-// origin: .exa.codeium_common_pb.TerminalShellCommandStatus
+// origin: .exa.cortex_pb.TerminalShellCommandStatus
 enum TerminalShellCommandStatus {
   TERMINAL_SHELL_COMMAND_STATUS_UNSPECIFIED = 0;
   TERMINAL_SHELL_COMMAND_STATUS_RUNNING = 1;
   TERMINAL_SHELL_COMMAND_STATUS_COMPLETED = 2;
 }
 
-// origin: .exa.codeium_common_pb.ThirdPartyWebSearchProvider
+// origin: .exa.cortex_pb.ThirdPartyWebSearchProvider
 enum ThirdPartyWebSearchProvider {
   THIRD_PARTY_WEB_SEARCH_PROVIDER_UNSPECIFIED = 0;
   THIRD_PARTY_WEB_SEARCH_PROVIDER_GEMINI = 2;
@@ -2737,7 +2752,7 @@ enum TokenType {
   TOKEN_TYPE_PLUGINS = 9;
 }
 
-// origin: .exa.codeium_common_pb.ToolFormatterType
+// origin: .exa.cortex_pb.ToolFormatterType
 enum ToolFormatterType {
   TOOL_FORMATTER_TYPE_UNSPECIFIED = 0;
   TOOL_FORMATTER_TYPE_LLAMA_3 = 1;
@@ -2754,7 +2769,7 @@ enum TrajectorySearchIdType {
   TRAJECTORY_SEARCH_ID_TYPE_MAINLINE = 2;
 }
 
-// origin: .exa.codeium_common_pb.RemoteControlDetails.Transport
+// origin: .exa.cortex_pb.RemoteControlDetails.Transport
 enum Transport {
   TRANSPORT_UNSPECIFIED = 0;
   TRANSPORT_WEB_CHANNEL = 1;
@@ -2789,7 +2804,7 @@ enum UnifiedDiffLineType {
 
 // origin: .genai.UrlContextResultContent.UrlContextResult.Status
 enum UrlcontextresultcontentUrlcontextresult_Status {
-  STATUS_UNSPECIFIED = 0;
+  URLCONTEXTRESULTCONTENTURLCONTEXTRESULT_STATUS_STATUS_UNSPECIFIED = 0;
   SUCCESS = 1;
   ERROR = 2;
   PAYWALL = 3;
@@ -2854,10 +2869,10 @@ message AccumulatedSection {
 
 // origin: .exa.cortex_pb.ActionDebugInfo
 message ActionDebugInfo {
-  repeated DebugInfoEntry entries = 1;
+  map<string, string> entries = 1;
 }
 
-// origin: .exa.codeium_common_pb.ActionPointer
+// origin: .exa.cortex_pb.ActionPointer
 message ActionPointer {
   string cortex_plan_id = 1;
   string code_plan_id = 2;
@@ -2928,7 +2943,7 @@ message ActionSpecDeleteFile {
 // origin: .exa.cortex_pb.ActionSpecSed
 message ActionSpecSed {
   repeated string expressions = 1;
-  repeated FileContentEntry file_content = 2;
+  map<string, string> file_content = 2;
   PathScopeItem path = 3;
 }
 
@@ -2949,6 +2964,7 @@ message AgentConfig {
 message AgentConfigResolution {
   CustomAgentSpec requested_agent_spec = 1;
   string applied_contrib_variant = 2;
+  ContribVariantMetadata contrib_variant_metadata = 3;
 }
 
 // origin: .exa.cortex_pb.AgentDiscoveryConfig
@@ -3023,7 +3039,7 @@ message AgentScriptPythonSpec {
 
 // origin: .exa.cortex_pb.AgenticModeConfig
 message AgenticModeConfig {
-  repeated InjectArtifactReminderThresholdMapEntry inject_artifact_reminder_threshold_map = 1;
+  map<string, int32> inject_artifact_reminder_threshold_map = 1;
   bool disable_artifact_reminders = 2;
   bool use_slash_plan = 3;
 }
@@ -3032,7 +3048,7 @@ message AgenticModeConfig {
 message AllowAlwaysConfig {
   repeated string dangerous_binaries = 1;
   repeated string subcommand_tools = 2;
-  repeated DangerousSubcommandsEntry dangerous_subcommands = 3;
+  map<string, DangerousSubcommands> dangerous_subcommands = 3;
 }
 
 // origin: .exa.cortex_pb.AndroidConfig
@@ -3086,7 +3102,7 @@ message AntigravityBrowserToolConfig {
   bool enable_ark = 29;
 }
 
-// origin: .exa.codeium_common_pb.AntigravityDeployment
+// origin: .exa.cortex_pb.AntigravityDeployment
 message AntigravityDeployment {
   string antigravity_deployment_id = 1;
   string auth_uid = 2;
@@ -3115,7 +3131,28 @@ message Any {
   bytes value = 2;
 }
 
-// origin: .exa.unified_state_sync_pb.AppliedUpdate
+// origin: .google.api.expr.ListValue
+message ApiExpr_ListValue {
+  repeated ApiExpr_Value values = 1;
+}
+
+// origin: .google.api.expr.Value
+message ApiExpr_Value {
+  NullValue null_value = 1;
+  bool bool_value = 2;
+  int64 int64_value = 3;
+  uint64 uint64_value = 4;
+  double double_value = 5;
+  string string_value = 6;
+  bytes bytes_value = 7;
+  EnumValue enum_value = 9;
+  Any object_value = 10;
+  MapValue map_value = 11;
+  ApiExpr_ListValue list_value = 12;
+  string type_value = 15;
+}
+
+// origin: .exa.config_pb.AppliedUpdate
 message AppliedUpdate {
   string key = 1;
   Row new_row = 2;
@@ -3149,43 +3186,13 @@ message Args {
   bool use_message_bridge = 6;
 }
 
-// origin: .exa.cortex_pb.CortexStepGeneric.ArgsEntry
-message ArgsEntry {
-  string key = 1;
-  string value = 2;
-}
-
-// origin: .exa.cortex_pb.ToolOverrideConfig.ArgumentDescriptionOverridesEntry
-message ArgumentDescriptionOverridesEntry {
-  string key = 1;
-  string value = 2;
-}
-
-// origin: .exa.cortex_pb.ToolOverrideConfig.ArgumentNameOverridesEntry
-message ArgumentNameOverridesEntry {
-  string key = 1;
-  string value = 2;
-}
-
 // origin: .exa.cortex_pb.ArgumentOverride
 message ArgumentOverride {
-  GoogleProtobuf_Value static_value = 1;
+  Value static_value = 1;
   bool omit = 2;
 }
 
-// origin: .exa.cortex_pb.ToolOverrideConfig.ArgumentValueOverridesEntry
-message ArgumentValueOverridesEntry {
-  string key = 1;
-  ArgumentOverride value = 2;
-}
-
-// origin: .exa.codeium_common_pb.McpPromptScopeItem.ArgumentValuesEntry
-message ArgumentValuesEntry {
-  string key = 1;
-  string value = 2;
-}
-
-// origin: .exa.codeium_common_pb.ArtifactComment
+// origin: .exa.cortex_pb.ArtifactComment
 message ArtifactComment {
   string artifact_uri = 1;
   string comment = 4;
@@ -3195,13 +3202,13 @@ message ArtifactComment {
   string page_title = 8;
 }
 
-// origin: .exa.codeium_common_pb.ArtifactFullFileTarget
+// origin: .exa.cortex_pb.ArtifactFullFileTarget
 message ArtifactFullFileTarget {
   ImageData image = 1;
   Media media = 2;
 }
 
-// origin: .exa.codeium_common_pb.ArtifactImageSelection
+// origin: .exa.cortex_pb.ArtifactImageSelection
 message ArtifactImageSelection {
   ImageData cropped_image = 1;
   float x = 2;
@@ -3211,7 +3218,7 @@ message ArtifactImageSelection {
   Media cropped_media = 6;
 }
 
-// origin: .exa.codeium_common_pb.ArtifactMetadata
+// origin: .exa.cortex_pb.ArtifactMetadata
 message ArtifactMetadata {
   ArtifactType artifact_type = 1;
   string summary = 2;
@@ -3230,13 +3237,13 @@ message ArtifactReviewState {
   string last_reviewed_content = 4;
 }
 
-// origin: .exa.codeium_common_pb.ArtifactSelection
+// origin: .exa.cortex_pb.ArtifactSelection
 message ArtifactSelection {
   TextSelection text_selection = 1;
   ArtifactImageSelection image_selection = 2;
 }
 
-// origin: .exa.codeium_common_pb.ArtifactSelectionTarget
+// origin: .exa.cortex_pb.ArtifactSelectionTarget
 message ArtifactSelectionTarget {
   repeated ArtifactSelection selections = 1;
 }
@@ -3292,12 +3299,6 @@ message AskQuestionOption {
 // origin: .exa.cortex_pb.AskQuestionToolConfig
 message AskQuestionToolConfig {
   bool enabled = 1;
-}
-
-// origin: .exa.codeium_common_pb.DOMNode.ElementNode.AttributesEntry
-message AttributesEntry {
-  string key = 1;
-  string value = 2;
 }
 
 // origin: .genai.AudioContent
@@ -3361,7 +3362,7 @@ message BattleModeInfo {
   repeated string children_trajectory_ids = 8;
   BattleEndType end_type = 9;
   repeated Model models = 10;
-  repeated OriginalWorkspaceSnapshotsEntry original_workspace_snapshots = 11;
+  map<string, int32> original_workspace_snapshots = 11;
   repeated CascadeRunStatus children_trajectory_statuses = 12;
   repeated Model original_models = 13;
   repeated bool eliminated = 14;
@@ -3369,7 +3370,7 @@ message BattleModeInfo {
   bool forked_from_history = 16;
   string trigger_tag = 17;
   string reference_conversation_id = 18;
-  repeated CortexBattlemodeinfo_MetadataEntry metadata = 19;
+  map<string, string> metadata = 19;
   CloneStrategy clone_strategy = 20;
   repeated string contrib_variants = 21;
 }
@@ -3381,7 +3382,7 @@ message BattleModeMetadata {
   ModelInfo model_info_override = 3;
 }
 
-// origin: .exa.codeium_common_pb.Blobref
+// origin: .exa.cortex_pb.Blobref
 message Blobref {
   string blob_id = 1;
 }
@@ -3416,7 +3417,7 @@ message BroadcastConversationDeletionRequest {
 message BroadcastConversationDeletionResponse {
 }
 
-// origin: .exa.codeium_common_pb.BrowserCodeBlockScopeItem
+// origin: .exa.cortex_pb.BrowserCodeBlockScopeItem
 message BrowserCodeBlockScopeItem {
   string url = 1;
   string title = 2;
@@ -3441,7 +3442,7 @@ message BrowserListNetworkRequestsToolConfig {
   bool enabled = 1;
 }
 
-// origin: .exa.codeium_common_pb.BrowserPageMetadata
+// origin: .exa.cortex_pb.BrowserPageMetadata
 message BrowserPageMetadata {
   string url = 1;
   string page_id = 2;
@@ -3454,7 +3455,7 @@ message BrowserPageMetadata {
   uint32 page_height = 9;
 }
 
-// origin: .exa.codeium_common_pb.BrowserPageScopeItem
+// origin: .exa.cortex_pb.BrowserPageScopeItem
 message BrowserPageScopeItem {
   string url = 1;
   string title = 2;
@@ -3468,7 +3469,7 @@ message BrowserStateDiffingConfig {
   bool include_dom_tree_in_diffs = 2;
 }
 
-// origin: .exa.codeium_common_pb.BrowserStateSnapshot
+// origin: .exa.cortex_pb.BrowserStateSnapshot
 message BrowserStateSnapshot {
   Timestamp timestamp = 1;
   string user_active_page_id = 2;
@@ -3498,7 +3499,7 @@ message BrowserSubagentToolConfig {
   bool include_ci_prompt = 13;
 }
 
-// origin: .exa.codeium_common_pb.BrowserTextScopeItem
+// origin: .exa.cortex_pb.BrowserTextScopeItem
 message BrowserTextScopeItem {
   string url = 1;
   string visible_text = 2;
@@ -3836,11 +3837,12 @@ message CascadeToolConfig {
   WaitToolConfig wait = 54;
   AskCustomPermissionToolConfig ask_custom_permission = 55;
   ToolOutputConfig tool_output = 56;
+  ListPluginAccountsToolConfig list_plugin_accounts = 57;
 }
 
 // origin: .exa.jetski_cortex_pb.CascadeTrajectorySummaries
 message CascadeTrajectorySummaries {
-  repeated SummariesEntry summaries = 1;
+  map<string, CascadeTrajectorySummary> summaries = 1;
 }
 
 // origin: .exa.jetski_cortex_pb.CascadeTrajectorySummary
@@ -3868,6 +3870,7 @@ message CascadeTrajectorySummary {
   string fork_parent_conversation_id = 24;
   bool interrupted = 25;
   bool has_activity = 26;
+  bool cloud = 27;
 }
 
 // origin: .exa.cortex_pb.CascadeUserInteraction
@@ -3896,13 +3899,13 @@ message CascadeUserInteraction {
   RemoteControlDetails remote_control_details = 25;
 }
 
-// origin: .exa.codeium_common_pb.CciWithSubrange
+// origin: .exa.cortex_pb.CciWithSubrange
 message CciWithSubrange {
   CodeContextItem cci = 1;
   ContextSubrange subrange = 2;
 }
 
-// origin: .exa.context_module_pb.CciWithSubrangeWithRetrievalMetadata
+// origin: .google.internal.cloud.code.v1internal.CciWithSubrangeWithRetrievalMetadata
 message CciWithSubrangeWithRetrievalMetadata {
   CciWithSubrange cci_with_subrange = 1;
   RetrievedCodeContextItemMetadata metadata = 2;
@@ -3976,7 +3979,7 @@ message ChatMessagePrompt {
   string provider_assigned_message_id = 21;
   repeated Any side_channels = 22;
   repeated Any passback_context = 24;
-  Struct prompt_struct = 25;
+  Genai_Struct prompt_struct = 25;
   repeated int32 merged_step_idxs = 26;
   bool telemetry_redacted = 27;
 }
@@ -4002,7 +4005,7 @@ message ChatModelMetadata {
   repeated RetryInfo retry_infos = 17;
   repeated Credits consumed_credits = 18;
   string response_model = 19;
-  repeated CustomMetadataEntry custom_metadata = 20;
+  map<string, string> custom_metadata = 20;
   string model_display_name = 21;
   string response_model_full = 22;
 }
@@ -4021,7 +4024,7 @@ message ChatStartMetadata {
   ContextWindowMetadata context_window_metadata = 10;
 }
 
-// origin: .exa.codeium_common_pb.ChatToolCall
+// origin: .exa.cortex_pb.ChatToolCall
 message ChatToolCall {
   string id = 1;
   string name = 2;
@@ -4096,7 +4099,7 @@ message CheckpointConfig {
   bool fail_on_invalid_output = 33;
 }
 
-// origin: .exa.codeium_common_pb.Citation
+// origin: .exa.cortex_pb.Citation
 message Citation {
   int32 start_index = 1;
   int32 end_index = 2;
@@ -4141,7 +4144,7 @@ message CodeAcknowledgementInfo {
   UnifiedDiff diff = 3;
 }
 
-// origin: .exa.codeium_common_pb.CodeContextItem
+// origin: .exa.cortex_pb.CodeContextItem
 message CodeContextItem {
   string absolute_path_migrate_me_to_uri = 1;
   repeated WorkspacePath workspace_paths = 2;
@@ -4151,7 +4154,7 @@ message CodeContextItem {
   uint32 end_line = 6;
   CodeContextType context_type = 7;
   Language language = 10;
-  repeated SnippetByTypeEntry snippet_by_type = 11;
+  map<string, SnippetWithWordCount> snippet_by_type = 11;
   uint32 start_col = 12;
   uint32 end_col = 13;
   GitRepoInfo repo_info = 14;
@@ -4159,12 +4162,12 @@ message CodeContextItem {
   string absolute_uri = 16;
 }
 
-// origin: .exa.context_module_pb.CodeContextProviderMetadata
+// origin: .google.internal.cloud.code.v1internal.CodeContextProviderMetadata
 message CodeContextProviderMetadata {
   float relative_weight = 1;
 }
 
-// origin: .exa.codeium_common_pb.CodeDiagnostic
+// origin: .exa.cortex_pb.CodeDiagnostic
 message CodeDiagnostic {
   Range range = 1;
   string message = 2;
@@ -4253,12 +4256,6 @@ message CodeToolConfig {
   int32 max_stored_diff_bytes = 22;
 }
 
-// origin: .exa.codeium_common_pb.SlashCommandScopeItem.ArgumentValuesEntry
-message CodeiumCommonSlashcommandscopeitem_ArgumentValuesEntry {
-  string key = 1;
-  string value = 2;
-}
-
 // origin: .exa.cortex_pb.CodingAgentConfig
 message CodingAgentConfig {
   bool google_mode = 1;
@@ -4329,7 +4326,7 @@ message CompletedInteraction {
   CascadeUserInteraction response = 2;
 }
 
-// origin: .exa.codeium_common_pb.CompletionConfiguration
+// origin: .exa.cortex_pb.CompletionConfiguration
 message CompletionConfiguration {
   uint64 num_completions = 1;
   uint64 max_tokens = 2;
@@ -4352,7 +4349,7 @@ message CompletionConfiguration {
   int32 thinking_level = 19;
 }
 
-// origin: .exa.codeium_common_pb.CompletionsRequest
+// origin: .exa.cortex_pb.CompletionsRequest
 message CompletionsRequest {
   CompletionConfiguration configuration = 1;
   string prompt = 2;
@@ -4388,7 +4385,7 @@ message ComponentResolutionPolicy {
   ResolutionPolicy empty_component_policy = 2;
 }
 
-// origin: .exa.codeium_common_pb.ConsoleLogLine
+// origin: .exa.cortex_pb.ConsoleLogLine
 message ConsoleLogLine {
   string timestamp_str = 1;
   string type = 2;
@@ -4396,7 +4393,7 @@ message ConsoleLogLine {
   string location = 4;
 }
 
-// origin: .exa.codeium_common_pb.ConsoleLogScopeItem
+// origin: .exa.cortex_pb.ConsoleLogScopeItem
 message ConsoleLogScopeItem {
   repeated ConsoleLogLine lines = 1;
   string server_address = 2;
@@ -4429,7 +4426,7 @@ message ContextData {
   FileContentData file = 2;
 }
 
-// origin: .exa.context_module_pb.ContextModuleResult
+// origin: .google.internal.cloud.code.v1internal.ContextModuleResult
 message ContextModuleResult {
   repeated CciWithSubrangeWithRetrievalMetadata retrieved_cci_with_subranges = 1;
   Document active_document = 2;
@@ -4441,12 +4438,12 @@ message ContextModuleResult {
   BrowserStateSnapshot browser_state_snapshot = 9;
 }
 
-// origin: .exa.codeium_common_pb.ContextScope
+// origin: .exa.cortex_pb.ContextScope
 message ContextScope {
   repeated ContextScopeItem items = 1;
 }
 
-// origin: .exa.codeium_common_pb.ContextScopeItem
+// origin: .exa.cortex_pb.ContextScopeItem
 message ContextScopeItem {
   PathScopeItem file = 1;
   PathScopeItem directory = 2;
@@ -4479,7 +4476,7 @@ message ContextScopeItem {
   PluginScopeItem plugin = 30;
 }
 
-// origin: .exa.codeium_common_pb.ContextSubrange
+// origin: .exa.cortex_pb.ContextSubrange
 message ContextSubrange {
   ContextSnippetType snippet_type = 1;
   int64 start_offset = 2;
@@ -4492,6 +4489,13 @@ message ContextWindowMetadata {
   TruncationReason truncation_reason = 2;
   TokenBreakdown token_breakdown = 3;
   int32 max_context_tokens = 4;
+}
+
+// origin: .exa.cortex_pb.ContribVariantMetadata
+message ContribVariantMetadata {
+  string assigned_variant = 1;
+  repeated string eligible_variants = 2;
+  string applied_variant = 3;
 }
 
 // origin: .exa.jetski_cortex_pb.ConversationAnnotations
@@ -4538,18 +4542,12 @@ message ConversationPickerResponse {
   repeated string deleted_cascade_ids = 3;
 }
 
-// origin: .exa.codeium_common_pb.ConversationScopeItem
+// origin: .exa.cortex_pb.ConversationScopeItem
 message ConversationScopeItem {
   string id = 1;
   string title = 2;
   Timestamp last_modified_time = 3;
   string source = 4;
-}
-
-// origin: .exa.cortex_pb.BattleModeInfo.MetadataEntry
-message CortexBattlemodeinfo_MetadataEntry {
-  string key = 1;
-  string value = 2;
 }
 
 // origin: .exa.cortex_pb.CortexStepEditNotebook.Args
@@ -4582,12 +4580,6 @@ message CortexCortexstepeditnotebook_Reply {
   int32 total_cell_count = 2;
 }
 
-// origin: .exa.cortex_pb.CortexStepEphemeralMessage.MetadataEntry
-message CortexCortexstepephemeralmessage_MetadataEntry {
-  string key = 1;
-  string value = 2;
-}
-
 // origin: .exa.cortex_pb.CortexStepExecuteNotebook.CellOutput
 message CortexCortexstepexecutenotebook_CellOutput {
   string cell_id = 1;
@@ -4614,12 +4606,6 @@ message CortexCortexstepreadnotebook_Reply {
   repeated NotebookBlob blobs = 3;
 }
 
-// origin: .exa.cortex_pb.CortexStepSystemMessage.MetadataEntry
-message CortexCortexstepsystemmessage_MetadataEntry {
-  string key = 1;
-  string value = 2;
-}
-
 // origin: .exa.cortex_pb.CortexErrorDetails
 message CortexErrorDetails {
   string user_error_message = 1;
@@ -4634,24 +4620,6 @@ message CortexErrorDetails {
   repeated string rpc_error_details = 10;
   string sherlog_link = 11;
   string user_error_number = 12;
-}
-
-// origin: .exa.cortex_pb.GenericStepResult.DataEntry
-message CortexGenericstepresult_DataEntry {
-  string key = 1;
-  Any value = 2;
-}
-
-// origin: .exa.cortex_pb.GenericStepResult.MetadataEntry
-message CortexGenericstepresult_MetadataEntry {
-  string key = 1;
-  string value = 2;
-}
-
-// origin: .exa.cortex_pb.McpServerSpec.EnvEntry
-message CortexMcpserverspec_EnvEntry {
-  string key = 1;
-  string value = 2;
 }
 
 // origin: .exa.cortex_pb.CortexMemory
@@ -4716,12 +4684,6 @@ message CortexMemoryScope {
 // origin: .exa.cortex_pb.CortexMemoryText
 message CortexMemoryText {
   string content = 1;
-}
-
-// origin: .exa.cortex_pb.SidecarConfig.EnvEntry
-message CortexSidecarconfig_EnvEntry {
-  string key = 1;
-  string value = 2;
 }
 
 // origin: .exa.cortex_pb.CortexStepAgencyToolCall
@@ -4960,7 +4922,7 @@ message CortexStepCheckpoint {
   string user_intent = 4;
   string session_summary = 5;
   string code_change_summary = 6;
-  repeated EditedFileMapEntry edited_file_map = 7;
+  map<string, DiffList> edited_file_map = 7;
   string memory_summary = 8;
   bool intent_only = 9;
   string conversation_title = 10;
@@ -5084,7 +5046,7 @@ message CortexStepCommandStatus {
 message CortexStepCompile {
   CortexStepCompileTool tool = 1;
   string input_spec = 2;
-  repeated OptionsEntry options = 3;
+  map<string, string> options = 3;
   string target = 4;
   string artifact_path = 5;
   bool artifact_is_executable = 6;
@@ -5149,7 +5111,7 @@ message CortexStepEphemeralMessage {
   repeated string triggered_heuristics = 3;
   repeated Media attachments = 4;
   string dom_tree_uri = 5;
-  repeated CortexCortexstepephemeralmessage_MetadataEntry metadata = 6;
+  map<string, string> metadata = 6;
 }
 
 // origin: .exa.cortex_pb.CortexStepErrorMessage
@@ -5230,7 +5192,7 @@ message CortexStepFindAllReferences {
 
 // origin: .exa.cortex_pb.CortexStepFinish
 message CortexStepFinish {
-  repeated OutputEntry output = 1;
+  map<string, string> output = 1;
   string output_string = 2;
 }
 
@@ -5261,7 +5223,7 @@ message CortexStepGeneratorMetadata {
 
 // origin: .exa.cortex_pb.CortexStepGeneric
 message CortexStepGeneric {
-  repeated ArgsEntry args = 1;
+  map<string, string> args = 1;
   GenericStepResult result = 2;
 }
 
@@ -5329,7 +5291,7 @@ message CortexStepInvokeSubagent {
 
 // origin: .exa.cortex_pb.CortexStepKIInsertion
 message CortexStepKIInsertion {
-  repeated KiReferencesEntry ki_references = 1;
+  map<string, KnowledgeReferences> ki_references = 1;
 }
 
 // origin: .exa.cortex_pb.CortexStepKnowledgeArtifacts
@@ -5403,7 +5365,7 @@ message CortexStepMcpTool {
   string progress_message = 10;
   double progress = 11;
   double progress_total = 12;
-  repeated MetadataEntry metadata = 13;
+  map<string, string> metadata = 13;
 }
 
 // origin: .exa.cortex_pb.CortexStepMemory
@@ -5554,9 +5516,9 @@ message CortexStepProposeCode {
 message CortexStepRPCAction {
   string service_name = 1;
   string method_name = 2;
-  GoogleProtobuf_Struct arguments = 3;
+  Struct arguments = 3;
   string error_message = 4;
-  GoogleProtobuf_Struct result = 5;
+  Struct result = 5;
 }
 
 // origin: .exa.cortex_pb.CortexStepReadBrowserPage
@@ -5743,7 +5705,7 @@ message CortexStepSystemMessage {
   StepRenderInfo render_info = 2;
   string event_type = 3;
   AgentMessage agent_message = 4;
-  repeated CortexCortexstepsystemmessage_MetadataEntry metadata = 5;
+  map<string, string> metadata = 5;
   repeated Media media = 6;
 }
 
@@ -5946,7 +5908,7 @@ message CortexWorkspaceMetadata {
   string branch_name = 4;
 }
 
-// origin: .google.internal.cloud.code.v1internal.Credits
+// origin: .google.rpc.context.Credits
 message Credits {
   CreditType credit_type = 1;
   int64 credit_amount = 2;
@@ -6008,12 +5970,6 @@ message CustomAgentSystemPromptConfig {
 message CustomExtensions {
 }
 
-// origin: .exa.cortex_pb.ChatModelMetadata.CustomMetadataEntry
-message CustomMetadataEntry {
-  string key = 1;
-  string value = 2;
-}
-
 // origin: .exa.cortex_pb.CustomPromptSection
 message CustomPromptSection {
   PromptSection prompt_section = 1;
@@ -6066,7 +6022,7 @@ message CustomizationPath {
   string absolute = 3;
 }
 
-// origin: .exa.codeium_common_pb.DOMElementScopeItem
+// origin: .exa.cortex_pb.DOMElementScopeItem
 message DOMElementScopeItem {
   string tag_name = 1;
   string outer_html = 2;
@@ -6080,17 +6036,17 @@ message DOMExtractionConfig {
   bool include_coordinates = 1;
 }
 
-// origin: .exa.codeium_common_pb.DOMNode
+// origin: .exa.cortex_pb.DOMNode
 message DOMNode {
   bool is_visible = 1;
   ElementNode element = 2;
   TextNode text = 3;
 }
 
-// origin: .exa.codeium_common_pb.DOMTree
+// origin: .exa.cortex_pb.DOMTree
 message DOMTree {
   string root_id = 1;
-  repeated MapEntry map = 2;
+  map<string, DOMNode> map = 2;
 }
 
 // origin: .exa.cortex_pb.AllowAlwaysConfig.DangerousSubcommands
@@ -6098,27 +6054,9 @@ message DangerousSubcommands {
   repeated string subcommands = 1;
 }
 
-// origin: .exa.cortex_pb.AllowAlwaysConfig.DangerousSubcommandsEntry
-message DangerousSubcommandsEntry {
-  string key = 1;
-  DangerousSubcommands value = 2;
-}
-
 // origin: .exa.cortex_pb.DataAccessMetadata
 message DataAccessMetadata {
   repeated string depot_paths = 1;
-}
-
-// origin: .exa.unified_state_sync_pb.Topic.DataEntry
-message DataEntry {
-  string key = 1;
-  Row value = 2;
-}
-
-// origin: .exa.cortex_pb.ActionDebugInfo.DebugInfoEntry
-message DebugInfoEntry {
-  string key = 1;
-  string value = 2;
 }
 
 // origin: .exa.cortex_pb.DeclarativeComponentConfig
@@ -6144,25 +6082,13 @@ message DefaultAgentConfig {
   string force_contrib_variant = 4;
 }
 
-// origin: .exa.codeium_common_pb.DeployTarget
+// origin: .exa.cortex_pb.DeployTarget
 message DeployTarget {
   DeploymentProvider deployment_provider = 1;
   bool is_sandbox = 2;
   string provider_team_id = 3;
   string provider_team_slug = 4;
   string domain = 5;
-}
-
-// origin: .exa.cortex_pb.ToolDescriptionOverrideMap.DescriptionsEntry
-message DescriptionsEntry {
-  string key = 1;
-  SectionOverrideConfig value = 2;
-}
-
-// origin: .exa.codeium_common_pb.MetricsRecord.DetailsEntry
-message DetailsEntry {
-  string key = 1;
-  string value = 2;
 }
 
 // origin: .exa.diff_action_pb.DiffBlock
@@ -6172,7 +6098,7 @@ message DiffBlock {
   UnifiedDiff unified_diff = 3;
 }
 
-// origin: .exa.codeium_common_pb.DiffCommentInfo
+// origin: .exa.cortex_pb.DiffCommentInfo
 message DiffCommentInfo {
   TextSelection original_selection = 1;
   TextSelection modified_selection = 2;
@@ -6190,7 +6116,7 @@ message DiffStats {
   int32 deletions = 2;
 }
 
-// origin: .exa.codeium_common_pb.Document
+// origin: .exa.cortex_pb.Document
 message Document {
   string absolute_path_migrate_me_to_uri = 1;
   string relative_path_migrate_me_to_workspace_uri = 2;
@@ -6220,7 +6146,7 @@ message DocumentContent {
   string mime_type_string = 6;
 }
 
-// origin: .exa.codeium_common_pb.DocumentLinesElement
+// origin: .exa.cortex_pb.DocumentLinesElement
 message DocumentLinesElement {
   DocumentQuery document_query = 1;
   repeated CodeContextItem overlapped_code_context_items = 2;
@@ -6228,26 +6154,26 @@ message DocumentLinesElement {
   uint32 last_element_prefix_overlap = 4;
 }
 
-// origin: .exa.codeium_common_pb.DocumentOutline
+// origin: .exa.cortex_pb.DocumentOutline
 message DocumentOutline {
   repeated DocumentOutlineElement elements = 1;
   int64 start_index = 2;
 }
 
-// origin: .exa.codeium_common_pb.DocumentOutlineElement
+// origin: .exa.cortex_pb.DocumentOutlineElement
 message DocumentOutlineElement {
   CodeContextItem code_context_item = 1;
   DocumentLinesElement document_lines_element = 2;
   string text = 3;
 }
 
-// origin: .exa.codeium_common_pb.DocumentPosition
+// origin: .exa.cortex_pb.DocumentPosition
 message DocumentPosition {
   uint64 row = 1;
   uint64 col = 2;
 }
 
-// origin: .exa.codeium_common_pb.DocumentQuery
+// origin: .exa.cortex_pb.DocumentQuery
 message DocumentQuery {
   string text = 1;
   int32 cursor_offset = 2;
@@ -6269,7 +6195,7 @@ message Duration {
   int32 nanos = 2;
 }
 
-// origin: .exa.codeium_common_pb.DynamicContextScopeItem
+// origin: .exa.cortex_pb.DynamicContextScopeItem
 message DynamicContextScopeItem {
   string provider_label = 1;
   string item_value = 2;
@@ -6293,25 +6219,19 @@ message EditNotebookResponse {
   int32 total_cell_count = 2;
 }
 
-// origin: .exa.cortex_pb.CortexStepCheckpoint.EditedFileMapEntry
-message EditedFileMapEntry {
-  string key = 1;
-  DiffList value = 2;
-}
-
-// origin: .exa.codeium_common_pb.EditorOptions
+// origin: .exa.cortex_pb.EditorOptions
 message EditorOptions {
   uint64 tab_size = 1;
   bool insert_spaces = 2;
   bool disable_autocomplete_in_comments = 3;
 }
 
-// origin: .exa.codeium_common_pb.DOMNode.ElementNode
+// origin: .exa.cortex_pb.DOMNode.ElementNode
 message ElementNode {
   string tag_name = 1;
   string xpath = 2;
   repeated string children = 3;
-  repeated AttributesEntry attributes = 4;
+  map<string, string> attributes = 4;
   bool is_interactive = 5;
   bool is_top_element = 6;
   int32 highlight_index = 7;
@@ -6349,10 +6269,16 @@ message EnterpriseToolConfig {
   repeated string custom_workspace = 2;
 }
 
-// origin: .exa.extension_server_pb.ExecuteCommandRequest.EnvEntry
-message EnvEntry {
-  string key = 1;
-  string value = 2;
+// origin: .google.api.expr.MapValue.Entry
+message Entry {
+  ApiExpr_Value key = 1;
+  ApiExpr_Value value = 2;
+}
+
+// origin: .google.api.expr.EnumValue
+message EnumValue {
+  string type = 1;
+  int32 value = 2;
 }
 
 // origin: .exa.cortex_pb.EphemeralMessagesConfig
@@ -6369,7 +6295,7 @@ message EphemeralMessagesConfig {
   repeated string static_messages = 10;
 }
 
-// origin: .exa.codeium_common_pb.ErrorTrace
+// origin: .exa.cortex_pb.ErrorTrace
 message ErrorTrace {
   string error_id = 1;
   int64 timestamp_unix_ms = 2;
@@ -6380,12 +6306,6 @@ message ErrorTrace {
   string ide_version = 7;
   string os = 8;
   bool is_dev = 9;
-}
-
-// origin: .exa.extension_server_pb.EventMetadataRecord
-message EventMetadataRecord {
-  string key = 1;
-  string value = 2;
 }
 
 // origin: .exa.cortex_pb.ExecutableScriptSpec
@@ -6402,7 +6322,7 @@ message ExecuteCommandRequest {
   bool sandbox_override = 6;
   string conversation_id = 7;
   string terminal_host = 8;
-  repeated EnvEntry env = 9;
+  map<string, string> env = 9;
 }
 
 // origin: .exa.extension_server_pb.ExecuteNotebookRequest
@@ -6444,7 +6364,7 @@ message ExecutorMetadata {
   LoadedCustomizations loaded_customizations = 18;
 }
 
-// origin: .exa.codeium_common_pb.ExperimentConfig
+// origin: .exa.cortex_pb.ExperimentConfig
 message ExperimentConfig {
   repeated ExperimentKey force_enable_experiments = 1;
   repeated ExperimentKey force_disable_experiments = 2;
@@ -6462,7 +6382,7 @@ message ExperimentValue {
   double number_value = 3;
 }
 
-// origin: .exa.codeium_common_pb.ExperimentWithVariant
+// origin: .exa.cortex_pb.ExperimentWithVariant
 message ExperimentWithVariant {
   ExperimentKey key = 1;
   string string = 2;
@@ -6475,7 +6395,7 @@ message ExperimentWithVariant {
 
 // origin: .exa.cortex_pb.Experiments
 message Experiments {
-  repeated ValuesEntry values = 1;
+  map<string, ExperimentValue> values = 1;
 }
 
 // origin: .devtools.cider.agent.trajectory_steps.StartCodeReviewStep.Args.ExternalContext
@@ -6511,12 +6431,6 @@ message Field {
   Value value = 2;
 }
 
-// origin: .google.protobuf.Struct.FieldsEntry
-message FieldsEntry {
-  string key = 1;
-  GoogleProtobuf_Value value = 2;
-}
-
 // origin: .exa.cortex_pb.FileAccessPermission
 message FileAccessPermission {
   string path = 1;
@@ -6531,18 +6445,18 @@ message FileCitation {
   string document_uri = 1;
   string file_name = 2;
   string source = 3;
-  Struct custom_metadata = 4;
+  Genai_Struct custom_metadata = 4;
   int32 page_number = 5;
   string media_id = 6;
 }
 
-// origin: .exa.codeium_common_pb.FileComment
+// origin: .exa.cortex_pb.FileComment
 message FileComment {
   string file_uri = 1;
   repeated FileCommentInfo file_comment_infos = 2;
 }
 
-// origin: .exa.codeium_common_pb.FileCommentInfo
+// origin: .exa.cortex_pb.FileCommentInfo
 message FileCommentInfo {
   string comment = 1;
   TextSelection selection = 2;
@@ -6556,13 +6470,7 @@ message FileContentData {
   FileVersion file_version = 3;
 }
 
-// origin: .exa.cortex_pb.ActionSpecSed.FileContentEntry
-message FileContentEntry {
-  string key = 1;
-  string value = 2;
-}
-
-// origin: .exa.codeium_common_pb.FileDiffComment
+// origin: .exa.cortex_pb.FileDiffComment
 message FileDiffComment {
   string file_uri = 1;
   repeated DiffCommentInfo diff_comment_infos = 3;
@@ -6574,7 +6482,7 @@ message FileDiffRef {
   DiffStats diff_stats = 2;
 }
 
-// origin: .exa.codeium_common_pb.FileLineRange
+// origin: .exa.cortex_pb.FileLineRange
 message FileLineRange {
   string absolute_uri = 1;
   uint32 start_line = 2;
@@ -6699,7 +6607,7 @@ message Function {
 // origin: .genai.FunctionCallContent
 message FunctionCallContent {
   string name = 3;
-  Struct arguments = 4;
+  Genai_Struct arguments = 4;
 }
 
 // origin: .exa.cortex_pb.FunctionProvider
@@ -6715,7 +6623,7 @@ message FunctionProvider {
 // origin: .genai.FunctionResultContent
 message FunctionResultContent {
   bool is_error = 2;
-  Struct struct_result = 3;
+  Genai_Struct struct_result = 3;
   string string_result = 7;
   string name = 8;
   FunctionResultSubcontentList content_list = 9;
@@ -6739,25 +6647,31 @@ message G3DocData {
   FileVersion file_version = 3;
 }
 
-// origin: .exa.codeium_common_pb.GRPCStatus
+// origin: .exa.cortex_pb.GRPCStatus
 message GRPCStatus {
   int32 code = 1;
   string message = 2;
+}
+
+// origin: .genai.Struct
+message Genai_Struct {
+  repeated Field fields = 1;
 }
 
 // origin: .exa.cortex_pb.GenerateImageToolConfig
 message GenerateImageToolConfig {
   bool force_disable = 1;
   string output_directory = 2;
+  bool save_to_parent_artifact_directory = 3;
 }
 
 // origin: .exa.cortex_pb.GenericStepResult
 message GenericStepResult {
   string result = 1;
-  repeated CortexGenericstepresult_MetadataEntry metadata = 2;
+  map<string, string> metadata = 2;
   StepRenderInfo step_render_info = 3;
   repeated Media media = 4;
-  repeated CortexGenericstepresult_DataEntry data = 5;
+  map<string, Any> data = 5;
   Any payload = 6;
   string full_output_uri = 7;
 }
@@ -6834,7 +6748,7 @@ message GetSecretValueResponse {
   string value = 1;
 }
 
-// origin: .exa.codeium_common_pb.GitRepoInfo
+// origin: .exa.cortex_pb.GitRepoInfo
 message GitRepoInfo {
   string name = 1;
   string owner = 2;
@@ -6864,26 +6778,6 @@ message GoogleMapsResult {
 // origin: .genai.GoogleMapsResultContent
 message GoogleMapsResultContent {
   repeated GoogleMapsResult result = 1;
-}
-
-// origin: .google.protobuf.ListValue
-message GoogleProtobuf_ListValue {
-  repeated GoogleProtobuf_Value values = 1;
-}
-
-// origin: .google.protobuf.Struct
-message GoogleProtobuf_Struct {
-  repeated FieldsEntry fields = 1;
-}
-
-// origin: .google.protobuf.Value
-message GoogleProtobuf_Value {
-  NullValue null_value = 1;
-  double number_value = 2;
-  string string_value = 3;
-  bool bool_value = 4;
-  GoogleProtobuf_Struct struct_value = 5;
-  GoogleProtobuf_ListValue list_value = 6;
 }
 
 // origin: .genai.GoogleSearchCallContent.GoogleSearchCallArguments
@@ -6929,17 +6823,17 @@ message GrepToolConfig {
   bool force_disable = 9;
 }
 
-// origin: .exa.codeium_common_pb.GroundingMetadata
+// origin: .exa.cortex_pb.GroundingMetadata
 message GroundingMetadata {
   repeated Source sources = 1;
 }
 
-// origin: .exa.codeium_common_pb.Guideline
+// origin: .exa.cortex_pb.Guideline
 message Guideline {
   repeated GuidelineItem items = 1;
 }
 
-// origin: .exa.codeium_common_pb.GuidelineItem
+// origin: .exa.cortex_pb.GuidelineItem
 message GuidelineItem {
   string guideline = 1;
 }
@@ -6964,7 +6858,7 @@ message HandleProposeCodeExtensionVerificationRequest {
 message HandleProposeCodeExtensionVerificationResponse {
 }
 
-// origin: .exa.language_server_pb.HandleStreamingCommandRequest
+// origin: .exa.cortex_pb.HandleStreamingCommandRequest
 message HandleStreamingCommandRequest {
   Metadata metadata = 1;
   Document document = 2;
@@ -6987,7 +6881,7 @@ message HandleStreamingCommandRequest {
   repeated IntellisenseSuggestion intellisense_suggestions = 19;
 }
 
-// origin: .exa.language_server_pb.HandleStreamingCommandResponse
+// origin: .exa.cortex_pb.HandleStreamingCommandResponse
 message HandleStreamingCommandResponse {
   string completion_id = 1;
   string prompt_id = 2;
@@ -7006,12 +6900,6 @@ message HandleStreamingCommandResponse {
   Trajectory trajectory = 15;
   string raw_text = 16;
   string trace_id = 17;
-}
-
-// origin: .exa.cortex_pb.McpServerSpec.HeadersEntry
-message HeadersEntry {
-  string key = 1;
-  string value = 2;
 }
 
 // origin: .exa.extension_server_pb.HeartbeatRequest
@@ -7052,23 +6940,17 @@ message Image {
 message ImageContent {
   GenaiImagecontent_MimeType mime_type = 1;
   bytes data = 2;
-  MediaResolution resolution = 5;
+  Genai_MediaResolution resolution = 5;
   string uri = 6;
   string mime_type_string = 8;
 }
 
-// origin: .exa.codeium_common_pb.ImageData
+// origin: .exa.cortex_pb.ImageData
 message ImageData {
   string base64_data = 1;
   string mime_type = 2;
   string caption = 3;
   string uri = 4;
-}
-
-// origin: .exa.cortex_pb.AgenticModeConfig.InjectArtifactReminderThresholdMapEntry
-message InjectArtifactReminderThresholdMapEntry {
-  string key = 1;
-  int32 value = 2;
 }
 
 // origin: .exa.cortex_pb.InjectedResponseMetadata
@@ -7085,7 +6967,7 @@ message InsertCodeAtCursorRequest {
 message InsertCodeAtCursorResponse {
 }
 
-// origin: .exa.codeium_common_pb.IntellisenseSuggestion
+// origin: .exa.cortex_pb.IntellisenseSuggestion
 message IntellisenseSuggestion {
   Range range = 1;
   string text = 2;
@@ -7148,27 +7030,21 @@ message Issue {
   string status_detail = 5;
 }
 
-// origin: .exa.cortex_pb.CortexStepKIInsertion.KiReferencesEntry
-message KiReferencesEntry {
-  string key = 1;
-  KnowledgeReferences value = 2;
-}
-
-// origin: .exa.codeium_common_pb.KnowledgeBaseChunk
+// origin: .exa.cortex_pb.KnowledgeBaseChunk
 message KnowledgeBaseChunk {
   string text = 1;
   int32 position = 2;
   MarkdownChunk markdown_chunk = 3;
 }
 
-// origin: .exa.codeium_common_pb.KnowledgeBaseGroup
+// origin: .exa.cortex_pb.KnowledgeBaseGroup
 message KnowledgeBaseGroup {
   string description = 1;
   KnowledgeBaseItemWithMetadata item = 2;
   repeated KnowledgeBaseGroup children = 3;
 }
 
-// origin: .exa.codeium_common_pb.KnowledgeBaseItem
+// origin: .exa.cortex_pb.KnowledgeBaseItem
 message KnowledgeBaseItem {
   string document_id = 1;
   string text = 2;
@@ -7182,7 +7058,7 @@ message KnowledgeBaseItem {
   Media media = 10;
 }
 
-// origin: .exa.codeium_common_pb.KnowledgeBaseItemWithMetadata
+// origin: .exa.cortex_pb.KnowledgeBaseItemWithMetadata
 message KnowledgeBaseItemWithMetadata {
   KnowledgeBaseItem knowledge_base_item = 1;
   float score = 2;
@@ -7190,7 +7066,7 @@ message KnowledgeBaseItemWithMetadata {
   string document_source_name = 4;
 }
 
-// origin: .exa.codeium_common_pb.KnowledgeBaseScopeItem
+// origin: .exa.cortex_pb.KnowledgeBaseScopeItem
 message KnowledgeBaseScopeItem {
   string document_id = 1;
   string display_name = 3;
@@ -7246,7 +7122,7 @@ message LanguageServerStartedRequest {
 message LanguageServerStartedResponse {
 }
 
-// origin: .exa.language_server_pb.LatencyInfo
+// origin: .exa.cortex_pb.LatencyInfo
 message LatencyInfo {
   uint64 client_latency_ms = 1;
   uint64 prompt_latency_ms = 2;
@@ -7274,7 +7150,7 @@ message LineRangeTarget {
   uint32 end_line = 3;
 }
 
-// origin: .exa.codeium_common_pb.LinkScopeItem
+// origin: .exa.cortex_pb.LinkScopeItem
 message LinkScopeItem {
   string url = 1;
   string title = 2;
@@ -7296,6 +7172,11 @@ message ListDirectoryResult {
   uint64 size_bytes = 4;
 }
 
+// origin: .exa.cortex_pb.ListPluginAccountsToolConfig
+message ListPluginAccountsToolConfig {
+  bool enabled = 1;
+}
+
 // origin: .genai.ListValue
 message ListValue {
   repeated Value values = 1;
@@ -7310,6 +7191,8 @@ message LoadedCustomization {
   Status status = 5;
   string plugin_name = 6;
   string error_detail = 7;
+  string version = 8;
+  MarketplaceInstall installed_from = 9;
 }
 
 // origin: .exa.cortex_pb.LoadedCustomizations
@@ -7317,7 +7200,7 @@ message LoadedCustomizations {
   repeated LoadedCustomization customizations = 1;
 }
 
-// origin: .exa.context_module_pb.LocalNodeState
+// origin: .google.internal.cloud.code.v1internal.LocalNodeState
 message LocalNodeState {
   CodeContextItem current_node = 1;
   CodeContextItem closest_above_node = 2;
@@ -7345,7 +7228,7 @@ message LogArtifactsConfig {
 // origin: .exa.extension_server_pb.LogEventRequest
 message LogEventRequest {
   ProductEventType event = 1;
-  repeated EventMetadataRecord metadata = 2;
+  map<string, string> metadata = 2;
   string event_string = 3;
 }
 
@@ -7369,14 +7252,14 @@ message LowLevelToolsConfig {
   bool enable_mouse_tools = 2;
 }
 
-// origin: .exa.codeium_common_pb.LspReference
+// origin: .exa.cortex_pb.LspReference
 message LspReference {
   string uri = 1;
   Range range = 2;
   string snippet = 3;
 }
 
-// origin: .exa.codeium_common_pb.MQueryConfig
+// origin: .exa.cortex_pb.MQueryConfig
 message MQueryConfig {
   bool should_batch_ccis = 1;
   int64 max_tokens_per_subrange = 2;
@@ -7390,22 +7273,28 @@ message MQueryConfig {
   uint32 top_cci_count = 10;
 }
 
-// origin: .exa.codeium_common_pb.DOMTree.MapEntry
-message MapEntry {
-  string key = 1;
-  DOMNode value = 2;
+// origin: .google.api.expr.MapValue
+message MapValue {
+  repeated Entry entries = 1;
 }
 
-// origin: .exa.codeium_common_pb.MarkdownChunk
+// origin: .exa.cortex_pb.MarkdownChunk
 message MarkdownChunk {
   repeated MarkdownHeader headers = 1;
   string text = 2;
 }
 
-// origin: .exa.codeium_common_pb.MarkdownChunk.MarkdownHeader
+// origin: .exa.cortex_pb.MarkdownChunk.MarkdownHeader
 message MarkdownHeader {
   MarkdownNodeType type = 1;
   string text = 2;
+}
+
+// origin: .exa.cortex_pb.MarketplaceInstall
+message MarketplaceInstall {
+  string marketplace = 1;
+  string id = 2;
+  string version = 3;
 }
 
 // origin: .exa.cortex_pb.McpDiscoveryConfig
@@ -7420,14 +7309,14 @@ message McpOAuthConfig {
   string client_secret = 2;
 }
 
-// origin: .exa.codeium_common_pb.McpPromptArgument
+// origin: .exa.cortex_pb.McpPromptArgument
 message McpPromptArgument {
   string name = 1;
   string description = 2;
   bool required = 3;
 }
 
-// origin: .exa.codeium_common_pb.McpPromptMessage
+// origin: .exa.cortex_pb.McpPromptMessage
 message McpPromptMessage {
   string role = 1;
   string text = 2;
@@ -7435,13 +7324,13 @@ message McpPromptMessage {
   McpResourceContent resource = 4;
 }
 
-// origin: .exa.codeium_common_pb.McpPromptScopeItem
+// origin: .exa.cortex_pb.McpPromptScopeItem
 message McpPromptScopeItem {
   string server_name = 1;
   string name = 2;
   string description = 3;
   repeated McpPromptArgument arguments = 4;
-  repeated ArgumentValuesEntry argument_values = 5;
+  map<string, string> argument_values = 5;
   repeated McpPromptMessage messages = 6;
 }
 
@@ -7453,7 +7342,7 @@ message McpResource {
   string mime_type = 4;
 }
 
-// origin: .exa.codeium_common_pb.McpResourceContent
+// origin: .exa.cortex_pb.McpResourceContent
 message McpResourceContent {
   string uri = 1;
   TextData text = 2;
@@ -7461,7 +7350,7 @@ message McpResourceContent {
   Media media_content = 4;
 }
 
-// origin: .exa.codeium_common_pb.McpResourceItem
+// origin: .exa.cortex_pb.McpResourceItem
 message McpResourceItem {
   string uri = 1;
   string name = 2;
@@ -7481,17 +7370,17 @@ message McpServerSpec {
   string server_name = 1;
   string command = 2;
   repeated string args = 3;
-  repeated CortexMcpserverspec_EnvEntry env = 4;
+  map<string, string> env = 4;
   uint32 server_index = 5;
   string server_url = 6;
   bool disabled = 7;
   repeated string disabled_tools = 8;
-  repeated HeadersEntry headers = 9;
+  map<string, string> headers = 9;
   repeated string enabled_tools = 10;
   bool skip_tool_name_prefix = 11;
   bool skip_tool_description_prefix = 12;
   string cwd = 13;
-  repeated ToolConfigEntry tool_config = 14;
+  map<string, McpServerToolConfig> tool_config = 14;
   McpOAuthConfig oauth = 15;
   McpAuthProviderType auth_provider_type = 16;
   string plugin_name = 17;
@@ -7513,7 +7402,7 @@ message McpServerSpec {
 message McpServerToolCallContent {
   string name = 1;
   string server_name = 2;
-  Struct arguments = 3;
+  Genai_Struct arguments = 3;
 }
 
 // origin: .exa.cortex_pb.McpServerToolConfig
@@ -7527,7 +7416,7 @@ message McpServerToolConfig {
 message McpServerToolResultContent {
   string name = 1;
   string server_name = 2;
-  Struct struct_result = 3;
+  Genai_Struct struct_result = 3;
   string string_result = 4;
   FunctionResultSubcontentList content_list = 6;
 }
@@ -7555,7 +7444,7 @@ message McpVariable {
   string link = 4;
 }
 
-// origin: .exa.codeium_common_pb.Media
+// origin: .exa.cortex_pb.Media
 message Media {
   string mime_type = 1;
   bytes inline_data = 2;
@@ -7567,6 +7456,12 @@ message Media {
   string media_id = 8;
   string display_name = 9;
   Any ingestion_options = 10;
+  int32 start_page = 11;
+  int32 end_page = 12;
+  int64 start_time_ms = 13;
+  int64 end_time_ms = 14;
+  double fps = 15;
+  MediaResolution media_resolution = 16;
 }
 
 // origin: .genai.VideoContent.MediaProcessing
@@ -7603,7 +7498,7 @@ message MessageRenderDetails {
   string message_title = 1;
 }
 
-// origin: .exa.codeium_common_pb.Metadata
+// origin: .exa.cortex_pb.Metadata
 message Metadata {
   string ide_name = 1;
   string extension_version = 2;
@@ -7630,13 +7525,7 @@ message Metadata {
   ExperimentConfig experiment_config = 35;
 }
 
-// origin: .exa.cortex_pb.CortexStepMcpTool.MetadataEntry
-message MetadataEntry {
-  string key = 1;
-  string value = 2;
-}
-
-// origin: .exa.codeium_common_pb.MetricsMetadata
+// origin: .exa.cortex_pb.MetricsMetadata
 message MetricsMetadata {
   int32 version = 1;
   string description = 2;
@@ -7646,11 +7535,11 @@ message MetricsMetadata {
   MetricsScope scope = 6;
 }
 
-// origin: .exa.codeium_common_pb.MetricsRecord
+// origin: .exa.cortex_pb.MetricsRecord
 message MetricsRecord {
   string name = 1;
   float value = 2;
-  repeated DetailsEntry details = 3;
+  map<string, string> details = 3;
   bool lower_better = 4;
   bool is_bool = 5;
   string error = 6;
@@ -7659,7 +7548,7 @@ message MetricsRecord {
   string value_breakdown = 10;
 }
 
-// origin: .exa.codeium_common_pb.ModalityTokenCount
+// origin: .exa.cortex_pb.ModalityTokenCount
 message ModalityTokenCount {
   Modality modality = 1;
   uint64 token_count = 2;
@@ -7675,7 +7564,7 @@ message ModelAPIRetryConfig {
   int64 max_sleep_duration_ms = 6;
 }
 
-// origin: .exa.codeium_common_pb.ModelFeatures
+// origin: .exa.cortex_pb.ModelFeatures
 message ModelFeatures {
   bool supports_context_tokens = 2;
   bool requires_instruct_tags = 3;
@@ -7701,13 +7590,13 @@ message ModelFeatures {
   bool requires_lead_in_generation = 25;
   bool requires_no_xml_tool_examples = 26;
   bool does_not_support_tool_choice = 27;
-  repeated SupportedMimeTypesEntry supported_mime_types = 28;
+  map<string, bool> supported_mime_types = 28;
   bool supports_adaptive_thinking = 29;
   bool supports_thought_circulation = 30;
   bool supports_deferred_tool_loading = 31;
 }
 
-// origin: .exa.codeium_common_pb.ModelInfo
+// origin: .exa.cortex_pb.ModelInfo
 message ModelInfo {
   Model model_id = 1;
   bool is_internal = 2;
@@ -7736,7 +7625,7 @@ message ModelInfo {
   string model_url = 25;
 }
 
-// origin: .exa.codeium_common_pb.ModelOrAlias
+// origin: .exa.cortex_pb.ModelOrAlias
 message ModelOrAlias {
   Model model = 1;
   ModelAlias alias = 2;
@@ -7750,7 +7639,7 @@ message ModelOutputRetryConfig {
   bool retry_only_on_invalid_args = 5;
 }
 
-// origin: .exa.codeium_common_pb.ModelUsageStats
+// origin: .exa.cortex_pb.ModelUsageStats
 message ModelUsageStats {
   Model model = 1;
   uint64 input_tokens = 2;
@@ -7759,7 +7648,7 @@ message ModelUsageStats {
   uint64 cache_read_tokens = 5;
   APIProvider api_provider = 6;
   string message_id = 7;
-  repeated ResponseHeaderEntry response_header = 8;
+  map<string, string> response_header = 8;
   uint64 thinking_output_tokens = 9;
   uint64 response_output_tokens = 10;
   string response_id = 11;
@@ -7935,32 +7824,14 @@ message OpenVirtualFileRequest {
 message OpenVirtualFileResponse {
 }
 
-// origin: .exa.cortex_pb.CortexStepCompile.OptionsEntry
-message OptionsEntry {
-  string key = 1;
-  string value = 2;
-}
-
-// origin: .exa.cortex_pb.BattleModeInfo.OriginalWorkspaceSnapshotsEntry
-message OriginalWorkspaceSnapshotsEntry {
-  string key = 1;
-  int32 value = 2;
-}
-
-// origin: .exa.cortex_pb.CortexStepFinish.OutputEntry
-message OutputEntry {
-  string key = 1;
-  string value = 2;
-}
-
-// origin: .exa.codeium_common_pb.PathScopeItem
+// origin: .exa.cortex_pb.PathScopeItem
 message PathScopeItem {
   string absolute_path_migrate_me_to_uri = 1;
-  repeated WorkspaceRelativePathsMigrateMeToWorkspaceUrisEntry workspace_relative_paths_migrate_me_to_workspace_uris = 2;
+  map<string, string> workspace_relative_paths_migrate_me_to_workspace_uris = 2;
   uint32 num_files = 3;
   uint64 num_bytes = 4;
   string absolute_uri = 5;
-  repeated WorkspaceUrisToRelativePathsEntry workspace_uris_to_relative_paths = 6;
+  map<string, string> workspace_uris_to_relative_paths = 6;
 }
 
 // origin: .exa.cortex_pb.PermissionConfig
@@ -7983,7 +7854,7 @@ message PermissionGrant {
   string target = 6;
 }
 
-// origin: .exa.codeium_common_pb.PermissionGrantsConfig
+// origin: .exa.cortex_pb.PermissionGrantsConfig
 message PermissionGrantsConfig {
   repeated string allow = 1;
   repeated string deny = 2;
@@ -8070,14 +7941,14 @@ message PluginDiscoveryConfig {
   repeated string builtin_plugin_names = 3;
 }
 
-// origin: .exa.codeium_common_pb.PluginRef
+// origin: .exa.cortex_pb.PluginRef
 message PluginRef {
   string name = 1;
   string display_name = 2;
   string logo = 3;
 }
 
-// origin: .exa.codeium_common_pb.PluginScopeItem
+// origin: .exa.cortex_pb.PluginScopeItem
 message PluginScopeItem {
   string name = 1;
   string display_name = 2;
@@ -8085,7 +7956,7 @@ message PluginScopeItem {
   string logo = 4;
 }
 
-// origin: .exa.codeium_common_pb.Point2
+// origin: .exa.cortex_pb.Point2
 message Point2 {
   int32 x = 1;
   int32 y = 2;
@@ -8113,7 +7984,7 @@ message PolicyGuardianConfig {
 message PreToolHookResult {
   bool allow_tool = 1;
   string deny_reason = 2;
-  GoogleProtobuf_Struct overwrite = 3;
+  Struct overwrite = 3;
   string decision = 4;
   string reason = 5;
   repeated string permission_overrides = 6;
@@ -8126,7 +7997,7 @@ message ProfilesConfig {
   bool enable_personal = 3;
 }
 
-// origin: .exa.codeium_common_pb.PromptAnnotationRange
+// origin: .exa.cortex_pb.PromptAnnotationRange
 message PromptAnnotationRange {
   PromptAnnotationKind kind = 1;
   uint64 byte_offset_start = 2;
@@ -8139,7 +8010,7 @@ message PromptCacheOptions {
   CacheControlType type = 1;
 }
 
-// origin: .exa.codeium_common_pb.PromptElementKindInfo
+// origin: .exa.cortex_pb.PromptElementKindInfo
 message PromptElementKindInfo {
   PromptElementKind kind = 1;
   ExperimentKey experiment_key = 2;
@@ -8148,7 +8019,7 @@ message PromptElementKindInfo {
   uint64 num_included = 5;
 }
 
-// origin: .exa.codeium_common_pb.PromptElementRange
+// origin: .exa.cortex_pb.PromptElementRange
 message PromptElementRange {
   PromptElementKind kind = 1;
   uint64 byte_offset_start = 2;
@@ -8191,7 +8062,7 @@ message PromptSectionMetadata {
   bool is_internal = 3;
 }
 
-// origin: .exa.codeium_common_pb.PromptStageLatency
+// origin: .exa.cortex_pb.PromptStageLatency
 message PromptStageLatency {
   string name = 1;
   uint64 latency_ms = 2;
@@ -8200,12 +8071,6 @@ message PromptStageLatency {
 // origin: .devtools.cider.agent.trajectory_steps.ProposeAICommentsStep
 message ProposeAICommentsStep {
   TrajectoryStepsProposeaicommentsstep_Args args = 2;
-}
-
-// origin: .exa.context_module_pb.RetrievedCodeContextItemMetadata.ProviderMetadataEntry
-message ProviderMetadataEntry {
-  string key = 1;
-  CodeContextProviderMetadata value = 2;
 }
 
 // origin: .exa.extension_server_pb.PushUnifiedStateSyncUpdateRequest
@@ -8224,7 +8089,7 @@ message QueryCorrectionSuggestion {
   string suggestion = 3;
 }
 
-// origin: .exa.codeium_common_pb.Range
+// origin: .exa.cortex_pb.Range
 message Range {
   uint64 start_offset = 1;
   uint64 end_offset = 2;
@@ -8268,7 +8133,7 @@ message ReadUrlContentToolConfig {
   bool force_disable = 1;
 }
 
-// origin: .exa.codeium_common_pb.RecipeScopeItem
+// origin: .exa.cortex_pb.RecipeScopeItem
 message RecipeScopeItem {
   string recipe_id = 1;
   string title = 2;
@@ -8277,13 +8142,13 @@ message RecipeScopeItem {
   string uri = 5;
 }
 
-// origin: .exa.codeium_common_pb.Recitation
+// origin: .exa.cortex_pb.Recitation
 message Recitation {
   Citation citation = 1;
   string content = 2;
 }
 
-// origin: .exa.codeium_common_pb.RecitationMetadata
+// origin: .exa.cortex_pb.RecitationMetadata
 message RecitationMetadata {
   repeated Recitation recitations = 1;
 }
@@ -8297,7 +8162,7 @@ message RecordErrorRequest {
 message RecordErrorResponse {
 }
 
-// origin: .exa.codeium_common_pb.RemoteControlDetails
+// origin: .exa.cortex_pb.RemoteControlDetails
 message RemoteControlDetails {
   string user_agent = 1;
   Transport transport = 2;
@@ -8354,7 +8219,7 @@ message Reply {
   string error_trace = 4;
 }
 
-// origin: .exa.codeium_common_pb.Repository
+// origin: .exa.cortex_pb.Repository
 message Repository {
   string computed_name = 1;
   string git_origin_url = 2;
@@ -8365,19 +8230,19 @@ message Repository {
   string submodule_path = 7;
 }
 
-// origin: .exa.codeium_common_pb.RepositoryPathScopeItem
+// origin: .exa.cortex_pb.RepositoryPathScopeItem
 message RepositoryPathScopeItem {
   GitRepoInfo repo_info = 1;
   string relative_path = 2;
   bool is_dir = 3;
 }
 
-// origin: .exa.codeium_common_pb.RepositoryScopeItem
+// origin: .exa.cortex_pb.RepositoryScopeItem
 message RepositoryScopeItem {
   GitRepoInfo repo_info = 1;
 }
 
-// origin: .exa.language_server_pb.RequestInfo
+// origin: .exa.cortex_pb.RequestInfo
 message RequestInfo {
   string prompt_id = 1;
   CompletionsRequest completions_request = 4;
@@ -8407,12 +8272,6 @@ message RequestedInteraction {
   ApprovalInteractionSpec approval_interaction = 23;
 }
 
-// origin: .exa.codeium_common_pb.ModelUsageStats.ResponseHeaderEntry
-message ResponseHeaderEntry {
-  string key = 1;
-  string value = 2;
-}
-
 // origin: .exa.extension_server_pb.RestartUserStatusUpdaterRequest
 message RestartUserStatusUpdaterRequest {
 }
@@ -8435,13 +8294,13 @@ message RetrieveContentStep {
   TrajectoryStepsRetrievecontentstep_Reply reply = 3;
 }
 
-// origin: .exa.context_module_pb.RetrievedCodeContextItemMetadata
+// origin: .google.internal.cloud.code.v1internal.RetrievedCodeContextItemMetadata
 message RetrievedCodeContextItemMetadata {
   repeated CodeContextSource context_sources = 1;
   CodeContextType context_type = 2;
   string scorer = 3;
   float score = 4;
-  repeated ProviderMetadataEntry provider_metadata = 5;
+  map<string, CodeContextProviderMetadata> provider_metadata = 5;
   bool is_in_pinned_scope = 6;
 }
 
@@ -8463,13 +8322,13 @@ message ReviewSnippet {
   string review_id = 3;
 }
 
-// origin: .exa.unified_state_sync_pb.Row
+// origin: .exa.config_pb.Row
 message Row {
   string value = 1;
   int64 e_tag = 2;
 }
 
-// origin: .exa.codeium_common_pb.RuleScopeItem
+// origin: .exa.cortex_pb.RuleScopeItem
 message RuleScopeItem {
   string rule_path = 1;
   string rule_name = 2;
@@ -8524,7 +8383,7 @@ message RunExtensionCodeResponse {
   string output = 1;
 }
 
-// origin: .exa.codeium_common_pb.RuntimeEnvironment
+// origin: .exa.cortex_pb.RuntimeEnvironment
 message RuntimeEnvironment {
   string host = 1;
   string binary = 2;
@@ -8638,7 +8497,7 @@ message SidecarConfig {
   bool disabled = 4;
   string description = 5;
   bool has_web_ui = 6;
-  repeated CortexSidecarconfig_EnvEntry env = 7;
+  map<string, string> env = 7;
   string display_name = 8;
   string builtin = 9;
   SidecarUIConfig ui_config = 10;
@@ -8687,7 +8546,7 @@ message SkillsConfig {
   repeated string exclude = 6;
 }
 
-// origin: .exa.codeium_common_pb.SlashCommandInfo
+// origin: .exa.cortex_pb.SlashCommandInfo
 message SlashCommandInfo {
   string name = 1;
   string model_facing_text = 2;
@@ -8699,18 +8558,18 @@ message SlashCommandInfo {
   PluginRef plugin = 8;
 }
 
-// origin: .exa.codeium_common_pb.SlashCommandScopeItem
+// origin: .exa.cortex_pb.SlashCommandScopeItem
 message SlashCommandScopeItem {
   SlashCommandInfo info = 1;
-  repeated CodeiumCommonSlashcommandscopeitem_ArgumentValuesEntry argument_values = 2;
+  map<string, string> argument_values = 2;
 }
 
-// origin: .exa.language_server_pb.SmartFocusConversationRequest
+// origin: .exa.cortex_pb.SmartFocusConversationRequest
 message SmartFocusConversationRequest {
   string cascade_id = 1;
 }
 
-// origin: .exa.language_server_pb.SmartFocusConversationResponse
+// origin: .exa.cortex_pb.SmartFocusConversationResponse
 message SmartFocusConversationResponse {
 }
 
@@ -8724,19 +8583,13 @@ message SnapshotMetadata {
   string artifact_dir_commit_hash = 6;
 }
 
-// origin: .exa.codeium_common_pb.CodeContextItem.SnippetByTypeEntry
-message SnippetByTypeEntry {
-  string key = 1;
-  SnippetWithWordCount value = 2;
-}
-
-// origin: .exa.codeium_common_pb.SnippetWithWordCount
+// origin: .exa.cortex_pb.SnippetWithWordCount
 message SnippetWithWordCount {
   string snippet = 1;
-  repeated WordCountBySplitterEntry word_count_by_splitter = 2;
+  map<string, WordCount> word_count_by_splitter = 2;
 }
 
-// origin: .exa.codeium_common_pb.Source
+// origin: .exa.cortex_pb.Source
 message Source {
   string reference_id = 1;
 }
@@ -8791,7 +8644,7 @@ message StatusTransition {
   Timestamp timestamp = 2;
 }
 
-// origin: .gemini_coder.Step
+// origin: .gdm.security.agi_control.agent_monitoring.monitors.Step
 message Step {
   CortexStepType type = 1;
   CortexStepStatus status = 4;
@@ -8954,17 +8807,12 @@ message StepRenderInfo {
   StepProgress progress = 8;
   repeated TitlePart title_parts = 9;
   repeated ContentBlock content_blocks = 10;
+  bool show_on_error = 11;
 }
 
 // origin: .exa.cortex_pb.StepStringConverterConfig
 message StepStringConverterConfig {
   CodeAcknowledgementConverterConfig code_acknowledgement = 1;
-}
-
-// origin: .exa.extension_server_pb.StoreSecretValueRequest
-message StoreSecretValueRequest {
-  string key = 1;
-  string value = 2;
 }
 
 // origin: .exa.extension_server_pb.StoreSecretValueResponse
@@ -8983,9 +8831,9 @@ message StringReplacement {
   string replacement = 2;
 }
 
-// origin: .genai.Struct
+// origin: .devtools.ai.autocomplete.Struct
 message Struct {
-  repeated Field fields = 1;
+  map<string, ApiExpr_Value> fields = 1;
 }
 
 // origin: .exa.cortex_pb.StructuredErrorPart
@@ -9044,21 +8892,9 @@ message SuggestedResponseConfig {
   bool force_disable = 1;
 }
 
-// origin: .exa.jetski_cortex_pb.CascadeTrajectorySummaries.SummariesEntry
-message SummariesEntry {
-  string key = 1;
-  CascadeTrajectorySummary value = 2;
-}
-
-// origin: .exa.codeium_common_pb.SuperCompleteFilterReason
+// origin: .exa.cortex_pb.SuperCompleteFilterReason
 message SuperCompleteFilterReason {
   string reason = 1;
-}
-
-// origin: .exa.codeium_common_pb.ModelFeatures.SupportedMimeTypesEntry
-message SupportedMimeTypesEntry {
-  string key = 1;
-  bool value = 2;
 }
 
 // origin: .devtools.cider.agent.trajectory_steps.StartCodeReviewStep.Tag
@@ -9087,7 +8923,7 @@ message TaskDelta {
   string from_prev_sibling = 8;
 }
 
-// origin: .gemini_coder.TaskDetails
+// origin: .gdm.security.agi_control.agent_monitoring.monitors.TaskDetails
 message TaskDetails {
   string id = 1;
   string log_uri = 2;
@@ -9135,7 +8971,7 @@ message TerminalBlock {
   int32 num_lines_above = 5;
 }
 
-// origin: .exa.codeium_common_pb.TerminalCommandData
+// origin: .exa.cortex_pb.TerminalCommandData
 message TerminalCommandData {
   string terminal_id = 1;
   string platform = 2;
@@ -9152,7 +8988,7 @@ message TerminalResearchResultRequest {
 message TerminalResearchResultResponse {
 }
 
-// origin: .exa.codeium_common_pb.TerminalScopeItem
+// origin: .exa.cortex_pb.TerminalScopeItem
 message TerminalScopeItem {
   string process_id = 1;
   string name = 2;
@@ -9160,7 +8996,7 @@ message TerminalScopeItem {
   string selectionContent = 4;
 }
 
-// origin: .exa.codeium_common_pb.TerminalShellCommand
+// origin: .exa.cortex_pb.TerminalShellCommand
 message TerminalShellCommand {
   uint32 shell_pid = 1;
   string command_line = 2;
@@ -9175,12 +9011,12 @@ message TerminalShellCommand {
   Timestamp last_updated_time = 11;
 }
 
-// origin: .exa.codeium_common_pb.TerminalShellCommandData
+// origin: .exa.cortex_pb.TerminalShellCommandData
 message TerminalShellCommandData {
   bytes raw_data = 1;
 }
 
-// origin: .exa.codeium_common_pb.TerminalShellCommandHeader
+// origin: .exa.cortex_pb.TerminalShellCommandHeader
 message TerminalShellCommandHeader {
   string terminal_id = 1;
   uint32 shell_pid = 2;
@@ -9191,14 +9027,14 @@ message TerminalShellCommandHeader {
   Metadata metadata = 7;
 }
 
-// origin: .exa.codeium_common_pb.TerminalShellCommandStreamChunk
+// origin: .exa.cortex_pb.TerminalShellCommandStreamChunk
 message TerminalShellCommandStreamChunk {
   TerminalShellCommandHeader header = 1;
   TerminalShellCommandData data = 2;
   TerminalShellCommandTrailer trailer = 3;
 }
 
-// origin: .exa.codeium_common_pb.TerminalShellCommandTrailer
+// origin: .exa.cortex_pb.TerminalShellCommandTrailer
 message TerminalShellCommandTrailer {
   int32 exit_code = 1;
   Timestamp end_time = 2;
@@ -9238,7 +9074,7 @@ message TestTargetsStep {
   TestReply reply = 3;
 }
 
-// origin: .exa.codeium_common_pb.TextBlock
+// origin: .exa.cortex_pb.TextBlock
 message TextBlock {
   string content = 1;
   FileLineRange file_line_range = 2;
@@ -9251,24 +9087,24 @@ message TextContent {
   repeated Annotation annotations = 4;
 }
 
-// origin: .exa.codeium_common_pb.TextData
+// origin: .exa.cortex_pb.TextData
 message TextData {
   string text = 1;
   string mime_type = 2;
 }
 
-// origin: .exa.codeium_common_pb.DOMNode.TextNode
+// origin: .exa.cortex_pb.DOMNode.TextNode
 message TextNode {
   string text = 1;
 }
 
-// origin: .exa.codeium_common_pb.TextOrScopeItem
+// origin: .exa.cortex_pb.TextOrScopeItem
 message TextOrScopeItem {
   string text = 1;
   ContextScopeItem item = 2;
 }
 
-// origin: .exa.codeium_common_pb.TextSelection
+// origin: .exa.cortex_pb.TextSelection
 message TextSelection {
   string content = 1;
   int32 start_line = 2;
@@ -9277,7 +9113,7 @@ message TextSelection {
   string after_text = 5;
 }
 
-// origin: .exa.codeium_common_pb.ThirdPartyWebSearchConfig
+// origin: .exa.cortex_pb.ThirdPartyWebSearchConfig
 message ThirdPartyWebSearchConfig {
   ThirdPartyWebSearchProvider provider = 1;
 }
@@ -9340,16 +9176,10 @@ message ToolCallContent {
   GoogleMapsCallContent google_maps_call = 10;
 }
 
-// origin: .exa.cortex_pb.McpServerSpec.ToolConfigEntry
-message ToolConfigEntry {
-  string key = 1;
-  McpServerToolConfig value = 2;
-}
-
 // origin: .exa.cortex_pb.ToolDescriptionOverrideMap
 message ToolDescriptionOverrideMap {
-  repeated DescriptionsEntry descriptions = 1;
-  repeated ToolOverridesEntry tool_overrides = 2;
+  map<string, SectionOverrideConfig> descriptions = 1;
+  map<string, ToolOverrideConfig> tool_overrides = 2;
 }
 
 // origin: .exa.cortex_pb.ToolOutputConfig
@@ -9360,16 +9190,10 @@ message ToolOutputConfig {
 // origin: .exa.cortex_pb.ToolOverrideConfig
 message ToolOverrideConfig {
   string name_override = 1;
-  repeated ArgumentNameOverridesEntry argument_name_overrides = 2;
+  map<string, string> argument_name_overrides = 2;
   SectionOverrideConfig description_override = 3;
-  repeated ArgumentDescriptionOverridesEntry argument_description_overrides = 4;
-  repeated ArgumentValueOverridesEntry argument_value_overrides = 5;
-}
-
-// origin: .exa.cortex_pb.ToolDescriptionOverrideMap.ToolOverridesEntry
-message ToolOverridesEntry {
-  string key = 1;
-  ToolOverrideConfig value = 2;
+  map<string, string> argument_description_overrides = 4;
+  map<string, ArgumentOverride> argument_value_overrides = 5;
 }
 
 // origin: .genai.ToolResultContent
@@ -9407,12 +9231,12 @@ message TopLevelTokenGroup {
   repeated TokenGroup children = 5;
 }
 
-// origin: .exa.unified_state_sync_pb.Topic
+// origin: .exa.config_pb.Topic
 message Topic {
-  repeated DataEntry data = 1;
+  map<string, Row> data = 1;
 }
 
-// origin: .gemini_coder.Trajectory
+// origin: .gdm.security.agi_control.agent_monitoring.monitors.Trajectory
 message Trajectory {
   string trajectory_id = 1;
   repeated Step steps = 2;
@@ -9623,7 +9447,7 @@ message UpdateDetailedViewWithCascadeInputRequest {
 message UpdateDetailedViewWithCascadeInputResponse {
 }
 
-// origin: .exa.unified_state_sync_pb.UpdateRequest
+// origin: .exa.config_pb.UpdateRequest
 message UpdateRequest {
   string topic_name = 1;
   string key = 2;
@@ -9665,7 +9489,7 @@ message UrlContextResultContent {
   bool is_error = 3;
 }
 
-// origin: .exa.codeium_common_pb.UserActivityScopeItem
+// origin: .exa.cortex_pb.UserActivityScopeItem
 message UserActivityScopeItem {
   string id = 1;
   string branch = 2;
@@ -9687,7 +9511,7 @@ message UserStepSnapshot {
   string name = 1;
 }
 
-// origin: .exa.language_server_pb.ValidationState
+// origin: .exa.cortex_pb.ValidationState
 message ValidationState {
   string uri = 1;
   string last_acknowledged_state = 2;
@@ -9701,23 +9525,17 @@ message Value {
   double number_value = 2;
   string string_value = 3;
   bool bool_value = 4;
-  Struct struct_value = 5;
+  Genai_Struct struct_value = 5;
   ListValue list_value = 6;
   Content content_value = 7;
   Function function_value = 9;
-}
-
-// origin: .exa.cortex_pb.Experiments.ValuesEntry
-message ValuesEntry {
-  string key = 1;
-  ExperimentValue value = 2;
 }
 
 // origin: .genai.VideoContent
 message VideoContent {
   GenaiVideocontent_MimeType mime_type = 1;
   bytes data = 2;
-  MediaResolution resolution = 5;
+  Genai_MediaResolution resolution = 5;
   string uri = 6;
   string mime_type_string = 8;
   string name = 16;
@@ -9747,9 +9565,10 @@ message ViewFileToolConfig {
   bool force_disable = 17;
   uint32 max_bytes_per_view = 18;
   uint32 max_file_size_bytes = 19;
+  bool enable_open_document = 20;
 }
 
-// origin: .exa.codeium_common_pb.Viewport
+// origin: .exa.cortex_pb.Viewport
 message Viewport {
   int32 x = 1;
   int32 y = 2;
@@ -9762,21 +9581,9 @@ message WaitToolConfig {
   bool enabled = 1;
 }
 
-// origin: .exa.codeium_common_pb.WordCount
+// origin: .exa.cortex_pb.WordCount
 message WordCount {
-  repeated WordCountMapEntry word_count_map = 1;
-}
-
-// origin: .exa.codeium_common_pb.SnippetWithWordCount.WordCountBySplitterEntry
-message WordCountBySplitterEntry {
-  string key = 1;
-  WordCount value = 2;
-}
-
-// origin: .exa.codeium_common_pb.WordCount.WordCountMapEntry
-message WordCountMapEntry {
-  string key = 1;
-  int64 value = 2;
+  map<string, int64> word_count_map = 1;
 }
 
 // origin: .genai.WordInfo
@@ -9796,7 +9603,7 @@ message WorkspaceAPIToolConfig {
 message WorkspaceArgument {
 }
 
-// origin: .exa.codeium_common_pb.WorkspacePath
+// origin: .exa.cortex_pb.WorkspacePath
 message WorkspacePath {
   string workspace_migrate_me_to_uri = 1;
   string relative_path = 2;
@@ -9806,18 +9613,6 @@ message WorkspacePath {
 // origin: .exa.cortex_pb.WorkspacePaths
 message WorkspacePaths {
   repeated string absolute_paths = 1;
-}
-
-// origin: .exa.codeium_common_pb.PathScopeItem.WorkspaceRelativePathsMigrateMeToWorkspaceUrisEntry
-message WorkspaceRelativePathsMigrateMeToWorkspaceUrisEntry {
-  string key = 1;
-  string value = 2;
-}
-
-// origin: .exa.codeium_common_pb.PathScopeItem.WorkspaceUrisToRelativePathsEntry
-message WorkspaceUrisToRelativePathsEntry {
-  string key = 1;
-  string value = 2;
 }
 
 // origin: .exa.extension_server_pb.WriteCascadeEditRequest

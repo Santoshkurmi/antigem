@@ -21,98 +21,141 @@ def read_varint(stream):
         shift += 7
     return res
 
-def parse_proto(stream, length=None):
+def parse_proto_fields(stream, allowed_fn_wt=None, max_length=None):
     fields = []
     start_pos = stream.tell()
     while True:
-        if length is not None and (stream.tell() - start_pos) >= length: break
+        if max_length is not None and (stream.tell() - start_pos) >= max_length:
+            break
+        tag_pos = stream.tell()
         tag = read_varint(stream)
-        if tag is None: break
+        if tag is None:
+            break
         fn, wt = tag >> 3, tag & 0x07
+        if fn == 0 or fn > 500:
+            stream.seek(tag_pos)
+            break
+        if allowed_fn_wt is not None:
+            if fn not in allowed_fn_wt or wt not in allowed_fn_wt[fn]:
+                stream.seek(tag_pos)
+                break
+
         if wt == 0:
             val = read_varint(stream)
+            if val is None: break
         elif wt == 1:
             val = stream.read(8)
             if len(val) < 8: break
         elif wt == 2:
             l = read_varint(stream)
-            if l is None: break
+            if l is None or l < 0: break
             val = stream.read(l)
             if len(val) < l: break
         elif wt == 5:
             val = stream.read(4)
             if len(val) < 4: break
         else:
+            stream.seek(tag_pos)
             break
         fields.append((fn, wt, val))
     return fields
 
-def parse_field_descriptor(data):
-    fields = parse_proto(BytesIO(data))
-    name, number, label, type_id, type_name = "", 0, 1, 0, ""
-    for fn, wt, val in fields:
-        if fn == 1:   name      = val.decode('utf-8', errors='ignore')
-        elif fn == 3: number    = val
-        elif fn == 4: label     = val
-        elif fn == 5: type_id   = val
-        elif fn == 6: type_name = val.decode('utf-8', errors='ignore')
-    return {"name": name, "number": number, "label": label, "type": type_id, "type_name": type_name}
+# Official Google descriptor.proto field tag schemas
+FD_TAGS = {1: {2}, 2: {2}, 3: {2}, 4: {2}, 5: {2}, 6: {2}, 7: {2}, 8: {2}, 9: {2}, 10: {0, 2}, 11: {0, 2}, 12: {2}}
+DESC_TAGS = {1: {2}, 2: {2}, 3: {2}, 4: {2}, 5: {2}, 6: {2}, 7: {2}, 8: {2}, 9: {2}, 10: {2}}
+FIELD_TAGS = {1: {2}, 2: {2}, 3: {0}, 4: {0}, 5: {0}, 6: {2}, 7: {2}, 8: {0}, 9: {2}, 10: {2}, 17: {0}}
+ENUM_TAGS = {1: {2}, 2: {2}, 3: {2}, 4: {2}, 5: {2}}
+ENUMVAL_TAGS = {1: {2}, 2: {0}, 3: {2}}
+SVC_TAGS = {1: {2}, 2: {2}, 3: {2}}
+METHOD_TAGS = {1: {2}, 2: {2}, 3: {2}, 4: {2}, 5: {0}, 6: {0}}
 
 def parse_enum_value(data):
-    fields = parse_proto(BytesIO(data))
+    if not isinstance(data, bytes): return {"name": "", "number": 0}
+    fields = parse_proto_fields(BytesIO(data), ENUMVAL_TAGS)
     name, number = "", 0
     for fn, wt, val in fields:
-        if fn == 1:   name   = val.decode('utf-8', errors='ignore')
-        elif fn == 2: number = val
+        if fn == 1 and isinstance(val, bytes): name   = val.decode('utf-8', errors='ignore')
+        elif fn == 2 and isinstance(val, int): number = val
     return {"name": name, "number": number}
 
 def parse_enum(data):
-    fields = parse_proto(BytesIO(data))
+    if not isinstance(data, bytes): return {"name": "", "values": []}
+    fields = parse_proto_fields(BytesIO(data), ENUM_TAGS)
     name, values = "", []
     for fn, wt, val in fields:
-        if fn == 1:   name = val.decode('utf-8', errors='ignore')
-        elif fn == 2: values.append(parse_enum_value(val))
+        if fn == 1 and isinstance(val, bytes): name = val.decode('utf-8', errors='ignore')
+        elif fn == 2 and isinstance(val, bytes): values.append(parse_enum_value(val))
     return {"name": name, "values": values}
 
+def parse_field_descriptor(data):
+    if not isinstance(data, bytes): return {"name": "", "number": 0, "label": 1, "type": 0, "type_name": ""}
+    fields = parse_proto_fields(BytesIO(data), FIELD_TAGS)
+    name, number, label, type_id, type_name = "", 0, 1, 0, ""
+    for fn, wt, val in fields:
+        if fn == 1 and isinstance(val, bytes):   name      = val.decode('utf-8', errors='ignore')
+        elif fn == 3 and isinstance(val, int):   number    = val
+        elif fn == 4 and isinstance(val, int):   label     = val
+        elif fn == 5 and isinstance(val, int):   type_id   = val
+        elif fn == 6 and isinstance(val, bytes): type_name = val.decode('utf-8', errors='ignore')
+    return {"name": name, "number": number, "label": label, "type": type_id, "type_name": type_name}
+
 def parse_message_descriptor(data):
-    fields = parse_proto(BytesIO(data))
+    if not isinstance(data, bytes): return {"name": "", "fields": [], "nested_types": [], "enum_types": []}
+    fields = parse_proto_fields(BytesIO(data), DESC_TAGS)
     name, msg_fields, nested_types, enum_types = "", [], [], []
     for fn, wt, val in fields:
-        if fn == 1:   name = val.decode('utf-8', errors='ignore')
-        elif fn == 2: msg_fields.append(parse_field_descriptor(val))
-        elif fn == 3: nested_types.append(parse_message_descriptor(val))
-        elif fn == 4: enum_types.append(parse_enum(val))
+        if fn == 1 and isinstance(val, bytes): name = val.decode('utf-8', errors='ignore')
+        elif fn == 2 and isinstance(val, bytes): msg_fields.append(parse_field_descriptor(val))
+        elif fn == 3 and isinstance(val, bytes): nested_types.append(parse_message_descriptor(val))
+        elif fn == 4 and isinstance(val, bytes): enum_types.append(parse_enum(val))
     return {"name": name, "fields": msg_fields, "nested_types": nested_types, "enum_types": enum_types}
 
+VALID_MAP_KEY_TYPES = {3, 4, 5, 6, 7, 8, 9, 13, 15, 16, 17, 18}
+
+def check_is_map_entry(msg):
+    if not msg:
+        return False, None, None
+    fields = msg.get('fields', [])
+    if len(fields) == 2:
+        f1 = next((f for f in fields if f['name'] == 'key' and f['number'] == 1), None)
+        f2 = next((f for f in fields if f['name'] == 'value' and f['number'] == 2), None)
+        # In Proto3, map keys must be scalar types (integers, strings, bools), not messages or enums
+        if f1 and f2 and f1.get('type') in VALID_MAP_KEY_TYPES:
+            return True, f1, f2
+    return False, None, None
+
 def parse_method(data):
-    fields = parse_proto(BytesIO(data))
+    if not isinstance(data, bytes): return {"name": "", "input_type": "", "output_type": "", "client_streaming": False, "server_streaming": False}
+    fields = parse_proto_fields(BytesIO(data), METHOD_TAGS)
     name, in_t, out_t, cs, ss = "", "", "", False, False
     for fn, wt, val in fields:
-        if fn == 1:   name = val.decode('utf-8', errors='ignore')
-        elif fn == 2: in_t = val.decode('utf-8', errors='ignore')
-        elif fn == 3: out_t = val.decode('utf-8', errors='ignore')
-        elif fn == 5: cs = bool(val)
-        elif fn == 6: ss = bool(val)
+        if fn == 1 and isinstance(val, bytes):   name = val.decode('utf-8', errors='ignore')
+        elif fn == 2 and isinstance(val, bytes): in_t = val.decode('utf-8', errors='ignore')
+        elif fn == 3 and isinstance(val, bytes): out_t = val.decode('utf-8', errors='ignore')
+        elif fn == 5 and isinstance(val, int):   cs = bool(val)
+        elif fn == 6 and isinstance(val, int):   ss = bool(val)
     return {"name": name, "input_type": in_t, "output_type": out_t,
             "client_streaming": cs, "server_streaming": ss}
 
 def parse_service(data):
-    fields = parse_proto(BytesIO(data))
+    if not isinstance(data, bytes): return "", []
+    fields = parse_proto_fields(BytesIO(data), SVC_TAGS)
     name, methods = "", []
     for fn, wt, val in fields:
-        if fn == 1:   name = val.decode('utf-8', errors='ignore')
-        elif fn == 2: methods.append(parse_method(val))
+        if fn == 1 and isinstance(val, bytes): name = val.decode('utf-8', errors='ignore')
+        elif fn == 2 and isinstance(val, bytes): methods.append(parse_method(val))
     return name, methods
 
 def parse_file(data):
-    fields = parse_proto(BytesIO(data))
+    stream = BytesIO(data)
+    fields = parse_proto_fields(stream, FD_TAGS)
     filename, package, messages, enums, services = "", "", [], [], []
     for fn, wt, val in fields:
-        if fn == 1:   filename = val.decode('utf-8', errors='ignore')
-        elif fn == 2: package  = val.decode('utf-8', errors='ignore')
-        elif fn == 4: messages.append(parse_message_descriptor(val))
-        elif fn == 5: enums.append(parse_enum(val))
-        elif fn == 6:
+        if fn == 1 and isinstance(val, bytes):   filename = val.decode('utf-8', errors='ignore')
+        elif fn == 2 and isinstance(val, bytes): package  = val.decode('utf-8', errors='ignore')
+        elif fn == 4 and isinstance(val, bytes): messages.append(parse_message_descriptor(val))
+        elif fn == 5 and isinstance(val, bytes): enums.append(parse_enum(val))
+        elif fn == 6 and isinstance(val, bytes):
             s = parse_service(val)
             if s[0] and s[1]:
                 services.append(s)
@@ -156,28 +199,27 @@ class ProtoRegistry:
         prefix = f".{package}" if package else ""
         for s_name, methods in services:
             full_s_name = f"{prefix}.{s_name}".lstrip('.')
-            self.services[full_s_name] = {
-                "file": filename, "service": s_name,
-                "package": package, "methods": methods
-            }
+            if full_s_name not in self.services or len(methods) > len(self.services[full_s_name]["methods"]):
+                self.services[full_s_name] = {
+                    "file": filename, "service": s_name,
+                    "package": package, "methods": methods
+                }
         for e in enums:
             full_e_name = f"{prefix}.{e['name']}"
-            # Only register the first occurrence of each full name so that
-            # a file registered later doesn't silently overwrite an earlier one.
-            if full_e_name not in self.enums:
+            if full_e_name not in self.enums or len(e.get("values", [])) > len(self.enums[full_e_name].get("values", [])):
                 self.enums[full_e_name] = e
         for m in messages:
             self._register_message(prefix, m)
 
     def _register_message(self, prefix, msg):
         full_m_name = f"{prefix}.{msg['name']}"
-        if full_m_name not in self.messages:
+        if full_m_name not in self.messages or len(msg.get("fields", [])) > len(self.messages[full_m_name].get("fields", [])):
             self.messages[full_m_name] = msg
         for nested in msg.get('nested_types', []):
             self._register_message(full_m_name, nested)
         for nested_enum in msg.get('enum_types', []):
             full_e_name = f"{full_m_name}.{nested_enum['name']}"
-            if full_e_name not in self.enums:
+            if full_e_name not in self.enums or len(nested_enum.get("values", [])) > len(self.enums[full_e_name].get("values", [])):
                 self.enums[full_e_name] = nested_enum
 
     # ------------------------------------------------------------------
@@ -193,6 +235,35 @@ class ProtoRegistry:
             return "message", self.messages[key], key
         if key in self.enums:
             return "enum", self.enums[key], key
+
+        # Resolve internal package aliases
+        aliases = [
+            (".exa.codeium_common_pb.", ".exa.cortex_pb."),
+            (".exa.cortex_pb.", ".exa.codeium_common_pb."),
+            (".exa.language_server_pb.", ".exa.cortex_pb."),
+            (".exa.cortex_pb.", ".exa.language_server_pb."),
+            (".google.internal.cloud.code.v1internal.", ".exa.cortex_pb."),
+        ]
+        for src, dst in aliases:
+            if key.startswith(src):
+                alt_key = dst + key[len(src):]
+                if alt_key in self.messages:
+                    return "message", self.messages[alt_key], alt_key
+                if alt_key in self.enums:
+                    return "enum", self.enums[alt_key], alt_key
+
+        # Leaf-based resolution (matches richest enum/message definition)
+        leaf = key.split('.')[-1]
+        matching_enums = [k for k in self.enums if k.endswith(f".{leaf}")]
+        if matching_enums:
+            best_k = max(matching_enums, key=lambda k: len(self.enums[k].get("values", [])))
+            return "enum", self.enums[best_k], best_k
+
+        matching_msgs = [k for k in self.messages if k.endswith(f".{leaf}")]
+        if matching_msgs:
+            best_k = max(matching_msgs, key=lambda k: len(self.messages[k].get("fields", [])))
+            return "message", self.messages[best_k], best_k
+
         return None, None, key
 
 # ---------------------------------------------------------------------------
@@ -339,47 +410,28 @@ def scan_all_descriptors(binary_path=None):
         pos += 1
 
     # ------------------------------------------------------------------
-    # Phase 2: Validate and deduplicate candidates.
-    # For each candidate, try to parse a bounded blob [candidate, next_candidate).
-    # A true FileDescriptorProto start will produce a valid filename matching
-    # what we detected in Phase 1.  A false positive (dependency string inside
-    # a real blob) will either produce a wrong filename or consume 0 useful bytes.
-    # We deduplicate by resolved filename — first occurrence of each file wins.
+    # Phase 2: Validate and deduplicate descriptors without artificial cutoff.
+    # We parse from each candidate start with a safe buffer, allowing full
+    # FileDescriptorProto objects (e.g. cortex.proto with 80+ enums) to be
+    # completely parsed without being truncated by internal dependency strings.
     # ------------------------------------------------------------------
     candidates.sort()
-    valid_blobs   = []        # (start, end, fname) for confirmed descriptors
-    seen_fnames   = set()     # dedup by resolved filename
-    seen_starts   = set()     # dedup by offset
+    seen_fnames = set()
+    seen_starts = set()
 
-    for idx, start in enumerate(candidates):
+    for start in candidates:
         if start in seen_starts:
             continue
-        # Bound to next candidate (or end of binary)
-        end = candidates[idx + 1] if idx + 1 < len(candidates) else data_len
-        blob = data[start:end]
         try:
-            fname, pkg, msgs, enums, svcs = parse_file(blob)
+            chunk = data[start: min(data_len, start + 4 * 1024 * 1024)]
+            fname, pkg, msgs, enums, svcs = parse_file(chunk)
+            if fname.endswith('.proto') and (msgs or enums or svcs):
+                if fname not in seen_fnames:
+                    seen_fnames.add(fname)
+                    registry.register_file(fname, pkg, msgs, enums, svcs)
+                seen_starts.add(start)
         except Exception:
             continue
-        if not fname.endswith('.proto'):
-            continue
-        if fname in seen_fnames:
-            # Same file seen before — mark this offset as consumed so we
-            # don't let it corrupt the next candidate's boundary
-            seen_starts.add(start)
-            continue
-        seen_fnames.add(fname)
-        seen_starts.add(start)
-        valid_blobs.append((start, end, fname, pkg, msgs, enums, svcs))
-
-    # ------------------------------------------------------------------
-    # Phase 3: Register all validated blobs.
-    # ------------------------------------------------------------------
-    for start, end, fname, pkg, msgs, enums, svcs in valid_blobs:
-        try:
-            registry.register_file(fname, pkg, msgs, enums, svcs)
-        except Exception:
-            pass
 
     return registry
 
@@ -479,19 +531,34 @@ def assign_display_names(full_names, current_package=None):
 # Main generation
 # ---------------------------------------------------------------------------
 
-def generate_per_service_protos(output_dir=None, binary_path=None):
+def generate_per_service_protos(output_dir=None, binary_path=None, full=False):
     # Always output next to this script file regardless of cwd
     if output_dir is None:
         output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "protos")
     os.makedirs(output_dir, exist_ok=True)
+    
+    # Clean stale proto files
+    for f in os.listdir(output_dir):
+        if f.endswith(".proto"):
+            try:
+                os.remove(os.path.join(output_dir, f))
+            except Exception:
+                pass
+
     print("Scanning embedded protobuf descriptors from binary...")
     registry = scan_all_descriptors(binary_path)
     print(f"Discovered {len(registry.services)} services, "
           f"{len(registry.messages)} messages, {len(registry.enums)} enums.\n")
 
+    from collections import defaultdict
+    service_counts = defaultdict(list)
+    for k, v in registry.services.items():
+        service_counts[v["service"]].append(k)
+
+    LOCAL_SERVICES = ['LanguageServerService', 'ExtensionServerService', 'RemotingService']
     target_service_keys = [
         s for s in registry.services.keys()
-        if any(k in s for k in ['LanguageServerService', 'ExtensionServerService', 'RemotingService'])
+        if any(s.endswith(f".{k}") or s == k or registry.services[s]["service"] in LOCAL_SERVICES for k in LOCAL_SERVICES)
     ]
 
     for s_key in sorted(target_service_keys):
@@ -499,6 +566,13 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
         service_name = s_info["service"]
         s_pkg        = s_info["package"] or "exa.local_grpc"
         package_name = SERVICE_PACKAGE_MAP.get(service_name, s_pkg)
+
+        # File naming: unique service name or clean prefix on collision
+        clean_file_stem = service_name
+        if len(service_counts[service_name]) > 1:
+            pkg_prefix = get_clean_package_prefix(s_key, package_name)
+            clean_file_stem = f"{pkg_prefix}_{service_name}"
+        proto_file_path = os.path.join(output_dir, f"{clean_file_stem}.proto")
 
         # ------------------------------------------------------------------
         # PHASE 1: Dependency walk — use FULL names throughout.
@@ -576,16 +650,35 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
         for fn, dn in enum_display.items():
             type_name_map[fn] = dn
 
+        # Upstream Host Resolution from Discovered Endpoints
+        HOST_MAP = {
+            'google.internal.cloud.code.v1internal': 'https://daily-cloudcode-pa.googleapis.com',
+            'google.cloud.aiplatform.v1beta1':       'https://aiplatform.googleapis.com',
+            'google.cloud.businessaicode.v1main':    'https://businessaicode.googleapis.com',
+            'google.cloud.businessaicode.v1beta':    'https://businessaicode.googleapis.com',
+            'google.cloud.speech.v1p1beta1':         'https://speech.googleapis.com',
+            'google.longrunning':                    'https://daily-cloudcode-pa.googleapis.com',
+            'devtools_jetski_boq_api_proto':         'https://daily-cloudcode-pa.googleapis.com',
+            'jetski.product.v1':                     'https://daily-cloudcode-pa.googleapis.com',
+            'exa.language_server_pb':                'http://127.0.0.1 (Local Hub / LSP)',
+            'exa.extension_server_pb':               'http://127.0.0.1 (Local Extension Bridge)',
+            'exa.remoting':                          'http://127.0.0.1 (Local Remoting)',
+            'exa.analytics_pb':                      'https://daily-cloudcode-pa.googleapis.com',
+            'genai':                                 'https://generativelanguage.googleapis.com',
+        }
+        upstream_host = HOST_MAP.get(package_name, 'https://daily-cloudcode-pa.googleapis.com' if 'google' in package_name else 'http://127.0.0.1 (Local)')
+
         # ------------------------------------------------------------------
         # PHASE 3: Write .proto file
         # ------------------------------------------------------------------
-        proto_file_path = os.path.join(output_dir, f"{service_name}.proto")
         with open(proto_file_path, "w") as f:
             f.write('syntax = "proto3";\n\n')
             f.write(f'package {package_name};\n\n')
 
             f.write(f'// {"=" * 72}\n')
             f.write(f'// Service: {service_name} ({len(s_info["methods"])} Methods)\n')
+            f.write(f'// Package: {package_name}\n')
+            f.write(f'// Default Upstream Host: {upstream_host}\n')
             f.write(f'// Target Route: /{package_name}.{service_name}/<Method>\n')
             f.write(f'// {"=" * 72}\n\n')
 
@@ -602,6 +695,12 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
             if resolved_enums:
                 f.write(f'// {"=" * 72}\n// Enumerations\n// {"=" * 72}\n\n')
                 written_enums = set()
+                from collections import Counter
+                val_counts = Counter()
+                for fn, e in resolved_enums.items():
+                    for v in e.get("values", []):
+                        val_counts[v["name"]] += 1
+
                 for fn in sorted(resolved_enums.keys(), key=lambda x: enum_display[x]):
                     dn = enum_display[fn]
                     if dn in written_enums: continue
@@ -610,8 +709,15 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
                     # Comment shows the exact origin full name from the binary
                     f.write(f'// origin: {fn}\n')
                     f.write(f'enum {dn} {{\n')
+                    seen_val_names = set()
                     for v in sorted(e["values"], key=lambda x: x["number"]):
-                        f.write(f'  {v["name"]} = {v["number"]};\n')
+                        v_name = v["name"]
+                        if val_counts[v_name] > 1 and not v_name.upper().startswith(dn.upper() + "_"):
+                            v_name = f"{dn.upper()}_{v_name}"
+                        if v_name in seen_val_names:
+                            continue
+                        seen_val_names.add(v_name)
+                        f.write(f'  {v_name} = {v["number"]};\n')
                     f.write('}\n\n')
 
             # Messages
@@ -621,19 +727,40 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
                 for fn in sorted(resolved_messages.keys(), key=lambda x: msg_display[x]):
                     dn = msg_display[fn]
                     if dn in written_msgs: continue
-                    written_msgs.add(dn)
                     m = resolved_messages[fn]
+                    if check_is_map_entry(m)[0]:
+                        continue
+                    written_msgs.add(dn)
                     # Comment shows the exact origin full name from the binary
                     f.write(f'// origin: {fn}\n')
                     f.write(f'message {dn} {{\n')
                     for field in sorted(m["fields"], key=lambda x: x["number"]):
-                        lbl = "repeated " if field["label"] == 3 else ""
-                        if field["type_name"]:
-                            t_str = type_name_map.get(field["type_name"],
-                                                       field["type_name"].split('.')[-1])
-                        else:
-                            t_str = TYPE_MAP.get(field["type"], "bytes")
-                        f.write(f'  {lbl}{t_str} {field["name"]} = {field["number"]};\n')
+                        is_map = False
+                        if field["label"] == 3 and field.get("type_name"):
+                            _, target_m, _ = registry.find_type(field["type_name"])
+                            if not target_m and field["type_name"] in resolved_messages:
+                                target_m = resolved_messages[field["type_name"]]
+                            if target_m:
+                                is_map_entry, f_key, f_val = check_is_map_entry(target_m)
+                                if is_map_entry:
+                                    is_map = True
+                                    k_str = TYPE_MAP.get(f_key["type"], "string")
+                                    if f_val.get("type_name"):
+                                        v_str = type_name_map.get(f_val["type_name"])
+                                        if not v_str:
+                                            _, _, res_v = registry.find_type(f_val["type_name"])
+                                            v_str = type_name_map.get(res_v, f_val["type_name"].split('.')[-1])
+                                    else:
+                                        v_str = TYPE_MAP.get(f_val["type"], "bytes")
+                                    f.write(f'  map<{k_str}, {v_str}> {field["name"]} = {field["number"]};\n')
+                        if not is_map:
+                            lbl = "repeated " if field["label"] == 3 else ""
+                            if field["type_name"]:
+                                t_str = type_name_map.get(field["type_name"],
+                                                           field["type_name"].split('.')[-1])
+                            else:
+                                t_str = TYPE_MAP.get(field["type"], "bytes")
+                            f.write(f'  {lbl}{t_str} {field["name"]} = {field["number"]};\n')
                     f.write('}\n\n')
 
         # ------------------------------------------------------------------
@@ -643,8 +770,25 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
         primitive_types = set(TYPE_MAP.values())
         errors = []
         for full_name, m in resolved_messages.items():
+            if check_is_map_entry(m)[0]:
+                continue
             m_dn = msg_display[full_name]
             for field in m["fields"]:
+                if field["label"] == 3 and field.get("type_name"):
+                    _, target_m, _ = registry.find_type(field["type_name"])
+                    if not target_m and field["type_name"] in resolved_messages:
+                        target_m = resolved_messages[field["type_name"]]
+                    if target_m:
+                        is_map_entry, f_key, f_val = check_is_map_entry(target_m)
+                        if is_map_entry:
+                            if f_val.get("type_name"):
+                                v_str = type_name_map.get(f_val["type_name"])
+                                if not v_str:
+                                    _, _, res_v = registry.find_type(f_val["type_name"])
+                                    v_str = type_name_map.get(res_v, f_val["type_name"].split('.')[-1])
+                                if v_str not in all_defined and v_str not in primitive_types:
+                                    errors.append(f"  '{m_dn}'.{field['name']} → '{v_str}' (from {f_val['type_name']})")
+                            continue
                 if field["type_name"]:
                     t_str = type_name_map.get(field["type_name"],
                                                field["type_name"].split('.')[-1])
@@ -657,17 +801,33 @@ def generate_per_service_protos(output_dir=None, binary_path=None):
         coll_msgs  = sum(1 for dn in msg_display.values()  if '_' in dn and '.' not in dn)
         coll_enums = sum(1 for dn in enum_display.values() if '_' in dn and '.' not in dn)
         coll_str   = f", Collisions: {coll_msgs}msg/{coll_enums}enum" if (coll_msgs or coll_enums) else ""
-        print(f"Generated: {service_name}.proto → {len(s_info['methods'])} RPCs, "
+        print(f"Generated: {clean_file_stem}.proto → {len(s_info['methods'])} RPCs, "
               f"{len(resolved_messages)} Messages, {len(resolved_enums)} Enums"
               f"{coll_str} [{status_str}]")
-        if errors:
-            for e in errors[:10]:
-                print(e)
+    # Export service catalog JSON for proxy routing
+    import json
+    catalog_path = os.path.join(output_dir, "service_catalog.json")
+    service_catalog = {}
+    for s_key in target_service_keys:
+        s_info = registry.services[s_key]
+        pkg = SERVICE_PACKAGE_MAP.get(s_info["service"], s_info["package"] or "exa.local_grpc")
+        host = HOST_MAP.get(pkg, "https://daily-cloudcode-pa.googleapis.com" if "google" in pkg else "http://127.0.0.1")
+        service_catalog[s_key] = {
+            "service": s_info["service"],
+            "package": pkg,
+            "upstream_host": host,
+            "route_prefix": f"/{pkg}.{s_info['service']}/",
+            "methods": [m["name"] for m in s_info["methods"]]
+        }
+    with open(catalog_path, "w") as f:
+        json.dump(service_catalog, f, indent=2)
 
     print(f"\nAll service proto files updated in: {output_dir}")
+    print(f"Service Catalog saved to: {catalog_path}")
 
 if __name__ == "__main__":
     custom_bin = None
+    full_scan = False
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -677,9 +837,11 @@ if __name__ == "__main__":
         elif a in ("--bin", "-b") and i + 1 < len(args):
             custom_bin = args[i + 1]
             i += 1
+        elif a in ("--full", "-f"):
+            full_scan = True
         elif not a.startswith("-") and custom_bin is None:
             custom_bin = a
         i += 1
 
-    generate_per_service_protos(binary_path=custom_bin)
+    generate_per_service_protos(binary_path=custom_bin, full=full_scan)
 
