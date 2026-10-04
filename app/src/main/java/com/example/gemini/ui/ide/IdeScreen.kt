@@ -1677,7 +1677,8 @@ fun IdeScreen(
                         shape = if (isRunnerMaximized) RoundedCornerShape(0.dp) else RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp),
                         color = Color(0xFF1E1E1E),
                         border = if (isRunnerMaximized) null else BorderStroke(1.dp, Color(0x33FFFFFF)),
-                        shadowElevation = if (isRunnerMaximized) 0.dp else 16.dp
+                        shadowElevation = 0.dp,
+                        tonalElevation = 0.dp
                     ) {
                         LocalTerminalContent(
                             customSession = session,

@@ -298,6 +298,8 @@ fun LocalTerminalContent(
                 val currentOnDragDelta by rememberUpdatedState(onDragDelta)
                 Surface(
                     color = Color(0xFF252526),
+                    shadowElevation = 0.dp,
+                    tonalElevation = 0.dp,
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(
