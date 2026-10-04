@@ -38,6 +38,7 @@ data class LocalCommandResult(
 
 sealed class BootstrapSource {
     object Auto : BootstrapSource()
+    object BaseMinimum : BootstrapSource()
     data class DirectUrl(val url: String) : BootstrapSource()
     data class LocalZipUri(val uri: android.net.Uri) : BootstrapSource()
 }
@@ -453,7 +454,7 @@ object LocalEnvironmentManager {
             var finalDownloadedSize = 0L
 
             when (source) {
-                is BootstrapSource.Auto -> {
+                is BootstrapSource.Auto, is BootstrapSource.BaseMinimum -> {
                     _installerState.value = LocalInstallerState.Downloading(
                         bytesDownloaded = 0L,
                         totalBytes = 35 * 1024 * 1024L,

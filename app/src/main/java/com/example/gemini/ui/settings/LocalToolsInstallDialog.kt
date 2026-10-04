@@ -240,7 +240,7 @@ fun LocalToolsInstallDialog(
                                 }
                             }
 
-                            // Option 2: Direct URL
+                            // Option 1: Base Minimum Termux
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
@@ -252,38 +252,38 @@ fun LocalToolsInstallDialog(
                                     .fillMaxWidth()
                                     .clickable { selectedSourceType = 1 }
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        RadioButton(
-                                            selected = selectedSourceType == 1,
-                                            onClick = { selectedSourceType = 1 },
-                                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = selectedSourceType == 1,
+                                        onClick = { selectedSourceType = 1 },
+                                        colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = "Direct Download URL",
+                                                text = "Base Minimum Termux",
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
-                                            Text(
-                                                text = "Download bootstrap from a direct .zip link",
-                                                fontSize = 11.5.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(Color(0xFF6366F1).copy(alpha = 0.15f))
+                                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                                            ) {
+                                                Text("Minimal (~33MB)", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6366F1))
+                                            }
                                         }
-                                    }
-                                    if (selectedSourceType == 1) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        OutlinedTextField(
-                                            value = directUrlText,
-                                            onValueChange = { directUrlText = it },
-                                            label = { Text("Direct URL (.zip)", fontSize = 12.sp) },
-                                            placeholder = { Text("https://.../bootstrap-aarch64.zip", fontSize = 11.sp) },
-                                            singleLine = true,
-                                            textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, fontFamily = FontFamily.Monospace),
-                                            modifier = Modifier.fillMaxWidth()
+                                        Text(
+                                            text = "Downloads clean official Termux base bootstrap (${LocalEnvironmentManager.getBootstrapArch()}) with essential coreutils",
+                                            fontSize = 11.5.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -775,8 +775,7 @@ fun LocalToolsInstallDialog(
                                             LocalEnvironmentManager.launchDiscover(context)
                                         }
                                         1 -> {
-                                            val source = BootstrapSource.DirectUrl(directUrlText.trim())
-                                            LocalEnvironmentManager.launchInstall(context, authPreferences, source)
+                                            LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.BaseMinimum)
                                         }
                                         2 -> {
                                             if (selectedFileUri != null) {
@@ -799,7 +798,11 @@ fun LocalToolsInstallDialog(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (selectedSourceType == 0) "Find Package" else "Install Now",
+                                    text = when (selectedSourceType) {
+                                        0 -> "Find Package"
+                                        1 -> "Download Base Termux"
+                                        else -> if (selectedFileUri != null) "Install Local ZIP" else "Choose ZIP"
+                                    },
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -899,10 +902,7 @@ fun LocalToolsInstallDialog(
                                     onClick = {
                                         when (selectedSourceType) {
                                             0 -> LocalEnvironmentManager.launchDiscover(context)
-                                            1 -> {
-                                                val source = BootstrapSource.DirectUrl(directUrlText.trim())
-                                                LocalEnvironmentManager.launchInstall(context, authPreferences, source)
-                                            }
+                                            1 -> LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.BaseMinimum)
                                             2 -> {
                                                 val source = selectedFileUri?.let { BootstrapSource.LocalZipUri(it) } ?: BootstrapSource.Auto
                                                 LocalEnvironmentManager.launchInstall(context, authPreferences, source)
