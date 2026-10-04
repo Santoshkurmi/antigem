@@ -297,7 +297,7 @@ fun LocalTerminalContent(
                 val activeTitle by activeSession.title.collectAsState()
                 val currentOnDragDelta by rememberUpdatedState(onDragDelta)
                 Surface(
-                    color = Color(0xFF252526),
+                    color = backgroundColor,
                     shadowElevation = 0.dp,
                     tonalElevation = 0.dp,
                     modifier = Modifier
@@ -314,24 +314,24 @@ fun LocalTerminalContent(
                         )
                 ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(if (isMaximized) Modifier.statusBarsPadding() else Modifier)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         // Small handle pill at the center of the header
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 5.dp, bottom = 2.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
+                        if (onDragDelta != null) {
                             Box(
                                 modifier = Modifier
-                                    .width(36.dp)
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(Color.White.copy(alpha = 0.35f))
-                            )
+                                    .fillMaxWidth()
+                                    .padding(top = 5.dp, bottom = 2.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(36.dp)
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(Color.White.copy(alpha = 0.35f))
+                                )
+                            }
                         }
 
                         Row(
@@ -401,7 +401,7 @@ fun LocalTerminalContent(
                         }
                     }
                 }
-                HorizontalDivider(color = Color(0xFF333333), thickness = 0.5.dp)
+                HorizontalDivider(color = Color(0x1AFFFFFF), thickness = 0.5.dp)
             }
 
             // NATIVE TERMUX TERMINAL VIEW (Full Screen, spans from the very top pixel)
@@ -723,8 +723,8 @@ fun LocalTerminalContent(
             }
         }
 
-        // FROSTED GLASS BLUR STATUS BAR OVERLAY
-        if (statusBarHeightDp > 0.dp) {
+        // FROSTED GLASS BLUR STATUS BAR OVERLAY (Only for full-screen standalone terminal dialog)
+        if (statusBarHeightDp > 0.dp && customSession == null) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
