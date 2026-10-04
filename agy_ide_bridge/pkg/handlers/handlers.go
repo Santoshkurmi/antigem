@@ -443,18 +443,20 @@ func (h *Handler) ProjectsHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. Saved projects from ~/.antigem/projects.json
 	saved := h.loadSavedProjects()
 	for _, p := range saved {
-		clean := filepath.Clean(p.Path)
-		if !seenPaths[clean] {
-			seenPaths[clean] = true
-			name := p.Name
-			if name == "" {
-				name = filepath.Base(clean)
+		clean := filepath.Clean(expandHome(p.Path))
+		if info, err := os.Stat(clean); err == nil && info.IsDir() {
+			if !seenPaths[clean] {
+				seenPaths[clean] = true
+				name := p.Name
+				if name == "" {
+					name = filepath.Base(clean)
+				}
+				projects = append(projects, models.ProjectSummary{
+					Name:     name,
+					Path:     clean,
+					IsCustom: true,
+				})
 			}
-			projects = append(projects, models.ProjectSummary{
-				Name:     name,
-				Path:     clean,
-				IsCustom: true,
-			})
 		}
 	}
 
@@ -479,12 +481,14 @@ func (h *Handler) ProjectsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 3. Fallback workspace
 	if len(projects) == 0 && h.Cfg.WorkspaceDir != "" {
-		clean := filepath.Clean(h.Cfg.WorkspaceDir)
-		projects = append(projects, models.ProjectSummary{
-			Name:     filepath.Base(clean),
-			Path:     clean,
-			IsCustom: false,
-		})
+		clean := filepath.Clean(expandHome(h.Cfg.WorkspaceDir))
+		if info, err := os.Stat(clean); err == nil && info.IsDir() {
+			projects = append(projects, models.ProjectSummary{
+				Name:     filepath.Base(clean),
+				Path:     clean,
+				IsCustom: false,
+			})
+		}
 	}
 
 	writeJSON(w, http.StatusOK, projects)

@@ -161,18 +161,26 @@ func main() {
 
 		// 1. Saved projects
 		for _, p := range loadSavedProjects() {
-			clean := filepath.Clean(p.Path)
-			if !seen[clean] {
-				seen[clean] = true
-				name := p.Name
-				if name == "" {
-					name = filepath.Base(clean)
+			path := p.Path
+			if strings.HasPrefix(path, "~/") {
+				path = filepath.Join(homeDir, strings.TrimPrefix(path, "~/"))
+			} else if path == "~" {
+				path = homeDir
+			}
+			clean := filepath.Clean(path)
+			if info, err := os.Stat(clean); err == nil && info.IsDir() {
+				if !seen[clean] {
+					seen[clean] = true
+					name := p.Name
+					if name == "" {
+						name = filepath.Base(clean)
+					}
+					projects = append(projects, ProjectItem{
+						Name:     name,
+						Path:     clean,
+						IsCustom: true,
+					})
 				}
-				projects = append(projects, ProjectItem{
-					Name:     name,
-					Path:     clean,
-					IsCustom: true,
-				})
 			}
 		}
 

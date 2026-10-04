@@ -74,6 +74,12 @@ import com.example.gemini.data.admin.AntiGemDeviceAdminReceiver
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.ZipFile
+import org.json.JSONObject
+import org.json.JSONArray
+import com.example.gemini.data.daemon.ProjectItem
+import com.example.gemini.data.daemon.TermuxDaemonManager
+import com.example.gemini.data.daemon.IdeApiClient
 
 enum class SettingsSection(val title: String, val subtitle: String) {
     MAIN("Settings & Preferences", "Configure your AntiGem experience"),
@@ -4202,6 +4208,8 @@ private fun BackupsSubScreen(
     var restorePassword by remember { mutableStateOf("") }
     var showRestorePasswordText by remember { mutableStateOf(false) }
 
+    var showProjectsBackupRestoreDialog by remember { mutableStateOf(false) }
+
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -4584,6 +4592,69 @@ private fun BackupsSubScreen(
                 }
             }
         }
+
+        // Card 4: IDE & AGY Projects Backup & Restore
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFF6366F1).copy(alpha = 0.15f),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.Workspaces,
+                                contentDescription = null,
+                                tint = Color(0xFF6366F1),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "IDE & AGY Projects Backup & Restore",
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Archive selected projects, workspaces & restore from zip",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Export and backup projects open in the IDE and AGY conversation workspaces. Choose clean git-aware packaging (excluding node_modules and build caches) or full raw folder archives. Restore with automatic location mapping and safety backup protection.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    lineHeight = 17.sp
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Button(
+                    onClick = { showProjectsBackupRestoreDialog = true },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.FolderZip, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Manage Projects Backup & Restore", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+            }
+        }
     }
 
     // 1. Server Running Alert Dialog
@@ -4784,6 +4855,867 @@ private fun BackupsSubScreen(
             info = executionInfo,
             onDismiss = { activeScriptExecution = null }
         )
+    }
+
+    // 5. Projects Backup & Restore Dialog
+    if (showProjectsBackupRestoreDialog) {
+        ProjectsBackupRestoreDialog(
+            onDismiss = { showProjectsBackupRestoreDialog = false },
+            onRequestStoragePermission = requestStoragePermission,
+            onExecuteScript = { executionInfo ->
+                activeScriptExecution = executionInfo
+            }
+        )
+    }
+}
+
+data class ProjectBackupManifestItem(
+    val name: String,
+    val originalPath: String,
+    val backupSubpath: String
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProjectsBackupRestoreDialog(
+    onDismiss: () -> Unit,
+    onRequestStoragePermission: (() -> Unit) -> Unit,
+    onExecuteScript: (ScriptExecutionInfo) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Backup, 1 = Restore
+    // Projects list from TermuxDaemonManager
+    val allProjects by TermuxDaemonManager.projects.collectAsState()
+    val homeDir = remember { LocalEnvironmentManager.getHomeDir(context).absolutePath.trimEnd('/') }
+
+    fun normalizeProjectPath(p: String, home: String): String {
+        var clean = p.trim().removePrefix("file://").trim()
+        if (clean.startsWith("~/")) {
+            clean = home + clean.removePrefix("~")
+        } else if (clean == "~") {
+            clean = home
+        }
+        if (clean.startsWith("/data/user/0/")) {
+            clean = "/data/data/" + clean.removePrefix("/data/user/0/")
+        }
+        clean = clean.replace(Regex("/+"), "/")
+        return clean.trimEnd('/')
+    }
+
+    // Filter out root $HOME, root filesystem paths, and duplicates
+    val validProjects = remember(allProjects, homeDir) {
+        val normHome = normalizeProjectPath(homeDir, homeDir)
+        allProjects.filter { proj ->
+            val p = normalizeProjectPath(proj.path, normHome)
+            p.isNotBlank() && p != normHome && p != "/" && p != "/data/data/com.termux/files" && p != "/data/data/com.termux"
+        }.distinctBy { normalizeProjectPath(it.path, normHome) }
+    }
+
+    LaunchedEffect(Unit) {
+        TermuxDaemonManager.loadProjects()
+    }
+
+    // --- Backup Tab State ---
+    val selectedProjectPaths = remember { mutableStateListOf<String>() }
+    var hasAutoSelected by remember { mutableStateOf(false) }
+    var backupMode by remember { mutableStateOf("git") } // "git" or "full"
+    var searchQuery by remember { mutableStateOf("") }
+
+    // Auto-select valid projects by default only once on initial load
+    LaunchedEffect(validProjects) {
+        if (!hasAutoSelected && validProjects.isNotEmpty()) {
+            selectedProjectPaths.clear()
+            selectedProjectPaths.addAll(validProjects.map { it.path })
+            hasAutoSelected = true
+        }
+    }
+
+    val filteredProjects = remember(validProjects, searchQuery) {
+        if (searchQuery.isBlank()) validProjects
+        else validProjects.filter { it.name.contains(searchQuery, ignoreCase = true) || it.path.contains(searchQuery, ignoreCase = true) }
+    }
+
+    val selectedCount = remember(selectedProjectPaths.toList(), validProjects) {
+        validProjects.count { selectedProjectPaths.contains(it.path) }
+    }
+
+    // Build nested tree list with path normalization
+    val flattenedTree = remember(filteredProjects, homeDir) {
+        val normHome = normalizeProjectPath(homeDir, homeDir)
+        val normMap = filteredProjects.associateWith { normalizeProjectPath(it.path, normHome) }
+        val sorted = filteredProjects.sortedBy { normMap[it]?.length ?: 0 }
+
+        fun findParent(proj: ProjectItem): ProjectItem? {
+            val childNorm = normMap[proj] ?: return null
+            return sorted.filter { parent ->
+                val parentNorm = normMap[parent] ?: ""
+                parentNorm.isNotBlank() && parentNorm != childNorm && childNorm.startsWith("$parentNorm/")
+            }.maxByOrNull { normMap[it]?.length ?: 0 }
+        }
+
+        val parentMap = mutableMapOf<String, ProjectItem?>()
+        filteredProjects.forEach { proj ->
+            parentMap[proj.path] = findParent(proj)
+        }
+
+        val result = mutableListOf<Triple<ProjectItem, Int, ProjectItem?>>() // item, level, parent
+        fun addNodeAndChildren(proj: ProjectItem, level: Int) {
+            result.add(Triple(proj, level, parentMap[proj.path]))
+            val children = filteredProjects.filter { parentMap[it.path]?.path == proj.path }
+            children.forEach { child ->
+                addNodeAndChildren(child, level + 1)
+            }
+        }
+
+        val roots = filteredProjects.filter { parentMap[it.path] == null }
+        roots.forEach { root ->
+            addNodeAndChildren(root, 0)
+        }
+        result
+    }
+
+    val effectiveBackupPaths = remember(selectedProjectPaths.toList(), validProjects, homeDir) {
+        val normHome = normalizeProjectPath(homeDir, homeDir)
+        val normMap = validProjects.associateWith { normalizeProjectPath(it.path, normHome) }
+        val selected = validProjects.filter { selectedProjectPaths.contains(it.path) }
+        selected.filter { item ->
+            val itemNorm = normMap[item] ?: ""
+            selected.none { other ->
+                val otherNorm = normMap[other] ?: ""
+                other.path != item.path && otherNorm.isNotBlank() && itemNorm.startsWith("$otherNorm/")
+            }
+        }.map { it.path }
+    }
+
+    // --- Restore Tab State ---
+    var restoreZipPath by remember { mutableStateOf("") }
+    var conflictStrategy by remember { mutableStateOf("bak") } // "bak" or "overwrite"
+    var customRestoreDir by remember { mutableStateOf("") }
+    var useCustomRestoreDir by remember { mutableStateOf(false) }
+    var manifestProjects by remember { mutableStateOf<List<ProjectBackupManifestItem>>(emptyList()) }
+    var manifestBackupMode by remember { mutableStateOf<String?>(null) }
+    var isInspectingArchive by remember { mutableStateOf(false) }
+    var archiveError by remember { mutableStateOf<String?>(null) }
+
+    val inspectArchive: (String) -> Unit = { path ->
+        if (path.isBlank()) {
+            manifestProjects = emptyList()
+            manifestBackupMode = null
+            archiveError = null
+        } else {
+            scope.launch(Dispatchers.IO) {
+                isInspectingArchive = true
+                archiveError = null
+                try {
+                    val file = File(path)
+                    if (!file.exists()) {
+                        withContext(Dispatchers.Main) {
+                            archiveError = "Archive file not found at: $path"
+                            manifestProjects = emptyList()
+                            isInspectingArchive = false
+                        }
+                    } else {
+                        val zip = ZipFile(file)
+                        val entry = zip.getEntry("antigem_project_manifest.json")
+                            ?: zip.getEntry(".antigem_project_manifest.json")
+                        if (entry != null) {
+                            val stream = zip.getInputStream(entry)
+                            val content = stream.bufferedReader().use { it.readText() }
+                            val json = JSONObject(content)
+                            val projectsArr = json.optJSONArray("projects") ?: JSONArray()
+                            val list = mutableListOf<ProjectBackupManifestItem>()
+                            for (i in 0 until projectsArr.length()) {
+                                val obj = projectsArr.getJSONObject(i)
+                                list.add(
+                                    ProjectBackupManifestItem(
+                                        name = obj.optString("name", "Project"),
+                                        originalPath = obj.optString("original_path", ""),
+                                        backupSubpath = obj.optString("backup_subpath", "")
+                                    )
+                                )
+                            }
+                            val mode = json.optString("backup_mode", "git")
+                            zip.close()
+                            withContext(Dispatchers.Main) {
+                                manifestProjects = list
+                                manifestBackupMode = mode
+                                isInspectingArchive = false
+                            }
+                        } else {
+                            val entries = zip.entries().asSequence().map { it.name }.toList()
+                            zip.close()
+                            val roots = entries.map { it.substringBefore('/') }.filter { it.isNotBlank() && !it.startsWith("__") }.distinct()
+                            val list = roots.map { ProjectBackupManifestItem(name = it, originalPath = "", backupSubpath = it) }
+                            withContext(Dispatchers.Main) {
+                                manifestProjects = list
+                                manifestBackupMode = "raw"
+                                isInspectingArchive = false
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        archiveError = "Error reading archive: ${e.message}"
+                        manifestProjects = emptyList()
+                        isInspectingArchive = false
+                    }
+                }
+            }
+        }
+    }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val destFile = File(context.cacheDir, "project_restore_payload_${System.currentTimeMillis()}.zip")
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        destFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        restoreZipPath = destFile.absolutePath
+                        inspectArchive(destFile.absolutePath)
+                    }
+                } catch (e: Exception) {
+                    Log.e("ProjectsBackup", "Failed copying selected backup file", e)
+                }
+            }
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .fillMaxHeight(0.88f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Header Bar
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF6366F1).copy(alpha = 0.15f),
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Workspaces,
+                                    contentDescription = null,
+                                    tint = Color(0xFF6366F1),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "Projects Backup & Restore",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Backup IDE & AGY workspaces or restore from zip",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Tab Switcher
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    contentColor = Color(0xFF6366F1),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                ) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Backup Projects", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) },
+                        icon = { Icon(Icons.Outlined.Archive, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Restore Projects", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) },
+                        icon = { Icon(Icons.Outlined.SettingsBackupRestore, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                if (selectedTab == 0) {
+                    // ==========================================
+                    // TAB 0: BACKUP PROJECTS
+                    // ==========================================
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Backup Mode Selection Card
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Backup Format & Packaging Mode:",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Git-Aware (Clean)
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (backupMode == "git") Color(0xFF6366F1).copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, if (backupMode == "git") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable { backupMode = "git" }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (backupMode == "git") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
+                                                contentDescription = null,
+                                                tint = if (backupMode == "git") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Column {
+                                                Text("Git-Aware (Clean)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (backupMode == "git") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurface)
+                                                Text("Excludes node_modules & build caches", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                    }
+
+                                    // Full Raw Archive
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (backupMode == "full") Color(0xFF6366F1).copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, if (backupMode == "full") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable { backupMode = "full" }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (backupMode == "full") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
+                                                contentDescription = null,
+                                                tint = if (backupMode == "full") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Column {
+                                                Text("Full Raw Archive", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (backupMode == "full") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurface)
+                                                Text("All files, symlinks & permissions as-is", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Select All / Deselect Bar + Count
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Select Projects ($selectedCount/${validProjects.size}):",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                TextButton(
+                                    onClick = {
+                                        selectedProjectPaths.clear()
+                                        selectedProjectPaths.addAll(validProjects.map { it.path })
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text("Select All", fontSize = 11.5.sp, color = Color(0xFF6366F1))
+                                }
+                                TextButton(
+                                    onClick = { selectedProjectPaths.clear() },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text("Deselect All", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+
+                        // Project Items Tree List
+                        if (validProjects.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "No open projects or workspaces detected in the IDE.",
+                                    fontSize = 12.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            val normHome = remember(homeDir) { normalizeProjectPath(homeDir, homeDir) }
+                            LazyColumn(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                items(flattenedTree, key = { it.first.path }) { (proj, level, parentProj) ->
+                                    val isParentSelected = parentProj != null && selectedProjectPaths.contains(parentProj.path)
+                                    val isDirectlySelected = selectedProjectPaths.contains(proj.path)
+                                    val isCoveredByParent = isParentSelected
+                                    val isSelected = isDirectlySelected || isCoveredByParent
+                                    val projNorm = normalizeProjectPath(proj.path, normHome)
+                                    val childProjectsCount = validProjects.count {
+                                        val otherNorm = normalizeProjectPath(it.path, normHome)
+                                        it.path != proj.path && otherNorm.startsWith("$projNorm/")
+                                    }
+
+                                    val toggleNode: () -> Unit = {
+                                        if (isCoveredByParent && parentProj != null) {
+                                            selectedProjectPaths.remove(parentProj.path)
+                                            val parentNorm = normalizeProjectPath(parentProj.path, normHome)
+                                            val siblings = validProjects.filter {
+                                                val otherNorm = normalizeProjectPath(it.path, normHome)
+                                                it.path != parentProj.path && otherNorm.startsWith("$parentNorm/")
+                                            }
+                                            siblings.forEach { sib ->
+                                                if (sib.path != proj.path && !selectedProjectPaths.contains(sib.path)) {
+                                                    selectedProjectPaths.add(sib.path)
+                                                }
+                                            }
+                                            selectedProjectPaths.remove(proj.path)
+                                        } else {
+                                            if (isDirectlySelected) {
+                                                selectedProjectPaths.remove(proj.path)
+                                                val descendants = validProjects.filter {
+                                                    val otherNorm = normalizeProjectPath(it.path, normHome)
+                                                    otherNorm.startsWith("$projNorm/")
+                                                }
+                                                descendants.forEach { selectedProjectPaths.remove(it.path) }
+                                            } else {
+                                                selectedProjectPaths.add(proj.path)
+                                            }
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = (level * 22).dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (level > 0) {
+                                            Text(
+                                                text = "└──",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = Color(0xFF6366F1).copy(alpha = 0.8f),
+                                                modifier = Modifier.padding(end = 6.dp)
+                                            )
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                            border = BorderStroke(
+                                                1.dp,
+                                                if (isSelected) Color(0xFF6366F1).copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { toggleNode() }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Checkbox(
+                                                    checked = isSelected,
+                                                    onCheckedChange = { toggleNode() },
+                                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF6366F1)),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = proj.name,
+                                                            fontSize = 13.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                        if (childProjectsCount > 0) {
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = Color(0xFF6366F1).copy(alpha = 0.15f)
+                                                            ) {
+                                                                Text(
+                                                                    text = "$childProjectsCount ${if (childProjectsCount == 1) "sub-project" else "sub-projects"}",
+                                                                    fontSize = 9.5.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = Color(0xFF6366F1),
+                                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                        if (isCoveredByParent && parentProj != null) {
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = Color(0xFF10B981).copy(alpha = 0.15f)
+                                                            ) {
+                                                                Text(
+                                                                    text = "Included with ${parentProj.name}",
+                                                                    fontSize = 9.5.sp,
+                                                                    fontWeight = FontWeight.Medium,
+                                                                    color = Color(0xFF10B981),
+                                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                                )
+                                                            }
+                                                        } else if (parentProj != null) {
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = Color(0xFF6366F1).copy(alpha = 0.12f)
+                                                            ) {
+                                                                Text(
+                                                                    text = "Inside ${parentProj.name}",
+                                                                    fontSize = 9.5.sp,
+                                                                    fontWeight = FontWeight.Medium,
+                                                                    color = Color(0xFF6366F1),
+                                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                    Text(
+                                                        text = proj.path,
+                                                        fontSize = 10.5.sp,
+                                                        fontFamily = FontFamily.Monospace,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Backup Action Button
+                        Button(
+                            onClick = {
+                                if (effectiveBackupPaths.isEmpty()) {
+                                    Toast.makeText(context, "Please select at least one project to backup", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                onRequestStoragePermission {
+                                    val targetsFile = File(context.cacheDir, "backup_targets_${System.currentTimeMillis()}.txt")
+                                    targetsFile.writeText(effectiveBackupPaths.joinToString("\n"))
+                                    onDismiss()
+                                    onExecuteScript(
+                                        ScriptExecutionInfo(
+                                            title = "Projects Backup Packager",
+                                            scriptName = "backup_projects",
+                                            args = listOf("", backupMode, "--paths-file", targetsFile.absolutePath)
+                                        )
+                                    )
+                                }
+                            },
+                            enabled = selectedCount > 0,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Outlined.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (effectiveBackupPaths.size == selectedCount) "Backup $selectedCount Selected Projects"
+                                       else "Backup $selectedCount Selected Projects (${effectiveBackupPaths.size} workspace roots)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                } else {
+                    // ==========================================
+                    // TAB 1: RESTORE PROJECTS
+                    // ==========================================
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Select a projects backup archive (.zip) to restore projects to their workspace locations.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                        )
+
+                        // File Picker Input
+                        OutlinedTextField(
+                            value = restoreZipPath,
+                            onValueChange = {
+                                restoreZipPath = it
+                                inspectArchive(it.trim())
+                            },
+                            label = { Text("Projects Archive File Path") },
+                            placeholder = { Text("/sdcard/Download/Antigem/backups/projects_backup_....zip") },
+                            singleLine = true,
+                            trailingIcon = {
+                                IconButton(onClick = { filePickerLauncher.launch("*/*") }) {
+                                    Icon(Icons.Outlined.FolderOpen, contentDescription = "Choose File", tint = Color(0xFF6366F1))
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Archive Inspection Summary
+                        if (isInspectingArchive) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color(0xFF6366F1))
+                                Text("Inspecting archive contents & manifest...", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
+                        archiveError?.let { err ->
+                            Text(text = err, color = Color(0xFFEF4444), fontSize = 11.5.sp)
+                        }
+
+                        if (manifestProjects.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Projects in Archive (${manifestProjects.size}):",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        manifestBackupMode?.let { mode ->
+                                            Text("Mode: $mode", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+
+                                    manifestProjects.forEach { item ->
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.padding(vertical = 2.dp)
+                                        ) {
+                                            Icon(Icons.Outlined.Folder, contentDescription = null, tint = Color(0xFF6366F1), modifier = Modifier.size(16.dp))
+                                            Column {
+                                                Text(item.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                                if (item.originalPath.isNotBlank()) {
+                                                    Text(
+                                                        "Target: ${item.originalPath}",
+                                                        fontSize = 10.sp,
+                                                        fontFamily = FontFamily.Monospace,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Conflict Strategy Option
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "If Target Project Folder Already Exists:",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+
+                                // Option A: Move to .bak
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable { conflictStrategy = "bak" }
+                                        .padding(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (conflictStrategy == "bak") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
+                                        contentDescription = null,
+                                        tint = if (conflictStrategy == "bak") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Column {
+                                        Text("Move existing to .bak.<timestamp> (Safe & Recommended)", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("Preserves existing code in a backup folder before extracting", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+
+                                // Option B: Overwrite
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable { conflictStrategy = "overwrite" }
+                                        .padding(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (conflictStrategy == "overwrite") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
+                                        contentDescription = null,
+                                        tint = if (conflictStrategy == "overwrite") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Column {
+                                        Text("Overwrite files in-place", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("Overwrites matching files directly inside target directory", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Optional: Custom Root Target Directory
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Checkbox(
+                                checked = useCustomRestoreDir,
+                                onCheckedChange = { useCustomRestoreDir = it },
+                                colors = CheckboxDefaults.colors(checkedColor = Color(0xFF6366F1)),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text("Restore to custom parent directory", fontSize = 12.sp)
+                        }
+
+                        if (useCustomRestoreDir) {
+                            OutlinedTextField(
+                                value = customRestoreDir,
+                                onValueChange = { customRestoreDir = it },
+                                label = { Text("Custom Restore Directory") },
+                                placeholder = { Text("/data/data/com.termux/files/home/restored_projects") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Restore Action Button
+                        Button(
+                            onClick = {
+                                val zipPath = restoreZipPath.trim()
+                                if (zipPath.isBlank()) {
+                                    Toast.makeText(context, "Please enter or pick a backup zip file", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                onDismiss()
+                                onExecuteScript(
+                                    ScriptExecutionInfo(
+                                        title = "Projects Archive Restorer",
+                                        scriptName = "restore_projects",
+                                        args = listOf(zipPath, conflictStrategy, if (useCustomRestoreDir) customRestoreDir.trim() else "")
+                                    )
+                                )
+                                scope.launch(Dispatchers.IO) {
+                                    delay(1500)
+                                    TermuxDaemonManager.loadProjects()
+                                }
+                            },
+                            enabled = restoreZipPath.isNotBlank(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = QuotaGreen),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Outlined.SettingsBackupRestore, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Start Restore (restore_projects)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -232,6 +232,12 @@ val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
   from(layout.projectDirectory.file("../scripts/restore_chats.sh")) {
     rename { "restore_chats" }
   }
+  from(layout.projectDirectory.file("../scripts/backup_projects.sh")) {
+    rename { "backup_projects" }
+  }
+  from(layout.projectDirectory.file("../scripts/restore_projects.sh")) {
+    rename { "restore_projects" }
+  }
   into(layout.projectDirectory.dir("src/main/assets/bin"))
 }
 
