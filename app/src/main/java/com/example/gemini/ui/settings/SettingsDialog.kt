@@ -2431,7 +2431,7 @@ private fun McpSubScreen(
             }
             val termuxEnv = mapOf(
                 "LD_PRELOAD" to "/data/data/com.termux/files/usr/lib/libtermux-exec.so",
-                "PATH" to "/data/data/com.termux/files/usr/bin:/system/bin"
+                "PATH" to "/data/data/com.termux/files/home/.local/bin:/data/data/com.termux/files/usr/bin:/system/bin"
             )
             val presets = listOf(
                 Triple("Browser/Terminal Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(

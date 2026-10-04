@@ -1276,7 +1276,12 @@ func injectTermuxEnvIfNeeded(rawContent string) string {
 				envMap["LD_PRELOAD"] = libTermuxExec
 			}
 			if _, hasPath := envMap["PATH"]; !hasPath {
-				envMap["PATH"] = "/data/data/com.termux/files/usr/bin:/system/bin"
+				home, _ := os.UserHomeDir()
+				if home != "" {
+					envMap["PATH"] = filepath.Join(home, ".local", "bin") + ":/data/data/com.termux/files/usr/bin:/system/bin"
+				} else {
+					envMap["PATH"] = "/data/data/com.termux/files/home/.local/bin:/data/data/com.termux/files/usr/bin:/system/bin"
+				}
 			}
 			sMap["env"] = envMap
 		}

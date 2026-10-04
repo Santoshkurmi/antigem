@@ -79,7 +79,7 @@ class AuthPreferences(private val context: Context) {
         val IS_TERMINAL_LAUNCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_launcher_enabled")
 
         const val DEFAULT_BRIDGE_BINARY_PATH = "~/../usr/bin/agy_ide_bridge"
-        const val DEFAULT_AGY_BINARY_PATH = "~/../usr/bin/agy"
+        const val DEFAULT_AGY_BINARY_PATH = "~/.local/bin/agy"
 
         const val TOKEN_PREFIX = "x-ag"
         const val TOKEN_SUFFIX = "_9qx"

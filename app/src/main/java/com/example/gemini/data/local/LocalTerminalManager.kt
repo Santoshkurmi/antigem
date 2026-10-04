@@ -187,7 +187,7 @@ class LocalPtySession(
 
             envMap["PREFIX"] = prefix.absolutePath
             envMap["HOME"] = home.absolutePath
-            envMap["PATH"] = "${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin"
+            envMap["PATH"] = "${home.absolutePath}/.local/bin:${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin"
             envMap["TMPDIR"] = tmp.absolutePath
             envMap["TERM"] = "xterm-256color"
             envMap["COLORTERM"] = "truecolor"

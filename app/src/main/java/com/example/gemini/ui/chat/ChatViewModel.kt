@@ -3423,7 +3423,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 envMap["LD_PRELOAD"] = "/data/data/com.termux/files/usr/lib/libtermux-exec.so"
                             }
                             if (!envMap.containsKey("PATH")) {
-                                envMap["PATH"] = "/data/data/com.termux/files/usr/bin:/system/bin"
+                                envMap["PATH"] = "/data/data/com.termux/files/home/.local/bin:/data/data/com.termux/files/usr/bin:/system/bin"
                             }
                             if (envMap.isNotEmpty()) {
                                 val envObj = org.json.JSONObject()

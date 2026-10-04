@@ -36,6 +36,13 @@ data class LocalCommandResult(
     val durationMs: Long
 )
 
+data class DeviceHardwareInfo(
+    val arch: String,
+    val vaBits: Int?, // 39, 48, or null if unknown (N/A)
+    val hasAtomics: Boolean?, // true, false, or null if unknown (N/A)
+    val supportedAbis: List<String>
+)
+
 sealed class BootstrapSource {
     object Auto : BootstrapSource()
     object BaseMinimum : BootstrapSource()
@@ -219,6 +226,56 @@ object LocalEnvironmentManager {
             }
         }
         return "aarch64"
+    }
+
+    fun getDeviceHardwareInfo(): DeviceHardwareInfo {
+        val arch = getBootstrapArch()
+        val abis = Build.SUPPORTED_ABIS?.toList() ?: emptyList()
+
+        var vaBits: Int? = null
+        try {
+            val mapsFile = File("/proc/self/maps")
+            if (mapsFile.exists() && mapsFile.canRead()) {
+                var maxAddress = 0L
+                var foundAny = false
+                mapsFile.forEachLine { line ->
+                    val range = line.substringBefore(' ')
+                    val endHex = range.substringAfter('-')
+                    val endAddr = endHex.toLongOrNull(16)
+                    if (endAddr != null) {
+                        foundAny = true
+                        if (endAddr > maxAddress) {
+                            maxAddress = endAddr
+                        }
+                    }
+                }
+                if (foundAny && maxAddress > 0) {
+                    vaBits = if (maxAddress > (1L shl 39)) 48 else 39
+                }
+            }
+        } catch (_: Exception) {
+            vaBits = null
+        }
+
+        var hasAtomics: Boolean? = null
+        try {
+            val cpuinfo = File("/proc/cpuinfo")
+            if (cpuinfo.exists() && cpuinfo.canRead()) {
+                val content = cpuinfo.readText()
+                if (content.isNotBlank()) {
+                    hasAtomics = content.contains("atomics", ignoreCase = true)
+                }
+            }
+        } catch (_: Exception) {
+            hasAtomics = null
+        }
+
+        return DeviceHardwareInfo(
+            arch = arch,
+            vaBits = vaBits,
+            hasAtomics = hasAtomics,
+            supportedAbis = abis
+        )
     }
 
     fun isInstalled(context: Context): Boolean {
@@ -1450,7 +1507,7 @@ object LocalEnvironmentManager {
                 """# Gemini Local Linux Environment
 export PREFIX="${prefixDir.absolutePath}"
 export HOME="${homeDir.absolutePath}"
-export PATH="${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/system/xbin"
+export PATH="${homeDir.absolutePath}/.local/bin:${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/system/xbin"
 export TMPDIR="${prefixDir.absolutePath}/tmp"
 export TERM="xterm-256color"
 export COLORTERM="truecolor"
@@ -1492,7 +1549,7 @@ fi
             etcProfile.writeText(
                 """export PREFIX="${prefixDir.absolutePath}"
 export HOME="${homeDir.absolutePath}"
-export PATH="${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/system/xbin"
+export PATH="${homeDir.absolutePath}/.local/bin:${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/system/xbin"
 export TMPDIR="${prefixDir.absolutePath}/tmp"
 export TERM="xterm-256color"
 export COLORTERM="truecolor"
@@ -1617,7 +1674,7 @@ All files created here persist inside the application.
 
             env["PREFIX"] = prefix.absolutePath
             env["HOME"] = home.absolutePath
-            env["PATH"] = "${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin"
+            env["PATH"] = "${home.absolutePath}/.local/bin:${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin"
             env["TMPDIR"] = tmp.absolutePath
             env["TERM"] = "xterm-256color"
             env["COLORTERM"] = "truecolor"
@@ -1813,7 +1870,7 @@ All files created here persist inside the application.
         env["PREFIX"] = prefixDir.absolutePath
         env["HOME"] = homeDir.absolutePath
         env["TMPDIR"] = tmpDir.absolutePath
-        env["PATH"] = "${binDir.absolutePath}:${prefixDir.absolutePath}/bin:/system/bin:/system/xbin"
+        env["PATH"] = "${homeDir.absolutePath}/.local/bin:${binDir.absolutePath}:${prefixDir.absolutePath}/bin:/system/bin:/system/xbin"
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
         env["LANG"] = "en_US.UTF-8"

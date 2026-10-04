@@ -207,9 +207,141 @@ fun FullScreenLocalToolsInstaller(
                 },
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp, bottom = 20.dp),
+                modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
                 lineHeight = 18.sp
             )
+
+            // Device Architecture & Hardware Capabilities Card
+            val hardwareInfo = remember { LocalEnvironmentManager.getDeviceHardwareInfo() }
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Memory,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = ClaudeTerracotta
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Device Hardware Capabilities",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // CPU Architecture Pill
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                .padding(vertical = 6.dp, horizontal = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("CPU Arch", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    hardwareInfo.arch,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = ClaudeTerracotta
+                                )
+                            }
+                        }
+
+                        // Virtual Address Space Pill
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    when (hardwareInfo.vaBits) {
+                                        48 -> QuotaGreen.copy(alpha = 0.12f)
+                                        39 -> Color(0xFFF59E0B).copy(alpha = 0.12f)
+                                        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                    }
+                                )
+                                .padding(vertical = 6.dp, horizontal = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Address Space", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    when (hardwareInfo.vaBits) {
+                                        48 -> "48-bit (VA48)"
+                                        39 -> "39-bit (VA39)"
+                                        else -> "N/A"
+                                    },
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = when (hardwareInfo.vaBits) {
+                                        48 -> QuotaGreen
+                                        39 -> Color(0xFFF59E0B)
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                        }
+
+                        // LSE Atomics Pill
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    when (hardwareInfo.hasAtomics) {
+                                        true -> QuotaGreen.copy(alpha = 0.12f)
+                                        false -> Color(0xFFEF4444).copy(alpha = 0.12f)
+                                        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                    }
+                                )
+                                .padding(vertical = 6.dp, horizontal = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("LSE Atomics", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    when (hardwareInfo.hasAtomics) {
+                                        true -> "Supported"
+                                        false -> "Not Supported"
+                                        else -> "N/A"
+                                    },
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = when (hardwareInfo.hasAtomics) {
+                                        true -> QuotaGreen
+                                        false -> Color(0xFFEF4444)
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             // Dynamic Step / Configuration Content
             when (val state = installerState) {

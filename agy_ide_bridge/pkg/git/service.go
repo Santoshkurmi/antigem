@@ -37,6 +37,7 @@ func getEnv() []string {
 	env := os.Environ()
 	termuxBin := "/data/data/com.termux/files/usr/bin"
 	home, _ := os.UserHomeDir()
+	localBin := filepath.Join(home, ".local", "bin")
 	geminiBin := filepath.Join(home, ".gemini", "bin")
 
 	pathFound := false
@@ -45,6 +46,9 @@ func getEnv() []string {
 			pathFound = true
 			curPath := strings.TrimPrefix(e, "PATH=")
 			var newParts []string
+			if home != "" && !strings.Contains(curPath, localBin) {
+				newParts = append(newParts, localBin)
+			}
 			if !strings.Contains(curPath, termuxBin) {
 				newParts = append(newParts, termuxBin)
 			}
@@ -57,7 +61,7 @@ func getEnv() []string {
 		}
 	}
 	if !pathFound {
-		env = append(env, "PATH="+termuxBin+":"+geminiBin+":/usr/local/bin:/usr/bin:/bin:/system/bin:/system/xbin")
+		env = append(env, "PATH="+localBin+":"+termuxBin+":"+geminiBin+":/usr/local/bin:/usr/bin:/bin:/system/bin:/system/xbin")
 	}
 	return env
 }
