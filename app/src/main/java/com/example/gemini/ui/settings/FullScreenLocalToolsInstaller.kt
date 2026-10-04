@@ -848,7 +848,7 @@ fun FullScreenLocalToolsInstaller(
                     Button(
                         onClick = {
                             when (selectedSourceType) {
-                                0 -> LocalEnvironmentManager.launchDiscover(context)
+                                0 -> LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.Auto)
                                 1 -> LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.BaseMinimum)
                                 2 -> {
                                     if (selectedFileUri != null) {
@@ -867,15 +867,15 @@ fun FullScreenLocalToolsInstaller(
                         colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                     ) {
                         Icon(
-                            imageVector = if (selectedSourceType == 0) Icons.Default.Search else Icons.Default.Download,
+                            imageVector = Icons.Default.Download,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = when (selectedSourceType) {
-                                0 -> "Find Bootstrap Package"
-                                1 -> "Download Base Termux"
+                                0 -> "Download & Install AntiGem (~350MB)"
+                                1 -> "Download Base Termux (~33MB)"
                                 else -> if (selectedFileUri != null) "Install Local ZIP" else "Choose ZIP File"
                             },
                             fontSize = 15.sp,
@@ -983,7 +983,7 @@ fun FullScreenLocalToolsInstaller(
                         Button(
                             onClick = {
                                 when (selectedSourceType) {
-                                    0 -> LocalEnvironmentManager.launchDiscover(context)
+                                    0 -> LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.Auto)
                                     1 -> LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.BaseMinimum)
                                     2 -> {
                                         val source = selectedFileUri?.let { BootstrapSource.LocalZipUri(it) } ?: BootstrapSource.Auto

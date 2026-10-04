@@ -1,7 +1,7 @@
 {
-  "version_code": 106,
-  "version_name": "1.0.6",
+  "version_code": 107,
+  "version_name": "1.0.7",
   "min_supported_version_code": 1,
-  "changelog": "Almost finalilzed all the stuff",
+  "changelog": "Almost boostrap full",
   "is_critical": false
 }

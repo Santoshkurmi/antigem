@@ -1,9 +1,13 @@
 package com.example.gemini.data.local
 
+import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.system.Os
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -1800,75 +1804,65 @@ All files created here persist inside the application.
         }
     }
 
+    fun clearAppDataAndReset(context: Context) {
+        Log.d(TAG, "[Reset] Triggering Android OS application data wipe...")
+        try {
+            LocalServerManager.forceKillAll()
+        } catch (_: Exception) {}
+
+        try {
+            LocalTerminalManager.closeAll()
+        } catch (_: Exception) {}
+
+        try {
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            val cleared = activityManager?.clearApplicationUserData() ?: false
+            if (!cleared) {
+                openAppInfoSettings(context)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "clearApplicationUserData failed, opening App Info settings: ${e.message}")
+            openAppInfoSettings(context)
+        }
+    }
+
+    fun openAppInfoSettings(context: Context) {
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", context.packageName, null)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed opening App Info settings: ${e.message}")
+        }
+    }
+
     suspend fun resetEnvironment(context: Context) = withContext(Dispatchers.IO) {
-        Log.d(TAG, "[Reset] Initiating complete rootfs reset...")
-        // 1. Force kill local server runner and all child processes
+        Log.d(TAG, "[Reset] Stopping local services and resetting installer state...")
         try {
             LocalServerManager.forceKillAll()
         } catch (e: Exception) {
             Log.w(TAG, "Error stopping local server during reset: ${e.message}")
         }
 
-        // 2. Close and terminate all active terminal sessions
         try {
             LocalTerminalManager.closeAll()
         } catch (e: Exception) {
             Log.w(TAG, "Error closing terminal sessions during reset: ${e.message}")
         }
 
-        // 3. Reset auto-start flag so next installation can immediately auto-start server
         LocalServerManager.resetAutoStartFlag()
 
-        // 4. Notify bridge service that local server is offline
         try {
             com.example.gemini.data.remote.AgyBridgeService.instance.notifyLocalStopped()
         } catch (_: Exception) {}
 
-        // 5. Short delay for process termination and file descriptor release
-        delay(300)
-
         val appContext = context.applicationContext
-        val prefix = getPrefixDir(appContext)
-        val home = getHomeDir(appContext)
-        val projects = getProjectsDir(appContext)
-        val tmp = getTmpDir(appContext)
-
-        // Delete bootstrap rootfs and user folders strictly within filesDir
-        try { if (prefix.exists()) prefix.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting prefix: ${e.message}") }
-        try { if (home.exists()) home.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting home: ${e.message}") }
-        try { if (projects.exists()) projects.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting projects: ${e.message}") }
-        try { if (tmp.exists()) tmp.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting tmp: ${e.message}") }
-
-        // Clean any stray files/directories created in filesDir (excluding internal datastore and profileinstaller)
-        val filesDir = appContext.filesDir
-        try {
-            filesDir.listFiles()?.forEach { file ->
-                val name = file.name
-                if (name != "datastore" && !name.startsWith("profile")) {
-                    try { file.deleteRecursively() } catch (e: Exception) { Log.w(TAG, "Failed deleting stray file $name: ${e.message}") }
-                }
-            }
-        } catch (_: Exception) {}
-
-        // Clean all temporary caches, package archives, and downloaded debs in cacheDir
-        try {
-            val cacheDir = appContext.cacheDir
-            cacheDir.listFiles()?.forEach { file ->
-                try { file.deleteRecursively() } catch (_: Exception) {}
-            }
-        } catch (_: Exception) {}
-
-        // Clean external cache if present
-        try {
-            appContext.externalCacheDir?.listFiles()?.forEach { file ->
-                try { file.deleteRecursively() } catch (_: Exception) {}
-            }
-        } catch (_: Exception) {}
-
         updateInstallNotification(appContext, "", "", -2, ongoing = false, force = true)
         _installerState.value = LocalInstallerState.Idle
         clearLogs()
-        Log.d(TAG, "Local environment bootstrap files cleared and reset.")
+        Log.d(TAG, "Local environment installer state cleared.")
     }
 
     suspend fun executeScriptLive(

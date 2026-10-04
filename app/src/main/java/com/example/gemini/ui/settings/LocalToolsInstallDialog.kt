@@ -904,7 +904,7 @@ fun LocalToolsInstallDialog(
                                 onClick = {
                                     when (selectedSourceType) {
                                         0 -> {
-                                            LocalEnvironmentManager.launchDiscover(context)
+                                            LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.Auto)
                                         }
                                         1 -> {
                                             LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.BaseMinimum)
@@ -924,15 +924,15 @@ fun LocalToolsInstallDialog(
                                 colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                             ) {
                                 Icon(
-                                    imageVector = if (selectedSourceType == 0) Icons.Default.Search else Icons.Default.Download,
+                                    imageVector = Icons.Default.Download,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = when (selectedSourceType) {
-                                        0 -> "Find Package"
-                                        1 -> "Download Base Termux"
+                                        0 -> "Download & Install AntiGem (~350MB)"
+                                        1 -> "Download Base Termux (~33MB)"
                                         else -> if (selectedFileUri != null) "Install Local ZIP" else "Choose ZIP"
                                     },
                                     color = Color.White,
@@ -1015,7 +1015,7 @@ fun LocalToolsInstallDialog(
                                 Button(
                                     onClick = {
                                         when (selectedSourceType) {
-                                            0 -> LocalEnvironmentManager.launchDiscover(context)
+                                            0 -> LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.Auto)
                                             1 -> LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.BaseMinimum)
                                             2 -> {
                                                 val source = selectedFileUri?.let { BootstrapSource.LocalZipUri(it) } ?: BootstrapSource.Auto

@@ -80,3 +80,5 @@ suspend fun streamUpdates(cascadeId: String) {
 -- Always explain user every single details that you are going to change to fix or add something(Dont need line by line but still enoough) and dont start editing, alwasy explain to user, and stop there, user will respond back with continue,do it or whatever or ask you more question,arguement
 
 - "Dont do gralew install or any install relelated command
+
+- Never ever try to compile or assemble for Standard Build, alwasy for termuxBuild only

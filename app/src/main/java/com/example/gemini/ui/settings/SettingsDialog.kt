@@ -3630,7 +3630,8 @@ private fun TerminalSubScreen(
     var showResetWarningDialog by remember { mutableStateOf(false) }
     var showResetPasswordDialog by remember { mutableStateOf(false) }
     var resetPasswordInput by remember { mutableStateOf("") }
-    var isResettingRootfs by remember { mutableStateOf(false) }
+    var showShutdownCountdownDialog by remember { mutableStateOf(false) }
+    var countdownSeconds by remember { mutableIntStateOf(5) }
 
     var hostState by remember { mutableStateOf(sshHost) }
     var portState by remember { mutableStateOf(sshPort.toString()) }
@@ -3874,7 +3875,7 @@ private fun TerminalSubScreen(
                             ) {
                                 Icon(imageVector = Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color.Red)
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Delete Rootfs", fontSize = 12.5.sp, color = Color.Red, fontWeight = FontWeight.SemiBold)
+                                Text("Delete All & Factory Reset", fontSize = 12.5.sp, color = Color.Red, fontWeight = FontWeight.SemiBold)
                             }
                         } else {
                             Button(
@@ -4015,7 +4016,7 @@ private fun TerminalSubScreen(
             },
             title = {
                 Text(
-                    text = "Reset Local Linux Rootfs?",
+                    text = "Delete All & Factory Reset?",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -4023,7 +4024,7 @@ private fun TerminalSubScreen(
             },
             text = {
                 Text(
-                    text = "Warning: All installed packages, custom configurations, files in \$HOME, and local project history will be permanently deleted.\n\nThis action cannot be undone. Are you sure you want to proceed?",
+                    text = "Warning: This will perform an Android OS-level data wipe. All installed packages, rootfs, dotfiles, app settings, and history will be completely cleared.\n\nThe app will close and start completely fresh on next launch. Are you sure you want to proceed?",
                     fontSize = 13.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -4068,7 +4069,7 @@ private fun TerminalSubScreen(
             },
             title = {
                 Text(
-                    text = "Confirm Destruction",
+                    text = "Confirm Full App Wipe",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -4077,7 +4078,7 @@ private fun TerminalSubScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "To confirm and permanently delete the entire local rootfs, type the confirmation phrase exactly as shown below:",
+                        text = "To confirm and permanently wipe all app data and local rootfs, type the confirmation phrase exactly as shown below:",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -4109,11 +4110,8 @@ private fun TerminalSubScreen(
                     onClick = {
                         if (isMatch) {
                             showResetPasswordDialog = false
-                            isResettingRootfs = true
-                            LocalEnvironmentManager.launchReset(context) {
-                                isResettingRootfs = false
-                                onResetLocalTools()
-                            }
+                            countdownSeconds = 5
+                            showShutdownCountdownDialog = true
                         }
                     },
                     enabled = isMatch,
@@ -4123,7 +4121,7 @@ private fun TerminalSubScreen(
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Delete Everything", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Delete All Data", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             },
             dismissButton = {
@@ -4139,32 +4137,68 @@ private fun TerminalSubScreen(
         )
     }
 
-    if (isResettingRootfs) {
+    if (showShutdownCountdownDialog) {
+        LaunchedEffect(Unit) {
+            for (i in 5 downTo 1) {
+                countdownSeconds = i
+                delay(1000)
+            }
+            countdownSeconds = 0
+            delay(300)
+            LocalEnvironmentManager.clearAppDataAndReset(context)
+        }
+
         Dialog(
             onDismissRequest = {},
             properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
         ) {
             Surface(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
-                modifier = Modifier.fillMaxWidth(0.85f)
+                tonalElevation = 10.dp,
+                border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.35f)),
+                modifier = Modifier.fillMaxWidth(0.92f)
             ) {
-                Row(
-                    modifier = Modifier.padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.5.dp,
-                        color = Color.Red
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(Color.Red.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${countdownSeconds}s",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.Red,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
                     Text(
-                        text = "Resetting rootfs & environment... Please wait.",
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Medium,
+                        text = "Factory Reset in Progress",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Text(
+                        text = "AntiGem is wiping all local app data, rootfs, and settings.\n\nThe app will automatically close in $countdownSeconds seconds. Simply re-open AntiGem to start fresh.",
+                        fontSize = 13.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        lineHeight = 19.sp
+                    )
+
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(32.dp),
+                        strokeWidth = 3.dp,
+                        color = Color.Red
                     )
                 }
             }
