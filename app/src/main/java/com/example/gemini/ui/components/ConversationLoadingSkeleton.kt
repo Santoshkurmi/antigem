@@ -530,11 +530,10 @@ fun NewChatCheckingAuthPromptCard(
 
 /**
  * Clean, friendly card displayed when the server is stopped / offline.
- * Informs the user that the engine is offline and provides a direct button to start it.
+ * Informs the user that the engine is offline and instructs them to tap the header status dot to start, restart, stop, or view logs.
  */
 @Composable
 fun ServerStoppedPromptCard(
-    onStartServerClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -572,36 +571,12 @@ fun ServerStoppedPromptCard(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "The local AI engine is currently stopped. Press the button below or tap the status indicator in the top bar to start the server.",
+            text = "The local AI engine is currently stopped. Tap the status dot in the top header to start, restart, or stop the server and inspect live logs.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
             textAlign = TextAlign.Center,
             lineHeight = 20.sp
         )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Button(
-            onClick = onStartServerClick,
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = ClaudeTerracotta,
-                contentColor = Color.White
-            ),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Start Server",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
     }
 }
 

@@ -1107,12 +1107,7 @@ fun ChatScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
-                                com.example.gemini.ui.components.ServerStoppedPromptCard(
-                                    onStartServerClick = {
-                                        com.example.gemini.data.local.LocalServerManager.startServer(context)
-                                        viewModel.retryConnections()
-                                    }
-                                )
+                                com.example.gemini.ui.components.ServerStoppedPromptCard()
                             }
                         }
                     } else if (isServerInitializing && messages.isEmpty()) {
