@@ -994,33 +994,15 @@ fun LocalToolsInstallDialog(
                     }
 
                     is LocalInstallerState.Success -> {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Button(
-                                    onClick = {
-                                        onDismiss()
-                                        onOpenTerminal()
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                                ) {
-                                    Icon(imageVector = Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Open Terminal", color = Color.White, fontWeight = FontWeight.Bold)
-                                }
-
-                                OutlinedButton(
-                                    onClick = onDismiss,
-                                    modifier = Modifier.weight(0.6f),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Text("Done", fontWeight = FontWeight.SemiBold)
-                                }
-                            }
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                        ) {
+                            Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Done", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
 

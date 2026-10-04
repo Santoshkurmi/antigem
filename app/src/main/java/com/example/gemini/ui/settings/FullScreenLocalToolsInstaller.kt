@@ -961,35 +961,17 @@ fun FullScreenLocalToolsInstaller(
                 }
 
                 is LocalInstallerState.Success -> {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    Button(
+                        onClick = onComplete,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                     ) {
-                        Button(
-                            onClick = {
-                                onComplete()
-                                context.startActivity(Intent(context, TermuxActivity::class.java))
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                        ) {
-                            Icon(imageVector = Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Launch Terminal", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        }
-
-                        OutlinedButton(
-                            onClick = onComplete,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(46.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Start AntiGem Chat", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        }
+                        Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Get Started", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
 
