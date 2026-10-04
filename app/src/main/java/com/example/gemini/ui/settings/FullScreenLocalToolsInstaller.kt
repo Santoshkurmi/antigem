@@ -392,7 +392,7 @@ fun FullScreenLocalToolsInstaller(
                                     }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "Downloads verified bootstrap for ${LocalEnvironmentManager.getBootstrapArch()} (~33MB) directly from official repository.",
+                                        text = "Downloads verified AntiGem rootfs (~350MB) with preconfigured tools and environment.",
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

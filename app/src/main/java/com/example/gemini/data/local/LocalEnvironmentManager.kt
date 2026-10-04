@@ -57,6 +57,11 @@ object LocalEnvironmentManager {
     // Minimum 10 MB required for a real Termux bootstrap archive
     private const val MIN_BOOTSTRAP_SIZE_BYTES = 10 * 1024 * 1024L
 
+    const val HARDCODED_ROOTFS_URL = "https://github.com/Santoshkurmi/antigem/releases/download/rootfs-v1/bootrapz_2026-10-04.zip"
+    const val HARDCODED_ROOTFS_TAG = "rootfs-v1"
+    const val HARDCODED_ROOTFS_ASSET = "bootrapz_2026-10-04.zip"
+    const val HARDCODED_ROOTFS_SIZE_BYTES = 350 * 1024 * 1024L
+
     private const val NOTIFICATION_CHANNEL_ID = "antigem_bootstrap_install"
     private const val NOTIFICATION_ID = 4096
     @Volatile
@@ -322,65 +327,17 @@ object LocalEnvironmentManager {
     suspend fun discoverBootstrapPackage(context: Context): DiscoveredPackageInfo? = withContext(Dispatchers.IO) {
         val arch = getBootstrapArch()
         val packageName = context.packageName
-        _installerState.value = LocalInstallerState.Discovering("Finding latest verified Termux bootstrap release for $arch...")
-
-        // 1. Query GitHub API for latest release
-        try {
-            val apiRequest = Request.Builder()
-                .url("https://api.github.com/repos/termux/termux-packages/releases/latest")
-                .header("User-Agent", "GeminiApp-BootstrapInstaller/1.0")
-                .header("Accept", "application/vnd.github.v3+json")
-                .build()
-
-            httpClient.newCall(apiRequest).execute().use { response ->
-                if (response.isSuccessful) {
-                    val bodyString = response.body?.string()
-                    if (!bodyString.isNullOrBlank()) {
-                        val json = JSONObject(bodyString)
-                        val tagName = json.optString("tag_name", "latest")
-                        val assets = json.optJSONArray("assets")
-                        if (assets != null) {
-                            for (i in 0 until assets.length()) {
-                                val asset = assets.getJSONObject(i)
-                                val name = asset.optString("name", "")
-                                val downloadUrl = asset.optString("browser_download_url", "")
-                                val size = asset.optLong("size", 33 * 1024 * 1024L)
-                                if (name == "bootstrap-$arch.zip" && downloadUrl.isNotBlank()) {
-                                    val info = DiscoveredPackageInfo(
-                                        url = downloadUrl,
-                                        releaseTag = tagName,
-                                        assetName = name,
-                                        arch = arch,
-                                        sizeBytes = size,
-                                        sizeFormatted = formatFileSize(size),
-                                        packageName = packageName
-                                    )
-                                    _installerState.value = LocalInstallerState.AwaitingConfirmation(info)
-                                    return@withContext info
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed discovery from GitHub API: ${e.message}")
-        }
-
-        // Fallback default
-        val fallbackTag = "bootstrap-2026.08.30-r1+apt.android-7"
-        val fallbackUrl = "https://github.com/termux/termux-packages/releases/download/${fallbackTag.replace("+", "%2B")}/bootstrap-$arch.zip"
-        val fallbackInfo = DiscoveredPackageInfo(
-            url = fallbackUrl,
-            releaseTag = fallbackTag,
-            assetName = "bootstrap-$arch.zip",
+        val info = DiscoveredPackageInfo(
+            url = HARDCODED_ROOTFS_URL,
+            releaseTag = HARDCODED_ROOTFS_TAG,
+            assetName = HARDCODED_ROOTFS_ASSET,
             arch = arch,
-            sizeBytes = 33 * 1024 * 1024L,
-            sizeFormatted = "~33 MB",
+            sizeBytes = HARDCODED_ROOTFS_SIZE_BYTES,
+            sizeFormatted = "~350 MB",
             packageName = packageName
         )
-        _installerState.value = LocalInstallerState.AwaitingConfirmation(fallbackInfo)
-        return@withContext fallbackInfo
+        _installerState.value = LocalInstallerState.AwaitingConfirmation(info)
+        info
     }
 
     private fun resolveBootstrapUrls(arch: String): List<String> {
@@ -511,7 +468,96 @@ object LocalEnvironmentManager {
             var finalDownloadedSize = 0L
 
             when (source) {
-                is BootstrapSource.Auto, is BootstrapSource.BaseMinimum -> {
+                is BootstrapSource.Auto -> {
+                    _installerState.value = LocalInstallerState.Downloading(
+                        bytesDownloaded = 0L,
+                        totalBytes = HARDCODED_ROOTFS_SIZE_BYTES,
+                        progressFraction = 0.02f,
+                        speedText = "Connecting...",
+                        currentPackageName = HARDCODED_ROOTFS_ASSET
+                    )
+                    updateInstallNotification(appContext, "Downloading AntiGem Rootfs", "Connecting...", -1)
+
+                    try {
+                        val request = Request.Builder()
+                            .url(HARDCODED_ROOTFS_URL)
+                            .header("User-Agent", "GeminiApp-LocalTerminal/${Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64"}")
+                            .build()
+
+                        httpClient.newCall(request).execute().use { response ->
+                            if (!response.isSuccessful) {
+                                val errorMsg = "Download failed: HTTP ${response.code} from release server."
+                                updateInstallNotification(appContext, "Installation Failed", errorMsg, -2, ongoing = false, force = true)
+                                _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                                return@withContext false
+                            }
+
+                            val body = response.body
+                            if (body == null) {
+                                val errorMsg = "Download failed: Empty response body."
+                                updateInstallNotification(appContext, "Installation Failed", errorMsg, -2, ongoing = false, force = true)
+                                _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                                return@withContext false
+                            }
+
+                            val contentLength = body.contentLength()
+                            val expectedTotal = if (contentLength > 0) contentLength else HARDCODED_ROOTFS_SIZE_BYTES
+                            var bytesReadTotal = 0L
+                            val startTime = System.currentTimeMillis()
+
+                            val buffer = ByteArray(64 * 1024)
+                            FileOutputStream(tempZipFile).use { outStream ->
+                                body.byteStream().use { inStream ->
+                                    var read: Int
+                                    var lastUpdate = System.currentTimeMillis()
+                                    while (inStream.read(buffer).also { read = it } != -1) {
+                                        outStream.write(buffer, 0, read)
+                                        bytesReadTotal += read
+
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastUpdate > 120) {
+                                            val elapsedSec = (now - startTime) / 1000.0
+                                            val speed = if (elapsedSec > 0) bytesReadTotal / elapsedSec else 0.0
+                                            val speedFormatted = "${formatFileSize(speed.toLong())}/s"
+                                            val fraction = (bytesReadTotal.toFloat() / expectedTotal.toFloat()).coerceIn(0.05f, 0.95f)
+
+                                            _installerState.value = LocalInstallerState.Downloading(
+                                                bytesDownloaded = bytesReadTotal,
+                                                totalBytes = expectedTotal,
+                                                progressFraction = fraction,
+                                                speedText = speedFormatted,
+                                                currentPackageName = HARDCODED_ROOTFS_ASSET
+                                            )
+                                            val pct = (fraction * 100).toInt()
+                                            updateInstallNotification(appContext, "Downloading AntiGem Rootfs ($pct%)", "$speedFormatted • $HARDCODED_ROOTFS_ASSET", pct)
+                                            lastUpdate = now
+                                        }
+                                    }
+                                }
+                            }
+
+                            finalDownloadedSize = tempZipFile.length()
+                            if (finalDownloadedSize >= MIN_BOOTSTRAP_SIZE_BYTES && validateZipIntegrity(tempZipFile)) {
+                                downloadSucceeded = true
+                            } else {
+                                tempZipFile.delete()
+                                val errorMsg = "Downloaded rootfs ZIP file was incomplete or corrupted."
+                                updateInstallNotification(appContext, "Installation Failed", errorMsg, -2, ongoing = false, force = true)
+                                _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                                return@withContext false
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Download attempt failed from $HARDCODED_ROOTFS_URL: ${e.message}")
+                        if (tempZipFile.exists()) tempZipFile.delete()
+                        val errorMsg = "Download failed: ${e.message ?: "Network error"}"
+                        updateInstallNotification(appContext, "Installation Failed", errorMsg, -2, ongoing = false, force = true)
+                        _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                        return@withContext false
+                    }
+                }
+
+                is BootstrapSource.BaseMinimum -> {
                     _installerState.value = LocalInstallerState.Downloading(
                         bytesDownloaded = 0L,
                         totalBytes = 35 * 1024 * 1024L,

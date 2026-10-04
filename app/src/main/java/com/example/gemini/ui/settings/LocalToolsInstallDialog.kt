@@ -364,7 +364,7 @@ fun LocalToolsInstallDialog(
                                             }
                                         }
                                         Text(
-                                            text = "Auto-finds latest verified Termux bootstrap (${LocalEnvironmentManager.getBootstrapArch()}, ~33MB) with confirmation prompt",
+                                            text = "Auto-downloads verified AntiGem rootfs (~350MB) with preconfigured tools and environment",
                                             fontSize = 11.5.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
