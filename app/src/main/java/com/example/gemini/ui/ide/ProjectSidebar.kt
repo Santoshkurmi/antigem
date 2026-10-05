@@ -23,10 +23,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.util.Log
+import android.webkit.MimeTypeMap
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
 import com.example.gemini.data.daemon.FileNode
+import com.example.gemini.data.daemon.IdeApiClient
 import com.example.gemini.data.daemon.ProjectItem
 import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.theme.ClaudeTerracotta
+import com.example.gemini.ui.components.AppToastHelper
+import com.example.gemini.ui.components.ChatToastType
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class SidebarTab {
     EXPLORER,
@@ -641,6 +655,8 @@ fun FileTreeNodeItem(
     onDeleteRequested: (FileNode) -> Unit,
     onOpenTerminal: (path: String) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val isExpanded = expandedPaths.contains(node.path)
     var menuExpanded by remember { mutableStateOf(false) }
     val isActive = activeFilePath == node.path
@@ -788,6 +804,30 @@ fun FileTreeNodeItem(
                             onRenameRequested(node)
                         }
                     )
+                    if (!node.isDir) {
+                        DropdownMenuItem(
+                            text = { Text("Share", fontSize = 13.5.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Share,
+                                    contentDescription = null,
+                                    tint = ClaudeTerracotta,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                AppToastHelper.showToast("Preparing file share...", ChatToastType.INFO)
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    FileShareHelper.shareFile(
+                                        context = context,
+                                        filePath = node.path,
+                                        fileName = node.name
+                                    )
+                                }
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Details", fontSize = 13.5.sp) },
                         leadingIcon = {
@@ -873,5 +913,73 @@ fun getFileIconColor(filename: String): Color {
         "md" -> Color(0xFF00E676)
         "sh" -> Color(0xFFFF9100)
         else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+}
+
+object FileShareHelper {
+    private const val TAG = "FileShareHelper"
+
+    suspend fun shareFile(
+        context: Context,
+        filePath: String,
+        fileName: String
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val localFile = File(filePath)
+            val cacheDir = File(context.cacheDir, "shared_files").apply { mkdirs() }
+
+            // Pre-cleanup previous cached files
+            try {
+                cacheDir.listFiles()?.forEach { if (it.isFile) it.delete() }
+            } catch (_: Exception) {}
+
+            val shareFile = File(cacheDir, fileName)
+
+            if (localFile.exists()) {
+                localFile.copyTo(shareFile, overwrite = true)
+            } else {
+                val content = IdeApiClient.readFile(filePath) ?: ""
+                shareFile.writeText(content)
+            }
+
+            val shareUri = try {
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", shareFile)
+            } catch (e: Exception) {
+                Log.e(TAG, "FileProvider error: ${e.message}", e)
+                Uri.fromFile(shareFile)
+            }
+
+            val ext = shareFile.extension.lowercase()
+            val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+
+            withContext(Dispatchers.Main) {
+                launchShareChooser(context, shareUri, fileName, mimeType)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Share failed: ${e.message}", e)
+            withContext(Dispatchers.Main) {
+                AppToastHelper.showToast("Share error: ${e.message}", ChatToastType.ERROR)
+            }
+        }
+    }
+
+    private fun launchShareChooser(context: Context, uri: Uri, fileName: String, mimeType: String) {
+        try {
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = mimeType
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, fileName)
+                putExtra(Intent.EXTRA_TEXT, fileName)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val chooser = Intent.createChooser(shareIntent, "Share $fileName").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to launch share chooser: ${e.message}")
+            AppToastHelper.showToast("Could not open share chooser", ChatToastType.ERROR)
+        }
     }
 }
