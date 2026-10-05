@@ -189,7 +189,7 @@ class TrajectoryEngine {
                 executionError?.takeIf { it.isNotBlank() } ?: "Execution encountered an error"
             }
             ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_USER_CANCELED -> {
-                "Generation stopped by user"
+                null
             }
             ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_MAX_INVOCATIONS -> {
                 "Maximum step limit reached (max generator invocations)"
