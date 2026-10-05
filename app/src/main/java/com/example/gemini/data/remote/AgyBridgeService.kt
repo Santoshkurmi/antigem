@@ -576,6 +576,82 @@ class AgyBridgeService(
         }
     }
 
+    data class ExportedArchiveResult(
+        val bytes: ByteArray,
+        val filename: String,
+        val title: String
+    )
+
+    suspend fun downloadConversationArchive(
+        conversationId: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Result<ExportedArchiveResult> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations/$conversationId/export")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val bytes = response.body?.bytes() ?: ByteArray(0)
+                val title = response.header("X-Conversation-Title") ?: conversationId
+                val contentDisposition = response.header("Content-Disposition") ?: ""
+                var filename = ""
+                val fnMatch = Regex("filename=\"?([^\";]+)\"?").find(contentDisposition)
+                if (fnMatch != null) {
+                    filename = fnMatch.groupValues[1]
+                }
+                if (filename.isBlank()) {
+                    val sanitized = title.replace(Regex("[^a-zA-Z0-9._-]"), "_").take(40).ifBlank { "conversation" }
+                    val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                    filename = "${sanitized}_${timeStamp}.antigem"
+                }
+
+                Result.success(ExportedArchiveResult(bytes, filename, title))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "downloadConversationArchive failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun restoreConversationArchive(
+        archiveBytes: ByteArray,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Result<AgyConversationSummary> = withContext(Dispatchers.IO) {
+        try {
+            val body = archiveBytes.toRequestBody("application/octet-stream".toMediaType())
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations/restore")
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: ${response.body?.string()}"))
+                }
+                val responseStr = response.body?.string() ?: "{}"
+                val json = JSONObject(responseStr)
+                val convObj = json.optJSONObject("conversation") ?: json
+                val summary = AgyConversationSummary(
+                    id = convObj.optString("id", convObj.optString("conversation_id", "")),
+                    title = convObj.optString("title", "Restored Chat"),
+                    createdAt = convObj.optString("created_at", ""),
+                    stepsCount = convObj.optInt("steps_count", 1),
+                    isRunning = false,
+                    lastActivity = convObj.optString("lastActivity").takeIf { it.isNotBlank() }
+                )
+                Result.success(summary)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "restoreConversationArchive failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     suspend fun uploadAttachment(
         filename: String,
         base64Data: String,

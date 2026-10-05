@@ -1,6 +1,7 @@
 package com.example.gemini.ui.drawer
 
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.expandVertically
@@ -1629,7 +1630,8 @@ private fun ChatHistoryItemRow(
                     },
                     onClick = {
                         menuExpanded = false
-                        scope.launch {
+                        com.example.gemini.ui.components.AppToastHelper.showToast("Exporting Markdown...", com.example.gemini.ui.components.ChatToastType.INFO)
+                        scope.launch(Dispatchers.IO) {
                             ConversationExportHelper.exportConversation(
                                 context = context,
                                 conversationId = conv.id,
@@ -1652,7 +1654,8 @@ private fun ChatHistoryItemRow(
                     },
                     onClick = {
                         menuExpanded = false
-                        scope.launch {
+                        com.example.gemini.ui.components.AppToastHelper.showToast("Exporting HTML...", com.example.gemini.ui.components.ChatToastType.INFO)
+                        scope.launch(Dispatchers.IO) {
                             ConversationExportHelper.exportConversation(
                                 context = context,
                                 conversationId = conv.id,
@@ -1664,7 +1667,7 @@ private fun ChatHistoryItemRow(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Share (.antigem)", fontSize = 13.5.sp) },
+                    text = { Text("Share", fontSize = 13.5.sp) },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Outlined.Share,
@@ -1675,7 +1678,8 @@ private fun ChatHistoryItemRow(
                     },
                     onClick = {
                         menuExpanded = false
-                        scope.launch {
+                        com.example.gemini.ui.components.AppToastHelper.showToast("Preparing .antigem share...", com.example.gemini.ui.components.ChatToastType.INFO)
+                        scope.launch(Dispatchers.IO) {
                             ConversationShareHelper.shareConversation(
                                 context = context,
                                 conversationId = conv.id,

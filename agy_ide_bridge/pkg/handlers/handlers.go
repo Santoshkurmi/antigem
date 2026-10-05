@@ -1,16 +1,21 @@
 package handlers
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	_ "modernc.org/sqlite"
 	"regexp"
 	"sort"
 	"strconv"
@@ -404,6 +409,495 @@ func (h *Handler) SystemPromptHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"conversationId": convID,
 		"systemPrompt":   prompt,
+	})
+}
+
+func getSafeTempDir() string {
+	if tmp := os.Getenv("TMPDIR"); tmp != "" {
+		if fi, err := os.Stat(tmp); err == nil && fi.IsDir() {
+			return tmp
+		}
+	}
+	if prefix := os.Getenv("PREFIX"); prefix != "" {
+		pTmp := filepath.Join(prefix, "tmp")
+		if fi, err := os.Stat(pTmp); err == nil && fi.IsDir() {
+			return pTmp
+		}
+	}
+	return os.TempDir()
+}
+
+func addFileToZip(zw *zip.Writer, srcPath, zipPath string) {
+	info, err := os.Stat(srcPath)
+	if err != nil {
+		return
+	}
+	data, err := os.ReadFile(srcPath)
+	if err != nil {
+		return
+	}
+	header := &zip.FileHeader{
+		Name:     filepath.ToSlash(zipPath),
+		Method:   zip.Deflate,
+		Modified: info.ModTime(),
+	}
+	header.SetMode(info.Mode())
+	f, err := zw.CreateHeader(header)
+	if err != nil {
+		return
+	}
+	_, _ = f.Write(data)
+}
+
+func (h *Handler) ExportConversationArchiveHandler(w http.ResponseWriter, r *http.Request) {
+	convID := strings.TrimPrefix(r.URL.Path, "/api/conversations/")
+	convID = strings.TrimSuffix(convID, "/export")
+	convID = strings.TrimSuffix(convID, "/share")
+	convID = strings.TrimSpace(convID)
+
+	if convID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "conversationId is required"})
+		return
+	}
+
+	convDir := filepath.Join(h.Cfg.BrainDir, convID)
+	convDbPath := filepath.Join(h.Cfg.AppDataDir, "conversations", convID+".db")
+	annotationsPath := filepath.Join(h.Cfg.AppDataDir, "annotations", convID+".pbtxt")
+
+	hasDir := false
+	if fi, err := os.Stat(convDir); err == nil && fi.IsDir() {
+		hasDir = true
+	}
+	hasDb := false
+	if fi, err := os.Stat(convDbPath); err == nil && !fi.IsDir() {
+		hasDb = true
+	}
+
+	if !hasDir && !hasDb {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "conversation not found"})
+		return
+	}
+
+	title := convID
+	if len(title) > 8 {
+		title = title[:8]
+	}
+	titleFile := filepath.Join(convDir, "custom_title.txt")
+	if tData, err := os.ReadFile(titleFile); err == nil && len(tData) > 0 {
+		tStr := strings.TrimSpace(string(tData))
+		if tStr != "" {
+			title = tStr
+		}
+	} else {
+		transcriptPath := filepath.Join(convDir, ".system_generated", "logs", "transcript.jsonl")
+		if file, err := os.Open(transcriptPath); err == nil {
+			sc := bufio.NewScanner(file)
+			buf := make([]byte, 64*1024)
+			sc.Buffer(buf, 1024*1024)
+			for sc.Scan() {
+				line := strings.TrimSpace(sc.Text())
+				if line == "" {
+					continue
+				}
+				var step struct {
+					Type    string `json:"type"`
+					Content string `json:"content"`
+				}
+				if err := json.Unmarshal([]byte(line), &step); err == nil && step.Type == "USER_INPUT" && step.Content != "" {
+					cleanPrompt := transcript.ExtractPromptText(step.Content)
+					if cleanPrompt != "" {
+						if len(cleanPrompt) > 36 {
+							title = cleanPrompt[:36] + "..."
+						} else {
+							title = cleanPrompt
+						}
+						break
+					}
+				}
+			}
+			file.Close()
+		}
+	}
+
+	manifest := map[string]interface{}{
+		"version":         1,
+		"format":          "antigem_chat_archive",
+		"conversation_id": convID,
+		"title":           title,
+		"exported_at":     time.Now().UTC().Format(time.RFC3339),
+	}
+	manifestBytes, _ := json.MarshalIndent(manifest, "", "  ")
+
+	sanitizedTitle := sanitizeNameReg.ReplaceAllString(title, "_")
+	if len(sanitizedTitle) > 40 {
+		sanitizedTitle = sanitizedTitle[:40]
+	}
+	if sanitizedTitle == "" {
+		sanitizedTitle = "conversation"
+	}
+	fileName := fmt.Sprintf("%s_%s.antigem", sanitizedTitle, time.Now().Format("20060102_150405"))
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
+	w.Header().Set("X-Conversation-Id", convID)
+	w.Header().Set("X-Conversation-Title", title)
+
+	zipWriter := zip.NewWriter(w)
+	defer zipWriter.Close()
+
+	// 1. Write manifest.json
+	if f, err := zipWriter.Create("manifest.json"); err == nil {
+		_, _ = f.Write(manifestBytes)
+	}
+
+	// 2. Write conversations/<convID>.db (and -shm, -wal if present)
+	if hasDb {
+		addFileToZip(zipWriter, convDbPath, filepath.Join("conversations", convID+".db"))
+		shmPath := convDbPath + "-shm"
+		if _, err := os.Stat(shmPath); err == nil {
+			addFileToZip(zipWriter, shmPath, filepath.Join("conversations", convID+".db-shm"))
+		}
+		walPath := convDbPath + "-wal"
+		if _, err := os.Stat(walPath); err == nil {
+			addFileToZip(zipWriter, walPath, filepath.Join("conversations", convID+".db-wal"))
+		}
+	}
+
+	// 3. Write brain/<convID>/...
+	if hasDir {
+		_ = filepath.Walk(convDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info == nil {
+				return nil
+			}
+			relPath, err := filepath.Rel(h.Cfg.BrainDir, path)
+			if err != nil {
+				return nil
+			}
+			zipRelPath := filepath.ToSlash(filepath.Join("brain", relPath))
+			if info.IsDir() {
+				if !strings.HasSuffix(zipRelPath, "/") {
+					zipRelPath += "/"
+				}
+				header := &zip.FileHeader{
+					Name:     zipRelPath,
+					Method:   zip.Deflate,
+					Modified: info.ModTime(),
+				}
+				header.SetMode(info.Mode())
+				_, _ = zipWriter.CreateHeader(header)
+				return nil
+			}
+
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return nil
+			}
+			header := &zip.FileHeader{
+				Name:     zipRelPath,
+				Method:   zip.Deflate,
+				Modified: info.ModTime(),
+			}
+			header.SetMode(info.Mode())
+			f, err := zipWriter.CreateHeader(header)
+			if err != nil {
+				return nil
+			}
+			_, _ = f.Write(data)
+			return nil
+		})
+	}
+
+	// 4. Write annotations/<convID>.pbtxt
+	if fi, err := os.Stat(annotationsPath); err == nil && !fi.IsDir() {
+		addFileToZip(zipWriter, annotationsPath, filepath.Join("annotations", convID+".pbtxt"))
+	}
+}
+
+func (h *Handler) RestoreConversationHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tempDir := filepath.Join(getSafeTempDir(), fmt.Sprintf("agy_restore_%d", time.Now().UnixNano()))
+	_ = os.MkdirAll(tempDir, 0755)
+	defer os.RemoveAll(tempDir)
+
+	var readerAt io.ReaderAt
+	var size int64
+
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		err := r.ParseMultipartForm(128 << 20)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Failed to parse multipart form: " + err.Error()})
+			return
+		}
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "No 'file' in multipart form: " + err.Error()})
+			return
+		}
+		defer file.Close()
+
+		tempZip := filepath.Join(tempDir, "upload.zip")
+		out, err := os.Create(tempZip)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create temp zip: " + err.Error()})
+			return
+		}
+		n, err := io.Copy(out, file)
+		out.Close()
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to save temp zip: " + err.Error()})
+			return
+		}
+		f, err := os.Open(tempZip)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to read temp zip: " + err.Error()})
+			return
+		}
+		defer f.Close()
+		readerAt = f
+		size = n
+	} else {
+		tempZip := filepath.Join(tempDir, "upload.zip")
+		out, err := os.Create(tempZip)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to create temp zip: " + err.Error()})
+			return
+		}
+		n, err := io.Copy(out, r.Body)
+		out.Close()
+		if err != nil || n == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Empty or invalid archive stream"})
+			return
+		}
+		f, err := os.Open(tempZip)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to read temp zip: " + err.Error()})
+			return
+		}
+		defer f.Close()
+		readerAt = f
+		size = n
+	}
+
+	zipReader, err := zip.NewReader(readerAt, size)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid zip/.antigem format: " + err.Error()})
+		return
+	}
+
+	targetBaseDir := h.Cfg.AppDataDir
+	targetConvsDir := filepath.Join(targetBaseDir, "conversations")
+	targetBrainDir := h.Cfg.BrainDir
+	targetAnnDir := filepath.Join(targetBaseDir, "annotations")
+
+	_ = os.MkdirAll(targetConvsDir, 0755)
+	_ = os.MkdirAll(targetBrainDir, 0755)
+	_ = os.MkdirAll(targetAnnDir, 0755)
+
+	var detectedConvID string
+	var manifestTitle string
+
+	// Unpack files safely
+	for _, file := range zipReader.File {
+		cleanName := filepath.Clean(file.Name)
+		if strings.HasPrefix(cleanName, "..") || strings.HasPrefix(cleanName, "/") || strings.HasPrefix(cleanName, "\\") {
+			continue
+		}
+
+		if cleanName == "manifest.json" {
+			rc, err := file.Open()
+			if err == nil {
+				var mf struct {
+					ConversationID string `json:"conversation_id"`
+					Title          string `json:"title"`
+				}
+				_ = json.NewDecoder(rc).Decode(&mf)
+				rc.Close()
+				if mf.ConversationID != "" {
+					detectedConvID = mf.ConversationID
+				}
+				if mf.Title != "" {
+					manifestTitle = mf.Title
+				}
+			}
+			continue
+		}
+
+		if detectedConvID == "" {
+			if strings.HasPrefix(cleanName, "conversations/") && strings.HasSuffix(cleanName, ".db") {
+				base := filepath.Base(cleanName)
+				detectedConvID = strings.TrimSuffix(base, ".db")
+			} else if strings.HasPrefix(cleanName, "brain/") {
+				parts := strings.Split(cleanName, "/")
+				if len(parts) >= 2 && parts[1] != "" {
+					detectedConvID = parts[1]
+				}
+			}
+		}
+
+		var destPath string
+		if strings.HasPrefix(cleanName, "conversations/") {
+			rel := strings.TrimPrefix(cleanName, "conversations/")
+			destPath = filepath.Join(targetConvsDir, rel)
+		} else if strings.HasPrefix(cleanName, "brain/") {
+			rel := strings.TrimPrefix(cleanName, "brain/")
+			destPath = filepath.Join(targetBrainDir, rel)
+		} else if strings.HasPrefix(cleanName, "annotations/") {
+			rel := strings.TrimPrefix(cleanName, "annotations/")
+			destPath = filepath.Join(targetAnnDir, rel)
+		} else {
+			continue
+		}
+
+		if file.FileInfo().IsDir() {
+			_ = os.MkdirAll(destPath, 0755)
+			continue
+		}
+
+		_ = os.MkdirAll(filepath.Dir(destPath), 0755)
+		rc, err := file.Open()
+		if err != nil {
+			continue
+		}
+
+		mode := file.Mode()
+		if mode == 0 {
+			mode = 0644
+		}
+		outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+		if err == nil {
+			_, _ = io.Copy(outFile, rc)
+			outFile.Close()
+		}
+		rc.Close()
+	}
+
+	if detectedConvID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "No valid conversation found in archive"})
+		return
+	}
+
+	now := time.Now().UTC()
+	nowSqlUtc := now.Format("2006-01-02 15:04:05.999999999+00:00")
+	nowFormatted := now.Format(time.RFC3339)
+
+	// Update modification time of transcript.jsonl, brain directory, and conversation DB to NOW
+	transcriptPath := filepath.Join(targetBrainDir, detectedConvID, ".system_generated", "logs", "transcript.jsonl")
+	convDir := filepath.Join(targetBrainDir, detectedConvID)
+	convDbPath := filepath.Join(targetConvsDir, detectedConvID+".db")
+	_ = os.Chtimes(transcriptPath, now, now)
+	_ = os.Chtimes(convDir, now, now)
+	_ = os.Chtimes(convDbPath, now, now)
+
+	// Extract Title
+	title := manifestTitle
+	if title == "" {
+		titleFile := filepath.Join(convDir, "custom_title.txt")
+		if tData, err := os.ReadFile(titleFile); err == nil && len(tData) > 0 {
+			title = strings.TrimSpace(string(tData))
+		}
+	}
+	if title == "" && transcriptPath != "" {
+		if file, err := os.Open(transcriptPath); err == nil {
+			sc := bufio.NewScanner(file)
+			buf := make([]byte, 64*1024)
+			sc.Buffer(buf, 1024*1024)
+			for sc.Scan() {
+				line := strings.TrimSpace(sc.Text())
+				if line == "" {
+					continue
+				}
+				var step struct {
+					Type    string `json:"type"`
+					Content string `json:"content"`
+				}
+				if err := json.Unmarshal([]byte(line), &step); err == nil && step.Type == "USER_INPUT" && step.Content != "" {
+					cleanPrompt := transcript.ExtractPromptText(step.Content)
+					if cleanPrompt != "" {
+						if len(cleanPrompt) > 36 {
+							title = cleanPrompt[:36] + "..."
+						} else {
+							title = cleanPrompt
+						}
+						break
+					}
+				}
+			}
+			file.Close()
+		}
+	}
+	if title == "" {
+		title = detectedConvID
+		if len(title) > 8 {
+			title = title[:8]
+		}
+	}
+
+	summaryDbPath := filepath.Join(targetBaseDir, "conversation_summaries.db")
+	db, err := sql.Open("sqlite", summaryDbPath)
+	if err == nil {
+		createTableSql := `CREATE TABLE IF NOT EXISTS conversation_summaries (
+			conversation_id text,
+			title text NOT NULL DEFAULT "",
+			preview text NOT NULL DEFAULT "",
+			step_count integer NOT NULL DEFAULT 0,
+			last_modified_time datetime NOT NULL,
+			workspace_uris text NOT NULL,
+			status text NOT NULL DEFAULT "",
+			source text NOT NULL DEFAULT "",
+			project_id text NOT NULL DEFAULT "",
+			agent_name text NOT NULL DEFAULT "",
+			parent_conversation_id text NOT NULL DEFAULT "",
+			nesting_depth integer NOT NULL DEFAULT 0,
+			battle_id text NOT NULL DEFAULT "",
+			winning_conversation_id text NOT NULL DEFAULT "",
+			not_fully_idle numeric NOT NULL DEFAULT false,
+			killed numeric NOT NULL DEFAULT false,
+			last_user_input_time datetime NOT NULL,
+			last_user_input_step_index integer NOT NULL DEFAULT -1,
+			app_data_dir text NOT NULL DEFAULT "",
+			raw_summary BLOB,
+			group_id TEXT NOT NULL DEFAULT '',
+			PRIMARY KEY (conversation_id)
+		);`
+		_, _ = db.Exec(createTableSql)
+
+		upsertSql := `INSERT INTO conversation_summaries (
+			conversation_id, title, preview, last_modified_time, last_user_input_time, workspace_uris, raw_summary
+		) VALUES (
+			?, ?, ?, ?, ?, '', NULL
+		) ON CONFLICT(conversation_id) DO UPDATE SET 
+			last_modified_time = excluded.last_modified_time,
+			last_user_input_time = excluded.last_user_input_time,
+			raw_summary = NULL,
+			title = CASE WHEN conversation_summaries.title = '' THEN excluded.title ELSE conversation_summaries.title END;`
+
+		if _, execErr := db.Exec(upsertSql, detectedConvID, title, title, nowSqlUtc, nowSqlUtc); execErr != nil {
+			fmt.Printf("[Restore] Error updating conversation_summaries.db: %v\n", execErr)
+		} else {
+			fmt.Printf("[Restore] Successfully updated conversation_summaries.db for %s with UTC timestamp %s\n", detectedConvID, nowSqlUtc)
+		}
+		db.Close()
+	} else {
+		fmt.Printf("[Restore] Failed to open conversation_summaries.db: %v\n", err)
+	}
+
+	summary := models.ConversationSummary{
+		ID:           detectedConvID,
+		Title:        title,
+		CreatedAt:    nowFormatted,
+		LastActivity: nowFormatted,
+		StepsCount:   1,
+		IsRunning:    false,
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":       "success",
+		"message":      "Conversation restored successfully",
+		"conversation": summary,
 	})
 }
 

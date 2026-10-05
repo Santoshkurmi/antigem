@@ -52,39 +52,46 @@ object ConversationShareHelper {
         snackbarHostState: SnackbarHostState? = null
     ) = withContext(Dispatchers.IO) {
         try {
-            var rawSteps: List<Step>? = null
-            var messages: List<ChatMessage> = if (!activeMessages.isNullOrEmpty()) {
-                activeMessages
+            // First attempt to download complete archive from Go bridge server
+            val bridgeArchiveRes = com.example.gemini.data.remote.AgyBridgeService.instance.downloadConversationArchive(conversationId)
+            val (bytes, fileName) = if (bridgeArchiveRes.isSuccess && bridgeArchiveRes.getOrNull()?.bytes?.isNotEmpty() == true) {
+                val res = bridgeArchiveRes.getOrThrow()
+                Pair(res.bytes, res.filename)
             } else {
-                val stepsRes = agyHubClient.getCascadeTrajectorySteps(conversationId)
-                if (stepsRes.isSuccess) {
-                    val steps = stepsRes.getOrThrow()
-                    rawSteps = steps
-                    val engine = TrajectoryEngine()
-                    engine.ingestStepsDirect(steps, conversationId)
+                // Fallback to client-side trajectory assembly if bridge server is unreachable
+                var rawSteps: List<Step>? = null
+                val messages: List<ChatMessage> = if (!activeMessages.isNullOrEmpty()) {
+                    activeMessages
                 } else {
+                    val stepsRes = agyHubClient.getCascadeTrajectorySteps(conversationId)
+                    if (stepsRes.isSuccess) {
+                        val steps = stepsRes.getOrThrow()
+                        rawSteps = steps
+                        val engine = TrajectoryEngine()
+                        engine.ingestStepsDirect(steps, conversationId)
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            AppToastHelper.showToast("Failed to load conversation: ${stepsRes.exceptionOrNull()?.message}", ChatToastType.ERROR)
+                        }
+                        return@withContext
+                    }
+                }
+
+                if (messages.isEmpty()) {
                     withContext(Dispatchers.Main) {
-                        AppToastHelper.showToast("Failed to load conversation: ${stepsRes.exceptionOrNull()?.message}", ChatToastType.ERROR)
+                        AppToastHelper.showToast("No messages to share", ChatToastType.INFO)
                     }
                     return@withContext
                 }
+
+                val sanitizedTitle = title.replace(Regex("[^a-zA-Z0-9._-]"), "_").take(40).ifBlank { "conversation" }
+                val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val fn = "${sanitizedTitle}_${timeStamp}.antigem"
+                val content = generateAntigemJsonl(title, conversationId, rawSteps, messages)
+                Pair(content.toByteArray(Charsets.UTF_8), fn)
             }
 
-            if (messages.isEmpty()) {
-                withContext(Dispatchers.Main) {
-                    AppToastHelper.showToast("No messages to share", ChatToastType.INFO)
-                }
-                return@withContext
-            }
-
-            val sanitizedTitle = title.replace(Regex("[^a-zA-Z0-9._-]"), "_").take(40).ifBlank { "conversation" }
-            val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val fileName = "${sanitizedTitle}_${timeStamp}.jsonl.antigem"
-
-            val content = generateAntigemJsonl(title, conversationId, rawSteps, messages)
-            val bytes = content.toByteArray(Charsets.UTF_8)
-
-            // 1. Auto-save to Downloads/AntiGem/Exports (Same as Markdown & HTML exports)
+            // 1. Auto-save to Downloads/AntiGem/Exports
             val savedFileName = saveToDownloadsExports(context, fileName, bytes)
 
             // 2. Save a copy to cache for sharing via FileProvider
@@ -101,7 +108,6 @@ object ConversationShareHelper {
             }
 
             withContext(Dispatchers.Main) {
-                // Immediately launch share sheet so user doesn't wait
                 launchShareChooser(context, shareUri, title, fileName)
 
                 if (snackbarHostState != null) {

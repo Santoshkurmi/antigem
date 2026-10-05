@@ -327,6 +327,9 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/conversations/restore", h.RestoreConversationHandler)
+	mux.HandleFunc("/api/conversations/import", h.RestoreConversationHandler)
+
 	mux.HandleFunc("/api/conversations/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		if strings.HasSuffix(path, "/system-prompt") {
@@ -335,6 +338,8 @@ func main() {
 			h.UpdateConversationTitleHandler(w, r)
 		} else if strings.HasSuffix(path, "/warm") {
 			h.PrewarmConversationHandler(w, r)
+		} else if strings.HasSuffix(path, "/export") || strings.HasSuffix(path, "/share") {
+			h.ExportConversationArchiveHandler(w, r)
 		} else {
 			switch r.Method {
 			case http.MethodGet:

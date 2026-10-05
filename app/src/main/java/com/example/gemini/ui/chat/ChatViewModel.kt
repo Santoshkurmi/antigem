@@ -3660,9 +3660,28 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _isSharedConversationLoading.value = true
         sharedConversationLoadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                if (inputStream != null) {
-                    val parsed = com.example.gemini.ui.components.ConversationShareHelper.parseSharedConversation(inputStream)
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                if (bytes != null && bytes.isNotEmpty()) {
+                    val restoreRes = agyBridgeService.restoreConversationArchive(bytes)
+                    if (restoreRes.isSuccess) {
+                        val restored = restoreRes.getOrThrow()
+                        if (!isActive) return@launch
+                        val newConv = com.example.gemini.domain.model.Conversation(
+                            id = restored.id,
+                            title = restored.title,
+                            updatedAt = System.currentTimeMillis(),
+                            createdAt = System.currentTimeMillis(),
+                            stepCount = restored.stepsCount
+                        )
+                        _conversations.value = listOf(newConv) + _conversations.value.filter { it.id != restored.id }
+                        withContext(Dispatchers.Main) {
+                            selectConversation(restored.id)
+                            com.example.gemini.ui.components.AppToastHelper.showToast("Restored chat: ${restored.title}", com.example.gemini.ui.components.ChatToastType.SUCCESS)
+                        }
+                        return@launch
+                    }
+
+                    val parsed = com.example.gemini.ui.components.ConversationShareHelper.parseSharedConversation(bytes.inputStream())
                     if (!isActive) return@launch
                     _sharedConversationPreview.value = parsed
                     withContext(Dispatchers.Main) {
