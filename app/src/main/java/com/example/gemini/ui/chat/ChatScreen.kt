@@ -186,6 +186,8 @@ fun ChatScreen(
     val connectionState by viewModel.connectionState.collectAsState()
     val conversationError by viewModel.conversationError.collectAsState()
     val activeInstances by viewModel.activeInstances.collectAsState()
+    val isActivelyRunning by viewModel.isCurrentChatActivelyRunning.collectAsState()
+    val isBackgroundActive by viewModel.isCurrentChatBackgroundActive.collectAsState()
     val quotaSummary by viewModel.quotaSummary.collectAsState()
     val preferredModelName by viewModel.preferredModelName.collectAsState()
     val isLocalToolsEnabled by viewModel.isLocalToolsEnabled.collectAsState(initial = false)
@@ -1766,7 +1768,8 @@ fun ChatScreen(
                         keyboardController?.hide()
                         showThinkingSelector = true
                     },
-                    isStreaming = isStreaming,
+                    isStreaming = isActivelyRunning,
+                    isBackgroundActive = isBackgroundActive,
                     onSendMessage = { text ->
                         viewModel.sendMessage(text)
                         viewModel.clearDraft(activeConversationKey)

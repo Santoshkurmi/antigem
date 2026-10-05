@@ -1262,6 +1262,31 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         streaming || instances.isNotEmpty() || convs.any { it.isRunning || it.notFullyIdle || it.hasActivity }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val isCurrentChatActivelyRunning: StateFlow<Boolean> = combine(
+        _conversations,
+        _currentConversation,
+        systemConnectionState
+    ) { convList, current, conn ->
+        val curId = current?.id ?: return@combine false
+        val conv = convList.find { it.id == curId } ?: current
+        (conv.isRunning) && conn.isHubOnline
+    }.distinctUntilChanged()
+    .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val isCurrentChatBackgroundActive: StateFlow<Boolean> = combine(
+        _conversations,
+        _currentConversation,
+        systemConnectionState,
+        _activeInstances
+    ) { convList, current, conn, instances ->
+        val curId = current?.id ?: return@combine false
+        val conv = convList.find { it.id == curId } ?: current
+        val isActivelyRunning = (conv.isRunning) && conn.isHubOnline
+        val activeInst = instances.find { it.conversationId == curId }
+        conn.isHubOnline && !isActivelyRunning && (conv.notFullyIdle || conv.hasActivity || activeInst != null)
+    }.distinctUntilChanged()
+    .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     private val _conversationDrafts = mutableMapOf<String, androidx.compose.ui.text.input.TextFieldValue>()
 
     private val _searchQuery = MutableStateFlow("")
@@ -1531,13 +1556,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 if (newTitle != curr.title ||
                                     newWorkspaceUri != curr.workspaceUri ||
                                     curr.isRunning != activeInMap.isRunning ||
+                                    curr.notFullyIdle != activeInMap.notFullyIdle ||
+                                    curr.hasActivity != activeInMap.hasActivity ||
                                     (activeInMap.stepCount > curr.stepCount)) {
                                     _currentConversation.value = curr.copy(
                                         title = newTitle,
                                         summary = activeInMap.summary ?: curr.summary,
                                         workspaceUri = newWorkspaceUri,
                                         stepCount = if (activeInMap.stepCount > 0) activeInMap.stepCount else curr.stepCount,
-                                        isRunning = activeInMap.isRunning
+                                        isRunning = activeInMap.isRunning,
+                                        notFullyIdle = activeInMap.notFullyIdle,
+                                        hasActivity = activeInMap.hasActivity
                                     )
                                 }
                             }

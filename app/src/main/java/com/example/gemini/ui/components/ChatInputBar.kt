@@ -158,6 +158,7 @@ fun ChatInputBar(
     onOpenModelSelector: () -> Unit,
     onOpenThinkingSelector: () -> Unit,
     isStreaming: Boolean,
+    isBackgroundActive: Boolean = false,
     onSendMessage: (String) -> Unit,
     onStopStreaming: () -> Unit,
     attachments: List<ChatAttachment> = emptyList(),
@@ -1211,11 +1212,10 @@ fun ChatInputBar(
                                 }
                             }
                         } else if (canSend) {
-                            val sendBtnColor = if (!isAuth) Color(0xFF6B7280) else if (isOnline) ClaudeTerracotta else Color(0xFF6B7280)
+                            val sendBtnColor = if (!isAuth) Color(0xFF6B7280) else if (!isOnline) Color(0xFF6B7280) else if (isBackgroundActive) Color(0xFFFFB300) else ClaudeTerracotta
                             Surface(
                                 onClick = {
                                     val trimmed = textFieldValue.text.trim()
-                                    if (canSend) {
                                         if (!isAuth) {
                                             Toast.makeText(context, "Please sign in first to send messages.", Toast.LENGTH_SHORT).show()
                                             return@Surface
@@ -1229,7 +1229,6 @@ fun ChatInputBar(
                                         }
                                         onSendMessage(trimmed)
                                         onTextFieldValueChange(TextFieldValue(""))
-                                    }
                                 },
                                 shape = CircleShape,
                                 color = sendBtnColor,
@@ -1239,7 +1238,7 @@ fun ChatInputBar(
                                     Icon(
                                         imageVector = Icons.Default.ArrowUpward,
                                         contentDescription = "Send",
-                                        tint = if (isAuth && isOnline) Color.White else Color(0xFFD1D5DB),
+                                        tint = if (isAuth && isOnline) (if (isBackgroundActive) Color(0xFF1E1E1E) else Color.White) else Color(0xFFD1D5DB),
                                         modifier = Modifier.size(19.dp)
                                     )
                                 }
