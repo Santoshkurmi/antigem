@@ -51,7 +51,6 @@ rm -f "$TEMP_ZIP"
 
 EXCLUDE_PATTERNS=(
     "*.sock"
-    "*/cache/*"   
     "*/.cache/*"
     "home/.ssh/*"
     "usr/etc/ssh/ssh_host_*"
@@ -59,12 +58,6 @@ EXCLUDE_PATTERNS=(
     "home/.gemini/jetski-standalone-oauth-token*"
     "home/.gemini/*oauth*"
     "home/.gemini/*token*"
-    "home/.gemini/antigravity/conversations/*"
-    "home/.gemini/antigravity/brain/*"
-    "home/.gemini/antigravity/annotations/*"
-    "home/.gemini/antigravity/cli.log"
-    "home/.gemini/antigravity/*.pb*"
-    "home/.gemini/antigravity/antigravity_state.pbtxt"
     "home/.bash_history"
     "home/.zsh_history"
 )
@@ -73,20 +66,12 @@ EXCLUDE_PATTERNS=(
 echo "      Calculating total files..."
 TOTAL_FILES=$( { find usr home \
     \( ! -name "*.sock" \
-       -a ! -path "*/cache/*" \
        -a ! -path "*/.cache/*" \
-       -a ! -path "*/.git/*" \
        -a ! -path "home/.ssh/*" \
        -a ! -name "ssh_host_*" \
        -a ! -path "home/.gemini/jetski-standalone-oauth-token*" \
        -a ! -path "home/.gemini/*oauth*" \
        -a ! -path "home/.gemini/*token*" \
-       -a ! -path "home/.gemini/antigravity/conversations/*" \
-       -a ! -path "home/.gemini/antigravity/brain/*" \
-       -a ! -path "home/.gemini/antigravity/annotations/*" \
-       -a ! -name "cli.log" \
-       -a ! -name "*.pbtxt" \
-       -a ! -name "*.pb" \
        -a ! -name ".bash_history" \
        -a ! -name ".zsh_history" \
     \) 2>/dev/null || true; } | wc -l)

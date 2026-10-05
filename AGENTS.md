@@ -82,3 +82,5 @@ suspend fun streamUpdates(cascadeId: String) {
 - "Dont do gralew install or any install relelated command
 
 - Never ever try to compile or assemble for Standard Build, alwasy for termuxBuild only
+
+- If you are not 100% sure for someting how to do, never try to do, always ask user for direction this case without understanding what user want.

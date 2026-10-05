@@ -285,6 +285,7 @@ fun LocalTerminalContent(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
+            .navigationBarsPadding()
             .imePadding()
     ) {
         Column(

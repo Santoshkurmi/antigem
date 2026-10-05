@@ -157,8 +157,8 @@ class MainActivity : ComponentActivity() {
                 if (window != null && !view.isInEditMode) {
                     val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
                     if (currentViewMode == AppViewMode.TERMINAL) {
-                        window.statusBarColor = android.graphics.Color.BLACK
-                        window.navigationBarColor = android.graphics.Color.BLACK
+                        window.statusBarColor = android.graphics.Color.TRANSPARENT
+                        window.navigationBarColor = android.graphics.Color.TRANSPARENT
                         insetsController.isAppearanceLightStatusBars = false
                         insetsController.isAppearanceLightNavigationBars = false
                     } else {

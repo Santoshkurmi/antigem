@@ -235,7 +235,8 @@ fun BrowserScreen(
     // If active tab WebView has history -> navigate back in history.
     BackHandler(enabled = isVisible) {
         if (isAddressFocused) {
-            focusManager.clearFocus()
+            isAddressFocused = false
+            focusManager.clearFocus(force = true)
             keyboardController?.hide()
         } else if (showTabOverview) {
             showTabOverview = false
@@ -254,7 +255,8 @@ fun BrowserScreen(
         // Save to typed history
         sessionManager.addHistory(context, rawUrl, targetUrl)
         textFieldValue = TextFieldValue(text = targetUrl)
-        focusManager.clearFocus()
+        isAddressFocused = false
+        focusManager.clearFocus(force = true)
         keyboardController?.hide()
         isControlsVisible = true
         sessionManager.openUrl(targetUrl, tabId = activeTabId, newTab = false)
@@ -890,7 +892,8 @@ fun BrowserScreen(
                         sessionManager.clearHistory(context)
                     },
                     onDismiss = {
-                        focusManager.clearFocus()
+                        isAddressFocused = false
+                        focusManager.clearFocus(force = true)
                         keyboardController?.hide()
                     }
                 )
@@ -936,7 +939,10 @@ private fun SearchHistoryOverlay(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 10.dp, vertical = 6.dp)
-                .clickable(enabled = false) {}, // prevent click-through
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {}, // consume clicks inside card to prevent dismiss
             shape = RoundedCornerShape(16.dp),
             color = if (isDark) Color(0xFF222222) else Color.White,
             shadowElevation = 8.dp,

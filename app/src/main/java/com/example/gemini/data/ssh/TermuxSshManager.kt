@@ -50,7 +50,7 @@ typealias TerminalSession = TerminalCommand
 
 data class TerminalSessionTab(
     val id: String = UUID.randomUUID().toString(),
-    val name: String = "Session 1",
+    val name: String = "1",
     val isPrimary: Boolean = false,
     val status: SessionTabStatus = SessionTabStatus.ACTIVE,
     val workingDirectory: String = "~",
@@ -144,7 +144,7 @@ object TermuxSshManager {
         val currentTabs = _tabs.value
         val tabNumber = currentTabs.size + 1
         val newTab = TerminalSessionTab(
-            name = customName ?: "Session $tabNumber",
+            name = customName ?: "$tabNumber",
             isPrimary = false,
             status = SessionTabStatus.ACTIVE
         )

@@ -1143,7 +1143,7 @@ object LocalTerminalManager {
             return withContext(Dispatchers.Main) {
                 val primary = LocalPtySession(
                     id = "session-1",
-                    initialTitle = "Session 1",
+                    initialTitle = "1",
                     context = context.applicationContext,
                     isSsh = false,
                     initialCommand = null,
@@ -1399,7 +1399,7 @@ object LocalTerminalManager {
                     it.id.removePrefix("session-").substringBefore("-").toIntOrNull()
                 }
                 val nextWinIndex = (existingIndices.maxOrNull() ?: _sessions.value.size) + 1
-                val resolvedTitle = sessionTitle ?: if (forceShell == "bash") "Bash $nextWinIndex" else "Session $nextWinIndex"
+                val resolvedTitle = sessionTitle ?: if (forceShell == "bash") "Bash $nextWinIndex" else "$nextWinIndex"
                 Log.d(TAG, "[Manager] Creating local session $nextWinIndex (forceShell=$forceShell, title=$resolvedTitle)")
                 val newSession = LocalPtySession(
                     id = "session-$nextWinIndex-${System.currentTimeMillis() % 10000}",
