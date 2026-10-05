@@ -958,9 +958,12 @@ func (h *Handler) ProjectsHandler(w http.ResponseWriter, r *http.Request) {
 	entries, err := os.ReadDir(h.Cfg.ProjectsBaseDir)
 	if err == nil {
 		for _, e := range entries {
-			if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
-				p := filepath.Join(h.Cfg.ProjectsBaseDir, e.Name())
-				clean := filepath.Clean(p)
+			if strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			p := filepath.Join(h.Cfg.ProjectsBaseDir, e.Name())
+			clean := filepath.Clean(p)
+			if info, err := os.Stat(clean); err == nil && info.IsDir() {
 				if !seenPaths[clean] {
 					seenPaths[clean] = true
 					projects = append(projects, models.ProjectSummary{
@@ -1147,19 +1150,20 @@ func (h *Handler) FsBrowseHandler(w http.ResponseWriter, r *http.Request) {
 
 	for _, e := range entries {
 		name := e.Name()
-		if strings.HasPrefix(name, ".") && name != ".gitignore" && name != ".env" {
-			continue // skip hidden files except important configs
-		}
 		fullPath := filepath.Join(dir, name)
-		info, _ := e.Info()
 		var size int64
 		var modTime int64
-		if info != nil {
+		isDir := e.IsDir()
+
+		if statInfo, err := os.Stat(fullPath); err == nil {
+			isDir = statInfo.IsDir()
+			size = statInfo.Size()
+			modTime = statInfo.ModTime().UnixMilli()
+		} else if info, err := e.Info(); err == nil && info != nil {
 			size = info.Size()
 			modTime = info.ModTime().UnixMilli()
 		}
 
-		isDir := e.IsDir()
 		ext := ""
 		if !isDir {
 			ext = strings.ToLower(filepath.Ext(name))
@@ -1273,28 +1277,41 @@ func buildRecursiveFileTree(dir string, currentDepth int, maxDepth int) ([]model
 	var nodes []models.FileNode
 	for _, entry := range entries {
 		name := entry.Name()
-		// Ignore hidden files and build output directories
-		if strings.HasPrefix(name, ".") || name == "node_modules" || name == "build" || name == "target" || name == "dist" || name == ".gradle" || name == ".idea" {
+		// Ignore only internal VCS storage and heavy build/dependency caches
+		if name == ".git" || name == "node_modules" || name == "build" || name == "target" || name == "dist" || name == ".gradle" || name == ".idea" {
 			continue
 		}
 
 		fullPath := filepath.Join(dir, name)
-		info, _ := entry.Info()
 		var size int64
-		if info != nil {
+		isDir := entry.IsDir()
+
+		if statInfo, err := os.Stat(fullPath); err == nil {
+			isDir = statInfo.IsDir()
+			size = statInfo.Size()
+		} else if info, err := entry.Info(); err == nil && info != nil {
 			size = info.Size()
 		}
 
 		node := models.FileNode{
 			Name:  name,
 			Path:  fullPath,
-			IsDir: entry.IsDir(),
+			IsDir: isDir,
 			Size:  size,
 		}
 
-		if entry.IsDir() {
-			children, _ := buildRecursiveFileTree(fullPath, currentDepth+1, maxDepth)
-			node.Children = children
+		if isDir {
+			realPath, err := filepath.EvalSymlinks(fullPath)
+			if err == nil {
+				// Prevent infinite loop if symlink points to ancestor directory
+				if !strings.HasPrefix(dir, realPath) {
+					children, _ := buildRecursiveFileTree(fullPath, currentDepth+1, maxDepth)
+					node.Children = children
+				}
+			} else {
+				children, _ := buildRecursiveFileTree(fullPath, currentDepth+1, maxDepth)
+				node.Children = children
+			}
 		}
 
 		nodes = append(nodes, node)
