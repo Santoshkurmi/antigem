@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AntiGem - Agentic AI Coding Workspace, Android IDE & Termux Linux Terminal</title>
+  
+  <!-- Primary Meta Tags -->
+  <meta name="title" content="AntiGem - Agentic AI Coding Workspace, Android IDE & Termux Linux Terminal">
+  <meta name="description" content="AntiGem is a next-generation Android IDE and Agentic AI Chat workspace. Run full Linux environments, edit code with syntax highlighting, execute terminal tasks, and build projects with AI on Android.">
+  <meta name="keywords" content="Android IDE, AI Chat, Agentic AI, Android Code Editor, Termux Terminal, Mobile Coding, Linux on Android, Android Developer Tools, Jetpack Compose, Wire gRPC, Antigravity">
+  <meta name="author" content="Santosh Kurmi">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+  <meta name="theme-color" content="#080c14">
+
+  <!-- Canonical Link -->
+  <link rel="canonical" href="https://santoshkurmi.github.io/antigem/">
+
+  <!-- Google Search Console Verification Placeholder -->
+  <!-- <meta name="google-site-verification" content="YOUR_GOOGLE_VERIFICATION_TOKEN_HERE" /> -->
+
+  <!-- Open Graph / Facebook / Discord / GitHub Previews -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://santoshkurmi.github.io/antigem/">
+  <meta property="og:site_name" content="AntiGem">
+  <meta property="og:title" content="AntiGem - Agentic AI Coding Workspace, Android IDE & Termux Terminal">
+  <meta property="og:description" content="Turn your Android device into a complete Agentic AI development station. Features interactive AI chat, code editor, native Linux PTY terminal, and Go bridge.">
+  <meta property="og:image" content="https://santoshkurmi.github.io/antigem/resources/chat_screen.jpg">
+  <meta property="og:image:alt" content="AntiGem Android IDE & AI Chat Interface">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Structured Data (JSON-LD for Google Search Console & Rich Snippets) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "AntiGem",
+    "headline": "Agentic AI Coding Workspace & Android IDE",
+    "operatingSystem": "Android",
+    "applicationCategory": "DeveloperApplication",
+    "applicationSubCategory": "Integrated Development Environment (IDE)",
+    "description": "Next-generation Android IDE and Agentic AI Chat workspace pairing Jetpack Compose with a native Termux Linux subsystem and direct binary gRPC hub mode.",
+    "url": "https://santoshkurmi.github.io/antigem/",
+    "downloadUrl": "https://github.com/santoshkurmi/antigem/releases",
+    "sameAs": [
+      "https://github.com/santoshkurmi/antigem"
+    ],
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "author": {
+      "@type": "Person",
+      "name": "Santosh Kurmi",
+      "url": "https://github.com/santoshkurmi"
+    }
+  }
+  </script>
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Ambient background glow effects -->
+  <div class="ambient-glow ambient-glow-1"></div>
+  <div class="ambient-glow ambient-glow-2"></div>
+  <div class="ambient-glow ambient-glow-3"></div>
+  <div class="grid-bg"></div>
+
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="container">
+      <a href="#" class="nav-brand">
+        <span class="brand-icon">⚡</span>
+        <span>AntiGem</span>
+        <span class="brand-badge">v2.0</span>
+      </a>
+
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#flavors">Flavors</a></li>
+        <li><a href="#showcase">Showcase</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#build">Build</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <a href="https://github.com/santoshkurmi/antigem" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span>GitHub</span>
+        </a>
+        <a href="https://github.com/santoshkurmi/antigem/releases" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Download APK</span>
+        </a>
+        <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle Navigation">☰</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero">
+    <div class="container">
+      <div class="hero-pill">
+        <span class="hero-pill-dot"></span>
+        <span>Next-Generation AI Development for Android</span>
+      </div>
+
+      <h1 class="hero-title">
+        The Agentic AI Workspace &<br/>
+        <span class="hero-title-gradient">Native Linux IDE Hub</span>
+      </h1>
+
+      <p class="hero-subtitle">
+        AntiGem turns your Android phone into a full-scale AI development station. Powered by Jetpack Compose, an embedded Go IDE bridge, native Termux Linux subsystem, and direct binary gRPC hub mode to Antigravity (<code style="font-family: var(--font-mono); color: var(--color-primary-light);">agy</code>).
+      </p>
+
+      <!-- Technology Badges -->
+      <div class="hero-badges">
+        <span class="badge-tag kotlin">⚡ Kotlin 2.0+</span>
+        <span class="badge-tag android">📱 Jetpack Compose</span>
+        <span class="badge-tag grpc">🔗 Square Wire gRPC</span>
+        <span class="badge-tag go">🐹 Go 1.23+ Bridge</span>
+        <span class="badge-tag termux">🐧 Termux Subsystem</span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="hero-cta">
+        <a href="https://github.com/santoshkurmi/antigem/releases" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-lg">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Download Latest Release</span>
+        </a>
+        <a href="https://github.com/santoshkurmi/antigem" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-lg">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span>View on GitHub</span>
+        </a>
+      </div>
+
+      <!-- Hero Visual Showcase -->
+      <div class="hero-visual">
+        <div class="hero-visual-inner">
+          <img src="resources/chat_screen.jpg" alt="AntiGem Agent Chat Interface" loading="lazy">
+          <img src="resources/ide_code_editor.jpg" alt="AntiGem Mobile IDE Editor" loading="lazy">
+        </div>
+        <div class="hero-visual-caption">
+          <span>✨</span> Interactive Agentic Chat & Mobile IDE in One Native App
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Overview & Architecture Section -->
+  <section id="architecture">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Core Architecture</span>
+        <h2 class="section-title">Built Native. No Fragile CLI Scraping.</h2>
+        <p class="section-desc">
+          Unlike ordinary AI wrappers that run CLI tools via stdout parsing, AntiGem communicates natively with the <code style="font-family: var(--font-mono); color: var(--color-primary-light);">agy</code> binary over gRPC hub mode using Square Wire.
+        </p>
+      </div>
+
+      <div class="arch-card">
+        <div class="arch-flow">
+          <div class="arch-node">
+            <div class="arch-node-icon">📱</div>
+            <div class="arch-node-title">AntiGem Android App</div>
+            <div class="arch-node-subtitle">Jetpack Compose UI & Native Terminal PTY</div>
+          </div>
+
+          <div class="arch-connector">
+            <span>Wire gRPC</span>
+            <div class="arch-connector-line"></div>
+            <span>WebSockets</span>
+          </div>
+
+          <div class="arch-node">
+            <div class="arch-node-icon">🐹</div>
+            <div class="arch-node-title">Embedded Go IDE Bridge</div>
+            <div class="arch-node-subtitle">agy_ide_bridge (Daemon IPC & Stream)</div>
+          </div>
+
+          <div class="arch-connector">
+            <span>Direct Hub</span>
+            <div class="arch-connector-line"></div>
+            <span>Proto Schema</span>
+          </div>
+
+          <div class="arch-node">
+            <div class="arch-node-icon">⚡</div>
+            <div class="arch-node-title">Antigravity (agy) Core</div>
+            <div class="arch-node-subtitle">Language Server, Models & Subagents</div>
+          </div>
+        </div>
+
+        <div class="arch-points">
+          <div class="arch-point-item">
+            <div class="arch-point-icon">⚡</div>
+            <div class="arch-point-text">
+              <h4>Type-Safe Protocol</h4>
+              <p>Strictly speaks the protobuf schema of agy directly over Square Wire for maximum reliability.</p>
+            </div>
+          </div>
+          <div class="arch-point-item">
+            <div class="arch-point-icon">💬</div>
+            <div class="arch-point-text">
+              <h4>Deep Interactivity</h4>
+              <p>Supports live question-and-answer prompts, tool confirmations, and multi-step subagent execution.</p>
+            </div>
+          </div>
+          <div class="arch-point-item">
+            <div class="arch-point-icon">🐧</div>
+            <div class="arch-point-text">
+              <h4>High-Performance PTY</h4>
+              <p>Runs a native Linux PTY terminal with foreground services for seamless background tasks.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Flavors Section -->
+  <section id="flavors">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">App Variants</span>
+        <h2 class="section-title">Choose Your Build Flavor</h2>
+        <p class="section-desc">Download the standalone all-in-one edition or connect to your existing Termux setup.</p>
+      </div>
+
+      <div class="flavor-grid">
+        <!-- Termux Flavor Card (Recommended) -->
+        <div class="flavor-card recommended">
+          <span class="flavor-badge">RECOMMENDED</span>
+          <h3 class="flavor-name">Termux Flavor</h3>
+          <div class="flavor-pkg">com.termux (antiGem-termux-release.apk)</div>
+          <p class="flavor-desc">
+            <strong>All-in-one standalone environment.</strong> You do NOT need the Termux app installed. AntiGem natively runs its own full Linux environment, package manager (<code style="font-family: var(--font-mono); color: var(--color-accent);">pkg</code>/<code style="font-family: var(--font-mono); color: var(--color-accent);">apt</code>), shell, and compilers in its private sandbox.
+          </p>
+          <ul class="flavor-features">
+            <li><span>✓</span> Standalone zero-setup installation</li>
+            <li><span>✓</span> Embedded Linux rootfs & package manager</li>
+            <li><span>✓</span> Built-in compiler toolchains & Glibc</li>
+            <li><span>✓</span> Direct foreground service support</li>
+          </ul>
+          <a href="https://github.com/santoshkurmi/antigem/releases" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width: 100%;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download Termux APK
+          </a>
+        </div>
+
+        <!-- Standard Flavor Card -->
+        <div class="flavor-card">
+          <h3 class="flavor-name">Standard Flavor</h3>
+          <div class="flavor-pkg">com.antigem</div>
+          <p class="flavor-desc">
+            Connects to an external Termux application already installed on your device. Runs <code style="font-family: var(--font-mono); color: var(--color-secondary);">agy_ide_bridge</code> inside external Termux and connects the AntiGem UI over localhost.
+          </p>
+          <ul class="flavor-features">
+            <li><span>✓</span> Integrates with existing Termux setup</li>
+            <li><span>✓</span> Shared package tree with system Termux</li>
+            <li><span>✓</span> Customizable bridge ports</li>
+          </ul>
+          <a href="https://github.com/santoshkurmi/antigem" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="width: 100%;">
+            View Source / Build
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Showcase Gallery Section -->
+  <section id="showcase">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Interface Gallery</span>
+        <h2 class="section-title">Explore AntiGem in Action</h2>
+        <p class="section-desc">Click on any screenshot to view the high-resolution interface.</p>
+      </div>
+
+      <div class="gallery-nav">
+        <button class="gallery-tab-btn active" data-filter="all">All Screens</button>
+        <button class="gallery-tab-btn" data-filter="chat">Agent Chat</button>
+        <button class="gallery-tab-btn" data-filter="editor">IDE & Terminal</button>
+        <button class="gallery-tab-btn" data-filter="tools">System & Browser</button>
+      </div>
+
+      <div class="gallery-grid">
+        <!-- 1. Chat Screen -->
+        <div class="gallery-card" data-category="chat">
+          <div class="gallery-card-img-wrap">
+            <img src="resources/chat_screen.jpg" alt="Agent Chat Execution" loading="lazy">
+            <div class="gallery-card-zoom-overlay">🔍 Click to zoom</div>
+          </div>
+          <div class="gallery-card-info">
+            <div class="gallery-card-title">💬 Agentic Chat & Tool Execution</div>
+            <div class="gallery-card-desc">Real-time reasoning stream, subagents, and tool cards.</div>
+          </div>
+        </div>
+
+        <!-- 2. IDE Code Editor -->
+        <div class="gallery-card" data-category="editor">
+          <div class="gallery-card-img-wrap">
+            <img src="resources/ide_code_editor.jpg" alt="Mobile IDE Code Editor" loading="lazy">
+            <div class="gallery-card-zoom-overlay">🔍 Click to zoom</div>
+          </div>
+          <div class="gallery-card-info">
+            <div class="gallery-card-title">💻 Full IDE Code Editor</div>
+            <div class="gallery-card-desc">Multi-tab syntax highlighting with line numbers and undo/redo.</div>
+          </div>
+        </div>
+
+        <!-- 3. Linux Terminal -->
+        <div class="gallery-card" data-category="editor">
+          <div class="gallery-card-img-wrap">
+            <img src="resources/linux_terminal.jpg" alt="Native Linux Terminal" loading="lazy">
+            <div class="gallery-card-zoom-overlay">🔍 Click to zoom</div>
+          </div>
+          <div class="gallery-card-info">
+            <div class="gallery-card-title">🐧 Native Linux Terminal</div>
+            <div class="gallery-card-desc">High-performance PTY with custom themes and quick-keys.</div>
+          </div>
+        </div>
+
+        <!-- 4. Sidebar Navigation -->
+        <div class="gallery-card" data-category="chat">
+          <div class="gallery-card-img-wrap">
+            <img src="resources/sidebar_navigation.jpg" alt="Sidebar Navigation & Workspaces" loading="lazy">
+            <div class="gallery-card-zoom-overlay">🔍 Click to zoom</div>
+          </div>
+          <div class="gallery-card-info">
+            <div class="gallery-card-title">📂 Sidebar & Workspace History</div>
+            <div class="gallery-card-desc">Organized conversation transcripts and active project trees.</div>
+          </div>
+        </div>
+
+        <!-- 5. Account Profile & Quota -->
+        <div class="gallery-card" data-category="tools">
+          <div class="gallery-card-img-wrap">
+            <img src="resources/account_profile_quota.jpg" alt="Quota & Account Info" loading="lazy">
+            <div class="gallery-card-zoom-overlay">🔍 Click to zoom</div>
+          </div>
+          <div class="gallery-card-info">
+            <div class="gallery-card-title">⚡ Quota & Account Info</div>
+            <div class="gallery-card-desc">Live model quota gauges for Flash, Pro, Ultra & Claude models.</div>
+          </div>
+        </div>
+
+        <!-- 6. Settings & Preferences -->
+        <div class="gallery-card" data-category="tools">
+          <div class="gallery-card-img-wrap">
+            <img src="resources/settings_preferences.jpg" alt="Settings & Backups" loading="lazy">
+            <div class="gallery-card-zoom-overlay">🔍 Click to zoom</div>
+          </div>
+          <div class="gallery-card-info">
+            <div class="gallery-card-title">⚙️ Settings, MCP & Backups</div>
+            <div class="gallery-card-desc">Rootfs backup suite, server parameters, and custom MCP tools.</div>
+          </div>
+        </div>
+
+        <!-- 7. Integrated Browser -->
+        <div class="gallery-card" data-category="tools">
+          <div class="gallery-card-img-wrap">
+            <img src="resources/integrated_browser.jpg" alt="Integrated Browser & Automation" loading="lazy">
+            <div class="gallery-card-zoom-overlay">🔍 Click to zoom</div>
+          </div>
+          <div class="gallery-card-info">
+            <div class="gallery-card-title">🌐 Integrated Browser & Automation</div>
+            <div class="gallery-card-desc">Local web app preview & autonomous DOM inspection.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Grid Section -->
+  <section id="features">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Key Capabilities</span>
+        <h2 class="section-title">Engineered for Developers</h2>
+        <p class="section-desc">A complete workstation engineered to bridge desktop-grade coding to mobile.</p>
+      </div>
+
+      <div class="features-grid">
+        <!-- Feature 1 -->
+        <div class="feature-box">
+          <div class="feature-icon-wrap">🤖</div>
+          <h3 class="feature-title">Autonomous Agentic AI</h3>
+          <ul class="feature-list">
+            <li><strong>Direct Wire gRPC Hub:</strong> Type-safe, low latency stream with Square Wire.</li>
+            <li><strong>Live Streamed Reasoning:</strong> Real-time tokens, thought collapse & subagent tracking.</li>
+            <li><strong>Model Switching:</strong> Gemini 3.7 Flash/Pro, Claude 3.5 Sonnet, GPT-4o, and custom models.</li>
+            <li><strong>Interactive Prompts:</strong> Native multiple-choice modals & tool approval.</li>
+          </ul>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-box">
+          <div class="feature-icon-wrap">🐧</div>
+          <h3 class="feature-title">Native Linux Subsystem</h3>
+          <ul class="feature-list">
+            <li><strong>High-Performance PTY:</strong> Terminal emulator with quick-keys and font sizing.</li>
+            <li><strong>Full Linux Stack:</strong> Pre-configured bash, Python, Node.js, Git, Go, and Glibc.</li>
+            <li><strong>Terminal MCP:</strong> Autonomous command execution with continuous foreground output.</li>
+          </ul>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-box">
+          <div class="feature-icon-wrap">📝</div>
+          <h3 class="feature-title">Mobile IDE Code Editor</h3>
+          <ul class="feature-list">
+            <li><strong>Syntax Highlighting:</strong> Python, Go, Kotlin, Java, Rust, JS/TS, HTML/CSS, JSON.</li>
+            <li><strong>Productivity Controls:</strong> Multi-tab switcher, find/replace, undo/redo, auto-indent.</li>
+            <li><strong>Workspace File Explorer:</strong> Instant directory browsing and project switching.</li>
+          </ul>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="feature-box">
+          <div class="feature-icon-wrap">🌐</div>
+          <h3 class="feature-title">Web Browser & Automation</h3>
+          <ul class="feature-list">
+            <li><strong>Built-in Browser:</strong> In-app preview for local dev servers (Vite, Next, Flask, etc.).</li>
+            <li><strong>Browser Automation MCP:</strong> Inspect DOM elements, click, type, and verify UI workflows.</li>
+          </ul>
+        </div>
+
+        <!-- Feature 5 -->
+        <div class="feature-box">
+          <div class="feature-icon-wrap">🎨</div>
+          <h3 class="feature-title">Dynamic Chat Artifacts</h3>
+          <ul class="feature-list">
+            <li><strong>Interactive Diffs:</strong> Expandable git-style diffs and copyable code blocks.</li>
+            <li><strong>Mermaid Diagrams:</strong> Hardware-accelerated flowcharts and state diagrams.</li>
+            <li><strong>Picture-in-Picture (PIP):</strong> Floating overlay for multi-tasking across Android.</li>
+          </ul>
+        </div>
+
+        <!-- Feature 6 -->
+        <div class="feature-box">
+          <div class="feature-icon-wrap">🛡️</div>
+          <h3 class="feature-title">Full Backup & Updater</h3>
+          <ul class="feature-list">
+            <li><strong>Rootfs Backup:</strong> One-tap export of installed Linux packages and dotfiles.</li>
+            <li><strong>Database Backup:</strong> Export transcripts, settings, and credentials to phone storage.</li>
+            <li><strong>In-App Updater:</strong> One-tap version checking and APK updates.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Build & Quickstart Section -->
+  <section id="build">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Source & Compilation</span>
+        <h2 class="section-title">Build From Source</h2>
+        <p class="section-desc">Clone and compile AntiGem directly with your favorite toolchain.</p>
+      </div>
+
+      <div class="build-container">
+        <!-- Prerequisites -->
+        <div class="prereq-card">
+          <h3 class="prereq-title">
+            <span>📋</span> Prerequisites
+          </h3>
+          <ul class="prereq-list">
+            <li class="prereq-item">
+              <span class="prereq-badge">JDK 17+</span>
+              <span>Java Development Kit</span>
+            </li>
+            <li class="prereq-item">
+              <span class="prereq-badge">API 35</span>
+              <span>Android SDK API 35 & Build Tools 35.0.0+</span>
+            </li>
+            <li class="prereq-item">
+              <span class="prereq-badge">Go 1.23+</span>
+              <span>For compiling <code style="color: var(--color-secondary);">agy_ide_bridge</code></span>
+            </li>
+            <li class="prereq-item">
+              <span class="prereq-badge">Gradle 8.11+</span>
+              <span>Build automation system</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Terminal Commands -->
+        <div class="code-terminal">
+          <div class="terminal-header">
+            <div class="terminal-dots">
+              <span class="terminal-dot dot-red"></span>
+              <span class="terminal-dot dot-yellow"></span>
+              <span class="terminal-dot dot-green"></span>
+            </div>
+            <span class="terminal-title">bash — antigem-build</span>
+            <button class="copy-btn" data-copy-target="buildCodeSnippet">Copy</button>
+          </div>
+          <div class="terminal-body" id="buildCodeSnippet">
+<span class="terminal-comment"># 1. Clone the repository</span>
+<span class="terminal-prompt">$</span> <span class="terminal-cmd">git clone https://github.com/santoshkurmi/antigem.git</span>
+<span class="terminal-prompt">$</span> <span class="terminal-cmd">cd antigem</span>
+
+<span class="terminal-comment"># 2. Build recommended Termux flavor APKs</span>
+<span class="terminal-prompt">$</span> <span class="terminal-cmd">./gradlew assembleTermuxDebug</span>
+<span class="terminal-prompt">$</span> <span class="terminal-cmd">./gradlew assembleTermuxRelease</span>
+
+<span class="terminal-comment"># 3. Or build all APKs via script</span>
+<span class="terminal-prompt">$</span> <span class="terminal-cmd">./scripts/build_all_apks.sh</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lightbox Modal for Screenshots -->
+  <div class="lightbox-modal" id="lightboxModal">
+    <div class="lightbox-content">
+      <button class="lightbox-close" id="lightboxClose" aria-label="Close Preview">&times;</button>
+      <img src="" alt="Enlarged screenshot" class="lightbox-img" id="lightboxImg">
+      <div class="lightbox-caption" id="lightboxCaption"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <span class="brand-icon">⚡</span>
+          <span>AntiGem</span>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/santoshkurmi/antigem/releases" target="_blank" rel="noopener noreferrer">Releases</a>
+          <a href="https://github.com/santoshkurmi/antigem" target="_blank" rel="noopener noreferrer">Source Code</a>
+          <a href="https://github.com/santoshkurmi/antigem/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Apache 2.0 License</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>AntiGem is open-source software licensed under the Apache License 2.0.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
