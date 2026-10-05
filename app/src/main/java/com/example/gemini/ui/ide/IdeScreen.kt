@@ -23,6 +23,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.WrapText
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -431,46 +433,116 @@ fun IdeScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = {
-                                coroutineScope.launch {
-                                    if (drawerState.isClosed) drawerState.open() else drawerState.close()
-                                }
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "Toggle Sidebar"
-                                )
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            coroutineScope.launch {
+                                if (drawerState.isClosed) drawerState.open() else drawerState.close()
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = activeProject?.name ?: "antiGem IDE",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Toggle Sidebar"
                             )
                         }
+                    },
+                    title = {
+                        Text(
+                            text = activeProject?.name ?: "antiGem IDE",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
+                        )
                     },
                     actions = {
                         val isTextFile = activeTab != null && (!isImageFile || (isSvgFile && showSvgSource))
                         val isTextEditable = isTextFile && !activeTab.isReadOnly
+                        var showMoreOptionsMenu by remember { mutableStateOf(false) }
 
-                        // SVG Toggle Button (Graphic Preview <-> XML Source Code)
-                        if (isSvgFile) {
-                            IconButton(
-                                onClick = { showSvgSource = !showSvgSource },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (showSvgSource) Icons.Default.Image else Icons.Default.Code,
-                                    contentDescription = if (showSvgSource) "Preview SVG Graphic" else "Edit SVG XML Source",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                        // Three-Dot More Options Menu (Word Wrap, Find in file, SVG toggle)
+                        if (isTextFile) {
+                            Box {
+                                IconButton(
+                                    onClick = { showMoreOptionsMenu = true },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "More editor options",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                DropdownMenu(
+                                    expanded = showMoreOptionsMenu,
+                                    onDismissRequest = { showMoreOptionsMenu = false }
+                                ) {
+                                    // Word Wrap with Checkbox
+                                    DropdownMenuItem(
+                                        text = { Text("Word Wrap", fontSize = 13.sp) },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.WrapText,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        },
+                                        trailingIcon = {
+                                            Checkbox(
+                                                checked = isWordWrap,
+                                                onCheckedChange = { isWordWrap = it },
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        },
+                                        onClick = {
+                                            isWordWrap = !isWordWrap
+                                        }
+                                    )
+
+                                    // Find / Search in File
+                                    DropdownMenuItem(
+                                        text = { Text("Find in File", fontSize = 13.sp) },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Search,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        },
+                                        onClick = {
+                                            showMoreOptionsMenu = false
+                                            showFindBar = true
+                                        }
+                                    )
+
+                                    // SVG Source / Graphic Preview Toggle
+                                    if (isSvgFile) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = if (showSvgSource) "Preview SVG Graphic" else "Edit SVG XML Source",
+                                                    fontSize = 13.sp
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = if (showSvgSource) Icons.Default.Image else Icons.Default.Code,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showMoreOptionsMenu = false
+                                                showSvgSource = !showSvgSource
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
 
-                        // Undo Button
+                        // Undo & Redo Buttons
                         if (isTextFile) {
                             IconButton(
                                 onClick = { currentEditorView?.undo() },
@@ -478,45 +550,22 @@ fun IdeScreen(
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Undo,
+                                    imageVector = Icons.AutoMirrored.Filled.Undo,
                                     contentDescription = "Undo",
                                     tint = if (canUndo && isTextEditable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
 
-                            // Redo Button
                             IconButton(
                                 onClick = { currentEditorView?.redo() },
                                 enabled = canRedo && isTextEditable,
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Redo,
+                                    imageVector = Icons.AutoMirrored.Filled.Redo,
                                     contentDescription = "Redo",
                                     tint = if (canRedo && isTextEditable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-
-                            // Find / Search in File Button
-                            IconButton(
-                                onClick = {
-                                    showFindBar = !showFindBar
-                                    if (!showFindBar) {
-                                        currentEditorView?.stopSearch()
-                                        findQuery = ""
-                                        searchMatchCount = 0
-                                        currentMatchIndex = -1
-                                        keyboardController?.hide()
-                                    }
-                                },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = "Find in file",
-                                    tint = if (showFindBar) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -565,21 +614,6 @@ fun IdeScreen(
                                     imageVector = Icons.Default.Save,
                                     contentDescription = if (isExternal) "Save As..." else "Save File",
                                     tint = if (activeTab.isModified || isExternal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        // Word Wrap Toggle Button
-                        if (!isImageFile && !(isSvgFile && !showSvgSource)) {
-                            IconButton(
-                                onClick = { isWordWrap = !isWordWrap },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.WrapText,
-                                    contentDescription = "Toggle Word Wrap",
-                                    tint = if (isWordWrap) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
