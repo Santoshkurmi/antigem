@@ -1239,15 +1239,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    val connectionState: StateFlow<com.example.gemini.data.remote.BridgeConnectionState> = combine(_isServerOnline, _isStreaming) { online, streaming ->
-        when {
-            online == false -> com.example.gemini.data.remote.BridgeConnectionState.OFFLINE_ERROR
-            streaming -> com.example.gemini.data.remote.BridgeConnectionState.STREAMING
-            online == true -> com.example.gemini.data.remote.BridgeConnectionState.CONNECTED_READY
-            else -> com.example.gemini.data.remote.BridgeConnectionState.CONNECTING
-        }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, com.example.gemini.data.remote.BridgeConnectionState.CONNECTING)
-
     private val _conversationError = MutableStateFlow<String?>(null)
     val conversationError: StateFlow<String?> = _conversationError.asStateFlow()
 
@@ -1255,13 +1246,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val activeInstances: StateFlow<List<com.example.gemini.data.remote.AgyActiveInstance>> = _activeInstances.asStateFlow()
 
     val isAnyGenerationOrTaskActive: StateFlow<Boolean> = combine(
-        _isStreaming,
         _activeInstances,
         _conversations
-    ) { streaming, instances, convs ->
-        streaming || instances.isNotEmpty() || convs.any { it.isRunning || it.notFullyIdle || it.hasActivity }
+    ) { instances, convs ->
+        instances.isNotEmpty() || convs.any { it.isRunning || it.notFullyIdle || it.hasActivity }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    // Authoritative conversation running & background states derived from the sidebar summary stream (_conversations).
+    // Note: We use the daemon's sidebar summaries (JetboxSubscribeToSummaries) as the single source of truth rather than
+    // per-frame stream updates from StreamAgentStateUpdates because the fine-grained gRPC stream in AGY can be buggier
+    // (e.g. continuing to report RUNNING state even when the turn has ended, particularly in long chats with multiple subagents/tools).
     val isCurrentChatActivelyRunning: StateFlow<Boolean> = combine(
         _conversations,
         _currentConversation,
@@ -1286,6 +1280,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         conn.isHubOnline && !isActivelyRunning && (conv.notFullyIdle || conv.hasActivity || activeInst != null)
     }.distinctUntilChanged()
     .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val connectionState: StateFlow<com.example.gemini.data.remote.BridgeConnectionState> = combine(_isServerOnline, isCurrentChatActivelyRunning) { online, streaming ->
+        when {
+            online == false -> com.example.gemini.data.remote.BridgeConnectionState.OFFLINE_ERROR
+            streaming -> com.example.gemini.data.remote.BridgeConnectionState.STREAMING
+            online == true -> com.example.gemini.data.remote.BridgeConnectionState.CONNECTED_READY
+            else -> com.example.gemini.data.remote.BridgeConnectionState.CONNECTING
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, com.example.gemini.data.remote.BridgeConnectionState.CONNECTING)
 
     private val _conversationDrafts = mutableMapOf<String, androidx.compose.ui.text.input.TextFieldValue>()
 
@@ -2006,7 +2009,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendMessage(content: String) {
-        if ((content.isBlank() && _attachments.value.isEmpty()) || _isStreaming.value) return
+        if ((content.isBlank() && _attachments.value.isEmpty()) || isCurrentChatActivelyRunning.value) return
 
         val state = systemConnectionState.value
         if (!state.canSend) {

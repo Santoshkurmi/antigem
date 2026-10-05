@@ -159,7 +159,6 @@ fun ChatScreen(
     val currentConv by viewModel.currentConversation.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val artifacts by viewModel.artifacts.collectAsState()
-    val isStreaming by viewModel.isStreaming.collectAsState()
     val selectedModelId by viewModel.selectedModelId.collectAsState()
     val availableModels by viewModel.availableModels.collectAsState()
     val enabledModels by viewModel.enabledModels.collectAsState()
@@ -611,7 +610,7 @@ fun ChatScreen(
     val lastThoughtLen = lastMsg?.thoughtText?.length ?: 0
     val lastToolCalls = lastMsg?.toolCalls.orEmpty()
     val toolCallsPayloadLen = lastToolCalls.sumOf { it.command.length + it.output.length + it.status.length }
-    val isRunningOrStreaming = isStreaming || (currentConv?.isRunning == true) || (lastMsg?.isStreaming == true)
+    val isRunningOrStreaming = isActivelyRunning || (lastMsg?.isStreaming == true)
 
     LaunchedEffect(feedItems.size, lastContentLen, lastThoughtLen, toolCallsPayloadLen, isRunningOrStreaming) {
         if (feedItems.isNotEmpty() && isRunningOrStreaming && shouldAutoScroll && !isUserDragging) {
@@ -785,7 +784,7 @@ fun ChatScreen(
                 hasReceivedInitialSync = hasReceivedInitialSync,
                 systemConnectionState = systemConnectionState,
                 errorMessage = conversationError,
-                isStreaming = isStreaming,
+                isStreaming = isActivelyRunning,
                 groupByWorkspace = groupChatsByWorkspace,
                 onToggleGroupByWorkspace = { viewModel.setGroupChatsByWorkspace(it) },
                 onRetry = { viewModel.retryConnections() },
