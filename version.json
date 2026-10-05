@@ -2,6 +2,11 @@
   "version_code": 107,
   "version_name": "1.0.7",
   "min_supported_version_code": 1,
-  "changelog": "Almost boostrap full",
+  "changelog": [
+    
+    "Added chat sharing to share open and chat in another phone",
+    "Fix minor issues"
+    
+  ],
   "is_critical": false
 }

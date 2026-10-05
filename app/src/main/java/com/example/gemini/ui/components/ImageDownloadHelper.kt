@@ -162,7 +162,11 @@ object ImageDownloadHelper {
         if (source.startsWith("http://") || source.startsWith("https://")) {
             return try {
                 val client = OkHttpClient()
-                val req = Request.Builder().url(source).get().build()
+                val req = Request.Builder()
+                    .url(source)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 AntiGem/1.0")
+                    .get()
+                    .build()
                 client.newCall(req).execute().use { resp ->
                     if (resp.isSuccessful) resp.body?.bytes() else null
                 }

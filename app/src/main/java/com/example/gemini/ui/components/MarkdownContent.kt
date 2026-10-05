@@ -87,7 +87,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.BrokenImage
 import coil.compose.AsyncImage
+import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 import com.example.gemini.data.remote.HubMediaResolver
 import com.example.gemini.theme.ClaudeTerracotta
@@ -1521,6 +1523,9 @@ fun MarkdownImageView(
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        var isImageLoading by remember(resolvedUrl) { mutableStateOf(resolvedUrl.isNotBlank()) }
+        var isImageError by remember(resolvedUrl) { mutableStateOf(false) }
+
         Surface(
             modifier = Modifier
                 .clip(RoundedCornerShape(12.dp))
@@ -1534,17 +1539,61 @@ fun MarkdownImageView(
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ) {
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(resolvedUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = image.alt,
-                contentScale = ContentScale.Fit,
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = 340.dp)
-            )
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(resolvedUrl)
+                        .crossfade(true)
+                        .setHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 AntiGem/1.0")
+                        .decoderFactory(SvgDecoder.Factory())
+                        .listener(
+                            onStart = { isImageLoading = true; isImageError = false },
+                            onSuccess = { _, _ -> isImageLoading = false; isImageError = false },
+                            onError = { _, res ->
+                                isImageLoading = false
+                                isImageError = true
+                                android.util.Log.e("MarkdownImageView", "Failed to load image $resolvedUrl: ${res.throwable.message}")
+                            }
+                        )
+                        .build(),
+                    contentDescription = image.alt,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (isImageLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                if (isImageError) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BrokenImage,
+                            contentDescription = "Failed to load image",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = image.alt.ifBlank { "Image could not be loaded" },
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
 
         if (image.alt.isNotBlank()) {
