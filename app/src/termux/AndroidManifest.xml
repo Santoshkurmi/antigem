@@ -1,48 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
-        <activity
-            android:name=".TermuxActivity"
-            android:exported="true"
-            android:label="@string/anti_term_name"
-            android:icon="@mipmap/ic_launcher"
-            android:roundIcon="@mipmap/ic_launcher_round"
-            android:launchMode="singleTask"
-            android:taskAffinity="com.termux.terminal"
-            android:theme="@style/Theme.Gemini"
-            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize"
-            android:windowSoftInputMode="stateHidden|adjustResize" />
-
-        <!-- AntiTerm Default Style Launcher Alias -->
-        <activity-alias
-            android:name=".TermuxAntiTermAlias"
-            android:targetActivity=".TermuxActivity"
-            android:icon="@mipmap/ic_launcher"
-            android:roundIcon="@mipmap/ic_launcher_round"
-            android:label="@string/anti_term_name"
-            android:theme="@style/Theme.Gemini"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter android:priority="1">
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <!-- Classic Termux Style Launcher Alias -->
-        <activity-alias
-            android:name=".TermuxClassicAlias"
-            android:targetActivity=".TermuxActivity"
-            android:icon="@mipmap/ic_termux_launcher"
-            android:roundIcon="@mipmap/ic_termux_launcher_round"
-            android:label="@string/termux_name"
-            android:theme="@style/Theme.Gemini"
-            android:enabled="false"
-            android:exported="true">
-            <intent-filter android:priority="1">
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-    </application>
+    <application />
 </manifest>

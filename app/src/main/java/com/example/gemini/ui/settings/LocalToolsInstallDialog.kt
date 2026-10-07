@@ -136,11 +136,13 @@ fun LocalToolsInstallDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
+                val isTermux = remember { LocalEnvironmentManager.isTermuxPackage(context) }
+
                 Text(
                     text = when (installerState) {
-                        is LocalInstallerState.Success -> "Local Tools Ready!"
+                        is LocalInstallerState.Success -> if (isTermux) "Local Tools Ready!" else "Ubuntu Container Ready!"
                         is LocalInstallerState.Error -> "Installation Error"
-                        is LocalInstallerState.Idle -> "Install Local Linux Tools"
+                        is LocalInstallerState.Idle -> if (isTermux) "Install Local Linux Tools" else "Install Ubuntu Container (ARM64)"
                         else -> "Setting Up Local Tools"
                     },
                     fontSize = 19.sp,
@@ -150,9 +152,9 @@ fun LocalToolsInstallDialog(
 
                 Text(
                     text = when (installerState) {
-                        is LocalInstallerState.Success -> "Termux-compatible shell, coreutils & toolchain are now active."
+                        is LocalInstallerState.Success -> if (isTermux) "Termux-compatible shell, coreutils & toolchain are now active." else "Ubuntu ARM64 container, bash, glibc & AGY tools are ready."
                         is LocalInstallerState.Error -> "Failed to configure local environment. You can retry below."
-                        is LocalInstallerState.Idle -> "Select how you would like to download and install the Termux rootfs:"
+                        is LocalInstallerState.Idle -> if (isTermux) "Select how you would like to download and install the Termux rootfs:" else "Select how you would like to set up the Ubuntu Linux container for AntiGem:"
                         else -> "Downloading and unpacking native Linux toolchain inside your app sandbox."
                     },
                     fontSize = 12.5.sp,
@@ -302,26 +304,28 @@ fun LocalToolsInstallDialog(
                             if (!LocalEnvironmentManager.isTermuxPackage(context)) {
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
-                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
                                         Text(
-                                            text = "Running as '${context.packageName}'",
+                                            text = "Ubuntu Linux Container (PRoot ARM64)",
                                             fontSize = 12.5.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.error
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                         Spacer(modifier = Modifier.height(3.dp))
                                         Text(
-                                            text = "Native Termux bootstrap binaries require package name 'com.termux' (install via './gradlew installTermuxDebug'). For this standard build, please use SSH Terminal Mode to connect to your Termux app or server.",
+                                            text = "AntiGem runs a full Ubuntu Linux environment inside a user-space PRoot container on 64-bit ARM. No device root required.",
                                             fontSize = 11.5.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
                             }
+
+                            val isTermux = LocalEnvironmentManager.isTermuxPackage(context)
 
                             // Option 1: Auto Download from GitHub (Recommended)
                             Surface(
@@ -348,7 +352,7 @@ fun LocalToolsInstallDialog(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = "Auto Download (GitHub)",
+                                                text = if (isTermux) "Auto Download (GitHub)" else "Ubuntu ARM64 Base (Light)",
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface
@@ -360,11 +364,15 @@ fun LocalToolsInstallDialog(
                                                     .background(QuotaGreen.copy(alpha = 0.15f))
                                                     .padding(horizontal = 5.dp, vertical = 1.dp)
                                             ) {
-                                                Text("Recommended", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = QuotaGreen)
+                                                Text(if (isTermux) "Recommended" else "Official", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = QuotaGreen)
                                             }
                                         }
                                         Text(
-                                            text = "Auto-downloads verified AntiGem rootfs (~350MB) with preconfigured tools and environment",
+                                            text = if (isTermux) {
+                                                "Auto-downloads verified AntiGem rootfs (~350MB) with preconfigured tools and environment"
+                                            } else {
+                                                "Downloads official minimal Ubuntu ARM64 container rootfs with glibc, bash, and development tools"
+                                            },
                                             fontSize = 11.5.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -372,56 +380,7 @@ fun LocalToolsInstallDialog(
                                 }
                             }
 
-                            // Option 1: Base Minimum Termux
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (selectedSourceType == 1) ClaudeTerracotta else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedSourceType = 1 }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = selectedSourceType == 1,
-                                        onClick = { selectedSourceType = 1 },
-                                        colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = "Base Minimum Termux",
-                                                fontSize = 13.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(Color(0xFF6366F1).copy(alpha = 0.15f))
-                                                    .padding(horizontal = 5.dp, vertical = 1.dp)
-                                            ) {
-                                                Text("Minimal (~33MB)", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6366F1))
-                                            }
-                                        }
-                                        Text(
-                                            text = "Downloads clean official Termux base bootstrap (${LocalEnvironmentManager.getBootstrapArch()}) with essential coreutils",
-                                            fontSize = 11.5.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Option 3: Local ZIP File from Storage
+                            // Option 2: Local ZIP File from Storage
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
@@ -443,13 +402,17 @@ fun LocalToolsInstallDialog(
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Local ZIP Archive",
+                                                text = if (isTermux) "Local ZIP Archive" else "Custom Ubuntu Rootfs (.zip)",
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
                                             Text(
-                                                text = "Pick an existing bootstrap .zip file from device (Offline)",
+                                                text = if (isTermux) {
+                                                    "Pick an existing bootstrap .zip file from device (Offline)"
+                                                } else {
+                                                    "Pick an existing container backup or custom rootfs (bootstraps.zip) from phone storage"
+                                                },
                                                 fontSize = 11.5.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -476,6 +439,57 @@ fun LocalToolsInstallDialog(
                                                 fontFamily = FontFamily.Monospace,
                                                 color = QuotaGreen,
                                                 modifier = Modifier.padding(top = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Option 3: Base Minimum Termux (Only for Termux flavor)
+                            if (isTermux) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (selectedSourceType == 1) ClaudeTerracotta else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectedSourceType = 1 }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = selectedSourceType == 1,
+                                            onClick = { selectedSourceType = 1 },
+                                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = "Base Minimum Termux",
+                                                    fontSize = 13.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(Color(0xFF6366F1).copy(alpha = 0.15f))
+                                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                                ) {
+                                                    Text("Minimal (~33MB)", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6366F1))
+                                                }
+                                            }
+                                            Text(
+                                                text = "Downloads clean official Termux base bootstrap (${LocalEnvironmentManager.getBootstrapArch()}) with essential coreutils",
+                                                fontSize = 11.5.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                     }
@@ -511,7 +525,7 @@ fun LocalToolsInstallDialog(
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = "Found Termux Bootstrap Package",
+                                text = if (isTermux) "Found Termux Bootstrap Package" else "Found Ubuntu Container Package",
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -931,7 +945,7 @@ fun LocalToolsInstallDialog(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = when (selectedSourceType) {
-                                        0 -> "Download & Install AntiGem (~350MB)"
+                                        0 -> if (isTermux) "Download & Install AntiGem (~350MB)" else "Download & Install Ubuntu Base"
                                         1 -> "Download Base Termux (~33MB)"
                                         else -> if (selectedFileUri != null) "Install Local ZIP" else "Choose ZIP"
                                     },

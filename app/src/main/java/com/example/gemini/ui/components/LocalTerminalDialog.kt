@@ -80,6 +80,7 @@ fun LocalTerminalDialog(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LocalTerminalContent(
     onClose: () -> Unit,
@@ -286,7 +287,8 @@ fun LocalTerminalContent(
             .fillMaxSize()
             .background(backgroundColor)
             .navigationBarsPadding()
-            .imePadding()
+            // Final keyboard height at animation start: one resize instead of a per-frame terminal reflow
+            .windowInsetsPadding(WindowInsets.imeAnimationTarget)
     ) {
         Column(
             modifier = Modifier

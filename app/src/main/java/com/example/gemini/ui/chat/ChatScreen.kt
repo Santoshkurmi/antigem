@@ -462,7 +462,7 @@ fun ChatScreen(
     var isUserDragging by remember { mutableStateOf(false) }
 
     val density = LocalDensity.current
-    val imeInsets = WindowInsets.ime
+    val imeInsets = WindowInsets.imeAnimationTarget
     var isKeyboardAnimating by remember { mutableStateOf(false) }
 
     val focusCoordinator = com.example.gemini.ui.components.LocalAppFocusCoordinator.current
@@ -1008,7 +1008,7 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) || systemConnectionState.status != com.example.gemini.data.remote.SystemStatus.OFFLINE) {
+                        if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context) || systemConnectionState.status != com.example.gemini.data.remote.SystemStatus.OFFLINE) {
                             val dotColor = systemConnectionState.dotColor
 
                             Box(
@@ -1080,7 +1080,7 @@ fun ChatScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .navigationBarsPadding()
-                    .imePadding()
+                    .windowInsetsPadding(WindowInsets.imeAnimationTarget)
             ) {
                 Box(
                     modifier = Modifier
@@ -2460,7 +2460,7 @@ fun ChatScreen(
                 onDismiss = { currentToast = null },
                 modifier = Modifier
                     .navigationBarsPadding()
-                    .imePadding()
+                    .windowInsetsPadding(WindowInsets.imeAnimationTarget)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             )
         }
@@ -2472,7 +2472,7 @@ fun ChatScreen(
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .navigationBarsPadding()
-            .imePadding()
+            .windowInsetsPadding(WindowInsets.imeAnimationTarget)
             .padding(horizontal = 16.dp, vertical = 12.dp)
             .zIndex(99999f)
     ) { data ->

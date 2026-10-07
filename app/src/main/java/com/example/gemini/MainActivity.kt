@@ -188,7 +188,7 @@ class MainActivity : ComponentActivity() {
             }
             var hasSkippedInstaller by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
 
-            val showFullScreenInstaller = isTermuxPackage && !isInstalledState && !hasSkippedInstaller
+            val showFullScreenInstaller = !isInstalledState && !hasSkippedInstaller
 
             GeminiTheme(darkTheme = useDarkTheme) {
                 Surface(

@@ -79,7 +79,9 @@ class AuthPreferences(private val context: Context) {
         val IS_TERMINAL_LAUNCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_launcher_enabled")
 
         const val DEFAULT_BRIDGE_BINARY_PATH = "~/../usr/bin/agy_ide_bridge"
+        const val DEFAULT_UBUNTU_BRIDGE_BINARY_PATH = "/antigem/bin/agy_ide_bridge"
         const val DEFAULT_AGY_BINARY_PATH = "~/.local/bin/agy"
+        const val DEFAULT_UBUNTU_AGY_BINARY_PATH = "/root/.local/bin/agy"
 
         const val TOKEN_PREFIX = "x-ag"
         const val TOKEN_SUFFIX = "_9qx"
@@ -152,7 +154,7 @@ class AuthPreferences(private val context: Context) {
     val preferredModelKey: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_KEY] }
     val preferredModelName: Flow<String?> = context.dataStore.data.map { it[PREFERRED_MODEL_NAME] }
     val useSshTerminal: Flow<Boolean> = context.dataStore.data.map { 
-        it[USE_SSH_TERMINAL] ?: (context.packageName != "com.termux")
+        it[USE_SSH_TERMINAL] ?: false
     }
     val isLocalToolsEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_ENABLED] ?: false }
     val isLocalToolsInstalled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_INSTALLED] ?: false }
@@ -710,15 +712,21 @@ class AuthPreferences(private val context: Context) {
         context.dataStore.edit { it[SECURITY_TOKEN] = validToken }
     }
 
+    fun getDefaultBridgeBinaryPath(): String =
+        if (context.packageName == "com.termux") DEFAULT_BRIDGE_BINARY_PATH else DEFAULT_UBUNTU_BRIDGE_BINARY_PATH
+
+    fun getDefaultAgyBinaryPath(): String =
+        if (context.packageName == "com.termux") DEFAULT_AGY_BINARY_PATH else DEFAULT_UBUNTU_AGY_BINARY_PATH
+
     val agyBridgeBinaryPath: Flow<String> = context.dataStore.data.map {
         it[AGY_BRIDGE_BINARY_PATH] ?: getAgyBridgeBinaryPathSync()
     }
 
     fun getAgyBridgeBinaryPathSync(): String =
-        syncPrefs.getString("agy_bridge_binary_path", DEFAULT_BRIDGE_BINARY_PATH) ?: DEFAULT_BRIDGE_BINARY_PATH
+        syncPrefs.getString("agy_bridge_binary_path", getDefaultBridgeBinaryPath()) ?: getDefaultBridgeBinaryPath()
 
     suspend fun saveAgyBridgeBinaryPath(path: String) {
-        val trimmed = path.trim().ifBlank { DEFAULT_BRIDGE_BINARY_PATH }
+        val trimmed = path.trim().ifBlank { getDefaultBridgeBinaryPath() }
         syncPrefs.edit().putString("agy_bridge_binary_path", trimmed).apply()
         context.dataStore.edit { it[AGY_BRIDGE_BINARY_PATH] = trimmed }
     }
@@ -728,10 +736,10 @@ class AuthPreferences(private val context: Context) {
     }
 
     fun getAgyBinaryPathSync(): String =
-        syncPrefs.getString("agy_binary_path", DEFAULT_AGY_BINARY_PATH) ?: DEFAULT_AGY_BINARY_PATH
+        syncPrefs.getString("agy_binary_path", getDefaultAgyBinaryPath()) ?: getDefaultAgyBinaryPath()
 
     suspend fun saveAgyBinaryPath(path: String) {
-        val trimmed = path.trim().ifBlank { DEFAULT_AGY_BINARY_PATH }
+        val trimmed = path.trim().ifBlank { getDefaultAgyBinaryPath() }
         syncPrefs.edit().putString("agy_binary_path", trimmed).apply()
         context.dataStore.edit { it[AGY_BINARY_PATH] = trimmed }
     }

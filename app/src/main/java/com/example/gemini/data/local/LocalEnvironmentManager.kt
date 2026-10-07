@@ -66,6 +66,11 @@ object LocalEnvironmentManager {
     const val HARDCODED_ROOTFS_ASSET = "bootrapz_2026-10-04.zip"
     const val HARDCODED_ROOTFS_SIZE_BYTES = 350 * 1024 * 1024L
 
+    const val UBUNTU_ROOTFS_URL = "https://github.com/termux/proot-distro/releases/download/v4.30.1/ubuntu-questing-aarch64-pd-v4.30.1.tar.xz"
+    const val UBUNTU_ROOTFS_TAG = "v4.30.1"
+    const val UBUNTU_ROOTFS_ASSET = "ubuntu-questing-aarch64-pd-v4.30.1.tar.xz"
+    const val UBUNTU_ROOTFS_SIZE_BYTES = 35 * 1024 * 1024L
+
     private const val NOTIFICATION_CHANNEL_ID = "antigem_bootstrap_install"
     private const val NOTIFICATION_ID = 4096
     @Volatile
@@ -166,7 +171,325 @@ object LocalEnvironmentManager {
     fun getTmpDir(context: Context): File = File(getPrefixDir(context), "tmp")
     fun getHomeDir(context: Context): File = File(context.filesDir, "home")
     fun getProjectsDir(context: Context): File = File(getHomeDir(context), "projects")
+    fun getUbuntuRootDir(context: Context): File = File(context.filesDir, "ubuntu")
     fun isTermuxPackage(context: Context): Boolean = context.packageName == "com.termux"
+
+    fun ensureProotExtracted(context: Context): String {
+        val binDir = File(context.filesDir, "bin")
+        val libDir = File(context.filesDir, "lib")
+        binDir.mkdirs()
+        libDir.mkdirs()
+
+        val prootBin = File(binDir, "proot")
+        val loaderBin = File(binDir, "loader")
+        val tallocLib = File(libDir, "libtalloc.so.2")
+        val tallocBin = File(binDir, "libtalloc.so.2")
+
+        try {
+            if (!prootBin.exists() || prootBin.length() < 10000L) {
+                context.assets.open("bin/proot").use { input ->
+                    FileOutputStream(prootBin).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                prootBin.setExecutable(true, false)
+                prootBin.setReadable(true, false)
+                try { Os.chmod(prootBin.absolutePath, 493) } catch (_: Exception) {}
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed extracting proot from assets: ${e.message}")
+        }
+
+        try {
+            if (!loaderBin.exists() || loaderBin.length() < 1000L) {
+                context.assets.open("bin/loader").use { input ->
+                    FileOutputStream(loaderBin).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                loaderBin.setExecutable(true, false)
+                loaderBin.setReadable(true, false)
+                try { Os.chmod(loaderBin.absolutePath, 493) } catch (_: Exception) {}
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed extracting loader from assets: ${e.message}")
+        }
+
+        try {
+            if (!tallocLib.exists() || tallocLib.length() < 1000L) {
+                val assetStream = try {
+                    context.assets.open("lib/libtalloc.so.2")
+                } catch (_: Exception) {
+                    context.assets.open("bin/libtalloc.so.2")
+                }
+                assetStream.use { input ->
+                    FileOutputStream(tallocLib).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                tallocLib.setReadable(true, false)
+                try { Os.chmod(tallocLib.absolutePath, 493) } catch (_: Exception) {}
+            }
+            if (!tallocBin.exists() || tallocBin.length() < 1000L) {
+                if (tallocLib.exists()) {
+                    try {
+                        tallocLib.copyTo(tallocBin, overwrite = true)
+                        tallocBin.setReadable(true, false)
+                        try { Os.chmod(tallocBin.absolutePath, 493) } catch (_: Exception) {}
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed extracting talloc from assets: ${e.message}")
+        }
+
+        if (prootBin.exists() && prootBin.length() > 0L) {
+            prootBin.setExecutable(true, false)
+            prootBin.setReadable(true, false)
+            try { Os.chmod(prootBin.absolutePath, 493) } catch (_: Exception) {}
+            return prootBin.absolutePath
+        }
+
+        val nativeLib = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
+        if (nativeLib.exists() && nativeLib.canExecute()) {
+            return nativeLib.absolutePath
+        }
+
+        return prootBin.absolutePath
+    }
+
+    fun getProotBinaryPath(context: Context): String = ensureProotExtracted(context)
+
+    fun getProotLoaderPath(context: Context): String {
+        ensureProotExtracted(context)
+        return File(File(context.filesDir, "bin"), "loader").absolutePath
+    }
+
+    fun setupFakeSysdata(context: Context): List<Pair<File, String>> {
+        val sysdataDir = File(context.filesDir, "sysdata").apply { mkdirs() }
+        val emptyDir = File(sysdataDir, "sys_empty").apply { mkdirs() }
+
+        val entries = listOf(
+            Triple("loadavg", "/proc/loadavg", "0.12 0.07 0.02 2/165 765\n"),
+            Triple("stat", "/proc/stat", "cpu  1957 0 2877 93280 262 342 254 87 0 0\ncpu0 31 0 226 12027 82 10 4 9 0 0\nintr 127541\nctxt 140223\nbtime 1680020856\nprocesses 772\nprocs_running 2\nprocs_blocked 0\nsoftirq 75663\n"),
+            Triple("uptime", "/proc/uptime", "124.08 932.80\n"),
+            Triple("version", "/proc/version", "Linux version 6.17.0-PRoot-Distro (proot@termux) (gcc (GCC) 13.3.0, GNU ld (GNU Binutils) 2.42) #1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000\n"),
+            Triple("vmstat", "/proc/vmstat", "nr_free_pages 1743136\nnr_inactive_anon 179281\nnr_active_anon 7183\nnr_inactive_file 22858\nnr_active_file 51328\npgpgin 890508\npgpgout 0\npswpin 0\npswpout 0\npgfault 176973\n"),
+            Triple("sysctl_entry_cap_last_cap", "/proc/sys/kernel/cap_last_cap", "40\n"),
+            Triple("sysctl_inotify_max_user_watches", "/proc/sys/fs/inotify/max_user_watches", "4096\n"),
+            Triple("sysctl_kernel_overflowuid", "/proc/sys/kernel/overflowuid", "65534\n"),
+            Triple("sysctl_kernel_overflowgid", "/proc/sys/kernel/overflowgid", "65534\n"),
+            Triple("fips_enabled", "/proc/sys/crypto/fips_enabled", "0\n")
+        )
+
+        val bindings = mutableListOf<Pair<File, String>>()
+        if (File("/sys/fs/selinux").exists()) {
+            bindings.add(emptyDir to "/sys/fs/selinux")
+        }
+
+        for ((name, guestPath, content) in entries) {
+            val file = File(sysdataDir, name)
+            if (!file.exists() || file.length() == 0L) {
+                file.writeText(content)
+            }
+            var readable = false
+            try {
+                val realFile = File(guestPath)
+                if (realFile.exists() && realFile.canRead()) {
+                    FileInputStream(realFile).use { it.read() }
+                    readable = true
+                }
+            } catch (_: Exception) {
+                readable = false
+            }
+            if (!readable || guestPath.contains("fips_enabled")) {
+                bindings.add(file to guestPath)
+            }
+        }
+        return bindings
+    }
+
+    fun setupProotDistroUbuntuFixups(context: Context, ubuntuDir: File) {
+        val resolvConf = File(ubuntuDir, "etc/resolv.conf")
+        resolvConf.parentFile?.mkdirs()
+        resolvConf.writeText("nameserver 8.8.8.8\nnameserver 8.8.4.4\n")
+
+        val hosts = File(ubuntuDir, "etc/hosts")
+        hosts.parentFile?.mkdirs()
+        hosts.writeText(
+            "# IPv4.\n" +
+            "127.0.0.1   localhost.localdomain localhost\n\n" +
+            "# IPv6.\n" +
+            "::1         localhost.localdomain localhost ip6-localhost ip6-loopback\n" +
+            "fe00::0     ip6-localnet\n" +
+            "ff00::0     ip6-mcastprefix\n" +
+            "ff02::1     ip6-allnodes\n" +
+            "ff02::2     ip6-allrouters\n" +
+            "ff02::3     ip6-allhosts\n"
+        )
+
+        // 1. Policy rc.d: exits 101 to prevent systemd service invocation during dpkg install/uninstall (fixes Error 100)
+        val sbinDir = File(ubuntuDir, "usr/sbin").apply { mkdirs() }
+        val policyRcd = File(sbinDir, "policy-rc.d")
+        policyRcd.writeText("#!/bin/sh\nexit 101\n")
+        policyRcd.setExecutable(true, false)
+        policyRcd.setReadable(true, false)
+        try { Os.chmod(policyRcd.absolutePath, 493) } catch (_: Exception) {}
+
+        // 2. APT sandbox root user configuration and cleanup desktop/interactive hooks
+        val aptConfDir = File(ubuntuDir, "etc/apt/apt.conf.d").apply { mkdirs() }
+        File(aptConfDir, "01sandbox").writeText("APT::Sandbox::User \"root\";\nDir::Bin::methods \"/usr/lib/apt/methods\";\n")
+        File(aptConfDir, "02no-recommends").writeText("APT::Install-Recommends \"0\";\nAPT::Install-Suggests \"0\";\n")
+        File(aptConfDir, "20packagekit").delete()
+        File(aptConfDir, "70debconf").delete()
+
+        // 3. Register Android UID/GID in /etc/passwd and /etc/group (matches proot-distro helpers/rootfs.py)
+        try {
+            val uid = android.os.Process.myUid()
+            val etcDir = File(ubuntuDir, "etc").apply { mkdirs() }
+            val passwd = File(etcDir, "passwd")
+            val shadow = File(etcDir, "shadow")
+            val group = File(etcDir, "group")
+            val gshadow = File(etcDir, "gshadow")
+
+            val appUser = "aid_app"
+            if (passwd.exists() && !passwd.readText().contains(appUser)) {
+                passwd.appendText("$appUser:x:$uid:$uid:AndroidApp:/:/sbin/nologin\n")
+            }
+            if (shadow.exists() && !shadow.readText().contains(appUser)) {
+                shadow.appendText("$appUser:*:18446:0:99999:7:::\n")
+            }
+            val groupText = if (group.exists()) group.readText() else ""
+            if (!groupText.contains(appUser)) {
+                group.appendText("$appUser:x:$uid:root,$appUser\n")
+            }
+            val gshadowText = if (gshadow.exists()) gshadow.readText() else ""
+            if (!gshadowText.contains(appUser)) {
+                gshadow.appendText("$appUser:*::root,$appUser\n")
+            }
+
+            // Standard Android supplementary network GIDs from proot-distro
+            val supplementaryGids = listOf(
+                "aid_inet" to 3003,
+                "aid_net_raw" to 3004,
+                "aid_admin" to 3005
+            )
+            for ((gname, gid) in supplementaryGids) {
+                if (!groupText.contains(gname)) {
+                    group.appendText("$gname:x:$gid:root,$appUser\n")
+                }
+                if (!gshadowText.contains(gname)) {
+                    gshadow.appendText("$gname:*::root,$appUser\n")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Non-fatal error registering Android UIDs: ${e.message}")
+        }
+
+        File(ubuntuDir, "tmp").apply {
+            mkdirs()
+            try { Os.chmod(absolutePath, 511) } catch (_: Exception) {}
+        }
+        File(ubuntuDir, "dev").mkdirs()
+        File(ubuntuDir, "proc").mkdirs()
+        File(ubuntuDir, "sys").mkdirs()
+        File(ubuntuDir, "root").mkdirs()
+        val rootBashrc = File(File(ubuntuDir, "root"), ".bashrc")
+        if (!rootBashrc.exists() || !rootBashrc.readText().contains("/usr/local/sbin")) {
+            rootBashrc.appendText("\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH\n")
+        }
+        // Ubuntu's /etc/zsh/zshrc compinit does ~15k fpath stats under proot (~30s first start)
+        val rootZshenv = File(File(ubuntuDir, "root"), ".zshenv")
+        if (!rootZshenv.exists()) {
+            rootZshenv.writeText("skip_global_compinit=1\n")
+        }
+
+        val profileD = File(File(ubuntuDir, "etc"), "profile.d").apply { mkdirs() }
+        val termuxProfile = File(profileD, "termux-profile.sh")
+        termuxProfile.writeText(
+            "export PATH=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH\"\n" +
+            "export HOME=\"/root\"\n" +
+            "export USER=\"root\"\n" +
+            "export LOGNAME=\"root\"\n" +
+            "export TERM=\"xterm-256color\"\n" +
+            "export COLORTERM=\"truecolor\"\n" +
+            "export LANG=\"C.UTF-8\"\n"
+        )
+        try { Os.chmod(termuxProfile.absolutePath, 420) } catch (_: Exception) {}
+
+        ensureRootfsCompatibilityLinks(ubuntuDir)
+    }
+
+    fun ensureRootfsCompatibilityLinks(ubuntuDir: File): Boolean {
+        if (!ubuntuDir.isDirectory) return false
+        val links = mapOf(
+            "bin" to "usr/bin",
+            "lib" to "usr/lib",
+            "sbin" to "usr/sbin"
+        )
+        return runCatching {
+            links.forEach { (name, destination) ->
+                val link = File(ubuntuDir, name)
+                val path = link.toPath()
+                if (java.nio.file.Files.isSymbolicLink(path)) {
+                    val currentTarget = java.nio.file.Files.readSymbolicLink(path).toString()
+                    if (currentTarget != destination) {
+                        java.nio.file.Files.delete(path)
+                        Os.symlink(destination, link.absolutePath)
+                    }
+                } else if (!link.exists()) {
+                    Os.symlink(destination, link.absolutePath)
+                }
+            }
+            File(ubuntuDir, "usr/bin/env").setExecutable(true, false)
+            File(ubuntuDir, "usr/bin/bash").setExecutable(true, false)
+            File(ubuntuDir, "bin/bash").exists() || File(ubuntuDir, "usr/bin/bash").exists()
+        }.onFailure {
+            Log.e(TAG, "Failed ensuring Ubuntu compatibility links: ${it.message}")
+        }.getOrDefault(false)
+    }
+
+    fun isUbuntuInstalled(context: Context): Boolean {
+        val ubuntuDir = getUbuntuRootDir(context)
+        val bash = File(ubuntuDir, "bin/bash")
+        val sh = File(ubuntuDir, "bin/sh")
+        val usrBash = File(ubuntuDir, "usr/bin/bash")
+        return ubuntuDir.exists() && (bash.exists() || sh.exists() || usrBash.exists())
+    }
+
+    fun isInstalled(context: Context): Boolean {
+        if (!isTermuxPackage(context)) {
+            return isUbuntuInstalled(context)
+        }
+        val binDir = getBinDir(context)
+        val homeDir = getHomeDir(context)
+        return (binDir.exists() && binDir.isDirectory && (File(binDir, "sh").exists() || File(binDir, "dash").exists() || File(binDir, "bash").exists() || File(binDir, "busybox").exists())) &&
+                homeDir.exists()
+    }
+
+    fun getInstallPath(context: Context): String {
+        return if (!isTermuxPackage(context)) {
+            getUbuntuRootDir(context).absolutePath
+        } else {
+            getPrefixDir(context).absolutePath
+        }
+    }
+
+    fun getFormattedDiskSpace(context: Context): String {
+        var totalBytes = 0L
+        if (!isTermuxPackage(context)) {
+            val ubuntu = getUbuntuRootDir(context)
+            val home = getHomeDir(context)
+            if (ubuntu.exists()) totalBytes += calculateDirectorySize(ubuntu)
+            if (home.exists()) totalBytes += calculateDirectorySize(home)
+        } else {
+            val prefix = getPrefixDir(context)
+            val home = getHomeDir(context)
+            if (prefix.exists()) totalBytes += calculateDirectorySize(prefix)
+            if (home.exists()) totalBytes += calculateDirectorySize(home)
+        }
+        return formatFileSize(totalBytes)
+    }
 
     fun ensureTermuxApiDispatcher(context: Context) {
         try {
@@ -287,25 +610,7 @@ object LocalEnvironmentManager {
         )
     }
 
-    fun isInstalled(context: Context): Boolean {
-        val binDir = getBinDir(context)
-        val homeDir = getHomeDir(context)
-        return (binDir.exists() && binDir.isDirectory && (File(binDir, "sh").exists() || File(binDir, "dash").exists() || File(binDir, "bash").exists() || File(binDir, "busybox").exists())) &&
-                homeDir.exists()
-    }
 
-    fun getInstallPath(context: Context): String {
-        return getPrefixDir(context).absolutePath
-    }
-
-    fun getFormattedDiskSpace(context: Context): String {
-        val prefix = getPrefixDir(context)
-        val home = getHomeDir(context)
-        var totalBytes = 0L
-        if (prefix.exists()) totalBytes += calculateDirectorySize(prefix)
-        if (home.exists()) totalBytes += calculateDirectorySize(home)
-        return formatFileSize(totalBytes)
-    }
 
     fun calculateDirectorySize(dir: File): Long {
         var size = 0L
@@ -331,15 +636,28 @@ object LocalEnvironmentManager {
     suspend fun discoverBootstrapPackage(context: Context): DiscoveredPackageInfo? = withContext(Dispatchers.IO) {
         val arch = getBootstrapArch()
         val packageName = context.packageName
-        val info = DiscoveredPackageInfo(
-            url = HARDCODED_ROOTFS_URL,
-            releaseTag = HARDCODED_ROOTFS_TAG,
-            assetName = HARDCODED_ROOTFS_ASSET,
-            arch = arch,
-            sizeBytes = HARDCODED_ROOTFS_SIZE_BYTES,
-            sizeFormatted = "~350 MB",
-            packageName = packageName
-        )
+        val isTermux = isTermuxPackage(context)
+        val info = if (isTermux) {
+            DiscoveredPackageInfo(
+                url = HARDCODED_ROOTFS_URL,
+                releaseTag = HARDCODED_ROOTFS_TAG,
+                assetName = HARDCODED_ROOTFS_ASSET,
+                arch = arch,
+                sizeBytes = HARDCODED_ROOTFS_SIZE_BYTES,
+                sizeFormatted = "~350 MB",
+                packageName = packageName
+            )
+        } else {
+            DiscoveredPackageInfo(
+                url = UBUNTU_ROOTFS_URL,
+                releaseTag = UBUNTU_ROOTFS_TAG,
+                assetName = UBUNTU_ROOTFS_ASSET,
+                arch = "arm64",
+                sizeBytes = UBUNTU_ROOTFS_SIZE_BYTES,
+                sizeFormatted = "~29 MB",
+                packageName = packageName
+            )
+        }
         _installerState.value = LocalInstallerState.AwaitingConfirmation(info)
         info
     }
@@ -473,18 +791,24 @@ object LocalEnvironmentManager {
 
             when (source) {
                 is BootstrapSource.Auto -> {
+                    val isTermux = isTermuxPackage(appContext)
+                    val targetUrl = if (isTermux) HARDCODED_ROOTFS_URL else UBUNTU_ROOTFS_URL
+                    val targetAsset = if (isTermux) HARDCODED_ROOTFS_ASSET else UBUNTU_ROOTFS_ASSET
+                    val targetSizeBytes = if (isTermux) HARDCODED_ROOTFS_SIZE_BYTES else UBUNTU_ROOTFS_SIZE_BYTES
+                    val titlePrefix = if (isTermux) "AntiGem Rootfs" else "Ubuntu Rootfs"
+
                     _installerState.value = LocalInstallerState.Downloading(
                         bytesDownloaded = 0L,
-                        totalBytes = HARDCODED_ROOTFS_SIZE_BYTES,
+                        totalBytes = targetSizeBytes,
                         progressFraction = 0.02f,
                         speedText = "Connecting...",
-                        currentPackageName = HARDCODED_ROOTFS_ASSET
+                        currentPackageName = targetAsset
                     )
-                    updateInstallNotification(appContext, "Downloading AntiGem Rootfs", "Connecting...", -1)
+                    updateInstallNotification(appContext, "Downloading $titlePrefix", "Connecting...", -1)
 
                     try {
                         val request = Request.Builder()
-                            .url(HARDCODED_ROOTFS_URL)
+                            .url(targetUrl)
                             .header("User-Agent", "GeminiApp-LocalTerminal/${Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64"}")
                             .build()
 
@@ -505,7 +829,7 @@ object LocalEnvironmentManager {
                             }
 
                             val contentLength = body.contentLength()
-                            val expectedTotal = if (contentLength > 0) contentLength else HARDCODED_ROOTFS_SIZE_BYTES
+                            val expectedTotal = if (contentLength > 0) contentLength else targetSizeBytes
                             var bytesReadTotal = 0L
                             val startTime = System.currentTimeMillis()
 
@@ -530,10 +854,10 @@ object LocalEnvironmentManager {
                                                 totalBytes = expectedTotal,
                                                 progressFraction = fraction,
                                                 speedText = speedFormatted,
-                                                currentPackageName = HARDCODED_ROOTFS_ASSET
+                                                currentPackageName = targetAsset
                                             )
                                             val pct = (fraction * 100).toInt()
-                                            updateInstallNotification(appContext, "Downloading AntiGem Rootfs ($pct%)", "$speedFormatted • $HARDCODED_ROOTFS_ASSET", pct)
+                                            updateInstallNotification(appContext, "Downloading $titlePrefix ($pct%)", "$speedFormatted • $targetAsset", pct)
                                             lastUpdate = now
                                         }
                                     }
@@ -541,18 +865,18 @@ object LocalEnvironmentManager {
                             }
 
                             finalDownloadedSize = tempZipFile.length()
-                            if (finalDownloadedSize >= MIN_BOOTSTRAP_SIZE_BYTES && validateZipIntegrity(tempZipFile)) {
+                            if (finalDownloadedSize >= MIN_BOOTSTRAP_SIZE_BYTES && validateArchiveIntegrity(tempZipFile)) {
                                 downloadSucceeded = true
                             } else {
                                 tempZipFile.delete()
-                                val errorMsg = "Downloaded rootfs ZIP file was incomplete or corrupted."
+                                val errorMsg = "Downloaded rootfs archive was incomplete or corrupted."
                                 updateInstallNotification(appContext, "Installation Failed", errorMsg, -2, ongoing = false, force = true)
                                 _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
                                 return@withContext false
                             }
                         }
                     } catch (e: Exception) {
-                        Log.w(TAG, "Download attempt failed from $HARDCODED_ROOTFS_URL: ${e.message}")
+                        Log.w(TAG, "Download attempt failed from $targetUrl: ${e.message}")
                         if (tempZipFile.exists()) tempZipFile.delete()
                         val errorMsg = "Download failed: ${e.message ?: "Network error"}"
                         updateInstallNotification(appContext, "Installation Failed", errorMsg, -2, ongoing = false, force = true)
@@ -640,7 +964,7 @@ object LocalEnvironmentManager {
                                 }
 
                                 finalDownloadedSize = tempZipFile.length()
-                                if (finalDownloadedSize >= MIN_BOOTSTRAP_SIZE_BYTES && validateZipIntegrity(tempZipFile)) {
+                                if (finalDownloadedSize >= MIN_BOOTSTRAP_SIZE_BYTES && validateArchiveIntegrity(tempZipFile)) {
                                     downloadSucceeded = true
                                 } else {
                                     tempZipFile.delete()
@@ -737,8 +1061,8 @@ object LocalEnvironmentManager {
                                 _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
                                 return@withContext false
                             }
-                            if (!validateZipIntegrity(tempZipFile)) {
-                                val errorMsg = "Downloaded file is not a valid ZIP archive."
+                            if (!validateArchiveIntegrity(tempZipFile)) {
+                                val errorMsg = "Downloaded file is not a valid archive."
                                 tempZipFile.delete()
                                 updateInstallNotification(appContext, "Installation Failed", errorMsg, -2, ongoing = false, force = true)
                                 _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
@@ -760,9 +1084,9 @@ object LocalEnvironmentManager {
                         totalBytes = 35 * 1024 * 1024L,
                         progressFraction = 0.1f,
                         speedText = "Importing file...",
-                        currentPackageName = "Local ZIP Archive"
+                        currentPackageName = "Local Archive"
                     )
-                    updateInstallNotification(appContext, "Importing Linux Rootfs", "Importing ZIP file...", -1, force = true)
+                    updateInstallNotification(appContext, "Importing Linux Rootfs", "Importing archive file...", -1, force = true)
 
                     try {
                         val inStream = appContext.contentResolver.openInputStream(source.uri)
@@ -781,14 +1105,14 @@ object LocalEnvironmentManager {
                         }
                         finalDownloadedSize = tempZipFile.length()
                         if (finalDownloadedSize < MIN_BOOTSTRAP_SIZE_BYTES) {
-                            val errorMsg = "Selected ZIP file is only ${formatFileSize(finalDownloadedSize)} (< 10 MB minimum required)."
+                            val errorMsg = "Selected file is only ${formatFileSize(finalDownloadedSize)} (< 10 MB minimum required)."
                             tempZipFile.delete()
                             updateInstallNotification(appContext, "Installation Failed", errorMsg, -2, ongoing = false, force = true)
                             _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
                             return@withContext false
                         }
-                        if (!validateZipIntegrity(tempZipFile)) {
-                            val errorMsg = "The selected file (${formatFileSize(finalDownloadedSize)}) is not a valid or readable ZIP archive."
+                        if (!validateArchiveIntegrity(tempZipFile)) {
+                            val errorMsg = "The selected file (${formatFileSize(finalDownloadedSize)}) is not a valid or readable archive."
                             tempZipFile.delete()
                             updateInstallNotification(appContext, "Installation Failed", errorMsg, -2, ongoing = false, force = true)
                             _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
@@ -815,42 +1139,60 @@ object LocalEnvironmentManager {
                 return@withContext false
             }
 
-            // Check if this ZIP is a GitHub Actions artifact wrapper containing an inner bootstrap-*.zip or debs.tar.gz
+            // Check if this file is a GZIP/XZ tarball or a ZIP archive
             var innerZipFound: File? = null
             var isDebsOnlyArchive = false
+            var isGzipTar = false
+            var isXzTar = false
 
+            val headerBytes = ByteArray(6)
             try {
-                java.util.zip.ZipFile(tempZipFile).use { outerZip ->
-                    val entries = outerZip.entries()
-                    var hasRootfsFiles = false
-                    while (entries.hasMoreElements()) {
-                        val entry = entries.nextElement()
-                        val name = entry.name
-                        if ((name.endsWith(".zip") && name.contains("bootstrap")) || (name.endsWith(".zip") && !name.contains("__MACOSX"))) {
-                            val innerFile = File(appContext.cacheDir, "inner_bootstrap.zip")
-                            outerZip.getInputStream(entry).use { inStream ->
-                                FileOutputStream(innerFile).use { outStream ->
-                                    inStream.copyTo(outStream)
-                                }
+                FileInputStream(tempZipFile).use { it.read(headerBytes) }
+            } catch (_: Exception) {}
+
+            if (headerBytes.size >= 2 && headerBytes[0] == 0x1f.toByte() && headerBytes[1] == 0x8b.toByte()) {
+                isGzipTar = true
+            } else if (headerBytes.size >= 2 && headerBytes[0] == 0xFD.toByte() && headerBytes[1] == 0x37.toByte()) {
+                isXzTar = true
+            } else {
+                try {
+                    java.util.zip.ZipFile(tempZipFile).use { outerZip ->
+                        val entries = outerZip.entries()
+                        var hasRootfsFiles = false
+                        while (entries.hasMoreElements()) {
+                            val entry = entries.nextElement()
+                            val name = entry.name
+                            val isInnerBootstrapZip = if (isTermuxPackage(appContext)) {
+                                (name.endsWith(".zip") && name.contains("bootstrap")) || (name.endsWith(".zip") && !name.contains("__MACOSX"))
+                            } else {
+                                name.endsWith(".zip") && !name.contains("/")
                             }
-                            innerZipFound = innerFile
-                            break
+                            if (isInnerBootstrapZip) {
+                                val innerFile = File(appContext.cacheDir, "inner_bootstrap.zip")
+                                outerZip.getInputStream(entry).use { inStream ->
+                                    FileOutputStream(innerFile).use { outStream ->
+                                        inStream.copyTo(outStream)
+                                    }
+                                }
+                                innerZipFound = innerFile
+                                break
+                            }
+                            if (name.contains("bin/") || name.contains("usr/")) {
+                                hasRootfsFiles = true
+                            }
+                            if (name.endsWith("debs.tar.gz") || name.endsWith(".deb")) {
+                                isDebsOnlyArchive = true
+                            }
                         }
-                        if (name.contains("bin/") || name.contains("usr/")) {
-                            hasRootfsFiles = true
-                        }
-                        if (name.endsWith("debs.tar.gz") || name.endsWith(".deb")) {
+                        if (!hasRootfsFiles && isDebsOnlyArchive && innerZipFound == null) {
                             isDebsOnlyArchive = true
+                        } else {
+                            isDebsOnlyArchive = false
                         }
                     }
-                    if (!hasRootfsFiles && isDebsOnlyArchive && innerZipFound == null) {
-                        isDebsOnlyArchive = true
-                    } else {
-                        isDebsOnlyArchive = false
-                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error inspecting outer ZIP structure: ${e.message}")
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error inspecting outer ZIP structure: ${e.message}")
             }
 
             val inner = innerZipFound
@@ -862,25 +1204,34 @@ object LocalEnvironmentManager {
             }
 
             // STEP 2: Extract verified bootstrap archive
-            log("Archive ready: ${formatFileSize(archiveToExtract.length())}, isDebsArchive=$isDebsOnlyArchive")
-            Log.d(TAG, "Extracting verified bootstrap archive (${formatFileSize(archiveToExtract.length())}, isDebsArchive=$isDebsOnlyArchive)...")
+            val archiveFormatName = if (isXzTar) "XZ" else if (isGzipTar) "GZIP" else if (isDebsOnlyArchive) "DEB" else "ZIP"
+            log("Archive ready: ${formatFileSize(archiveToExtract.length())}, format=$archiveFormatName")
+            Log.d(TAG, "Extracting verified bootstrap archive (${formatFileSize(archiveToExtract.length())}, format=$archiveFormatName)...")
             _installerState.value = LocalInstallerState.Extracting(
                 extractedFilesCount = 0,
-                totalFilesEstimate = if (isDebsOnlyArchive) 155 else 800,
+                totalFilesEstimate = if (isDebsOnlyArchive) 155 else 1200,
                 progressFraction = 0.05f,
                 currentFileName = "Preparing directory structure..."
             )
             updateInstallNotification(appContext, "Extracting Linux Rootfs (0%)", "Preparing directory structure...", 0, force = true)
 
-            // Reset prefix directory for a clean install
-            if (prefixDir.exists()) {
-                prefixDir.deleteRecursively()
+            // Reset target directory for a clean install
+            if (!isTermuxPackage(appContext)) {
+                val ubuntuDir = getUbuntuRootDir(appContext)
+                if (ubuntuDir.exists()) {
+                    ubuntuDir.deleteRecursively()
+                }
+                ubuntuDir.mkdirs()
+            } else {
+                if (prefixDir.exists()) {
+                    prefixDir.deleteRecursively()
+                }
+                prefixDir.mkdirs()
+                binDir.mkdirs()
+                libDir.mkdirs()
+                etcDir.mkdirs()
+                tmpDir.mkdirs()
             }
-            prefixDir.mkdirs()
-            binDir.mkdirs()
-            libDir.mkdirs()
-            etcDir.mkdirs()
-            tmpDir.mkdirs()
 
             var extractedCount = 0
 
@@ -897,12 +1248,129 @@ object LocalEnvironmentManager {
                     val pct = (fraction * 100).toInt()
                     updateInstallNotification(appContext, "Extracting Packages ($pct%)", "Unpacking $pkgName ($count/$total)", pct)
                 }
+            } else if (isGzipTar || isXzTar) {
+                val isUbuntuMode = !isTermuxPackage(appContext)
+                val destDir = if (isUbuntuMode) getUbuntuRootDir(appContext) else prefixDir
+                log("Extracting rootfs files from $archiveFormatName tarball into ${destDir.absolutePath}...")
+
+                val rawStream = BufferedInputStream(FileInputStream(archiveToExtract))
+                val compressedStream: InputStream = if (isXzTar) {
+                    XZCompressorInputStream(rawStream)
+                } else {
+                    GzipCompressorInputStream(rawStream)
+                }
+                TarArchiveInputStream(compressedStream).use { tarIn ->
+                    var entry: TarArchiveEntry? = tarIn.nextEntry
+                    while (entry != null) {
+                        val rawName = entry.name
+                        val cleanPath = rawName.removePrefix("./").removePrefix("/")
+                        if (cleanPath.isNotEmpty()) {
+                            val isHomePath = cleanPath.startsWith("home/") || cleanPath.contains("/files/home/")
+                            val targetFile = if (isHomePath) {
+                                val relHome = cleanPath
+                                    .replaceFirst(Regex("^.*?files/home/"), "")
+                                    .removePrefix("home/")
+                                    .removePrefix("./")
+                                if (relHome.isBlank()) null else File(homeDir, relHome)
+                            } else if (isUbuntuMode) {
+                                val relUbuntu = ubuntuLegacyRelativePath(cleanPath)
+                                if (relUbuntu.isBlank() || relUbuntu == "/") null else File(destDir, relUbuntu)
+                            } else {
+                                val entryName = cleanPath
+                                    .replaceFirst(Regex("^.*?files/usr/"), "")
+                                    .replaceFirst(Regex("^.*?files/"), "")
+                                    .removePrefix("usr/")
+                                    .removePrefix("./")
+                                if (entryName.isBlank() || entryName == "/") null else File(prefixDir, entryName)
+                            }
+
+                            if (targetFile != null) {
+                                targetFile.parentFile?.let { p ->
+                                    if (!p.exists()) {
+                                        p.mkdirs()
+                                        try { Os.chmod(p.absolutePath, 493) } catch (_: Exception) {}
+                                    }
+                                }
+
+                                if (entry.isSymbolicLink) {
+                                    if (targetFile.exists() || isSymlink(targetFile)) {
+                                        targetFile.setWritable(true, true)
+                                        try { targetFile.delete() } catch (_: Exception) {}
+                                    }
+                                    val symlinkTarget = entry.linkName
+                                    if (!symlinkTarget.isNullOrBlank()) {
+                                        try {
+                                            Os.symlink(symlinkTarget, targetFile.absolutePath)
+                                        } catch (e: Exception) {
+                                            Log.w(TAG, "Failed creating symlink $cleanPath -> $symlinkTarget: ${e.message}")
+                                        }
+                                    }
+                                } else if (entry.isDirectory) {
+                                    targetFile.mkdirs()
+                                    val dirMode = if (isUbuntuMode && entry.mode != 0) {
+                                        (entry.mode and 511) or 448
+                                    } else if (entry.mode != 0) (entry.mode and 511) or 493 else 493
+                                    try { Os.chmod(targetFile.absolutePath, dirMode) } catch (_: Exception) {}
+                                } else {
+                                    if (targetFile.exists() || isSymlink(targetFile)) {
+                                        targetFile.setWritable(true, true)
+                                        try { targetFile.delete() } catch (_: Exception) {}
+                                    }
+                                    try {
+                                        FileOutputStream(targetFile).use { fos ->
+                                            tarIn.copyTo(fos)
+                                        }
+                                        val unixMode = entry.mode and 511
+                                        val isExecutableDir = targetFile.parentFile?.name in listOf("bin", "libexec", "applets", "sbin")
+                                        val isExecutablePath = targetFile.absolutePath.contains("/bin/") || targetFile.absolutePath.contains("/libexec/")
+                                        if (isUbuntuMode && unixMode != 0) {
+                                            // Exact mode from the rootfs tarball (e.g. /etc/shadow 0640)
+                                            try { Os.chmod(targetFile.absolutePath, unixMode) } catch (_: Exception) {}
+                                        } else if (isExecutableDir || isExecutablePath || !targetFile.name.contains(".")) {
+                                            targetFile.setExecutable(true, false)
+                                            targetFile.setReadable(true, false)
+                                            targetFile.setWritable(true, true)
+                                            try { Os.chmod(targetFile.absolutePath, if (unixMode != 0) unixMode or 493 else 493) } catch (_: Exception) {}
+                                        } else {
+                                            targetFile.setReadable(true, false)
+                                            try { Os.chmod(targetFile.absolutePath, if (unixMode != 0) unixMode or 420 else 420) } catch (_: Exception) {}
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Error extracting $rawName to ${targetFile.absolutePath}: ${e.message}")
+                                    }
+                                }
+                            }
+                        }
+
+                        extractedCount++
+                        if (extractedCount % 50 == 0) {
+                            val fraction = (extractedCount.toFloat() / (extractedCount + 300).toFloat()).coerceIn(0.05f, 0.95f)
+                            _installerState.value = LocalInstallerState.Extracting(
+                                extractedFilesCount = extractedCount,
+                                totalFilesEstimate = extractedCount + 300,
+                                progressFraction = fraction,
+                                currentFileName = rawName
+                            )
+                            val pct = (fraction * 100).toInt()
+                            updateInstallNotification(appContext, "Extracting Rootfs ($pct%)", rawName.substringAfterLast("/"), pct)
+                        }
+                        entry = tarIn.nextEntry
+                    }
+                }
             } else {
-                log("Extracting rootfs files from ZIP into ${prefixDir.absolutePath}...")
+                val isUbuntuMode = !isTermuxPackage(appContext)
+                val destDir = if (isUbuntuMode) getUbuntuRootDir(appContext) else prefixDir
+                log("Extracting rootfs files from ZIP into ${destDir.absolutePath}...")
                 val symlinksFromTxt = mutableListOf<Pair<String, String>>()
                 CommonsZipFile(archiveToExtract).use { zip ->
                     val entriesList = zip.entries.toList()
                     val totalEntries = entriesList.size
+                    // Rootfs-relative layout (backup_proot_ubuntu): no "ubuntu/" or host ".../files/ubuntu/" prefix
+                    val isRootfsRelativeZip = isUbuntuMode && entriesList.none { e ->
+                        val n = e.name.removePrefix("./")
+                        n.startsWith("ubuntu/") || ubuntuHostPrefixRegex.containsMatchIn(n)
+                    }
+                    if (isUbuntuMode) log("Ubuntu ZIP layout: ${if (isRootfsRelativeZip) "rootfs-relative" else "ubuntu/ prefixed"}")
 
                     for (entry in entriesList) {
                         val rawName = entry.name
@@ -927,13 +1395,18 @@ object LocalEnvironmentManager {
                         }
 
                         val cleanPath = rawName.removePrefix("./")
-                        val isHomePath = cleanPath.startsWith("home/") || cleanPath.contains("/files/home/")
-                        val targetFile = if (isHomePath) {
+                        val isHomePath = !isRootfsRelativeZip && (cleanPath.startsWith("home/") || cleanPath.contains("/files/home/"))
+                        val targetFile = if (isRootfsRelativeZip) {
+                            if (cleanPath.isBlank() || cleanPath == "/") null else File(destDir, cleanPath)
+                        } else if (isHomePath) {
                             val relHome = cleanPath
                                 .replaceFirst(Regex("^.*?files/home/"), "")
                                 .removePrefix("home/")
                                 .removePrefix("./")
                             if (relHome.isBlank()) null else File(homeDir, relHome)
+                        } else if (isUbuntuMode) {
+                            val relUbuntu = ubuntuLegacyRelativePath(cleanPath)
+                            if (relUbuntu.isBlank() || relUbuntu == "/") null else File(destDir, relUbuntu)
                         } else {
                             val entryName = cleanPath
                                 .replaceFirst(Regex("^.*?files/usr/"), "")
@@ -969,7 +1442,7 @@ object LocalEnvironmentManager {
                                 targetFile.mkdirs()
                                 val dirMode = if (unixMode != 0) unixMode else 493 // 0755
                                 try {
-                                    Os.chmod(targetFile.absolutePath, dirMode)
+                                    Os.chmod(targetFile.absolutePath, if (isUbuntuMode) dirMode or 448 else dirMode)
                                 } catch (e: Exception) {
                                     Log.w(TAG, "chmod failed on directory ${targetFile.name}: ${e.message}")
                                 }
@@ -998,7 +1471,7 @@ object LocalEnvironmentManager {
                                     // Apply exact Unix mode recorded in the ZIP header
                                     if (unixMode != 0) {
                                         try {
-                                            Os.chmod(targetFile.absolutePath, unixMode)
+                                            Os.chmod(targetFile.absolutePath, if (isUbuntuMode) unixMode and 511 else unixMode)
                                         } catch (e: Exception) {
                                             Log.w(TAG, "chmod failed on ${targetFile.name} (mode $unixMode): ${e.message}")
                                         }
@@ -1045,6 +1518,9 @@ object LocalEnvironmentManager {
                                         .removePrefix("home/")
                                         .removePrefix("./")
                                     if (relHome.isBlank()) null else File(homeDir, relHome)
+                                } else if (isUbuntuMode) {
+                                    val relUbuntu = ubuntuLegacyRelativePath(cleanRel)
+                                    if (relUbuntu.isBlank() || relUbuntu == "/") null else File(destDir, relUbuntu)
                                 } else {
                                     val relUsr = cleanRel
                                         .replaceFirst(Regex("^.*?files/usr/"), "")
@@ -1085,18 +1561,30 @@ object LocalEnvironmentManager {
                 progressFraction = 0.90f
             )
             updateInstallNotification(appContext, "Configuring Linux Environment (90%)", "Configuring paths, permissions, and shell profiles...", 90, force = true)
-            configureEnvironmentFiles(appContext, prefixDir, binDir, etcDir, homeDir, projectsDir)
+            
+            if (!isTermuxPackage(appContext)) {
+                val ubuntuDir = getUbuntuRootDir(appContext)
+                setupProotDistroUbuntuFixups(appContext, ubuntuDir)
+                log("Finalizing initial dpkg package triggers...")
+                executeCommand(
+                    command = "DEBIAN_FRONTEND=noninteractive dpkg --configure -a",
+                    context = appContext
+                )
+            } else {
+                configureEnvironmentFiles(appContext, prefixDir, binDir, etcDir, homeDir, projectsDir)
+            }
 
             // STEP 4: Strict Verification
             _installerState.value = LocalInstallerState.Verifying(
-                testName = "Verifying Termux binaries and shell execution..."
+                testName = "Verifying Linux environment and shell execution..."
             )
             updateInstallNotification(appContext, "Verifying Installation (95%)", "Testing shell environment...", 95, force = true)
             delay(200)
 
-            val installedSize = calculateDirectorySize(prefixDir)
+            val checkDir = if (!isTermuxPackage(appContext)) getUbuntuRootDir(appContext) else prefixDir
+            val installedSize = calculateDirectorySize(checkDir)
             val installedSizeStr = formatFileSize(installedSize)
-            log("Total installed prefix size: $installedSizeStr ($installedSize bytes)")
+            log("Total installed rootfs size: $installedSizeStr ($installedSize bytes)")
 
             if (installedSize < 5 * 1024 * 1024L) {
                 val errorMsg = "Verification failed: installed package directory is too small ($installedSizeStr). Installation is incomplete."
@@ -1112,7 +1600,7 @@ object LocalEnvironmentManager {
 
             log("Running verification test command in shell...")
             val testRes = executeCommand(
-                command = "echo 'GEMINI_LOCAL_TOOLS_OK' && pwd && (which bash || which sh || echo 'sh_ok')",
+                command = "echo 'GEMINI_LOCAL_TOOLS_OK' && pwd && which bash",
                 context = appContext
             )
             log("Verification output: ${testRes.output.trim()}")
@@ -1168,28 +1656,45 @@ object LocalEnvironmentManager {
         }
     }
 
-    private fun validateZipIntegrity(file: File): Boolean {
+    private fun validateArchiveIntegrity(file: File): Boolean {
         if (!file.exists() || file.length() < MIN_BOOTSTRAP_SIZE_BYTES) {
             Log.w(TAG, "File size check failed: ${file.length()} bytes (< 10 MB required)")
             return false
         }
         return try {
-            java.util.zip.ZipFile(file).use { zip ->
-                val count = zip.size()
-                Log.d(TAG, "validateZipIntegrity: ZIP contains $count entries")
-                count > 0
+            val header = ByteArray(6)
+            FileInputStream(file).use { it.read(header) }
+            val isGzip = header.size >= 2 && header[0] == 0x1f.toByte() && header[1] == 0x8b.toByte()
+            val isXz = header.size >= 2 && header[0] == 0xFD.toByte() && header[1] == 0x37.toByte()
+            if (isXz) {
+                TarArchiveInputStream(XZCompressorInputStream(BufferedInputStream(FileInputStream(file)))).use { tarIn ->
+                    tarIn.nextEntry != null
+                }
+            } else if (isGzip) {
+                TarArchiveInputStream(GzipCompressorInputStream(BufferedInputStream(FileInputStream(file)))).use { tarIn ->
+                    tarIn.nextEntry != null
+                }
+            } else {
+                java.util.zip.ZipFile(file).use { zip ->
+                    val count = zip.size()
+                    Log.d(TAG, "validateArchiveIntegrity: ZIP contains $count entries")
+                    count > 0
+                }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "ZIP integrity error: ${e.message}", e)
-            try {
-                ZipInputStream(BufferedInputStream(FileInputStream(file))).use { zis ->
-                    zis.nextEntry != null
-                }
-            } catch (_: Exception) {
-                false
-            }
+            Log.w(TAG, "Archive integrity error: ${e.message}", e)
+            false
         }
     }
+
+    private val ubuntuHostPrefixRegex = Regex("^(?:.*/)?files/ubuntu/")
+
+    private fun ubuntuLegacyRelativePath(cleanPath: String): String =
+        cleanPath
+            .replaceFirst(ubuntuHostPrefixRegex, "")
+            .replaceFirst(Regex("^ubuntu-[^/]+/"), "")
+            .removePrefix("ubuntu/")
+            .removePrefix("./")
 
     private fun isSymlink(file: File): Boolean {
         return try {
@@ -1713,6 +2218,119 @@ All files created here persist inside the application.
     ): LocalCommandResult = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         val env = mutableMapOf<String, String>()
+
+        if (context != null && !isTermuxPackage(context) && isUbuntuInstalled(context)) {
+            val prootBin = getProotBinaryPath(context)
+            val ubuntuDir = getUbuntuRootDir(context)
+            val homeDir = getHomeDir(context)
+            val prootTmpDir = File(context.filesDir, "tmp").apply {
+                mkdirs()
+                try { Os.chmod(absolutePath, 511) } catch (_: Exception) {}
+            }
+            val shmDir = File(context.filesDir, "shm").apply {
+                mkdirs()
+                try { Os.chmod(absolutePath, 511) } catch (_: Exception) {}
+            }
+            val sysdataBindings = setupFakeSysdata(context)
+            val cmdList = mutableListOf(
+                prootBin,
+                "--kill-on-exit",
+                "--link2symlink",
+                "--sysvipc",
+                "--kernel-release=\\Linux\\localhost\\6.1.0\\2026.08\\aarch64\\localdomain\\-1\\",
+                "-L",
+                "--change-id=0:0",
+                "--rootfs=${ubuntuDir.absolutePath}",
+                "--cwd=/root",
+                "--bind=/dev",
+                "--bind=/proc",
+                "--bind=/sys",
+                "--bind=/dev/urandom:/dev/random",
+                "--bind=${shmDir.absolutePath}:/dev/shm",
+                "--bind=${prootTmpDir.absolutePath}:/tmp"
+            )
+            for ((fakeFile, guestPath) in sysdataBindings) {
+                cmdList.add("--bind=${fakeFile.absolutePath}:$guestPath")
+            }
+            listOf(
+                "/apex", "/odm", "/product", "/system", "/system_ext", "/vendor",
+                "/plat_property_contexts", "/property_contexts"
+            ).forEach { hostPath ->
+                if (File(hostPath).exists()) {
+                    val destInRootfs = File(ubuntuDir, hostPath.removePrefix("/"))
+                    if (File(hostPath).isDirectory) {
+                        destInRootfs.mkdirs()
+                    } else {
+                        destInRootfs.parentFile?.mkdirs()
+                        if (!destInRootfs.exists()) {
+                            try { destInRootfs.createNewFile() } catch (_: Exception) {}
+                        }
+                    }
+                    cmdList.add("-b")
+                    cmdList.add(hostPath)
+                }
+            }
+            if (File("/storage").exists() && File("/storage").canRead()) {
+                cmdList.add("-b")
+                cmdList.add("/storage")
+            }
+            if (File("/storage/emulated/0").exists()) {
+                cmdList.add("-b")
+                cmdList.add("/storage/emulated/0:/sdcard")
+            } else if (File("/sdcard").exists()) {
+                cmdList.add("-b")
+                cmdList.add("/sdcard")
+            }
+            cmdList.addAll(
+                listOf(
+                    "-b", "${homeDir.absolutePath}:/root/workspace",
+                    "-w", "/root",
+                    "/bin/bash", "-c", command
+                )
+            )
+            val processBuilder = ProcessBuilder(cmdList)
+            processBuilder.environment()["HOME"] = "/root"
+            processBuilder.environment()["USER"] = "root"
+            processBuilder.environment()["TERM"] = "xterm-256color"
+            processBuilder.environment()["LANG"] = "C.UTF-8"
+            processBuilder.environment()["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            processBuilder.environment()["TMPDIR"] = "/tmp"
+            processBuilder.environment()["DEBIAN_FRONTEND"] = "noninteractive"
+            // processBuilder.environment()["PROOT_NO_SECCOMP"] = "1"
+            processBuilder.environment()["PROOT_LOADER"] = getProotLoaderPath(context)
+            processBuilder.environment()["PROOT_TMP_DIR"] = prootTmpDir.absolutePath
+            processBuilder.environment()["LD_LIBRARY_PATH"] = "${context.filesDir.absolutePath}/lib:${context.filesDir.absolutePath}/bin"
+            if (customEnv != null) {
+                processBuilder.environment().putAll(customEnv)
+            }
+            processBuilder.redirectErrorStream(true)
+            return@withContext try {
+                val process = processBuilder.start()
+                val outputBuilder = StringBuilder()
+                val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    outputBuilder.append(line).append("\n")
+                }
+                val exited = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+                val durationMs = System.currentTimeMillis() - startTime
+                if (!exited) {
+                    process.destroyForcibly()
+                    outputBuilder.append("\n[Process timed out after ${timeoutSeconds}s]")
+                    LocalCommandResult(exitCode = 124, output = outputBuilder.toString().trim(), durationMs = durationMs)
+                } else {
+                    LocalCommandResult(exitCode = process.exitValue(), output = outputBuilder.toString().trim(), durationMs = durationMs)
+                }
+            } catch (e: Exception) {
+                val durationMs = System.currentTimeMillis() - startTime
+                Log.e(TAG, "Command execution error: ${e.message}")
+                LocalCommandResult(
+                    exitCode = 1,
+                    output = "Execution failed: ${e.localizedMessage ?: e.message}",
+                    durationMs = durationMs
+                )
+            }
+        }
 
         var resolvedWorkingDir = workingDir
         if (context != null) {

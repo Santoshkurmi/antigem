@@ -96,7 +96,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     ABOUT("About & Info", "App version, package details, and bridge export")
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsDialog(
     userEmail: String?,
@@ -233,6 +233,8 @@ fun SettingsDialog(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var currentSection by remember { mutableStateOf(SettingsSection.MAIN) }
+    // Hoisted so the main list keeps its position while a sub-section is open
+    val mainMenuScrollState = rememberScrollState()
 
     // Intercept system Back button
     BackHandler(enabled = true) {
@@ -256,6 +258,7 @@ fun SettingsDialog(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .windowInsetsPadding(WindowInsets.imeAnimationTarget)
         ) {
             // Top App Bar
             TopAppBar(
@@ -350,6 +353,7 @@ fun SettingsDialog(
                         isLocalToolsInstalled = isLocalToolsInstalled,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
+                        scrollState = mainMenuScrollState,
                         onNavigate = { currentSection = it }
                     )
 
@@ -545,12 +549,13 @@ private fun MainSettingsMenu(
     isLocalToolsInstalled: Boolean = false,
     cardBg: Color,
     cardBorder: BorderStroke,
+    scrollState: androidx.compose.foundation.ScrollState,
     onNavigate: (SettingsSection) -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -2010,7 +2015,7 @@ private fun ServersSubScreen(
                     value = bridgeBinPath,
                     onValueChange = { bridgeBinPath = it; saveFeedback = null },
                     label = { Text("IDE Bridge Binary Path") },
-                    placeholder = { Text(AuthPreferences.DEFAULT_BRIDGE_BINARY_PATH) },
+                    placeholder = { Text(authPrefs.getDefaultBridgeBinaryPath()) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp)
@@ -2022,7 +2027,7 @@ private fun ServersSubScreen(
                     value = agyBinPath,
                     onValueChange = { agyBinPath = it; saveFeedback = null },
                     label = { Text("AGY Hub Binary Path") },
-                    placeholder = { Text(AuthPreferences.DEFAULT_AGY_BINARY_PATH) },
+                    placeholder = { Text(authPrefs.getDefaultAgyBinaryPath()) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp)
@@ -2043,8 +2048,8 @@ private fun ServersSubScreen(
                         sharedHost = "127.0.0.1"
                         hubPort = "1235"
                         bridgePort = "1234"
-                        bridgeBinPath = AuthPreferences.DEFAULT_BRIDGE_BINARY_PATH
-                        agyBinPath = AuthPreferences.DEFAULT_AGY_BINARY_PATH
+                        bridgeBinPath = authPrefs.getDefaultBridgeBinaryPath()
+                        agyBinPath = authPrefs.getDefaultAgyBinaryPath()
                         saveFeedback = "Settings reset to defaults (click Save to apply)."
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -2168,8 +2173,8 @@ private fun ServersSubScreen(
                 val tokenToSave = if (securityToken.length == AuthPreferences.TOKEN_LENGTH) securityToken else AuthPreferences.generateRandomToken()
                 coroutineScope.launch {
                     authPrefs.saveSecurityToken(tokenToSave)
-                    authPrefs.saveAgyBridgeBinaryPath(bridgeBinPath.trim().ifBlank { AuthPreferences.DEFAULT_BRIDGE_BINARY_PATH })
-                    authPrefs.saveAgyBinaryPath(agyBinPath.trim().ifBlank { AuthPreferences.DEFAULT_AGY_BINARY_PATH })
+                    authPrefs.saveAgyBridgeBinaryPath(bridgeBinPath.trim().ifBlank { authPrefs.getDefaultBridgeBinaryPath() })
+                    authPrefs.saveAgyBinaryPath(agyBinPath.trim().ifBlank { authPrefs.getDefaultAgyBinaryPath() })
                 }
                 saveFeedback = "✓ Server, Binaries and Security settings saved!"
                 showRestartDialog = true

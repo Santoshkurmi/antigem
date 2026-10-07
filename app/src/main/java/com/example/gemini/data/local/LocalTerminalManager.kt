@@ -1,6 +1,7 @@
 package com.example.gemini.data.local
 
 import android.content.Context
+import android.system.Os
 import android.util.Log
 import com.example.gemini.data.preferences.AuthPreferences
 import com.jcraft.jsch.ChannelExec
@@ -138,99 +139,215 @@ class LocalPtySession(
                 connectSsh()
             }
         } else {
-            val prefix = LocalEnvironmentManager.getPrefixDir(context)
-            val bin = LocalEnvironmentManager.getBinDir(context)
-            val lib = LocalEnvironmentManager.getLibDir(context)
-            val home = LocalEnvironmentManager.getHomeDir(context)
-            val tmp = LocalEnvironmentManager.getTmpDir(context)
+            val safeCols = if (ptyCols > 0) ptyCols else if (LocalTerminalManager.lastKnownCols > 0) LocalTerminalManager.lastKnownCols else 80
+            val safeRows = if (ptyRows > 0) ptyRows else if (LocalTerminalManager.lastKnownRows > 0) LocalTerminalManager.lastKnownRows else 24
 
-            LocalEnvironmentManager.ensureGlibcEnvironment(context)
-            LocalEnvironmentManager.ensureTermuxApiDispatcher(context)
+            if (!LocalEnvironmentManager.isTermuxPackage(context) && LocalEnvironmentManager.isUbuntuInstalled(context)) {
+                val ubuntuDir = LocalEnvironmentManager.getUbuntuRootDir(context)
+                val prootBin = LocalEnvironmentManager.getProotBinaryPath(context)
+                val homeDir = LocalEnvironmentManager.getHomeDir(context)
 
-            val loginShellBinaries = arrayOf("login", "bash", "zsh", "fish", "sh")
+                val prootTmpDir = File(context.filesDir, "tmp").apply {
+                    mkdirs()
+                    try { Os.chmod(absolutePath, 511) } catch (_: Exception) {}
+                }
+                val shmDir = File(context.filesDir, "shm").apply {
+                    mkdirs()
+                    try { Os.chmod(absolutePath, 511) } catch (_: Exception) {}
+                }
+                val sysdataBindings = LocalEnvironmentManager.setupFakeSysdata(context)
 
-            val shellBinary = when {
-                forceShell != null && File(bin, forceShell).exists() && File(bin, forceShell).canExecute() -> File(bin, forceShell).absolutePath
-                forceShell != null && File(bin, forceShell).exists() -> File(bin, forceShell).absolutePath
-                forceShell != null && File(forceShell).exists() -> File(forceShell).absolutePath
-                else -> {
-                    var found: String? = null
-                    for (name in loginShellBinaries) {
-                        val file = File(bin, name)
-                        if (file.exists() && file.canExecute()) {
-                            found = file.absolutePath
-                            break
+                val prootArgs = mutableListOf(
+                    "proot",
+                    "--kill-on-exit",
+                    "--link2symlink",
+                    "--sysvipc",
+                    "--kernel-release=\\Linux\\localhost\\6.1.0\\2026.08\\aarch64\\localdomain\\-1\\",
+                    "-L",
+                    "--change-id=0:0",
+                    "--rootfs=${ubuntuDir.absolutePath}",
+                    "--cwd=/root",
+                    "--bind=/dev",
+                    "--bind=/proc",
+                    "--bind=/sys",
+                    "--bind=/dev/urandom:/dev/random",
+                    "--bind=${shmDir.absolutePath}:/dev/shm",
+                    "--bind=${prootTmpDir.absolutePath}:/tmp",
+                    "--bind=${LocalEnvironmentManager.getBinDir(context).absolutePath}:/antigem/bin"
+                )
+                for ((fakeFile, guestPath) in sysdataBindings) {
+                    prootArgs.add("--bind=${fakeFile.absolutePath}:$guestPath")
+                }
+                listOf(
+                    "/apex", "/odm", "/product", "/system", "/system_ext", "/vendor",
+                    "/linkerconfig/ld.config.txt", "/linkerconfig/com.android.art/ld.config.txt",
+                    "/plat_property_contexts", "/property_contexts"
+                ).forEach { hostPath ->
+                    if (File(hostPath).exists()) {
+                        val destInRootfs = File(ubuntuDir, hostPath.removePrefix("/"))
+                        if (File(hostPath).isDirectory) {
+                            destInRootfs.mkdirs()
+                        } else {
+                            destInRootfs.parentFile?.mkdirs()
+                            if (!destInRootfs.exists()) {
+                                try { destInRootfs.createNewFile() } catch (_: Exception) {}
+                            }
                         }
+                        prootArgs.add("--bind=$hostPath")
                     }
-                    if (found == null) {
+                }
+                if (File("/storage").exists() && File("/storage").canRead()) {
+                    prootArgs.add("--bind=/storage")
+                }
+                if (File("/storage/emulated/0").exists()) {
+                    prootArgs.add("--bind=/storage/emulated/0:/sdcard")
+                } else if (File("/sdcard").exists()) {
+                    prootArgs.add("--bind=/sdcard")
+                }
+                LocalEnvironmentManager.setupProotDistroUbuntuFixups(context, ubuntuDir)
+
+                val envWrapper = listOf(
+                    "/usr/bin/env", "-i",
+                    "HOME=/root",
+                    "USER=root",
+                    "LOGNAME=root",
+                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "TERM=xterm-256color",
+                    "COLORTERM=truecolor",
+                    "LANG=C.UTF-8",
+                    "TMPDIR=/tmp"
+                )
+                val interactiveShell = if (File(ubuntuDir, "usr/bin/zsh").exists()) "/usr/bin/zsh" else "/bin/bash"
+                if (!initialCommand.isNullOrBlank()) {
+                    if (execShellAfterCommand) {
+                        prootArgs.addAll(envWrapper + listOf("/bin/bash", "-c", "$initialCommand; exec $interactiveShell"))
+                    } else {
+                        prootArgs.addAll(envWrapper + listOf("/bin/bash", "-c", initialCommand))
+                    }
+                } else {
+                    prootArgs.addAll(envWrapper + listOf(interactiveShell, "--login"))
+                }
+
+                terminalSession = TerminalSession(
+                    prootBin,
+                    context.filesDir.absolutePath,
+                    prootArgs.toTypedArray(),
+                    arrayOf(
+                        "HOME=/root",
+                        "USER=root",
+                        "LOGNAME=root",
+                        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                        "TERM=xterm-256color",
+                        "COLORTERM=truecolor",
+                        "LANG=C.UTF-8",
+                        "TMPDIR=/tmp",
+                        "DEBIAN_FRONTEND=noninteractive",
+                        "COLUMNS=$safeCols",
+                        "LINES=$safeRows",
+                        // "PROOT_NO_SECCOMP=1",
+                        "PROOT_LOADER=${LocalEnvironmentManager.getProotLoaderPath(context)}",
+                        "PROOT_TMP_DIR=${prootTmpDir.absolutePath}",
+                        "LD_LIBRARY_PATH=${context.filesDir.absolutePath}/lib:${context.filesDir.absolutePath}/bin"
+                    ),
+                    LocalTerminalManager.currentBufferSize,
+                    this
+                )
+                try {
+                    terminalSession.updateSize(safeCols, safeRows)
+                } catch (_: Exception) {
+                }
+            } else {
+                val prefix = LocalEnvironmentManager.getPrefixDir(context)
+                val bin = LocalEnvironmentManager.getBinDir(context)
+                val lib = LocalEnvironmentManager.getLibDir(context)
+                val home = LocalEnvironmentManager.getHomeDir(context)
+                val tmp = LocalEnvironmentManager.getTmpDir(context)
+
+                LocalEnvironmentManager.ensureGlibcEnvironment(context)
+                LocalEnvironmentManager.ensureTermuxApiDispatcher(context)
+
+                val loginShellBinaries = arrayOf("login", "bash", "zsh", "fish", "sh")
+
+                val shellBinary = when {
+                    forceShell != null && File(bin, forceShell).exists() && File(bin, forceShell).canExecute() -> File(bin, forceShell).absolutePath
+                    forceShell != null && File(bin, forceShell).exists() -> File(bin, forceShell).absolutePath
+                    forceShell != null && File(forceShell).exists() -> File(forceShell).absolutePath
+                    else -> {
+                        var found: String? = null
                         for (name in loginShellBinaries) {
                             val file = File(bin, name)
-                            if (file.exists()) {
+                            if (file.exists() && file.canExecute()) {
                                 found = file.absolutePath
                                 break
                             }
                         }
+                        if (found == null) {
+                            for (name in loginShellBinaries) {
+                                val file = File(bin, name)
+                                if (file.exists()) {
+                                    found = file.absolutePath
+                                    break
+                                }
+                            }
+                        }
+                        found ?: "/system/bin/sh"
                     }
-                    found ?: "/system/bin/sh"
                 }
-            }
 
-            val safeCols = if (ptyCols > 0) ptyCols else if (LocalTerminalManager.lastKnownCols > 0) LocalTerminalManager.lastKnownCols else 80
-            val safeRows = if (ptyRows > 0) ptyRows else if (LocalTerminalManager.lastKnownRows > 0) LocalTerminalManager.lastKnownRows else 24
+                val envMap = LinkedHashMap<String, String>()
+                try {
+                    System.getenv().forEach { (k, v) ->
+                        if (v != null) envMap[k] = v
+                    }
+                } catch (_: Exception) {}
 
-            val envMap = LinkedHashMap<String, String>()
-            try {
-                System.getenv().forEach { (k, v) ->
-                    if (v != null) envMap[k] = v
-                }
-            } catch (_: Exception) {}
+                envMap["PREFIX"] = prefix.absolutePath
+                envMap["HOME"] = home.absolutePath
+                envMap["PATH"] = "${home.absolutePath}/.local/bin:${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin"
+                envMap["TMPDIR"] = tmp.absolutePath
+                envMap["TERM"] = "xterm-256color"
+                envMap["COLORTERM"] = "truecolor"
+                envMap["TERMUX_VERSION"] = "0.118.0"
+                envMap["TERMUX_MAIN_PACKAGE_NAME"] = context.packageName
+                envMap["TERMUX_APK_RELEASE"] = "GITHUB"
+                envMap["TERMUX_APP_PID"] = "${android.os.Process.myPid()}"
+                envMap["TERMUX__USER_ID"] = "0"
+                envMap["SHELL"] = shellBinary
+                envMap["ANDROID_DATA"] = "/data"
+                envMap["ANDROID_ROOT"] = "/system"
+                envMap["LANG"] = "en_US.UTF-8"
+                envMap["LC_ALL"] = "en_US.UTF-8"
+                envMap["COLUMNS"] = "$safeCols"
+                envMap["LINES"] = "$safeRows"
+                envMap["PS1"] = "$ "
 
-            envMap["PREFIX"] = prefix.absolutePath
-            envMap["HOME"] = home.absolutePath
-            envMap["PATH"] = "${home.absolutePath}/.local/bin:${bin.absolutePath}:${bin.absolutePath}/applets:/system/bin:/system/xbin"
-            envMap["TMPDIR"] = tmp.absolutePath
-            envMap["TERM"] = "xterm-256color"
-            envMap["COLORTERM"] = "truecolor"
-            envMap["TERMUX_VERSION"] = "0.118.0"
-            envMap["TERMUX_MAIN_PACKAGE_NAME"] = context.packageName
-            envMap["TERMUX_APK_RELEASE"] = "GITHUB"
-            envMap["TERMUX_APP_PID"] = "${android.os.Process.myPid()}"
-            envMap["TERMUX__USER_ID"] = "0"
-            envMap["SHELL"] = shellBinary
-            envMap["ANDROID_DATA"] = "/data"
-            envMap["ANDROID_ROOT"] = "/system"
-            envMap["LANG"] = "en_US.UTF-8"
-            envMap["LC_ALL"] = "en_US.UTF-8"
-            envMap["COLUMNS"] = "$safeCols"
-            envMap["LINES"] = "$safeRows"
-            envMap["PS1"] = "$ "
+                val envList = envMap.map { "${it.key}=${it.value}" }.toTypedArray()
 
-            val envList = envMap.map { "${it.key}=${it.value}" }.toTypedArray()
-
-            val isLoginShell = shellBinary != "/system/bin/sh"
-            val processName = (if (isLoginShell) "-" else "") + File(shellBinary).name
-            val cwd = if (File(workingDirectory).exists()) workingDirectory else home.absolutePath
-            val shellArgs = if (!initialCommand.isNullOrBlank()) {
-                if (execShellAfterCommand) {
-                    arrayOf(processName, "-c", "$initialCommand; exec $shellBinary")
+                val isLoginShell = shellBinary != "/system/bin/sh"
+                val processName = (if (isLoginShell) "-" else "") + File(shellBinary).name
+                val cwd = if (File(workingDirectory).exists()) workingDirectory else home.absolutePath
+                val shellArgs = if (!initialCommand.isNullOrBlank()) {
+                    if (execShellAfterCommand) {
+                        arrayOf(processName, "-c", "$initialCommand; exec $shellBinary")
+                    } else {
+                        arrayOf(processName, "-c", initialCommand)
+                    }
                 } else {
-                    arrayOf(processName, "-c", initialCommand)
+                    arrayOf(processName)
                 }
-            } else {
-                arrayOf(processName)
-            }
 
-            terminalSession = TerminalSession(
-                shellBinary,
-                cwd,
-                shellArgs,
-                envList,
-                LocalTerminalManager.currentBufferSize,
-                this
-            )
-            try {
-                terminalSession.updateSize(safeCols, safeRows)
-            } catch (_: Exception) {
+                terminalSession = TerminalSession(
+                    shellBinary,
+                    cwd,
+                    shellArgs,
+                    envList,
+                    LocalTerminalManager.currentBufferSize,
+                    this
+                )
+                try {
+                    terminalSession.updateSize(safeCols, safeRows)
+                } catch (_: Exception) {
+                }
             }
         }
     }
@@ -1131,7 +1248,7 @@ object LocalTerminalManager {
         }
 
         val authPrefs = AuthPreferences(context)
-        val defaultUseSsh = !LocalEnvironmentManager.isTermuxPackage(context)
+        val defaultUseSsh = false
         val useSsh = authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh
         val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
         val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
@@ -1387,7 +1504,7 @@ object LocalTerminalManager {
     ) {
         val authPrefs = AuthPreferences(context)
         managerScope.launch {
-            val defaultUseSsh = !LocalEnvironmentManager.isTermuxPackage(context)
+            val defaultUseSsh = false
             val useSsh = authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh
             val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
             val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
