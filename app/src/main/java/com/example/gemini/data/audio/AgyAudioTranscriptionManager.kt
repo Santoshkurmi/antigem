@@ -27,7 +27,7 @@ import kotlin.math.sqrt
 class AgyAudioTranscriptionManager(
     private val agyHubClient: AgyHubClient,
     private val getHubUrl: suspend () -> String
-) {
+) : SpeechTranscriber {
     companion object {
         private const val TAG = "AgyAudioTranscription"
         private const val SAMPLE_RATE = 16000
@@ -48,16 +48,16 @@ class AgyAudioTranscriptionManager(
     val isLivePaused = _isLivePaused.asStateFlow()
 
     private val _latestAmplitude = MutableStateFlow(0.08f)
-    val latestAmplitude = _latestAmplitude.asStateFlow()
+    override val latestAmplitude = _latestAmplitude.asStateFlow()
 
     private var lastTranscribedText = ""
 
     @SuppressLint("MissingPermission")
-    fun startTranscriptionSession(
+    override fun startTranscriptionSession(
         scope: CoroutineScope,
-        cascadeId: String = "",
-        preCursorText: String = "",
-        postCursorText: String = "",
+        cascadeId: String,
+        preCursorText: String,
+        postCursorText: String,
         onPartialText: (String) -> Unit,
         onFinalText: (String) -> Unit,
         onError: (String) -> Unit
@@ -200,7 +200,7 @@ class AgyAudioTranscriptionManager(
         }
     }
 
-    fun stopTranscriptionSession(onDone: ((String) -> Unit)? = null) {
+    override fun stopTranscriptionSession(onDone: ((String) -> Unit)?) {
         val wasRecording = isRecording.getAndSet(false)
         _isLiveStreaming.value = false
         val sid = currentSessionId.value
@@ -237,7 +237,7 @@ class AgyAudioTranscriptionManager(
         }
     }
 
-    fun cancelTranscriptionSession() {
+    override fun cancelTranscriptionSession() {
         isRecording.set(false)
         _isLiveStreaming.value = false
         val sid = currentSessionId.value
@@ -262,7 +262,7 @@ class AgyAudioTranscriptionManager(
         }
     }
 
-    fun pauseTranscriptionSession() {
+    override fun pauseTranscriptionSession() {
         if (isRecording.get()) {
             isPaused.set(true)
             _isLivePaused.value = true
@@ -270,7 +270,7 @@ class AgyAudioTranscriptionManager(
         }
     }
 
-    fun resumeTranscriptionSession() {
+    override fun resumeTranscriptionSession() {
         if (isRecording.get()) {
             isPaused.set(false)
             _isLivePaused.value = false

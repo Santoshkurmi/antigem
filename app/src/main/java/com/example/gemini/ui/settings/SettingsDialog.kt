@@ -1,5 +1,7 @@
 package com.example.gemini.ui.settings
 
+import com.example.gemini.ui.claude.SettingsGroupHeader
+import com.example.gemini.ui.components.ClaudeAccent
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
@@ -92,6 +94,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     BACKUPS("Backups & Restore", "Backup rootfs environment and AGY chat histories"),
     DATA_PROTECTION("Data Loss Protection", "Uninstall shield & App Info clear data protection"),
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
+    CLAUDE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
     DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD"),
     ABOUT("About & Info", "App version, package details, and bridge export")
 }
@@ -228,11 +231,16 @@ fun SettingsDialog(
     isFloatingNetworkInspectorEnabled: Boolean = false,
     onToggleFloatingNetworkInspector: (Boolean) -> Unit = {},
     onOpenNetworkInspector: () -> Unit = {},
+    claude: com.example.gemini.ui.claude.ClaudeSettingsDeps? = null,
+    initialClaudePage: com.example.gemini.ui.claude.ClaudeSettingsPage? = null,
+    enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = com.example.gemini.domain.model.AgentKind.entries.toSet(),
+    onSetAgentEnabled: (com.example.gemini.domain.model.AgentKind, Boolean) -> Unit = { _, _ -> },
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var currentSection by remember { mutableStateOf(SettingsSection.MAIN) }
+    var currentSection by remember { mutableStateOf(if (initialClaudePage != null && claude != null) SettingsSection.CLAUDE else SettingsSection.MAIN) }
+    var claudePage by remember { mutableStateOf(initialClaudePage ?: com.example.gemini.ui.claude.ClaudeSettingsPage.ACCOUNT) }
     // Hoisted so the main list keeps its position while a sub-section is open
     val mainMenuScrollState = rememberScrollState()
 
@@ -354,6 +362,16 @@ fun SettingsDialog(
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         scrollState = mainMenuScrollState,
+                        enabledAgents = enabledAgents,
+                        onSetAgentEnabled = onSetAgentEnabled,
+                        claudeGroup = claude?.let { deps ->
+                            {
+                                com.example.gemini.ui.claude.ClaudeSettingsGroup(deps) { page ->
+                                    claudePage = page
+                                    currentSection = SettingsSection.CLAUDE
+                                }
+                            }
+                        },
                         onNavigate = { currentSection = it }
                     )
 
@@ -521,6 +539,9 @@ fun SettingsDialog(
                         cardBorder = cardBorder
                     )
 
+                    SettingsSection.CLAUDE -> if (claude != null) {
+                        com.example.gemini.ui.claude.ClaudeSettingsScreen(claude, claudePage) { currentSection = SettingsSection.MAIN }
+                    }
                     SettingsSection.ABOUT -> AboutSubScreen(
                         cardBg = cardBg,
                         cardBorder = cardBorder
@@ -550,6 +571,9 @@ private fun MainSettingsMenu(
     cardBg: Color,
     cardBorder: BorderStroke,
     scrollState: androidx.compose.foundation.ScrollState,
+    claudeGroup: (@Composable () -> Unit)? = null,
+    enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = com.example.gemini.domain.model.AgentKind.entries.toSet(),
+    onSetAgentEnabled: (com.example.gemini.domain.model.AgentKind, Boolean) -> Unit = { _, _ -> },
     onNavigate: (SettingsSection) -> Unit
 ) {
     Column(
@@ -559,23 +583,13 @@ private fun MainSettingsMenu(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Section 1: Appearance & Display
-        val themeLabel = when (themeMode) {
-            "DARK" -> "Dark Mode"
-            "LIGHT" -> "Light Mode"
-            else -> "Auto (System)"
-        }
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Palette,
-            iconTint = ClaudeTerracotta,
-            title = "Appearance & Theme",
-            subtitle = "$themeLabel • ${(chatFontScale * 100).toInt()}% text scale",
-            badgeText = themeLabel,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.APPEARANCE) }
+        SettingsGroupHeader(
+            "Antigravity",
+            GeminiBlue,
+            "Google Antigravity agent (agy hub)",
+            enabled = com.example.gemini.domain.model.AgentKind.AGY in enabledAgents,
+            onEnabledChange = { onSetAgentEnabled(com.example.gemini.domain.model.AgentKind.AGY, it) }
         )
-
         // Section 2: Servers & Network
         val (serverBadge, serverColor) = when {
             isServerOnline && isBridgeOnline -> "Online" to QuotaGreen
@@ -633,6 +647,54 @@ private fun MainSettingsMenu(
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.SKILLS_PLUGINS) }
+        )
+
+        // Section 5: Commands & Permissions
+        val (policyBadge, policyColor) = when {
+            commandAutoExecutionPolicy.contains("EAGER", ignoreCase = true) -> "⚡ Auto-Run" to QuotaGreen
+            commandAutoExecutionPolicy.contains("AUTO", ignoreCase = true) -> "🛡️ Smart Safety" to Color(0xFF00ACC1)
+            else -> "✋ Ask User" to Color(0xFFF59E0B)
+        }
+        val sandboxSummary = if (commandSandboxEnabled) "Sandbox ON" else "Sandbox OFF"
+        SettingsCategoryCard(
+            icon = Icons.Outlined.Security,
+            iconTint = policyColor,
+            title = "Commands & Permissions",
+            subtitle = "Policy: $policyBadge • $sandboxSummary",
+            badgeText = policyBadge,
+            badgeColor = policyColor,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.COMMANDS) }
+        )
+
+        if (claudeGroup != null) {
+            SettingsGroupHeader(
+                "Claude Code",
+                ClaudeAccent,
+                "Anthropic Claude Code CLI",
+                enabled = com.example.gemini.domain.model.AgentKind.CLAUDE in enabledAgents,
+                onEnabledChange = { onSetAgentEnabled(com.example.gemini.domain.model.AgentKind.CLAUDE, it) }
+            )
+            claudeGroup()
+        }
+
+        SettingsGroupHeader("App", MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), "Shared by both agents")
+        // Section 1: Appearance & Display
+        val themeLabel = when (themeMode) {
+            "DARK" -> "Dark Mode"
+            "LIGHT" -> "Light Mode"
+            else -> "Auto (System)"
+        }
+        SettingsCategoryCard(
+            icon = Icons.Outlined.Palette,
+            iconTint = ClaudeTerracotta,
+            title = "Appearance & Theme",
+            subtitle = "$themeLabel • ${(chatFontScale * 100).toInt()}% text scale",
+            badgeText = themeLabel,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.APPEARANCE) }
         )
 
         // Section 4: Automation & Device Bridge
@@ -698,25 +760,6 @@ private fun MainSettingsMenu(
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.DATA_PROTECTION) }
-        )
-
-        // Section 5: Commands & Permissions
-        val (policyBadge, policyColor) = when {
-            commandAutoExecutionPolicy.contains("EAGER", ignoreCase = true) -> "⚡ Auto-Run" to QuotaGreen
-            commandAutoExecutionPolicy.contains("AUTO", ignoreCase = true) -> "🛡️ Smart Safety" to Color(0xFF00ACC1)
-            else -> "✋ Ask User" to Color(0xFFF59E0B)
-        }
-        val sandboxSummary = if (commandSandboxEnabled) "Sandbox ON" else "Sandbox OFF"
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Security,
-            iconTint = policyColor,
-            title = "Commands & Permissions",
-            subtitle = "Policy: $policyBadge • $sandboxSummary",
-            badgeText = policyBadge,
-            badgeColor = policyColor,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.COMMANDS) }
         )
 
         // Section 6: Diagnostics & Performance

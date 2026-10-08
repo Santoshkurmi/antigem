@@ -1,5 +1,6 @@
 package com.example.gemini.data.agent
 
+import com.example.gemini.domain.model.AgentKind
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.Conversation
 import kotlinx.coroutines.flow.StateFlow

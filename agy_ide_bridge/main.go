@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"gemini-server/pkg/claude"
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/handlers"
 	"gemini-server/pkg/hub"
@@ -33,6 +34,7 @@ Usage:
 Flags:
   -u, --unpatch             Unpatch AGY binary back to standard header and exit (do not start server)
   --bin <path>              Custom path to AGY binary (for --unpatch or custom setups)
+  --claude-bin <path>       Custom path to the Claude Code CLI (default: claude on PATH)
   -t, --token <token>       12-character security token for API & AGY CSRF obfuscation
   -f, --force, --f          Force start AGY Hub automatically without prompting
   -p, --port <port>         Port for the Go IDE Server (default: 1234)
@@ -110,6 +112,7 @@ func main() {
 
 	var unpatchOnly bool
 	var customAgyBin string
+	var customClaudeBin string
 	var forceStart bool
 	var skipHub bool
 	var cliToken string
@@ -128,6 +131,13 @@ func main() {
 		case arg == "--bin" || arg == "--agy-bin":
 			if i+1 < len(os.Args) {
 				customAgyBin = os.Args[i+1]
+				i++
+			}
+		case strings.HasPrefix(arg, "--claude-bin="):
+			customClaudeBin = strings.TrimPrefix(arg, "--claude-bin=")
+		case arg == "--claude-bin":
+			if i+1 < len(os.Args) {
+				customClaudeBin = os.Args[i+1]
 				i++
 			}
 		case strings.HasPrefix(arg, "--token="):
@@ -258,6 +268,10 @@ func main() {
 	h.SetHub(wsHub)
 
 	mux := http.NewServeMux()
+
+	// Claude Code CLI sessions (process manager + NDJSON WebSocket relay)
+	claudeMgr := claude.NewManager(cfg.HomeDir, cfg.WorkspaceDir, customClaudeBin)
+	mux.Handle("/api/claude/", claudeMgr)
 
 	// REST Endpoints
 	mux.HandleFunc("/api/health", h.HealthHandler)
@@ -544,7 +558,8 @@ func main() {
 	// 1. Close all active WebSocket client connections immediately
 	wsHub.Close()
 
-	// 2. Stop AGY Hub process group and continuous background monitor
+	// 2. Stop Claude Code sessions, then the AGY Hub process group and continuous background monitor
+	claudeMgr.StopAll()
 	if hubMgr != nil {
 		hubMgr.Stop()
 	}

@@ -35,7 +35,7 @@ import android.util.Log
 import org.json.JSONObject
 import java.util.UUID
 import com.example.gemini.data.agent.AgentChatBackend
-import com.example.gemini.data.agent.AgentKind
+import com.example.gemini.domain.model.AgentKind
 import com.example.gemini.data.agent.ChatSessionStore
 import com.example.gemini.ui.chat.PendingToolApproval
 import kotlinx.coroutines.CoroutineScope
@@ -870,6 +870,9 @@ class AgyChatBackend(
         Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel.startPersistentStream] convId=$conversationId, current activeId=$activeStreamConversationId, jobActive=${persistentStreamJob?.isActive}")
         if (conversationId.isBlank()) return
 
+        // Another agent's chat is on screen: never stream it from the AGY hub
+        if (_currentConversation.value?.let { it.id == conversationId && it.agent != AgentKind.AGY } == true) return
+
         // Brand new unsaved conversation: do not fetch trajectory from backend
         val isNewUnsaved = (_currentConversation.value?.id == conversationId && _currentConversation.value?.title == "New Chat" && _messages.value.isEmpty()) && !_conversations.value.any { it.id == conversationId }
         if (isNewUnsaved) {
@@ -1082,7 +1085,7 @@ class AgyChatBackend(
         _selectedModelId.value = modelId
         _bridgeStatusMessage.value = null
         val conv = _currentConversation.value
-        if (conv != null) {
+        if (conv != null && conv.agent == AgentKind.AGY) {
             val updated = conv.copy(modelId = modelId)
             _currentConversation.value = updated
             _conversations.value = _conversations.value.map { if (it.id == updated.id) updated else it }
@@ -2130,6 +2133,20 @@ class AgyChatBackend(
     fun resetQuotaState() {
         _quotas.value = emptyList()
         _quotaSummary.value = null
+    }
+
+    /** Stops streaming the current AGY chat because another agent's chat is being opened. */
+    fun detach() {
+        persistentStreamJob?.cancel()
+        persistentStreamJob = null
+        activeStreamConversationId = null
+        currentAssistantMsgId = null
+        isPromptInFlight = false
+        hasStartedRunning = false
+        hasSeenTurnActivity = false
+        _isStreaming.value = false
+        _isLoadingConversation.value = false
+        _bridgeStatusMessage.value = null
     }
 
     fun dispose() {

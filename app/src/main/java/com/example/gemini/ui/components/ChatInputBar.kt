@@ -168,10 +168,12 @@ fun ChatInputBar(
     onAttachClick: () -> Unit = {},
     onTranscribeAudioFile: ((File, onDone: (String) -> Unit, onError: (String) -> Unit) -> Unit)? = null,
     isTranscribingAudio: Boolean = false,
-    speechManager: com.example.gemini.data.audio.AgyAudioTranscriptionManager? = null,
+    speechManager: com.example.gemini.data.audio.SpeechTranscriber? = null,
     cascadeId: String = "",
     isOnline: Boolean = true,
     isAuth: Boolean = true,
+    /** Shown when sending is blocked because [isOnline] is false. */
+    offlineMessage: String = "Server is offline. Start the server to send messages.",
     focusRequester: FocusRequester = remember { FocusRequester() },
     modifier: Modifier = Modifier
 ) {
@@ -1221,7 +1223,7 @@ fun ChatInputBar(
                                             return@Surface
                                         }
                                         if (!isOnline) {
-                                            Toast.makeText(context, "Server is offline. Start the server to send messages.", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, offlineMessage, Toast.LENGTH_SHORT).show()
                                             return@Surface
                                         }
                                         if (isLiveDictating) {

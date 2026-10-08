@@ -29,6 +29,9 @@ import com.example.gemini.domain.model.*
 import com.example.gemini.theme.ClaudeTerracotta
 import com.example.gemini.theme.QuotaGreen
 
+/** True where the chat shows unanswered questions in the docked question panel; the card then stays compact. */
+val LocalQuestionPanelActive = staticCompositionLocalOf { false }
+
 @Composable
 fun ChoiceQuestionnaireCard(
     toolCall: ToolCall,
@@ -75,6 +78,11 @@ fun ChoiceQuestionnaireCard(
                 )
             }
         }
+        return
+    }
+
+    if (LocalQuestionPanelActive.current && !isCompleted) {
+        QuestionPanelStatusRow(toolCall, questionnaire, modifier)
         return
     }
 
@@ -597,7 +605,7 @@ private fun OptionRow(
     }
 }
 
-private fun formatSelectionsSummary(
+internal fun formatSelectionsSummary(
     questionnaire: ChoiceQuestionnaire,
     selectedOptions: Map<String, Set<String>>,
     otherSelected: Map<String, Boolean>,
@@ -692,3 +700,48 @@ private fun parseAnswerSummary(output: String, questionnaire: ChoiceQuestionnair
     return results
 }
 
+
+/** Compact in-chat state of a question answered through the docked panel. */
+@Composable
+private fun QuestionPanelStatusRow(toolCall: ToolCall, questionnaire: ChoiceQuestionnaire, modifier: Modifier) {
+    val waiting = toolCall.status == "AWAITING_CHOICE"
+    val (title, tint) = when {
+        waiting -> "Waiting for your answer" to ClaudeTerracotta
+        toolCall.status == "RUNNING" -> "Answer sent" to QuotaGreen
+        else -> "Question dismissed" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+    }
+    Surface(
+        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = tint.copy(alpha = 0.06f),
+        border = BorderStroke(1.dp, tint.copy(alpha = 0.3f))
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.Top) {
+            Icon(
+                if (waiting) Icons.AutoMirrored.Outlined.HelpOutline else Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(17.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                questionnaire.questions.take(3).forEach { q ->
+                    Text(
+                        "• ${q.prompt}",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+                if (questionnaire.questions.size > 3) {
+                    Text("+${questionnaire.questions.size - 3} more", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                }
+                if (waiting) {
+                    Text("Answer in the panel above the message box.", fontSize = 11.5.sp, color = tint, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
+}

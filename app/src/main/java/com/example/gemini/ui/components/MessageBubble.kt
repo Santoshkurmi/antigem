@@ -770,6 +770,14 @@ fun TokenUsageTelemetryPill(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            if (usage.costUsd != null && usage.costUsd > 0.0) {
+                Text(
+                    text = "$" + String.format(java.util.Locale.US, if (usage.costUsd < 0.01) "%.4f" else "%.3f", usage.costUsd),
+                    fontSize = 10.5.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (usage.isEstimated) {
                 Text(
                     text = "(est.)",

@@ -52,7 +52,8 @@ data class TokenUsage(
     val cacheCreationTokens: Int = 0,
     val totalTokens: Int = 0,
     val durationMs: Long = 0L,
-    val isEstimated: Boolean = false
+    val isEstimated: Boolean = false,
+    val costUsd: Double? = null
 )
 
 @Serializable
@@ -118,7 +119,8 @@ data class Conversation(
     val parentConversationId: String? = null,
     val subagentRole: String? = null,
     val subagentTypeName: String? = null,
-    val nestingDepth: Int = 0
+    val nestingDepth: Int = 0,
+    val agent: AgentKind = AgentKind.AGY
 )
 
 enum class ModelFamily {

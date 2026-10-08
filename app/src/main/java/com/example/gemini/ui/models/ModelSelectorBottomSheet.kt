@@ -272,62 +272,14 @@ private fun MainCategoryListView(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 20.dp)
     ) {
-        // Compact Centered Header
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "Select Model",
-                    fontSize = 17.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = if (availableModelsCount > 0) "$availableModelsCount models available" else "No models loaded",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            val rotation by if (isRefreshing) {
-                val infiniteTransition = rememberInfiniteTransition(label = "spin")
-                infiniteTransition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = 360f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(800, easing = LinearEasing),
-                        repeatMode = RepeatMode.Restart
-                    ),
-                    label = "spin_angle"
-                )
-            } else {
-                remember { mutableFloatStateOf(0f) }
-            }
-
-            IconButton(
-                onClick = onRefresh,
-                enabled = !isRefreshing,
-                modifier = Modifier
-                    .size(36.dp)
-                    .align(Alignment.CenterEnd)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Refresh,
-                    contentDescription = "Refresh models & quotas",
-                    tint = ClaudeTerracotta,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .rotate(rotation)
-                )
-            }
-        }
+        // Agent header (same as the Claude Code picker)
+        com.example.gemini.ui.agents.AgentSheetHeader(
+            agent = com.example.gemini.domain.model.AgentKind.AGY,
+            title = "Select model",
+            detail = if (availableModelsCount > 0) "$availableModelsCount models" else "no models loaded",
+            refreshing = isRefreshing,
+            onRefresh = onRefresh
+        )
 
         Spacer(modifier = Modifier.height(14.dp))
 
