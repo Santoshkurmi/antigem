@@ -50,8 +50,6 @@ type SpawnOptions struct {
 	ResumeSessionAt string `json:"resume_session_at,omitempty"`
 	// Thinking is "on" or "off".
 	Thinking string `json:"thinking,omitempty"`
-	// AllowBypass enables the bypassPermissions mode for this process.
-	AllowBypass string `json:"allow_bypass,omitempty"`
 }
 
 // Manager owns all Claude sessions of this bridge.
@@ -265,9 +263,6 @@ func (s *Session) Configure(o SpawnOptions) {
 	if o.Thinking != "" {
 		s.opts.Thinking = o.Thinking
 	}
-	if o.AllowBypass != "" {
-		s.opts.AllowBypass = o.AllowBypass
-	}
 }
 
 // Write sends one NDJSON line to the process, spawning it first if needed.
@@ -301,9 +296,16 @@ func (s *Session) spawnLocked() error {
 	if s.opts.Model != "" {
 		args = append(args, "--model", s.opts.Model)
 	}
-	if s.opts.PermissionMode != "" {
-		args = append(args, "--permission-mode", s.opts.PermissionMode)
+	// Bypass (skip every permission check) is never used: the app runs Claude in Auto unless the user chose a
+	// default mode in settings.json (Auto falls back to Manual on models without it)
+	mode := s.opts.PermissionMode
+	if mode == "" {
+		mode = s.mgr.defaultPermissionMode()
 	}
+	if mode == "bypassPermissions" {
+		mode = "auto"
+	}
+	args = append(args, "--permission-mode", mode)
 	if s.opts.Effort != "" {
 		args = append(args, "--effort", s.opts.Effort)
 	}
@@ -313,8 +315,9 @@ func (s *Session) spawnLocked() error {
 	case "on":
 		args = append(args, "--max-thinking-tokens", "31999")
 	}
-	if s.opts.AllowBypass == "1" {
-		args = append(args, "--allow-dangerously-skip-permissions")
+	// attachments of every chat live under one folder Claude may read without asking
+	if root := s.mgr.attachmentsRoot(); os.MkdirAll(root, 0o700) == nil {
+		args = append(args, "--add-dir", root)
 	}
 
 	transcript := s.mgr.FindTranscript(s.ID)

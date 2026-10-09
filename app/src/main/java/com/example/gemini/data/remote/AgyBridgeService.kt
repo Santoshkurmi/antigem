@@ -65,7 +65,7 @@ enum class BridgeConnectionState {
 
 data class AgyHubStatus(
     val status: String = "idle", // "idle", "starting", "online", "error", "stopped"
-    val port: String = "1235",
+    val port: String = com.example.gemini.BuildConfig.HUB_PORT.toString(),
     val csrfToken: String? = null,
     val error: String? = null,
     val logs: List<String> = emptyList()
@@ -425,7 +425,7 @@ class AgyBridgeService(
                     val json = JSONObject(body)
                     val hubObj = json.optJSONObject("hub")
                     val st = hubObj?.optString("status", if (hubObj.optBoolean("active", false)) "online" else "stopped") ?: "stopped"
-                    val p = java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "1235"
+                    val p = java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: com.example.gemini.BuildConfig.HUB_PORT.toString()
                     val csrf = hubObj?.optString("csrf_token")?.takeIf { it.isNotBlank() }
                     val err = hubObj?.optString("error")?.takeIf { it.isNotBlank() }
                     val logsArr = hubObj?.optJSONArray("logs")
@@ -484,7 +484,7 @@ class AgyBridgeService(
                         "hub_status" -> {
                             val st = root.optString("status", "idle")
                             val p = root.optString("port").takeIf { it.isNotBlank() }
-                                ?: java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: "1235"
+                                ?: java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: com.example.gemini.BuildConfig.HUB_PORT.toString()
                             val csrf = root.optString("csrf_token").takeIf { it.isNotBlank() }
                                 ?: root.optString("csrfToken").takeIf { it.isNotBlank() }
                             val err = root.optString("error").takeIf { it.isNotBlank() }

@@ -20,6 +20,63 @@ import (
 
 func (m *Manager) settingsPath() string { return filepath.Join(m.HomeDir, ".claude", "settings.json") }
 
+// defaultPermissionMode is the mode new Claude processes start in: settings.json `permissions.defaultMode` when the
+// user set one, otherwise Auto. Bypass is never returned (the app does not skip permission checks).
+func (m *Manager) defaultPermissionMode() string {
+	var s struct {
+		Permissions struct {
+			DefaultMode string `json:"defaultMode"`
+		} `json:"permissions"`
+	}
+	if raw, err := os.ReadFile(m.settingsPath()); err == nil && json.Unmarshal(raw, &s) == nil {
+		switch mode := s.Permissions.DefaultMode; mode {
+		case "", "bypassPermissions":
+		default:
+			return mode
+		}
+	}
+	return "auto"
+}
+
+// handleSandbox reports whether Claude Code's command sandbox can run here (bubblewrap + socat, and bubblewrap
+// actually able to start a container, which proot usually is not) and whether settings.json enables it.
+func (m *Manager) handleSandbox(w http.ResponseWriter, r *http.Request) {
+	resp := map[string]interface{}{"success": true, "available": false}
+	var s struct {
+		Sandbox struct {
+			Enabled bool `json:"enabled"`
+		} `json:"sandbox"`
+	}
+	if raw, err := os.ReadFile(m.settingsPath()); err == nil && json.Unmarshal(raw, &s) == nil {
+		resp["enabled"] = s.Sandbox.Enabled
+	}
+	bwrap, err := exec.LookPath("bwrap")
+	if err != nil {
+		resp["reason"] = "bubblewrap (bwrap) is not installed"
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	if _, err := exec.LookPath("socat"); err != nil {
+		resp["reason"] = "socat is not installed"
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, bwrap, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--unshare-net", "true").CombinedOutput()
+	if err != nil {
+		reason := strings.TrimSpace(string(out))
+		if reason == "" {
+			reason = err.Error()
+		}
+		resp["reason"] = "bubblewrap cannot create a sandbox here: " + reason
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	resp["available"] = true
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (m *Manager) handleSettings(w http.ResponseWriter, r *http.Request) {
 	path := m.settingsPath()
 	switch r.Method {

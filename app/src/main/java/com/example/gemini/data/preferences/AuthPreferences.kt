@@ -110,8 +110,16 @@ class AuthPreferences(private val context: Context) {
         val currentFramedHeader: String
             get() = buildFramedHeader(currentSecurityToken)
 
-        const val DEFAULT_HUB_URL = "http://127.0.0.1:1235"
-        const val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:1234"
+        // per app (see the build flavors): com.antigem uses other ports than com.termux so both can run together
+        val DEFAULT_HUB_URL = "http://127.0.0.1:${com.example.gemini.BuildConfig.HUB_PORT}"
+        val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:${com.example.gemini.BuildConfig.BRIDGE_PORT}"
+
+        /** The defaults every install used before ports became per app; a saved copy of them follows the new default. */
+        private const val LEGACY_HUB_URL = "http://127.0.0.1:1235"
+        private const val LEGACY_BRIDGE_HTTP_URL = "http://127.0.0.1:1234"
+
+        fun migrateHubUrl(url: String): String = if (url.trimEnd('/') == LEGACY_HUB_URL) DEFAULT_HUB_URL else url
+        fun migrateBridgeUrl(url: String): String = if (url.trimEnd('/') == LEGACY_BRIDGE_HTTP_URL) DEFAULT_BRIDGE_HTTP_URL else url
 
         @Volatile
         var currentHubUrl: String = DEFAULT_HUB_URL
@@ -134,8 +142,8 @@ class AuthPreferences(private val context: Context) {
     init {
         val savedHub = syncPrefs.getString("agy_hub_url", null)
         val savedBridgeHttp = syncPrefs.getString("agy_bridge_http_url", null)
-        if (!savedHub.isNullOrBlank()) currentHubUrl = savedHub
-        if (!savedBridgeHttp.isNullOrBlank()) currentBridgeHttpUrl = savedBridgeHttp
+        if (!savedHub.isNullOrBlank()) currentHubUrl = migrateHubUrl(savedHub)
+        if (!savedBridgeHttp.isNullOrBlank()) currentBridgeHttpUrl = migrateBridgeUrl(savedBridgeHttp)
         val inspectorOn = syncPrefs.getBoolean("is_network_inspector_enabled", false)
         val inspectorFloating = syncPrefs.getBoolean("is_floating_network_inspector_enabled", false)
         com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled = inspectorOn
@@ -170,13 +178,13 @@ class AuthPreferences(private val context: Context) {
     fun isFlowAutomationEnabledSync(): Boolean = syncPrefs.getBoolean("is_flow_automation_enabled", false)
 
     val agyBridgeHttpUrl: Flow<String> = context.dataStore.data.map { 
-        val url = it[AGY_BRIDGE_HTTP_URL] ?: DEFAULT_BRIDGE_HTTP_URL
+        val url = it[AGY_BRIDGE_HTTP_URL]?.let(::migrateBridgeUrl) ?: DEFAULT_BRIDGE_HTTP_URL
         currentBridgeHttpUrl = url
         url
     }
     val agyBridgeWsUrl: Flow<String> = agyBridgeHttpUrl.map { toWsUrl(it) }
     val agyHubUrl: Flow<String> = context.dataStore.data.map { 
-        val url = it[AGY_HUB_URL] ?: DEFAULT_HUB_URL
+        val url = it[AGY_HUB_URL]?.let(::migrateHubUrl) ?: DEFAULT_HUB_URL
         currentHubUrl = url
         url
     }

@@ -95,6 +95,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     DATA_PROTECTION("Data Loss Protection", "Uninstall shield & App Info clear data protection"),
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
     CLAUDE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
+    AGENTS("Agents", "Run Antigravity, Claude Code or both"),
     DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD"),
     ABOUT("About & Info", "App version, package details, and bridge export")
 }
@@ -235,8 +236,9 @@ fun SettingsDialog(
     onOpenNetworkInspector: () -> Unit = {},
     claude: com.example.gemini.ui.claude.ClaudeSettingsDeps? = null,
     initialClaudePage: com.example.gemini.ui.claude.ClaudeSettingsPage? = null,
-    enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = com.example.gemini.domain.model.AgentKind.entries.toSet(),
-    onSetAgentEnabled: (com.example.gemini.domain.model.AgentKind, Boolean) -> Unit = { _, _ -> },
+    enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = setOf(com.example.gemini.domain.model.AgentKind.AGY),
+    isApplyingAgents: Boolean = false,
+    onApplyAgents: (Set<com.example.gemini.domain.model.AgentKind>) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -366,7 +368,6 @@ fun SettingsDialog(
                         cardBorder = cardBorder,
                         scrollState = mainMenuScrollState,
                         enabledAgents = enabledAgents,
-                        onSetAgentEnabled = onSetAgentEnabled,
                         claudeGroup = claude?.let { deps ->
                             {
                                 com.example.gemini.ui.claude.ClaudeSettingsGroup(deps) { page ->
@@ -544,6 +545,11 @@ fun SettingsDialog(
                         cardBorder = cardBorder
                     )
 
+                    SettingsSection.AGENTS -> com.example.gemini.ui.agents.AgentsSettingsPage(
+                        enabled = enabledAgents,
+                        isApplying = isApplyingAgents,
+                        onApply = onApplyAgents
+                    )
                     SettingsSection.CLAUDE -> if (claude != null) {
                         com.example.gemini.ui.claude.ClaudeSettingsScreen(claude, claudePage) { currentSection = SettingsSection.MAIN }
                     }
@@ -578,10 +584,11 @@ private fun MainSettingsMenu(
     cardBorder: BorderStroke,
     scrollState: androidx.compose.foundation.ScrollState,
     claudeGroup: (@Composable () -> Unit)? = null,
-    enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = com.example.gemini.domain.model.AgentKind.entries.toSet(),
-    onSetAgentEnabled: (com.example.gemini.domain.model.AgentKind, Boolean) -> Unit = { _, _ -> },
+    enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = setOf(com.example.gemini.domain.model.AgentKind.AGY),
     onNavigate: (SettingsSection) -> Unit
 ) {
+    val agyOn = com.example.gemini.domain.model.AgentKind.AGY in enabledAgents
+    val claudeOn = com.example.gemini.domain.model.AgentKind.CLAUDE in enabledAgents
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -589,12 +596,21 @@ private fun MainSettingsMenu(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        SettingsGroupHeader(
-            "Antigravity",
-            GeminiBlue,
-            "Google Antigravity agent (agy hub)",
-            enabled = com.example.gemini.domain.model.AgentKind.AGY in enabledAgents,
-            onEnabledChange = { onSetAgentEnabled(com.example.gemini.domain.model.AgentKind.AGY, it) }
+        SettingsGroupHeader("Agents", MaterialTheme.colorScheme.primary, "Which agents run, and the local server they share")
+        SettingsCategoryCard(
+            icon = Icons.Outlined.SmartToy,
+            iconTint = MaterialTheme.colorScheme.primary,
+            title = "Agents",
+            subtitle = when {
+                agyOn && claudeOn -> "Antigravity and Claude Code"
+                claudeOn -> "Claude Code only"
+                else -> "Antigravity only"
+            },
+            badgeText = "${enabledAgents.size} on",
+            badgeColor = MaterialTheme.colorScheme.primary,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.AGENTS) }
         )
         // Section 2: Servers & Network
         val (serverBadge, serverColor) = when {
@@ -614,6 +630,8 @@ private fun MainSettingsMenu(
             onClick = { onNavigate(SettingsSection.SERVERS) }
         )
 
+        if (agyOn) {
+        SettingsGroupHeader("Antigravity", GeminiBlue, "Google Antigravity agent (agy hub)")
         // Section 3: MCP Servers & Tools
         val activeMcpCount = mcpServers.count { it.isEnabled }
         val totalMcpCount = mcpServers.size
@@ -674,14 +692,10 @@ private fun MainSettingsMenu(
             onClick = { onNavigate(SettingsSection.COMMANDS) }
         )
 
-        if (claudeGroup != null) {
-            SettingsGroupHeader(
-                "Claude Code",
-                ClaudeAccent,
-                "Anthropic Claude Code CLI",
-                enabled = com.example.gemini.domain.model.AgentKind.CLAUDE in enabledAgents,
-                onEnabledChange = { onSetAgentEnabled(com.example.gemini.domain.model.AgentKind.CLAUDE, it) }
-            )
+        }
+
+        if (claudeGroup != null && claudeOn) {
+            SettingsGroupHeader("Claude Code", ClaudeAccent, "Anthropic Claude Code CLI")
             claudeGroup()
         }
 
@@ -1718,8 +1732,8 @@ private fun ServersSubScreen(
 
     val initialSharedHost = remember { initBridgeHost.ifBlank { initHubHost.ifBlank { "127.0.0.1" } } }
     var sharedHost by remember { mutableStateOf(initialSharedHost) }
-    var hubPort by remember { mutableStateOf(initHubPort.ifBlank { "1235" }) }
-    var bridgePort by remember { mutableStateOf(initBridgePort.ifBlank { "1234" }) }
+    var hubPort by remember { mutableStateOf(initHubPort.ifBlank { com.example.gemini.BuildConfig.HUB_PORT.toString() }) }
+    var bridgePort by remember { mutableStateOf(initBridgePort.ifBlank { com.example.gemini.BuildConfig.BRIDGE_PORT.toString() }) }
 
     val initialBridgeBinPath = remember { authPrefs.getAgyBridgeBinaryPathSync() }
     val initialAgyBinPath = remember { authPrefs.getAgyBinaryPathSync() }
@@ -1790,8 +1804,8 @@ private fun ServersSubScreen(
                     onClick = {
                         showUnsavedDialog = false
                         sharedHost = initialSharedHost
-                        hubPort = initHubPort.ifBlank { "1235" }
-                        bridgePort = initBridgePort.ifBlank { "1234" }
+                        hubPort = initHubPort.ifBlank { com.example.gemini.BuildConfig.HUB_PORT.toString() }
+                        bridgePort = initBridgePort.ifBlank { com.example.gemini.BuildConfig.BRIDGE_PORT.toString() }
                         bridgeBinPath = initialBridgeBinPath
                         agyBinPath = initialAgyBinPath
                         securityToken = initSecurityToken
@@ -1906,7 +1920,7 @@ private fun ServersSubScreen(
                         value = hubPort,
                         onValueChange = { hubPort = it; saveFeedback = null },
                         label = { Text("AGY Hub Port") },
-                        placeholder = { Text("1235") },
+                        placeholder = { Text(com.example.gemini.BuildConfig.HUB_PORT.toString()) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp)
@@ -1915,7 +1929,7 @@ private fun ServersSubScreen(
                         value = bridgePort,
                         onValueChange = { bridgePort = it; saveFeedback = null },
                         label = { Text("IDE Bridge Port") },
-                        placeholder = { Text("1234") },
+                        placeholder = { Text(com.example.gemini.BuildConfig.BRIDGE_PORT.toString()) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp)
@@ -2094,8 +2108,8 @@ private fun ServersSubScreen(
                 OutlinedButton(
                     onClick = {
                         sharedHost = "127.0.0.1"
-                        hubPort = "1235"
-                        bridgePort = "1234"
+                        hubPort = com.example.gemini.BuildConfig.HUB_PORT.toString()
+                        bridgePort = com.example.gemini.BuildConfig.BRIDGE_PORT.toString()
                         bridgeBinPath = authPrefs.getDefaultBridgeBinaryPath()
                         agyBinPath = authPrefs.getDefaultAgyBinaryPath()
                         saveFeedback = "Settings reset to defaults (click Save to apply)."
@@ -2213,8 +2227,8 @@ private fun ServersSubScreen(
         Button(
             onClick = {
                 val cleanHost = sharedHost.trim().ifBlank { "127.0.0.1" }
-                val cleanHubPort = hubPort.trim().ifBlank { "1235" }
-                val cleanBridgePort = bridgePort.trim().ifBlank { "1234" }
+                val cleanHubPort = hubPort.trim().ifBlank { com.example.gemini.BuildConfig.HUB_PORT.toString() }
+                val cleanBridgePort = bridgePort.trim().ifBlank { com.example.gemini.BuildConfig.BRIDGE_PORT.toString() }
                 val fullHub = "http://$cleanHost:$cleanHubPort"
                 val fullBridge = "http://$cleanHost:$cleanBridgePort"
                 onSaveServerUrls(fullHub, fullBridge)
@@ -2489,7 +2503,7 @@ private fun McpSubScreen(
             val presets = listOf(
                 Triple("Browser/Terminal Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(
                     serverName = "browser_terminal_automation",
-                    serverUrl = "http://127.0.0.1:8765/mcp",
+                    serverUrl = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/mcp",
                     headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
                 )),
                 Triple("Local Tools", "Stdio", com.example.gemini.domain.model.McpServerSpec(

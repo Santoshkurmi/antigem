@@ -56,8 +56,16 @@ class ClaudeChatBackend(
     private val _conversations = MutableStateFlow<List<Conversation>>(emptyList())
     override val conversations: StateFlow<List<Conversation>> = _conversations.asStateFlow()
     override val currentConversation: StateFlow<Conversation?> = store.currentConversation.asStateFlow()
-    override val messages = store.messages.asStateFlow()
-    override val conversationError: StateFlow<String?> = store.conversationError.asStateFlow()
+    // Claude keeps its own message / error state: the Antigravity backend writes the shared store and must never
+    // touch a Claude chat (ChatViewModel shows the state of the agent that owns the chat on screen)
+    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    override val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
+    private val _conversationError = MutableStateFlow<String?>(null)
+    override val conversationError: StateFlow<String?> = _conversationError.asStateFlow()
+
+    private val _startupStatus = MutableStateFlow<String?>(null)
+    /** Set while a sent message waits for the claude process to boot (seconds on a phone). */
+    val startupStatus: StateFlow<String?> = _startupStatus.asStateFlow()
 
     private val _isStreaming = MutableStateFlow(false)
     override val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
@@ -74,8 +82,13 @@ class ClaudeChatBackend(
     /** Models from the CLI's `initialize` (with supported effort levels). */
     val modelInfos: StateFlow<List<ClaudeModelInfo>> = _modelInfos.asStateFlow()
 
-    private val _availableModels = MutableStateFlow(DEFAULT_MODELS)
+    private val _availableModels = MutableStateFlow<List<AiModel>>(emptyList())
+    /** The CLI's models; empty until they are loaded (no placeholder). */
     val availableModels: StateFlow<List<AiModel>> = _availableModels.asStateFlow()
+
+    private val _modelsError = MutableStateFlow<String?>(null)
+    /** Why the model list could not be loaded (null while loading or after success). */
+    val modelsError: StateFlow<String?> = _modelsError.asStateFlow()
 
     private val _selectedModelId = MutableStateFlow("default")
     val selectedModelId: StateFlow<String> = _selectedModelId.asStateFlow()
@@ -91,7 +104,7 @@ class ClaudeChatBackend(
     private val _thinkingEnabled = MutableStateFlow(true)
     val thinkingEnabled: StateFlow<Boolean> = _thinkingEnabled.asStateFlow()
 
-    private val _permissionMode = MutableStateFlow("default")
+    private val _permissionMode = MutableStateFlow(prefs.cachedDefaultMode())
     val permissionMode: StateFlow<String> = _permissionMode.asStateFlow()
 
     private val _fastModeState = MutableStateFlow("off")
@@ -146,21 +159,39 @@ class ClaudeChatBackend(
     // controls changed in this chat; untouched ones are left to the user's settings.json defaults
     @Volatile private var modeTouched = false
     @Volatile private var thinkingTouched = false
-    @Volatile private var defaultPermissionMode = "default"
+    // the mode new chats start in: the bridge's default (Auto unless the user set one in settings.json)
+    @Volatile private var defaultPermissionMode = prefs.cachedDefaultMode()
     private val localConversations = LinkedHashMap<String, Conversation>()
-    private var started = false
+    // a sent message is waiting for the process the bridge spawns for it
+    private var awaitingProcess = false
+    // opening a chat whose process is live: its newest output is replayed from the bridge buffer up to this seq;
+    // the chat is shown once (complete) when it arrives
+    private var replayUntilSeq: Long? = null
+    private var replayDeadline: Job? = null
+    private var loopJob: Job? = null
+    private val titleRefreshes = HashMap<String, Job>()
 
-    /** Loads the session list and model info; keeps the list fresh. */
+    /** Loads the session list and model info and keeps the list fresh (Claude Code is enabled). */
     fun start() {
-        if (started) return
-        started = true
-        backendScope.launch {
+        if (loopJob?.isActive == true) return
+        prefs.cachedInfo()?.let { applyInfo(it) }
+        loopJob = backendScope.launch {
             refreshInfo(force = false)
             while (isActive) {
                 refreshSessions()
-                delay(30_000)
+                // poll faster while a Claude chat is working so the sidebar's running state stays current
+                delay(if (_conversations.value.any { it.isRunning }) 5_000 else 30_000)
             }
         }
+    }
+
+    /** Claude Code was turned off: stop polling and forget its chats. */
+    fun stop() {
+        loopJob?.cancel()
+        loopJob = null
+        detach()
+        _conversations.value = emptyList()
+        synchronized(localConversations) { localConversations.clear() }
     }
 
     // ------------------------------------------------------------------ AgentChatBackend
@@ -226,8 +257,12 @@ class ClaudeChatBackend(
                 attachedId = conv.id
             }
             transcript.addLocalUserMessage(uuid, displayText, atts)
+            if (!processLive) {
+                awaitingProcess = true
+                _startupStatus.value = "Starting Claude Code…"
+            }
             emitNow()
-            val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(text, atts))))
+            val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(conv.id, text, atts))))
             ensureConnected(conv.id)
             send(frame)
         }
@@ -261,8 +296,10 @@ class ClaudeChatBackend(
 
     override fun retryConnections() {
         backendScope.launch(worker) {
-            val id = attachedId
-            if (id != null && store.currentConversation.value?.id == id && pendingForkFrom == null) loadAndAttach(id)
+            val id = attachedId ?: return@launch
+            if (store.currentConversation.value?.id != id || pendingForkFrom != null) return@launch
+            // a chat not on disk yet has no history to reload: just reconnect (its output is in the bridge buffer)
+            if (isOnDisk(id)) loadAndAttach(id) else ensureConnected(id)
         }
         backendScope.launch { refreshSessions() }
     }
@@ -271,9 +308,13 @@ class ClaudeChatBackend(
         backendScope.launch { refreshSessions() }
         backendScope.launch(worker) {
             val id = attachedId ?: return@launch
-            if (socketJob?.isActive != true && pendingForkFrom == null && _conversations.value.any { it.id == id }) loadAndAttach(id)
+            if (socketJob?.isActive != true && pendingForkFrom == null && isOnDisk(id)) loadAndAttach(id)
         }
     }
+
+    /** The bridge lists the chat (its transcript exists); a chat only known locally has not been written yet. */
+    private fun isOnDisk(id: String) =
+        _conversations.value.any { it.id == id } && synchronized(localConversations) { id !in localConversations }
 
     /** Stops listening to the current chat (another agent's chat is being opened). */
     fun detach() {
@@ -400,7 +441,7 @@ class ClaudeChatBackend(
         )
     }
 
-    /** default (Manual) | acceptEdits | plan | auto | dontAsk | bypassPermissions */
+    /** default (Manual) | acceptEdits | plan | auto | dontAsk */
     fun setPermissionMode(mode: String) {
         modeTouched = true
         _permissionMode.value = mode
@@ -486,7 +527,7 @@ class ClaudeChatBackend(
                         }
                         transcript.finishHistory()
                     }
-                    .onFailure { store.conversationError.value = "Cannot load the chat to fork: ${it.message}" }
+                    .onFailure { _conversationError.value = "Cannot load the chat to fork: ${it.message}" }
             }
             emitNow()
             _isLoadingConversation.value = false
@@ -556,38 +597,113 @@ class ClaudeChatBackend(
     fun refreshInfo(force: Boolean = true) {
         backendScope.launch {
             _isRefreshingModels.value = true
-            client.info(refresh = force).onSuccess { resp ->
-                val info = resp.info ?: return@onSuccess
-                if (info.models.isNotEmpty()) {
-                    _modelInfos.value = info.models
-                    _availableModels.value = info.models.map { m ->
-                        // "Default (recommended)" + "Opus 5.5 · Best for…" → "Default (Opus 5.5)"
-                        val resolved = m.description.substringBefore(" · ", "").takeIf { m.value == "default" && it.isNotBlank() }
-                        AiModel(
-                            id = m.value,
-                            displayName = resolved?.let { "Default ($it)" } ?: m.displayName.ifBlank { m.value },
-                            description = m.description,
-                            key = m.value,
-                            baseName = m.displayName.ifBlank { m.value }
-                        )
+            client.info(refresh = force)
+                .onSuccess { resp ->
+                    val info = resp.info
+                    if (resp.success && info != null) {
+                        applyInfo(info)
+                        prefs.saveInfo(info)
+                        _modelsError.value = null
+                        resp.default_mode?.let { mode ->
+                            defaultPermissionMode = mode
+                            prefs.saveDefaultMode(mode)
+                            if (!processLive && !modeTouched) _permissionMode.value = mode
+                        }
+                    } else {
+                        _modelsError.value = resp.error ?: "Claude Code did not return its models"
                     }
                 }
-                _slashCommands.value = info.commands.map { c ->
-                    SlashCommandItem(
-                        name = c.name,
-                        command = "/${c.name}",
-                        description = c.description + c.argumentHint.takeIf { it.isNotBlank() }?.let { "  $it" }.orEmpty(),
-                        type = if (c.builtin && !c.name.contains(':')) "command" else "skill"
-                    )
+                .onFailure { _modelsError.value = it.message ?: "Cannot reach the bridge" }
+            _isRefreshingModels.value = false
+        }
+    }
+
+    /** Models, slash commands and defaults from the CLI's `initialize` (live or cached). */
+    private fun applyInfo(info: ClaudeInitializeInfo) {
+        if (info.models.isNotEmpty()) {
+            _modelInfos.value = info.models
+            _availableModels.value = info.models.map { m ->
+                // "Default (recommended)" + "Opus 5.5 · Best for…" → "Default (Opus 5.5)"
+                val resolved = m.description.substringBefore(" · ", "").takeIf { m.value == "default" && it.isNotBlank() }
+                AiModel(
+                    id = m.value,
+                    displayName = resolved?.let { "Default ($it)" } ?: m.displayName.ifBlank { m.value },
+                    family = com.example.gemini.domain.model.ModelFamily.CLAUDE,
+                    description = m.description,
+                    key = m.value,
+                    baseName = m.displayName.ifBlank { m.value }
+                )
+            }
+        }
+        _slashCommands.value = info.commands
+            .filter { it.name !in HIDDEN_COMMANDS && !it.description.startsWith("(removed)") }
+            .map { c ->
+                val appDescription = APP_COMMANDS[c.name]
+                SlashCommandItem(
+                    name = c.name,
+                    command = "/${c.name}",
+                    description = appDescription ?: (c.description + c.argumentHint.takeIf { it.isNotBlank() }?.let { "  $it" }.orEmpty()),
+                    type = when {
+                        appDescription != null -> "app"
+                        c.builtin && !c.name.contains(':') -> "command"
+                        else -> "skill"
+                    }
+                )
+            }
+        _outputStyles.value = info.available_output_styles
+        info.fast_mode_state?.let { _fastModeState.value = it }
+    }
+
+    /**
+     * A slash command the app answers itself, or null to send [text] to Claude. Commands with arguments that only
+     * change a chat control (`/model opus`, `/effort high`, `/rename x`) are applied through the app's controls so
+     * the chips stay in sync.
+     */
+    fun appCommand(text: String): ClaudeAppCommand? {
+        val trimmed = text.trim()
+        if (!trimmed.startsWith("/")) return null
+        val name = trimmed.removePrefix("/").substringBefore(' ').lowercase()
+        val arg = trimmed.substringAfter(' ', "").trim()
+        return when (name) {
+            "usage", "cost" -> ClaudeAppCommand.Usage
+            "context" -> ClaudeAppCommand.Context
+            "mcp" -> if (arg.isBlank()) ClaudeAppCommand.Mcp else null
+            "config" -> if (arg.isBlank()) ClaudeAppCommand.Settings else null
+            "clear", "new" -> ClaudeAppCommand.NewChat
+            "model" -> if (arg.isBlank()) ClaudeAppCommand.ModelPicker else {
+                selectModel(arg)
+                ClaudeAppCommand.Done("Model set to $arg")
+            }
+            "effort" -> when {
+                arg.isBlank() -> ClaudeAppCommand.ModelPicker
+                arg.equals("auto", true) || arg.equals("default", true) -> {
+                    setEffort(null)
+                    ClaudeAppCommand.Done("Effort set to the model default")
                 }
-                _outputStyles.value = info.available_output_styles
-                info.fast_mode_state?.let { _fastModeState.value = it }
-                info.current_permission_mode?.let {
-                    defaultPermissionMode = it
-                    if (!processLive && !modeTouched) _permissionMode.value = it
+                else -> {
+                    setEffort(arg.lowercase())
+                    ClaudeAppCommand.Done("Effort set to ${effortName(arg)}")
                 }
             }
-            _isRefreshingModels.value = false
+            "rename" -> if (arg.isBlank()) null else {
+                store.currentConversation.value?.id?.let { renameConversation(it, arg) }
+                ClaudeAppCommand.Done("Chat renamed")
+            }
+            else -> null
+        }
+    }
+
+    private fun effortName(level: String) = if (level.equals("xhigh", true)) "extra high" else level.lowercase()
+
+    /** The CLI writes a chat's AI title shortly after the first reply: look again a few times. */
+    private fun scheduleTitleRefresh() {
+        val id = attachedId ?: return
+        titleRefreshes[id]?.cancel()
+        titleRefreshes[id] = backendScope.launch {
+            for (wait in longArrayOf(1_500, 6_000, 15_000)) {
+                delay(wait)
+                refreshSessions()
+            }
         }
     }
 
@@ -610,7 +726,11 @@ class ClaudeChatBackend(
                 localConversations.keys.removeAll(ids)
                 localConversations.values.toList()
             }
-            _conversations.value = (locals + fromBridge).sortedByDescending { it.updatedAt }
+            val openId = store.currentConversation.value?.id
+            val openRunning = _isTurnActive.value
+            _conversations.value = (locals + fromBridge)
+                .map { if (it.id == openId) it.copy(isRunning = it.isRunning || openRunning) else it }
+                .sortedByDescending { it.updatedAt }
             val cur = store.currentConversation.value
             if (cur != null && cur.agent == AgentKind.CLAUDE) {
                 fromBridge.find { it.id == cur.id }?.let { fresh ->
@@ -630,8 +750,8 @@ class ClaudeChatBackend(
         _permissionMode.value = defaultPermissionMode
         _thinkingEnabled.value = true
         store.currentConversation.value = conv
-        store.messages.value = emptyList()
-        store.conversationError.value = null
+        _messages.value = emptyList()
+        _conversationError.value = null
         _isLoadingConversation.value = loading
         _isStreaming.value = false
         _isTurnActive.value = false
@@ -649,13 +769,40 @@ class ClaudeChatBackend(
             transcript.finishHistory()
             lastSeq = h.state.buffer_start_seq - 1
             processLive = h.state.live
-            emitNow()
-            _isLoadingConversation.value = false
+            val newest = h.state.next_seq - 1
+            if (h.state.live && newest >= h.state.buffer_start_seq) {
+                // the rest of the chat is in the bridge buffer: keep the loading state until it is replayed
+                replayUntilSeq = newest
+                replayDeadline?.cancel()
+                // safety net only: the replay normally ends within a moment
+                replayDeadline = backendScope.launch(worker) {
+                    delay(3_000)
+                    if (attachedId == id) finishReplay()
+                }
+            } else {
+                finishReplay()
+            }
             connect(id, h.state.buffer_start_seq)
         }.onFailure {
+            if (it.isBridgeUnreachable() && BridgeStartup.isStartingUp()) {
+                // the app just started and the local server is not up yet: keep loading and try again
+                backendScope.launch(worker) {
+                    delay(2_000)
+                    if (attachedId == id) loadAndAttach(id)
+                }
+                return
+            }
             _isLoadingConversation.value = false
-            store.conversationError.value = "Cannot load Claude chat: ${it.message}"
+            _conversationError.value = "Cannot load Claude chat: ${it.message}"
         }
+    }
+
+    private fun finishReplay() {
+        replayUntilSeq = null
+        replayDeadline?.cancel()
+        replayDeadline = null
+        emitNow()
+        _isLoadingConversation.value = false
     }
 
     private fun ensureConnected(id: String) {
@@ -699,8 +846,7 @@ class ClaudeChatBackend(
             effort = _effort.value,
             thinking = if (!thinkingTouched) null else if (_thinkingEnabled.value) "on" else "off",
             fork_from = pendingForkFrom,
-            resume_session_at = pendingResumeAt,
-            allow_bypass = if (prefs.allowBypass.value) "1" else null
+            resume_session_at = pendingResumeAt
         )
     }
 
@@ -710,18 +856,25 @@ class ClaudeChatBackend(
                 val seq = frame.seq ?: return
                 if (seq <= lastSeq) return
                 lastSeq = seq
-                val data = frame.data ?: return
-                if (data["type"]?.jsonPrimitive?.contentOrNull == "control_response") {
-                    deliverReply(data)
+                val data = frame.data
+                val isReply = data?.get("type")?.jsonPrimitive?.contentOrNull == "control_response"
+                if (isReply) deliverReply(data!!)
+                val type = if (data != null && !isReply) transcript.applyLive(data) else ""
+                val replayTarget = replayUntilSeq
+                if (replayTarget != null) {
+                    // old output being replayed while the chat opens: no side effects, show it once at the end.
+                    // Every buffered line counts, control replies included (often the newest line).
+                    if (seq >= replayTarget) finishReplay()
                     return
                 }
-                val type = transcript.applyLive(data)
+                if (data == null || isReply) return
+                if (awaitingProcess && type != "stream_event" && type != "rate_limit_event" && type != "command_lifecycle") {
+                    awaitingProcess = false
+                    _startupStatus.value = null
+                }
                 when (type) {
                     "result" -> {
-                        backendScope.launch {
-                            delay(1500)
-                            refreshSessions()
-                        }
+                        scheduleTitleRefresh()
                         onTurnFinished()
                         refreshContextUsage()
                     }
@@ -731,6 +884,8 @@ class ClaudeChatBackend(
                             val cur = store.currentConversation.value
                             if (!title.isNullOrBlank() && cur != null && cur.id == attachedId) {
                                 store.currentConversation.value = cur.copy(title = title)
+                                _conversations.value = _conversations.value.map { if (it.id == cur.id) it.copy(title = title) else it }
+                                synchronized(localConversations) { localConversations[cur.id]?.let { localConversations[cur.id] = it.copy(title = title) } }
                             }
                         }
                         "init" -> {
@@ -749,16 +904,27 @@ class ClaudeChatBackend(
                     "attached" -> {
                         if (lastSeq >= 0 && lastSeq + 1 < st.buffer_start_seq) {
                             // output was dropped from the buffer while we were away: reload from the transcript
-                            attachedId?.let { id -> backendScope.launch(worker) { loadAndAttach(id) } }
-                            return
+                            // (a chat not written to disk yet keeps what it shows)
+                            val id = attachedId
+                            if (id != null && isOnDisk(id)) {
+                                backendScope.launch(worker) { loadAndAttach(id) }
+                                return
+                            }
                         }
-                        if (!st.live && transcript.isTurnActive) transcript.endTurn()
+                        // no process and nothing sent on this connection: a turn shown as running is over (the
+                        // process exited while we were away). A just-sent message starts the process itself.
+                        if (!st.live && transcript.isTurnActive && !awaitingProcess) transcript.endTurn()
+                        if (replayUntilSeq != null && st.next_seq - 1 <= lastSeq) finishReplay()
                     }
                     "spawned" -> {
                         pendingForkFrom = null
                         pendingResumeAt = null
+                        if (awaitingProcess) _startupStatus.value = "Claude Code is starting…"
                     }
                     "exited" -> {
+                        awaitingProcess = false
+                        _startupStatus.value = null
+                        if (replayUntilSeq != null) finishReplay()
                         failReplies("Claude process exited")
                         val err = frame.error.orEmpty()
                         if (transcript.isTurnActive || (frame.exit_code ?: 0) != 0) {
@@ -773,6 +939,9 @@ class ClaudeChatBackend(
             }
             "bridge_error" -> {
                 val err = frame.error.orEmpty()
+                awaitingProcess = false
+                _startupStatus.value = null
+                if (replayUntilSeq != null) finishReplay()
                 failReplies(err)
                 transcript.addError(
                     if (err.contains("not found", ignoreCase = true)) "Claude Code is not installed" else "Claude Code unavailable",
@@ -833,6 +1002,11 @@ class ClaudeChatBackend(
         processLive = false
         pendingForkFrom = null
         pendingResumeAt = null
+        awaitingProcess = false
+        _startupStatus.value = null
+        replayUntilSeq = null
+        replayDeadline?.cancel()
+        replayDeadline = null
     }
 
     private fun scheduleEmit() {
@@ -846,12 +1020,16 @@ class ClaudeChatBackend(
     private fun emitNow() {
         emitJob?.cancel()
         emitJob = null
+        if (replayUntilSeq != null) return
         val id = attachedId ?: return
         if (store.currentConversation.value?.id != id) return
         val msgs = transcript.toChatMessages()
-        store.messages.value = msgs
+        _messages.value = msgs
         val active = transcript.isTurnActive
         _isTurnActive.value = active
+        if (_conversations.value.any { it.id == id && it.isRunning != active }) {
+            _conversations.value = _conversations.value.map { if (it.id == id) it.copy(isRunning = active) else it }
+        }
         _isStreaming.value = active && !transcript.hasPending()
         _pendingPermissions.value = transcript.pendingList().filter { it.toolName != "AskUserQuestion" }
         _cacheInfo.value = transcript.cacheInfo
@@ -873,14 +1051,34 @@ class ClaudeChatBackend(
         return if (path.isBlank()) "" else if (path.startsWith("file://")) path else "file://$path"
     }
 
-    private fun buildBlocks(text: String, atts: List<ChatAttachment>): List<ClaudeContentBlock> {
+    /**
+     * The prompt's content blocks. Images small enough go inline (Claude sees them directly); every other file (and
+     * bigger images) is saved on the bridge for this chat and listed by path, so Claude reads it with its tools and
+     * the chat can show it again later. If saving fails, PDFs and text files still go inline.
+     */
+    private suspend fun buildBlocks(sessionId: String, text: String, atts: List<ChatAttachment>): List<ClaudeContentBlock> {
         val blocks = mutableListOf<ClaudeContentBlock>()
         val notes = mutableListOf<String>()
+        val saved = mutableListOf<ClaudeAttachments.SavedFile>()
         for (a in atts) {
             val b64 = a.base64
             val mime = a.mimeType?.lowercase().orEmpty()
+            if (b64.isNullOrBlank()) {
+                notes.add("[Attachment ${a.name} could not be read]")
+                continue
+            }
+            if (mime in IMAGE_TYPES && b64.length * 3L / 4 <= INLINE_IMAGE_BYTES) {
+                blocks.add(ClaudeContentBlock(type = "image", source = ClaudeBlockSource("base64", mime, b64)))
+                continue
+            }
+            val result = client.saveAttachment(sessionId, a.name, mime.ifBlank { "application/octet-stream" }, b64).getOrNull()
+            val path = result?.path
+            if (result?.success == true && path != null) {
+                saved.add(ClaudeAttachments.SavedFile(path, result.mime_type ?: mime, result.size))
+                continue
+            }
+            Log.w(TAG, "attachment ${a.name} not saved: ${result?.error}")
             when {
-                b64.isNullOrBlank() -> notes.add("[Attachment ${a.name} could not be read]")
                 mime in IMAGE_TYPES -> blocks.add(ClaudeContentBlock(type = "image", source = ClaudeBlockSource("base64", mime, b64)))
                 mime == "application/pdf" -> blocks.add(ClaudeContentBlock(type = "document", title = a.name, source = ClaudeBlockSource("base64", mime, b64)))
                 isTextLike(mime, a.name) -> {
@@ -889,10 +1087,12 @@ class ClaudeChatBackend(
                         blocks.add(ClaudeContentBlock(type = "document", title = a.name, source = ClaudeBlockSource("text", "text/plain", decoded)))
                     } else notes.add("[Attachment ${a.name} could not be decoded]")
                 }
-                else -> notes.add("[Attachment ${a.name} (${mime.ifBlank { "unknown type" }}) is not supported by Claude]")
+                else -> notes.add("[Attachment ${a.name} could not be saved for Claude: ${result?.error ?: "the bridge did not answer"}]")
             }
         }
-        val fullText = (notes + listOf(text)).filter { it.isNotBlank() }.joinToString("\n")
+        val fullText = (notes + listOf(text) + listOfNotNull(saved.takeIf { it.isNotEmpty() }?.let { ClaudeAttachments.block(it) }))
+            .filter { it.isNotBlank() }
+            .joinToString("\n\n")
         if (fullText.isNotBlank() || blocks.isEmpty()) blocks.add(ClaudeContentBlock(type = "text", text = fullText.ifBlank { " " }))
         return blocks
     }
@@ -907,6 +1107,8 @@ class ClaudeChatBackend(
         private const val TAG = "ClaudeChatBackend"
 
         private val IMAGE_TYPES = setOf("image/jpeg", "image/png", "image/gif", "image/webp")
+        /** Larger images are saved as files (the API takes inline images up to about 5 MB). */
+        private const val INLINE_IMAGE_BYTES = 3_500_000L
         private val TEXT_MIME_TYPES = setOf(
             "application/json", "application/xml", "application/javascript", "application/x-sh",
             "application/x-yaml", "application/toml", "application/sql"
@@ -917,9 +1119,20 @@ class ClaudeChatBackend(
             "html", "css", "scss", "sql", "gradle", "properties", "ini", "conf", "env", "dart", "lua", "proto"
         )
 
-        /** Shown until the CLI's real model list arrives. */
-        val DEFAULT_MODELS = listOf(
-            AiModel(id = "default", displayName = "Default (recommended)", description = "Claude Code default model", key = "default", baseName = "Default")
+        /** Built-in commands whose terminal view the app replaces with its own screen (see [appCommand]). */
+        val APP_COMMANDS = mapOf(
+            "usage" to "Plan usage limits and this chat's cost",
+            "context" to "Context window usage",
+            "model" to "Choose the model",
+            "effort" to "Set the effort level",
+            "mcp" to "MCP servers",
+            "config" to "Claude Code settings",
+            "clear" to "Start a new chat"
+        )
+
+        /** Built-ins that do nothing useful in the app (terminal-only views, internal or removed commands). */
+        private val HIDDEN_COMMANDS = setOf(
+            "color", "focus", "heapdump", "__remote-workflow", "workflow-launch-exec", "extra-usage", "agents", "import"
         )
 
         /** Permission modes in the order the mode menu shows them. */
@@ -928,8 +1141,7 @@ class ClaudeChatBackend(
             "acceptEdits" to "Accept edits",
             "plan" to "Plan",
             "auto" to "Auto",
-            "dontAsk" to "Don't ask",
-            "bypassPermissions" to "Bypass"
+            "dontAsk" to "Don't ask"
         )
     }
 }

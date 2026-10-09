@@ -50,9 +50,7 @@ data class BridgeConfigFrame(
     val fork_from: String? = null,
     val resume_session_at: String? = null,
     /** "on" | "off" */
-    val thinking: String? = null,
-    /** "1" allows bypassPermissions mode */
-    val allow_bypass: String? = null
+    val thinking: String? = null
 )
 
 // ---------------------------------------------------------------- outgoing (app → claude)
@@ -361,6 +359,8 @@ data class ClaudeInitializeInfo(
 data class ClaudeInfoResponse(
     val success: Boolean = false,
     val info: ClaudeInitializeInfo? = null,
+    /** Permission mode new chats start in (the user's settings.json default, otherwise Auto). */
+    val default_mode: String? = null,
     val error: String? = null
 )
 
@@ -631,4 +631,48 @@ data class ClaudeRewindResult(
 data class ClaudeExportResult(
     val text: String = "",
     val default_filename: String? = null
+)
+
+// ---------------------------------------------------------------- app-handled slash commands
+
+/** A slash command the app answers itself instead of sending it to Claude (see ClaudeChatBackend.appCommand). */
+sealed interface ClaudeAppCommand {
+    data object Usage : ClaudeAppCommand
+    data object Context : ClaudeAppCommand
+    data object ModelPicker : ClaudeAppCommand
+    data object Mcp : ClaudeAppCommand
+    data object Settings : ClaudeAppCommand
+    data object NewChat : ClaudeAppCommand
+    /** Applied through the app's own controls; [message] confirms it. */
+    data class Done(val message: String) : ClaudeAppCommand
+}
+
+// ---------------------------------------------------------------- attachments & sandbox
+
+@Serializable
+data class ClaudeAttachmentSave(
+    val session_id: String,
+    val name: String,
+    val mime_type: String,
+    /** File content, base64. */
+    val data: String
+)
+
+@Serializable
+data class ClaudeSavedAttachment(
+    val success: Boolean = false,
+    val path: String? = null,
+    val name: String? = null,
+    val size: Long = 0,
+    val mime_type: String? = null,
+    val error: String? = null
+)
+
+/** Whether Claude Code's command sandbox (bubblewrap) can run on this device, and whether it is turned on. */
+@Serializable
+data class ClaudeSandboxInfo(
+    val success: Boolean = false,
+    val available: Boolean = false,
+    val enabled: Boolean = false,
+    val reason: String? = null
 )

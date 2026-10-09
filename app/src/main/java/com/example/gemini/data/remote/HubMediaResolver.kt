@@ -40,6 +40,30 @@ object HubMediaResolver {
         return imageBytesCache[key]
     }
 
+    /** A file served by the IDE bridge (Claude chat attachments): needs the bridge's auth header, so Coil cannot load it. */
+    fun isBridgeFileUrl(uri: String): Boolean =
+        uri.startsWith(com.example.gemini.data.preferences.AuthPreferences.currentBridgeHttpUrl.trimEnd('/') + "/api/claude/attachments/")
+
+    /** Downloads a bridge file with the authenticated client (null when it is gone or the bridge is offline). */
+    suspend fun fetchBridgeFile(url: String): ByteArray? = withContext(Dispatchers.IO) {
+        runCatching {
+            AgyBridgeService.instance.client.newCall(okhttp3.Request.Builder().url(url).get().build()).execute().use { resp ->
+                if (resp.isSuccessful) resp.body?.bytes() else null
+            }
+        }.getOrNull()
+    }
+
+    /** Saves a bridge file into the app cache (to open it with another app or the file viewer). */
+    suspend fun downloadBridgeFile(context: Context, url: String, name: String): File? {
+        val bytes = fetchBridgeFile(url) ?: return null
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val dir = File(context.cacheDir, "claude-attachments").apply { mkdirs() }
+                File(dir, name.substringAfterLast('/').ifBlank { "attachment" }).apply { writeBytes(bytes) }
+            }.getOrNull()
+        }
+    }
+
     fun clearRamCache() {
         imageRamCache.clear()
         imageBytesCache.clear()
@@ -51,6 +75,7 @@ object HubMediaResolver {
      */
     fun isLocalOrCached(context: Context, uriOrPath: String): Boolean {
         if (uriOrPath.isBlank()) return false
+        if (isBridgeFileUrl(uriOrPath)) return imageRamCache.containsKey(normalizeKey(uriOrPath))
         if (uriOrPath.startsWith("data:image/") || uriOrPath.startsWith("http://") || uriOrPath.startsWith("https://") || uriOrPath.startsWith("content://")) {
             return true
         }
@@ -68,6 +93,7 @@ object HubMediaResolver {
      */
     fun getResolvedUriSync(context: Context, uriOrPath: String): String {
         if (uriOrPath.isBlank()) return ""
+        if (isBridgeFileUrl(uriOrPath)) return imageRamCache[normalizeKey(uriOrPath)] ?: ""
         if (uriOrPath.startsWith("data:image/") || uriOrPath.startsWith("http://") || uriOrPath.startsWith("https://") || uriOrPath.startsWith("content://")) {
             return uriOrPath
         }
@@ -95,6 +121,14 @@ object HubMediaResolver {
         hubUrl: String = com.example.gemini.data.preferences.AuthPreferences.currentHubUrl
     ): String = withContext(Dispatchers.IO) {
         if (rawUri.isBlank()) return@withContext ""
+        if (isBridgeFileUrl(rawUri)) {
+            val key = normalizeKey(rawUri)
+            imageRamCache[key]?.let { return@withContext it }
+            val bytes = fetchBridgeFile(rawUri) ?: return@withContext ""
+            val mime = java.net.URLConnection.guessContentTypeFromName(rawUri.substringAfterLast("%2F")) ?: "image/jpeg"
+            imageBytesCache[key] = bytes
+            return@withContext "data:$mime;base64,${Base64.encodeToString(bytes, Base64.NO_WRAP)}".also { imageRamCache[key] = it }
+        }
         if (rawUri.startsWith("data:image/") || rawUri.startsWith("http://") || rawUri.startsWith("https://") || rawUri.startsWith("content://")) {
             return@withContext rawUri
         }

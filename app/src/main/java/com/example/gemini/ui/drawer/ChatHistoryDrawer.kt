@@ -106,6 +106,8 @@ fun ChatHistoryDrawer(
     isOpen: Boolean = false,
     /** Accounts of the enabled agents; replaces the Antigravity-only profile / sign-in button when set. */
     accountsButton: (@Composable () -> Unit)? = null,
+    /** Antigravity runs: its hub start-up and first sync drive the list's loading states. */
+    agyEnabled: Boolean = true,
     claudeActions: ClaudeDrawerActions? = null,
     modifier: Modifier = Modifier
 ) {
@@ -697,13 +699,16 @@ fun ChatHistoryDrawer(
                 }
             }
 
+            // breathing room between the header actions and the list
+            Spacer(modifier = Modifier.height(12.dp))
+
             // Inline Search Bar (Smooth, no text clipping, auto-expandable)
             AnimatedVisibility(
                 visible = isSearchActive || searchQuery.isNotBlank(),
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
-                Column(modifier = Modifier.padding(top = 10.dp)) {
+                Column(modifier = Modifier.padding(bottom = 8.dp)) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
@@ -844,11 +849,11 @@ fun ChatHistoryDrawer(
                 }
             }
 
-            val isEngineConnecting = (systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.STARTING ||
+            val isEngineConnecting = agyEnabled && (systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.STARTING ||
                     systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.ACQUIRING_CSRF ||
                     (systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.OFFLINE && isInitialGracePeriod)) && conversations.isEmpty()
             val showSkeleton =
-                (!hasReceivedInitialSync || isLoading) && conversations.isEmpty() && errorMessage.isNullOrBlank()
+                agyEnabled && (!hasReceivedInitialSync || isLoading) && conversations.isEmpty() && errorMessage.isNullOrBlank()
 
             Crossfade(
                 targetState = when {

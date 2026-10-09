@@ -174,6 +174,8 @@ fun ChatInputBar(
     isAuth: Boolean = true,
     /** Shown when sending is blocked because [isOnline] is false. */
     offlineMessage: String = "Server is offline. Start the server to send messages.",
+    /** The agent cannot read audio (Claude): the mic records and transcribes to text instead of attaching a file. */
+    voiceNotesAsText: Boolean = false,
     focusRequester: FocusRequester = remember { FocusRequester() },
     modifier: Modifier = Modifier
 ) {
@@ -295,6 +297,11 @@ fun ChatInputBar(
     }
 
     fun togglePauseAudioRecording() {
+        if (recordMode == AudioRecordMode.TRANSCRIBE) {
+            if (isRecordingPaused) speechManager?.resumeTranscriptionSession() else speechManager?.pauseTranscriptionSession()
+            isRecordingPaused = !isRecordingPaused
+            return
+        }
         val rec = mediaRecorder ?: return
         try {
             if (isRecordingPaused) {
@@ -1252,8 +1259,12 @@ fun ChatInputBar(
 
                             Surface(
                                 onClick = {
-                                    recordMode = AudioRecordMode.VOICE_NOTE
-                                    triggerMicClick()
+                                    if (voiceNotesAsText) {
+                                        startAutoTranscribe()
+                                    } else {
+                                        recordMode = AudioRecordMode.VOICE_NOTE
+                                        triggerMicClick()
+                                    }
                                 },
                                 shape = CircleShape,
                                 color = voiceBgColor,
@@ -1263,7 +1274,7 @@ fun ChatInputBar(
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Rounded.Mic,
-                                        contentDescription = "Record voice note",
+                                        contentDescription = if (voiceNotesAsText) "Record and transcribe" else "Record voice note",
                                         tint = voiceIconColor,
                                         modifier = Modifier.size(20.dp)
                                     )

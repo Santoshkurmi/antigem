@@ -64,6 +64,10 @@ func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m.handlePlugins(w, r, strings.TrimPrefix(strings.TrimPrefix(path, "/plugins"), "/"))
 	case path == "/cli/job" || strings.HasPrefix(path, "/cli/"):
 		m.handleCLIJob(w, r, strings.TrimPrefix(path, "/cli/"))
+	case path == "/attachments" || strings.HasPrefix(path, "/attachments/"):
+		m.handleAttachments(w, r, strings.TrimPrefix(strings.TrimPrefix(path, "/attachments"), "/"))
+	case path == "/sandbox" && r.Method == http.MethodGet:
+		m.handleSandbox(w, r)
 	case path == "/status" && r.Method == http.MethodGet:
 		m.handleStatus(w, r)
 	case path == "/info" && r.Method == http.MethodGet:
@@ -212,7 +216,6 @@ func (m *Manager) serveSessionWS(w http.ResponseWriter, r *http.Request) {
 		ForkFrom:        q.Get("fork_from"),
 		ResumeSessionAt: q.Get("resume_session_at"),
 		Thinking:        q.Get("thinking"),
-		AllowBypass:     q.Get("allow_bypass"),
 	})
 
 	sub := &subscriber{conn: conn, ch: make(chan []byte, maxBufferedLines+1024), done: make(chan struct{})}
@@ -325,7 +328,8 @@ func (m *Manager) handleInfo(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "info": info})
+	// the mode new chats start in (read fresh: settings.json may have changed since the cached initialize)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "info": info, "default_mode": m.defaultPermissionMode()})
 }
 
 func writeJSON(w http.ResponseWriter, code int, v interface{}) {

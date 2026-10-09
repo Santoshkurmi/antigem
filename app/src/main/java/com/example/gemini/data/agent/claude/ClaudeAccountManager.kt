@@ -73,8 +73,15 @@ class ClaudeAccountManager(
         statusJob?.cancel()
         _checking.value = true
         statusJob = scope.launch {
-            val result = client.status()
+            var result = client.status()
+            // right after launch the local server is still coming up: keep "Checking…" and look again
+            while (result.exceptionOrNull()?.isBridgeUnreachable() == true && BridgeStartup.isStartingUp()) {
+                delay(2_000)
+                if (!isActive) return@launch
+                result = client.status()
+            }
             if (!isActive) return@launch
+            if (result.isSuccess || result.exceptionOrNull() is ClaudeBridgeOutdatedException) BridgeStartup.markReached()
             result
                 .onSuccess {
                     _status.value = it
@@ -86,7 +93,7 @@ class ClaudeAccountManager(
                     val failure = classify(it)
                     _failure.value = failure
                     _statusError.value = when (failure) {
-                        ClaudeStatus.BRIDGE_OUTDATED -> "The running bridge has no Claude Code support. Restart the local server to load the new version."
+                        ClaudeStatus.BRIDGE_OUTDATED -> it.message
                         ClaudeStatus.BRIDGE_OFFLINE -> "Could not reach the bridge" + (it.message?.let { m -> " ($m)." } ?: ".")
                         else -> it.message ?: "Status check failed"
                     }
@@ -105,9 +112,7 @@ class ClaudeAccountManager(
 
     private fun classify(error: Throwable): ClaudeStatus = when {
         error is ClaudeBridgeOutdatedException -> ClaudeStatus.BRIDGE_OUTDATED
-        error is java.net.ConnectException || error is java.net.NoRouteToHostException || error is java.net.UnknownHostException -> ClaudeStatus.BRIDGE_OFFLINE
-        // OkHttp reports a connect timeout as SocketTimeoutException("failed to connect …")
-        error is java.net.SocketTimeoutException && error.message.orEmpty().contains("connect", ignoreCase = true) -> ClaudeStatus.BRIDGE_OFFLINE
+        error.isBridgeUnreachable() -> ClaudeStatus.BRIDGE_OFFLINE
         else -> ClaudeStatus.ERROR
     }
 

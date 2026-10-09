@@ -420,8 +420,11 @@ class ClaudeTranscript {
         if (joined.startsWith("<local-command-caveat>")) return
 
         val uuid = e.uuid ?: "u_${turns.size}"
-        val displayText = commandDisplay(joined) ?: stripContextTags(joined)
-        val attachments = blocks.mapIndexedNotNull { i, b -> b.toAttachment(uuid, i) }
+        // files saved on the bridge are listed in an <attached-files> block: show them as attachments, not text
+        val (promptText, savedFiles) = ClaudeAttachments.extract(joined)
+        val displayText = commandDisplay(promptText) ?: stripContextTags(promptText)
+        val attachments = blocks.mapIndexedNotNull { i, b -> b.toAttachment(uuid, i) } +
+            savedFiles.mapIndexed { i, f -> ClaudeAttachments.toChatAttachment(f, "${uuid}_file_$i") }
         if (displayText.isBlank() && attachments.isEmpty()) return
         val createdAt = parseTime(e.timestamp) ?: System.currentTimeMillis()
         addUserTurn(uuid, displayText, attachments, createdAt, e.parentUuid ?: lastEventUuid)

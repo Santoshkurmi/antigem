@@ -43,7 +43,11 @@ class ClaudeVoiceTranscriber(
     private var recordJob: Job? = null
     private val recording = AtomicBoolean(false)
     private val paused = AtomicBoolean(false)
+    // Claude's transcript is cumulative for the whole stream: TranscriptText carries everything said so far, and
+    // TranscriptEndpoint (normally only after CloseStream) ends it. Text up to an endpoint is reported once.
     @Volatile private var pendingText = ""
+    @Volatile private var committedText = ""
+    @Volatile private var stopping = false
     @Volatile private var closed = CompletableSignal()
     private var callbacks: Callbacks? = null
 
@@ -79,6 +83,8 @@ class ClaudeVoiceTranscriber(
         }
         audioRecord = record
         pendingText = ""
+        committedText = ""
+        stopping = false
         closed = CompletableSignal()
         callbacks = Callbacks(scope, onPartialText, onFinalText, onError)
         recording.set(true)
@@ -123,15 +129,22 @@ class ClaudeVoiceTranscriber(
         when (obj["type"]?.jsonPrimitive?.contentOrNull) {
             "TranscriptInterim", "TranscriptText" -> {
                 val data = obj["data"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                if (data.isNotBlank()) {
-                    pendingText = data
-                    report { it.onPartial(data) }
+                // drop what an earlier endpoint already reported, keep only this utterance
+                val segment = (if (committedText.isNotEmpty() && data.startsWith(committedText)) data.removePrefix(committedText) else data).trim()
+                if (segment.isNotBlank()) {
+                    pendingText = segment
+                    report { it.onPartial(segment) }
                 }
             }
             "TranscriptEndpoint" -> {
+                // while stopping, the final text goes to stopTranscriptionSession's callback instead
+                if (stopping) return
                 val done = pendingText
                 pendingText = ""
-                if (done.isNotBlank()) report { it.onFinal(done) }
+                if (done.isNotBlank()) {
+                    committedText = (obj["data"]?.jsonPrimitive?.contentOrNull ?: (committedText + " " + done)).trim()
+                    report { it.onFinal(done) }
+                }
             }
             "TranscriptError", "error" -> {
                 val msg = obj["description"]?.jsonPrimitive?.contentOrNull ?: obj["message"]?.jsonPrimitive?.contentOrNull ?: "transcription error"
@@ -148,6 +161,7 @@ class ClaudeVoiceTranscriber(
 
     override fun stopTranscriptionSession(onDone: ((String) -> Unit)?) {
         val cb = callbacks
+        stopping = true
         stopAudio()
         val ws = socket
         if (ws == null) {

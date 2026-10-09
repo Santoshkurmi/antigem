@@ -76,20 +76,28 @@ fun agyStatusEntry(
     authInfo: AgyHubClient.AgyAuthInfo,
     isAuthBusy: Boolean,
     inStartupGrace: Boolean,
+    serverRestarting: Boolean,
     onSignIn: () -> Unit,
     onCheckAuth: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onRestartServer: () -> Unit
 ): AgentStatusEntry {
     val status = state.status
     fun entry(label: String, color: Color = status.dotColor, detail: String? = null, action: AgentStatusAction? = null, pending: Boolean = false) =
         AgentStatusEntry(AgentKind.AGY, label, color, detail, action, pending, isReady = status == SystemStatus.READY && !isAuthBusy)
     return when {
+        serverRestarting -> entry("Restarting…", SystemStatus.STARTING.dotColor, "The local server is restarting.", pending = true)
         isAuthBusy -> entry("Signing in…", SystemStatus.ACQUIRING_CSRF.dotColor, "Finish signing in with Google in your browser.", AgentStatusAction("Check", onCheckAuth), pending = true)
         status == SystemStatus.OFFLINE && inStartupGrace -> entry("Starting…", SystemStatus.STARTING.dotColor, "Starting the local server.", pending = true)
+        status == SystemStatus.OFFLINE && state is SystemConnectionState.Connected -> entry(
+            "Offline",
+            detail = "The Antigravity hub is stopped.",
+            action = AgentStatusAction("Restart", onRestartServer)
+        )
         status == SystemStatus.OFFLINE -> entry(
             "Offline",
-            detail = if (state is SystemConnectionState.Connected) "The Antigravity hub is stopped." else "The local server is not running.",
-            action = AgentStatusAction("Retry", onRetry)
+            detail = "The local server is not running.",
+            action = AgentStatusAction("Start", onRestartServer)
         )
         status == SystemStatus.STARTING -> entry("Starting…", detail = "The Antigravity hub is starting.", pending = true)
         status == SystemStatus.ACQUIRING_CSRF -> entry("Connecting…", detail = "Getting a session token from the hub.", pending = true)
@@ -107,7 +115,7 @@ fun agyStatusEntry(
         else -> entry(
             "Error",
             detail = (state as? SystemConnectionState.Connected)?.error ?: (state as? SystemConnectionState.Error)?.message,
-            action = AgentStatusAction("Retry", onRetry)
+            action = if (state is SystemConnectionState.Connected) AgentStatusAction("Restart", onRestartServer) else AgentStatusAction("Retry", onRetry)
         )
     }
 }
@@ -116,11 +124,15 @@ fun claudeStatusEntry(
     state: ClaudeStatus,
     status: ClaudeCliStatus?,
     error: String?,
+    serverRestarting: Boolean,
     onSignIn: () -> Unit,
     onSetup: () -> Unit,
     onRestartServer: () -> Unit,
     onRetry: () -> Unit
 ): AgentStatusEntry {
+    if (serverRestarting) {
+        return AgentStatusEntry(AgentKind.CLAUDE, "Restarting…", ClaudeStatus.CHECKING.dotColor, "The local server is restarting.", pending = true)
+    }
     val auth = status?.auth
     fun entry(detail: String? = null, action: AgentStatusAction? = null) = AgentStatusEntry(
         AgentKind.CLAUDE, state.label, state.dotColor, detail, action,
@@ -130,7 +142,7 @@ fun claudeStatusEntry(
     )
     return when (state) {
         ClaudeStatus.CHECKING -> entry("Looking for the Claude Code CLI and its sign-in.")
-        ClaudeStatus.BRIDGE_OFFLINE -> entry(error ?: "The local server is not running.", AgentStatusAction("Retry", onRetry))
+        ClaudeStatus.BRIDGE_OFFLINE -> entry(error ?: "The local server is not running.", AgentStatusAction("Start", onRestartServer))
         ClaudeStatus.BRIDGE_OUTDATED -> entry(error, AgentStatusAction("Restart", onRestartServer))
         ClaudeStatus.NOT_INSTALLED -> entry("The claude CLI is not installed on this device.", AgentStatusAction("Set up", onSetup))
         ClaudeStatus.SIGNED_OUT -> entry("Sign in with your Claude subscription or an Anthropic Console account.", AgentStatusAction("Sign in", onSignIn))

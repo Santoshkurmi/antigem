@@ -33,7 +33,8 @@ class AndroidLocalBridgeServer private constructor() {
 
     companion object {
         private const val TAG = "AndroidBridgeServer"
-        const val DEFAULT_PORT = 8765
+        /** Per app (build flavor) so com.antigem and com.termux do not collide. */
+        val DEFAULT_PORT = com.example.gemini.BuildConfig.BROWSER_MCP_PORT
         val instance: AndroidLocalBridgeServer by lazy { AndroidLocalBridgeServer() }
     }
 

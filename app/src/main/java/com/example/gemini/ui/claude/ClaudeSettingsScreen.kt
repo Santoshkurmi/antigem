@@ -322,7 +322,6 @@ private fun DefaultsPage(deps: ClaudeSettingsDeps) {
     val settings by deps.config.settings.collectAsState()
     val models by deps.backend.modelInfos.collectAsState()
     val styles by deps.backend.outputStyles.collectAsState()
-    val allowBypass by deps.prefs.allowBypass.collectAsState()
     val voiceLang by deps.prefs.voiceLanguage.collectAsState()
     LaunchedEffect(Unit) {
         deps.config.loadSettings()
@@ -334,7 +333,8 @@ private fun DefaultsPage(deps: ClaudeSettingsDeps) {
     val effort = str("effortLevel")
     val thinking = (s["alwaysThinkingEnabled"] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: true
     val style = str("outputStyle") ?: "default"
-    val mode = deps.config.defaultMode() ?: "default"
+    // no default in settings.json: new chats start in Auto
+    val mode = deps.config.defaultMode()?.takeIf { it != "bypassPermissions" } ?: "auto"
 
     Hint("These apply to new Claude chats (saved in ~/.claude/settings.json, shared with the terminal CLI).")
 
@@ -376,27 +376,17 @@ private fun DefaultsPage(deps: ClaudeSettingsDeps) {
         SectionTitle("Default permission mode")
         Spacer(Modifier.height(6.dp))
         ClaudeChatBackend.PERMISSION_MODES.forEach { (value, label) ->
-            if (value == "bypassPermissions" && !allowBypass) return@forEach
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { deps.config.setDefaultMode(if (value == "default") null else value) }
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { deps.config.setDefaultMode(value) }
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                androidx.compose.material3.RadioButton(selected = value == mode, onClick = { deps.config.setDefaultMode(if (value == "default") null else value) })
+                androidx.compose.material3.RadioButton(selected = value == mode, onClick = { deps.config.setDefaultMode(value) })
                 Column {
                     Text(label, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
                     Hint(permissionModeDescription(value))
                 }
             }
-        }
-        HorizontalDivider(Modifier.padding(vertical = 6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Allow Bypass mode", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-                Hint("Lets chats skip every permission check. Only for sandboxes without sensitive data.")
-            }
-            Switch(checked = allowBypass, onCheckedChange = { deps.prefs.setAllowBypass(it) },
-                colors = SwitchDefaults.colors(checkedTrackColor = QuotaRed))
         }
     }
 
@@ -437,6 +427,30 @@ private fun PermissionsPage(deps: ClaudeSettingsDeps) {
     var newRule by remember { mutableStateOf("") }
     var behavior by remember { mutableStateOf("allow") }
     if (settings == null) Hint("Loading settings…")
+
+    // Claude Code's command sandbox: the safe way to have fewer prompts (Bypass is never used by this app)
+    val sandbox by deps.config.sandbox.collectAsState()
+    LaunchedEffect(Unit) { deps.config.loadSandbox() }
+    ClaudeCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                SectionTitle("Sandbox commands")
+                Hint(
+                    when {
+                        sandbox == null -> "Checking whether the sandbox can run on this device…"
+                        sandbox?.available == true -> "Run Claude's shell commands in an isolated container (no network, limited files). Commands that stay inside it run without asking."
+                        else -> "Not available here: ${sandbox?.reason ?: "unknown reason"}. Auto mode already asks rarely."
+                    }
+                )
+            }
+            Switch(
+                checked = sandbox?.enabled == true,
+                enabled = sandbox?.available == true,
+                onCheckedChange = { deps.config.setSandboxEnabled(it) },
+                colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent)
+            )
+        }
+    }
 
     Hint("Rules use the CLI syntax: Bash(npm test), Bash(git log *), Read(./src/**), Edit(docs/**), WebFetch(domain:github.com), mcp__server__tool. Deny wins over ask, ask wins over allow.")
     ClaudeCard {

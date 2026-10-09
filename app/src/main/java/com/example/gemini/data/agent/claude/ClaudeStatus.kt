@@ -16,8 +16,8 @@ enum class ClaudeStatus(
     /** The bridge did not answer. */
     BRIDGE_OFFLINE("Bridge offline", 0xFF9CA3AF),
 
-    /** The bridge answered but has no `/api/claude` routes: an older bridge binary is still running. */
-    BRIDGE_OUTDATED("Bridge update needed", 0xFFF97316),
+    /** The running bridge cannot serve Claude (an older binary, or started with Claude turned off): restart it. */
+    BRIDGE_OUTDATED("Restart needed", 0xFFF97316),
 
     /** No `claude` binary on the device. */
     NOT_INSTALLED("Claude Code not found", 0xFFF97316),

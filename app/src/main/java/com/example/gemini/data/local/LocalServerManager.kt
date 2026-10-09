@@ -197,14 +197,14 @@ object LocalServerManager {
 
         val token = authPrefs.getSecurityTokenSync()
         val bridgePort = try {
-            java.net.URI(AuthPreferences.currentBridgeHttpUrl).port.takeIf { it > 0 } ?: 1234
+            java.net.URI(AuthPreferences.currentBridgeHttpUrl).port.takeIf { it > 0 } ?: com.example.gemini.BuildConfig.BRIDGE_PORT
         } catch (_: Exception) {
-            1234
+            com.example.gemini.BuildConfig.BRIDGE_PORT
         }
         val hubPort = try {
-            java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 } ?: 1235
+            java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 } ?: com.example.gemini.BuildConfig.HUB_PORT
         } catch (_: Exception) {
-            1235
+            com.example.gemini.BuildConfig.HUB_PORT
         }
         val tzOffset = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 1000
 
@@ -214,7 +214,10 @@ object LocalServerManager {
             ""
         }
 
-        return "$bridgeCmd -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset$binParam"
+        // agents switched off in the app never run (no AGY hub / no Claude Code endpoints)
+        val agentFlags = com.example.gemini.data.agent.AgentPreferences.bridgeFlags(context)
+
+        return "$bridgeCmd -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset$binParam$agentFlags"
     }
 
     /**
@@ -405,6 +408,16 @@ object LocalServerManager {
         AgyBridgeService.instance.notifyLocalStopped()
         // Retain _serverSession.value so terminal logs and history remain fully visible in the dialog
         _status.value = LocalServerStatus.Stopped(exitCode = 0)
+    }
+
+    /** Restarts the server and waits until it is starting again (agent selection changed). */
+    suspend fun restartServerAndWait(context: Context) {
+        hasInitialAutoStarted = true
+        activeJob?.cancel()
+        _status.value = LocalServerStatus.Starting
+        stopServerInternal()
+        delay(200)
+        startServerInternal(context, forceRestart = true)
     }
 
     fun restartServer(context: Context) {

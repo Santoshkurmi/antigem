@@ -335,11 +335,29 @@ fun ChatScreen(
 
     // Per-agent health for the status dot, accounts, new-chat picker and empty chat (only enabled agents)
     val enabledAgents by viewModel.enabledAgents.collectAsState()
+    val hasChosenAgents by viewModel.hasChosenAgents.collectAsState()
+    val isApplyingAgents by viewModel.isApplyingAgents.collectAsState()
+    val claudeStartup by claudeBackend.startupStatus.collectAsState()
+    val claudeModelList by claudeBackend.availableModels.collectAsState()
+    val claudeModelsError by claudeBackend.modelsError.collectAsState()
+    val claudeModelsRefreshing by claudeBackend.isRefreshingModels.collectAsState()
+    var showClaudeUsage by remember { mutableStateOf(false) }
+    var showClaudeContext by remember { mutableStateOf(false) }
     val claudeState by viewModel.claudeAccount.state.collectAsState()
     val claudeStatusError by viewModel.claudeAccount.statusError.collectAsState()
     val openClaudeSetup = {
         claudeSettingsPage = com.example.gemini.ui.claude.ClaudeSettingsPage.ACCOUNT
         showSettingsDialog = true
+    }
+    val serverRestarting = serverStatus is com.example.gemini.data.local.LocalServerStatus.Starting ||
+        serverStatus is com.example.gemini.data.local.LocalServerStatus.Stopping
+    val restartLocalServer = {
+        com.example.gemini.ui.components.AppToastHelper.showToast("Restarting the local server…", com.example.gemini.ui.components.ChatToastType.INFO)
+        com.example.gemini.data.local.LocalServerManager.restartServer(context)
+    }
+    val recheckClaude = {
+        com.example.gemini.ui.components.AppToastHelper.showToast("Checking Claude Code…", com.example.gemini.ui.components.ChatToastType.INFO)
+        viewModel.claudeAccount.refreshStatus()
     }
     val agyEntry = if (com.example.gemini.domain.model.AgentKind.AGY in enabledAgents) {
         com.example.gemini.ui.agents.agyStatusEntry(
@@ -347,9 +365,14 @@ fun ChatScreen(
             authInfo = agyAuthInfo,
             isAuthBusy = isAuthBusy,
             inStartupGrace = isInitialGracePeriod,
+            serverRestarting = serverRestarting,
             onSignIn = { viewModel.loginToAgyHub(force = true) },
             onCheckAuth = { viewModel.checkAgyAuthStatus(userInitiated = true) },
-            onRetry = { viewModel.retryConnections() }
+            onRetry = {
+                com.example.gemini.ui.components.AppToastHelper.showToast("Reconnecting to Antigravity…", com.example.gemini.ui.components.ChatToastType.INFO)
+                viewModel.retryConnections()
+            },
+            onRestartServer = restartLocalServer
         )
     } else null
     val claudeEntry = if (com.example.gemini.domain.model.AgentKind.CLAUDE in enabledAgents) {
@@ -357,13 +380,34 @@ fun ChatScreen(
             state = claudeState,
             status = claudeStatus,
             error = claudeStatusError,
+            serverRestarting = serverRestarting,
             onSignIn = { showClaudeLogin = true },
             onSetup = openClaudeSetup,
-            onRestartServer = { com.example.gemini.data.local.LocalServerManager.restartServer(context) },
-            onRetry = { viewModel.claudeAccount.refreshStatus() }
+            onRestartServer = restartLocalServer,
+            onRetry = recheckClaude
         )
     } else null
     val agentEntries = listOfNotNull(agyEntry, claudeEntry)
+
+    // Slash commands Claude's CLI only shows in a terminal: the app opens its own screen instead
+    val handleClaudeCommand: (com.example.gemini.data.agent.claude.ClaudeAppCommand) -> Unit = { cmd ->
+        when (cmd) {
+            com.example.gemini.data.agent.claude.ClaudeAppCommand.Usage -> showClaudeUsage = true
+            com.example.gemini.data.agent.claude.ClaudeAppCommand.Context -> showClaudeContext = true
+            com.example.gemini.data.agent.claude.ClaudeAppCommand.ModelPicker -> showModelSelector = true
+            com.example.gemini.data.agent.claude.ClaudeAppCommand.Mcp -> {
+                claudeSettingsPage = com.example.gemini.ui.claude.ClaudeSettingsPage.MCP
+                showSettingsDialog = true
+            }
+            com.example.gemini.data.agent.claude.ClaudeAppCommand.Settings -> {
+                claudeSettingsPage = com.example.gemini.ui.claude.ClaudeSettingsPage.DEFAULTS
+                showSettingsDialog = true
+            }
+            com.example.gemini.data.agent.claude.ClaudeAppCommand.NewChat -> viewModel.startNewChat(com.example.gemini.domain.model.AgentKind.CLAUDE)
+            is com.example.gemini.data.agent.claude.ClaudeAppCommand.Done ->
+                com.example.gemini.ui.components.AppToastHelper.showToast(cmd.message, com.example.gemini.ui.components.ChatToastType.SUCCESS)
+        }
+    }
     var showAccountsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -669,7 +713,17 @@ fun ChatScreen(
         }
     }
 
-    val currentModel = AiModel.findInList(enabledModels, selectedModelId, preferredModelName)
+    val currentModel = if (isClaudeChat) {
+        claudeModelList.find { it.id == selectedModelId } ?: AiModel(
+            id = selectedModelId.ifBlank { "default" },
+            displayName = when {
+                claudeModelsRefreshing -> "Loading models…"
+                claudeModelsError != null -> "Models unavailable"
+                else -> "Choose model"
+            },
+            family = com.example.gemini.domain.model.ModelFamily.CLAUDE
+        )
+    } else AiModel.findInList(enabledModels, selectedModelId, preferredModelName)
     val currentQuota = quotas.find { it.modelId == selectedModelId }
 
     val activeChatProject by TermuxDaemonManager.activeProject.collectAsState()
@@ -893,6 +947,7 @@ fun ChatScreen(
                     showSettingsDialog = true
                     scope.launch { drawerState.close() }
                 },
+                agyEnabled = com.example.gemini.domain.model.AgentKind.AGY in enabledAgents,
                 accountsButton = {
                     com.example.gemini.ui.agents.AccountsButton(
                         agy = agyEntry,
@@ -1269,7 +1324,8 @@ fun ChatScreen(
                                         onSetup = openClaudeSetup,
                                         onRestartServer = { com.example.gemini.data.local.LocalServerManager.restartServer(context) },
                                         onRetry = { viewModel.claudeAccount.refreshStatus() },
-                                        onServerLogs = { showLocalServerOutputDialog = true }
+                                        onServerLogs = { showLocalServerOutputDialog = true },
+                                        serverStarting = serverRestarting
                                     )
                                 } else when (if (isClaudeChat) null else systemConnectionState.status) {
                                     com.example.gemini.data.remote.SystemStatus.CHECKING_AUTH -> {
@@ -1556,21 +1612,35 @@ fun ChatScreen(
                                             .fillMaxWidth()
                                             .clickable {
                                                 val before = inputText.substring(0, slashIndex)
-                                                val newText = "$before${item.command} "
+                                                val appCmd = if (isClaudeChat && item.type == "app") claudeBackend.appCommand(item.command) else null
+                                                val newText = if (appCmd != null) before else "$before${item.command} "
                                                 val tfv = TextFieldValue(
                                                     text = newText,
                                                     selection = TextRange(newText.length)
                                                 )
                                                 textFieldValue = tfv
                                                 viewModel.setDraft(activeConversationKey, tfv)
+                                                if (appCmd != null) {
+                                                    focusManager.clearFocus(force = true)
+                                                    keyboardController?.hide()
+                                                    handleClaudeCommand(appCmd)
+                                                }
                                             }
                                             .padding(horizontal = 12.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            imageVector = if (item.type == "command") Icons.Default.Bolt else Icons.Default.Extension,
+                                            imageVector = when (item.type) {
+                                                "command" -> Icons.Default.Bolt
+                                                "app" -> Icons.AutoMirrored.Outlined.OpenInNew
+                                                else -> Icons.Default.Extension
+                                            },
                                             contentDescription = null,
-                                            tint = if (item.type == "command") ClaudeTerracotta else QuotaGreen,
+                                            tint = when (item.type) {
+                                                "command" -> ClaudeTerracotta
+                                                "app" -> com.example.gemini.ui.components.AgyAccent
+                                                else -> QuotaGreen
+                                            },
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
@@ -1584,15 +1654,20 @@ fun ChatScreen(
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
                                                 Spacer(modifier = Modifier.width(6.dp))
+                                                val chipColor = when (item.type) {
+                                                    "command" -> ClaudeTerracotta
+                                                    "app" -> com.example.gemini.ui.components.AgyAccent
+                                                    else -> QuotaGreen
+                                                }
                                                 Surface(
                                                     shape = RoundedCornerShape(4.dp),
-                                                    color = if (item.type == "command") ClaudeTerracotta.copy(alpha = 0.15f) else QuotaGreen.copy(alpha = 0.15f)
+                                                    color = chipColor.copy(alpha = 0.15f)
                                                 ) {
                                                     Text(
-                                                        text = (item.pluginName ?: item.type).uppercase(),
+                                                        text = (item.pluginName ?: if (item.type == "app") "opens" else item.type).uppercase(),
                                                         fontSize = 9.sp,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = if (item.type == "command") ClaudeTerracotta else QuotaGreen,
+                                                        color = chipColor,
                                                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                     )
                                                 }
@@ -1696,7 +1771,7 @@ fun ChatScreen(
 
                 // Dynamic Bridge / Project / Model Initialization Banner
                 AnimatedVisibility(
-                    visible = !bridgeStatusMessage.isNullOrBlank(),
+                    visible = !isClaudeChat && !bridgeStatusMessage.isNullOrBlank(),
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()
                 ) {
@@ -1731,7 +1806,7 @@ fun ChatScreen(
 
                 // Disconnection / Reconnecting Inline Banner (Compact, non-intrusive with Reconnect action)
                 AnimatedVisibility(
-                    visible = (isServerOnline == false || isReconnecting) && messages.isNotEmpty(),
+                    visible = !isClaudeChat && (isServerOnline == false || isReconnecting) && messages.isNotEmpty(),
                     enter = expandVertically() + fadeIn(),
                     exit = shrinkVertically() + fadeOut()
                 ) {
@@ -1859,7 +1934,14 @@ fun ChatScreen(
 
                 // Claude Code chat: status notice (the empty chat shows the full prompt instead) and chat controls
                 if (isClaudeChat) {
-                    if (messages.isNotEmpty()) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = claudeStartup != null,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        com.example.gemini.ui.claude.ClaudeStartupNotice(claudeStartup ?: "")
+                    }
+                    if (messages.isNotEmpty() && !serverRestarting) {
                         com.example.gemini.ui.claude.ClaudeStatusBanner(
                             state = claudeState,
                             onSignIn = { showClaudeLogin = true },
@@ -1904,10 +1986,26 @@ fun ChatScreen(
                     isStreaming = isActivelyRunning,
                     isBackgroundActive = isBackgroundActive,
                     onSendMessage = { text ->
-                        viewModel.sendMessage(text)
+                        val appCmd = if (isClaudeChat && attachments.isEmpty()) claudeBackend.appCommand(text) else null
+                        val unreadable = if (isClaudeChat) attachments.filter { a ->
+                            a.isAudio || a.mimeType?.startsWith("audio/") == true || a.mimeType?.startsWith("video/") == true
+                        } else emptyList()
+                        if (unreadable.isNotEmpty()) {
+                            // Claude models cannot read audio or video: say so instead of sending a file it would reject
+                            com.example.gemini.ui.components.AppToastHelper.showToast(
+                                "Claude can't read audio or video files. Remove them, or tap the mic to dictate instead.",
+                                com.example.gemini.ui.components.ChatToastType.ERROR
+                            )
+                            return@ChatInputBar
+                        }
+                        if (appCmd != null) {
+                            handleClaudeCommand(appCmd)
+                        } else {
+                            viewModel.sendMessage(text)
+                            userSentMessageTrigger++
+                        }
                         viewModel.clearDraft(activeConversationKey)
                         textFieldValue = TextFieldValue("")
-                        userSentMessageTrigger++
                     },
                     onStopStreaming = { showStopConfirmDialog = true },
                     attachments = attachments,
@@ -1920,6 +2018,7 @@ fun ChatScreen(
                     },
                     isTranscribingAudio = isTranscribingAudio,
                     speechManager = if (isClaudeChat) viewModel.claudeVoice else viewModel.speechManager,
+                    voiceNotesAsText = isClaudeChat,
                     cascadeId = activeConversationKey,
                     focusRequester = chatInputFocusRequester
                 )
@@ -2121,7 +2220,8 @@ fun ChatScreen(
             claude = claudeSettingsDeps,
             initialClaudePage = claudeSettingsPage,
             enabledAgents = enabledAgents,
-            onSetAgentEnabled = { agent, on -> viewModel.setAgentEnabled(agent, on) },
+            isApplyingAgents = isApplyingAgents,
+            onApplyAgents = { viewModel.applyAgents(it) },
             onDismiss = {
                 showSettingsDialog = false
                 claudeSettingsPage = null
@@ -2131,6 +2231,19 @@ fun ChatScreen(
 
     if (showClaudeLogin) {
         com.example.gemini.ui.claude.ClaudeLoginDialog(viewModel.claudeAccount) { showClaudeLogin = false }
+    }
+
+    if (!hasChosenAgents) {
+        com.example.gemini.ui.agents.AgentChoiceDialog { viewModel.applyAgents(it) }
+    }
+    if (isApplyingAgents) {
+        com.example.gemini.ui.agents.AgentsApplyingDialog()
+    }
+    if (showClaudeUsage) {
+        com.example.gemini.ui.claude.ClaudeUsageDialog(viewModel.claudeAccount, claudeBackend) { showClaudeUsage = false }
+    }
+    if (showClaudeContext) {
+        com.example.gemini.ui.claude.ClaudeContextDialog(claudeBackend) { showClaudeContext = false }
     }
 
     if (showAccountsDialog) {

@@ -26,7 +26,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -42,37 +41,19 @@ import com.example.gemini.ui.components.ClaudeAccent
 
 /** Uppercase group label used to separate Antigravity / Claude Code / App settings. */
 @Composable
-fun SettingsGroupHeader(
-    title: String,
-    accent: Color,
-    subtitle: String? = null,
-    modifier: Modifier = Modifier,
-    /** With [onEnabledChange]: an on/off switch for the whole group (an agent). */
-    enabled: Boolean? = null,
-    onEnabledChange: (Boolean) -> Unit = {}
-) {
-    Row(modifier = modifier.padding(top = 10.dp, bottom = 2.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(accent))
-                Spacer(Modifier.width(8.dp))
-                Text(title.uppercase(), fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = accent, letterSpacing = 1.sp)
-            }
-            if (subtitle != null) {
-                Text(
-                    if (enabled == false) "Off · hidden from new chats and the status dot" else subtitle,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    modifier = Modifier.padding(start = 16.dp, top = 1.dp)
-                )
-            }
+fun SettingsGroupHeader(title: String, accent: Color, subtitle: String? = null, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(top = 10.dp, bottom = 2.dp, start = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(accent))
+            Spacer(Modifier.width(8.dp))
+            Text(title.uppercase(), fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = accent, letterSpacing = 1.sp)
         }
-        if (enabled != null) {
-            androidx.compose.material3.Switch(
-                checked = enabled,
-                onCheckedChange = onEnabledChange,
-                colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = accent),
-                modifier = Modifier.scale(0.85f)
+        if (subtitle != null) {
+            Text(
+                subtitle,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier.padding(start = 16.dp, top = 1.dp)
             )
         }
     }

@@ -42,8 +42,12 @@ class ClaudeBridgeClient(
             http.newCall(request).execute().use { resp ->
                 val text = resp.body?.string().orEmpty()
                 val isJson = text.trimStart().startsWith("{")
-                // the bridge's Claude routes always answer JSON; a plain 404 means a bridge without them
+                // the bridge's Claude routes always answer JSON; a plain 404 means a bridge without them, and a 503
+                // "disabled" one that was started with --no-claude (Claude was off when the server started)
                 if (resp.code == 404 && !isJson) throw ClaudeBridgeOutdatedException()
+                if (resp.code == 503 && text.contains("\"disabled\":true")) {
+                    throw ClaudeBridgeOutdatedException("The local server was started with Claude Code turned off. Restart it to use Claude.")
+                }
                 if (!resp.isSuccessful && !isJson) error("HTTP ${resp.code}" + text.trim().take(120).let { if (it.isBlank()) "" else ": $it" })
                 ClaudeJson.decodeFromString<T>(text)
             }
@@ -118,6 +122,12 @@ class ClaudeBridgeClient(
 
     suspend fun cliJob(): Result<ClaudeCliJobResponse> = get("/cli/job")
 
+    /** Saves an attachment of chat [sessionId] on the bridge; Claude is given its path. */
+    suspend fun saveAttachment(sessionId: String, name: String, mimeType: String, base64: String): Result<ClaudeSavedAttachment> =
+        call(Request.Builder().url(url("/attachments")).post(ClaudeJson.encodeToString(ClaudeAttachmentSave(sessionId, name, mimeType, base64)).toRequestBody(jsonType)).build(), slowClient)
+
+    suspend fun sandbox(): Result<ClaudeSandboxInfo> = call(Request.Builder().url(url("/sandbox")).get().build(), slowClient)
+
     /** action: install | update */
     suspend fun startCliJob(action: String): Result<ClaudeCliJobResponse> = post("/cli/$action")
 
@@ -144,7 +154,6 @@ class ClaudeBridgeClient(
                 spawn.fork_from?.let { addQueryParameter("fork_from", it) }
                 spawn.resume_session_at?.let { addQueryParameter("resume_session_at", it) }
                 spawn.thinking?.let { addQueryParameter("thinking", it) }
-                spawn.allow_bypass?.let { addQueryParameter("allow_bypass", it) }
             }
             .build()
         val request = Request.Builder().url(httpUrl.toString().replaceFirst("http", "ws")).build()
@@ -173,8 +182,36 @@ class ClaudeBridgeClient(
     }
 }
 
+/** Nothing answered at the bridge address (not running yet, stopped, or unreachable). */
+fun Throwable.isBridgeUnreachable(): Boolean =
+    this is java.net.ConnectException || this is java.net.NoRouteToHostException || this is java.net.UnknownHostException ||
+        // OkHttp reports a connect timeout as SocketTimeoutException("failed to connect …")
+        (this is java.net.SocketTimeoutException && message.orEmpty().contains("connect", ignoreCase = true))
+
+/**
+ * The app has just started (or the local server is starting): an unreachable bridge is expected for a few seconds,
+ * so callers wait and retry instead of reporting it offline. Like AGY's start-up grace period.
+ */
+object BridgeStartup {
+    private val appStart = System.currentTimeMillis()
+    @Volatile private var reached = false
+
+    fun markReached() {
+        reached = true
+    }
+
+    fun isStartingUp(): Boolean {
+        if (reached) return false
+        val elapsed = System.currentTimeMillis() - appStart
+        val serverStarting = com.example.gemini.data.local.LocalServerManager.status.value is com.example.gemini.data.local.LocalServerStatus.Starting
+        return elapsed < 20_000 || (serverStarting && elapsed < 60_000)
+    }
+}
+
 /** The bridge answered but has no `/api/claude` routes: an older bridge binary is still running. */
-class ClaudeBridgeOutdatedException : IllegalStateException("The running bridge has no Claude Code support")
+class ClaudeBridgeOutdatedException(
+    message: String = "The running bridge has no Claude Code support. Restart the local server to load the new version."
+) : IllegalStateException(message)
 
 class ClaudeSocket internal constructor(private val ws: WebSocket) {
     fun send(text: String): Boolean = ws.send(text)

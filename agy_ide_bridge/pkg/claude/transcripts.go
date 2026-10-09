@@ -357,6 +357,7 @@ func (m *Manager) DeleteSession(id string) error {
 	if s != nil {
 		s.KillAndWait(6 * time.Second)
 	}
+	m.removeAttachments(id)
 	path := m.FindTranscript(id)
 	if path == "" {
 		return nil

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -34,9 +35,17 @@ fun ClaudeStatusPrompt(
     onRestartServer: () -> Unit,
     onRetry: () -> Unit,
     onServerLogs: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** The local server is (re)starting: wait instead of reporting it offline. */
+    serverStarting: Boolean = false
 ) {
     val dot = state.dotColor
+    if (serverStarting) {
+        AgentSetupPrompt(
+            AgentKind.CLAUDE, "Starting the local server…", "Claude Code will be ready in a moment.", modifier, ClaudeStatus.CHECKING.dotColor
+        )
+        return
+    }
     when (state) {
         ClaudeStatus.CHECKING -> AgentSetupPrompt(
             AgentKind.CLAUDE, "Checking Claude Code…", "Looking for the Claude Code CLI and your sign-in.", modifier, dot
@@ -65,8 +74,8 @@ fun ClaudeStatusPrompt(
         )
         ClaudeStatus.BRIDGE_OUTDATED -> AgentSetupPrompt(
             AgentKind.CLAUDE,
-            "Bridge update needed",
-            error ?: "The running bridge has no Claude Code support. Restart the local server to load the new version.",
+            "Restart the local server",
+            error ?: "The running local server cannot run Claude Code yet. Restart it to load Claude.",
             modifier, dot,
             actionLabel = "Restart server", onAction = onRestartServer,
             secondaryLabel = "Check again", onSecondary = onRetry
@@ -104,7 +113,7 @@ fun ClaudeStatusBanner(
         ClaudeStatus.SIGNED_OUT -> "Claude Code is signed out" to ("Sign in" to onSignIn)
         ClaudeStatus.SIGNING_IN -> "Finishing Claude sign-in…" to ("Open" to onSignIn)
         ClaudeStatus.NOT_INSTALLED -> "Claude Code not found on this device" to ("Set up" to onSetup)
-        ClaudeStatus.BRIDGE_OUTDATED -> "The bridge needs a restart for Claude Code" to ("Restart" to onRestartServer)
+        ClaudeStatus.BRIDGE_OUTDATED -> "Restart the local server to use Claude Code" to ("Restart" to onRestartServer)
         ClaudeStatus.BRIDGE_OFFLINE -> "Local server offline" to ("Retry" to onRetry)
         else -> return
     }
@@ -128,6 +137,33 @@ fun ClaudeStatusBanner(
             )
             Spacer(Modifier.width(8.dp))
             AgentActionPill(action.first, ClaudeAccent, action.second)
+        }
+    }
+}
+
+/** Above the input while a sent message waits for the claude process to boot. */
+@Composable
+fun ClaudeStartupNotice(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = ClaudeAccent.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, ClaudeAccent.copy(alpha = 0.3f))
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.padding(end = 10.dp).size(14.dp),
+                strokeWidth = 2.dp,
+                color = ClaudeAccent
+            )
+            androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+                Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "The first message of a chat starts Claude Code, which can take a little while on a phone.",
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
         }
     }
 }

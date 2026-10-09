@@ -42,6 +42,7 @@ Flags:
   --tz-offset <seconds>     Timezone offset in seconds (e.g. 20700 for UTC+05:45)
   --tz <location>           Timezone location name (e.g. Asia/Kathmandu)
   --no-hub                  Skip launching AGY Hub (run IDE server only)
+  --no-claude               Disable Claude Code (no /api/claude endpoints, never runs the claude CLI)
   -d, --dir <path>          Custom workspace directory
   -h, --help                Show help documentation`)
 }
@@ -113,6 +114,7 @@ func main() {
 	var unpatchOnly bool
 	var customAgyBin string
 	var customClaudeBin string
+	var noClaude bool
 	var forceStart bool
 	var skipHub bool
 	var cliToken string
@@ -151,6 +153,8 @@ func main() {
 			forceStart = true
 		case arg == "--no-hub" || arg == "-n" || arg == "--skip-hub":
 			skipHub = true
+		case arg == "--no-claude":
+			noClaude = true
 		case strings.HasPrefix(arg, "--port="):
 			cfg.Port = strings.TrimPrefix(arg, "--port=")
 		case arg == "-p" || arg == "--port":
@@ -269,9 +273,18 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Claude Code CLI sessions (process manager + NDJSON WebSocket relay)
-	claudeMgr := claude.NewManager(cfg.HomeDir, cfg.WorkspaceDir, customClaudeBin)
-	mux.Handle("/api/claude/", claudeMgr)
+	// Claude Code CLI sessions (process manager + NDJSON WebSocket relay); off with --no-claude
+	var claudeMgr *claude.Manager
+	if noClaude {
+		mux.HandleFunc("/api/claude/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"success":false,"disabled":true,"error":"Claude Code is turned off in the app"}`))
+		})
+	} else {
+		claudeMgr = claude.NewManager(cfg.HomeDir, cfg.WorkspaceDir, customClaudeBin)
+		mux.Handle("/api/claude/", claudeMgr)
+	}
 
 	// REST Endpoints
 	mux.HandleFunc("/api/health", h.HealthHandler)
@@ -559,7 +572,9 @@ func main() {
 	wsHub.Close()
 
 	// 2. Stop Claude Code sessions, then the AGY Hub process group and continuous background monitor
-	claudeMgr.StopAll()
+	if claudeMgr != nil {
+		claudeMgr.StopAll()
+	}
 	if hubMgr != nil {
 		hubMgr.Stop()
 	}

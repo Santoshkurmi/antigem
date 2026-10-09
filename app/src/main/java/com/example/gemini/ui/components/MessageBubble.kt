@@ -44,6 +44,7 @@ import android.net.Uri
 import android.content.Intent
 import java.io.File
 import com.example.gemini.data.remote.HubMediaResolver
+import kotlinx.coroutines.launch
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.theme.ClaudeTerracotta
@@ -880,7 +881,8 @@ private fun UserMessageImageItem(
         }
     }
 
-    val finalUri = resolvedUri.ifBlank { rawUri }
+    // a bridge file needs the authenticated fetch above; Coil alone would be refused
+    val finalUri = resolvedUri.ifBlank { if (HubMediaResolver.isBridgeFileUrl(rawUri)) "" else rawUri }
     val coilData: Any? = remember(finalUri, attachment.base64, memKey) {
         val cachedBytes = HubMediaResolver.getImageBytes(memKey)
         when {
@@ -909,7 +911,13 @@ private fun UserMessageImageItem(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .clickable { if (finalUri.isNotBlank()) onImageClick(finalUri) }
+            .clickable {
+                when {
+                    finalUri.isNotBlank() -> onImageClick(finalUri)
+                    // image kept only as data (e.g. a reopened Claude chat)
+                    !attachment.base64.isNullOrBlank() -> onImageClick("data:${attachment.mimeType ?: "image/jpeg"};base64,${attachment.base64}")
+                }
+            }
     ) {
         if (coilData != null) {
             AsyncImage(
@@ -996,6 +1004,7 @@ private fun UserMessageDocumentItem(
 ) {
     val context = LocalContext.current
     val fileLinkHandler = LocalFileLinkHandler.current
+    val scope = rememberCoroutineScope()
 
     val isText = remember(attachment) {
         val mime = attachment.mimeType?.lowercase() ?: ""
@@ -1016,6 +1025,30 @@ private fun UserMessageDocumentItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .clickable {
+                val bridgeUrl = attachment.url?.takeIf { HubMediaResolver.isBridgeFileUrl(it) }
+                if (bridgeUrl != null && attachment.localUri.isNullOrBlank()) {
+                    // saved on the bridge (Claude chat): fetch it, then open like a local file
+                    scope.launch {
+                        val file = HubMediaResolver.downloadBridgeFile(context, bridgeUrl, attachment.name)
+                        if (file == null) {
+                            Toast.makeText(context, "${attachment.name} is no longer available", Toast.LENGTH_SHORT).show()
+                        } else if (isText) {
+                            fileLinkHandler.onOpenFile(file.absolutePath)
+                        } else {
+                            try {
+                                val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                    setDataAndType(uri, attachment.mimeType ?: "*/*")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(intent, "Open ${attachment.name}"))
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Cannot open: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                    return@clickable
+                }
                 if (isText) {
                     val targetPath = when {
                         attachment.path.isNotBlank() -> attachment.path

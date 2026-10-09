@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,14 +24,11 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.DataUsage
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -69,6 +67,11 @@ import com.example.gemini.ui.agents.SheetSectionLabel
 import com.example.gemini.ui.components.ClaudeAccent
 import kotlinx.coroutines.delay
 
+private fun isoUtcSeconds(epochSeconds: Long): String =
+    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+        .format(java.util.Date(epochSeconds * 1000))
+
 private fun compactTokens(n: Long): String = when {
     n >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", n / 1_000_000.0)
     n >= 1000 -> "${n / 1000}k"
@@ -93,7 +96,6 @@ fun ClaudeControlsStrip(
     val limits by backend.rateLimits.collectAsState()
     val modelInfos by backend.modelInfos.collectAsState()
     val selectedModel by backend.selectedModelId.collectAsState()
-    val allowBypass by prefs.allowBypass.collectAsState()
 
     val info = modelInfos.find { it.value == selectedModel } ?: modelInfos.firstOrNull()
     var modeMenu by remember { mutableStateOf(false) }
@@ -116,65 +118,24 @@ fun ClaudeControlsStrip(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // permission mode
-        Box {
-            val modeColor = when (mode) {
-                "plan" -> Color(0xFF0EA5E9)
-                "acceptEdits" -> QuotaGreen
-                "auto" -> Color(0xFF8B5CF6)
-                "bypassPermissions" -> QuotaRed
-                "dontAsk" -> QuotaAmber
-                else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-            }
-            ControlChip(
-                text = permissionModeLabel(mode),
-                icon = Icons.Outlined.Shield,
-                color = modeColor,
-                highlighted = mode != "default",
-                onClick = { modeMenu = true }
-            )
-            DropdownMenu(expanded = modeMenu, onDismissRequest = { modeMenu = false }) {
-                ClaudeChatBackend.PERMISSION_MODES.forEach { (value, label) ->
-                    val available = when (value) {
-                        "bypassPermissions" -> allowBypass
-                        "auto" -> info?.supportsAutoMode != false
-                        else -> true
-                    }
-                    if (!available) return@forEach
-                    DropdownMenuItem(
-                        text = {
-                            Column {
-                                Text(label, fontWeight = if (value == mode) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp)
-                                Text(permissionModeDescription(value), fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                            }
-                        },
-                        trailingIcon = { if (value == mode) Icon(Icons.Default.Check, null, tint = ClaudeAccent) },
-                        onClick = {
-                            modeMenu = false
-                            backend.setPermissionMode(value)
-                        }
-                    )
-                }
-            }
-        }
+        ControlChip(
+            text = permissionModeLabel(mode),
+            icon = permissionModeIcon(mode),
+            color = permissionModeColor(mode),
+            highlighted = mode != "default",
+            onClick = { modeMenu = true }
+        )
 
         // effort
         val levels = info?.supportedEffortLevels.orEmpty()
         if (levels.isNotEmpty()) {
-            Box {
-                ControlChip(text = "Effort: ${effortLabel(effort)}", icon = Icons.Outlined.Speed, onClick = { effortMenu = true })
-                DropdownMenu(expanded = effortMenu, onDismissRequest = { effortMenu = false }) {
-                    (listOf<String?>(null) + levels).forEach { level ->
-                        DropdownMenuItem(
-                            text = { Text(effortLabel(level), fontWeight = if (level == effort) FontWeight.Bold else FontWeight.Normal) },
-                            trailingIcon = { if (level == effort) Icon(Icons.Default.Check, null, tint = ClaudeAccent) },
-                            onClick = {
-                                effortMenu = false
-                                backend.setEffort(level)
-                            }
-                        )
-                    }
-                }
-            }
+            ControlChip(
+                text = "Effort · ${effortLabel(effort)}",
+                icon = Icons.Outlined.Speed,
+                color = if (effort != null) ClaudeAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                highlighted = effort != null,
+                onClick = { effortMenu = true }
+            )
         }
 
         // thinking
@@ -215,40 +176,30 @@ fun ClaudeControlsStrip(
         }
     }
 
-    if (showContext) {
-        val ctx = context
-        AlertDialog(
-            onDismissRequest = { showContext = false },
-            title = { Text("Context window", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (ctx != null) {
-                        Text("${compactTokens(ctx.totalTokens)} of ${compactTokens(ctx.maxTokens)} tokens used (${ctx.percentage.toInt()}%)", fontSize = 13.sp)
-                        UsageBar("Used", ctx.percentage / 100.0, null)
-                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                        ctx.categories.forEach { cat ->
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(cat.name, fontSize = 12.5.sp)
-                                Text(compactTokens(cat.tokens), fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                            }
-                        }
-                        Text(
-                            "Send /compact to summarize the conversation and free space.",
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                    }
-                }
+    if (modeMenu) {
+        val autoSupported = info?.supportsAutoMode != false
+        ClaudePermissionModeSheet(
+            current = mode,
+            modes = ClaudeChatBackend.PERMISSION_MODES.filter { (value, _) -> value != "auto" || autoSupported },
+            note = if (autoSupported) {
+                "Auto asks only for risky actions. For fewer prompts without giving up checks, turn on Sandbox commands in Settings → Claude Code → Permissions."
+            } else {
+                "This model has no Auto mode; chats on it start in Manual."
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    backend.refreshContextUsage()
-                }) { Text("Refresh") }
-            },
-            dismissButton = { TextButton(onClick = { showContext = false }) { Text("Close") } }
+            onSelect = { backend.setPermissionMode(it) },
+            onDismiss = { modeMenu = false }
         )
     }
+    if (effortMenu) {
+        ClaudeEffortSheet(
+            levels = info?.supportedEffortLevels.orEmpty(),
+            current = effort,
+            onSelect = { backend.setEffort(it) },
+            onDismiss = { effortMenu = false }
+        )
+    }
+
+    if (showContext) ClaudeContextDialog(backend) { showContext = false }
 
     if (showCache) {
         val c = cache
@@ -274,7 +225,7 @@ fun ClaudeControlsStrip(
 }
 
 /** Model picker for Claude chats: CLI models, effort per model, thinking, fast mode, plan usage. */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ClaudeModelSheet(
     backend: ClaudeChatBackend,
@@ -289,6 +240,7 @@ fun ClaudeModelSheet(
     val thinking by backend.thinkingEnabled.collectAsState()
     val fast by backend.fastModeState.collectAsState()
     val refreshing by backend.isRefreshingModels.collectAsState()
+    val modelsError by backend.modelsError.collectAsState()
     val usage by account.usage.collectAsState()
     val liveLimits by backend.rateLimits.collectAsState()
     val cardColor = claudeCardColor()
@@ -310,7 +262,11 @@ fun ClaudeModelSheet(
             AgentSheetHeader(
                 AgentKind.CLAUDE,
                 "Select model",
-                if (rows.isEmpty()) "no models loaded" else "${rows.size} models",
+                when {
+                    rows.isNotEmpty() -> "${rows.size} models"
+                    refreshing -> "loading models…"
+                    else -> "no models loaded"
+                },
                 refreshing = refreshing,
                 onRefresh = { backend.refreshInfo(force = true) }
             )
@@ -323,7 +279,55 @@ fun ClaudeModelSheet(
                 )
             }
 
+            // plan limits, shown like Antigravity's quota chips (remaining share · time to reset)
+            val five = liveLimits["five_hour"]?.let { it.utilization to it.resetsAt?.let(::isoUtcSeconds) }
+                ?: usage?.rate_limits?.five_hour?.let { (it.utilization ?: 0.0) / 100.0 to it.resets_at }
+            val week = liveLimits["seven_day"]?.let { it.utilization to it.resetsAt?.let(::isoUtcSeconds) }
+                ?: usage?.rate_limits?.seven_day?.let { (it.utilization ?: 0.0) / 100.0 to it.resets_at }
+            if (five != null || week != null) {
+                Spacer(Modifier.height(10.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(start = 48.dp)
+                ) {
+                    five?.let { (used, reset) ->
+                        val left = (1.0 - used).toFloat().coerceIn(0f, 1f)
+                        com.example.gemini.ui.models.buildQuotaSummaryLine("5h", left, reset, null)?.let {
+                            com.example.gemini.ui.models.QuotaBadgeChip(text = it, fraction = left)
+                        }
+                    }
+                    week?.let { (used, reset) ->
+                        val left = (1.0 - used).toFloat().coerceIn(0f, 1f)
+                        com.example.gemini.ui.models.buildQuotaSummaryLine("7d", left, reset, null)?.let {
+                            com.example.gemini.ui.models.QuotaBadgeChip(text = it, fraction = left)
+                        }
+                    }
+                }
+            }
+
             SheetSectionLabel("Model")
+            if (rows.isEmpty()) {
+                Surface(shape = RoundedCornerShape(14.dp), color = cardColor, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (refreshing) {
+                            androidx.compose.material3.CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+                            Spacer(Modifier.height(10.dp))
+                            Text("Loading Claude's models…", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("Claude Code is starting to list them; this can take a moment.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        } else {
+                            Text("No models loaded", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text(
+                                modelsError ?: "Claude Code has not listed its models yet.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            TextButton(onClick = { backend.refreshInfo(force = true) }) { Text("Try again", color = ClaudeAccent) }
+                        }
+                    }
+                }
+            }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 rows.forEach { (value, name, desc) ->
                     val isSel = value == selected
@@ -394,21 +398,110 @@ fun ClaudeModelSheet(
                     }
                 }
             }
-
-            // live windows from the chat stream take precedence over the cached usage call
-            val five = liveLimits["five_hour"]?.let { it.utilization to formatReset(null, it.resetsAt) }
-                ?: usage?.rate_limits?.five_hour?.let { (it.utilization ?: 0.0) / 100.0 to formatReset(it.resets_at) }
-            val week = liveLimits["seven_day"]?.let { it.utilization to formatReset(null, it.resetsAt) }
-                ?: usage?.rate_limits?.seven_day?.let { (it.utilization ?: 0.0) / 100.0 to formatReset(it.resets_at) }
-            if (five != null || week != null) {
-                SheetSectionLabel("Plan usage")
-                Surface(shape = RoundedCornerShape(14.dp), color = cardColor, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        five?.let { UsageBar("5-hour limit", it.first, it.second) }
-                        week?.let { UsageBar("Weekly limit", it.first, it.second) }
-                    }
-                }
-            }
         }
     }
+}
+
+/** Context window usage of the open chat (the `/context` command). */
+@Composable
+fun ClaudeContextDialog(backend: ClaudeChatBackend, onDismiss: () -> Unit) {
+    val ctx by backend.contextUsage.collectAsState()
+    LaunchedEffect(Unit) { backend.refreshContextUsage() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Context window", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val c = ctx
+                if (c == null) {
+                    Text("Context usage shows once this chat has started (send a message first).", fontSize = 13.sp)
+                } else {
+                    Text("${compactTokens(c.totalTokens)} of ${compactTokens(c.maxTokens)} tokens used (${c.percentage.toInt()}%)", fontSize = 13.sp)
+                    UsageBar("Used", c.percentage / 100.0, null)
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                    c.categories.forEach { cat ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(cat.name, fontSize = 12.5.sp)
+                            Text(compactTokens(cat.tokens), fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        }
+                    }
+                    Text(
+                        "Send /compact to summarize the conversation and free space.",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { backend.refreshContextUsage() }) { Text("Refresh") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
+}
+
+/** Plan limits and this chat's cost (the `/usage` command). */
+@Composable
+fun ClaudeUsageDialog(account: ClaudeAccountManager, backend: ClaudeChatBackend, onDismiss: () -> Unit) {
+    val usage by account.usage.collectAsState()
+    val status by account.status.collectAsState()
+    val live by backend.rateLimits.collectAsState()
+    val cost by backend.sessionCost.collectAsState()
+    var loading by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        account.refreshUsage(force = true)
+        delay(1_500)
+        loading = false
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("Usage", fontWeight = FontWeight.Bold)
+                val plan = (usage?.subscription_type ?: status?.auth?.subscriptionType)?.let { com.example.gemini.ui.agents.claudePlanLabel(it) }
+                Text(
+                    listOfNotNull("Claude Code", plan?.let { "$it plan" }).joinToString(" · "),
+                    fontSize = 12.sp,
+                    color = ClaudeAccent
+                )
+            }
+        },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val rl = usage?.rate_limits
+                // live windows from the chat stream are fresher than the cached call
+                val five = live["five_hour"]?.let { it.utilization to formatReset(null, it.resetsAt) }
+                    ?: rl?.five_hour?.let { (it.utilization ?: 0.0) / 100.0 to formatReset(it.resets_at) }
+                val week = live["seven_day"]?.let { it.utilization to formatReset(null, it.resetsAt) }
+                    ?: rl?.seven_day?.let { (it.utilization ?: 0.0) / 100.0 to formatReset(it.resets_at) }
+                when {
+                    five != null || week != null -> {
+                        five?.let { UsageBar("Current session (5-hour)", it.first, it.second) }
+                        week?.let { UsageBar("This week (all models)", it.first, it.second) }
+                        rl?.seven_day_opus?.let { UsageBar("This week (Opus)", (it.utilization ?: 0.0) / 100.0, formatReset(it.resets_at)) }
+                        rl?.seven_day_sonnet?.let { UsageBar("This week (Sonnet)", (it.utilization ?: 0.0) / 100.0, formatReset(it.resets_at)) }
+                    }
+                    loading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Loading plan usage…", fontSize = 13.sp)
+                    }
+                    usage != null && !usage!!.rate_limits_available ->
+                        Text("Plan limits do not apply to this account (API billing has no 5-hour or weekly limits).", fontSize = 13.sp)
+                    else -> Text("Plan usage is not available right now.", fontSize = 13.sp)
+                }
+                HorizontalDivider()
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("This chat", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+                    Text(if (cost > 0) String.format(java.util.Locale.US, "$%.2f", cost) else "–", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Text(
+                    "Cost is what this chat would cost at API prices; on a subscription it counts toward the limits above.",
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { account.refreshUsage(force = true) }) { Text("Refresh") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
 }

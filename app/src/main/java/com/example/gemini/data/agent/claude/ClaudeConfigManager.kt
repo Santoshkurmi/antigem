@@ -40,6 +40,30 @@ class ClaudeConfigManager(
     /** Called after settings change so the chat picks up new defaults. */
     var onSettingsChanged: () -> Unit = {}
 
+    private val _sandbox = MutableStateFlow<ClaudeSandboxInfo?>(null)
+    /** Whether Claude Code's command sandbox can run on this device (checked by the bridge) and is turned on. */
+    val sandbox: StateFlow<ClaudeSandboxInfo?> = _sandbox.asStateFlow()
+
+    fun loadSandbox() {
+        scope.launch {
+            client.sandbox()
+                .onSuccess { _sandbox.value = it }
+                .onFailure { _sandbox.value = ClaudeSandboxInfo(reason = "Could not check: ${it.message}") }
+        }
+    }
+
+    /**
+     * Turns the command sandbox on or off in settings.json: commands then run in an isolated container and the
+     * ones that stay inside it are approved without asking.
+     */
+    fun setSandboxEnabled(enabled: Boolean) {
+        val cur = (_settings.value?.get("sandbox") as? JsonObject).orEmpty()
+        val next = cur + ("enabled" to JsonPrimitive(enabled)) +
+            (if (enabled && "autoAllowBashIfSandboxed" !in cur) mapOf("autoAllowBashIfSandboxed" to JsonPrimitive(true)) else emptyMap())
+        setValue("sandbox", JsonObject(next))
+        _sandbox.value = _sandbox.value?.copy(enabled = enabled)
+    }
+
     fun loadSettings() {
         scope.launch {
             client.settings()
