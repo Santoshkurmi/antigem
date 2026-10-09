@@ -189,6 +189,8 @@ fun SettingsDialog(
     isTerminalAutomationEnabled: Boolean = true,
     onToggleBrowserAutomation: (Boolean) -> Unit = {},
     onToggleTerminalAutomation: (Boolean) -> Unit = {},
+    isFlowAutomationEnabled: Boolean = false,
+    onToggleFlowAutomation: (Boolean) -> Unit = {},
     isFloatingSwitcherEnabled: Boolean = true,
     floatingSwitcherOrientation: String = "HORIZONTAL",
     floatingSwitcherItems: List<String> = listOf("chat", "ide", "terminal", "browser"),
@@ -355,6 +357,7 @@ fun SettingsDialog(
                         installedPlugins = installedPlugins,
                         isBrowserAutomationEnabled = isBrowserAutomationEnabled,
                         isTerminalAutomationEnabled = isTerminalAutomationEnabled,
+                        isFlowAutomationEnabled = isFlowAutomationEnabled,
                         commandAutoExecutionPolicy = commandAutoExecutionPolicy,
                         commandSandboxEnabled = commandSandboxEnabled,
                         isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
@@ -455,6 +458,8 @@ fun SettingsDialog(
                         isTerminalAutomationEnabled = isTerminalAutomationEnabled,
                         onToggleBrowserAutomation = onToggleBrowserAutomation,
                         onToggleTerminalAutomation = onToggleTerminalAutomation,
+                        isFlowAutomationEnabled = isFlowAutomationEnabled,
+                        onToggleFlowAutomation = onToggleFlowAutomation,
                         cardBg = cardBg,
                         cardBorder = cardBorder
                     )
@@ -564,6 +569,7 @@ private fun MainSettingsMenu(
     installedPlugins: List<com.example.gemini.data.remote.dto.InstalledPluginDto> = emptyList(),
     isBrowserAutomationEnabled: Boolean,
     isTerminalAutomationEnabled: Boolean,
+    isFlowAutomationEnabled: Boolean = false,
     commandAutoExecutionPolicy: String,
     commandSandboxEnabled: Boolean,
     isFloatingDiagnosticsEnabled: Boolean = false,
@@ -698,17 +704,16 @@ private fun MainSettingsMenu(
         )
 
         // Section 4: Automation & Device Bridge
-        val autoActiveCount = (if (isBrowserAutomationEnabled) 1 else 0) + (if (isTerminalAutomationEnabled) 1 else 0)
+        val autoActiveCount = (if (isBrowserAutomationEnabled) 1 else 0) + (if (isTerminalAutomationEnabled) 1 else 0) + (if (isFlowAutomationEnabled) 1 else 0)
         val (autoBadge, autoColor) = when (autoActiveCount) {
-            2 -> "Full Access" to QuotaGreen
-            1 -> "Partial" to Color(0xFF00ACC1)
-            else -> "Disabled" to Color(0xFFFFA000)
+            3 -> "Full Access" to QuotaGreen
+            0 -> "Disabled" to Color(0xFFFFA000)
+            else -> "Partial" to Color(0xFF00ACC1)
         }
-        val autoSummary = when {
-            isBrowserAutomationEnabled && isTerminalAutomationEnabled -> "Browser: ON • Terminal: ON"
-            isBrowserAutomationEnabled -> "Browser: ON • Terminal: OFF"
-            isTerminalAutomationEnabled -> "Browser: OFF • Terminal: ON"
-            else -> "All Automation Disabled"
+        val autoSummary = if (autoActiveCount == 0) {
+            "All Automation Disabled"
+        } else {
+            "Browser: ${if (isBrowserAutomationEnabled) "ON" else "OFF"} • Terminal: ${if (isTerminalAutomationEnabled) "ON" else "OFF"} • Flow: ${if (isFlowAutomationEnabled) "ON" else "OFF"}"
         }
         SettingsCategoryCard(
             icon = Icons.Outlined.SmartToy,
@@ -7689,6 +7694,8 @@ private fun AutomationSubScreen(
     isTerminalAutomationEnabled: Boolean,
     onToggleBrowserAutomation: (Boolean) -> Unit,
     onToggleTerminalAutomation: (Boolean) -> Unit,
+    isFlowAutomationEnabled: Boolean,
+    onToggleFlowAutomation: (Boolean) -> Unit,
     cardBg: Color,
     cardBorder: BorderStroke
 ) {
@@ -7994,6 +8001,124 @@ private fun AutomationSubScreen(
                                 fontSize = 10.sp,
                                 fontFamily = FontFamily.Monospace,
                                 color = if (isTerminalAutomationEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Flow Automation Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = if (isFlowAutomationEnabled) BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.4f)) else cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isFlowAutomationEnabled) Color(0xFF8B5CF6).copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Movie,
+                                    contentDescription = null,
+                                    tint = if (isFlowAutomationEnabled) Color(0xFF8B5CF6) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "Flow Automation",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (isFlowAutomationEnabled) QuotaGreen.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = if (isFlowAutomationEnabled) "ACTIVE" else "DISABLED",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isFlowAutomationEnabled) QuotaGreen else Color.Gray,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Google Flow image & video generation",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isFlowAutomationEnabled,
+                        onCheckedChange = onToggleFlowAutomation,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color(0xFF8B5CF6)
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Allows the AI to generate images and videos on Google Flow (flow.google.com) through your own signed-in session in the in-app browser, and to read your Flow projects, media and credits. Open Flow in the AntiGem browser and sign in first, and keep AntiGem open while generating. Files are kept once in ~/flow-media (never copied to your gallery) and fetched only when the AI needs them.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    lineHeight = 17.sp
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Exposed MCP Tools (29):",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val flowTools = listOf(
+                        "flow_status", "flow_list_models", "flow_list_projects", "flow_create_project",
+                        "flow_rename_project", "flow_open_project", "flow_get_settings", "flow_list_media",
+                        "flow_get_media", "flow_upload_media", "flow_generate_image", "flow_generate_video", "flow_get_job", "flow_video_status", "flow_get_last_media", "flow_rename_media",
+                        "flow_trash_media", "flow_restore_media", "flow_combine_videos", "flow_video_to_gif", "flow_extract_frame",
+                        "flow_create_scene", "flow_edit_image", "flow_edit_video", "flow_extend_video", "flow_upscale_image", "flow_upscale_video", "flow_cancel", "flow_lock_tab"
+                    )
+                    flowTools.forEach { tool ->
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        ) {
+                            Text(
+                                text = tool,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (isFlowAutomationEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                         }

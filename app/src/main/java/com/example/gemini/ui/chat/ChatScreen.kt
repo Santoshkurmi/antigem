@@ -231,6 +231,7 @@ fun ChatScreen(
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
     val isBrowserAutomationEnabled by viewModel.isBrowserAutomationEnabled.collectAsState()
     val isTerminalAutomationEnabled by viewModel.isTerminalAutomationEnabled.collectAsState()
+    val isFlowAutomationEnabled by viewModel.isFlowAutomationEnabled.collectAsState()
     val isFloatingSwitcherEnabled by viewModel.isFloatingSwitcherEnabled.collectAsState()
     val floatingSwitcherOrientation by viewModel.floatingSwitcherOrientation.collectAsState()
     val floatingSwitcherItems by viewModel.floatingSwitcherItems.collectAsState()
@@ -1313,7 +1314,6 @@ fun ChatScreen(
                             androidx.compose.ui.platform.LocalDensity provides customDensity,
                             com.example.gemini.ui.components.LocalQuestionPanelActive provides true
                         ) {
-                            SelectionContainer(modifier = Modifier.fillMaxSize()) {
                                 LazyColumn(
                                     state = listState,
                                     modifier = Modifier.fillMaxSize(),
@@ -1460,7 +1460,6 @@ fun ChatScreen(
                                         Spacer(modifier = Modifier.height(16.dp))
                                     }
                                 }
-                            }
                         }
                     }
 
@@ -2075,6 +2074,8 @@ fun ChatScreen(
             isTerminalAutomationEnabled = isTerminalAutomationEnabled,
             onToggleBrowserAutomation = { viewModel.setBrowserAutomationEnabled(it) },
             onToggleTerminalAutomation = { viewModel.setTerminalAutomationEnabled(it) },
+            isFlowAutomationEnabled = isFlowAutomationEnabled,
+            onToggleFlowAutomation = { viewModel.setFlowAutomationEnabled(it) },
             isFloatingSwitcherEnabled = isFloatingSwitcherEnabled,
             floatingSwitcherOrientation = floatingSwitcherOrientation,
             floatingSwitcherItems = floatingSwitcherItems,

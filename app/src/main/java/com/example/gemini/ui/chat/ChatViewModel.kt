@@ -647,6 +647,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val isTerminalAutomationEnabled: StateFlow<Boolean> = authPrefs.isTerminalAutomationEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.isTerminalAutomationEnabledSync())
 
+    val isFlowAutomationEnabled: StateFlow<Boolean> = authPrefs.isFlowAutomationEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.isFlowAutomationEnabledSync())
+
     fun setBrowserAutomationEnabled(enabled: Boolean) {
         viewModelScope.launch {
             authPrefs.setBrowserAutomationEnabled(enabled)
@@ -656,6 +659,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun setTerminalAutomationEnabled(enabled: Boolean) {
         viewModelScope.launch {
             authPrefs.setTerminalAutomationEnabled(enabled)
+        }
+    }
+
+    fun setFlowAutomationEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPrefs.setFlowAutomationEnabled(enabled)
         }
     }
 

@@ -35,9 +35,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lightbulb
@@ -142,6 +144,8 @@ sealed class MarkdownBlock {
     data class InteractiveUi(val htmlCode: String, val title: String = "Interactive App") : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class Image(val alt: String, val url: String) : MarkdownBlock()
+
+    data class Video(val alt: String, val url: String) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class YouTubeVideo(
         val videoId: String,
@@ -207,6 +211,9 @@ fun MarkdownBlockView(
         }
         is MarkdownBlock.Image -> {
             MarkdownImageView(image = block, modifier = modifier)
+        }
+        is MarkdownBlock.Video -> {
+            MarkdownVideoView(video = block, modifier = modifier)
         }
         is MarkdownBlock.YouTubeVideo -> {
             YouTubeVideoView(video = block, modifier = modifier)
@@ -1615,6 +1622,247 @@ fun MarkdownImageView(
             onDismiss = { showFullDialog = false }
         )
     }
+}
+
+/**
+ * Renders a local or remote video file (mp4/webm/mov) inline with play/pause and a seek bar.
+ * Uses MediaPlayer + TextureView so the video scrolls and clips correctly inside the chat list.
+ */
+@Composable
+fun MarkdownVideoView(
+    video: MarkdownBlock.Video,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val videoUri = remember(video.url) {
+        val raw = video.url.trim()
+        if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("content://") || raw.startsWith("file://")) {
+            Uri.parse(raw)
+        } else {
+            Uri.fromFile(java.io.File(raw))
+        }
+    }
+    var aspectRatio by remember(video.url) { mutableFloatStateOf(16f / 9f) }
+    var isPrepared by remember(video.url) { mutableStateOf(false) }
+    var isPlaying by remember(video.url) { mutableStateOf(false) }
+    var hasError by remember(video.url) { mutableStateOf(false) }
+    var durationMs by remember(video.url) { mutableIntStateOf(0) }
+    var positionMs by remember(video.url) { mutableIntStateOf(0) }
+    var isSeeking by remember(video.url) { mutableStateOf(false) }
+
+    val player = remember(video.url) { android.media.MediaPlayer() }
+
+    DisposableEffect(player) {
+        try {
+            player.setDataSource(context, videoUri)
+            player.setOnPreparedListener { mp ->
+                if (mp.videoWidth > 0 && mp.videoHeight > 0) {
+                    aspectRatio = mp.videoWidth.toFloat() / mp.videoHeight
+                }
+                durationMs = mp.duration.coerceAtLeast(0)
+                isPrepared = true
+                mp.seekTo(1)
+            }
+            player.setOnCompletionListener {
+                isPlaying = false
+                positionMs = durationMs
+            }
+            player.setOnErrorListener { _, _, _ ->
+                hasError = true
+                isPlaying = false
+                true
+            }
+            player.prepareAsync()
+        } catch (e: Exception) {
+            Log.e("MarkdownVideoView", "Failed to open video ${video.url}: ${e.message}")
+            hasError = true
+        }
+        onDispose {
+            try { player.release() } catch (_: Exception) {}
+        }
+    }
+
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            if (!isSeeking) {
+                positionMs = try { player.currentPosition } catch (_: Exception) { positionMs }
+            }
+            delay(250)
+        }
+    }
+
+    val togglePlayback: () -> Unit = {
+        try {
+            if (isPlaying) {
+                player.pause()
+                isPlaying = false
+            } else {
+                if (durationMs > 0 && positionMs >= durationMs - 200) player.seekTo(0)
+                player.start()
+                isPlaying = true
+            }
+        } catch (_: Exception) {}
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .heightIn(max = 420.dp)
+                .aspectRatio(aspectRatio)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.Black)
+                .clickable(enabled = isPrepared && !hasError) { togglePlayback() }
+        ) {
+            if (hasError) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ErrorOutline,
+                        contentDescription = "Failed to load video",
+                        tint = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = video.alt.ifBlank { "Video could not be loaded" },
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
+            } else {
+                AndroidView(
+                    factory = { ctx ->
+                        android.view.TextureView(ctx).apply {
+                            surfaceTextureListener = object : android.view.TextureView.SurfaceTextureListener {
+                                private var surface: android.view.Surface? = null
+
+                                override fun onSurfaceTextureAvailable(texture: android.graphics.SurfaceTexture, width: Int, height: Int) {
+                                    surface = android.view.Surface(texture)
+                                    try {
+                                        player.setSurface(surface)
+                                        if (isPrepared && !isPlaying) player.seekTo(positionMs.coerceAtLeast(1))
+                                    } catch (_: Exception) {}
+                                }
+
+                                override fun onSurfaceTextureSizeChanged(texture: android.graphics.SurfaceTexture, width: Int, height: Int) {}
+
+                                override fun onSurfaceTextureDestroyed(texture: android.graphics.SurfaceTexture): Boolean {
+                                    try {
+                                        if (player.isPlaying) player.pause()
+                                        player.setSurface(null)
+                                    } catch (_: Exception) {}
+                                    isPlaying = false
+                                    surface?.release()
+                                    surface = null
+                                    return true
+                                }
+
+                                override fun onSurfaceTextureUpdated(texture: android.graphics.SurfaceTexture) {}
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                if (!isPlaying) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color.Black.copy(alpha = 0.55f),
+                        modifier = Modifier.size(52.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (isPrepared) {
+                                Icon(
+                                    imageVector = Icons.Filled.PlayArrow,
+                                    contentDescription = "Play",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            } else {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (isPrepared && !hasError && durationMs > 0) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+            ) {
+                IconButton(onClick = togglePlayback, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Slider(
+                    value = positionMs.toFloat().coerceIn(0f, durationMs.toFloat()),
+                    onValueChange = {
+                        isSeeking = true
+                        positionMs = it.toInt()
+                    },
+                    onValueChangeFinished = {
+                        try { player.seekTo(positionMs) } catch (_: Exception) {}
+                        isSeeking = false
+                    },
+                    valueRange = 0f..durationMs.toFloat(),
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "${formatVideoTime(positionMs)} / ${formatVideoTime(durationMs)}",
+                    fontSize = 10.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(start = 6.dp)
+                )
+                IconButton(
+                    onClick = { ImageDownloadHelper.downloadVideo(context, video.url, video.alt, coroutineScope) },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Download,
+                        contentDescription = "Download video",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        if (video.alt.isNotBlank()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = video.alt,
+                fontSize = 11.5.sp,
+                fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+private fun formatVideoTime(ms: Int): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(totalSec / 60, totalSec % 60)
 }
 
 private val YOUTUBE_EXTRACT_REGEX = Regex(
@@ -3091,6 +3339,14 @@ fun parseMarkdownBlocks(
             } else {
                 result.add(MarkdownBlock.Image(alt = alt, url = imgUrl))
             }
+            i++
+            continue
+        }
+
+        // 5a-2. Video files: ![alt](path.mp4) or [alt](path.mp4)
+        val videoMatch = Regex("^\\s*!?\\[(.*?)\\]\\(([^\\s)]+\\.(?:mp4|webm|mov|m4v|3gp)(?:\\?[^\\s)]*)?)\\)\\s*$", RegexOption.IGNORE_CASE).find(line)
+        if (videoMatch != null) {
+            result.add(MarkdownBlock.Video(alt = videoMatch.groupValues[1], url = videoMatch.groupValues[2]))
             i++
             continue
         }

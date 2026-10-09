@@ -68,6 +68,7 @@ class AuthPreferences(private val context: Context) {
         val FLOATING_SWITCHER_POS_Y = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_pos_y")
         val IS_BROWSER_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_browser_automation_enabled")
         val IS_TERMINAL_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_automation_enabled")
+        val IS_FLOW_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_flow_automation_enabled")
         val IS_FLOATING_DIAGNOSTICS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_diagnostics_enabled")
         val IS_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_network_inspector_enabled")
         val IS_FLOATING_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_network_inspector_enabled")
@@ -162,9 +163,11 @@ class AuthPreferences(private val context: Context) {
     val localToolsVersion: Flow<String?> = context.dataStore.data.map { it[LOCAL_TOOLS_VERSION] }
     val isBrowserAutomationEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_BROWSER_AUTOMATION_ENABLED] ?: true }
     val isTerminalAutomationEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_TERMINAL_AUTOMATION_ENABLED] ?: true }
+    val isFlowAutomationEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_FLOW_AUTOMATION_ENABLED] ?: false }
 
     fun isBrowserAutomationEnabledSync(): Boolean = syncPrefs.getBoolean("is_browser_automation_enabled", true)
     fun isTerminalAutomationEnabledSync(): Boolean = syncPrefs.getBoolean("is_terminal_automation_enabled", true)
+    fun isFlowAutomationEnabledSync(): Boolean = syncPrefs.getBoolean("is_flow_automation_enabled", false)
 
     val agyBridgeHttpUrl: Flow<String> = context.dataStore.data.map { 
         val url = it[AGY_BRIDGE_HTTP_URL] ?: DEFAULT_BRIDGE_HTTP_URL
@@ -357,6 +360,13 @@ class AuthPreferences(private val context: Context) {
         syncPrefs.edit().putBoolean("is_terminal_automation_enabled", enabled).apply()
         context.dataStore.edit { prefs ->
             prefs[IS_TERMINAL_AUTOMATION_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setFlowAutomationEnabled(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("is_flow_automation_enabled", enabled).apply()
+        context.dataStore.edit { prefs ->
+            prefs[IS_FLOW_AUTOMATION_ENABLED] = enabled
         }
     }
 

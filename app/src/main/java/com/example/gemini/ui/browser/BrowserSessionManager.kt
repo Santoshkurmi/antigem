@@ -5,13 +5,22 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputMethodManager
 import android.webkit.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -92,6 +101,17 @@ class BrowserTabSession(
     var isDesktopMode by mutableStateOf(false)
     var defaultUserAgent: String? = null
     var previewBitmap by mutableStateOf<Bitmap?>(null)
+
+    // AI automation (Flow): lock requested by the model, AI currently working, temporary user unlock,
+    // and whether the tab is what the user is looking at right now
+    var aiLocked by mutableStateOf(false)
+    var aiBusy by mutableStateOf(false)
+    var userUnlocked by mutableStateOf(false)
+    var isOnScreen by mutableStateOf(false)
+
+    /** True while the user must not interact with the page (overlay shown, keyboard kept away). */
+    val blocksUserInput: Boolean
+        get() = aiBusy || (aiLocked && !userUnlocked)
 
     // Circular buffers for real-time telemetry (capped to 300 entries each)
     val consoleLogs = ConcurrentLinkedDeque<BrowserConsoleMessage>()
@@ -484,6 +504,13 @@ class BrowserSessionManager private constructor() {
     private var offscreenContainer: ViewGroup? = null
     private var appContext: Context? = null
 
+    /**
+     * Files handed to the next page file chooser instead of opening a picker
+     * (armed by Flow automation when it uploads media).
+     */
+    @Volatile
+    var pendingChooserFiles: List<Uri>? = null
+
     fun init(context: Context) {
         appContext = context.applicationContext
         loadShortcutsIfNeeded(context)
@@ -776,7 +803,18 @@ class BrowserSessionManager private constructor() {
         } catch (_: Exception) {}
         tab.webView = null
 
-        val wv = WebView(context).apply {
+        val wv = object : WebView(context) {
+            // While AI automation drives this tab, page input focus must never bring up the soft keyboard
+            // (text is entered through the page itself) ...
+            override fun onCheckIsTextEditor(): Boolean = if (tab.blocksUserInput) false else super.onCheckIsTextEditor()
+
+            override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? =
+                if (tab.blocksUserInput) null else super.onCreateInputConnection(outAttrs)
+
+            // ... and an off-screen tab must not steal focus (and the keyboard) from what the user is typing in
+            override fun requestFocus(direction: Int, previouslyFocusedRect: Rect?): Boolean =
+                if (tab.aiBusy && !tab.isOnScreen) false else super.requestFocus(direction, previouslyFocusedRect)
+        }.apply {
             setBackgroundColor(Color.WHITE)
             layoutParams = ViewGroup.LayoutParams(1080, 1920)
 
@@ -850,6 +888,9 @@ class BrowserSessionManager private constructor() {
                     }
                     if (tab.isDevToolsEnabled && view != null) {
                         ErudaHelper.inject(view, showImmediately = false)
+                    }
+                    if (tab.isDesktopMode && FlowAutomationManager.isFlowUrl(url)) {
+                        view?.postDelayed({ zoomOutFully(tab) }, 800)
                     }
                     view?.postDelayed({
                         tab.capturePreview()
@@ -1029,6 +1070,18 @@ class BrowserSessionManager private constructor() {
                         )
                     }
                     return super.onConsoleMessage(consoleMessage)
+                }
+
+                override fun onShowFileChooser(
+                    webView: WebView?,
+                    filePathCallback: ValueCallback<Array<Uri>>?,
+                    fileChooserParams: FileChooserParams?
+                ): Boolean {
+                    val pending = pendingChooserFiles
+                        ?: return super.onShowFileChooser(webView, filePathCallback, fileChooserParams)
+                    pendingChooserFiles = null
+                    filePathCallback?.onReceiveValue(pending.toTypedArray())
+                    return true
                 }
             }
         }
@@ -1477,6 +1530,81 @@ class BrowserSessionManager private constructor() {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Zooms the tab out as far as the page allows, so a desktop-width page fits the screen width.
+     */
+    fun zoomOutFully(tab: BrowserTabSession) {
+        mainHandler.post {
+            val wv = tab.webView ?: return@post
+            repeat(15) { if (!wv.zoomOut()) return@post }
+        }
+    }
+
+    /**
+     * Hides the soft keyboard if it is showing for this tab's WebView.
+     */
+    fun hideKeyboard(tab: BrowserTabSession) {
+        mainHandler.post {
+            val wv = tab.webView ?: return@post
+            val imm = wv.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager ?: return@post
+            imm.hideSoftInputFromWindow(wv.windowToken, 0)
+        }
+    }
+
+    /**
+     * After AI automation: closes the keyboard and drops the WebView's focus, so unblocking input doesn't
+     * bring the keyboard back for a field the AI focused.
+     */
+    fun releaseFocus(tab: BrowserTabSession) {
+        mainHandler.post {
+            val wv = tab.webView ?: return@post
+            val imm = wv.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.hideSoftInputFromWindow(wv.windowToken, 0)
+            if (wv.hasFocus()) wv.clearFocus()
+        }
+    }
+
+    /**
+     * Sends a real (trusted) touch tap to the WebView. [fx]/[fy] are fractions (0..1)
+     * of the page's visual viewport, so the result is independent of zoom and density.
+     */
+    suspend fun dispatchTap(tabId: String?, fx: Float, fy: Float): Result<Boolean> = withContext(Dispatchers.Main) {
+        val tab = (if (tabId.isNullOrBlank()) getActiveTab() else tabs.find { it.id == tabId })
+            ?: return@withContext Result.failure(Exception("Tab not found"))
+        val wv = tab.webView ?: return@withContext Result.failure(Exception("WebView not initialized for tab"))
+        if (wv.width <= 0 || wv.height <= 0) return@withContext Result.failure(Exception("WebView has no size yet"))
+        if (fx !in 0f..1f || fy !in 0f..1f) return@withContext Result.failure(Exception("Tap point is outside the visible page"))
+
+        val x = fx * wv.width
+        val y = fy * wv.height
+        val downTime = SystemClock.uptimeMillis()
+        val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0).apply {
+            source = InputDevice.SOURCE_TOUCHSCREEN
+        }
+        wv.dispatchTouchEvent(down)
+        down.recycle()
+        kotlinx.coroutines.delay(70)
+        val up = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y, 0).apply {
+            source = InputDevice.SOURCE_TOUCHSCREEN
+        }
+        wv.dispatchTouchEvent(up)
+        up.recycle()
+        Result.success(true)
+    }
+
+    /**
+     * Sends a real key press (e.g. KeyEvent.KEYCODE_ESCAPE) to the WebView.
+     */
+    suspend fun dispatchKey(tabId: String?, keyCode: Int): Result<Boolean> = withContext(Dispatchers.Main) {
+        val tab = (if (tabId.isNullOrBlank()) getActiveTab() else tabs.find { it.id == tabId })
+            ?: return@withContext Result.failure(Exception("Tab not found"))
+        val wv = tab.webView ?: return@withContext Result.failure(Exception("WebView not initialized for tab"))
+        val now = SystemClock.uptimeMillis()
+        wv.dispatchKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0))
+        wv.dispatchKeyEvent(KeyEvent(now, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, keyCode, 0))
+        Result.success(true)
     }
 
     /**

@@ -132,6 +132,14 @@ fun BrowserScreen(
     val defaultMaxFooterOffsetPx = remember(density) { with(density) { 100.dp.toPx() } }
     var footerHeightPx by remember { mutableFloatStateOf(0f) }
     var footerOffsetPx by remember { mutableFloatStateOf(0f) }
+    val flowManager = remember { FlowAutomationManager.instance }
+    // The page area stops above the bottom bar while the bar is visible (so it never covers pages that don't
+    // scroll the window, e.g. Flow); once the bar has fully slid away on a scrolling page, the page uses the space.
+    val navBarBottomPx = WindowInsets.navigationBars.getBottom(density)
+    val footerOverlapDp = with(density) {
+        val hidden = footerHeightPx > 0f && footerOffsetPx >= footerHeightPx - 1f
+        (if (hidden) 0f else (footerHeightPx - navBarBottomPx).coerceAtLeast(0f)).toDp()
+    }
     var ignoreScrollUntilTouch by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -219,6 +227,10 @@ fun BrowserScreen(
                         tab.webView?.onResume()
                     }
                     tabs.firstNotNullOfOrNull { it.webView }?.resumeTimers()
+                }
+                Lifecycle.Event.ON_STOP -> {
+                    // A temporary unlock of an AI-locked tab ends when the app goes to the background
+                    tabs.forEach { it.userUnlocked = false }
                 }
                 else -> {}
             }
@@ -729,9 +741,23 @@ fun BrowserScreen(
             tabs.forEach { tab ->
                 key(tab.id) {
                     val isActive = tab.id == activeTabId
+                    val isFlowTab = FlowAutomationManager.isFlowUrl(tab.url)
+                    val tabOnScreen = isActive && isVisible && !isHomePage
+                    SideEffect {
+                        tab.isOnScreen = tabOnScreen
+                        if (isFlowTab) {
+                            tab.aiLocked = flowManager.tabLocked
+                            tab.aiBusy = flowManager.isBusy
+                        }
+                    }
+                    // A temporary unlock ends as soon as the user leaves this tab or the browser screen
+                    LaunchedEffect(tabOnScreen) {
+                        if (!tabOnScreen) tab.userUnlocked = false
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .padding(bottom = footerOverlapDp)
                             .graphicsLayer {
                                 alpha = if (isActive && !isHomePage) 1f else 0f
                                 translationX = if (isActive && !isHomePage) 0f else -20000f
@@ -821,6 +847,13 @@ fun BrowserScreen(
                             },
                             modifier = Modifier.fillMaxSize()
                         )
+
+                        if (isFlowTab && (flowManager.isBusy || (flowManager.tabLocked && !tab.userUnlocked))) {
+                            FlowAiLockOverlay(
+                                busy = flowManager.isBusy,
+                                onUnlock = { tab.userUnlocked = true }
+                            )
+                        }
                     }
                 }
             }
@@ -1973,6 +2006,66 @@ fun BrowserDiagnosticOverlay(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Dismiss", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Covers an AI-controlled Flow tab with an invisible touch blocker and a small see-through status pill near the
+ * top, so the user can still watch the page. While the AI is working it only shows that; when the tab is locked
+ * it offers a temporary unlock.
+ */
+@Composable
+private fun FlowAiLockOverlay(busy: Boolean, onUnlock: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent().changes.forEach { it.consume() }
+                    }
+                }
+            },
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = Color.Black.copy(alpha = 0.55f),
+            modifier = Modifier.padding(top = 10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 12.dp, end = if (busy) 14.dp else 4.dp, top = 6.dp, bottom = 6.dp)
+            ) {
+                if (busy) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Color.White)
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.Lock,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (busy) "AI is working in Flow…" else "Controlled by AI",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White
+                )
+                if (!busy) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    TextButton(
+                        onClick = onUnlock,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text("Unlock", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFFFB38A))
+                    }
                 }
             }
         }

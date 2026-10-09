@@ -66,6 +66,72 @@ object ImageDownloadHelper {
         }
     }
 
+    /**
+     * Saves a video (local path, file://, content:// or http(s) URL) to Downloads/AntiGem, streaming it to disk.
+     */
+    fun downloadVideo(context: Context, videoSource: String, title: String, coroutineScope: CoroutineScope) {
+        if (videoSource.isBlank()) {
+            Toast.makeText(context, "No video to download", Toast.LENGTH_SHORT).show()
+            return
+        }
+        coroutineScope.launch {
+            val saved = withContext(Dispatchers.IO) { saveVideoToDownloads(context, videoSource, title) }
+            if (saved != null) {
+                Toast.makeText(context, "Video saved to Downloads/AntiGem", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Failed to save video", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun saveVideoToDownloads(context: Context, source: String, title: String): Uri? = try {
+        val clean = source.trim().removePrefix("file://")
+        val extension = clean.substringBefore('?').substringAfterLast('.', "mp4").lowercase().takeIf { it.length in 2..4 } ?: "mp4"
+        val mimeType = when (extension) {
+            "webm" -> "video/webm"
+            "mov" -> "video/quicktime"
+            "3gp" -> "video/3gpp"
+            else -> "video/mp4"
+        }
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val safeTitle = title.replace(Regex("[^A-Za-z0-9_-]"), "_").take(30).trimEnd('_')
+        val fileName = if (safeTitle.isNotBlank()) "VID_${safeTitle}_$timestamp.$extension" else "VID_$timestamp.$extension"
+
+        val input: java.io.InputStream? = when {
+            source.startsWith("content://") -> context.contentResolver.openInputStream(Uri.parse(source))
+            source.startsWith("http://") || source.startsWith("https://") -> {
+                val resp = OkHttpClient().newCall(Request.Builder().url(source).get().build()).execute()
+                if (resp.isSuccessful) resp.body?.byteStream() else { resp.close(); null }
+            }
+            else -> File(clean).takeIf { it.canRead() && it.length() > 0 }?.inputStream()
+        }
+        input?.use { stream ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/AntiGem")
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val resolver = context.contentResolver
+                val itemUri = resolver.insert(MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
+                itemUri?.also { uri ->
+                    resolver.openOutputStream(uri)?.use { out -> stream.copyTo(out) }
+                    values.clear()
+                    values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                    resolver.update(uri, values, null, null)
+                }
+            } else {
+                val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "AntiGem").apply { mkdirs() }
+                val target = File(dir, fileName)
+                target.outputStream().use { out -> stream.copyTo(out) }
+                Uri.fromFile(target)
+            }
+        }
+    } catch (_: Exception) {
+        null
+    }
+
     private fun openImage(context: Context, uri: Uri, mimeType: String) {
         try {
             val intent = Intent(Intent.ACTION_VIEW).apply {
