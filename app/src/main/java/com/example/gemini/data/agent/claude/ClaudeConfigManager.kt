@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -159,8 +160,39 @@ class ClaudeConfigManager(
     fun saveMemory(scopeName: String, cwd: String?, content: String) {
         scope.launch {
             client.saveMemory(scopeName, cwd, content)
-                .onSuccess { if (it.success) _messages.tryEmit("CLAUDE.md saved") else _messages.tryEmit("Save failed: ${it.error}") }
+                .onSuccess {
+                    if (it.success) {
+                        _messages.tryEmit("CLAUDE.md saved")
+                        _memory.value = _memory.value?.copy(content = content, exists = true)
+                    } else _messages.tryEmit("Save failed: ${it.error}")
+                }
                 .onFailure { _messages.tryEmit("Save failed: ${it.message}") }
+        }
+    }
+
+    private val _autoMemory = MutableStateFlow<ClaudeAutoMemoryResponse?>(null)
+    /** Notes Claude saved by itself for the project (null while loading). */
+    val autoMemory: StateFlow<ClaudeAutoMemoryResponse?> = _autoMemory.asStateFlow()
+
+    fun loadAutoMemory(cwd: String?) {
+        scope.launch {
+            _autoMemory.value = null
+            client.autoMemory(cwd)
+                .onSuccess { _autoMemory.value = it }
+                .onFailure { _autoMemory.value = ClaudeAutoMemoryResponse(error = it.message ?: "Cannot reach the bridge") }
+        }
+    }
+
+    fun deleteAutoMemory(cwd: String?, name: String) {
+        scope.launch {
+            client.deleteAutoMemory(cwd, name)
+                .onSuccess {
+                    if (it.success) {
+                        _messages.tryEmit("Deleted $name")
+                        _autoMemory.value = _autoMemory.value?.let { m -> m.copy(files = m.files.filter { f -> f.name != name }) }
+                    } else _messages.tryEmit("Delete failed: ${it.error}")
+                }
+                .onFailure { _messages.tryEmit("Delete failed: ${it.message}") }
         }
     }
 
@@ -172,36 +204,73 @@ class ClaudeConfigManager(
     private val _mcpLoading = MutableStateFlow(false)
     val mcpLoading: StateFlow<Boolean> = _mcpLoading.asStateFlow()
 
+    private val _mcpOps = MutableStateFlow<Map<String, String>>(emptyMap())
+    /** Server name → what is being done to it right now ("Adding…", "Removing…"). */
+    val mcpOps: StateFlow<Map<String, String>> = _mcpOps.asStateFlow()
+
+    private val _mcpAddError = MutableStateFlow<Pair<String, String>?>(null)
+    /** The last add that failed: server name → the CLI's error (shown on the add sheet / list). */
+    val mcpAddError: StateFlow<Pair<String, String>?> = _mcpAddError.asStateFlow()
+
+    private fun setMcpOp(name: String, op: String?) {
+        _mcpOps.value = if (op == null) _mcpOps.value - name else _mcpOps.value + (name to op)
+    }
+
     fun loadMcp(cwd: String?) {
-        scope.launch {
-            _mcpLoading.value = true
-            client.mcpServers(cwd)
-                .onSuccess { if (it.success) _mcpServers.value = it.servers else _messages.tryEmit("MCP status failed: ${it.error}") }
-                .onFailure { _messages.tryEmit("MCP status failed: ${it.message}") }
-            _mcpLoading.value = false
-        }
+        scope.launch { loadMcpNow(cwd) }
     }
 
     fun addMcp(req: ClaudeMcpAddRequest, cwd: String?) {
         scope.launch {
-            _mcpLoading.value = true
-            client.addMcpServer(req)
-                .onSuccess { if (it.success) _messages.tryEmit("Added MCP server '${req.name}'") else _messages.tryEmit(it.error ?: "Add failed") }
-                .onFailure { _messages.tryEmit("Add failed: ${it.message}") }
-            _mcpLoading.value = false
-            loadMcp(cwd)
+            _mcpAddError.value = null
+            setMcpOp(req.name, "Adding…")
+            val error = client.addMcpServer(req).fold(
+                { if (it.success) null else it.error?.lines()?.lastOrNull { l -> l.isNotBlank() } ?: "Add failed" },
+                { it.message ?: "Add failed" }
+            )
+            if (error != null) {
+                setMcpOp(req.name, null)
+                _mcpAddError.value = req.name to error
+                _messages.tryEmit("Could not add '${req.name}': $error")
+                return@launch
+            }
+            // added: the status check connects to it (can take a few seconds)
+            setMcpOp(req.name, "Connecting…")
+            loadMcpNow(cwd)
+            setMcpOp(req.name, null)
+            val added = _mcpServers.value.find { it.name == req.name }
+            _messages.tryEmit(
+                when (added?.status) {
+                    "connected" -> "'${req.name}' connected · ${added.tools.size} tools"
+                    "failed" -> "'${req.name}' was added but failed to connect"
+                    else -> "Added '${req.name}'"
+                }
+            )
         }
     }
 
     fun removeMcp(name: String, scopeName: String?, cwd: String?) {
         scope.launch {
-            _mcpLoading.value = true
+            setMcpOp(name, "Removing…")
             client.removeMcpServer(name, scopeName, cwd)
-                .onSuccess { if (it.success) _messages.tryEmit("Removed '$name'") else _messages.tryEmit(it.error ?: "Remove failed") }
+                .onSuccess {
+                    if (it.success) {
+                        _messages.tryEmit("Removed '$name'")
+                        _mcpServers.value = _mcpServers.value.filter { s -> s.name != name }
+                    } else _messages.tryEmit(it.error ?: "Remove failed")
+                }
                 .onFailure { _messages.tryEmit("Remove failed: ${it.message}") }
-            _mcpLoading.value = false
-            loadMcp(cwd)
+            setMcpOp(name, null)
+            loadMcpNow(cwd)
         }
+    }
+
+    private suspend fun loadMcpNow(cwd: String?) {
+        _mcpLoading.value = true
+        client.mcpServers(cwd)
+            .onSuccess { if (it.success) _mcpServers.value = it.servers else _messages.tryEmit("MCP status failed: ${it.error}") }
+            .onFailure { _messages.tryEmit("MCP status failed: ${it.message}") }
+        _mcpLoading.value = false
     }
 
     // ---------------------------------------------------------------- plugins
@@ -209,9 +278,12 @@ class ClaudeConfigManager(
     private val _plugins = MutableStateFlow<ClaudePluginsResponse?>(null)
     val plugins: StateFlow<ClaudePluginsResponse?> = _plugins.asStateFlow()
 
-    private val _pluginBusy = MutableStateFlow<String?>(null)
-    /** Plugin id (or marketplace) currently being changed. */
-    val pluginBusy: StateFlow<String?> = _pluginBusy.asStateFlow()
+    private val _pluginOps = MutableStateFlow<Map<String, String>>(emptyMap())
+    /** Plugin key (or marketplace name / source) → its pending or running action ("install", "uninstall", …). */
+    val pluginOps: StateFlow<Map<String, String>> = _pluginOps.asStateFlow()
+
+    // the CLI changes one shared plugin config: actions run one after another
+    private val pluginMutex = kotlinx.coroutines.sync.Mutex()
 
     fun loadPlugins() {
         scope.launch {
@@ -223,17 +295,34 @@ class ClaudeConfigManager(
 
     /** action: install | uninstall | enable | disable | update | marketplace-add | marketplace-remove | marketplace-update */
     fun pluginAction(action: String, body: ClaudePluginAction) {
+        val key = body.plugin.ifBlank { body.name ?: body.source ?: action }
+        if (key in _pluginOps.value) return
+        _pluginOps.value = _pluginOps.value + (key to action)
         scope.launch {
-            _pluginBusy.value = body.plugin.ifBlank { body.name ?: body.source ?: action }
-            client.pluginAction(action, body)
-                .onSuccess {
-                    if (it.success) _messages.tryEmit("${action.replace('-', ' ').replaceFirstChar { c -> c.uppercase() }}: done")
-                    else _messages.tryEmit(it.error?.lines()?.lastOrNull { l -> l.isNotBlank() } ?: "$action failed")
-                }
-                .onFailure { _messages.tryEmit("$action failed: ${it.message}") }
-            _pluginBusy.value = null
-            loadPlugins()
+            val label = key.substringBefore('@')
+            pluginMutex.withLock {
+                client.pluginAction(action, body)
+                    .onSuccess {
+                        if (it.success) _messages.tryEmit("${pluginActionDone(action)} $label")
+                        else _messages.tryEmit("$label: " + (it.error?.lines()?.lastOrNull { l -> l.isNotBlank() } ?: "$action failed"))
+                    }
+                    .onFailure { _messages.tryEmit("$label: $action failed: ${it.message}") }
+                client.plugins().onSuccess { _plugins.value = it }
+            }
+            _pluginOps.value = _pluginOps.value - key
         }
+    }
+
+    private fun pluginActionDone(action: String) = when (action) {
+        "install" -> "Installed"
+        "uninstall" -> "Uninstalled"
+        "enable" -> "Enabled"
+        "disable" -> "Disabled"
+        "update" -> "Updated"
+        "marketplace-add" -> "Added marketplace"
+        "marketplace-remove" -> "Removed marketplace"
+        "marketplace-update" -> "Updated marketplace"
+        else -> "Done:"
     }
 
     // ---------------------------------------------------------------- CLI install / update

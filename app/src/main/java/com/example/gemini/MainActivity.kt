@@ -213,7 +213,10 @@ class MainActivity : ComponentActivity() {
                             onComplete = {
                                 isInstalledState = true
                                 hasSkippedInstaller = true
-                                if (com.example.gemini.data.local.LocalServerManager.hasServerScript(context)) {
+                                // before the first agent choice the server waits (the choice dialog starts it)
+                                if (com.example.gemini.data.local.LocalServerManager.hasServerScript(context) &&
+                                    com.example.gemini.data.agent.AgentPreferences.hasChosenSync(context)
+                                ) {
                                     com.example.gemini.data.local.LocalServerManager.startServer(
                                         context,
                                         forceRestart = false

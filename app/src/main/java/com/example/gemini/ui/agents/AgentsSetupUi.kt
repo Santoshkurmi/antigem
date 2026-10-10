@@ -155,7 +155,7 @@ fun AgentChoiceDialog(onConfirm: (Set<AgentKind>) -> Unit) {
     }
 }
 
-/** Settings → Agents: change the selection; applying restarts the local server so a turned-off agent stops. */
+/** Settings → Agents: change the selection; applying stops the local server and restarts the app with the new agents. */
 @Composable
 fun AgentsSettingsPage(
     enabled: Set<AgentKind>,
@@ -187,7 +187,7 @@ fun AgentsSettingsPage(
                 Spacer(Modifier.width(10.dp))
                 Text("Restarting…")
             } else {
-                Text(if (selected == enabled) "No changes" else "Apply and restart", fontWeight = FontWeight.SemiBold)
+                Text(if (selected == enabled) "No changes" else "Apply and restart app", fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -197,7 +197,7 @@ fun AgentsSettingsPage(
             title = { Text("Restart to apply?", fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "The local server restarts with the new agents so nothing of a turned-off agent keeps running. " +
+                    "The local server stops and the app restarts with the new agents, so nothing of a turned-off agent keeps running. " +
                         "Replies in progress stop, and a chat of a turned-off agent is closed.",
                     fontSize = 13.5.sp
                 )
@@ -206,14 +206,14 @@ fun AgentsSettingsPage(
                 Button(onClick = {
                     confirm = false
                     onApply(selected)
-                }) { Text("Restart now") }
+                }) { Text("Restart app") }
             },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } }
         )
     }
 }
 
-/** Shown while the server restarts for a new agent selection. */
+/** Shown while the server stops before the app restarts for a new agent selection. */
 @Composable
 fun AgentsApplyingDialog() {
     Dialog(onDismissRequest = {}, properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)) {
@@ -223,7 +223,7 @@ fun AgentsApplyingDialog() {
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Text("Applying agents", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                    Text("Restarting the local server…", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text("Stopping the local server, then restarting the app…", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
             }
         }

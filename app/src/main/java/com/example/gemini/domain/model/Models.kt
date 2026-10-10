@@ -53,7 +53,9 @@ data class TokenUsage(
     val totalTokens: Int = 0,
     val durationMs: Long = 0L,
     val isEstimated: Boolean = false,
-    val costUsd: Double? = null
+    val costUsd: Double? = null,
+    /** The model that produced the reply, when the agent reports it (Claude). */
+    val model: String? = null
 )
 
 @Serializable

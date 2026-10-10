@@ -31,6 +31,8 @@ var upgrader = websocket.Upgrader{
 //	GET    /api/claude/sessions/{id}/history    main-chain transcript entries + live state
 //	POST   /api/claude/sessions/{id}/title      {"title": "..."}
 //	POST   /api/claude/sessions/{id}/kill       stop the process
+//	POST   /api/claude/sessions/{id}/rewind     {"before": "<prompt uuid>"} edit an earlier prompt in place
+//	POST   /api/claude/sessions/{id}/fork       {"new_id", "title"} copy the chat under a new id
 //	DELETE /api/claude/sessions/{id}            delete transcript (and stop the process)
 //	GET    /api/claude/session?id=..&since=..   WebSocket: NDJSON relay to the session's process
 //	GET    /api/claude/voice?language=en        WebSocket: dictation relay (16 kHz PCM in, transcripts out)
@@ -39,6 +41,7 @@ var upgrader = websocket.Upgrader{
 //	GET    /api/claude/usage[?refresh=1]        plan limits & cost (`get_usage`)
 //	GET|PUT /api/claude/settings                ~/.claude/settings.json
 //	GET|PUT /api/claude/memory?scope=user|project&cwd=  CLAUDE.md
+//	GET|DELETE /api/claude/memory/auto?cwd=[&name=]     notes Claude saved by itself for the project
 //	GET|POST|DELETE /api/claude/mcp             MCP servers (status / add / remove)
 //	GET    /api/claude/plugins                  installed + available plugins, marketplaces
 //	POST   /api/claude/plugins/{install|uninstall|enable|disable|update|marketplace-add|marketplace-remove|marketplace-update}
@@ -58,6 +61,8 @@ func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m.handleSettings(w, r)
 	case path == "/memory":
 		m.handleMemory(w, r)
+	case path == "/memory/auto":
+		m.handleAutoMemory(w, r)
 	case path == "/mcp":
 		m.handleMcp(w, r)
 	case path == "/plugins" || strings.HasPrefix(path, "/plugins/"):
@@ -98,6 +103,7 @@ func (m *Manager) handleSessionREST(w http.ResponseWriter, r *http.Request, rest
 	case action == "history" && r.Method == http.MethodGet:
 		st := SessionState{}
 		var maxBytes int64
+		var cut *string
 		if s := m.Existing(id); s != nil {
 			st = s.State()
 			if st.Live {
@@ -105,6 +111,12 @@ func (m *Manager) handleSessionREST(w http.ResponseWriter, r *http.Request, rest
 				if maxBytes == 0 {
 					maxBytes = -1 // new session: everything comes from the live buffer
 				}
+				cut = s.HistoryCut()
+			}
+		}
+		if cut == nil {
+			if at, ok := m.rewindPoint(id); ok {
+				cut = &at
 			}
 		}
 		var entries []json.RawMessage
@@ -112,7 +124,7 @@ func (m *Manager) handleSessionREST(w http.ResponseWriter, r *http.Request, rest
 		if maxBytes < 0 {
 			entries = []json.RawMessage{}
 		} else {
-			entries, err = m.History(id, maxBytes)
+			entries, err = m.History(id, maxBytes, cut)
 		}
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
@@ -129,6 +141,33 @@ func (m *Manager) handleSessionREST(w http.ResponseWriter, r *http.Request, rest
 		}
 		if err := m.RenameSession(id, strings.TrimSpace(body.Title)); err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]interface{}{"success": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
+	case action == "rewind" && r.Method == http.MethodPost:
+		var body struct {
+			Before string `json:"before"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || !sessionIDRe.MatchString(body.Before) {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "before (prompt uuid) required"})
+			return
+		}
+		if err := m.RewindSession(id, body.Before); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
+	case action == "fork" && r.Method == http.MethodPost:
+		var body struct {
+			NewID string `json:"new_id"`
+			Title string `json:"title"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || !sessionIDRe.MatchString(body.NewID) {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "new_id required"})
+			return
+		}
+		if err := m.ForkSession(id, body.NewID, strings.TrimSpace(body.Title)); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})

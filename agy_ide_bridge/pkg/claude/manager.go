@@ -223,6 +223,18 @@ type Session struct {
 	subs          map[*subscriber]struct{}
 	lastActivity  time.Time
 	generation    int
+	// historyCut is the rewind point the live process was started at: its transcript still ends with the old
+	// branch until the first new prompt is written, so history is cut there while the process runs.
+	historyCut *string
+	// rewindPending: the rewind is cleared once this process gets its first prompt
+	rewindPending bool
+}
+
+// HistoryCut is the rewind point of the live process, if it was started at one.
+func (s *Session) HistoryCut() *string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.historyCut
 }
 
 func (s *Session) State() SessionState {
@@ -245,13 +257,18 @@ func (s *Session) Configure(o SpawnOptions) {
 	if o.Cwd != "" {
 		s.opts.Cwd = o.Cwd
 	}
-	if o.Model != "" {
+	// "default" clears a value chosen before (the CLI then uses settings.json / its own default)
+	if o.Model == "default" {
+		s.opts.Model = ""
+	} else if o.Model != "" {
 		s.opts.Model = o.Model
 	}
 	if o.PermissionMode != "" {
 		s.opts.PermissionMode = o.PermissionMode
 	}
-	if o.Effort != "" {
+	if o.Effort == "default" {
+		s.opts.Effort = ""
+	} else if o.Effort != "" {
 		s.opts.Effort = o.Effort
 	}
 	if o.ForkFrom != "" {
@@ -279,6 +296,11 @@ func (s *Session) Write(line []byte) error {
 	}
 	if json.Unmarshal(line, &head) == nil && head.Type == "user" {
 		s.pendingTurns++
+		if s.rewindPending {
+			// the new prompt starts the new branch: from now on the transcript itself ends there
+			s.rewindPending = false
+			s.mgr.clearRewind(s.ID)
+		}
 	}
 	s.lastActivity = time.Now()
 	if _, err := s.stdin.Write(append(append([]byte{}, line...), '\n')); err != nil {
@@ -321,10 +343,20 @@ func (s *Session) spawnLocked() error {
 	}
 
 	transcript := s.mgr.FindTranscript(s.ID)
+	rewindAt, rewinding := s.mgr.rewindPoint(s.ID)
+	if rewinding && rewindAt == "" && transcript != "" {
+		// the first prompt was edited: nothing is kept, the chat starts over under the same id
+		_ = os.RemoveAll(strings.TrimSuffix(transcript, ".jsonl"))
+		_ = os.Remove(transcript)
+		transcript = ""
+	}
 	s.historyOffset = 0
 	switch {
 	case transcript != "":
 		args = append(args, "--resume="+s.ID)
+		if rewinding {
+			args = append(args, "--resume-session-at="+rewindAt)
+		}
 		if fi, err := os.Stat(transcript); err == nil {
 			s.historyOffset = fi.Size()
 		}
@@ -373,6 +405,11 @@ func (s *Session) spawnLocked() error {
 	s.bufferedBytes = 0
 	s.pendingTurns = 0
 	s.stderrTail = nil
+	s.historyCut = nil
+	s.rewindPending = rewinding
+	if rewinding {
+		s.historyCut = &rewindAt
+	}
 	gen := s.generation
 
 	go s.readStderr(stderr)
@@ -466,6 +503,8 @@ func (s *Session) wait(cmd *exec.Cmd, gen int) {
 	s.lines = nil
 	s.bufferedBytes = 0
 	s.historyOffset = 0
+	s.historyCut = nil
+	s.rewindPending = false
 	s.broadcastLocked(stateMessage(s.stateLocked(), "exited", &code, errText))
 }
 

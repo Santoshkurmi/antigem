@@ -278,6 +278,11 @@ object LocalServerManager {
             Log.d(TAG, "[ServerManager] No server executable found in home directory, skipping autoStartOnAppLaunch")
             return
         }
+        if (!com.example.gemini.data.agent.AgentPreferences.hasChosenSync(context)) {
+            // the server starts with the agent flags: wait for the first-launch agent choice
+            Log.d(TAG, "[ServerManager] Agents not chosen yet, deferring auto-start until the choice is made")
+            return
+        }
         hasInitialAutoStarted = true
         startServer(context, forceRestart = false)
     }
@@ -418,6 +423,23 @@ object LocalServerManager {
         stopServerInternal()
         delay(200)
         startServerInternal(context, forceRestart = true)
+    }
+
+    /**
+     * Stops the server and ends its terminal session for good (the app restarts next, e.g. after the agent
+     * selection changed): nothing of the old server may keep running.
+     */
+    suspend fun stopServerCompletely() {
+        hasInitialAutoStarted = true
+        activeJob?.cancel()
+        stopServerInternal()
+        // let the bridge finish stopping its children (Claude processes, the AGY hub) before the session is closed
+        withTimeoutOrNull(5_000L) {
+            while (AgyBridgeService.instance.systemConnectionState.value !is com.example.gemini.data.remote.SystemConnectionState.Offline) {
+                delay(150)
+            }
+        }
+        forceKillAll()
     }
 
     fun restartServer(context: Context) {

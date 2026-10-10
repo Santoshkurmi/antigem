@@ -12,11 +12,9 @@ import com.example.gemini.ui.browser.FlowRequest
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
-import java.io.InputStreamReader
 import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -33,6 +31,9 @@ class AndroidLocalBridgeServer private constructor() {
 
     companion object {
         private const val TAG = "AndroidBridgeServer"
+        private const val MAX_HEADER_BYTES = 64 * 1024
+        /** Uploads arrive as base64 in JSON: allow large bodies, but not unbounded ones. */
+        private const val MAX_BODY_BYTES = 512L * 1024 * 1024
         /** Per app (build flavor) so com.antigem and com.termux do not collide. */
         val DEFAULT_PORT = com.example.gemini.BuildConfig.BROWSER_MCP_PORT
         val instance: AndroidLocalBridgeServer by lazy { AndroidLocalBridgeServer() }
@@ -41,7 +42,8 @@ class AndroidLocalBridgeServer private constructor() {
     private var serverSocket: ServerSocket? = null
     private var isRunning = false
     private val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val clientThreadPool = Executors.newFixedThreadPool(8)
+    // one thread per open request: Flow calls wait up to ~50 s each, so a fixed pool would make parallel calls queue
+    private val clientThreadPool = Executors.newCachedThreadPool()
     private var appContext: Context? = null
     @Volatile
     private var cachedDeviceId: String = ""
@@ -100,78 +102,139 @@ class AndroidLocalBridgeServer private constructor() {
         Log.i(TAG, "Bridge Server stopped")
     }
 
+    /** One HTTP/1.1 request; [body] is the raw body bytes decoded as UTF-8. */
+    private class HttpRequest(val method: String, val rawPath: String, val headers: Map<String, String>, val body: String)
+
+    /** Remembers whether anything was written, so a failure after a response never writes a second one. */
+    private class TrackingOutputStream(private val out: OutputStream) : OutputStream() {
+        @Volatile var used = false
+            private set
+        override fun write(b: Int) { used = true; out.write(b) }
+        override fun write(b: ByteArray, off: Int, len: Int) { used = true; out.write(b, off, len) }
+        override fun flush() = out.flush()
+    }
+
+    /**
+     * Reads one request from the raw byte stream: the header block up to the blank line, then exactly
+     * Content-Length bytes (or a chunked body). Content-Length counts bytes, so the body must never be read as
+     * characters: a prompt with any non-ASCII character would otherwise wait for bytes that never come.
+     */
+    private fun readRequest(input: InputStream): HttpRequest? {
+        val head = ByteArrayOutputStream()
+        while (true) {
+            val b = input.read()
+            if (b == -1) return null
+            head.write(b)
+            if (head.size() > MAX_HEADER_BYTES) throw java.io.IOException("request headers too large")
+            val bytes = head.size()
+            if (b == '\n'.code) {
+                val arr = head.toByteArray()
+                val endsCrlf = bytes >= 4 && arr[bytes - 2] == '\r'.code.toByte() && arr[bytes - 3] == '\n'.code.toByte() && arr[bytes - 4] == '\r'.code.toByte()
+                val endsLf = bytes >= 2 && arr[bytes - 2] == '\n'.code.toByte()
+                if (endsCrlf || endsLf) break
+                // a request may start with stray blank lines
+                if (bytes <= 2 && arr.all { it == '\r'.code.toByte() || it == '\n'.code.toByte() }) head.reset()
+            }
+        }
+        val lines = String(head.toByteArray(), Charsets.UTF_8).split('\n').map { it.trimEnd('\r') }
+        val requestLine = lines.firstOrNull()?.split(" ")?.takeIf { it.size >= 2 } ?: return null
+        val headers = mutableMapOf<String, String>()
+        for (line in lines.drop(1)) {
+            val colon = line.indexOf(':')
+            if (colon > 0) headers[line.substring(0, colon).trim().lowercase()] = line.substring(colon + 1).trim()
+        }
+        val bodyBytes = when {
+            headers["transfer-encoding"]?.contains("chunked", ignoreCase = true) == true -> readChunked(input)
+            else -> {
+                val length = headers["content-length"]?.toLongOrNull() ?: 0L
+                if (length > MAX_BODY_BYTES) throw java.io.IOException("request body too large ($length bytes)")
+                readExactly(input, length.toInt())
+            }
+        }
+        return HttpRequest(requestLine[0].uppercase(), requestLine[1], headers, String(bodyBytes, Charsets.UTF_8))
+    }
+
+    private fun readExactly(input: InputStream, length: Int): ByteArray {
+        val buf = ByteArray(length)
+        var read = 0
+        while (read < length) {
+            val r = input.read(buf, read, length - read)
+            if (r == -1) throw java.io.EOFException("request body ended after $read of $length bytes")
+            read += r
+        }
+        return buf
+    }
+
+    private fun readAsciiLine(input: InputStream): String {
+        val line = ByteArrayOutputStream()
+        while (true) {
+            val b = input.read()
+            if (b == -1 || b == '\n'.code) break
+            if (b != '\r'.code) line.write(b)
+            if (line.size() > MAX_HEADER_BYTES) throw java.io.IOException("chunk header too large")
+        }
+        return line.toString(Charsets.US_ASCII.name())
+    }
+
+    private fun readChunked(input: InputStream): ByteArray {
+        val body = ByteArrayOutputStream()
+        while (true) {
+            val size = readAsciiLine(input).substringBefore(';').trim().toLongOrNull(16)
+                ?: throw java.io.IOException("invalid chunk size")
+            if (size == 0L) {
+                // optional trailer headers up to the blank line
+                while (readAsciiLine(input).isNotEmpty()) Unit
+                break
+            }
+            if (body.size() + size > MAX_BODY_BYTES) throw java.io.IOException("request body too large")
+            body.write(readExactly(input, size.toInt()))
+            readAsciiLine(input) // CRLF after the chunk
+        }
+        return body.toByteArray()
+    }
+
     private fun handleClient(socket: Socket) {
+        var request: HttpRequest? = null
+        var output: TrackingOutputStream? = null
         try {
             socket.soTimeout = 30000
-            val input = socket.getInputStream()
-            val output = socket.getOutputStream()
+            val input = java.io.BufferedInputStream(socket.getInputStream(), 64 * 1024)
+            val out = TrackingOutputStream(java.io.BufferedOutputStream(socket.getOutputStream(), 64 * 1024))
+            output = out
+            val req = readRequest(input) ?: return
+            request = req
 
-            val reader = BufferedReader(InputStreamReader(input, Charsets.UTF_8))
-            val firstLine = reader.readLine() ?: return
-            val parts = firstLine.split(" ")
-            if (parts.size < 2) return
-
-            val method = parts[0].uppercase()
-            val rawPath = parts[1]
+            val method = req.method
+            val rawPath = req.rawPath
             val path = rawPath.substringBefore("?")
             val queryString = if (rawPath.contains("?")) rawPath.substringAfter("?") else ""
-
-            val headers = mutableMapOf<String, String>()
-            var contentLength = 0
-            var line: String? = reader.readLine()
-            while (!line.isNullOrBlank()) {
-                val currentLine = line
-                val colonIdx = currentLine.indexOf(':')
-                if (colonIdx != -1) {
-                    val key = currentLine.substring(0, colonIdx).trim().lowercase()
-                    val value = currentLine.substring(colonIdx + 1).trim()
-                    headers[key] = value
-                    if (key == "content-length") {
-                        contentLength = value.toIntOrNull() ?: 0
-                    }
-                }
-                line = reader.readLine()
-            }
-
-            var body = ""
-            if (contentLength > 0) {
-                val buf = CharArray(contentLength)
-                var readTotal = 0
-                while (readTotal < contentLength) {
-                    val r = reader.read(buf, readTotal, contentLength - readTotal)
-                    if (r == -1) break
-                    readTotal += r
-                }
-                body = String(buf, 0, readTotal)
-            }
+            val headers = req.headers
+            val body = req.body
 
             // Handle CORS preflight
             if (method == "OPTIONS") {
-                sendResponse(output, 200, "application/json", "{}")
+                sendResponse(out, 200, "application/json", "{}")
                 return
             }
 
             // Verify device ID security header for all non-OPTIONS requests
             if (cachedDeviceId.length <= 5) {
                 Log.e(TAG, "Bridge server security error: cachedDeviceId is not initialized or invalid")
-                sendResponse(output, 500, "application/json", "{\"error\": \"Server security error: Device ID not initialized or invalid\"}")
+                sendResponse(out, 500, "application/json", "{\"error\": \"Server security error: Device ID not initialized or invalid\"}")
                 return
             }
 
             val clientDeviceId = headers["x-device-id"]
             if (clientDeviceId.isNullOrBlank() || clientDeviceId != cachedDeviceId) {
                 Log.w(TAG, "Blocked unauthorized request to $path (missing or invalid X-Device-Id header)")
-                sendResponse(output, 401, "application/json", "{\"error\": \"Unauthorized: Invalid or missing X-Device-Id header\"}")
+                sendResponse(out, 401, "application/json", "{\"error\": \"Unauthorized: Invalid or missing X-Device-Id header\"}")
                 return
             }
 
             // Route request
             runBlocking {
                 when {
-                    path == "/mcp" || path == "/rpc" -> {
-                        val mcpRes = handleMcpJsonRpc(body)
-                        sendResponse(output, 200, "application/json", mcpRes.toString())
-                    }
+                    path == "/mcp" || path == "/rpc" -> handleMcpHttp(method, body, out)
                     path == "/api/health" -> {
                         val res = JSONObject().apply {
                             put("status", "ok")
@@ -179,45 +242,125 @@ class AndroidLocalBridgeServer private constructor() {
                             put("tabsCount", BrowserSessionManager.instance.tabs.size)
                             put("terminalsCount", LocalTerminalBridge.instance.listSessions().size)
                         }
-                        sendResponse(output, 200, "application/json", res.toString())
+                        sendResponse(out, 200, "application/json", res.toString())
                     }
                     path.startsWith("/api/browser/") -> {
-                        handleBrowserRest(path.removePrefix("/api/browser/"), method, body, queryString, output)
+                        handleBrowserRest(path.removePrefix("/api/browser/"), method, body, queryString, out)
                     }
                     path.startsWith("/api/terminal/") -> {
-                        handleTerminalRest(path.removePrefix("/api/terminal/"), method, body, queryString, output)
+                        handleTerminalRest(path.removePrefix("/api/terminal/"), method, body, queryString, out)
                     }
                     else -> {
-                        sendResponse(output, 404, "application/json", "{\"error\": \"Not Found\"}")
+                        sendResponse(out, 404, "application/json", "{\"error\": \"Not Found\"}")
                     }
                 }
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error handling client request", e)
+        } catch (t: Throwable) {
+            Log.w(TAG, "Error handling client request ${request?.method} ${request?.rawPath}", t)
+            // never close a request without an answer: the client would only see "EOF"
+            val out = output
+            val req = request
+            if (out != null && req != null && !out.used) {
+                runCatching {
+                    val path = req.rawPath.substringBefore("?")
+                    if (path == "/mcp" || path == "/rpc") {
+                        val id = runCatching { JSONObject(req.body).opt("id") }.getOrNull()
+                        sendResponse(out, 200, "application/json", jsonRpcError(id, -32603, "Internal error: ${t.message ?: t.javaClass.simpleName}").toString())
+                    } else {
+                        sendResponse(out, 500, "application/json", JSONObject().put("error", t.message ?: t.javaClass.simpleName).toString())
+                    }
+                }
+            }
         } finally {
+            try {
+                output?.flush()
+            } catch (_: Exception) {}
             try {
                 socket.close()
             } catch (_: Exception) {}
         }
     }
 
+    /**
+     * MCP over HTTP: a POSTed JSON-RPC request gets its response, notifications (no id) get 202 with no body, a
+     * batch gets an array, and GET (the optional server-sent event stream) is not offered (405).
+     */
+    private suspend fun handleMcpHttp(method: String, body: String, out: OutputStream) {
+        if (method != "POST") {
+            sendResponse(out, 405, "application/json", jsonRpcError(null, -32600, "Use POST for MCP requests").toString(), allow = "POST, OPTIONS")
+            return
+        }
+        val trimmed = body.trim()
+        if (trimmed.startsWith("[")) {
+            val batch = runCatching { JSONArray(trimmed) }.getOrNull()
+            if (batch == null) {
+                sendResponse(out, 200, "application/json", jsonRpcError(null, -32700, "Parse error").toString())
+                return
+            }
+            val responses = JSONArray()
+            for (i in 0 until batch.length()) {
+                val item = batch.optJSONObject(i)
+                if (item == null) {
+                    responses.put(jsonRpcError(null, -32600, "Invalid request"))
+                    continue
+                }
+                if (!item.has("id")) continue
+                responses.put(runMcpRequest(item))
+            }
+            if (responses.length() == 0) sendResponse(out, 202, "application/json", "")
+            else sendResponse(out, 200, "application/json", responses.toString())
+            return
+        }
+        val req = runCatching { JSONObject(trimmed) }.getOrNull()
+        when {
+            req == null -> sendResponse(out, 200, "application/json", jsonRpcError(null, -32700, "Parse error").toString())
+            // a notification (e.g. notifications/initialized) has no id and gets no response
+            !req.has("id") -> sendResponse(out, 202, "application/json", "")
+            else -> sendResponse(out, 200, "application/json", runMcpRequest(req).toString())
+        }
+    }
+
+    /** One JSON-RPC request; a failure becomes a JSON-RPC error instead of a dropped connection. */
+    private suspend fun runMcpRequest(req: JSONObject): JSONObject = try {
+        handleMcpJsonRpc(req.toString())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (t: Throwable) {
+        Log.w(TAG, "MCP request ${req.optString("method")} failed", t)
+        jsonRpcError(req.opt("id"), -32603, "Internal error: ${t.message ?: t.javaClass.simpleName}")
+    }
+
+    private fun jsonRpcError(id: Any?, code: Int, message: String): JSONObject = JSONObject().apply {
+        put("jsonrpc", "2.0")
+        put("id", id ?: JSONObject.NULL)
+        put("error", JSONObject().apply {
+            put("code", code)
+            put("message", message)
+        })
+    }
+
     private fun sendResponse(
         out: OutputStream,
         statusCode: Int,
         contentType: String,
-        body: String
+        body: String,
+        allow: String? = null
     ) {
         val bytes = body.toByteArray(Charsets.UTF_8)
         val statusText = when (statusCode) {
             200 -> "OK"
+            202 -> "Accepted"
             400 -> "Bad Request"
+            401 -> "Unauthorized"
             404 -> "Not Found"
+            405 -> "Method Not Allowed"
             500 -> "Internal Server Error"
             else -> "OK"
         }
         val header = "HTTP/1.1 $statusCode $statusText\r\n" +
                 "Content-Type: $contentType; charset=utf-8\r\n" +
                 "Content-Length: ${bytes.size}\r\n" +
+                (allow?.let { "Allow: $it\r\n" } ?: "") +
                 "Access-Control-Allow-Origin: *\r\n" +
                 "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
                 "Access-Control-Allow-Headers: Content-Type, X-Device-Id\r\n" +

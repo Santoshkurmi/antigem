@@ -102,6 +102,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun applyAgents(agents: Set<AgentKind>) {
         if (agents.isEmpty()) return
         val before = enabledAgents.value
+        val firstChoice = !hasChosenAgents.value
         agentPrefs.setEnabled(agents)
         if (newChatAgent.value !in agents) claudePrefs.setNewChatAgent(if (AgentKind.AGY in agents) AgentKind.AGY else agents.first())
         if (AgentKind.CLAUDE in agents) {
@@ -112,11 +113,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
         val cur = store.currentConversation.value
         if (cur == null || cur.agent !in agents) startNewChat()
-        if (before != agents) {
+        if (firstChoice) {
+            // first launch: the server waited for this choice and now starts with it
+            com.example.gemini.data.local.LocalServerManager.autoStartOnAppLaunch(getApplication())
+        } else if (before != agents) {
+            // stop the server completely, then restart the app: it starts the server again with the new agents
             viewModelScope.launch {
                 _isApplyingAgents.value = true
-                runCatching { com.example.gemini.data.local.LocalServerManager.restartServerAndWait(getApplication()) }
-                _isApplyingAgents.value = false
+                runCatching { com.example.gemini.data.local.LocalServerManager.stopServerCompletely() }
+                val app = getApplication<Application>()
+                app.packageManager.getLaunchIntentForPackage(app.packageName)?.component?.let { component ->
+                    app.startActivity(android.content.Intent.makeRestartActivityTask(component))
+                }
+                Runtime.getRuntime().exit(0)
             }
         }
     }
@@ -955,7 +964,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch { claudeBackend.refreshSessions() }
         }
         claudeBackend.onTurnFinished = { claudeAccount.refreshUsage(force = false) }
-        claudeConfig.onSettingsChanged = { claudeBackend.refreshInfo(force = true) }
+        claudeConfig.onSettingsChanged = {
+            claudeBackend.refreshInfo(force = true)
+            claudeBackend.loadChatDefaults()
+        }
         claudeConfig.onCliChanged = {
             claudeAccount.refreshStatus()
             claudeBackend.refreshInfo(force = true)

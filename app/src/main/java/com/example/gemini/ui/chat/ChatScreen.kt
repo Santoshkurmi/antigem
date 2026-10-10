@@ -1584,109 +1584,53 @@ fun ChatScreen(
                         }
                     }
 
+                    // a Claude command that needs no argument runs on tap (when nothing else is typed and no turn runs)
+                    val slashRunsOnTap: (com.example.gemini.data.remote.SlashCommandItem) -> Boolean = { item ->
+                        isClaudeChat && item.type != "app" && item.argumentHint.isBlank() &&
+                            inputText.substring(0, slashIndex.coerceAtLeast(0)).isBlank() && !isActivelyRunning && attachments.isEmpty()
+                    }
                     androidx.compose.animation.AnimatedVisibility(
                         visible = slashSuggestions.isNotEmpty(),
                         enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
                         exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.4f)),
-                            shadowElevation = 8.dp,
-                            tonalElevation = 6.dp
-                        ) {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 240.dp)
-                                    .padding(vertical = 4.dp)
-                            ) {
-                                items(slashSuggestions, key = { item -> "${item.type}_${item.command}" }) { item ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                val before = inputText.substring(0, slashIndex)
-                                                val appCmd = if (isClaudeChat && item.type == "app") claudeBackend.appCommand(item.command) else null
-                                                val newText = if (appCmd != null) before else "$before${item.command} "
-                                                val tfv = TextFieldValue(
-                                                    text = newText,
-                                                    selection = TextRange(newText.length)
-                                                )
-                                                textFieldValue = tfv
-                                                viewModel.setDraft(activeConversationKey, tfv)
-                                                if (appCmd != null) {
-                                                    focusManager.clearFocus(force = true)
-                                                    keyboardController?.hide()
-                                                    handleClaudeCommand(appCmd)
-                                                }
-                                            }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = when (item.type) {
-                                                "command" -> Icons.Default.Bolt
-                                                "app" -> Icons.AutoMirrored.Outlined.OpenInNew
-                                                else -> Icons.Default.Extension
-                                            },
-                                            contentDescription = null,
-                                            tint = when (item.type) {
-                                                "command" -> ClaudeTerracotta
-                                                "app" -> com.example.gemini.ui.components.AgyAccent
-                                                else -> QuotaGreen
-                                            },
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = item.command,
-                                                    fontSize = 13.5.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontFamily = FontFamily.Monospace,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                val chipColor = when (item.type) {
-                                                    "command" -> ClaudeTerracotta
-                                                    "app" -> com.example.gemini.ui.components.AgyAccent
-                                                    else -> QuotaGreen
-                                                }
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = chipColor.copy(alpha = 0.15f)
-                                                ) {
-                                                    Text(
-                                                        text = (item.pluginName ?: if (item.type == "app") "opens" else item.type).uppercase(),
-                                                        fontSize = 9.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = chipColor,
-                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                                    )
-                                                }
-                                            }
-                                            if (item.description.isNotBlank()) {
-                                                Spacer(modifier = Modifier.height(2.dp))
-                                                Text(
-                                                    text = item.description,
-                                                    fontSize = 11.5.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                                                    maxLines = 2,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
+                        SlashCommandOverlay(
+                            items = slashSuggestions,
+                            query = slashQuery,
+                            runsOnTap = slashRunsOnTap,
+                            onPick = { item ->
+                                val before = inputText.substring(0, slashIndex)
+                                val appCmd = if (isClaudeChat && item.type == "app") claudeBackend.appCommand(item.command) else null
+                                when {
+                                    appCmd != null -> {
+                                        val tfv = TextFieldValue(before, selection = TextRange(before.length))
+                                        textFieldValue = tfv
+                                        viewModel.setDraft(activeConversationKey, tfv)
+                                        focusManager.clearFocus(force = true)
+                                        keyboardController?.hide()
+                                        handleClaudeCommand(appCmd)
+                                    }
+                                    slashRunsOnTap(item) -> {
+                                        // e.g. /compact: Claude Code runs a command sent as a message
+                                        viewModel.sendMessage(item.command)
+                                        userSentMessageTrigger++
+                                        viewModel.clearDraft(activeConversationKey)
+                                        textFieldValue = TextFieldValue("")
+                                        focusManager.clearFocus(force = true)
+                                        keyboardController?.hide()
+                                    }
+                                    else -> {
+                                        val newText = "$before${item.command} "
+                                        val tfv = TextFieldValue(newText, selection = TextRange(newText.length))
+                                        textFieldValue = tfv
+                                        viewModel.setDraft(activeConversationKey, tfv)
                                     }
                                 }
                             }
-                        }
+                        )
                     }
 
                     // Floating File Autocomplete Suggestions when user types @
@@ -2233,7 +2177,8 @@ fun ChatScreen(
         com.example.gemini.ui.claude.ClaudeLoginDialog(viewModel.claudeAccount) { showClaudeLogin = false }
     }
 
-    if (!hasChosenAgents) {
+    // asked once the local environment (rootfs) is installed, before the local server starts
+    if (!hasChosenAgents && (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context))) {
         com.example.gemini.ui.agents.AgentChoiceDialog { viewModel.applyAgents(it) }
     }
     if (isApplyingAgents) {
@@ -2283,9 +2228,9 @@ fun ChatScreen(
                     Text(
                         text = when {
                             isClaudeChat && action.type == MessageActionType.EDIT ->
-                                "Claude opens a copy of this chat that ends right before this message, so you can change it and send again. The original chat stays in your history."
+                                "This chat goes back to right before this message, so you can change it and send again. Everything after it is removed from the chat."
                             isClaudeChat ->
-                                "Claude opens a copy of this chat that ends before this reply and answers the same message again. The original chat stays in your history."
+                                "This chat goes back to right before this reply and Claude answers the same message again. The current reply is removed from the chat."
                             action.type == MessageActionType.EDIT ->
                                 "Editing this message will delete the subsequent response so you can edit and send a fresh query. Do you want to continue?"
                             else ->
@@ -2334,7 +2279,7 @@ fun ChatScreen(
                 ) {
                     Text(
                         text = when {
-                            isClaudeChat && action.type == MessageActionType.EDIT -> "Edit in a copy"
+                            isClaudeChat && action.type == MessageActionType.EDIT -> "Edit"
                             action.type == MessageActionType.EDIT -> "Edit & Delete"
                             else -> "Regenerate"
                         },

@@ -133,6 +133,10 @@ func (m *Manager) memoryPath(scope, cwd string) (string, error) {
 	case "", "user":
 		return filepath.Join(m.HomeDir, ".claude", "CLAUDE.md"), nil
 	case "project":
+		if cwd == "" {
+			// no project open: chats run in the default workspace
+			cwd = m.DefaultCwd
+		}
 		if cwd == "" || !filepath.IsAbs(cwd) {
 			return "", fmt.Errorf("project memory needs an absolute cwd")
 		}
@@ -154,7 +158,8 @@ func (m *Manager) handleMemory(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		data, err := os.ReadFile(path)
-		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": path, "exists": err == nil, "content": string(data)})
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": path, "exists": err == nil, "content": string(data),
+			"project_dir": filepath.Dir(path)})
 	case http.MethodPut:
 		var body struct {
 			Content string `json:"content"`
@@ -171,6 +176,74 @@ func (m *Manager) handleMemory(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "path": path})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"success": false, "error": "GET or PUT"})
+	}
+}
+
+var nonAlnumRe = regexp.MustCompile(`[^A-Za-z0-9]`)
+
+// autoMemoryDir is the folder where Claude keeps the notes it saves by itself for a project:
+// ~/.claude/projects/<cwd with every non-alphanumeric char as '-'>/memory.
+func (m *Manager) autoMemoryDir(cwd string) string {
+	if cwd == "" {
+		cwd = m.DefaultCwd
+	}
+	if real, err := filepath.EvalSymlinks(cwd); err == nil {
+		cwd = real
+	}
+	name := nonAlnumRe.ReplaceAllString(cwd, "-")
+	if len(name) > 200 {
+		// long paths are shortened with a hash suffix by the CLI
+		if matches, _ := filepath.Glob(filepath.Join(m.ProjectsDir(), name[:200]+"*")); len(matches) > 0 {
+			return filepath.Join(matches[0], "memory")
+		}
+	}
+	return filepath.Join(m.ProjectsDir(), name, "memory")
+}
+
+type autoMemoryFile struct {
+	Name     string `json:"name"`
+	Size     int64  `json:"size"`
+	Modified int64  `json:"modified"`
+	Content  string `json:"content"`
+}
+
+// handleAutoMemory: GET lists the notes Claude saved for the project, DELETE ?name= removes one.
+func (m *Manager) handleAutoMemory(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	dir := m.autoMemoryDir(q.Get("cwd"))
+	switch r.Method {
+	case http.MethodGet:
+		files := []autoMemoryFile{}
+		entries, _ := os.ReadDir(dir)
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			fi, err := e.Info()
+			if err != nil {
+				continue
+			}
+			data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+			if len(data) > 64<<10 {
+				data = data[:64<<10]
+			}
+			files = append(files, autoMemoryFile{Name: e.Name(), Size: fi.Size(), Modified: fi.ModTime().UnixMilli(), Content: string(data)})
+		}
+		sort.Slice(files, func(i, j int) bool { return files[i].Modified > files[j].Modified })
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "dir": dir, "files": files})
+	case http.MethodDelete:
+		name := q.Get("name")
+		if name == "" || name != filepath.Base(name) || strings.HasPrefix(name, ".") {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "invalid name"})
+			return
+		}
+		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"success": false, "error": "GET or DELETE"})
 	}
 }
 

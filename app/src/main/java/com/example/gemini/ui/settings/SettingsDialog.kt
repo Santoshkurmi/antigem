@@ -275,9 +275,11 @@ fun SettingsDialog(
             // Top App Bar
             TopAppBar(
                 title = {
+                    // a Claude Code page names itself here (it has no header of its own)
+                    val isClaudePage = currentSection == SettingsSection.CLAUDE && claude != null
                     Column {
                         Text(
-                            text = currentSection.title,
+                            text = if (isClaudePage) "Claude Code · ${claudePage.title}" else currentSection.title,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -286,7 +288,7 @@ fun SettingsDialog(
                         )
                         if (currentSection != SettingsSection.MAIN) {
                             Text(
-                                text = currentSection.subtitle,
+                                text = if (isClaudePage) claudePage.subtitle else currentSection.subtitle,
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                                 maxLines = 1,

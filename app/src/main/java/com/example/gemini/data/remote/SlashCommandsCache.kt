@@ -12,7 +12,9 @@ data class SlashCommandItem(
     val description: String,
     val type: String = "skill", // "skill" or "command"
     val pluginName: String? = null,
-    val path: String = ""
+    val path: String = "",
+    /** What the command expects after its name (Claude's `argumentHint`); blank = it runs as is. */
+    val argumentHint: String = ""
 )
 
 object SlashCommandsCache {

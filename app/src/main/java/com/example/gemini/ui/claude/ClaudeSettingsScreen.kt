@@ -3,6 +3,8 @@ package com.example.gemini.ui.claude
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -95,7 +97,7 @@ enum class ClaudeSettingsPage(val title: String, val subtitle: String) {
     PERMISSIONS("Permission rules", "What Claude may do without asking"),
     MCP("MCP servers", "Tools Claude can call"),
     PLUGINS("Plugins", "Installed plugins, catalog and marketplaces"),
-    MEMORY("Memory", "CLAUDE.md instructions Claude always reads"),
+    MEMORY("Memory", "Instructions (CLAUDE.md) and the notes Claude saved"),
     ADVANCED("Advanced", "Edit ~/.claude/settings.json directly")
 }
 
@@ -147,7 +149,7 @@ fun ClaudeSettingsGroup(deps: ClaudeSettingsDeps, onOpen: (ClaudeSettingsPage) -
     }
 }
 
-/** One Claude settings page with its own header; [onBack] returns to the main settings menu. */
+/** One Claude settings page (the settings top bar shows its title); [onBack] returns to the main settings menu. */
 @Composable
 fun ClaudeSettingsScreen(deps: ClaudeSettingsDeps, page: ClaudeSettingsPage, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -158,28 +160,23 @@ fun ClaudeSettingsScreen(deps: ClaudeSettingsDeps, page: ClaudeSettingsPage, onB
     LaunchedEffect(Unit) {
         deps.account.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-            Column {
-                Text("Claude Code · ${page.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = ClaudeAccent)
-                Text(page.subtitle, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
-            }
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            when (page) {
-                ClaudeSettingsPage.ACCOUNT -> AccountPage(deps)
-                ClaudeSettingsPage.DEFAULTS -> DefaultsPage(deps)
-                ClaudeSettingsPage.PERMISSIONS -> PermissionsPage(deps)
-                ClaudeSettingsPage.MCP -> McpPage(deps)
-                ClaudeSettingsPage.PLUGINS -> PluginsPage(deps)
-                ClaudeSettingsPage.MEMORY -> MemoryPage(deps)
-                ClaudeSettingsPage.ADVANCED -> AdvancedPage(deps)
-            }
+    // the plugin catalog is a lazy list of its own (thousands of entries); every other page scrolls as a whole
+    if (page == ClaudeSettingsPage.PLUGINS) {
+        PluginsPage(deps)
+        return
+    }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        when (page) {
+            ClaudeSettingsPage.ACCOUNT -> AccountPage(deps)
+            ClaudeSettingsPage.DEFAULTS -> DefaultsPage(deps)
+            ClaudeSettingsPage.PERMISSIONS -> PermissionsPage(deps)
+            ClaudeSettingsPage.MCP -> McpPage(deps)
+            ClaudeSettingsPage.PLUGINS -> Unit
+            ClaudeSettingsPage.MEMORY -> MemoryPage(deps)
+            ClaudeSettingsPage.ADVANCED -> AdvancedPage(deps)
         }
     }
 }
@@ -286,12 +283,27 @@ private fun AccountPage(deps: ClaudeSettingsDeps) {
         }
     }
 
-    usage?.let { u ->
+    val usageRefreshing by deps.account.isRefreshingUsage.collectAsState()
+    val usageError by deps.account.usageError.collectAsState()
+    val usageUpdatedAt by deps.account.usageUpdatedAt.collectAsState()
+    if (usage != null || usageRefreshing || usageError != null) {
         ClaudeCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Plan usage", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                IconButton(onClick = { deps.account.refreshUsage(force = true) }) { Icon(Icons.Outlined.Refresh, "Refresh usage") }
+                Column(Modifier.weight(1f)) {
+                    Text("Plan usage", fontWeight = FontWeight.Bold)
+                    Hint(
+                        when {
+                            usageRefreshing -> "Updating…"
+                            usageUpdatedAt > 0 -> "Updated " + java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(usageUpdatedAt))
+                            else -> ""
+                        }
+                    )
+                }
+                if (usageRefreshing) CircularProgressIndicator(Modifier.padding(12.dp).size(20.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+                else IconButton(onClick = { deps.account.refreshUsage(force = true) }) { Icon(Icons.Outlined.Refresh, "Refresh usage") }
             }
+            usageError?.let { Text("Could not update: $it", fontSize = 12.sp, color = QuotaRed) }
+            val u = usage ?: return@ClaudeCard
             val rl = u.rate_limits
             if (rl == null || !u.rate_limits_available) {
                 Hint("Plan limits are not available for this account (API billing has no 5-hour / weekly limits).")
@@ -486,75 +498,272 @@ private fun PermissionsPage(deps: ClaudeSettingsDeps) {
 
 // ======================================================================== MCP servers
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun McpPage(deps: ClaudeSettingsDeps) {
     val servers by deps.config.mcpServers.collectAsState()
     val loading by deps.config.mcpLoading.collectAsState()
+    val ops by deps.config.mcpOps.collectAsState()
+    val addError by deps.config.mcpAddError.collectAsState()
     val cwd = activeProjectPath()
-    var showAdd by remember { mutableStateOf(false) }
+    var addDraft by remember { mutableStateOf<ClaudeMcpAddRequest?>(null) }
+    var toDelete by remember { mutableStateOf<com.example.gemini.data.agent.claude.ClaudeMcpServer?>(null) }
+    var expandedTools by remember { mutableStateOf(setOf<String>()) }
+    var expandedErrors by remember { mutableStateOf(setOf<String>()) }
     LaunchedEffect(Unit) { deps.config.loadMcp(cwd) }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Hint(if (cwd != null) "Includes servers for the open project ($cwd)." else "Open a project to also see its project-scoped servers.")
-        Spacer(Modifier.weight(1f))
-        if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-        IconButton(onClick = { deps.config.loadMcp(cwd) }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+        Column(Modifier.weight(1f)) {
+            Text("Tools Claude can call", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Hint(if (cwd != null) "Includes servers of the open project ($cwd)." else "Open a project to also see its project-scoped servers.")
+        }
+        if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+        else IconButton(onClick = { deps.config.loadMcp(cwd) }) { Icon(Icons.Outlined.Refresh, "Refresh") }
     }
-    Button(onClick = { showAdd = true }, colors = ButtonDefaults.buttonColors(containerColor = ClaudeAccent)) { Text("Add MCP server") }
-    if (servers.isEmpty() && !loading) Hint("No MCP servers configured.")
-    servers.forEach { srv ->
-        ClaudeCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val color = when (srv.status) {
-                    "connected" -> QuotaGreen
-                    "pending" -> QuotaAmber
-                    "failed" -> QuotaRed
-                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                }
-                Box(Modifier.size(9.dp).clip(CircleShape).background(color))
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(srv.name, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-                    Hint(listOfNotNull(srv.status, srv.scope ?: srv.source, "${srv.tools.size} tools".takeIf { srv.tools.isNotEmpty() }).joinToString(" · "))
-                    srv.error?.let { Text(it, fontSize = 11.sp, color = QuotaRed) }
-                }
-                val removable = srv.scope in setOf("user", "project", "local")
-                if (removable) IconButton(onClick = { deps.config.removeMcp(srv.name, srv.scope, cwd) }) {
-                    Icon(Icons.Outlined.Delete, "Remove", tint = QuotaRed.copy(alpha = 0.8f))
+
+    // quick presets, like the Antigravity MCP screen
+    val context = LocalContext.current
+    val deviceId = remember(context) {
+        runCatching { android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) }.getOrNull().orEmpty()
+    }
+    val presets = listOf(
+        "Browser/Terminal Automation" to ClaudeMcpAddRequest(
+            name = "browser_terminal_automation",
+            transport = "http",
+            url = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/mcp",
+            headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
+        )
+    )
+    Text("Quick presets", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        presets.forEach { (label, req) ->
+            val added = servers.any { it.name == req.name }
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = !added && req.name !in ops) { addDraft = req }
+            ) {
+                Row(Modifier.padding(vertical = 8.dp, horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(if (added) "✓ $label" else "+ $label", fontSize = 11.5.sp, fontWeight = FontWeight.Medium)
+                    TransportBadge(req.transport)
                 }
             }
-            if (srv.tools.isNotEmpty()) {
-                Text(srv.tools.joinToString(", ") { it.name }, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                    maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+        }
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = ClaudeAccent.copy(alpha = 0.12f),
+            border = BorderStroke(1.dp, ClaudeAccent.copy(alpha = 0.4f)),
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { addDraft = ClaudeMcpAddRequest(name = "") }
+        ) {
+            Text("+ Custom server", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = ClaudeAccent, modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp))
+        }
+    }
+
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("Configured servers (${servers.size})", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        if (servers.isNotEmpty()) Hint("${servers.sumOf { it.tools.size }} tools")
+    }
+
+    // servers being added show up right away with their progress
+    ops.filterKeys { name -> servers.none { it.name == name } }.forEach { (name, op) ->
+        ClaudeCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Hint(if (op.startsWith("Connecting")) "Added · checking that it starts and listing its tools…" else op)
+                }
             }
         }
     }
-    if (showAdd) AddMcpDialog(cwd, onDismiss = { showAdd = false }) { req ->
-        deps.config.addMcp(req, cwd)
-        showAdd = false
+
+    when {
+        servers.isEmpty() && loading && ops.isEmpty() -> ClaudeCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text("Checking MCP servers…", fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                    Hint("Claude Code starts each server to list its tools; this can take a few seconds.")
+                }
+            }
+        }
+        servers.isEmpty() && ops.isEmpty() -> ClaudeCard {
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Outlined.Hub, null, tint = ClaudeAccent.copy(alpha = 0.7f), modifier = Modifier.size(28.dp))
+                Spacer(Modifier.height(6.dp))
+                Text("No MCP servers yet", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Hint("Add one from the presets above or a custom server to give Claude more tools.")
+            }
+        }
+    }
+
+    servers.forEach { srv ->
+        val op = ops[srv.name]
+        val (statusColor, statusLabel) = when {
+            op != null -> ClaudeAccent to op
+            srv.status == "connected" -> QuotaGreen to "Connected"
+            srv.status == "pending" -> QuotaAmber to "Starting"
+            srv.status == "failed" -> QuotaRed to "Failed"
+            srv.status == "needs-auth" -> QuotaAmber to "Needs sign-in"
+            srv.status == "disabled" -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f) to "Disabled"
+            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f) to srv.status.ifBlank { "Unknown" }.replaceFirstChar { it.uppercase() }
+        }
+        val cfg = srv.config
+        fun cfgStr(key: String) = (cfg?.get(key) as? JsonPrimitive)?.content
+        val transport = cfgStr("type") ?: if (cfgStr("url") != null) "http" else "stdio"
+        val target = cfgStr("url") ?: listOfNotNull(cfgStr("command"),
+            (cfg?.get("args") as? kotlinx.serialization.json.JsonArray)?.joinToString(" ") { (it as? JsonPrimitive)?.content.orEmpty() }).joinToString(" ").trim()
+        ClaudeCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(transportColor(transport).copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.Extension, null, tint = transportColor(transport), modifier = Modifier.size(18.dp))
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(srv.name, fontWeight = FontWeight.Bold, fontSize = 14.5.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TransportBadge(transport)
+                        Badge(statusLabel, statusColor)
+                        (srv.scope ?: srv.source)?.let { Hint(scopeLabel(it)) }
+                    }
+                }
+                when {
+                    op != null -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+                    srv.scope in setOf("user", "project", "local") -> IconButton(onClick = { toDelete = srv }) {
+                        Icon(Icons.Outlined.Delete, "Remove", tint = QuotaRed.copy(alpha = 0.8f))
+                    }
+                }
+            }
+            if (target.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)) {
+                    Text(if (transport == "stdio") "> $target" else "URL: $target", fontSize = 11.5.sp, fontFamily = FontFamily.Monospace,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                }
+            }
+            srv.error?.takeIf { it.isNotBlank() }?.let { err ->
+                val open = srv.name in expandedErrors
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { expandedErrors = if (open) expandedErrors - srv.name else expandedErrors + srv.name },
+                    shape = RoundedCornerShape(8.dp), color = QuotaRed.copy(alpha = 0.08f)
+                ) {
+                    Text(err, fontSize = 11.5.sp, color = QuotaRed, maxLines = if (open) Int.MAX_VALUE else 2, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                }
+            }
+            if (srv.tools.isNotEmpty()) {
+                val open = srv.name in expandedTools
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { expandedTools = if (open) expandedTools - srv.name else expandedTools + srv.name }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("${srv.tools.size} tools", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = ClaudeAccent, modifier = Modifier.weight(1f))
+                    Text(if (open) "Hide" else "Show", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                }
+                if (open) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        srv.tools.forEach { tool ->
+                            Surface(shape = RoundedCornerShape(5.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
+                                Text(tool.name, fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    addDraft?.let { draft ->
+        AddMcpDialog(
+            initial = draft,
+            cwd = cwd,
+            error = addError?.takeIf { it.first == draft.name }?.second,
+            onDismiss = { addDraft = null }
+        ) { req ->
+            deps.config.addMcp(req, cwd)
+            addDraft = null
+        }
+    }
+    toDelete?.let { srv ->
+        AlertDialog(
+            onDismissRequest = { toDelete = null },
+            title = { Text("Remove ${srv.name}?", fontWeight = FontWeight.Bold) },
+            text = { Text("Claude will no longer be able to use its tools.", fontSize = 13.5.sp) },
+            confirmButton = {
+                TextButton(onClick = {
+                    deps.config.removeMcp(srv.name, srv.scope, cwd)
+                    toDelete = null
+                }) { Text("Remove", color = QuotaRed) }
+            },
+            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancel") } }
+        )
     }
 }
 
+private fun transportColor(transport: String) = if (transport == "stdio") Color(0xFF7B1FA2) else Color(0xFF1976D2)
+
 @Composable
-private fun AddMcpDialog(cwd: String?, onDismiss: () -> Unit, onAdd: (ClaudeMcpAddRequest) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var transport by remember { mutableStateOf("stdio") }
-    var scope by remember { mutableStateOf("user") }
-    var command by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("") }
-    var pairs by remember { mutableStateOf("") }
+private fun TransportBadge(transport: String) = Badge(if (transport == "stdio") "Stdio" else transport.uppercase(), transportColor(transport))
+
+@Composable
+private fun Badge(text: String, color: Color) {
+    Surface(shape = RoundedCornerShape(4.dp), color = color.copy(alpha = 0.15f)) {
+        Text(text, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = color, modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
+    }
+}
+
+private fun scopeLabel(scope: String) = when (scope) {
+    "user" -> "all projects"
+    "local" -> "this project (you)"
+    "project" -> "this project (.mcp.json)"
+    else -> scope
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AddMcpDialog(
+    initial: ClaudeMcpAddRequest,
+    cwd: String?,
+    error: String?,
+    onDismiss: () -> Unit,
+    onAdd: (ClaudeMcpAddRequest) -> Unit
+) {
+    var name by remember { mutableStateOf(initial.name) }
+    var transport by remember { mutableStateOf(initial.transport) }
+    var scope by remember { mutableStateOf(initial.scope) }
+    var command by remember { mutableStateOf((listOf(initial.command) + initial.args).filter { it.isNotBlank() }.joinToString(" ")) }
+    var url by remember { mutableStateOf(initial.url) }
+    var pairs by remember {
+        mutableStateOf(
+            if (initial.transport == "stdio") initial.env.entries.joinToString("\n") { "${it.key}=${it.value}" }
+            else initial.headers.entries.joinToString("\n") { "${it.key}: ${it.value}" }
+        )
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add MCP server", fontWeight = FontWeight.Bold) },
+        title = { Text(if (initial.name.isBlank()) "Add MCP server" else "Add ${initial.name}", fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                error?.let {
+                    Surface(shape = RoundedCornerShape(8.dp), color = QuotaRed.copy(alpha = 0.08f), modifier = Modifier.fillMaxWidth()) {
+                        Text(it, fontSize = 12.sp, color = QuotaRed, modifier = Modifier.padding(8.dp))
+                    }
+                }
                 OutlinedTextField(name, { name = it.trim() }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text("Transport", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("stdio", "http", "sse").forEach { t ->
                         ControlChip(t, highlighted = transport == t, color = if (transport == t) ClaudeAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), onClick = { transport = t })
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Available in", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("user" to "All projects", "local" to "This project (me)", "project" to "This project (.mcp.json)").forEach { (sc, label) ->
                         val enabled = sc == "user" || cwd != null
                         ControlChip(label, highlighted = scope == sc, color = if (scope == sc) ClaudeAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.7f else 0.3f),
@@ -600,109 +809,155 @@ private fun AddMcpDialog(cwd: String?, onDismiss: () -> Unit, onAdd: (ClaudeMcpA
 @Composable
 private fun PluginsPage(deps: ClaudeSettingsDeps) {
     val data by deps.config.plugins.collectAsState()
-    val busy by deps.config.pluginBusy.collectAsState()
+    val ops by deps.config.pluginOps.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
     var marketSource by remember { mutableStateOf("") }
+    var addingMarket by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { deps.config.loadPlugins() }
+    // the field empties once the marketplace add has finished
+    LaunchedEffect(ops) {
+        addingMarket?.let { if (it !in ops) { addingMarket = null; marketSource = "" } }
+    }
 
-    TabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
-        listOf("Installed", "Discover", "Marketplaces").forEachIndexed { i, t ->
-            Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t, fontSize = 13.sp) })
+    // the catalog has thousands of plugins: search once typing pauses, off the main thread
+    val available = data?.plugins?.available.orEmpty()
+    val searchIndex = remember(available) { available.map { p -> "${p.name}\n${p.description}\n${p.category.orEmpty()}".lowercase() } }
+    var results by remember { mutableStateOf(available) }
+    var searching by remember { mutableStateOf(false) }
+    LaunchedEffect(query, available) {
+        searching = true
+        if (query.isNotBlank()) kotlinx.coroutines.delay(300)
+        val q = query.trim().lowercase()
+        results = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            if (q.isEmpty()) available else available.filterIndexed { i, _ -> searchIndex[i].contains(q) }
         }
+        searching = false
     }
-    if (data == null) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(8.dp))
-            Hint("Loading plugins… (the catalog can take a few seconds)")
+
+    Column(Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
+            listOf("Installed", "Discover", "Marketplaces").forEachIndexed { i, t ->
+                Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t, fontSize = 13.sp) })
+            }
         }
-        return
-    }
-    val d = data!!
-    busy?.let {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(8.dp))
-            Hint("Working on $it…")
+        val d = data
+        if (d == null) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+                Spacer(Modifier.width(8.dp))
+                Hint("Loading plugins… (the catalog can take a few seconds)")
+            }
+            return@Column
         }
-    }
-    when (tab) {
-        0 -> {
-            if (d.plugins.installed.isEmpty()) Hint("No plugins installed. Find some in Discover.")
-            d.plugins.installed.forEach { p ->
-                ClaudeCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(p.name.ifBlank { p.key }, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-                            Hint(listOfNotNull(p.version?.let { "v$it" }, p.scope, p.key.substringAfter('@', "").takeIf { it.isNotBlank() }).joinToString(" · "))
+        val installedIds = remember(d) { d.plugins.installed.map { it.key }.toSet() }
+        androidx.compose.foundation.lazy.LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            when (tab) {
+                0 -> {
+                    if (d.plugins.installed.isEmpty()) item { Hint("No plugins installed. Find some in Discover.") }
+                    items(d.plugins.installed.size, key = { "i_" + d.plugins.installed[it].key }) { i ->
+                        val p = d.plugins.installed[i]
+                        val op = ops[p.key]
+                        ClaudeCard {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(p.name.ifBlank { p.key }, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                                    Hint(listOfNotNull(p.version?.let { "v$it" }, p.scope, p.key.substringAfter('@', "").takeIf { it.isNotBlank() }).joinToString(" · "))
+                                }
+                                if (op != null) PluginProgress(op)
+                                else if (p.enabled != null) Switch(
+                                    checked = p.enabled,
+                                    onCheckedChange = { deps.config.pluginAction(if (it) "enable" else "disable", ClaudePluginAction(plugin = p.key, scope = p.scope)) },
+                                    colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent)
+                                )
+                            }
+                            if (p.description.isNotBlank()) Text(p.description, fontSize = 11.5.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
+                                OutlinedButton(onClick = { deps.config.pluginAction("update", ClaudePluginAction(plugin = p.key)) }, enabled = op == null) { Text("Update", fontSize = 12.sp) }
+                                OutlinedButton(onClick = { deps.config.pluginAction("uninstall", ClaudePluginAction(plugin = p.key, scope = p.scope)) }, enabled = op == null) {
+                                    Text("Uninstall", fontSize = 12.sp, color = QuotaRed)
+                                }
+                            }
                         }
-                        if (p.enabled != null) Switch(
-                            checked = p.enabled, enabled = busy == null,
-                            onCheckedChange = { deps.config.pluginAction(if (it) "enable" else "disable", ClaudePluginAction(plugin = p.key, scope = p.scope)) },
-                            colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent)
+                    }
+                }
+                1 -> {
+                    item(key = "search") {
+                        OutlinedTextField(
+                            query, { query = it }, singleLine = true,
+                            placeholder = { Text("Search ${available.size} plugins") },
+                            trailingIcon = { if (searching) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = ClaudeAccent) },
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    if (p.description.isNotBlank()) Text(p.description, fontSize = 11.5.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
-                        OutlinedButton(onClick = { deps.config.pluginAction("update", ClaudePluginAction(plugin = p.key)) }, enabled = busy == null) { Text("Update", fontSize = 12.sp) }
-                        OutlinedButton(onClick = { deps.config.pluginAction("uninstall", ClaudePluginAction(plugin = p.key, scope = p.scope)) }, enabled = busy == null) {
-                            Text("Uninstall", fontSize = 12.sp, color = QuotaRed)
+                    item(key = "count") { Hint(if (searching) "Searching…" else "${results.size} plugin(s)") }
+                    items(results.size, key = { "a_" + results[it].key }) { i ->
+                        val p = results[i]
+                        val op = ops[p.key]
+                        ClaudeCard {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                                    Hint(listOfNotNull(p.category, p.key.substringAfter('@', "").takeIf { it.isNotBlank() }).joinToString(" · "))
+                                }
+                                when {
+                                    op != null -> PluginProgress(op)
+                                    p.key in installedIds -> Text("Installed", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = QuotaGreen)
+                                    else -> Button(onClick = { deps.config.pluginAction("install", ClaudePluginAction(plugin = p.key, scope = "user")) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeAccent)) { Text("Install", fontSize = 12.sp) }
+                                }
+                            }
+                            if (p.description.isNotBlank()) Text(p.description, fontSize = 11.5.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
                         }
                     }
                 }
-            }
-        }
-        1 -> {
-            OutlinedTextField(query, { query = it }, singleLine = true, placeholder = { Text("Search ${d.plugins.available.size} plugins") }, modifier = Modifier.fillMaxWidth())
-            val installedIds = d.plugins.installed.map { it.key }.toSet()
-            val results = d.plugins.available.filter {
-                query.isBlank() || it.name.contains(query, true) || it.description.contains(query, true) || (it.category?.contains(query, true) == true)
-            }
-            Hint("${results.size} result(s)" + if (results.size > 60) " · showing the first 60" else "")
-            results.take(60).forEach { p ->
-                ClaudeCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-                            Hint(listOfNotNull(p.category, p.key.substringAfter('@', "").takeIf { it.isNotBlank() }).joinToString(" · "))
-                        }
-                        if (p.key in installedIds) Text("Installed", fontSize = 11.sp, color = QuotaGreen)
-                        else Button(onClick = { deps.config.pluginAction("install", ClaudePluginAction(plugin = p.key, scope = "user")) }, enabled = busy == null,
-                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeAccent)) { Text("Install", fontSize = 12.sp) }
+                else -> {
+                    item(key = "about") {
+                        Hint("A marketplace is a catalog of plugins (a git repo with a marketplace.json). Discover lists the plugins of every marketplace added here; refresh one to get its newest plugins.")
                     }
-                    if (p.description.isNotBlank()) Text(p.description, fontSize = 11.5.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
-                }
-            }
-        }
-        else -> {
-            ClaudeCard {
-                SectionTitle("Add a marketplace")
-                Hint("GitHub owner/repo, a git URL, or a URL to marketplace.json")
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(marketSource, { marketSource = it.trim() }, singleLine = true, placeholder = { Text("owner/repo") }, modifier = Modifier.weight(1f))
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = {
-                        deps.config.pluginAction("marketplace-add", ClaudePluginAction(source = marketSource))
-                        marketSource = ""
-                    }, enabled = marketSource.isNotBlank() && busy == null, colors = ButtonDefaults.buttonColors(containerColor = ClaudeAccent)) { Text("Add") }
-                }
-            }
-            d.marketplaces.forEach { m ->
-                ClaudeCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(m.name, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-                            Hint(listOfNotNull(m.repo, m.url, m.source).firstOrNull().orEmpty())
+                    item(key = "add") {
+                        ClaudeCard {
+                            SectionTitle("Add a marketplace")
+                            Hint("GitHub owner/repo, a git URL, or a URL to marketplace.json")
+                            Spacer(Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedTextField(marketSource, { marketSource = it.trim() }, singleLine = true, placeholder = { Text("owner/repo") }, modifier = Modifier.weight(1f))
+                                Spacer(Modifier.width(8.dp))
+                                val adding = addingMarket != null
+                                Button(onClick = {
+                                    addingMarket = marketSource
+                                    deps.config.pluginAction("marketplace-add", ClaudePluginAction(source = marketSource))
+                                }, enabled = marketSource.isNotBlank() && !adding, colors = ButtonDefaults.buttonColors(containerColor = ClaudeAccent)) {
+                                    if (adding) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White) else Text("Add")
+                                }
+                            }
                         }
-                        IconButton(onClick = { deps.config.pluginAction("marketplace-update", ClaudePluginAction(name = m.name)) }, enabled = busy == null) {
-                            Icon(Icons.Outlined.Refresh, "Update")
-                        }
-                        IconButton(onClick = { deps.config.pluginAction("marketplace-remove", ClaudePluginAction(name = m.name)) }, enabled = busy == null) {
-                            Icon(Icons.Outlined.Delete, "Remove", tint = QuotaRed.copy(alpha = 0.8f))
+                    }
+                    items(d.marketplaces.size, key = { "m_" + d.marketplaces[it].name }) { i ->
+                        val m = d.marketplaces[i]
+                        val op = ops[m.name]
+                        ClaudeCard {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(m.name, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                                    Hint(listOfNotNull(m.repo, m.url, m.source).firstOrNull().orEmpty())
+                                }
+                                if (op != null) PluginProgress(op)
+                                else {
+                                    IconButton(onClick = { deps.config.pluginAction("marketplace-update", ClaudePluginAction(name = m.name)) }) {
+                                        Icon(Icons.Outlined.Refresh, "Refresh catalog")
+                                    }
+                                    IconButton(onClick = { deps.config.pluginAction("marketplace-remove", ClaudePluginAction(name = m.name)) }) {
+                                        Icon(Icons.Outlined.Delete, "Remove", tint = QuotaRed.copy(alpha = 0.8f))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -711,42 +966,132 @@ private fun PluginsPage(deps: ClaudeSettingsDeps) {
     }
 }
 
+/** The running (or queued) action of one plugin / marketplace. */
+@Composable
+private fun PluginProgress(action: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            when (action) {
+                "install" -> "Installing…"
+                "uninstall" -> "Removing…"
+                "enable" -> "Enabling…"
+                "disable" -> "Disabling…"
+                "update", "marketplace-update" -> "Updating…"
+                "marketplace-remove" -> "Removing…"
+                else -> "Working…"
+            },
+            fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = ClaudeAccent
+        )
+    }
+}
+
 // ======================================================================== Memory
 
 @Composable
 private fun MemoryPage(deps: ClaudeSettingsDeps) {
     val memory by deps.config.memory.collectAsState()
+    val auto by deps.config.autoMemory.collectAsState()
+    // the project Claude chats run in: the open project, otherwise the bridge's default workspace
     val cwd = activeProjectPath()
+    val projectName = cwd?.trimEnd('/')?.substringAfterLast('/')?.ifBlank { null } ?: "Default workspace"
     var scope by remember { mutableStateOf("user") }
     var text by remember { mutableStateOf("") }
+    var openNote by remember { mutableStateOf<String?>(null) }
+    var noteToDelete by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(scope) { deps.config.loadMemory(scope, if (scope == "project") cwd else null) }
     LaunchedEffect(memory) { memory?.let { text = it.content } }
+    LaunchedEffect(cwd) { deps.config.loadAutoMemory(cwd) }
 
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ControlChip("Personal (all projects)", highlighted = scope == "user", color = if (scope == "user") ClaudeAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), onClick = { scope = "user" })
-        ControlChip("This project", highlighted = scope == "project",
-            color = if (scope == "project") ClaudeAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = if (cwd != null) 0.7f else 0.3f),
-            onClick = { if (cwd != null) scope = "project" })
+    // ---- CLAUDE.md
+    ClaudeCard {
+        SectionTitle("Instructions (CLAUDE.md)")
+        Hint("Rules Claude follows in every chat. New chats read them right away; a chat that is already running reads them the next time its Claude process starts.")
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ControlChip("All projects", highlighted = scope == "user", color = if (scope == "user") ClaudeAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), onClick = { scope = "user" })
+            ControlChip(projectName, highlighted = scope == "project", color = if (scope == "project") ClaudeAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), onClick = { scope = "project" })
+        }
+        Spacer(Modifier.height(8.dp))
+        val m = memory
+        if (m == null) {
+            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+        } else {
+            Hint(
+                (if (scope == "user") "Used in every project · " else "Used only in $projectName · ") +
+                    m.path + if (!m.exists) " (created when you save)" else ""
+            )
+            Spacer(Modifier.height(6.dp))
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                placeholder = { Text("# Instructions Claude follows in every chat\n- Prefer Kotlin coroutines\n- Run ./gradlew test before committing") },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = { deps.config.saveMemory(scope, if (scope == "project") cwd else null, text) },
+                enabled = text != m.content,
+                colors = ButtonDefaults.buttonColors(containerColor = ClaudeAccent)
+            ) { Text("Save") }
+        }
     }
-    if (scope == "project" && cwd == null) {
-        Hint("Open a project first.")
-        return
+
+    // ---- auto memory
+    ClaudeCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                SectionTitle("Claude's memory · $projectName")
+                Hint("Notes Claude saved by itself while working in this project. This is what Claude checks when you ask what it remembers.")
+            }
+            IconButton(onClick = { deps.config.loadAutoMemory(cwd) }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+        }
+        val a = auto
+        when {
+            a == null -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+            a.error != null -> Text(a.error, fontSize = 12.sp, color = QuotaRed)
+            a.files.isEmpty() -> Hint("No notes yet. Ask Claude to remember something and it saves it here.")
+            else -> {
+                Hint(a.dir)
+                a.files.forEach { f ->
+                    val open = openNote == f.name
+                    HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { openNote = if (open) null else f.name },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(f.name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                            Hint(java.text.SimpleDateFormat("d MMM yyyy, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(f.modified)))
+                        }
+                        IconButton(onClick = { noteToDelete = f.name }) { Icon(Icons.Outlined.Delete, "Delete", tint = QuotaRed.copy(alpha = 0.8f)) }
+                    }
+                    if (open) {
+                        Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f), modifier = Modifier.fillMaxWidth()) {
+                            Text(f.content, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(8.dp))
+                        }
+                    }
+                }
+            }
+        }
     }
-    val m = memory
-    if (m == null) {
-        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-        return
+
+    noteToDelete?.let { name ->
+        AlertDialog(
+            onDismissRequest = { noteToDelete = null },
+            title = { Text("Delete $name?", fontWeight = FontWeight.Bold) },
+            text = { Text("Claude forgets what this note says.", fontSize = 13.5.sp) },
+            confirmButton = {
+                TextButton(onClick = {
+                    deps.config.deleteAutoMemory(cwd, name)
+                    noteToDelete = null
+                }) { Text("Delete", color = QuotaRed) }
+            },
+            dismissButton = { TextButton(onClick = { noteToDelete = null }) { Text("Cancel") } }
+        )
     }
-    Hint(m.path + if (!m.exists) " (will be created)" else "")
-    OutlinedTextField(
-        value = text,
-        onValueChange = { text = it },
-        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-        placeholder = { Text("# Instructions Claude follows in every chat\n- Prefer Kotlin coroutines\n- Run ./gradlew test before committing") },
-        modifier = Modifier.fillMaxWidth().heightIn(min = 260.dp)
-    )
-    Button(onClick = { deps.config.saveMemory(scope, if (scope == "project") cwd else null, text) },
-        colors = ButtonDefaults.buttonColors(containerColor = ClaudeAccent)) { Text("Save CLAUDE.md") }
 }
 
 // ======================================================================== Advanced

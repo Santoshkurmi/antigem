@@ -3,7 +3,9 @@ package com.example.gemini.data.agent.claude
 import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.AgyBridgeService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
@@ -69,6 +71,14 @@ class ClaudeBridgeClient(
 
     suspend fun kill(sessionId: String): Result<BridgeSimpleResponse> = post("/sessions/$sessionId/kill")
 
+    /** Cuts the chat right before the prompt [beforeUuid]; the next message continues from there. */
+    suspend fun rewind(sessionId: String, beforeUuid: String): Result<BridgeSimpleResponse> =
+        post("/sessions/$sessionId/rewind", ClaudeJson.encodeToString(ClaudeRewindRequest(beforeUuid)))
+
+    /** Copies the chat under [newId] (written to disk right away). */
+    suspend fun fork(sessionId: String, newId: String, title: String): Result<BridgeSimpleResponse> =
+        post("/sessions/$sessionId/fork", ClaudeJson.encodeToString(ClaudeForkRequest(newId, title)))
+
     suspend fun delete(sessionId: String): Result<BridgeSimpleResponse> =
         call(Request.Builder().url(url("/sessions/$sessionId")).delete().build())
 
@@ -99,6 +109,16 @@ class ClaudeBridgeClient(
 
     suspend fun saveMemory(scope: String, cwd: String?, content: String): Result<BridgeSimpleResponse> =
         call(Request.Builder().url(url(memoryQuery(scope, cwd))).put(ClaudeJson.encodeToString(ClaudeMemoryPut(content)).toRequestBody(jsonType)).build())
+
+    private fun autoMemoryQuery(cwd: String?) = "/memory/auto" + (cwd?.let { "?cwd=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: "")
+
+    /** Notes Claude saved by itself for the project [cwd] (null = the default workspace). */
+    suspend fun autoMemory(cwd: String?): Result<ClaudeAutoMemoryResponse> = get(autoMemoryQuery(cwd))
+
+    suspend fun deleteAutoMemory(cwd: String?, name: String): Result<BridgeSimpleResponse> {
+        val q = autoMemoryQuery(cwd) + (if (cwd == null) "?" else "&") + "name=" + java.net.URLEncoder.encode(name, "UTF-8")
+        return call(Request.Builder().url(url(q)).delete().build())
+    }
 
     suspend fun mcpServers(cwd: String? = null): Result<ClaudeMcpResponse> =
         get("/mcp" + (cwd?.let { "?cwd=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""))
@@ -179,7 +199,8 @@ class ClaudeBridgeClient(
         }
         val ws = bridge.wsClient.newWebSocket(request, listener)
         awaitClose { ws.close(1000, null) }
-    }
+        // never drop a frame: a lost `result` would leave the turn running forever
+    }.buffer(Channel.UNLIMITED)
 }
 
 /** Nothing answered at the bridge address (not running yet, stopped, or unreachable). */

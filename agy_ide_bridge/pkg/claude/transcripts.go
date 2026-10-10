@@ -257,8 +257,9 @@ func transcriptCwd(path string) string {
 }
 
 // History returns the main-chain transcript entries (user / assistant / system) of a session, read up to
-// maxBytes (0 = whole file). Entries are raw JSON objects in conversation order.
-func (m *Manager) History(id string, maxBytes int64) ([]json.RawMessage, error) {
+// maxBytes (0 = whole file). Entries are raw JSON objects in conversation order. With cut, the chain ends at that
+// entry instead of the newest message ("" = no entries): a rewind not followed by a new prompt yet.
+func (m *Manager) History(id string, maxBytes int64, cut *string) ([]json.RawMessage, error) {
 	path := m.FindTranscript(id)
 	if path == "" {
 		return []json.RawMessage{}, nil
@@ -312,6 +313,9 @@ func (m *Manager) History(id string, maxBytes int64) ([]json.RawMessage, error) 
 		}
 	}
 
+	if cut != nil {
+		leaf = *cut
+	}
 	var chainIDs []string
 	onChain := map[string]bool{}
 	for cur := leaf; cur != "" && !onChain[cur]; {
@@ -358,6 +362,7 @@ func (m *Manager) DeleteSession(id string) error {
 		s.KillAndWait(6 * time.Second)
 	}
 	m.removeAttachments(id)
+	m.clearRewind(id)
 	path := m.FindTranscript(id)
 	if path == "" {
 		return nil

@@ -393,6 +393,27 @@ data class BridgeSimpleResponse(
 @Serializable
 data class ClaudeTitleRequest(val title: String)
 
+/** Edit an earlier prompt in place: the chat is cut right before the prompt [before] (its uuid). */
+@Serializable
+data class ClaudeRewindRequest(val before: String)
+
+/** Copies a chat under [new_id]. */
+@Serializable
+data class ClaudeForkRequest(val new_id: String, val title: String)
+
+/** `get_settings().applied`: what the running process really uses. */
+@Serializable
+data class ClaudeAppliedSettings(
+    val model: String? = null,
+    val effort: String? = null
+)
+
+@Serializable
+data class ClaudeGetSettingsResult(
+    val applied: ClaudeAppliedSettings? = null,
+    val effective: JsonObject? = null
+)
+
 // ---------------------------------------------------------------- usage / limits
 
 @Serializable
@@ -494,6 +515,25 @@ data class ClaudeMemoryResponse(
     val path: String = "",
     val exists: Boolean = false,
     val content: String = "",
+    /** The folder the file is in (the project folder for project scope). */
+    val project_dir: String = "",
+    val error: String? = null
+)
+
+/** One note Claude saved by itself (auto memory). */
+@Serializable
+data class ClaudeAutoMemoryFile(
+    val name: String,
+    val size: Long = 0,
+    val modified: Long = 0,
+    val content: String = ""
+)
+
+@Serializable
+data class ClaudeAutoMemoryResponse(
+    val success: Boolean = false,
+    val dir: String = "",
+    val files: List<ClaudeAutoMemoryFile> = emptyList(),
     val error: String? = null
 )
 

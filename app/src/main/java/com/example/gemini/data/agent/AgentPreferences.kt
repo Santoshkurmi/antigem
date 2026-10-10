@@ -42,6 +42,10 @@ class AgentPreferences(context: Context) {
         private fun read(prefs: android.content.SharedPreferences): Set<AgentKind> =
             AgentKind.entries.filter { prefs.getBoolean(key(it), default(it)) }.toSet().ifEmpty { setOf(AgentKind.AGY) }
 
+        /** The first-launch agent choice was made, read synchronously (the server does not start before it). */
+        fun hasChosenSync(context: Context): Boolean =
+            context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CHOSEN, false)
+
         /** Enabled agents, read synchronously (bridge launch). */
         fun enabledSync(context: Context): Set<AgentKind> =
             read(context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE))

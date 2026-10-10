@@ -64,7 +64,7 @@ class ClaudeChatBackend(
     override val conversationError: StateFlow<String?> = _conversationError.asStateFlow()
 
     private val _startupStatus = MutableStateFlow<String?>(null)
-    /** Set while a sent message waits for the claude process to boot (seconds on a phone). */
+    /** Set while a sent message waits for the claude process to boot (seconds on a phone), or while compacting. */
     val startupStatus: StateFlow<String?> = _startupStatus.asStateFlow()
 
     private val _isStreaming = MutableStateFlow(false)
@@ -100,6 +100,14 @@ class ClaudeChatBackend(
     private val _effort = MutableStateFlow<String?>(null)
     /** null = the model's default effort. */
     val effort: StateFlow<String?> = _effort.asStateFlow()
+
+    private val _appliedEffort = MutableStateFlow<String?>(null)
+    /** The effort the running process really uses (`get_settings().applied.effort`), null until known. */
+    val appliedEffort: StateFlow<String?> = _appliedEffort.asStateFlow()
+
+    private val _controlMessages = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 8)
+    /** A chat control the CLI refused (shown as a toast), or other short notices. */
+    val controlMessages: kotlinx.coroutines.flow.SharedFlow<String> = _controlMessages
 
     private val _thinkingEnabled = MutableStateFlow(true)
     val thinkingEnabled: StateFlow<Boolean> = _thinkingEnabled.asStateFlow()
@@ -152,18 +160,25 @@ class ClaudeChatBackend(
     private var emitJob: Job? = null
     private var lastSeq = -1L
     private var processLive = false
-    private var pendingForkFrom: String? = null
-    private var pendingResumeAt: String? = null
     private val outbox = ArrayDeque<String>()
     private val replies = HashMap<String, CompletableDeferred<ClaudeControlResponseInner>>()
-    // controls changed in this chat; untouched ones are left to the user's settings.json defaults
+    // the permission mode was changed in this chat; untouched it is left to the user's settings.json default
     @Volatile private var modeTouched = false
-    @Volatile private var thinkingTouched = false
+    // model / effort / thinking were changed in this chat (a new chat otherwise follows the settings.json defaults)
+    @Volatile private var controlsTouched = false
+    // settings.json defaults for new chats: model, effortLevel, alwaysThinkingEnabled
+    @Volatile private var chatDefaults = ChatDefaults()
     // the mode new chats start in: the bridge's default (Auto unless the user set one in settings.json)
     @Volatile private var defaultPermissionMode = prefs.cachedDefaultMode()
     private val localConversations = LinkedHashMap<String, Conversation>()
+    // controls of chats opened in this app session (model / effort / thinking), by chat id
+    private val chatControls = HashMap<String, ChatControls>()
     // a sent message is waiting for the process the bridge spawns for it
     private var awaitingProcess = false
+    // shows the start-up notice only when the process takes a while (a quick start just shows the typing dots)
+    private var startupNoticeJob: Job? = null
+    // /compact (or auto-compaction) is running: the notice says so
+    private var compacting = false
     // opening a chat whose process is live: its newest output is replayed from the bridge buffer up to this seq;
     // the chat is shown once (complete) when it arrives
     private var replayUntilSeq: Long? = null
@@ -177,6 +192,7 @@ class ClaudeChatBackend(
         prefs.cachedInfo()?.let { applyInfo(it) }
         loopJob = backendScope.launch {
             refreshInfo(force = false)
+            loadChatDefaults()
             while (isActive) {
                 refreshSessions()
                 // poll faster while a Claude chat is working so the sidebar's running state stays current
@@ -207,6 +223,7 @@ class ClaudeChatBackend(
             agent = AgentKind.CLAUDE
         )
         showConversation(conv, loading = false)
+        applyChatDefaults()
         _cacheInfo.value = null
         _contextUsage.value = null
         backendScope.launch(worker) {
@@ -259,7 +276,11 @@ class ClaudeChatBackend(
             transcript.addLocalUserMessage(uuid, displayText, atts)
             if (!processLive) {
                 awaitingProcess = true
-                _startupStatus.value = "Starting Claude Code…"
+                startupNoticeJob?.cancel()
+                startupNoticeJob = backendScope.launch(worker) {
+                    delay(STARTUP_NOTICE_DELAY_MS)
+                    if (awaitingProcess) _startupStatus.value = "Starting Claude Code…"
+                }
             }
             emitNow()
             val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(conv.id, text, atts))))
@@ -289,15 +310,28 @@ class ClaudeChatBackend(
         if (store.currentConversation.value?.id == id) startNewChat()
     }
 
+    /** Copies the chat on the bridge (it is a chat of its own right away) and opens the copy. */
     override fun forkConversation(id: String) {
         val source = _conversations.value.find { it.id == id } ?: return
-        forkInto(source, cutAtUserUuid = null) {}
+        val newId = UUID.randomUUID().toString()
+        val title = "${source.title} (fork)"
+        backendScope.launch {
+            client.fork(source.id, newId, title)
+                .mapCatching { if (!it.success) error(it.error ?: "the bridge refused") }
+                .onSuccess {
+                    val now = System.currentTimeMillis()
+                    upsertLocal(source.copy(id = newId, sessionId = newId, title = title, createdAt = now, updatedAt = now, isRunning = false))
+                    withContext(Dispatchers.Main) { selectConversation(newId) }
+                    refreshSessions()
+                }
+                .onFailure { _controlMessages.tryEmit("Cannot fork this chat: ${it.message}") }
+        }
     }
 
     override fun retryConnections() {
         backendScope.launch(worker) {
             val id = attachedId ?: return@launch
-            if (store.currentConversation.value?.id != id || pendingForkFrom != null) return@launch
+            if (store.currentConversation.value?.id != id) return@launch
             // a chat not on disk yet has no history to reload: just reconnect (its output is in the bridge buffer)
             if (isOnDisk(id)) loadAndAttach(id) else ensureConnected(id)
         }
@@ -308,7 +342,7 @@ class ClaudeChatBackend(
         backendScope.launch { refreshSessions() }
         backendScope.launch(worker) {
             val id = attachedId ?: return@launch
-            if (socketJob?.isActive != true && pendingForkFrom == null && isOnDisk(id)) loadAndAttach(id)
+            if (socketJob?.isActive != true && isOnDisk(id)) loadAndAttach(id)
         }
     }
 
@@ -404,67 +438,159 @@ class ClaudeChatBackend(
     // ------------------------------------------------------------------ chat controls
 
     fun selectModel(modelId: String) {
+        val previous = _selectedModelId.value
+        controlsTouched = true
+        setSelectedModel(modelId)
+        // keep the effort valid for the new model
+        val levels = _modelInfos.value.find { it.value == modelId }?.supportedEffortLevels.orEmpty()
+        if (_effort.value != null && levels.isNotEmpty() && _effort.value !in levels) setEffort(null)
+        applyControl(
+            live = ClaudeControlRequestBody(subtype = "set_model", model = modelId),
+            spawn = BridgeConfigFrame(model = modelId),
+            what = "model",
+            revert = { setSelectedModel(previous) }
+        )
+    }
+
+    private fun setSelectedModel(modelId: String) {
         _selectedModelId.value = modelId
         val conv = store.currentConversation.value
         if (conv != null && conv.agent == AgentKind.CLAUDE) store.currentConversation.value = conv.copy(modelId = modelId)
-        // keep the effort valid for the new model
-        val levels = _modelInfos.value.find { it.value == modelId }?.supportedEffortLevels.orEmpty()
-        if (_effort.value != null && levels.isNotEmpty() && _effort.value !in levels) _effort.value = null
-        liveOrSpawn(
-            live = ClaudeControlRequestBody(subtype = "set_model", model = modelId),
-            spawn = BridgeConfigFrame(model = modelId.takeIf { it != "default" })
-        )
     }
 
     /** level: low | medium | high | xhigh | max, or null for the model default. */
     fun setEffort(level: String?) {
+        val previous = _effort.value
+        controlsTouched = true
         _effort.value = level
-        liveOrSpawn(
+        applyControl(
             live = ClaudeControlRequestBody(
                 subtype = "apply_flag_settings",
                 settings = buildJsonObject { put("effortLevel", level?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull) }
             ),
-            spawn = BridgeConfigFrame(effort = level)
+            spawn = BridgeConfigFrame(effort = level ?: "default"),
+            what = "effort",
+            revert = { _effort.value = previous }
         )
     }
 
     fun setThinking(enabled: Boolean) {
-        thinkingTouched = true
+        val previous = _thinkingEnabled.value
+        controlsTouched = true
         _thinkingEnabled.value = enabled
-        liveOrSpawn(
+        applyControl(
             live = ClaudeControlRequestBody(
                 subtype = "set_max_thinking_tokens",
                 max_thinking_tokens = if (enabled) 31999 else 0,
                 thinking_display = if (enabled) "summarized" else null
             ),
-            spawn = BridgeConfigFrame(thinking = if (enabled) "on" else "off")
+            spawn = BridgeConfigFrame(thinking = if (enabled) "on" else "off"),
+            what = "thinking",
+            revert = { _thinkingEnabled.value = previous }
         )
     }
 
     /** default (Manual) | acceptEdits | plan | auto | dontAsk */
     fun setPermissionMode(mode: String) {
+        val previous = _permissionMode.value
         modeTouched = true
         _permissionMode.value = mode
-        liveOrSpawn(
+        applyControl(
             live = ClaudeControlRequestBody(subtype = "set_permission_mode", mode = mode),
-            spawn = BridgeConfigFrame(permission_mode = mode)
+            spawn = BridgeConfigFrame(permission_mode = mode),
+            what = "mode",
+            revert = { _permissionMode.value = previous }
         )
     }
 
-    /** Applies a control live when the process runs, otherwise stores it as a spawn option (no process is started). */
-    private fun liveOrSpawn(live: ClaudeControlRequestBody, spawn: BridgeConfigFrame) {
+    /**
+     * Applies a chat control. With a running process it is sent live and the CLI's answer is checked: a refused
+     * change is reverted (and shown), an accepted one is confirmed with [syncApplied]. Without a process it is a
+     * spawn option of the next start (no process is started); before the chat is connected [spawnConfig] covers it.
+     */
+    private fun applyControl(live: ClaudeControlRequestBody, spawn: BridgeConfigFrame, what: String, revert: () -> Unit) {
         backendScope.launch(worker) {
             if (socket == null) return@launch
-            if (processLive) sendControl(live) else send(ClaudeJson.encodeToString(spawn))
+            if (!processLive) {
+                send(ClaudeJson.encodeToString(spawn))
+                return@launch
+            }
+            val reply = request(live, timeoutMs = 15_000)
+            when {
+                reply == null -> _controlMessages.tryEmit("Claude Code did not confirm the $what change")
+                reply.subtype == "error" -> {
+                    revert()
+                    _controlMessages.tryEmit("Claude Code refused the $what change: ${reply.error ?: "unknown error"}")
+                }
+                else -> syncApplied()
+            }
         }
     }
+
+    /** Reads what the running process really uses (`get_settings().applied`) and shows that in the controls. */
+    private suspend fun syncApplied() {
+        if (!processLive || socket == null) return
+        val applied = request(ClaudeControlRequestBody(subtype = "get_settings"), timeoutMs = 15_000)?.response
+            ?.let { runCatching { ClaudeJson.decodeFromJsonElement<ClaudeGetSettingsResult>(it) }.getOrNull() }
+            ?.applied ?: return
+        applied.model?.let { selectResolvedModel(it) }
+        _appliedEffort.value = applied.effort
+        if (_effort.value != null && applied.effort != null && applied.effort != _effort.value) _effort.value = applied.effort
+    }
+
+    /**
+     * Shows the model alias that runs [resolved] (a full id like `claude-opus-5-5`). The current choice is kept when
+     * it already resolves to it (e.g. "default" → Opus 5.5).
+     */
+    private fun selectResolvedModel(resolved: String) {
+        val infos = _modelInfos.value
+        val current = infos.find { it.value == _selectedModelId.value }
+        if (current?.value == resolved || current?.resolvedModel == resolved) return
+        val match = infos.firstOrNull { it.value == resolved } ?: infos.firstOrNull { it.resolvedModel == resolved && it.value != "default" }
+            ?: infos.firstOrNull { it.resolvedModel == resolved }
+        setSelectedModel(match?.value ?: resolved)
+    }
+
+    /** New chats start with the settings.json defaults (the Chat defaults page). */
+    private fun applyChatDefaults() {
+        controlsTouched = false
+        val d = chatDefaults
+        _selectedModelId.value = d.model ?: "default"
+        _effort.value = d.effort
+        _appliedEffort.value = null
+        _thinkingEnabled.value = d.thinking
+    }
+
+    /** Reads the defaults for new chats from settings.json (and applies them to a new chat nothing was sent in). */
+    fun loadChatDefaults() {
+        backendScope.launch {
+            client.settings().onSuccess { resp ->
+                if (!resp.success) return@onSuccess
+                val st = resp.settings
+                fun str(key: String) = (st[key] as? JsonPrimitive)?.contentOrNull
+                chatDefaults = ChatDefaults(
+                    model = str("model"),
+                    effort = str("effortLevel"),
+                    thinking = str("alwaysThinkingEnabled")?.toBooleanStrictOrNull() ?: true
+                )
+                val cur = store.currentConversation.value
+                if (!controlsTouched && cur != null && cur.agent == AgentKind.CLAUDE && !isOnDisk(cur.id) && _messages.value.isEmpty()) {
+                    applyChatDefaults()
+                }
+            }
+        }
+    }
+
+    private data class ChatDefaults(val model: String? = null, val effort: String? = null, val thinking: Boolean = true)
+
+    private data class ChatControls(val model: String, val effort: String?, val thinking: Boolean)
 
     // ------------------------------------------------------------------ edit / regenerate / rewind / export
 
     /**
-     * Edits the prompt with [userMessageId]: opens a fork of this chat that ends right before that prompt (the
-     * original chat is kept), and returns the prompt text for the input box. With [restoreCode], files changed
-     * since that prompt are restored first.
+     * Edits the prompt with [userMessageId] in place, like the CLI's rewind: the chat is cut right before that
+     * prompt (the next message continues from there) and the prompt text is returned for the input box. With
+     * [restoreCode], files changed since that prompt are restored first.
      */
     fun editMessage(userMessageId: String, restoreCode: Boolean, onRestored: (String) -> Unit) {
         val conv = store.currentConversation.value ?: return
@@ -472,67 +598,36 @@ class ClaudeChatBackend(
         backendScope.launch(worker) {
             val text = transcript.userText(userUuid).orEmpty()
             if (restoreCode) rewindFilesLocked(userUuid)
-            withContext(Dispatchers.Main) {
-                forkInto(conv, cutAtUserUuid = userUuid) { onRestored(text) }
-            }
+            if (rewindLocked(conv.id, userUuid)) withContext(Dispatchers.Main) { onRestored(text) }
         }
     }
 
-    /** Regenerates the reply [assistantMessageId] in a fork that ends before its prompt, re-sending that prompt. */
+    /** Regenerates the reply [assistantMessageId]: the chat is cut before its prompt and that prompt is sent again. */
     fun regenerate(assistantMessageId: String) {
         val conv = store.currentConversation.value ?: return
         backendScope.launch(worker) {
             val userUuid = transcript.userBefore(assistantMessageId) ?: return@launch
             val text = transcript.userText(userUuid).orEmpty()
-            withContext(Dispatchers.Main) {
-                forkInto(conv, cutAtUserUuid = userUuid) { fork -> sendPrompt(fork, text, emptyList()) }
+            if (rewindLocked(conv.id, userUuid)) {
+                withContext(Dispatchers.Main) { sendPrompt(store.currentConversation.value ?: conv, text, emptyList()) }
             }
         }
     }
 
-    /**
-     * Opens a new conversation forked from [source]. With [cutAtUserUuid], history ends right before that prompt
-     * (`--resume-session-at`); the fork's process starts with the first message sent in it.
-     */
-    private fun forkInto(source: Conversation, cutAtUserUuid: String?, then: (Conversation) -> Unit) {
-        val newId = UUID.randomUUID().toString()
-        val fork = source.copy(
-            id = newId,
-            sessionId = newId,
-            title = if (cutAtUserUuid == null) "${source.title} (fork)" else source.title,
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
-            isRunning = false,
-            agent = AgentKind.CLAUDE
-        )
-        showConversation(fork, loading = true)
-        backendScope.launch(worker) {
-            val parent = cutAtUserUuid?.let { transcript.parentOfUser(it) }
-            detachLocked()
-            attachedId = newId
-            if (cutAtUserUuid != null && parent == null) {
-                // editing the very first prompt: nothing to keep, start fresh in the same folder
-                transcript.reset(newId)
-                pendingForkFrom = null
-                pendingResumeAt = null
-            } else {
-                pendingForkFrom = source.id
-                pendingResumeAt = parent
-                client.history(source.id)
-                    .onSuccess { h ->
-                        transcript.reset(newId)
-                        for (entry in h.entries) {
-                            if (cutAtUserUuid != null && entry["uuid"]?.jsonPrimitive?.contentOrNull == cutAtUserUuid) break
-                            transcript.applyHistory(entry)
-                        }
-                        transcript.finishHistory()
-                    }
-                    .onFailure { _conversationError.value = "Cannot load the chat to fork: ${it.message}" }
-            }
-            emitNow()
+    /** Cuts chat [id] right before the prompt [userUuid] on the bridge and reloads it. */
+    private suspend fun rewindLocked(id: String, userUuid: String): Boolean {
+        _isLoadingConversation.value = true
+        val res = client.rewind(id, userUuid).mapCatching { if (!it.success) error(it.error ?: "the bridge refused") }
+        if (res.isFailure) {
             _isLoadingConversation.value = false
-            withContext(Dispatchers.Main) { then(store.currentConversation.value ?: fork) }
+            _controlMessages.tryEmit("Cannot edit this message: ${res.exceptionOrNull()?.message}")
+            return false
         }
+        if (store.currentConversation.value?.id != id) return false
+        detachLocked()
+        attachedId = id
+        loadAndAttach(id)
+        return true
     }
 
     /** Restores files changed since [userUuid] (Claude's file checkpoints). Returns the CLI's summary. */
@@ -642,7 +737,8 @@ class ClaudeChatBackend(
                 SlashCommandItem(
                     name = c.name,
                     command = "/${c.name}",
-                    description = appDescription ?: (c.description + c.argumentHint.takeIf { it.isNotBlank() }?.let { "  $it" }.orEmpty()),
+                    description = appDescription ?: c.description,
+                    argumentHint = if (appDescription != null) "" else c.argumentHint,
                     type = when {
                         appDescription != null -> "app"
                         c.builtin && !c.name.contains(':') -> "command"
@@ -745,10 +841,24 @@ class ClaudeChatBackend(
     // ------------------------------------------------------------------ socket
 
     private fun showConversation(conv: Conversation, loading: Boolean) {
+        // the chat being left keeps its controls for when it is opened again (its process may still run with them)
+        store.currentConversation.value?.takeIf { it.agent == AgentKind.CLAUDE && it.id != conv.id }?.let { prev ->
+            synchronized(chatControls) { chatControls[prev.id] = ChatControls(_selectedModelId.value, _effort.value, _thinkingEnabled.value) }
+        }
         modeTouched = false
-        thinkingTouched = false
+        controlsTouched = false
         _permissionMode.value = defaultPermissionMode
-        _thinkingEnabled.value = true
+        _appliedEffort.value = null
+        val remembered = synchronized(chatControls) { chatControls[conv.id] }
+        if (remembered != null) {
+            controlsTouched = true
+            _selectedModelId.value = remembered.model
+            _effort.value = remembered.effort
+            _thinkingEnabled.value = remembered.thinking
+        } else {
+            _effort.value = chatDefaults.effort
+            _thinkingEnabled.value = chatDefaults.thinking
+        }
         store.currentConversation.value = conv
         _messages.value = emptyList()
         _conversationError.value = null
@@ -769,6 +879,8 @@ class ClaudeChatBackend(
             transcript.finishHistory()
             lastSeq = h.state.buffer_start_seq - 1
             processLive = h.state.live
+            // resuming a chat continues on the model it last used (a running process is checked once attached)
+            if (!h.state.live && !controlsTouched) transcript.sessionModel?.let { selectResolvedModel(it) }
             val newest = h.state.next_seq - 1
             if (h.state.live && newest >= h.state.buffer_start_seq) {
                 // the rest of the chat is in the bridge buffer: keep the loading state until it is replayed
@@ -841,12 +953,11 @@ class ClaudeChatBackend(
         val cwd = conv?.workspaceUri?.removePrefix("file://")?.takeIf { it.isNotBlank() }
         return BridgeConfigFrame(
             cwd = cwd,
-            model = _selectedModelId.value.takeIf { it.isNotBlank() && it != "default" },
+            // always explicit, so the process runs exactly what the controls show ("default" clears an older choice)
+            model = _selectedModelId.value.ifBlank { "default" },
             permission_mode = _permissionMode.value.takeIf { modeTouched },
-            effort = _effort.value,
-            thinking = if (!thinkingTouched) null else if (_thinkingEnabled.value) "on" else "off",
-            fork_from = pendingForkFrom,
-            resume_session_at = pendingResumeAt
+            effort = _effort.value ?: "default",
+            thinking = if (_thinkingEnabled.value) "on" else "off"
         )
     }
 
@@ -855,6 +966,16 @@ class ClaudeChatBackend(
             "bridge_line" -> {
                 val seq = frame.seq ?: return
                 if (seq <= lastSeq) return
+                if (lastSeq >= 0 && seq > lastSeq + 1) {
+                    // frames were lost on the way: attach again from the first missing one (the bridge buffer
+                    // still has it), otherwise e.g. a lost `result` leaves the turn running forever
+                    Log.w(TAG, "missed frames ${lastSeq + 1}..${seq - 1}: re-attaching")
+                    attachedId?.let { id ->
+                        socket = null
+                        connect(id, lastSeq + 1)
+                    }
+                    return
+                }
                 lastSeq = seq
                 val data = frame.data
                 val isReply = data?.get("type")?.jsonPrimitive?.contentOrNull == "control_response"
@@ -870,10 +991,11 @@ class ClaudeChatBackend(
                 if (data == null || isReply) return
                 if (awaitingProcess && type != "stream_event" && type != "rate_limit_event" && type != "command_lifecycle") {
                     awaitingProcess = false
-                    _startupStatus.value = null
+                    clearStartupNotice()
                 }
                 when (type) {
                     "result" -> {
+                        endCompactingNotice()
                         scheduleTitleRefresh()
                         onTurnFinished()
                         refreshContextUsage()
@@ -891,8 +1013,17 @@ class ClaudeChatBackend(
                         "init" -> {
                             processLive = true
                             transcript.permissionMode?.let { _permissionMode.value = it }
+                            // confirm what the process really runs (not inline: the reply arrives on this worker)
+                            backendScope.launch(worker) { syncApplied() }
                         }
-                        "status" -> transcript.permissionMode?.let { _permissionMode.value = it }
+                        "status" -> {
+                            transcript.permissionMode?.let { _permissionMode.value = it }
+                            if (data["status"]?.jsonPrimitive?.contentOrNull == "compacting") {
+                                compacting = true
+                                _startupStatus.value = "Compacting the conversation…"
+                            } else endCompactingNotice()
+                        }
+                        "compact_boundary" -> endCompactingNotice()
                     }
                 }
                 if (type == "stream_event") scheduleEmit() else emitNow()
@@ -915,15 +1046,16 @@ class ClaudeChatBackend(
                         // process exited while we were away). A just-sent message starts the process itself.
                         if (!st.live && transcript.isTurnActive && !awaitingProcess) transcript.endTurn()
                         if (replayUntilSeq != null && st.next_seq - 1 <= lastSeq) finishReplay()
+                        // a running process may use other settings than this app last showed for the chat
+                        if (st.live) backendScope.launch(worker) { syncApplied() }
                     }
                     "spawned" -> {
-                        pendingForkFrom = null
-                        pendingResumeAt = null
-                        if (awaitingProcess) _startupStatus.value = "Claude Code is starting…"
+                        // only when the start-up notice is already shown (a slow start)
+                        if (awaitingProcess && _startupStatus.value != null) _startupStatus.value = "Claude Code is starting…"
                     }
                     "exited" -> {
                         awaitingProcess = false
-                        _startupStatus.value = null
+                        clearStartupNotice()
                         if (replayUntilSeq != null) finishReplay()
                         failReplies("Claude process exited")
                         val err = frame.error.orEmpty()
@@ -940,7 +1072,7 @@ class ClaudeChatBackend(
             "bridge_error" -> {
                 val err = frame.error.orEmpty()
                 awaitingProcess = false
-                _startupStatus.value = null
+                clearStartupNotice()
                 if (replayUntilSeq != null) finishReplay()
                 failReplies(err)
                 transcript.addError(
@@ -951,6 +1083,19 @@ class ClaudeChatBackend(
                 emitNow()
             }
         }
+    }
+
+    private fun clearStartupNotice() {
+        startupNoticeJob?.cancel()
+        startupNoticeJob = null
+        compacting = false
+        _startupStatus.value = null
+    }
+
+    private fun endCompactingNotice() {
+        if (!compacting) return
+        compacting = false
+        _startupStatus.value = null
     }
 
     private fun deliverReply(data: JsonObject) {
@@ -1000,10 +1145,8 @@ class ClaudeChatBackend(
         attachedId = null
         lastSeq = -1
         processLive = false
-        pendingForkFrom = null
-        pendingResumeAt = null
         awaitingProcess = false
-        _startupStatus.value = null
+        clearStartupNotice()
         replayUntilSeq = null
         replayDeadline?.cancel()
         replayDeadline = null
@@ -1118,6 +1261,9 @@ class ClaudeChatBackend(
             "tsx", "jsx", "go", "rs", "c", "h", "cpp", "hpp", "cs", "swift", "rb", "php", "sh", "bash", "zsh",
             "html", "css", "scss", "sql", "gradle", "properties", "ini", "conf", "env", "dart", "lua", "proto"
         )
+
+        /** The start-up notice appears only when Claude Code takes longer than this to answer a sent message. */
+        private const val STARTUP_NOTICE_DELAY_MS = 4_000L
 
         /** Built-in commands whose terminal view the app replaces with its own screen (see [appCommand]). */
         val APP_COMMANDS = mapOf(

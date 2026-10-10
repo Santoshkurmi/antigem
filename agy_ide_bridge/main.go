@@ -548,8 +548,12 @@ func main() {
 		}
 	}
 
-	// Always initialize HubManager so background monitoring and status updates work continuously
+	// Always initialize HubManager (the handlers use it); with --no-hub it is disabled: no monitoring, no probes
 	hubMgr = hub.NewHubManager(hubPort, cfg.WorkspaceDir, cfg.AppDataDir, secToken, resolvedAgyBin)
+	if skipHub {
+		hubMgr.Disabled = true
+		hubMgr.SetStopped()
+	}
 	h.HubManager = hubMgr
 	wsHub.StatusProv = hubMgr
 	wsHub.HubPort = hubPort
@@ -557,7 +561,9 @@ func main() {
 	hubMgr.OnStatusChange = func(status string, csrfToken string, errorMsg string, logs []string) {
 		wsHub.BroadcastHubStatus(status, hubPort, csrfToken, errorMsg, logs)
 	}
-	hubMgr.StartContinuousMonitor()
+	if !skipHub {
+		hubMgr.StartContinuousMonitor()
+	}
 
 	if shouldStartHub {
 		if err := hubMgr.Start(); err != nil {

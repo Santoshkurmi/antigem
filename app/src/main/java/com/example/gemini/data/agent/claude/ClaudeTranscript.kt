@@ -77,6 +77,8 @@ class ClaudeTranscript {
         val blockCounts = HashMap<String, Int>()
         var isStreaming = false
         var lastMessageUsage: ClaudeUsage? = null
+        /** The model that wrote this reply, as the API reported it (`assistant.message.model`). */
+        var model: String? = null
         var resultUsage: TokenUsage? = null
     }
 
@@ -333,7 +335,10 @@ class ClaudeTranscript {
                 activeTurn = null
             }
         }
-        if (!synthetic) e.message.model?.let { sessionModel = it }
+        if (!synthetic) e.message.model?.let {
+            sessionModel = it
+            turn.model = it
+        }
         val msgId = e.message.id ?: e.uuid ?: "msg"
         e.message.usage?.let { u ->
             if (!synthetic) {
@@ -682,7 +687,7 @@ class ClaudeTranscript {
                 }
             }
         }
-        val usage = turn.resultUsage ?: turn.lastMessageUsage?.toTokenUsage()
+        val usage = (turn.resultUsage ?: turn.lastMessageUsage?.toTokenUsage())?.copy(model = turn.model)
         return ChatMessage(
             id = turn.id,
             conversationId = conversationId,

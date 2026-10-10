@@ -116,9 +116,31 @@ class ClaudeAccountManager(
         else -> ClaudeStatus.ERROR
     }
 
+    private val _isRefreshingUsage = MutableStateFlow(false)
+    val isRefreshingUsage: StateFlow<Boolean> = _isRefreshingUsage.asStateFlow()
+
+    private val _usageError = MutableStateFlow<String?>(null)
+    /** Why the last plan-usage refresh failed (null after a success). */
+    val usageError: StateFlow<String?> = _usageError.asStateFlow()
+
+    private val _usageUpdatedAt = MutableStateFlow(0L)
+    /** When plan usage was last loaded (ms). */
+    val usageUpdatedAt: StateFlow<Long> = _usageUpdatedAt.asStateFlow()
+
     fun refreshUsage(force: Boolean = true) {
+        if (_isRefreshingUsage.value) return
+        _isRefreshingUsage.value = true
         scope.launch {
-            client.usage(force).onSuccess { resp -> if (resp.success) _usage.value = resp.usage }
+            client.usage(force)
+                .onSuccess { resp ->
+                    if (resp.success) {
+                        _usage.value = resp.usage
+                        _usageError.value = null
+                        _usageUpdatedAt.value = System.currentTimeMillis()
+                    } else _usageError.value = resp.error ?: "Claude Code did not return usage"
+                }
+                .onFailure { _usageError.value = it.message ?: "Cannot reach the bridge" }
+            _isRefreshingUsage.value = false
         }
     }
 

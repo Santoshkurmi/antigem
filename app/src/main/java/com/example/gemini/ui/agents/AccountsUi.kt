@@ -203,9 +203,7 @@ fun AccountsDialog(
                         title = if (entry.isReady) agyAuth.displayName.ifBlank { AgentKind.AGY.label() } else AgentKind.AGY.label(),
                         subtitle = if (entry.isReady) agyAuth.email.ifBlank { null } else entry.detail,
                         facts = if (entry.isReady) listOfNotNull(
-                            agyAuth.userTier.ifBlank { agyAuth.planName }.ifBlank { null },
-                            agyAuth.availablePromptCredits?.let { "$it prompt credits" },
-                            agyAuth.availableFlowCredits?.let { "$it flow credits" }
+                            agyAuth.userTier.ifBlank { agyAuth.planName }.ifBlank { null }
                         ) else emptyList()
                     ) {
                         when {

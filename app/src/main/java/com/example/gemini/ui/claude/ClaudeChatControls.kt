@@ -96,6 +96,12 @@ fun ClaudeControlsStrip(
     val limits by backend.rateLimits.collectAsState()
     val modelInfos by backend.modelInfos.collectAsState()
     val selectedModel by backend.selectedModelId.collectAsState()
+    val appliedEffort by backend.appliedEffort.collectAsState()
+    val androidContext = androidx.compose.ui.platform.LocalContext.current
+    // a control the CLI refused is reverted; say why
+    LaunchedEffect(Unit) {
+        backend.controlMessages.collect { android.widget.Toast.makeText(androidContext, it, android.widget.Toast.LENGTH_LONG).show() }
+    }
 
     val info = modelInfos.find { it.value == selectedModel } ?: modelInfos.firstOrNull()
     var modeMenu by remember { mutableStateOf(false) }
@@ -130,7 +136,8 @@ fun ClaudeControlsStrip(
         val levels = info?.supportedEffortLevels.orEmpty()
         if (levels.isNotEmpty()) {
             ControlChip(
-                text = "Effort · ${effortLabel(effort)}",
+                // "Default" shows the level the process really runs when the CLI reported it
+                text = "Effort · ${effortLabel(effort)}" + if (effort == null && appliedEffort != null) " (${effortLabel(appliedEffort)})" else "",
                 icon = Icons.Outlined.Speed,
                 color = if (effort != null) ClaudeAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
                 highlighted = effort != null,

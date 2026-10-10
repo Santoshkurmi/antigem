@@ -771,9 +771,9 @@ fun TokenUsageTelemetryPill(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (usage.costUsd != null && usage.costUsd > 0.0) {
+            usage.model?.let { model ->
                 Text(
-                    text = "$" + String.format(java.util.Locale.US, if (usage.costUsd < 0.01) "%.4f" else "%.3f", usage.costUsd),
+                    text = model.removePrefix("claude-"),
                     fontSize = 10.5.sp,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -46,6 +46,9 @@ type HubManager struct {
 	SecurityToken  string
 	OnLoginURL     func(url string)
 	OnStatusChange func(status string, csrfToken string, errorMsg string, logs []string)
+	// Disabled: Antigravity is turned off in the app (--no-hub). The hub port is never probed and the hub never
+	// started; set before the manager is used and not changed afterwards.
+	Disabled bool
 
 	cmd         *exec.Cmd
 	stdinPipe   io.WriteCloser
@@ -202,6 +205,9 @@ func NewHubManager(hubPort, workspaceDir, appDataDir, securityToken, agyBinPath 
 
 // isHubReady probes if port 1235 is active and accepting connections, logging probe details for debugging
 func (m *HubManager) isHubReady() bool {
+	if m.Disabled {
+		return false
+	}
 	start := time.Now()
 	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+m.HubPort, 400*time.Millisecond)
 	elapsed := time.Since(start)
@@ -275,6 +281,13 @@ func (m *HubManager) GetStatusInfo() (string, string, string, []string) {
 	logsCopy := make([]string, len(m.recentLogs))
 	copy(logsCopy, m.recentLogs)
 	return m.status, m.csrfToken, m.lastError, logsCopy
+}
+
+// SetStopped reports the hub as stopped (used when Antigravity is turned off).
+func (m *HubManager) SetStopped() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.status = HubStatusStopped
 }
 
 func (m *HubManager) setStatus(status string, errorMsg string) {
@@ -365,6 +378,9 @@ func (m *HubManager) IsRunning() bool {
 
 // Start launches agy --hub with interactive feedback, a spinner, and non-blocking update bypass.
 func (m *HubManager) Start() error {
+	if m.Disabled {
+		return fmt.Errorf("Antigravity is turned off in the app")
+	}
 	m.mu.Lock()
 	// 1. Check if already active and responding to RPC requests
 	if m.isHubReady() {
