@@ -12,7 +12,9 @@ sealed interface ChatTurn {
     data class User(
         val stepIndex: Int,
         val text: String,
-        val attachments: List<ChatAttachment> = emptyList()
+        val attachments: List<ChatAttachment> = emptyList(),
+        /** When the prompt was sent (the step's created_at); null when unknown. */
+        val createdAt: Long? = null
     ) : ChatTurn {
         override val key: String get() = "user_turn_$stepIndex"
     }
@@ -21,7 +23,9 @@ sealed interface ChatTurn {
         val turnId: String,
         val blocks: List<TurnBlock>,
         val isStreaming: Boolean = false,
-        val tokenUsage: TokenUsage? = null
+        val tokenUsage: TokenUsage? = null,
+        /** The model that generated the turn (generator_model enum name, matching AiModel.id). */
+        val modelId: String? = null
     ) : ChatTurn {
         override val key: String get() = "assistant_turn_$turnId"
     }

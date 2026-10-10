@@ -1,11 +1,16 @@
 {
-  "version_code": 108,
-  "version_name": "1.0.8",
+  "version_code": 109,
+  "version_name": "1.0.9",
   "min_supported_version_code": 1,
   "changelog": [
-    
-    "Added chat sharing to share open and chat in another phone",
-    "Fix minor issues"
+    "Added google flow video generation mcp",
+    "Added claude animation on chat(can be disabled in settings)",
+    "Add claude integration(beta)",
+    "Few bug fixes and performance improvements",
+    "UI improvements",
+    "Fix little bugs in browser",
+    "Added support for ubunutu proot in standard build(apk not provided though)",
+    "Added curly divider for date in chat"
     
   ],
   "is_critical": false

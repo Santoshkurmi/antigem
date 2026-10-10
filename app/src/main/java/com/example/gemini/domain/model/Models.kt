@@ -84,7 +84,9 @@ data class ChatMessage(
     val contextSummary: String? = null,
     val stepIndex: Int? = null,
     val attachments: List<ChatAttachment> = emptyList(),
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    /** The model that wrote this reply, as the agent reports it (null when unknown). */
+    val modelId: String? = null
 )
 
 @Serializable

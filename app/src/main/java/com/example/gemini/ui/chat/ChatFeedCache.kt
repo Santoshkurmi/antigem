@@ -25,6 +25,9 @@ sealed class ChatFeedItem(val key: String, val contentType: String) {
     data class AssistantFooter(val message: ChatMessage) : ChatFeedItem("footer_${message.id}", "FOOTER")
     @Immutable
     data class StreamingMessage(val message: ChatMessage) : ChatFeedItem("streaming_${message.id}", "STREAMING")
+    /** A wavy-line divider with a label: a new day, or a model switch. */
+    @Immutable
+    data class Divider(val id: String, val label: String) : ChatFeedItem("divider_$id", "DIVIDER")
 }
 
 object ChatFeedCache {
@@ -115,9 +118,16 @@ object ChatFeedCache {
         }
     }
 
+    /**
+     * The chat as list items. With [dividers], a divider goes before the first prompt of each new day ("Sat, Oct 10")
+     * and before the prompt of a reply whose model differs from the previous reply's ("Switched to Sonnet 5.5";
+     * [modelName] turns a model id into its display name).
+     */
     fun buildFeedItems(
         messages: List<ChatMessage>,
-        selectedModelId: String
+        selectedModelId: String,
+        dividers: Boolean = false,
+        modelName: (String) -> String = { it }
     ): List<ChatFeedItem> {
         val result = ArrayList<ChatFeedItem>(messages.size * 3)
         val seenKeys = HashSet<String>()
@@ -128,7 +138,29 @@ object ChatFeedCache {
             }
         }
 
+        var lastDay: String? = null
+        var lastModel: String? = null
+        // where the latest prompt's items start: a model divider goes right before that prompt
+        var promptStart = -1
         for (msg in messages) {
+            if (dividers && msg.role == MessageRole.USER) {
+                val day = dayKey(msg.createdAt)
+                if (day != lastDay) {
+                    addItem(ChatFeedItem.Divider("day_$day", dayLabel(msg.createdAt)))
+                    lastDay = day
+                }
+                promptStart = result.size
+            }
+            if (dividers && msg.role == MessageRole.ASSISTANT && msg.modelId != null) {
+                val previous = lastModel
+                if (previous != null && msg.modelId != previous) {
+                    val divider = ChatFeedItem.Divider("model_${msg.id}", "Switched to ${modelName(msg.modelId)}")
+                    if (seenKeys.add(divider.key)) result.add(if (promptStart >= 0) promptStart else result.size, divider)
+                }
+                lastModel = msg.modelId
+            }
+            // only the first reply after a prompt may put a divider before that prompt
+            if (msg.role == MessageRole.ASSISTANT) promptStart = -1
             if (!msg.isStreaming) {
                 val parsed = getOrParse(msg)
                 for (item in parsed) {
@@ -170,6 +202,20 @@ object ChatFeedCache {
 
     fun clear() {
         cache.clear()
+    }
+
+    private fun dayKey(millis: Long): String {
+        val c = java.util.Calendar.getInstance().apply { timeInMillis = millis }
+        return "${c.get(java.util.Calendar.YEAR)}-${c.get(java.util.Calendar.DAY_OF_YEAR)}"
+    }
+
+    /** "Sat, Oct 10" in the phone's language and format; the year is added when it is not this year. */
+    private fun dayLabel(millis: Long): String {
+        val locale = java.util.Locale.getDefault()
+        val thisYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+        val year = java.util.Calendar.getInstance().apply { timeInMillis = millis }.get(java.util.Calendar.YEAR)
+        val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, if (year == thisYear) "EEEMMMd" else "EEEMMMdyyyy")
+        return java.text.SimpleDateFormat(pattern, locale).format(java.util.Date(millis))
     }
 }
 

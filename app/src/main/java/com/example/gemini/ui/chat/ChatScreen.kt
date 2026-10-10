@@ -195,6 +195,7 @@ fun ChatScreen(
     val isDevModeEnabled by viewModel.isDevModeEnabled.collectAsState()
     val chatFontScale by viewModel.chatFontScale.collectAsState(initial = 1.0f)
     val workingAnimationEnabled by viewModel.authPreferences.workingAnimationEnabled.collectAsState(initial = true)
+    val chatDividersEnabled by viewModel.authPreferences.chatDividersEnabled.collectAsState(initial = true)
     val claudeCompacting by claudeBackend.isCompacting.collectAsState()
     val bridgeStatusMessage by viewModel.bridgeStatusMessage.collectAsState()
     val isServerOnline by viewModel.isServerOnline.collectAsState()
@@ -510,8 +511,20 @@ fun ChatScreen(
     }
 
     // Granular block-level feed item expansion from pre-warmed background cache (0ms UI thread work)
-    val feedItems = remember(messages, selectedModelId) {
-        ChatFeedCache.buildFeedItems(messages, selectedModelId)
+    // model ids → display names for the "Switched to …" dividers (Claude: resolved ids; Antigravity: enum names)
+    val claudeModelInfos by claudeBackend.modelInfos.collectAsState()
+    val modelNameOf: (String) -> String = remember(isClaudeChat, claudeModelInfos, availableModels) {
+        { id ->
+            if (isClaudeChat) {
+                (claudeModelInfos.firstOrNull { it.resolvedModel == id && it.value != "default" } ?: claudeModelInfos.firstOrNull { it.value == id })
+                    ?.displayName?.takeIf { it.isNotBlank() } ?: id.removePrefix("claude-")
+            } else {
+                availableModels.firstOrNull { it.id == id || it.key == id }?.displayName ?: id
+            }
+        }
+    }
+    val feedItems = remember(messages, selectedModelId, chatDividersEnabled, modelNameOf) {
+        ChatFeedCache.buildFeedItems(messages, selectedModelId, dividers = chatDividersEnabled, modelName = modelNameOf)
     }
 
     // Fresh LazyListState per conversation — restores saved position if returning, or initializes directly at bottom
@@ -1433,6 +1446,7 @@ fun ChatScreen(
                                                 }
                                             }
                                         }
+                                        is ChatFeedItem.Divider -> com.example.gemini.ui.components.WaveDivider(label = feedItem.label)
                                         is ChatFeedItem.User -> {
                                             val msgIndex = messages.indexOfFirst { it.id == feedItem.message.id }
                                             val willDeleteOutput = msgIndex < messages.lastIndex

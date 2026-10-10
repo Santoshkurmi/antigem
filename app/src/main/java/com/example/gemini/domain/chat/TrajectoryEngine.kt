@@ -100,7 +100,8 @@ class TrajectoryEngine {
         pendingUserTurn = ChatTurn.User(
             stepIndex = activeTurnStartStep,
             text = text,
-            attachments = attachments
+            attachments = attachments,
+            createdAt = System.currentTimeMillis()
         )
         _turns.value = getTurns()
     }
@@ -334,14 +335,14 @@ class TrajectoryEngine {
                     val prevUserStepIdx = if (lastUserStepArrayIndex >= 0) (indices.getOrNull(lastUserStepArrayIndex) ?: lastUserStepArrayIndex) else -1
                     val turnId = "${conversationId}_${prevUserStepIdx + 1}"
                     val tokenUsage = computeTokenUsage(currentTurnSteps)
-                    completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), tokenUsage = tokenUsage))
+                    completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), tokenUsage = tokenUsage, modelId = turnModel(currentTurnSteps)))
                     currentTurnBlocks = mutableListOf()
                     currentTurnSteps = mutableListOf()
                 }
 
                 val userText = extractUserText(step.user_input)
                 val attachments = extractUserAttachments(step.user_input, stepIndex)
-                completedTurns.add(ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments))
+                completedTurns.add(ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments, createdAt = parseTimestampToMillis(step.metadata?.created_at)?.takeIf { it > 0 }))
                 lastUserStepArrayIndex = i
                 activeTurnStartStep = stepIndex + 1
             } else {
@@ -367,7 +368,7 @@ class TrajectoryEngine {
             val lastUserStepIdx = if (lastUserStepArrayIndex >= 0) (indices.getOrNull(lastUserStepArrayIndex) ?: lastUserStepArrayIndex) else -1
             val turnId = "${conversationId}_${lastUserStepIdx + 1}"
             val tokenUsage = computeTokenUsage(currentTurnSteps)
-            completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), isStreaming = false, tokenUsage = tokenUsage))
+            completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), isStreaming = false, tokenUsage = tokenUsage, modelId = turnModel(currentTurnSteps)))
         }
     }
 
@@ -390,7 +391,7 @@ class TrajectoryEngine {
 
                 val userText = extractUserText(step.user_input)
                 val attachments = extractUserAttachments(step.user_input, stepIndex)
-                val userTurn = ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments)
+                val userTurn = ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments, createdAt = parseTimestampToMillis(step.metadata?.created_at)?.takeIf { it > 0 })
                 val existingIdx = completedTurns.indexOfFirst { it is ChatTurn.User && it.stepIndex == stepIndex }
                 if (existingIdx >= 0) {
                     completedTurns[existingIdx] = userTurn
@@ -405,6 +406,10 @@ class TrajectoryEngine {
             }
         }
     }
+
+    /** The model that generated a turn: the last step that names one (the enum name, as in AiModel.id). */
+    private fun turnModel(steps: Iterable<Step>): String? =
+        steps.mapNotNull { it.metadata?.generator_model?.name?.takeUnless { n -> n.contains("UNSPECIFIED") } }.lastOrNull()
 
     private fun parseTimestampToMillis(ts: Timestamp?): Long? {
         if (ts == null) return null
@@ -476,9 +481,9 @@ class TrajectoryEngine {
                 val existingTurn = completedTurns[existingIndex] as ChatTurn.Assistant
                 val mergedBlocks = (existingTurn.blocks.filterNot { eb -> blocks.any { it.stepIndex == eb.stepIndex } } + blocks)
                     .sortedBy { it.stepIndex }
-                completedTurns[existingIndex] = existingTurn.copy(blocks = mergedBlocks, isStreaming = false, tokenUsage = tokenUsage ?: existingTurn.tokenUsage)
+                completedTurns[existingIndex] = existingTurn.copy(blocks = mergedBlocks, isStreaming = false, tokenUsage = tokenUsage ?: existingTurn.tokenUsage, modelId = turnModel(activeStepsMap.values) ?: existingTurn.modelId)
             } else {
-                completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = blocks.toList(), isStreaming = false, tokenUsage = tokenUsage))
+                completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = blocks.toList(), isStreaming = false, tokenUsage = tokenUsage, modelId = turnModel(activeStepsMap.values)))
             }
         }
 
@@ -556,7 +561,8 @@ class TrajectoryEngine {
                 turnId = turnId,
                 blocks = finalBlocks,
                 isStreaming = isRunning && !isWaitingInteraction,
-                tokenUsage = activeTokenUsage
+                tokenUsage = activeTokenUsage,
+                modelId = turnModel(activeStepsMap.values)
             )
             if (existingAssistantIdx >= 0) {
                 baseTurns.toMutableList().apply {
@@ -594,7 +600,7 @@ class TrajectoryEngine {
                             content = turn.text,
                             attachments = turn.attachments,
                             stepIndex = turn.stepIndex,
-                            createdAt = System.currentTimeMillis()
+                            createdAt = turn.createdAt ?: System.currentTimeMillis()
                         )
                     )
                 }
@@ -699,7 +705,8 @@ class TrajectoryEngine {
                             thoughtDurationMs = maxDuration,
                             toolCalls = toolCalls,
                             isStreaming = turn.isStreaming,
-                            tokenUsage = turn.tokenUsage
+                            tokenUsage = turn.tokenUsage,
+                            modelId = turn.modelId
                         )
                     )
                 }

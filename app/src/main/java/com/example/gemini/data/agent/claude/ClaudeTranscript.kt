@@ -696,7 +696,8 @@ class ClaudeTranscript {
             thoughtText = thoughts.joinToString("\n\n").trim().takeIf { it.isNotBlank() },
             toolCalls = toolCalls,
             isStreaming = turn.isStreaming,
-            tokenUsage = if (turn.isStreaming) null else usage
+            tokenUsage = if (turn.isStreaming) null else usage,
+            modelId = turn.model
         )
     }
 
