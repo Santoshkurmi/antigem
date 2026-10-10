@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.graphics.Bitmap
 import android.util.Log
-import android.view.MotionEvent
 import android.view.ViewGroup
 import android.webkit.*
 import androidx.activity.compose.BackHandler
@@ -77,7 +76,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.gemini.theme.ClaudeTerracotta
 import java.net.URLEncoder
 
@@ -129,18 +127,11 @@ fun BrowserScreen(
     var showMoreMenu by remember { mutableStateOf(false) }
     var isControlsVisible by remember { mutableStateOf(true) }
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val defaultMaxFooterOffsetPx = remember(density) { with(density) { 100.dp.toPx() } }
     var footerHeightPx by remember { mutableFloatStateOf(0f) }
-    var footerOffsetPx by remember { mutableFloatStateOf(0f) }
     val flowManager = remember { FlowAutomationManager.instance }
-    // The page area stops above the bottom bar while the bar is visible (so it never covers pages that don't
-    // scroll the window, e.g. Flow); once the bar has fully slid away on a scrolling page, the page uses the space.
+    // The bottom bar is fixed like the top bar: the page area always ends right above it, so it never covers the page
     val navBarBottomPx = WindowInsets.navigationBars.getBottom(density)
-    val footerOverlapDp = with(density) {
-        val hidden = footerHeightPx > 0f && footerOffsetPx >= footerHeightPx - 1f
-        (if (hidden) 0f else (footerHeightPx - navBarBottomPx).coerceAtLeast(0f)).toDp()
-    }
-    var ignoreScrollUntilTouch by remember { mutableStateOf(false) }
+    val footerOverlapDp = with(density) { (footerHeightPx - navBarBottomPx).coerceAtLeast(0f).toDp() }
 
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
@@ -253,8 +244,6 @@ fun BrowserScreen(
         } else if (showTabOverview) {
             showTabOverview = false
         } else if (activeTab?.webView?.canGoBack() == true) {
-            footerOffsetPx = 0f
-            ignoreScrollUntilTouch = true
             activeTab.webView?.goBack()
         } else {
             onClose()
@@ -293,11 +282,6 @@ fun BrowserScreen(
     }
 
 
-
-    LaunchedEffect(isAddressFocused, showTabOverview, isHomePage, activeTabId, activeTab?.url) {
-        footerOffsetPx = 0f
-        ignoreScrollUntilTouch = true
-    }
 
     if (showTabOverview) {
         // Tab Overview Grid Screen (Screenshot 2)
@@ -369,7 +353,7 @@ fun BrowserScreen(
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.Code,
+                                imageVector = Icons.Outlined.BugReport,
                                 contentDescription = "Inspect DevTools",
                                 tint = if (isDevToolsOn) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = if (hasActivePage) 0.85f else 0.4f),
                                 modifier = Modifier.size(20.dp)
@@ -385,7 +369,7 @@ fun BrowserScreen(
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
-                                imageVector = if (isDesktopMode) Icons.Default.DesktopWindows else Icons.Default.Smartphone,
+                                imageVector = if (isDesktopMode) Icons.Outlined.Laptop else Icons.Outlined.TouchApp,
                                 contentDescription = if (isDesktopMode) "Desktop mode enabled" else "Mobile mode enabled",
                                 tint = if (isDesktopMode) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                 modifier = Modifier.size(20.dp)
@@ -535,11 +519,12 @@ fun BrowserScreen(
                             },
                             modifier = Modifier.size(36.dp)
                         ) {
+                            // same "go to chat" icon as the IDE's top bar: a cross would read as "close the browser"
                             Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Close to Chat",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                modifier = Modifier.size(21.dp)
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "AI Chat",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
@@ -554,9 +539,6 @@ fun BrowserScreen(
                         if (coords.size.height > 0) {
                             footerHeightPx = coords.size.height.toFloat()
                         }
-                    }
-                    .graphicsLayer {
-                        translationY = footerOffsetPx
                     },
                 color = barBackgroundColor,
                 shadowElevation = 8.dp,
@@ -577,8 +559,6 @@ fun BrowserScreen(
                     // 1. Back in WebView (<)
                     IconButton(
                         onClick = {
-                            footerOffsetPx = 0f
-                            ignoreScrollUntilTouch = true
                             if (activeTab?.webView?.canGoBack() == true) {
                                 activeTab.webView?.goBack()
                             }
@@ -597,8 +577,6 @@ fun BrowserScreen(
                     // 2. Forward in WebView (>)
                     IconButton(
                         onClick = {
-                            footerOffsetPx = 0f
-                            ignoreScrollUntilTouch = true
                             if (activeTab?.webView?.canGoForward() == true) {
                                 activeTab.webView?.goForward()
                             }
@@ -771,26 +749,21 @@ fun BrowserScreen(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
-                                SwipeRefreshLayout(ctx).apply {
+                                // a plain container (no swipe-to-refresh) the tab's WebView is moved into
+                                android.widget.FrameLayout(ctx).apply {
                                     layoutParams = ViewGroup.LayoutParams(
                                         ViewGroup.LayoutParams.MATCH_PARENT,
                                         ViewGroup.LayoutParams.MATCH_PARENT
                                     )
-                                    setColorSchemeColors(ClaudeTerracotta.toArgb(), 0xFFD97706.toInt())
-                                    setProgressBackgroundColorSchemeColor(if (isDarkTheme) 0xFF2A2826.toInt() else android.graphics.Color.WHITE)
-                                    setOnRefreshListener {
-                                        val currentWv = tab.webView ?: wv
-                                        currentWv.reload()
-                                    }
                                     addView(wv)
                                 }
                             },
-                            update = { swipeRefresh ->
-                                val wv = sessionManager.ensureWebViewAttached(swipeRefresh.context, tab, isDarkTheme)
-                                if (wv.parent != swipeRefresh) {
+                            update = { container ->
+                                val wv = sessionManager.ensureWebViewAttached(container.context, tab, isDarkTheme)
+                                if (wv.parent != container) {
                                     (wv.parent as? ViewGroup)?.removeView(wv)
-                                    swipeRefresh.removeAllViews()
-                                    swipeRefresh.addView(wv)
+                                    container.removeAllViews()
+                                    container.addView(wv)
                                 }
                                 tab.webView = wv
                                 wv.setBackgroundColor(android.graphics.Color.WHITE)
@@ -801,39 +774,8 @@ fun BrowserScreen(
                                     wv.settings.forceDark = WebSettings.FORCE_DARK_OFF
                                 }
 
-                                swipeRefresh.setProgressBackgroundColorSchemeColor(if (isDarkTheme) 0xFF2A2826.toInt() else android.graphics.Color.WHITE)
-                                swipeRefresh.setColorSchemeColors(ClaudeTerracotta.toArgb(), 0xFFD97706.toInt())
-
-                                val isHome = tab.url.isBlank() || tab.url == "about:blank"
-                                swipeRefresh.isEnabled = !isHome && !showTabOverview && !isAddressFocused
-                                if (!swipeRefresh.isEnabled || !tab.isLoading) {
-                                    swipeRefresh.isRefreshing = false
-                                }
-
-                                wv.setOnTouchListener { _, event ->
-                                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                                        ignoreScrollUntilTouch = false
-                                    }
-                                    false
-                                }
-
-                                wv.setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
+                                wv.setOnScrollChangeListener { _, _, scrollY, _, _ ->
                                     tab.scrollY = scrollY
-                                    val isHomeNow = tab.url.isBlank() || tab.url == "about:blank"
-                                    if (isHomeNow || showTabOverview || isAddressFocused) {
-                                        if (footerOffsetPx != 0f) footerOffsetPx = 0f
-                                        return@setOnScrollChangeListener
-                                    }
-                                    if (ignoreScrollUntilTouch) {
-                                        return@setOnScrollChangeListener
-                                    }
-                                    if (scrollY <= 10) {
-                                        footerOffsetPx = 0f
-                                    } else {
-                                        val dy = scrollY - oldScrollY
-                                        val maxOffset = if (footerHeightPx > 0f) footerHeightPx else defaultMaxFooterOffsetPx
-                                        footerOffsetPx = (footerOffsetPx + dy.toFloat()).coerceIn(0f, maxOffset)
-                                    }
                                 }
 
                                 if (isActive && isVisible && !isHomePage) {
@@ -842,8 +784,8 @@ fun BrowserScreen(
                                     wv.onPause()
                                 }
                             },
-                            onRelease = { swipeRefresh ->
-                                swipeRefresh.removeAllViews()
+                            onRelease = { container ->
+                                container.removeAllViews()
                             },
                             modifier = Modifier.fillMaxSize()
                         )
