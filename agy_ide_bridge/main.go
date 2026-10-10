@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	// DNS for Android (no /etc/resolv.conf there); a package so `go build main.go` includes it too
+	_ "gemini-server/pkg/androiddns"
 	"gemini-server/pkg/claude"
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/handlers"
