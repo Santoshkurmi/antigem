@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -487,6 +488,28 @@ func (m *Manager) handleCLIJob(w http.ResponseWriter, r *http.Request, action st
 			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": "another install/update is running"})
 			return
 		}
+	}
+	if runtime.GOOS == "android" && (action == "install" || action == "update") {
+		// Termux: the official binary needs glibc, so it is downloaded like install.sh does and started by the
+		// app's wrapper (see native_install.go)
+		nj := &cliJob{Kind: action, Running: true, Started: time.Now()}
+		m.jobMu.Lock()
+		m.job = nj
+		m.jobMu.Unlock()
+		go func() {
+			code := 0
+			if err := m.nativeInstall(nj); err != nil {
+				fmt.Fprintf(nj, "Error: %v\n", err)
+				code = 1
+			}
+			nj.mu.Lock()
+			nj.Running = false
+			nj.ExitCode = &code
+			nj.mu.Unlock()
+			m.invalidateCaches()
+		}()
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "job": nj.snapshot()})
+		return
 	}
 	var cmd *exec.Cmd
 	switch action {

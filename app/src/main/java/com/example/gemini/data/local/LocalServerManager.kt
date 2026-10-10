@@ -213,11 +213,17 @@ object LocalServerManager {
         } else {
             ""
         }
+        val claudeCmd = authPrefs.getClaudeBinaryPathSync().trim()
+        val claudeBinParam = if (claudeCmd.isNotBlank() && com.example.gemini.domain.model.AgentKind.CLAUDE in com.example.gemini.data.agent.AgentPreferences.enabledSync(context)) {
+            " --claude-bin \"$claudeCmd\""
+        } else {
+            ""
+        }
 
         // agents switched off in the app never run (no AGY hub / no Claude Code endpoints)
         val agentFlags = com.example.gemini.data.agent.AgentPreferences.bridgeFlags(context)
 
-        return "$bridgeCmd -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset$binParam$agentFlags"
+        return "$bridgeCmd -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset$binParam$claudeBinParam$agentFlags"
     }
 
     /**
@@ -313,6 +319,9 @@ object LocalServerManager {
 
         val appContext = context.applicationContext
         ensureBridgeBinary(appContext)
+        // the bridge starts Claude Code through the app's launcher (--claude-bin)
+        LocalEnvironmentManager.ensureGlibcEnvironment(appContext)
+        LocalEnvironmentManager.ensureClaudeWrapper(appContext)
 
         val command = resolveServerCommand(appContext)
         if (command == null) {

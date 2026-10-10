@@ -1444,14 +1444,27 @@ fun ChatScreen(
                                                     .padding(horizontal = 16.dp, vertical = 2.dp)
                                             ) {
                                                 val isTool = feedItem.block is MarkdownBlock.AgentTool
-                                                MarkdownBlockView(
-                                                    block = feedItem.block,
-                                                    onApproveTool = if (isTool) { { toolCall -> viewModel.approveAndExecuteTerminalTool(toolCall, feedItem.messageId) } } else null,
-                                                    onRejectTool = if (isTool) { { toolCall -> if (toolCall.toolType == ToolType.ASK_CHOICE) viewModel.cancelUserChoices(toolCall, feedItem.messageId) else viewModel.rejectTerminalTool(toolCall, feedItem.messageId) } } else null,
-                                                    onTerminateTool = if (isTool) { { toolCall -> viewModel.terminateRunningTerminalTool(toolCall, feedItem.messageId) } } else null,
-                                                    onSubmitChoices = if (isTool) { { toolCall, responses, summaryPayload -> viewModel.submitUserChoices(toolCall, feedItem.messageId, responses, summaryPayload) } } else null,
-                                                    onSkipChoices = if (isTool) { { toolCall, responses -> viewModel.skipUserChoices(toolCall, feedItem.messageId, responses) } } else null
-                                                )
+                                                val blockView: @Composable () -> Unit = {
+                                                    MarkdownBlockView(
+                                                        block = feedItem.block,
+                                                        onApproveTool = if (isTool) { { toolCall -> viewModel.approveAndExecuteTerminalTool(toolCall, feedItem.messageId) } } else null,
+                                                        onRejectTool = if (isTool) { { toolCall -> if (toolCall.toolType == ToolType.ASK_CHOICE) viewModel.cancelUserChoices(toolCall, feedItem.messageId) else viewModel.rejectTerminalTool(toolCall, feedItem.messageId) } } else null,
+                                                        onTerminateTool = if (isTool) { { toolCall -> viewModel.terminateRunningTerminalTool(toolCall, feedItem.messageId) } } else null,
+                                                        onSubmitChoices = if (isTool) { { toolCall, responses, summaryPayload -> viewModel.submitUserChoices(toolCall, feedItem.messageId, responses, summaryPayload) } } else null,
+                                                        onSkipChoices = if (isTool) { { toolCall, responses -> viewModel.skipUserChoices(toolCall, feedItem.messageId, responses) } } else null
+                                                    )
+                                                }
+                                                // Text is selectable per block: each list item has its own selection container, so a
+                                                // selection never outlives the item when it scrolls away (one container spanning many
+                                                // items crashed). Interactive blocks (tool cards, web views, media) keep their own gestures.
+                                                val selectable = when (feedItem.block) {
+                                                    is MarkdownBlock.Paragraph, is MarkdownBlock.Header, is MarkdownBlock.Bullet,
+                                                    is MarkdownBlock.Numbered, is MarkdownBlock.Task, is MarkdownBlock.Blockquote,
+                                                    is MarkdownBlock.Alert, is MarkdownBlock.Code, is MarkdownBlock.Table,
+                                                    is MarkdownBlock.Details -> true
+                                                    else -> false
+                                                }
+                                                if (selectable) SelectionContainer { blockView() } else blockView()
                                             }
                                         }
                                         is ChatFeedItem.AssistantTyping -> {

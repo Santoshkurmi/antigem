@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -342,6 +343,10 @@ func (m *Manager) handleStatus(w http.ResponseWriter, r *http.Request) {
 	out, err := m.runCLI(20*time.Second, "auth", "status", "--json")
 	if v := <-version; v != "" {
 		resp["version"] = v
+	} else if runtime.GOOS == "android" && !m.hasNativeVersion() {
+		// the app's wrapper is always there; Claude itself is not installed yet
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "installed": false, "error": "Claude Code is not installed"})
+		return
 	}
 	var auth map[string]interface{}
 	if len(out) > 0 && json.Unmarshal(out, &auth) == nil {

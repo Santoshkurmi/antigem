@@ -264,6 +264,7 @@ class LocalPtySession(
                 val tmp = LocalEnvironmentManager.getTmpDir(context)
 
                 LocalEnvironmentManager.ensureGlibcEnvironment(context)
+                LocalEnvironmentManager.ensureClaudeWrapper(context)
                 LocalEnvironmentManager.ensureTermuxApiDispatcher(context)
 
                 val loginShellBinaries = arrayOf("login", "bash", "zsh", "fish", "sh")

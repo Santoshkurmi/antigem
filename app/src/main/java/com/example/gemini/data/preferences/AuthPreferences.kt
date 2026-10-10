@@ -75,6 +75,7 @@ class AuthPreferences(private val context: Context) {
         val SECURITY_TOKEN = stringPreferencesKey("security_token")
         val AGY_BRIDGE_BINARY_PATH = stringPreferencesKey("agy_bridge_binary_path")
         val AGY_BINARY_PATH = stringPreferencesKey("agy_binary_path")
+        val CLAUDE_BINARY_PATH = stringPreferencesKey("claude_binary_path")
         val HAS_SEEN_TERMINAL_LAUNCHER_ONBOARDING = androidx.datastore.preferences.core.booleanPreferencesKey("has_seen_terminal_launcher_onboarding")
         val TERMINAL_LAUNCHER_STYLE = stringPreferencesKey("terminal_launcher_style") // "ANTITERM" or "TERMUX"
         val IS_TERMINAL_LAUNCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_launcher_enabled")
@@ -83,6 +84,9 @@ class AuthPreferences(private val context: Context) {
         const val DEFAULT_UBUNTU_BRIDGE_BINARY_PATH = "/antigem/bin/agy_ide_bridge"
         const val DEFAULT_AGY_BINARY_PATH = "~/.local/bin/agy"
         const val DEFAULT_UBUNTU_AGY_BINARY_PATH = "/root/.local/bin/agy"
+        /** The app's Claude Code launcher (glibc loader); Claude's updater never touches it. */
+        const val DEFAULT_CLAUDE_BINARY_PATH = "~/../usr/bin/claude"
+        const val DEFAULT_UBUNTU_CLAUDE_BINARY_PATH = "/root/.local/bin/claude"
 
         const val TOKEN_PREFIX = "x-ag"
         const val TOKEN_SUFFIX = "_9qx"
@@ -760,6 +764,18 @@ class AuthPreferences(private val context: Context) {
         val trimmed = path.trim().ifBlank { getDefaultAgyBinaryPath() }
         syncPrefs.edit().putString("agy_binary_path", trimmed).apply()
         context.dataStore.edit { it[AGY_BINARY_PATH] = trimmed }
+    }
+
+    fun getDefaultClaudeBinaryPath(): String =
+        if (context.packageName == "com.termux") DEFAULT_CLAUDE_BINARY_PATH else DEFAULT_UBUNTU_CLAUDE_BINARY_PATH
+
+    fun getClaudeBinaryPathSync(): String =
+        syncPrefs.getString("claude_binary_path", getDefaultClaudeBinaryPath()) ?: getDefaultClaudeBinaryPath()
+
+    suspend fun saveClaudeBinaryPath(path: String) {
+        val trimmed = path.trim().ifBlank { getDefaultClaudeBinaryPath() }
+        syncPrefs.edit().putString("claude_binary_path", trimmed).apply()
+        context.dataStore.edit { it[CLAUDE_BINARY_PATH] = trimmed }
     }
 
     val hasSeenTerminalLauncherOnboarding: Flow<Boolean> = context.dataStore.data.map {

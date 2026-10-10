@@ -491,6 +491,92 @@ object LocalEnvironmentManager {
         return formatFileSize(totalBytes)
     }
 
+    /** The app's Claude Code launcher: `$PREFIX/bin/claude` (the bridge is started with `--claude-bin` pointing here). */
+    fun getClaudeWrapperFile(context: Context): File = File(getBinDir(context), "claude")
+
+    /**
+     * Writes the Claude Code launcher. The official binary is built for glibc, so it runs through the bundled glibc
+     * loader. Claude's own installer and updater only manage `~/.local/share/claude/versions/<version>` and the
+     * `~/.local/bin/claude` link, never `$PREFIX/bin`, so updates cannot break this launcher: it always starts the
+     * newest version found. `~/.local/bin/claude` (first on the terminal PATH) is pointed back at the launcher whenever
+     * an update replaced it. Called on every server start and new terminal; only rewrites what changed.
+     */
+    fun ensureClaudeWrapper(context: Context) {
+        if (!isTermuxPackage(context)) return
+        try {
+            val prefix = getPrefixDir(context).absolutePath
+            val home = getHomeDir(context).absolutePath
+            val bin = getBinDir(context)
+            if (!bin.exists()) return
+            val script = """
+                |#!$prefix/bin/bash
+                |# Claude Code launcher written by AntiGem on every start (edits are overwritten).
+                |# The official Claude binary needs glibc: start the newest installed version through the bundled loader.
+                |# Claude's updater only changes ~/.local/share/claude/versions and ~/.local/bin/claude, never this file.
+                |VERSIONS_DIR="$home/.local/share/claude/versions"
+                |GLIBC_LIB="$prefix/glibc/lib"
+                |LOADER="${'$'}GLIBC_LIB/ld-linux-aarch64.so.1"
+                |TARGET=""
+                |if [ -d "${'$'}VERSIONS_DIR" ]; then
+                |    for v in ${'$'}(ls -1 "${'$'}VERSIONS_DIR" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+${'$'}' | sort -V -r); do
+                |        if [ -f "${'$'}VERSIONS_DIR/${'$'}v" ] && [ -s "${'$'}VERSIONS_DIR/${'$'}v" ]; then
+                |            TARGET="${'$'}VERSIONS_DIR/${'$'}v"
+                |            break
+                |        fi
+                |    done
+                |fi
+                |if [ -z "${'$'}TARGET" ]; then
+                |    for f in "$prefix/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe" "$prefix/lib/node_modules/@anthropic-ai/claude-code/bin/claude"; do
+                |        if [ -f "${'$'}f" ]; then
+                |            TARGET="${'$'}f"
+                |            break
+                |        fi
+                |    done
+                |fi
+                |if [ -z "${'$'}TARGET" ]; then
+                |    echo "Claude Code is not installed. Install it in AntiGem: Settings > Claude Code > Account & CLI." >&2
+                |    exit 127
+                |fi
+                |if [ ! -x "${'$'}LOADER" ]; then
+                |    echo "The glibc runtime is missing (${'$'}LOADER). Reopen AntiGem to restore it." >&2
+                |    exit 127
+                |fi
+                |# termux-exec is a bionic library: it must not be preloaded into the glibc process
+                |unset LD_PRELOAD
+                |exec "${'$'}LOADER" --library-path "${'$'}GLIBC_LIB" "${'$'}TARGET" "${'$'}@"
+                |""".trimMargin()
+            val wrapper = getClaudeWrapperFile(context)
+            if (!wrapper.exists() || isSymlink(wrapper) || wrapper.readText() != script) {
+                if (isSymlink(wrapper)) wrapper.delete()
+                val tmp = File(bin, ".claude.tmp")
+                tmp.writeText(script)
+                tmp.setExecutable(true, false)
+                tmp.setReadable(true, false)
+                if (!tmp.renameTo(wrapper)) {
+                    wrapper.delete()
+                    tmp.renameTo(wrapper)
+                }
+                wrapper.setExecutable(true, false)
+            }
+            // the terminal finds ~/.local/bin first: keep `claude` there pointing at the launcher
+            val localBin = File(home, ".local/bin")
+            localBin.mkdirs()
+            val link = File(localBin, "claude")
+            val pointsToWrapper = try {
+                Os.readlink(link.absolutePath) == wrapper.absolutePath
+            } catch (_: Exception) {
+                false
+            }
+            if (!pointsToWrapper) {
+                // delete() also removes a (possibly dangling) symlink left by Claude's updater
+                link.delete()
+                Os.symlink(wrapper.absolutePath, link.absolutePath)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Claude launcher setup failed: ${e.message}")
+        }
+    }
+
     fun ensureTermuxApiDispatcher(context: Context) {
         try {
             val libexecDir = File(getPrefixDir(context), "libexec")

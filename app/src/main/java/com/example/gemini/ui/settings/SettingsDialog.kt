@@ -1739,8 +1739,10 @@ private fun ServersSubScreen(
 
     val initialBridgeBinPath = remember { authPrefs.getAgyBridgeBinaryPathSync() }
     val initialAgyBinPath = remember { authPrefs.getAgyBinaryPathSync() }
+    val initialClaudeBinPath = remember { authPrefs.getClaudeBinaryPathSync() }
     var bridgeBinPath by remember { mutableStateOf(initialBridgeBinPath) }
     var agyBinPath by remember { mutableStateOf(initialAgyBinPath) }
+    var claudeBinPath by remember { mutableStateOf(initialClaudeBinPath) }
 
     var hubTestStatus by remember { mutableStateOf<String?>(null) }
     var isTestingHub by remember { mutableStateOf(false) }
@@ -1753,12 +1755,13 @@ private fun ServersSubScreen(
     var showRestartDialog by remember { mutableStateOf(false) }
     var showUnsavedDialog by remember { mutableStateOf(false) }
 
-    val hasUnsavedChanges = remember(sharedHost, hubPort, bridgePort, bridgeBinPath, agyBinPath, securityToken) {
+    val hasUnsavedChanges = remember(sharedHost, hubPort, bridgePort, bridgeBinPath, agyBinPath, claudeBinPath, securityToken) {
         sharedHost.trim() != initialSharedHost.trim() ||
             hubPort.trim() != initHubPort.trim() ||
             bridgePort.trim() != initBridgePort.trim() ||
             bridgeBinPath.trim() != initialBridgeBinPath.trim() ||
             agyBinPath.trim() != initialAgyBinPath.trim() ||
+            claudeBinPath.trim() != initialClaudeBinPath.trim() ||
             securityToken.trim() != initSecurityToken.trim()
     }
 
@@ -1810,6 +1813,7 @@ private fun ServersSubScreen(
                         bridgePort = initBridgePort.ifBlank { com.example.gemini.BuildConfig.BRIDGE_PORT.toString() }
                         bridgeBinPath = initialBridgeBinPath
                         agyBinPath = initialAgyBinPath
+                        claudeBinPath = initialClaudeBinPath
                         securityToken = initSecurityToken
                     },
                     shape = RoundedCornerShape(8.dp)
@@ -2069,7 +2073,7 @@ private fun ServersSubScreen(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(text = "Binary Executable Paths", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        Text(text = "Custom paths used when auto-starting IDE Bridge and AGY Hub", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        Text(text = "Custom paths used when auto-starting IDE Bridge, AGY Hub and Claude Code", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
                 }
 
@@ -2097,13 +2101,32 @@ private fun ServersSubScreen(
                     shape = RoundedCornerShape(10.dp)
                 )
 
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = claudeBinPath,
+                    onValueChange = { claudeBinPath = it; saveFeedback = null },
+                    label = { Text("Claude Code Binary Path") },
+                    placeholder = { Text(authPrefs.getDefaultClaudeBinaryPath()) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp)
+                )
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "• Passed via --bin on launch so auto-start executes the designated binary directly without interactive prompts.",
+                    text = "• Passed to the bridge on launch (--bin for AGY, --claude-bin for Claude Code) so auto-start executes the designated binary directly without interactive prompts.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
+                if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(LocalContext.current)) {
+                    Text(
+                        text = "• Claude Code: the default is AntiGem's launcher, which runs the newest official Claude version through the bundled glibc. Claude updates never replace it.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -2114,6 +2137,7 @@ private fun ServersSubScreen(
                         bridgePort = com.example.gemini.BuildConfig.BRIDGE_PORT.toString()
                         bridgeBinPath = authPrefs.getDefaultBridgeBinaryPath()
                         agyBinPath = authPrefs.getDefaultAgyBinaryPath()
+                        claudeBinPath = authPrefs.getDefaultClaudeBinaryPath()
                         saveFeedback = "Settings reset to defaults (click Save to apply)."
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -2239,6 +2263,7 @@ private fun ServersSubScreen(
                     authPrefs.saveSecurityToken(tokenToSave)
                     authPrefs.saveAgyBridgeBinaryPath(bridgeBinPath.trim().ifBlank { authPrefs.getDefaultBridgeBinaryPath() })
                     authPrefs.saveAgyBinaryPath(agyBinPath.trim().ifBlank { authPrefs.getDefaultAgyBinaryPath() })
+                    authPrefs.saveClaudeBinaryPath(claudeBinPath.trim().ifBlank { authPrefs.getDefaultClaudeBinaryPath() })
                 }
                 saveFeedback = "✓ Server, Binaries and Security settings saved!"
                 showRestartDialog = true

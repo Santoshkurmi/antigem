@@ -73,6 +73,10 @@ type Manager struct {
 }
 
 func NewManager(homeDir, defaultCwd, customBin string) *Manager {
+	// the app passes paths like "~/../usr/bin/claude" quoted, so the shell does not expand the tilde
+	if customBin == "~" || strings.HasPrefix(customBin, "~/") {
+		customBin = filepath.Join(homeDir, strings.TrimPrefix(customBin, "~"))
+	}
 	m := &Manager{
 		HomeDir:    homeDir,
 		DefaultCwd: defaultCwd,

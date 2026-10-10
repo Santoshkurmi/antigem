@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -429,14 +430,16 @@ fun UserMessageBubble(
 
                 if (displayContent.isNotBlank() && !(audioAtts.isNotEmpty() && (displayContent == "Voice note" || displayContent == "Voice message"))) {
                     Column {
-                        Text(
-                            text = displayContent,
-                            fontSize = 15.sp,
-                            lineHeight = 22.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = if (isLongText && !isTextExpanded) 6 else Int.MAX_VALUE,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        SelectionContainer {
+                            Text(
+                                text = displayContent,
+                                fontSize = 15.sp,
+                                lineHeight = 22.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = if (isLongText && !isTextExpanded) 6 else Int.MAX_VALUE,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                         if (isLongText) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(
@@ -581,8 +584,29 @@ fun AssistantMessageFooter(
 
             Spacer(modifier = Modifier.width(4.dp))
 
+            // the whole reply in one selection area (the feed selects one block at a time)
+            var showSelectText by remember { mutableStateOf(false) }
             IconButton(
-                onClick = { onRetry(message) },
+                onClick = { showSelectText = true },
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.SelectAll,
+                    contentDescription = "Select text",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            if (showSelectText) {
+                SelectTextSheet(content = message.content) { showSelectText = false }
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            // a mistaken tap must not replace the reply: ask first
+            var confirmRetry by remember { mutableStateOf(false) }
+            IconButton(
+                onClick = { confirmRetry = true },
                 modifier = Modifier.size(28.dp)
             ) {
                 Icon(
@@ -590,6 +614,25 @@ fun AssistantMessageFooter(
                     contentDescription = "Regenerate response",
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                     modifier = Modifier.size(16.dp)
+                )
+            }
+            if (confirmRetry) {
+                AlertDialog(
+                    onDismissRequest = { confirmRetry = false },
+                    title = { Text("Regenerate response?", fontWeight = FontWeight.Bold) },
+                    text = {
+                        Text(
+                            "The same message is sent again and this reply is replaced by a new one.",
+                            fontSize = 14.sp
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            confirmRetry = false
+                            onRetry(message)
+                        }) { Text("Regenerate", color = ClaudeTerracotta, fontWeight = FontWeight.Bold) }
+                    },
+                    dismissButton = { TextButton(onClick = { confirmRetry = false }) { Text("Cancel") } }
                 )
             }
 
