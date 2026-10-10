@@ -38,6 +38,7 @@ class AuthPreferences(private val context: Context) {
         val ENABLED_MODELS = androidx.datastore.preferences.core.stringSetPreferencesKey("enabled_models")
         val IS_DEV_MODE_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_dev_mode_enabled")
         val CHAT_FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("chat_font_scale")
+        val WORKING_ANIMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("working_animation_enabled")
         val IS_LOCAL_TOOLS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_local_tools_enabled")
         val IS_LOCAL_TOOLS_INSTALLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_local_tools_installed")
         val LOCAL_TOOLS_INSTALL_DATE = androidx.datastore.preferences.core.longPreferencesKey("local_tools_install_date")
@@ -230,6 +231,9 @@ class AuthPreferences(private val context: Context) {
     val enabledModelIds: Flow<Set<String>?> = context.dataStore.data.map { it[ENABLED_MODELS] }
     val isDevModeEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_DEV_MODE_ENABLED] ?: false }
     val chatFontScale: Flow<Float> = context.dataStore.data.map { it[CHAT_FONT_SCALE] ?: 1.0f }
+
+    /** The Claude Code-style "working" row under a running reply; off = only the "…" dots before the first output. */
+    val workingAnimationEnabled: Flow<Boolean> = context.dataStore.data.map { it[WORKING_ANIMATION_ENABLED] ?: true }
     val themeMode: Flow<String> = context.dataStore.data.map { prefs ->
         val mode = prefs[APP_THEME_MODE] ?: "SYSTEM"
         if (syncPrefs.getString("app_theme_mode", null) != mode) {
@@ -469,6 +473,12 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveChatFontScale(scale: Float) {
         context.dataStore.edit { prefs ->
             prefs[CHAT_FONT_SCALE] = scale
+        }
+    }
+
+    suspend fun saveWorkingAnimationEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[WORKING_ANIMATION_ENABLED] = enabled
         }
     }
 

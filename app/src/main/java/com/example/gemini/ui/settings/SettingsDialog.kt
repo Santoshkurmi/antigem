@@ -1181,6 +1181,49 @@ private fun AppearanceSubScreen(
             }
         }
 
+        // Working animation (Claude Code style) switch
+        val appearanceContext = LocalContext.current
+        val appearancePrefs = remember { AuthPreferences(appearanceContext.applicationContext) }
+        val workingAnimation by appearancePrefs.workingAnimationEnabled.collectAsState(initial = true)
+        val appearanceScope = rememberCoroutineScope()
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = cardBg,
+            border = cardBorder,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        text = "Working Animation",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Claude Code-style animated star and status word under the reply for as long as the agent works. Off: only the \"…\" indicator before the first output.",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                Switch(
+                    checked = workingAnimation,
+                    onCheckedChange = { enabled -> appearanceScope.launch { appearancePrefs.saveWorkingAnimationEnabled(enabled) } },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = ClaudeTerracotta
+                    )
+                )
+            }
+        }
+
         // Floating App Switcher Card
         Surface(
             shape = RoundedCornerShape(14.dp),

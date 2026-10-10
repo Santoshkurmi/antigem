@@ -177,8 +177,9 @@ class ClaudeChatBackend(
     private var awaitingProcess = false
     // shows the start-up notice only when the process takes a while (a quick start just shows the typing dots)
     private var startupNoticeJob: Job? = null
-    // /compact (or auto-compaction) is running: the notice says so
-    private var compacting = false
+    private val _isCompacting = MutableStateFlow(false)
+    /** /compact (or auto-compaction) is running: the notice and the working row say so. */
+    val isCompacting: StateFlow<Boolean> = _isCompacting.asStateFlow()
     // opening a chat whose process is live: its newest output is replayed from the bridge buffer up to this seq;
     // the chat is shown once (complete) when it arrives
     private var replayUntilSeq: Long? = null
@@ -1019,7 +1020,7 @@ class ClaudeChatBackend(
                         "status" -> {
                             transcript.permissionMode?.let { _permissionMode.value = it }
                             if (data["status"]?.jsonPrimitive?.contentOrNull == "compacting") {
-                                compacting = true
+                                _isCompacting.value = true
                                 _startupStatus.value = "Compacting the conversation…"
                             } else endCompactingNotice()
                         }
@@ -1088,13 +1089,13 @@ class ClaudeChatBackend(
     private fun clearStartupNotice() {
         startupNoticeJob?.cancel()
         startupNoticeJob = null
-        compacting = false
+        _isCompacting.value = false
         _startupStatus.value = null
     }
 
     private fun endCompactingNotice() {
-        if (!compacting) return
-        compacting = false
+        if (!_isCompacting.value) return
+        _isCompacting.value = false
         _startupStatus.value = null
     }
 

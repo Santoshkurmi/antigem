@@ -194,6 +194,8 @@ fun ChatScreen(
     val incomingMarkdownPreview by viewModel.incomingMarkdownPreview.collectAsState()
     val isDevModeEnabled by viewModel.isDevModeEnabled.collectAsState()
     val chatFontScale by viewModel.chatFontScale.collectAsState(initial = 1.0f)
+    val workingAnimationEnabled by viewModel.authPreferences.workingAnimationEnabled.collectAsState(initial = true)
+    val claudeCompacting by claudeBackend.isCompacting.collectAsState()
     val bridgeStatusMessage by viewModel.bridgeStatusMessage.collectAsState()
     val isServerOnline by viewModel.isServerOnline.collectAsState()
     val isReconnecting by viewModel.isReconnecting.collectAsState()
@@ -701,17 +703,47 @@ fun ChatScreen(
 
     // Smart auto-scroll during streaming & tool execution: follows live stream and tool calls smoothly without getting stuck
     val lastMsg = messages.lastOrNull()
-    val lastContentLen = lastMsg?.content?.length ?: 0
-    val lastThoughtLen = lastMsg?.thoughtText?.length ?: 0
     val lastToolCalls = lastMsg?.toolCalls.orEmpty()
-    val toolCallsPayloadLen = lastToolCalls.sumOf { it.command.length + it.output.length + it.status.length }
     val isRunningOrStreaming = isActivelyRunning || (lastMsg?.isStreaming == true)
 
-    LaunchedEffect(feedItems.size, lastContentLen, lastThoughtLen, toolCallsPayloadLen, isRunningOrStreaming) {
-        if (feedItems.isNotEmpty() && isRunningOrStreaming && shouldAutoScroll && !isUserDragging) {
-            listState.scrollToItem(feedItems.size)
+    // The end of a turn is one step: the working row stays until the reply's footer (tokens, actions) exists, then
+    // the two cross-fade in place while the end of the chat stays pinned (no animated scroll afterwards)
+    val lastIsAssistantWithText = lastMsg?.role == com.example.gemini.domain.model.MessageRole.ASSISTANT && lastMsg.content.isNotEmpty()
+    val footerShown = feedItems.lastOrNull() is ChatFeedItem.AssistantFooter
+    var tailFinishing by remember(convKey) { mutableStateOf(false) }
+    var wasRunning by remember(convKey) { mutableStateOf(isRunningOrStreaming) }
+    LaunchedEffect(convKey, isRunningOrStreaming) {
+        val finished = wasRunning && !isRunningOrStreaming
+        wasRunning = isRunningOrStreaming
+        if (!finished) {
+            tailFinishing = false
+            return@LaunchedEffect
+        }
+        tailFinishing = true
+        delay(1_000) // safety: never hold the end longer than this
+        tailFinishing = false
+    }
+    LaunchedEffect(tailFinishing, footerShown, lastIsAssistantWithText) {
+        if (tailFinishing && (footerShown || !lastIsAssistantWithText)) {
+            // keep pinning for the frames in which the footer is laid out and fades in
+            delay(300)
+            tailFinishing = false
         }
     }
+    val holdingTail = tailFinishing && lastIsAssistantWithText && !footerShown
+
+    // Applied in the same layout pass as the new content (not a frame later), so the end of the chat (the working
+    // row) never drops below the screen while the reply grows: the output grows above it
+    val followTail = feedItems.isNotEmpty() && (isRunningOrStreaming || tailFinishing) && shouldAutoScroll && !isUserDragging
+    if (followTail) {
+        SideEffect { listState.requestScrollToItem(feedItems.size) }
+    }
+
+    // The Claude Code-style working row: under the reply for as long as the agent works, but not while it waits for
+    // the user (an approval or a question)
+    val waitingForUser = (isClaudeChat && claudePending.isNotEmpty()) ||
+        lastToolCalls.any { it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE" }
+    val showWorkingRow = workingAnimationEnabled && (isRunningOrStreaming || holdingTail) && !waitingForUser
 
     val currentModel = if (isClaudeChat) {
         claudeModelList.find { it.id == selectedModelId } ?: AiModel(
@@ -1467,7 +1499,8 @@ fun ChatScreen(
                                                 if (selectable) SelectionContainer { blockView() } else blockView()
                                             }
                                         }
-                                        is ChatFeedItem.AssistantTyping -> {
+                                        // with the working animation on, the working row below replaces these dots
+                                        is ChatFeedItem.AssistantTyping -> if (!workingAnimationEnabled) {
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -1479,6 +1512,8 @@ fun ChatScreen(
                                         is ChatFeedItem.AssistantFooter -> {
                                             AssistantMessageFooter(
                                                 message = feedItem.message,
+                                                // fades in where the working row fades out (no pop-in at the end of a turn)
+                                                modifier = Modifier.animateItem(fadeInSpec = tween(220), placementSpec = null, fadeOutSpec = null),
                                                 isDevModeEnabled = isDevModeEnabled,
                                                 onRetry = { targetMsg ->
                                                     viewModel.retryMessage(targetMsg.id)
@@ -1521,6 +1556,17 @@ fun ChatScreen(
                                                 artifactsCount = artifacts.size
                                             )
                                         }
+                                        }
+                                    }
+
+                                    if (showWorkingRow) {
+                                        item(key = "working_spinner", contentType = "working_spinner") {
+                                            com.example.gemini.ui.components.AgentWorkingSpinner(
+                                                color = if (isClaudeChat) com.example.gemini.ui.components.ClaudeAccent else com.example.gemini.ui.components.AgyAccent,
+                                                compacting = isClaudeChat && claudeCompacting,
+                                                // fades out where the reply's footer fades in
+                                                modifier = Modifier.animateItem(fadeInSpec = tween(180), placementSpec = null, fadeOutSpec = tween(220))
+                                            )
                                         }
                                     }
 
