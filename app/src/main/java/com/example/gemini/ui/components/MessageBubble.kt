@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DataObject
@@ -382,9 +384,21 @@ fun UserMessageBubble(
             ContextSummaryCheckpointBanner(summaryText = message.contextSummary)
         }
 
+        // After "Show less" on a message taller than the screen, the list would otherwise be left
+        // scrolled past it, so collapsing looks like it did nothing
+        val bubbleBringIntoView = remember { BringIntoViewRequester() }
+        var collapseRequests by remember { mutableIntStateOf(0) }
+        LaunchedEffect(collapseRequests) {
+            if (collapseRequests > 0) {
+                withFrameNanos { }
+                bubbleBringIntoView.bringIntoView()
+            }
+        }
+
         Box(
             modifier = Modifier
                 .widthIn(max = 330.dp)
+                .bringIntoViewRequester(bubbleBringIntoView)
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .clickable { showUserActions = !showUserActions }
@@ -425,8 +439,10 @@ fun UserMessageBubble(
                 // 4. Text content (if not just placeholder "Voice note")
                 val displayContent = remember(message.content) { formatUserDisplayContent(message.content) }
                 val lineCount = remember(displayContent) { displayContent.lines().size }
-                val isLongText = remember(displayContent, lineCount) { lineCount > 6 || displayContent.length > 350 }
-                var isTextExpanded by remember { mutableStateOf(false) }
+                // Keyed on the message so an edited/resent prompt always starts collapsed
+                var isTextExpanded by remember(message.id, displayContent) { mutableStateOf(false) }
+                // Measured, not guessed: wrapped lines count too, and short text never gets the toggle
+                var isTextOverflowing by remember(message.id, displayContent) { mutableStateOf(false) }
 
                 if (displayContent.isNotBlank() && !(audioAtts.isNotEmpty() && (displayContent == "Voice note" || displayContent == "Voice message"))) {
                     Column {
@@ -436,16 +452,20 @@ fun UserMessageBubble(
                                 fontSize = 15.sp,
                                 lineHeight = 22.sp,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = if (isLongText && !isTextExpanded) 6 else Int.MAX_VALUE,
-                                overflow = TextOverflow.Ellipsis
+                                maxLines = if (isTextExpanded) Int.MAX_VALUE else 6,
+                                overflow = TextOverflow.Ellipsis,
+                                onTextLayout = { if (!isTextExpanded) isTextOverflowing = it.hasVisualOverflow }
                             )
                         }
-                        if (isLongText) {
+                        if (isTextExpanded || isTextOverflowing) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
-                                    .clickable { isTextExpanded = !isTextExpanded }
+                                    .clickable {
+                                        if (isTextExpanded) collapseRequests++
+                                        isTextExpanded = !isTextExpanded
+                                    }
                                     .padding(vertical = 2.dp, horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {

@@ -191,17 +191,38 @@ fun AppUpdateDialog(
                         .border(1.dp, onSurfaceColor.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
                         .padding(10.dp)
                 ) {
+                    // One numbered row per changelog line; any bullet/number the line already has is dropped
+                    val changelogItems = remember(updateInfo.changelog) {
+                        updateInfo.changelog.lines()
+                            .map { it.trim().replace(Regex("""^(?:[•\-*]|\d+[.)])\s*"""), "") }
+                            .filter { it.isNotBlank() }
+                            .ifEmpty { listOf("Performance optimizations", "Stability and UI improvements") }
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = updateInfo.changelog.ifBlank { "• Performance optimizations\n• Stability and UI improvements" },
-                            color = onSurfaceColor,
-                            fontSize = 12.5.sp,
-                            lineHeight = 17.sp
-                        )
+                        changelogItems.forEachIndexed { index, item ->
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = "${index + 1}.",
+                                    color = primaryColor,
+                                    fontSize = 12.5.sp,
+                                    lineHeight = 17.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.widthIn(min = 20.dp)
+                                )
+                                Text(
+                                    text = item,
+                                    color = onSurfaceColor,
+                                    fontSize = 12.5.sp,
+                                    lineHeight = 17.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
                     }
                 }
 
