@@ -894,12 +894,15 @@ fun IdeScreen(
                 )
             },
             containerColor = MaterialTheme.colorScheme.background,
-            contentWindowInsets = WindowInsets.statusBars
+            // Navigation bars too, so the editor, viewers and run terminal never sit under 3-button navigation
+            contentWindowInsets = WindowInsets.statusBars.union(WindowInsets.navigationBars)
         ) { paddingValues ->
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    // The run terminal pads navigation bars/IME itself; don't let it add the bar twice
+                    .consumeWindowInsets(paddingValues)
             ) {
 
             // Code Editor & Tabs Area
