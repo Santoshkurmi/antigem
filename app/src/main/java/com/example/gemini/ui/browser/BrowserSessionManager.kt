@@ -102,7 +102,6 @@ class BrowserTabSession(
     var isStalled by mutableStateOf(false)
     var isDevToolsEnabled by mutableStateOf(false)
     var isDesktopMode by mutableStateOf(false)
-    var defaultUserAgent: String? = null
     var previewBitmap by mutableStateOf<Bitmap?>(null)
 
     // AI automation (Flow): lock requested by the model, AI currently working, temporary user unlock,
@@ -227,47 +226,16 @@ class BrowserSessionManager private constructor() {
         private const val DEFAULT_TIMEOUT_MS = 15000L
 
         /**
-         * Stand-in for WebView's "Version" token. Google rejects the literal "Version/4.0".
-         * A short random token keeps the "/4.0" shape (Rvyc/4.0) and stays stable for this process.
-         */
-        private val webViewProductToken: String = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".let { alphabet ->
-            buildString(4) {
-                repeat(4) { append(alphabet[kotlin.random.Random.nextInt(alphabet.length)]) }
-            }
-        }
-
-        fun chromeFullVersion(userAgent: String): String {
-            Regex("""Chrome/(\d+\.\d+\.\d+\.\d+)""").find(userAgent)?.groupValues?.get(1)?.let { return it }
-            Regex("""Chrome/(\d+)""").find(userAgent)?.groupValues?.get(1)?.let { return "$it.0.0.0" }
-            return "0.0.0.0"
-        }
-
-        /**
-         * Mobile WebView UA with the two embedded-browser markers removed:
-         * "; wv" is dropped, and "Version/4.0" becomes "<token>/4.0".
-         * The device string and Chrome version stay exactly what this WebView reports.
-         */
-        fun mobileUserAgent(context: Context): String {
-            return WebSettings.getDefaultUserAgent(context)
-                .replace("; wv", "")
-                .replace("Version/", "$webViewProductToken/")
-        }
-
-        /**
-         * Desktop UA in the Linux form, using the same Chrome version as the installed WebView.
-         */
-        fun desktopUserAgent(context: Context): String {
-            val version = chromeFullVersion(WebSettings.getDefaultUserAgent(context))
-            return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$version Safari/537.36"
-        }
-
-        /**
          * Injects script to spoof Desktop screen width/height, platform, client hints, and desktop viewport meta tag.
          * This prevents responsive sites (like YouTube, Google, Facebook, Twitter, Reddit) from falling back to mobile.
+         * Google sign-in pages are left untouched: their bot checks flag overridden navigator properties.
          */
-        fun injectDesktopSpoofing(view: WebView?) {
-            val fullVersion = chromeFullVersion(view?.settings?.userAgentString ?: "")
+        fun injectDesktopSpoofing(view: WebView?, url: String? = view?.url) {
+            if (BrowserIdentity.isGoogleSignInUrl(url)) return
+            val fullVersion = BrowserIdentity.chromeFullVersion(WebSettings.getDefaultUserAgent(view?.context ?: return))
             val majorVersion = fullVersion.substringBefore('.')
+            // With native client hints, navigator.userAgentData is already the desktop Chrome one
+            val spoofUserAgentData = !BrowserIdentity.canSetClientHints()
             val js = """
             (function() {
                 try {
@@ -299,7 +267,7 @@ class BrowserSessionManager private constructor() {
 
                     // 3. Override navigator.userAgentData (Chromium Client Hints)
                     try {
-                        if (navigator.userAgentData) {
+                        if ($spoofUserAgentData && navigator.userAgentData) {
                             Object.defineProperty(navigator, 'userAgentData', {
                                 get: function() {
                                     return {
@@ -673,6 +641,49 @@ class BrowserSessionManager private constructor() {
     }
 
     /**
+     * Wipes everything a site could use to recognise this browser again: cookies, local/session
+     * storage, IndexedDB, service workers, HTTP cache, saved HTTP auth, site permissions, tabs and
+     * typed history. Speed-dial shortcuts are kept. Ends with one fresh, empty tab.
+     */
+    fun clearAllBrowsingData(context: Context, onDone: () -> Unit = {}) {
+        mainHandler.post {
+            val ctx = context.applicationContext
+            tabs.forEach { setAutomationInput(it, false) }
+            // HTTP cache is shared by all WebViews, but clearing it needs an instance
+            val tabView = tabs.firstNotNullOfOrNull { it.webView }
+            val cacheView = tabView ?: WebView(ctx)
+            cacheView.clearCache(true)
+            if (tabView == null) runCatching { cacheView.destroy() }
+            tabs.forEach { tab ->
+                tab.webView?.let { wv ->
+                    runCatching {
+                        wv.stopLoading()
+                        wv.clearHistory()
+                        wv.clearFormData()
+                        wv.clearSslPreferences()
+                        (wv.parent as? ViewGroup)?.removeView(wv)
+                        wv.destroy()
+                    }
+                }
+                tab.webView = null
+            }
+            tabs.clear()
+            WebStorage.getInstance().deleteAllData()
+            GeolocationPermissions.getInstance().clearAll()
+            WebViewDatabase.getInstance(ctx).clearHttpAuthUsernamePassword()
+            clearHistory(ctx)
+            val cookies = CookieManager.getInstance()
+            cookies.removeAllCookies {
+                cookies.flush()
+                val fresh = BrowserTabSession(initialUrl = "", initialTitle = "New Tab")
+                tabs.add(fresh)
+                activeTabId = fresh.id
+                onDone()
+            }
+        }
+    }
+
+    /**
      * Opens a URL in an existing tab or creates a new tab.
      */
     fun openUrl(url: String, tabId: String? = null, newTab: Boolean = false, desktopMode: Boolean? = null): BrowserTabSession {
@@ -750,9 +761,9 @@ class BrowserSessionManager private constructor() {
         tab.isLoading = true
         tab.startLoadingWatchdog(mainHandler)
 
-        mainHandler.post {
+        val load: () -> Unit = load@{
             try {
-                val effectiveCtx = ctx ?: tab.webView?.context ?: return@post
+                val effectiveCtx = ctx ?: tab.webView?.context ?: return@load
                 var wv = tab.webView
                 if (wv == null) {
                     wv = ensureWebViewAttached(effectiveCtx, tab, isDark = true)
@@ -776,6 +787,11 @@ class BrowserSessionManager private constructor() {
                 )
             }
         }
+        if (BrowserIdentity.isGoogleSignInUrl(effectiveUrl) && BrowserExtensionManager.instance.isHostRunning()) {
+            BrowserExtensionManager.instance.releaseTab(tab) { load() }
+        } else {
+            mainHandler.post { load() }
+        }
     }
 
     fun toggleDesktopMode(tab: BrowserTabSession?, context: Context? = null) {
@@ -791,19 +807,15 @@ class BrowserSessionManager private constructor() {
                 if (effectiveCtx != null) ensureWebViewAttached(effectiveCtx, tab, isDark = true) else null
             } ?: return@post
 
-            if (tab.defaultUserAgent == null) {
-                tab.defaultUserAgent = mobileUserAgent(wv.context)
-            }
+            BrowserIdentity.applyTo(wv.settings, wv.context, enable)
 
             if (enable) {
-                wv.settings.userAgentString = desktopUserAgent(wv.context)
                 wv.settings.useWideViewPort = true
                 wv.settings.loadWithOverviewMode = true
                 wv.settings.setSupportZoom(true)
                 wv.settings.builtInZoomControls = true
                 wv.settings.displayZoomControls = false
             } else {
-                wv.settings.userAgentString = tab.defaultUserAgent ?: mobileUserAgent(wv.context)
                 wv.settings.useWideViewPort = true
                 wv.settings.loadWithOverviewMode = true
             }
@@ -858,7 +870,7 @@ class BrowserSessionManager private constructor() {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    fun createWebView(context: Context, tab: BrowserTabSession, isDark: Boolean): WebView {
+    fun createWebView(context: Context, tab: BrowserTabSession, isDark: Boolean, loadInitialUrl: Boolean = true): WebView {
         try {
             tab.webView?.let { old ->
                 (old.parent as? ViewGroup)?.removeView(old)
@@ -903,12 +915,11 @@ class BrowserSessionManager private constructor() {
                 builtInZoomControls = true
                 displayZoomControls = false
                 mediaPlaybackRequiresUserGesture = false
+                // Popup sign-in flows ("Sign in with Google" on other sites) need window.open + window.opener
+                setSupportMultipleWindows(true)
+                javaScriptCanOpenWindowsAutomatically = true
 
-                userAgentString = if (tab.isDesktopMode) {
-                    desktopUserAgent(context)
-                } else {
-                    mobileUserAgent(context)
-                }
+                BrowserIdentity.applyTo(this, context, tab.isDesktopMode)
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     isAlgorithmicDarkeningAllowed = false
@@ -937,7 +948,7 @@ class BrowserSessionManager private constructor() {
                     tab.canGoBack = view?.canGoBack() == true
                     tab.canGoForward = view?.canGoForward() == true
                     if (tab.isDesktopMode) {
-                        injectDesktopSpoofing(view)
+                        injectDesktopSpoofing(view, url)
                     }
                     setAutomationInput(tab, tab.aiBusy)
                 }
@@ -959,9 +970,9 @@ class BrowserSessionManager private constructor() {
                     tab.canGoBack = view?.canGoBack() == true
                     tab.canGoForward = view?.canGoForward() == true
                     if (tab.isDesktopMode) {
-                        injectDesktopSpoofing(view)
+                        injectDesktopSpoofing(view, url)
                     }
-                    if (tab.isDevToolsEnabled && view != null) {
+                    if (tab.isDevToolsEnabled && view != null && !BrowserIdentity.isGoogleSignInUrl(url)) {
                         ErudaHelper.inject(view, showImmediately = false)
                     }
                     if (tab.isDesktopMode && tab.aiBusy) {
@@ -976,7 +987,7 @@ class BrowserSessionManager private constructor() {
                 override fun onPageCommitVisible(view: WebView?, url: String?) {
                     super.onPageCommitVisible(view, url)
                     if (tab.isDesktopMode) {
-                        injectDesktopSpoofing(view)
+                        injectDesktopSpoofing(view, url)
                     }
                     setAutomationInput(tab, tab.aiBusy)
                 }
@@ -1075,6 +1086,21 @@ class BrowserSessionManager private constructor() {
                     val uri = request?.url ?: return false
                     val scheme = uri.scheme?.lowercase() ?: return false
                     if (scheme == "http" || scheme == "https" || scheme == "file" || scheme == "about" || scheme == "data") {
+                        // Detach the extension host's DevTools session before Google sign-in loads,
+                        // so its bot checks never see an attached debugger. GET only: a POST cannot be replayed.
+                        val target = uri.toString()
+                        if (request.isForMainFrame && request.method.equals("GET", ignoreCase = true) &&
+                            BrowserIdentity.isGoogleSignInUrl(target) && !BrowserIdentity.isGoogleSignInUrl(tab.url) &&
+                            BrowserExtensionManager.instance.isHostRunning()
+                        ) {
+                            val referer = Uri.parse(tab.url).takeIf { it.scheme == "https" && !it.host.isNullOrBlank() }
+                                ?.let { "https://${it.host}/" }
+                            tab.url = target
+                            BrowserExtensionManager.instance.releaseTab(tab) {
+                                if (referer != null) view?.loadUrl(target, mapOf("Referer" to referer)) else view?.loadUrl(target)
+                            }
+                            return true
+                        }
                         if (tab.isDesktopMode) {
                             val host = uri.host?.lowercase() ?: ""
                             if (host == "m.youtube.com") {
@@ -1127,6 +1153,26 @@ class BrowserSessionManager private constructor() {
                     if (!title.isNullOrBlank()) tab.title = title
                 }
 
+                // window.open / target=_blank: open a real tab that keeps window.opener, like Chrome.
+                // Popups without a user gesture are blocked, as Chrome does.
+                override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message?): Boolean {
+                    val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+                    if (!isUserGesture) return false
+                    val popupTab = BrowserTabSession(initialUrl = "", initialTitle = "New Tab").also {
+                        it.isDesktopMode = tab.isDesktopMode
+                    }
+                    transport.webView = createWebView(context, popupTab, isDark, loadInitialUrl = false)
+                    tabs.add(popupTab)
+                    // Leave AI-driven tabs in front so automation keeps the tab it is working on
+                    if (!tab.aiBusy) activeTabId = popupTab.id
+                    resultMsg.sendToTarget()
+                    return true
+                }
+
+                override fun onCloseWindow(window: WebView?) {
+                    tabs.firstOrNull { it.webView === window }?.let { closeTab(it.id) }
+                }
+
                 override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
                     if (consoleMessage != null) {
                         val level = when (consoleMessage.messageLevel()) {
@@ -1171,6 +1217,8 @@ class BrowserSessionManager private constructor() {
         )
         wv.layout(0, 0, 1080, 1920)
 
+        // A popup WebView must stay unused until WebViewTransport hands it to the opener
+        if (!loadInitialUrl) return wv
         if (tab.url.isNotBlank() && tab.url != "about:blank") {
             BrowserExtensionManager.instance.loadWithExtensions(tab, wv, tab.url)
         } else {

@@ -127,6 +127,7 @@ fun BrowserScreen(
     var shouldSelectAllOnNextValueChange by remember { mutableStateOf(false) }
     var showTabOverview by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
+    var showClearDataConfirm by remember { mutableStateOf(false) }
     var isControlsVisible by remember { mutableStateOf(true) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     var footerHeightPx by remember { mutableFloatStateOf(0f) }
@@ -694,6 +695,14 @@ fun BrowserScreen(
                                     activeTab?.webView?.clearCache(true)
                                 }
                             )
+                            DropdownMenuItem(
+                                text = { Text("Clear Browsing Data", color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = { Icon(Icons.Outlined.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    showClearDataConfirm = true
+                                }
+                            )
                             HorizontalDivider()
                             DropdownMenuItem(
                                 text = { Text("Close Browser", color = MaterialTheme.colorScheme.error) },
@@ -701,6 +710,41 @@ fun BrowserScreen(
                                 onClick = {
                                     showMoreMenu = false
                                     onClose()
+                                }
+                            )
+                        }
+
+                        if (showClearDataConfirm) {
+                            AlertDialog(
+                                onDismissRequest = { showClearDataConfirm = false },
+                                title = { Text("Clear Browsing Data?") },
+                                text = {
+                                    Text(
+                                        "This deletes all cookies, site data (local storage, IndexedDB, service workers), cache, " +
+                                            "saved site logins, site permissions, history and closes every tab. " +
+                                            "You will be signed out of all websites, including Google accounts. " +
+                                            "Speed dial shortcuts are kept. This cannot be undone."
+                                    )
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            showClearDataConfirm = false
+                                            sessionManager.clearAllBrowsingData(context) {
+                                                activeTabId = sessionManager.activeTabId
+                                                textFieldValue = TextFieldValue("")
+                                                android.widget.Toast.makeText(context, "Browsing data cleared", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                                    ) {
+                                        Text("Clear All")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showClearDataConfirm = false }) {
+                                        Text("Cancel")
+                                    }
                                 }
                             )
                         }

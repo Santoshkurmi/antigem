@@ -274,6 +274,7 @@ export class ExtensionHost {
     let body = ''; for await (const chunk of req) { body += chunk; if (Buffer.byteLength(body) > 64 * 1024 * 1024) return send({ error: 'Request too large' }, 413); }
     const data = body ? JSON.parse(body) : {};
     if (url.pathname === '/health' && native) return send({ status: 'ok', ready: !!this.ready, pid: process.pid, tools: this.toolRegistry.size });
+    if (url.pathname === '/tab/release' && native) { const tab = (await this.browser.tabs()).find(t => this.browser.native(t.id) === data.nativeId); if (tab) this.browser.release(tab.id); return send({ success: true }); }
     if (url.pathname === '/tab/prepare' && native) { const tab = (await this.browser.tabs()).find(t => this.browser.native(t.id) === data.nativeId); if (!tab) throw new Error('Tab not found'); await this.prepareTab(tab); return send({ success: true }); }
     if (url.pathname === '/mcp' && native) {
       if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return send({ error: 'Use POST for MCP requests' }, 405); }

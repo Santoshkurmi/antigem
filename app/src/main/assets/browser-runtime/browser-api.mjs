@@ -13,6 +13,10 @@ export function matches(pattern, input) {
     return new RegExp('^' + expression + '$').test(u.pathname + u.search);
   } catch { return false; }
 }
+// Google sign-in must load with no DevTools session attached; its bot checks detect one.
+export function isSignInPage(input) {
+  try { const host = new URL(input).hostname.toLowerCase(); return host === 'accounts.youtube.com' || host === 'myaccount.google.com' || /^accounts\.google\.[a-z.]+$/.test(host); } catch { return false; }
+}
 export function safeFile(root, relative) {
   if (typeof relative !== 'string' || path.isAbsolute(relative)) throw new Error('Extension resources must use relative paths');
   const resolved = fs.realpathSync(path.resolve(root, relative)); const base = fs.realpathSync(root);
@@ -52,6 +56,7 @@ export class BrowserAPI {
     try { return await promise; } finally { this.initializing.delete(tabId); }
   }
   async connect(tabId) {
+    if (isSignInPage((await this.tab(tabId)).url)) throw new Error('Extensions are paused on Google sign-in pages');
     const nativeId = this.native(tabId); let info;
     if (process.env.AGY_CDP_URL) {
       await this.bridge('eval', { tab_id: nativeId, script: `window.__antigemTabId=${JSON.stringify(nativeId)}` });
@@ -157,10 +162,12 @@ export class BrowserAPI {
   async poll() {
     const tabs = await this.tabs(); const now = new Map(tabs.map(t => [t.id, t]));
     for (const tab of tabs) { const old = this.lastTabs.get(tab.id); if (!old) this.host.broadcastAll('tabs.onCreated', [tab]); else { const change = {}; for (const key of ['url', 'title', 'status']) if (old[key] !== tab[key]) change[key] = tab[key]; if (Object.keys(change).length) this.host.broadcastAll('tabs.onUpdated', [tab.id, change, tab]); if (!old.active && tab.active) this.host.broadcastAll('tabs.onActivated', [{ tabId: tab.id, windowId: 1 }]); }
+      if (isSignInPage(tab.url)) { this.release(tab.id); continue; }
       await this.host.prepareTab(tab).catch(e => { if (this.host.options.verbose) console.error(e.message); });
     }
     for (const id of this.lastTabs.keys()) if (!now.has(id)) { this.host.broadcastAll('tabs.onRemoved', [id, { windowId: 1, isWindowClosing: false }]); this.connections.get(id)?.close(); this.host.dropTabContexts(id); }
     this.lastTabs = now;
   }
+  release(tabId) { this.connections.get(tabId)?.close(); }
   close() { for (const c of this.connections.values()) c.close(); }
 }

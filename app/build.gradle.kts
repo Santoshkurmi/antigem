@@ -148,6 +148,7 @@ dependencies {
   // Networking and Serialization
   implementation(libs.okhttp)
   implementation(libs.okhttp.sse)
+  implementation(libs.androidx.webkit)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.androidx.datastore.preferences)
   implementation("com.telemetrydeck:kotlin-sdk:6.0.1")

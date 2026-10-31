@@ -169,10 +169,28 @@ class BrowserExtensionManager private constructor() {
         request("/tab/prepare", JSONObject().put("nativeId", tab.id))
     }
 
+    fun isHostRunning() = hostProcess?.isAlive == true
+
+    /**
+     * Closes the host's DevTools session for [tab] (Google sign-in must load without one), then runs
+     * [then] on the main thread. Never blocks navigation for long: failures and timeouts still continue.
+     */
+    fun releaseTab(tab: BrowserTabSession, then: () -> Unit) {
+        scope.launch {
+            runCatching {
+                val request = Request.Builder().url("http://127.0.0.1:${hostPort()}/tab/release").header("X-Device-Id", deviceId())
+                    .post(JSONObject().put("nativeId", tab.id).toString().toRequestBody("application/json".toMediaType())).build()
+                http.newBuilder().readTimeout(2, TimeUnit.SECONDS).build().newCall(request).execute().close()
+            }.onFailure { Log.w(TAG, "Could not release tab before sign-in", it) }
+            withContext(Dispatchers.Main) { then() }
+        }
+    }
+
     fun loadWithExtensions(tab: BrowserTabSession, view: android.webkit.WebView, url: String) {
         // Navigation must never wait for Node, DevTools, or an extension worker. A newly created
         // WebView may not even have a renderer to inspect until its first load has started.
         view.loadUrl(url)
+        if (BrowserIdentity.isGoogleSignInUrl(url)) return
         scope.launch {
             runCatching { prepareTab(tab) }.onFailure { lastError = it.message; Log.w(TAG, "Extension preparation failed", it) }
         }
