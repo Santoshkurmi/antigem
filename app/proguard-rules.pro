@@ -87,3 +87,5 @@
     public static int v(...);
     public static int d(...);
 }
+# WorkManager's Room database is created by reflection; R8 full mode strips its no-arg constructor.
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
