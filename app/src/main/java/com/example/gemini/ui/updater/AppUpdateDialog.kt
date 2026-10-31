@@ -191,13 +191,8 @@ fun AppUpdateDialog(
                         .border(1.dp, onSurfaceColor.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
                         .padding(10.dp)
                 ) {
-                    // One numbered row per changelog line; any bullet/number the line already has is dropped
-                    val changelogItems = remember(updateInfo.changelog) {
-                        updateInfo.changelog.lines()
-                            .map { it.trim().replace(Regex("""^(?:[•\-*]|\d+[.)])\s*"""), "") }
-                            .filter { it.isNotBlank() }
-                            .ifEmpty { listOf("Performance optimizations", "Stability and UI improvements") }
-                    }
+                    // One numbered row per version.json changelog entry
+                    val changelogItems = updateInfo.changelog.ifEmpty { listOf("Performance optimizations", "Stability and UI improvements") }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()

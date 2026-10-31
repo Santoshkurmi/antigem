@@ -26,7 +26,7 @@ data class AppUpdateInfo(
     val currentVersionName: String,
     val packageName: String,
     val downloadUrl: String,
-    val changelog: String,
+    val changelog: List<String>,
     val isCritical: Boolean = false
 )
 
@@ -76,9 +76,9 @@ class AppUpdateManager(private val context: Context) {
             val remoteVersionName = json.optString("version_name", "1.0.0")
             val minSupportedCode = json.optInt("min_supported_version_code", 0)
             val changelog = when (val raw = json.opt("changelog")) {
-                is org.json.JSONArray -> (0 until raw.length()).joinToString("\n") { raw.optString(it) }
-                is String -> raw
-                else -> "• General improvements and bug fixes."
+                is org.json.JSONArray -> (0 until raw.length()).map { raw.optString(it) }
+                is String -> listOf(raw)
+                else -> listOf("General improvements and bug fixes.")
             }
             val isCritical = json.optBoolean("is_critical", false) || (BuildConfig.VERSION_CODE < minSupportedCode)
 
