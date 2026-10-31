@@ -16,6 +16,8 @@
 
 </div>
 
+> 💬 **Facing any issue?** Join our [WhatsApp community group](https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV?s=cl&p=a&mlu=4&ilr=4) for help and updates.
+
 ---
 
 ## 🌟 Overview
