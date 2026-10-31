@@ -5,6 +5,7 @@ import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.AgyHubClient.AgyAuthInfo
 import com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus
 import exa.language_server_pb.AuthLogoutRequest
+import exa.language_server_pb.AuthResult
 import exa.language_server_pb.GetAuthStatusRequest
 import exa.language_server_pb.GetLocalUserInfoRequest
 import exa.language_server_pb.GetUserStatusRequest
@@ -23,9 +24,9 @@ class AgyAuthService {
         val instance by lazy { AgyAuthService() }
     }
 
-    suspend fun login(hubUrl: String = AuthPreferences.currentHubUrl): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun login(hubUrl: String = AuthPreferences.currentHubUrl): Result<AuthResult?> = withContext(Dispatchers.IO) {
         val req = LoginRequest(is_gcp_tos = false)
-        AgyLanguageService.Login().executeSafely(req).map { }
+        AgyLanguageService.Login().executeSafely(req).map { it.auth_result }
     }
 
     suspend fun authLogout(hubUrl: String = AuthPreferences.currentHubUrl): Result<Unit> = withContext(Dispatchers.IO) {

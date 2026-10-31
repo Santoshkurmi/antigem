@@ -210,6 +210,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val authFeedbackMessage = agyBackend.authFeedbackMessage
     val pendingLoginUrl = agyBackend.pendingLoginUrl
     fun clearPendingLoginUrl() = agyBackend.clearPendingLoginUrl()
+    val agyLoginIssue = agyBackend.agyLoginIssue
+    fun clearAgyLoginIssue() = agyBackend.clearAgyLoginIssue()
     fun onDrawerOpened() = agyBackend.onDrawerOpened()
     fun cancelAgyLogin() = agyBackend.cancelAgyLogin()
     fun checkAgyAuthStatus(userInitiated: Boolean = false) = agyBackend.checkAgyAuthStatus(userInitiated)

@@ -217,6 +217,15 @@ class AgyChatBackend(
         _pendingLoginUrl.value = null
     }
 
+    data class AgyLoginIssue(val message: String, val verificationUrl: String)
+
+    private val _agyLoginIssue = MutableStateFlow<AgyLoginIssue?>(null)
+    val agyLoginIssue: StateFlow<AgyLoginIssue?> = _agyLoginIssue.asStateFlow()
+
+    fun clearAgyLoginIssue() {
+        _agyLoginIssue.value = null
+    }
+
     private var loginPollJob: Job? = null
     private var lastAuthCheckTimeMs = 0L
 
@@ -361,7 +370,22 @@ class AgyChatBackend(
             // 2. Kick off login RPC on daemon (Login RPC opens browser / triggers auth flow)
             launch {
                 try {
-                    agyHubClient.login(hubUrl)
+                    val authResult = agyHubClient.login(hubUrl).getOrNull()
+                    if (authResult != null && !authResult.has_valid_auth) {
+                        val verificationUrl = authResult.ineligible?.verification_url?.takeIf { it.isNotBlank() }
+                            ?: authResult.verification_required?.verification_url?.takeIf { it.isNotBlank() }
+                        if (verificationUrl != null) {
+                            loginPollJob?.cancel()
+                            _isAuthBusy.value = false
+                            _pendingLoginUrl.value = null
+                            agyBridgeService.updateAuthChecking(false)
+                            _agyLoginIssue.value = AgyLoginIssue(
+                                message = authResult.ui_message.takeIf { it.isNotBlank() }
+                                    ?: "Your account needs verification before you can sign in.",
+                                verificationUrl = verificationUrl
+                            )
+                        }
+                    }
                 } catch (e: Exception) {
                     android.util.Log.d("ChatViewModel", "Hub login RPC finished/interrupted: ${e.message}")
                 }

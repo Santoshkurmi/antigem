@@ -248,6 +248,7 @@ fun ChatScreen(
     val terminalLauncherStylePref by viewModel.authPreferences.terminalLauncherStyle.collectAsState(initial = com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_ANTITERM)
     val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
     val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
+    val agyLoginIssue by viewModel.agyLoginIssue.collectAsState()
     val hubStatus by viewModel.hubStatus.collectAsState()
     val systemConnectionState by viewModel.systemConnectionState.collectAsState()
     val isNetworkConnected by viewModel.isNetworkConnectedState.collectAsState()
@@ -1064,6 +1065,48 @@ fun ChatScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { viewModel.clearPendingLoginUrl() }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+        agyLoginIssue?.let { issue ->
+            AlertDialog(
+                onDismissRequest = { viewModel.clearAgyLoginIssue() },
+                title = {
+                    Text(
+                        text = "Account Verification Required",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+                },
+                text = {
+                    Text(
+                        text = issue.message,
+                        fontSize = 13.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(issue.verificationUrl)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                android.util.Log.e("ChatScreen", "Failed to open browser: ${e.message}")
+                            }
+                            viewModel.clearAgyLoginIssue()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                    ) {
+                        Text("Verify Account", fontWeight = FontWeight.SemiBold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.clearAgyLoginIssue() }) {
                         Text("Cancel")
                     }
                 }
