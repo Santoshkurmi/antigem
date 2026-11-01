@@ -199,3 +199,45 @@ test('developer logs survive reload and failed starts, enforce bounds and requir
   await host.unload(ext.id);fs.writeFileSync(path.join(dir,'worker.js'),'throw new Error("bad developer update")');await assert.rejects(host.loadExtension(dir),/bad developer update/);
   assert.ok((await get(ext.id)).value.logs.some(e=>e.level==='error'&&e.message.includes('bad developer update')));
 });
+test('skills folder adds get_skills, get_skill and get_skill_file, even without a worker or mcp_tools',async t=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'antigem-skills-'));const dir=path.join(root,'yt');fs.mkdirSync(path.join(dir,'skills','youtube_upload','more'),{recursive:true});
+  fs.writeFileSync(path.join(dir,'manifest.json'),JSON.stringify({manifest_version:3,id:'yt',name:'YouTube'}));
+  fs.writeFileSync(path.join(dir,'skills','youtube_upload.md'),'# Upload a video\n\nUploads a video to YouTube Studio.\n\nSee youtube_upload/thumbnails.md.');
+  fs.writeFileSync(path.join(dir,'skills','search.md'),'---\nname: Search\ndescription: "Find videos"\n---\nBody');
+  fs.writeFileSync(path.join(dir,'skills','youtube_upload','thumbnails.md'),'Thumbnail rules');fs.writeFileSync(path.join(dir,'skills','youtube_upload','more','x.md'),'x');
+  fs.writeFileSync(path.join(dir,'skills','notes.txt'),'not a skill');
+  const host=new ExtensionHost({root,stateRoot:path.join(root,'state')});await host.loadExtension(dir);
+  t.after(async()=>{await host.close();fs.rmSync(root,{recursive:true,force:true});});
+  const call=async(method,params)=>(await host.mcp({jsonrpc:'2.0',id:1,method,params},'yt')).result;
+  assert.match((await call('initialize',{})).instructions,/- youtube_upload: Uploads a video to YouTube Studio\./);
+  const tools=(await call('tools/list')).tools;assert.deepEqual(tools.map(x=>x.name),['get_skills','get_skill','get_skill_file']);assert.match(tools[0].description,/Skills: search, youtube_upload\./);
+  const skills=JSON.parse((await call('tools/call',{name:'get_skills'})).content[0].text).skills;
+  assert.deepEqual(skills.map(s=>[s.name,s.title,s.description,s.detail_files]),[['search','Search','Find videos',0],['youtube_upload','Upload a video','Uploads a video to YouTube Studio.',2]]);
+  const skill=JSON.parse((await call('tools/call',{name:'get_skill',arguments:{name:'youtube_upload'}})).content[0].text);
+  assert.match(skill.content,/See youtube_upload/);assert.deepEqual(skill.detail_files.map(f=>f.file),['more/x.md','thumbnails.md']);
+  assert.equal(JSON.parse((await call('tools/call',{name:'get_skill_file',arguments:{name:'youtube_upload',file:'thumbnails.md'}})).content[0].text).content,'Thumbnail rules');
+  assert.equal((await call('tools/call',{name:'get_skill_file',arguments:{name:'youtube_upload',file:'../search.md'}})).isError,true);
+  assert.equal((await call('tools/call',{name:'get_skill',arguments:{name:'nope'}})).isError,true);
+});
+test('a tool the extension declares wins over the built-in skill tool of the same name',async t=>{
+  const {host,ext,dir}=await fixture(t,`chrome.runtime.onMessage.addListener((m,s,reply)=>{reply('own')})`);
+  fs.mkdirSync(path.join(dir,'skills'));fs.writeFileSync(path.join(dir,'skills','a.md'),'# A');
+  ext.manifest.mcp_tools.push({name:'get_skill'});host.toolRegistry.set(JSON.stringify([ext.id,'get_skill']),{spec:{name:'get_skill'},extension:ext});
+  assert.deepEqual(host.listTools(ext.id).map(x=>x.name),['echo','get_skill','get_skills','get_skill_file']);
+  assert.equal(await host.callTool('get_skill',{name:'a'},ext.id),'own');
+  assert.equal(host.listTools(ext.id).filter(x=>x.name==='get_skill').length,1);
+});
+test('chrome.antigem.uploadFiles needs antigemFiles, checks paths and asks the app to answer the file chooser',async t=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'antigem-upload-'));const make=(id,permissions)=>{const dir=path.join(root,id);fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir,'manifest.json'),JSON.stringify({manifest_version:3,id,name:id,permissions,host_permissions:['https://*/*'],background:{service_worker:'w.js'},mcp_tools:[{name:'x'}]}));fs.writeFileSync(path.join(dir,'w.js'),'');return dir;};
+  const host=new ExtensionHost({root,stateRoot:path.join(root,'state')});t.after(async()=>{await host.close();fs.rmSync(root,{recursive:true,force:true});});
+  const calls=[];host.browser.tab=async id=>({id});host.browser.checkAccess=async()=>{};host.browser.native=id=>'native-'+id;host.browser.bridge=async(endpoint,body)=>{calls.push([endpoint,body]);return {success:true,method:'chooser',given:body.file_paths.length};};
+  const allowed=await host.loadExtension(make('poster',['antigemFiles']));const denied=await host.loadExtension(make('plain',[]));
+  const home=path.resolve(process.env.HOME);
+  const result=await host.nativeRequest(allowed.background,'antigem.uploadFiles',{tabId:3,files:['~/photo.png'],selector:'input[type=file]',point:{fx:0.5,fy:0.4},timeoutMs:5000});
+  assert.equal(result.method,'chooser');
+  assert.deepEqual(calls[0],['upload',{tab_id:'native-3',file_paths:[path.join(home,'photo.png')],selector:'input[type=file]',fx:0.5,fy:0.4,method:undefined,timeout_ms:5000}]);
+  await assert.rejects(host.nativeRequest(denied.background,'antigem.uploadFiles',{tabId:3,files:['~/photo.png']}),/antigemFiles/);
+  await assert.rejects(host.nativeRequest(allowed.background,'antigem.uploadFiles',{tabId:3,files:['/etc/passwd']}),/inside the app home/);
+  await assert.rejects(host.nativeRequest(allowed.background,'antigem.uploadFiles',{tabId:3,files:[]}),/files is required/);
+});

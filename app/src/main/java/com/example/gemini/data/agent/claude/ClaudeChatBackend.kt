@@ -275,7 +275,7 @@ class ClaudeChatBackend(
     private fun sendPrompt(conv: Conversation, text: String, atts: List<ChatAttachment>) {
         val displayText = text.ifBlank { if (atts.any { it.isImage }) "Image" else "Attachment" }
         val title = if (conv.title == "New Chat" || conv.title.isBlank()) {
-            val first = displayText.lines().firstOrNull { it.isNotBlank() } ?: "Chat"
+            val first = com.example.gemini.data.remote.PromptExpansion.collapse(displayText).lines().firstOrNull { it.isNotBlank() } ?: "Chat"
             first.take(40) + if (first.length > 40) "..." else ""
         } else conv.title
         val updated = conv.copy(title = title, updatedAt = System.currentTimeMillis(), modelId = _selectedModelId.value)

@@ -9,6 +9,7 @@ import { randomUUID, randomBytes, webcrypto } from 'node:crypto';
 import { createChromeAPI } from './chrome-api.mjs';
 import { createChromePolyfill } from './chrome-polyfill.mjs';
 import { BrowserAPI, matches, safeFile } from './browser-api.mjs';
+import { SKILL_TOOL_NAMES, listSkills, skillTools, callSkillTool, skillInstructions } from './skills.mjs';
 
 const ROOT = path.join(homedir(), 'extensions');
 const json = value => JSON.parse(JSON.stringify(value));
@@ -114,7 +115,7 @@ export class ExtensionHost {
   }
   nativeAPI(context) {
     const api = {};
-    for (const name of ['automation','readFile','writeFile','listFiles','copyFile','stat','download','mediaFrame','mediaInfo']) api[name] = args => this.request(context, `antigem.${name}`, args);
+    for (const name of ['automation','uploadFiles','readFile','writeFile','listFiles','copyFile','stat','download','mediaFrame','mediaInfo']) api[name] = args => this.request(context, `antigem.${name}`, args);
     return api;
   }
   async request(ctx, method, args = []) {
@@ -169,6 +170,8 @@ export class ExtensionHost {
   async nativeRequest(ctx, method, args) {
     this.permissions(ctx.extension, 'antigemFiles');
     if (method === 'antigem.automation') { const tab = await this.browser.tab(args.tabId); await this.browser.checkAccess(ctx.extension, tab.id); return this.browser.bridge('automation', { ...args, tab_id: this.browser.native(tab.id), owner: ctx.extension.id }); }
+    // Files go to the page's own file chooser (no picker); the app taps the element and answers the chooser
+    if (method === 'antigem.uploadFiles') { const tab = await this.browser.tab(args.tabId); await this.browser.checkAccess(ctx.extension, tab.id); if (!Array.isArray(args.files) || !args.files.length) throw new Error('files is required'); return this.browser.bridge('upload', { tab_id: this.browser.native(tab.id), file_paths: args.files.map(f => this.filePath(f)), selector: args.selector, fx: args.point?.fx, fy: args.point?.fy, method: args.method, timeout_ms: args.timeoutMs }); }
     if (method === 'antigem.listFiles') { const root=this.filePath(args.path);const output=[];const limit=Math.min(2000,Math.max(1,args.limit||500));const scan=dir=>{for(const entry of fs.readdirSync(dir,{withFileTypes:true})){if(output.length>=limit)return;const file=path.join(dir,entry.name);if(entry.isSymbolicLink())continue;const stat=fs.statSync(file);output.push({name:entry.name,path:file,isFile:entry.isFile(),isDirectory:entry.isDirectory(),size:stat.size,modified:stat.mtimeMs});if(args.recursive&&entry.isDirectory())scan(file);}};scan(root);return output; }
     if (method === 'antigem.copyFile') { const from=this.filePath(args.from),to=this.filePath(args.to);fs.mkdirSync(path.dirname(to),{recursive:true});if(from!==to)fs.copyFileSync(from,to);return {path:to}; }
     if (method === 'antigem.stat') { const file = this.filePath(args.path); const s = fs.statSync(file); return { path: file, size: s.size, modified: s.mtimeMs, isFile: s.isFile() }; }
@@ -239,14 +242,16 @@ export class ExtensionHost {
   async resetRegistrations(ext) { for (const reg of ext.registrations.values()) for (const identifier of reg.ids) await reg.connection.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }).catch(() => {}); ext.registrations.clear(); }
   async unload(id) { const ext = this.extensions.get(id); if (!ext) throw new Error('Extension not found'); ext.enabled = false; await this.resetRegistrations(ext); for (const a of ext.alarms.values()) clearTimeout(a.timer); for (const ctx of [...this.contexts.values()]) if (ctx.extension === ext) this.dropContext(ctx); for (const [name, entry] of this.toolRegistry) if (entry.extension === ext) this.toolRegistry.delete(name); for(const ids of this.browser.debuggers.values())ids.delete(id);this.extensions.delete(id); }
   async reload(id) { const ext = this.extensions.get(id); if (!ext) throw new Error('Extension not found'); const dir = ext.dir; await this.unload(id); return this.loadExtension(dir); }
-  listTools(extensionId) { return [...this.toolRegistry.values()].filter(e => e.extension.enabled && (extensionId === undefined || e.extension.id === extensionId)).map(e => ({ name: e.spec.name, description: e.spec.description || '', inputSchema: e.spec.inputSchema || { type: 'object', properties: {} } })); }
-  async callTool(name, args = {}, extensionId) { const entry = this.toolRegistry.get(JSON.stringify([extensionId, name])); if (!entry?.extension.enabled) throw new Error(`Tool not found in extension ${extensionId || '(not selected)'}: ${name}`); const caller = this.context(entry.extension, 'mcp'); try { return await this.message(caller, { type: 'mcp_tool_call', tool: name, args }, { extensionId: entry.extension.id }); } finally { this.dropContext(caller); } }
+  listTools(extensionId) { const tools = [...this.toolRegistry.values()].filter(e => e.extension.enabled && (extensionId === undefined || e.extension.id === extensionId)).map(e => ({ name: e.spec.name, description: e.spec.description || '', inputSchema: e.spec.inputSchema || { type: 'object', properties: {} } })); return tools.concat(this.skillTools(extensionId).filter(t => !tools.some(own => own.name === t.name))); }
+  // Skill tools are added to every extension that has skills/*.md; a tool the extension declares itself takes precedence.
+  skillTools(extensionId) { const ext = extensionId === undefined ? null : this.extensions.get(extensionId); if (!ext?.enabled) return []; try { const skills = listSkills(ext.dir); return skills.length ? skillTools(skills) : []; } catch (e) { console.error(`[${extensionId}] skills: ${e.message}`); return []; } }
+  async callTool(name, args = {}, extensionId) { if (SKILL_TOOL_NAMES.includes(name) && !this.toolRegistry.has(JSON.stringify([extensionId, name])) && this.skillTools(extensionId).length) return callSkillTool(this.extensions.get(extensionId).dir, name, args); const entry = this.toolRegistry.get(JSON.stringify([extensionId, name])); if (!entry?.extension.enabled) throw new Error(`Tool not found in extension ${extensionId || '(not selected)'}: ${name}`); const caller = this.context(entry.extension, 'mcp'); try { return await this.message(caller, { type: 'mcp_tool_call', tool: name, args }, { extensionId: entry.extension.id }); } finally { this.dropContext(caller); } }
   async mcp(request, extensionId) {
     const { id, method, params } = request; const respond = result => ({ jsonrpc: '2.0', id, result });
     if (id === undefined) return null;
     const ext = this.extensions.get(extensionId);
     if (!ext?.enabled) return { jsonrpc: '2.0', id, error: { code: -32602, message: 'Select an enabled extension for this MCP server' } };
-    if (method === 'initialize') return respond({ protocolVersion: params?.protocolVersion || '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: ext.id, version: ext.manifest.version || '1.0.0' } });
+    if (method === 'initialize') return respond({ protocolVersion: params?.protocolVersion || '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: ext.id, version: ext.manifest.version || '1.0.0' }, instructions: (() => { try { return skillInstructions(ext.manifest.name || ext.id, listSkills(ext.dir)); } catch { return undefined; } })() });
     if (method === 'ping') return respond({});
     if (method === 'tools/list') return respond({ tools: this.listTools(extensionId) });
     if (method === 'tools/call') { try { const value = await this.callTool(params?.name, params?.arguments || {}, extensionId); return respond(value?.content && Array.isArray(value.content) ? value : { content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value ?? null, null, 2) }] }); } catch (error) { return respond({ isError: true, content: [{ type: 'text', text: error.message }] }); } }
@@ -285,7 +290,7 @@ export class ExtensionHost {
       if (response === null) { res.writeHead(202, { 'Cache-Control': 'no-store' }); res.end(); return; }
       return send(response);
     }
-    if (url.pathname === '/extensions' && native) return send([...this.extensions.values()].map(e => ({ id: e.id, name: e.manifest.name, enabled: e.enabled, dir: e.dir, tools: (e.manifest.mcp_tools || []).length })));
+    if (url.pathname === '/extensions' && native) return send([...this.extensions.values()].map(e => ({ id: e.id, name: e.manifest.name, enabled: e.enabled, dir: e.dir, tools: (e.manifest.mcp_tools || []).length, skills: (() => { try { return listSkills(e.dir).length; } catch { return 0; } })() })));
     if (url.pathname === '/extension/logs' && native) {const limit=data.limit??50;if(!Number.isInteger(limit)||limit<1||limit>200)throw new Error('Log limit must be 1–200');const entries=this.logs.filter(e=>!data.id||e.extension_id===data.id);return send({logs:entries.slice(-limit),retained:entries.length,capacity:500});}
     if (url.pathname === '/extension/load' && native) { const ext = await this.loadExtension(data.dir); return send({ id: ext.id }); }
     if (url.pathname === '/extension/reload' && native) return send({ id: (await this.reload(data.id)).id });

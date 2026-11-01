@@ -2,7 +2,7 @@
 
 ## Model configuration
 
-App MCP settings → **WebView Extension MCP** → choose one enabled extension. This preset is first, followed by WebView Extension Developer, Browser Automation, Terminal Automation and Stitch. The [developer MCP](developer-mcp.md) provides SDK docs and the complete create/edit/install/test loop without exposing a combined normal extension server. There is no server that combines all extension tools. Custom manual server configuration is still possible.
+App MCP settings → **Custom AntiGem Plugin MCP** → choose one enabled extension. This preset is first, followed by Custom AntiGem Plugin Developer, Browser Automation, Terminal Automation and Stitch. The [developer MCP](developer-mcp.md) provides SDK docs and the complete create/edit/install/test loop without exposing a combined normal extension server. There is no server that combines all extension tools. Custom manual server configuration is still possible.
 
 ```json
 {

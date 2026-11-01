@@ -23,6 +23,7 @@ import (
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/handlers"
 	"gemini-server/pkg/hub"
+	"gemini-server/pkg/plugins"
 	"gemini-server/pkg/security"
 	"gemini-server/pkg/ws"
 )
@@ -287,6 +288,9 @@ func main() {
 		claudeMgr = claude.NewManager(cfg.HomeDir, cfg.WorkspaceDir, customClaudeBin)
 		mux.Handle("/api/claude/", claudeMgr)
 	}
+
+	// Custom AntiGem plugins on disk: list, install (ZIP or GitHub repository), update, remove, export
+	mux.Handle("/api/custom-plugins/", plugins.NewManager(cfg.HomeDir))
 
 	// REST Endpoints
 	mux.HandleFunc("/api/health", h.HealthHandler)

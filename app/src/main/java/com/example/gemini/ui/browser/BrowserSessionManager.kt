@@ -29,10 +29,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -210,6 +212,9 @@ class BrowserTabSession(
         put("networkErrorCount", networkErrors.size)
     }
 }
+
+/** Largest total size uploadFiles builds inside the page when no file chooser opens. */
+private const val MAX_IN_PAGE_UPLOAD_BYTES = 25L * 1024 * 1024
 
 /**
  * Singleton BrowserSessionManager that maintains persistent browser sessions,
@@ -533,12 +538,11 @@ class BrowserSessionManager private constructor() {
     private var offscreenContainer: ViewGroup? = null
     private var appContext: Context? = null
 
-    /**
-     * Files handed to the next page file chooser instead of opening a picker
-     * (armed by Flow automation when it uploads media).
-     */
+    /** An automated file pick: the next file chooser [webView] opens receives [files] instead of showing a picker. */
+    private class PendingChooser(val webView: WebView, val files: List<Uri>, val result: CompletableDeferred<JSONObject>)
+
     @Volatile
-    var pendingChooserFiles: List<Uri>? = null
+    private var pendingChooser: PendingChooser? = null
 
     fun init(context: Context) {
         appContext = context.applicationContext
@@ -1200,10 +1204,15 @@ class BrowserSessionManager private constructor() {
                     filePathCallback: ValueCallback<Array<Uri>>?,
                     fileChooserParams: FileChooserParams?
                 ): Boolean {
-                    val pending = pendingChooserFiles
+                    // Answer an automated upload for this tab without a picker; otherwise the normal picker
+                    val pending = pendingChooser?.takeIf { it.webView === webView }
                         ?: return super.onShowFileChooser(webView, filePathCallback, fileChooserParams)
-                    pendingChooserFiles = null
-                    filePathCallback?.onReceiveValue(pending.toTypedArray())
+                    pendingChooser = null
+                    val multiple = fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE
+                    val given = if (multiple) pending.files else pending.files.take(1)
+                    filePathCallback?.onReceiveValue(given.toTypedArray())
+                    pending.result.complete(JSONObject().put("multiple", multiple).put("given", given.size)
+                        .put("accept", JSONArray(fileChooserParams?.acceptTypes.orEmpty().filter { it.isNotBlank() })))
                     return true
                 }
             }
@@ -1806,6 +1815,150 @@ class BrowserSessionManager private constructor() {
         up.recycle()
         Result.success(true)
     }
+
+    private val uploadMutex = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * Uploads local files to a page the way a person picking them would: finds the upload element ([selector], a CSS
+     * point [x]/[y], a viewport fraction [fx]/[fy], or the page's only file input), arms this tab's file chooser and
+     * real-taps the element, so the site's own chooser receives the files without a picker. A hidden file input is
+     * shown on top just for the tap. [method] "auto" falls back to building the files inside the page (assigning a
+     * file input, or a drop event on a drag-and-drop area) when no chooser opens; "chooser"/"drop" force one way.
+     */
+    suspend fun uploadFiles(
+        tabId: String?, paths: List<String>, selector: String? = null, x: Float? = null, y: Float? = null,
+        fx: Float? = null, fy: Float? = null, method: String = "auto", timeoutMs: Long = 10_000
+    ): Result<JSONObject> = runCatching {
+        require(method in setOf("auto", "chooser", "drop")) { "method must be auto, chooser or drop" }
+        val files = resolveUploadFiles(paths)
+        uploadMutex.withLock {
+            val tab = withContext(Dispatchers.Main) { if (tabId.isNullOrBlank()) getActiveTab() else tabs.find { it.id == tabId } }
+                ?: error("Tab not found")
+            val wv = tab.webView ?: error("WebView not initialized for tab")
+            val located = JSONObject(evaluateJs(tab.id, uploadLocateScript(selector, x, y, fx, fy)).getOrThrow())
+            require(located.optBoolean("ok")) { located.optString("error").ifBlank { "Could not find the upload element" } }
+            val result = JSONObject().put("files", JSONArray(files.map { it.name })).put("target", located.optString("tag"))
+                .put("file_input", located.optBoolean("file_input"))
+            try {
+                if (method != "drop" && located.optBoolean("tappable", true)) {
+                    val picked = CompletableDeferred<JSONObject>()
+                    pendingChooser = PendingChooser(wv, files.map { Uri.fromFile(it) }, picked)
+                    try {
+                        dispatchTap(tab.id, located.getDouble("fx").toFloat(), located.getDouble("fy").toFloat()).getOrThrow()
+                        val info = withTimeoutOrNull(timeoutMs) { picked.await() }
+                        if (info != null) {
+                            result.put("method", "chooser").put("given", info.getInt("given")).put("multiple", info.getBoolean("multiple"))
+                                .put("accept", info.getJSONArray("accept"))
+                            if (info.getInt("given") < files.size) result.put("note", "The page takes one file at a time; only the first was given")
+                            return@withLock result
+                        }
+                    } finally {
+                        if (pendingChooser?.result === picked) pendingChooser = null
+                    }
+                    require(method == "auto") {
+                        "The page did not open a file chooser within ${timeoutMs / 1000} s. Point at the element that opens it (its upload button or <input type=file>), or use method \"drop\" for a drag-and-drop area."
+                    }
+                }
+                require(files.sumOf { it.length() } <= MAX_IN_PAGE_UPLOAD_BYTES) {
+                    "No file chooser opened, and the files are too large to build inside the page (25 MiB). Point at the element that opens the file chooser."
+                }
+                val payload = JSONArray(files.map { file ->
+                    JSONObject().put("name", file.name)
+                        .put("type", android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "application/octet-stream")
+                        .put("data", android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP))
+                })
+                val done = JSONObject(evaluateJs(tab.id, uploadInPageScript(payload)).getOrThrow())
+                require(done.optBoolean("ok")) { done.optString("error").ifBlank { "In-page upload failed" } }
+                result.put("method", done.getString("method")).put("given", done.getInt("given"))
+                    .put("note", "No file chooser opened; the files were built inside the page. Some sites ignore that, so check the page shows them.")
+            } finally {
+                evaluateJs(tab.id, "window.__agUploadRestore&&window.__agUploadRestore();delete window.__agUploadTarget;true")
+            }
+        }
+    }
+
+    private fun resolveUploadFiles(paths: List<String>): List<File> {
+        require(paths.size in 1..20) { "Pass 1–20 file paths" }
+        val context = appContext ?: error("Browser is not initialized")
+        val home = com.example.gemini.data.local.LocalEnvironmentManager.getHomeDir(context).canonicalFile
+        val roots = listOf(home, File("/sdcard").canonicalFile, File("/storage/emulated/0").canonicalFile)
+        return paths.map { path ->
+            val raw = when {
+                path == "~" || path.startsWith("~/") -> File(home, path.removePrefix("~").removePrefix("/"))
+                File(path).isAbsolute -> File(path)
+                else -> File(home, path)
+            }
+            val file = raw.canonicalFile
+            require(roots.any { file.path.startsWith(it.path + File.separator) }) { "File must be inside the terminal home or shared storage: $path" }
+            require(file.isFile) { "File not found: $path" }
+            file
+        }
+    }
+
+    /** Finds the upload element, makes it tappable and returns its centre as viewport fractions (see dispatchTap). */
+    private fun uploadLocateScript(selector: String?, x: Float?, y: Float?, fx: Float?, fy: Float?): String {
+        fun num(v: Float?) = v?.toString() ?: "null"
+        return """
+        (function(sel, px, py, ffx, ffy) {
+          const shown = el => { const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+            return r.width >= 4 && r.height >= 4 && s.visibility !== 'hidden' && s.display !== 'none' && parseFloat(s.opacity || '1') > 0.05; };
+          const name = el => el.id ? '#' + el.id : el.name ? el.tagName.toLowerCase() + '[name="' + el.name + '"]' : el.tagName.toLowerCase();
+          const v = window.visualViewport;
+          let el = null;
+          if (sel) { el = document.querySelector(sel); if (!el) return {ok:false, error:'No element matches ' + sel}; }
+          else if (px != null) el = document.elementFromPoint(px, py);
+          else if (ffx != null) el = document.elementFromPoint((v ? v.offsetLeft : 0) + ffx * (v ? v.width : innerWidth), (v ? v.offsetTop : 0) + ffy * (v ? v.height : innerHeight));
+          else {
+            const inputs = [...document.querySelectorAll('input[type=file]')].filter(i => !i.disabled);
+            if (!inputs.length) return {ok:false, error:'No file input on this page. Pass the selector (or x/y) of its upload button.'};
+            if (inputs.length > 1) return {ok:false, error:'Several file inputs on this page; pass a selector, e.g. ' + inputs.slice(0, 8).map(name).join(', ')};
+            el = inputs[0];
+          }
+          if (!el) return {ok:false, error:'No element at that point'};
+          const input = el.matches('input[type=file]') ? el : (el.control && el.control.matches && el.control.matches('input[type=file]') ? el.control : null);
+          window.__agUploadTarget = el;
+          const base = {ok:true, tag:el.tagName.toLowerCase(), file_input:!!input, multiple:!!(input && input.multiple), accept:input ? input.accept : ''};
+          let overlaid = false;
+          if (input && !shown(el)) {
+            // A hidden file input: lay it over the page just for the tap, restored afterwards
+            const saved = input.getAttribute('style');
+            window.__agUploadRestore = () => { if (saved === null) input.removeAttribute('style'); else input.setAttribute('style', saved); delete window.__agUploadRestore; };
+            input.setAttribute('style', (saved || '') + ';position:fixed!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;' +
+              'opacity:0.01!important;z-index:2147483647!important;display:block!important;visibility:visible!important;pointer-events:auto!important');
+            el = input; overlaid = true; window.__agUploadTarget = input;
+            if (!shown(input)) { window.__agUploadRestore(); return Object.assign(base, {tappable:false}); }
+          } else el.scrollIntoView({block:'center', inline:'center', behavior:'instant'});
+          const r = el.getBoundingClientRect();
+          const cx = (r.left + r.width / 2 - (v ? v.offsetLeft : 0)) / (v ? v.width : innerWidth);
+          const cy = (r.top + r.height / 2 - (v ? v.offsetTop : 0)) / (v ? v.height : innerHeight);
+          if (!(cx >= 0 && cx <= 1 && cy >= 0 && cy <= 1)) return Object.assign(base, {tappable:false});
+          return Object.assign(base, {tappable:true, overlaid, fx:cx, fy:cy});
+        })(${selector?.let { JSONObject.quote(it) } ?: "null"}, ${num(x)}, ${num(y)}, ${num(fx)}, ${num(fy)})
+        """.trimIndent()
+    }
+
+    /** Fallback without a chooser: assigns the files to the file input, or drops them on a drag-and-drop area. */
+    private fun uploadInPageScript(files: JSONArray) = """
+        (function(files) {
+          const el = window.__agUploadTarget;
+          if (!el || !el.isConnected) return {ok:false, error:'The upload element is gone'};
+          const input = el.matches('input[type=file]') ? el : (el.control && el.control.matches && el.control.matches('input[type=file]') ? el.control : null);
+          const dt = new DataTransfer();
+          for (const f of (input && !input.multiple) ? files.slice(0, 1) : files) {
+            const bin = atob(f.data), bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            dt.items.add(new File([bytes], f.name, {type:f.type, lastModified:Date.now()}));
+          }
+          if (input) {
+            input.files = dt.files;
+            input.dispatchEvent(new Event('input', {bubbles:true}));
+            input.dispatchEvent(new Event('change', {bubbles:true}));
+            return {ok:true, method:'assign', given:dt.files.length};
+          }
+          for (const type of ['dragenter', 'dragover', 'drop']) el.dispatchEvent(new DragEvent(type, {bubbles:true, cancelable:true, dataTransfer:dt}));
+          return {ok:true, method:'drop', given:dt.files.length};
+        })($files)
+    """.trimIndent()
 
     /**
      * Sends a real key press (e.g. KeyEvent.KEYCODE_ESCAPE) to the WebView.

@@ -1694,10 +1694,14 @@ fun ChatScreen(
                     val isSlashActive = isSlashCommand && !inputText.substring(slashIndex).contains(" ")
                     val slashQuery = if (isSlashActive) inputText.substring(slashIndex + 1) else ""
 
-                    val slashSuggestions = remember(slashQuery, effectiveSlashCommands, isSlashActive) {
-                        if (!isSlashActive || effectiveSlashCommands.isEmpty()) emptyList()
+                    // `/plu:` browses custom AntiGem plugins and their skills; custom commands join the normal list
+                    val customCommands = com.example.gemini.data.remote.CustomSlashCommands.commands.toList()
+                    val installedPlugins = com.example.gemini.ui.browser.BrowserExtensionManager.instance.extensions.toList()
+                    val slashSuggestions = remember(slashQuery, effectiveSlashCommands, isSlashActive, customCommands, installedPlugins) {
+                        if (!isSlashActive) emptyList()
+                        else if (slashQuery.startsWith("plu:", ignoreCase = true)) com.example.gemini.data.remote.PromptExpansion.pluginSuggestions(slashQuery.substring(4))
                         else {
-                            effectiveSlashCommands.filter { item ->
+                            (com.example.gemini.data.remote.PromptExpansion.baseSlashItems() + effectiveSlashCommands).filter { item ->
                                 slashQuery.isBlank() ||
                                 item.name.contains(slashQuery, ignoreCase = true) ||
                                 item.command.removePrefix("/").contains(slashQuery, ignoreCase = true) ||
@@ -1708,7 +1712,7 @@ fun ChatScreen(
 
                     // a Claude command that needs no argument runs on tap (when nothing else is typed and no turn runs)
                     val slashRunsOnTap: (com.example.gemini.data.remote.SlashCommandItem) -> Boolean = { item ->
-                        isClaudeChat && item.type != "app" && item.argumentHint.isBlank() &&
+                        isClaudeChat && item.type != "app" && item.type != "plugin" && item.type != "custom" && item.argumentHint.isBlank() &&
                             inputText.substring(0, slashIndex.coerceAtLeast(0)).isBlank() && !isActivelyRunning && attachments.isEmpty()
                     }
                     androidx.compose.animation.AnimatedVisibility(
@@ -1745,7 +1749,8 @@ fun ChatScreen(
                                         keyboardController?.hide()
                                     }
                                     else -> {
-                                        val newText = "$before${item.command} "
+                                        // "/plu:" and "/plu:<plugin>:" keep the picker open for the next level
+                                        val newText = if (item.command.endsWith(":")) "$before${item.command}" else "$before${item.command} "
                                         val tfv = TextFieldValue(newText, selection = TextRange(newText.length))
                                         textFieldValue = tfv
                                         viewModel.setDraft(activeConversationKey, tfv)

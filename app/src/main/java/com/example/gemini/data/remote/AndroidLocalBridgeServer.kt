@@ -29,10 +29,14 @@ class AndroidLocalBridgeServer private constructor() {
         BROWSER("browser_mcp"),
         TERMINAL("terminal_mcp"),
         GOOGLE_FLOW("google_flow_mcp"),
-        EXTENSION_DEVELOPER("webview_extension_developer_mcp")
+        EXTENSION_DEVELOPER("custom_plugin_developer_mcp")
     }
 
     companion object {
+        /** The plugin developer MCP's preset name; older installs added it as [LEGACY_DEVELOPER_MCP_NAME] (same URL, still works). */
+        const val DEVELOPER_MCP_NAME = "custom_plugin_developer_mcp"
+        const val LEGACY_DEVELOPER_MCP_NAME = "webview_extension_developer_mcp"
+        fun isDeveloperMcpName(name: String) = name == DEVELOPER_MCP_NAME || name == LEGACY_DEVELOPER_MCP_NAME
         private const val TAG = "AndroidBridgeServer"
         private const val MAX_HEADER_BYTES = 64 * 1024
         /** Uploads arrive as base64 in JSON: allow large bodies, but not unbounded ones. */
@@ -62,6 +66,8 @@ class AndroidLocalBridgeServer private constructor() {
         BrowserSessionManager.instance.init(context)
         LocalTerminalBridge.instance.init(context)
         com.example.gemini.ui.browser.BrowserExtensionManager.instance.init(context)
+        com.example.gemini.data.remote.CustomSlashCommands.init(context)
+        com.example.gemini.ui.browser.PluginRepositories.init(context)
 
         serverScope.launch {
             try {
@@ -626,6 +632,31 @@ class AndroidLocalBridgeServer private constructor() {
             })
         })
 
+        // 7b. Browser Upload File
+        tools.put(JSONObject().apply {
+            put("name", "browser_upload_file")
+            put("description", "Upload local files to the page like a person picking them in a file dialog: taps the page's upload button or file input with a real touch and hands the files to the site's own file chooser, with no picker shown. Omit selector/x/y when the page has a single file input. For drag-and-drop-only areas it falls back to dropping the files (up to 25 MiB). Check the page afterwards (e.g. browser_screenshot) to confirm the site accepted them.")
+            put("inputSchema", JSONObject().apply {
+                put("type", "object")
+                put("properties", JSONObject().apply {
+                    put("tab_id", JSONObject().apply { put("type", "string") })
+                    put("file_paths", JSONObject().apply {
+                        put("type", "array"); put("items", JSONObject().put("type", "string"))
+                        put("description", "1–20 local files: absolute, ~/... or relative to the terminal home; inside the terminal home or /sdcard")
+                    })
+                    put("selector", JSONObject().apply { put("type", "string"); put("description", "CSS selector of the upload button, its <label> or the <input type=file> (hidden inputs work)") })
+                    put("x", JSONObject().apply { put("type", "number"); put("description", "Instead of selector: X of the upload button in CSS pixels (as browser_inspect_dom reports)") })
+                    put("y", JSONObject().apply { put("type", "number"); put("description", "Y of the upload button in CSS pixels") })
+                    put("method", JSONObject().apply {
+                        put("type", "string"); put("enum", JSONArray().put("auto").put("chooser").put("drop"))
+                        put("description", "auto (default): file chooser, else in-page fallback; chooser: only the real file chooser; drop: only build the files in the page (drag-and-drop areas)")
+                    })
+                    put("timeout_seconds", JSONObject().apply { put("type", "integer"); put("description", "How long to wait for the page to open its file chooser (1–30, default 10)") })
+                })
+                put("required", JSONArray().apply { put("file_paths") })
+            })
+        })
+
         // 8. Browser Evaluate JS
         tools.put(JSONObject().apply {
             put("name", "browser_eval_js")
@@ -950,6 +981,20 @@ class AndroidLocalBridgeServer private constructor() {
                         }
                     }
                 }
+                "browser_upload_file" -> {
+                    val paths = args.optJSONArray("file_paths")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+                    val res = bManager.uploadFiles(
+                        args.optString("tab_id").ifBlank { null }, paths, args.optString("selector").ifBlank { null },
+                        if (args.has("x")) args.optDouble("x").toFloat() else null, if (args.has("y")) args.optDouble("y").toFloat() else null,
+                        method = args.optString("method").ifBlank { "auto" },
+                        timeoutMs = args.optInt("timeout_seconds", 10).coerceIn(1, 30) * 1000L
+                    )
+                    if (res.isFailure) return JSONObject().apply {
+                        put("isError", true)
+                        put("content", JSONArray().put(JSONObject().put("type", "text").put("text", "Upload failed: ${res.exceptionOrNull()?.message}")))
+                    }
+                    content.put(JSONObject().put("type", "text").put("text", res.getOrThrow().toString(2)))
+                }
                 "browser_eval_js" -> {
                     val tabId = args.optString("tab_id").ifBlank { null }
                     val script = args.optString("script", "")
@@ -1263,6 +1308,19 @@ class AndroidLocalBridgeServer private constructor() {
                     if (res.isFailure) put("error", res.exceptionOrNull()?.message)
                 }.toString())
             }
+            "upload" -> {
+                // chrome.antigem.uploadFiles from extensions; paths were checked by the extension host
+                val paths = bodyJson.optJSONArray("file_paths")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+                val res = bManager.uploadFiles(
+                    bodyJson.optString("tab_id").ifBlank { null }, paths, bodyJson.optString("selector").ifBlank { null },
+                    fx = if (bodyJson.has("fx")) bodyJson.getDouble("fx").toFloat() else null,
+                    fy = if (bodyJson.has("fy")) bodyJson.getDouble("fy").toFloat() else null,
+                    method = bodyJson.optString("method").ifBlank { "auto" },
+                    timeoutMs = bodyJson.optLong("timeout_ms", 10_000).coerceIn(1_000, 30_000)
+                )
+                sendResponse(out, if (res.isSuccess) 200 else 400, "application/json",
+                    (res.getOrNull()?.put("success", true) ?: JSONObject().put("success", false).put("error", res.exceptionOrNull()?.message)).toString())
+            }
             "key" -> {
                 val tabId = bodyJson.optString("tab_id").ifBlank { null }
                 val key = bodyJson.optString("key", "")
@@ -1335,11 +1393,9 @@ class AndroidLocalBridgeServer private constructor() {
                 sendResponse(out, 200, "application/json", extension.toJsonObject().toString())
             }
             "extensions/install" -> {
-                val file = java.io.File(bodyJson.getString("zip_path")).canonicalFile
-                val home = com.example.gemini.data.local.LocalEnvironmentManager.getHomeDir(appContext!!).canonicalPath
-                require(file.path.startsWith("$home/") || file.path.startsWith("/storage/emulated/0/") || file.path.startsWith("/sdcard/")) { "ZIP must be in terminal home or shared storage" }
-                val extension = com.example.gemini.ui.browser.BrowserExtensionManager.instance.installArchive(
-                    android.net.Uri.fromFile(file), bodyJson.getString("folder_name"),
+                // The IDE bridge checks the ZIP is in the terminal home or shared storage, unpacks and installs it
+                val extension = com.example.gemini.ui.browser.BrowserExtensionManager.instance.installDraft(
+                    null, bodyJson.getString("zip_path"), bodyJson.getString("folder_name"),
                     bodyJson.optString("update_id").takeIf { it.isNotBlank() }
                 )
                 sendResponse(out, 200, "application/json", extension.toJsonObject().toString())

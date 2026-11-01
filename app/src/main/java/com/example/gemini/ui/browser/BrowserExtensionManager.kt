@@ -29,21 +29,82 @@ data class BrowserExtension(
     val version: String,
     val description: String,
     val toolCount: Int = 0,
+    val skillCount: Int = 0,
     val folderName: String = "",
     val permissions: List<String> = emptyList(),
     val isEnabled: Boolean = true,
-    val dirPath: String = ""
+    val dirPath: String = "",
+    /** Absolute path of the manifest's icon, blank if none. */
+    val iconPath: String = "",
+    /** Where a repository install came from; null for ZIP and bundled plugins. */
+    val source: PluginSource? = null,
+    /** Where the folder lives: [Location.INSTALLED] (ZIP/repository installs), built into the app, or a user folder. */
+    val location: Location = Location.INSTALLED,
+    val skills: List<ExtensionSkill> = emptyList()
 ) {
+    enum class Location { INSTALLED, BUNDLED, USER_FOLDER }
+
+    companion object {
+        /** A plugin as listed by the IDE bridge's /api/custom-plugins. */
+        fun fromJson(o: JSONObject) = BrowserExtension(
+            id = o.getString("id"), name = o.optString("name"), version = o.optString("version"), description = o.optString("description"),
+            toolCount = o.optInt("toolCount"), skillCount = o.optInt("skillCount"), folderName = o.optString("folderName"),
+            permissions = o.optJSONArray("permissions")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
+            isEnabled = o.optBoolean("isEnabled", true), dirPath = o.optString("dirPath"), iconPath = o.optString("iconPath"),
+            source = o.optJSONObject("source")?.let { PluginSource(it.optString("repo"), it.optString("ref"), it.optString("path")) },
+            location = when (o.optString("location")) { "bundled" -> Location.BUNDLED; "user_folder" -> Location.USER_FOLDER; else -> Location.INSTALLED },
+            skills = o.optJSONArray("skills")?.let { a ->
+                (0 until a.length()).map { i -> a.getJSONObject(i).let { ExtensionSkill(it.optString("name"), it.optString("title"), it.optString("description"), it.optString("path"), it.optString("detailDir").ifBlank { null }) } }
+            }.orEmpty()
+        )
+    }
+
     fun toJsonObject(): JSONObject = JSONObject().apply {
         put("id", id)
         put("name", name)
         put("version", version)
         put("description", description)
         put("toolCount", toolCount)
+        put("skillCount", skillCount)
         put("folderName", folderName)
         put("permissions", JSONArray(permissions))
         put("isEnabled", isEnabled)
         put("dirPath", dirPath)
+        put("iconPath", iconPath)
+        source?.let { put("source", it.toJson()) }
+    }
+}
+
+/** Written as `.antigem-source.json` into plugins installed from a repository, so updates can be found later. */
+data class PluginSource(val repo: String, val ref: String, val path: String) {
+    fun toJson(): JSONObject = JSONObject().put("repo", repo).put("ref", ref).put("path", path)
+
+    companion object {
+        const val FILE = ".antigem-source.json"
+        fun read(dir: File): PluginSource? = runCatching {
+            JSONObject(File(dir, FILE).readText()).let { PluginSource(it.getString("repo"), it.optString("ref"), it.getString("path")) }
+        }.getOrNull()
+    }
+}
+
+/** The manifest's icon: `icon` (one file) or the largest entry of Chrome-style `icons` ({"48": "icon48.png"}). */
+object PluginIcons {
+    private val TYPES = setOf("png", "jpg", "jpeg", "webp", "svg")
+
+    fun relative(manifest: JSONObject): String? {
+        manifest.optString("icon").takeIf { it.isNotBlank() }?.let { return it }
+        val icons = manifest.optJSONObject("icons") ?: return null
+        return icons.keys().asSequence().maxByOrNull { it.toIntOrNull() ?: 0 }?.let { icons.optString(it) }?.takeIf { it.isNotBlank() }
+    }
+
+    fun resolve(dir: File, manifest: JSONObject): String = resolve(dir, relative(manifest))
+
+    /** Absolute path of icon file [name] inside [dir], blank if it is missing, outside the package or not an image. */
+    fun resolve(dir: File, name: String?): String {
+        if (name.isNullOrBlank()) return ""
+        if (name.substringAfterLast('.').lowercase() !in TYPES) return ""
+        val file = File(dir, name).canonicalFile
+        return if (file.path.startsWith(dir.canonicalPath + File.separator) && file.isFile) file.path else ""
     }
 }
 
@@ -73,7 +134,7 @@ class BrowserExtensionManager private constructor() {
         appContext = context.applicationContext
         scope.launch {
             runCatching { ensureHost() }.onFailure { lastError = it.message; Log.e(TAG, "Extension host failed", it) }
-            withContext(Dispatchers.Main) { loadExtensions() }
+            loadExtensions()
         }
     }
 
@@ -211,125 +272,58 @@ class BrowserExtensionManager private constructor() {
         return list.distinctBy { it.absolutePath }
     }
 
-    private fun getConfigFile(extDir: File): File = File(extDir, "extensions.json")
+    private fun getDisabledExtensionIds(extDir: File): Set<String> = runCatching {
+        val arr = JSONObject(File(extDir, "extensions.json").readText()).optJSONArray("disabled") ?: JSONArray()
+        (0 until arr.length()).map { arr.getString(it) }.toSet()
+    }.getOrDefault(emptySet())
 
-    private fun getDisabledExtensionIds(extDir: File): Set<String> {
-        val file = getConfigFile(extDir)
-        if (!file.exists()) return emptySet()
-        return try {
-            val json = JSONObject(file.readText())
-            val arr = json.optJSONArray("disabled") ?: JSONArray()
-            val set = mutableSetOf<String>()
-            for (i in 0 until arr.length()) {
-                set.add(arr.getString(i))
-            }
-            set
-        } catch (e: Exception) {
-            Log.w(TAG, "Error reading extensions config: ${e.message}")
-            emptySet()
-        }
-    }
-
-    private fun saveDisabledExtensionIds(extDir: File, disabled: Set<String>) {
-        require(extDir.mkdirs() || extDir.isDirectory) { "Cannot create extension directory" }
-        val file = getConfigFile(extDir)
-        val temporary = File(extDir, ".extensions-${java.util.UUID.randomUUID()}.tmp")
-        try {
-            temporary.writeText(JSONObject().put("disabled", JSONArray(disabled.toList())).toString(2))
-            check(temporary.renameTo(file)) { "Cannot save extension settings" }
-        } finally { temporary.delete() }
-    }
-
-    fun loadExtensions(): List<BrowserExtension> {
+    /**
+     * Read-only scan of the plugin folders, used only when the IDE bridge can't be reached (e.g. at app start before it
+     * runs) so installed plugins still load into the extension host. Every change goes through [PluginBridge].
+     */
+    private fun scanLocal(): List<BrowserExtension> {
         val ctx = appContext ?: return emptyList()
-        val dirs = getExtensionsDirectories(ctx)
         val loaded = mutableListOf<BrowserExtension>()
         val seenIds = mutableSetOf<String>()
-
-        for (baseDir in dirs) {
-            if (!baseDir.exists() || !baseDir.isDirectory) continue
+        for (baseDir in getExtensionsDirectories(ctx)) {
             val disabled = getDisabledExtensionIds(baseDir)
-
-            val children = baseDir.listFiles() ?: continue
-            for (sub in children) {
-                if (!sub.isDirectory || sub.name.startsWith(".")) continue
-                val manifestFile = File(sub, "manifest.json")
-                if (!manifestFile.exists()) continue
-
-                try {
-                    val manifestStr = manifestFile.readText()
-                    val manifestJson = JSONObject(manifestStr)
-
-                    val id = manifestJson.optString("id", sub.name)
-                    if (!seenIds.add(id)) continue
-                    val name = manifestJson.optString("name", sub.name)
-                    val version = manifestJson.optString("version", "1.0.0")
-                    val description = manifestJson.optString("description", "")
-
-                    // Permissions
-                    val perms = mutableListOf<String>()
-                    val permArr = manifestJson.optJSONArray("permissions")
-                    if (permArr != null) {
-                        for (i in 0 until permArr.length()) {
-                            perms.add(permArr.getString(i))
+            for (sub in baseDir.listFiles().orEmpty().sortedBy { it.name }) {
+                if (!sub.isDirectory || sub.name.startsWith(".") || !File(sub, "manifest.json").isFile) continue
+                runCatching {
+                    val manifest = JSONObject(File(sub, "manifest.json").readText())
+                    val id = manifest.optString("id").ifBlank { sub.name }
+                    if (!seenIds.add(id)) return@runCatching
+                    val skills = ExtensionSkills.list(sub)
+                    loaded += BrowserExtension(
+                        id = id, name = manifest.optString("name").ifBlank { sub.name }, version = manifest.optString("version"),
+                        description = manifest.optString("description"), toolCount = manifest.optJSONArray("mcp_tools")?.length() ?: 0,
+                        skillCount = skills.size, folderName = sub.name,
+                        permissions = manifest.optJSONArray("permissions")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
+                        isEnabled = id !in disabled, dirPath = sub.absolutePath, iconPath = PluginIcons.resolve(sub, manifest),
+                        source = PluginSource.read(sub), skills = skills,
+                        location = when (baseDir.absolutePath) {
+                            File(ctx.filesDir, "browser-extensions").absolutePath -> BrowserExtension.Location.BUNDLED
+                            File(LocalEnvironmentManager.getHomeDir(ctx), "extensions").absolutePath, File(ctx.filesDir, "extensions").absolutePath -> BrowserExtension.Location.INSTALLED
+                            else -> BrowserExtension.Location.USER_FOLDER
                         }
-                    }
-
-                    val ext = BrowserExtension(
-                        id = id,
-                        name = name,
-                        version = version,
-                        description = description,
-                        toolCount = manifestJson.optJSONArray("mcp_tools")?.length() ?: 0,
-                        folderName = sub.name,
-                        permissions = perms,
-                        isEnabled = !disabled.contains(id),
-                        dirPath = sub.absolutePath
                     )
-                    loaded.add(ext)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to parse extension at ${sub.absolutePath}: ${e.message}")
-                }
+                }.onFailure { Log.w(TAG, "Failed to parse extension at ${sub.absolutePath}: ${it.message}") }
             }
         }
-
-        extensions.clear()
-        extensions.addAll(loaded)
         return loaded
     }
 
-    private fun managedRoot() = File(LocalEnvironmentManager.getHomeDir(appContext!!), "extensions").apply { mkdirs() }
-
-    private fun checkedFolder(name: String): String {
-        val value = name.trim()
-        require(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,63}").matches(value) && value != "." && value != "..") { "Use 1–64 letters, numbers, dots, underscores or hyphens for the folder name" }
-        require(value != "runtime") { "The folder name runtime is reserved" }
-        return value
+    /** Reads the plugin list from the IDE bridge (or [scanLocal] if it is not running) and publishes it to [extensions]. */
+    suspend fun loadExtensions(): List<BrowserExtension> {
+        val list = runCatching { PluginBridge.list() }.getOrElse {
+            Log.w(TAG, "IDE bridge plugin list unavailable, scanning locally: ${it.message}")
+            withContext(Dispatchers.IO) { scanLocal() }
+        }
+        withContext(Dispatchers.Main) { extensions.clear(); extensions.addAll(list) }
+        return list
     }
 
-    internal fun validatePackage(root: File): JSONObject {
-        val manifest = JSONObject(File(root, "manifest.json").readText())
-        require(manifest.optInt("manifest_version") in 2..3) { "Only manifest versions 2 and 3 are supported" }
-        require(manifest.optString("name").isNotBlank()) { "Extension name is required" }
-        val tools = manifest.optJSONArray("mcp_tools") ?: error("manifest.json must declare mcp_tools")
-        require(tools.length() > 0) { "Extension must declare at least one MCP tool" }
-        val names = mutableSetOf<String>()
-        for (i in 0 until tools.length()) {
-            val name = tools.getJSONObject(i).getString("name")
-            require(name.isNotBlank() && names.add(name)) { "Duplicate or empty MCP tool name" }
-        }
-        val background = manifest.optJSONObject("background") ?: error("Extension background worker is required")
-        val files = background.optString("service_worker").takeIf { it.isNotBlank() }?.let { listOf(it) }
-            ?: background.optJSONArray("scripts")?.let { array -> (0 until array.length()).map { array.getString(it) } }.orEmpty()
-        require(files.isNotEmpty()) { "Extension background worker is required" }
-        for (relative in files) {
-            val file = File(root, relative).canonicalFile
-            require(file.path.startsWith(root.canonicalPath + File.separator) && file.isFile) { "Missing or invalid background file: $relative" }
-        }
-        return manifest
-    }
-
-    private suspend fun publish() = withContext(Dispatchers.Main) { loadExtensions() }
+    private suspend fun publish() = loadExtensions()
 
     suspend fun refreshExtensions() = withContext(Dispatchers.IO) { extensionMutex.withLock {
         ensureHost()
@@ -357,10 +351,7 @@ class BrowserExtensionManager private constructor() {
                 }
             BrowserAutomationController.release(id)
         }
-        val base = File(extension.dirPath).parentFile!!
-        val disabled = getDisabledExtensionIds(base).toMutableSet()
-        if (enable) disabled.remove(id) else disabled.add(id)
-        saveDisabledExtensionIds(base, disabled)
+        PluginBridge.setEnabled(id, enable)
         publish()
     } }
 
@@ -383,71 +374,79 @@ class BrowserExtensionManager private constructor() {
         publish()
     } }
 
-    suspend fun installArchive(uri: android.net.Uri, folderName: String, updateId: String? = null): BrowserExtension = withContext(Dispatchers.IO) { extensionMutex.withLock {
+    /** The manifest inside a plugin ZIP, to spot an already-installed plugin and show versions before installing. */
+    suspend fun archiveManifest(uri: android.net.Uri): JSONObject =
+        PluginBridge.inspect(appContext ?: error("Extension manager is not initialized"), uri)
+
+    /** [asNew] installs a separate copy whose ID comes from [folderName], even if the ZIP's own ID is already installed. */
+    suspend fun installArchive(uri: android.net.Uri, folderName: String, updateId: String? = null, asNew: Boolean = false): BrowserExtension = withContext(Dispatchers.IO) { extensionMutex.withLock {
         val context = appContext ?: error("Extension manager is not initialized")
-        val folder = checkedFolder(folderName)
         ensureHost()
         val previous = updateId?.let { id -> extensions.firstOrNull { it.id == id } ?: error("Extension not found") }
-        val stage = File(context.cacheDir, "webview-extension-${java.util.UUID.randomUUID()}").apply { mkdirs() }
-        try {
-            val root = context.contentResolver.openInputStream(uri)?.use { WebViewExtensionArchive.extract(it, File(stage, "unpacked")) } ?: error("Cannot read ZIP")
-            require(previous == null || folder == previous.folderName) { "Use Rename folder to change the folder before updating" }
-            val manifest = validatePackage(root)
-            val id = previous?.id ?: manifest.optString("id").ifBlank { folder.replace('.', '_') }
-            require(Regex("[A-Za-z0-9_-]+").matches(id)) { "Invalid extension ID" }
-            require(previous != null || extensions.none { it.id == id }) { "Extension already exists; use Update ZIP" }
-            manifest.put("id", id)
-            File(root, "manifest.json").writeText(manifest.toString(2))
-            val target = File(managedRoot(), folder)
-            require(previous != null || !target.exists()) { "Folder already exists" }
-            require(previous == null || !target.exists() || target.absolutePath == previous.dirPath) { "Folder belongs to another extension" }
-            val backup = File(stage, "previous")
-            val enabled = previous?.isEnabled ?: true
-            if (previous?.isEnabled == true) unloadIfLoaded(id)
-            val existed = target.exists()
-            try {
-                if (existed) require(target.renameTo(backup)) { "Cannot stage previous extension" }
-                root.copyRecursively(target, overwrite = false)
-                if (enabled) hostRequest("/extension/load", JSONObject().put("dir", target.absolutePath))
-                val disabled = getDisabledExtensionIds(managedRoot()).toMutableSet()
-                if (enabled) disabled.remove(id) else disabled.add(id)
-                saveDisabledExtensionIds(managedRoot(), disabled)
-            } catch (error: Exception) {
-                runCatching { hostRequest("/extension/unload", JSONObject().put("id", id)) }
-                if (!existed || backup.exists()) target.deleteRecursively()
-                if (backup.exists()) check(backup.renameTo(target)) { "Failed to restore previous extension" }
-                if (previous?.isEnabled == true) hostRequest("/extension/load", JSONObject().put("dir", previous.dirPath))
-                throw error
-            }
-            publish().first { it.id == id }
-        } finally { stage.deleteRecursively() }
+        activate(PluginBridge.install(context, uri, folderName.trim(), updateId, asNew).plugin, previous)
     } }
 
-    suspend fun renameFolder(id: String, folderName: String): BrowserExtension = withContext(Dispatchers.IO) { extensionMutex.withLock {
-        val name = checkedFolder(folderName)
+    /** Installs or updates folder [path] of a GitHub repository ([repo] as owner/repo[@ref]); the bridge downloads only that folder. */
+    suspend fun installFromRepo(repo: String, path: String, folderName: String, updateId: String?, asNew: Boolean = false): BrowserExtension = withContext(Dispatchers.IO) { extensionMutex.withLock {
         ensureHost()
-        val extension = extensions.firstOrNull { it.id == id } ?: error("Extension not found")
-        val source = File(extension.dirPath)
-        val target = File(managedRoot(), name)
-        if (source.canonicalFile == target.canonicalFile) return@withLock extension
-        require(!target.exists()) { "Folder already exists" }
-        if (extension.isEnabled) unloadIfLoaded(id)
-        val move = source.parentFile?.canonicalFile == managedRoot().canonicalFile
-        try {
-            if (move) require(source.renameTo(target)) { "Cannot rename extension folder" } else source.copyRecursively(target)
-            val manifest = JSONObject(File(target, "manifest.json").readText()).put("id", id)
-            File(target, "manifest.json").writeText(manifest.toString(2))
-            if (extension.isEnabled) hostRequest("/extension/load", JSONObject().put("dir", target.absolutePath))
-            val disabled = getDisabledExtensionIds(managedRoot()).toMutableSet()
-            if (extension.isEnabled) disabled.remove(id) else disabled.add(id)
-            saveDisabledExtensionIds(managedRoot(), disabled)
+        val previous = updateId?.let { id -> extensions.firstOrNull { it.id == id } ?: error("Extension not found") }
+        activate(PluginBridge.repoInstall(repo, path, folderName.trim(), updateId, asNew).plugin, previous)
+    } }
+
+    /** Installs a developer-MCP draft ([projectId]) or a local ZIP ([zipPath]) through the bridge, then loads it. */
+    suspend fun installDraft(projectId: String?, zipPath: String?, folderName: String, updateId: String?): BrowserExtension = withContext(Dispatchers.IO) { extensionMutex.withLock {
+        ensureHost()
+        val previous = updateId?.let { id -> extensions.firstOrNull { it.id == id } ?: error("Extension not found") }
+        activate(PluginBridge.draftInstall(projectId, zipPath, folderName.trim(), updateId).plugin, previous)
+    } }
+
+    /** Loads a plugin the bridge just placed; if it fails to start, the bridge puts the previous files back. */
+    private suspend fun activate(installed: BrowserExtension, previous: BrowserExtension?): BrowserExtension {
+        if (previous?.isEnabled == true) unloadIfLoaded(previous.id)
+        if (installed.isEnabled) try {
+            unloadIfLoaded(installed.id)
+            hostRequest("/extension/load", JSONObject().put("dir", installed.dirPath))
         } catch (error: Exception) {
-            if (move && target.exists()) target.renameTo(source) else target.deleteRecursively()
-            if (extension.isEnabled) hostRequest("/extension/load", JSONObject().put("dir", source.absolutePath))
+            runCatching { unloadIfLoaded(installed.id) }
+            runCatching { PluginBridge.restore(installed.folderName) }
+            if (previous?.isEnabled == true) runCatching { hostRequest("/extension/load", JSONObject().put("dir", previous.dirPath)) }
+            publish()
             throw error
         }
+        runCatching { PluginBridge.commit(installed.folderName) }
+        return publish().firstOrNull { it.id == installed.id } ?: installed
+    }
+
+    suspend fun renameFolder(id: String, folderName: String): BrowserExtension = withContext(Dispatchers.IO) { extensionMutex.withLock {
+        ensureHost()
+        val extension = extensions.firstOrNull { it.id == id } ?: error("Extension not found")
+        if (extension.isEnabled) unloadIfLoaded(id)
+        val renamed = try { PluginBridge.rename(id, folderName.trim()) } catch (error: Exception) {
+            if (extension.isEnabled) runCatching { hostRequest("/extension/load", JSONObject().put("dir", extension.dirPath)) }
+            throw error
+        }
+        if (renamed.isEnabled) hostRequest("/extension/load", JSONObject().put("dir", renamed.dirPath))
         publish().first { it.id == id }
     } }
+
+    /**
+     * Removes a plugin through the IDE bridge (symlinks inside it are removed as links, never followed). Its stored
+     * data (storage.local/sync) is kept for a later reinstall unless [deleteData]. If another root has a plugin with
+     * the same ID (e.g. the bundled copy), that one takes over; bundled plugins come back on the app's next start.
+     */
+    suspend fun uninstall(id: String, deleteData: Boolean) = withContext(Dispatchers.IO) { extensionMutex.withLock {
+        ensureHost()
+        extensions.firstOrNull { it.id == id } ?: error("Extension not found")
+        unloadIfLoaded(id)
+        PluginBridge.remove(id, deleteData)
+        publish().firstOrNull { it.id == id && it.isEnabled }?.let { hostRequest("/extension/load", JSONObject().put("dir", it.dirPath)) }
+    } }
+
+    /** A shareable ZIP of the plugin in the cache (the caller moves or deletes it), built by the IDE bridge. */
+    suspend fun exportZip(id: String): File {
+        val context = appContext ?: error("Extension manager is not initialized")
+        return PluginBridge.export(id, File(context.cacheDir, "plugin-export/${java.util.UUID.randomUUID()}"))
+    }
 
     fun toggleExtension(id: String, enable: Boolean) { scope.launch { runCatching { setEnabled(id, enable) }.onFailure { lastError = it.message } } }
     fun reloadExtension(id: String) { scope.launch { runCatching { reload(id) }.onFailure { lastError = it.message } } }

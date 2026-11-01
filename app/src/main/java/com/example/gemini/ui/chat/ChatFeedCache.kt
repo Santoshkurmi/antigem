@@ -44,7 +44,9 @@ object ChatFeedCache {
                 msgItems.add(ChatFeedItem.Summary(msg))
             }
             MessageRole.USER -> {
-                msgItems.add(ChatFeedItem.User(msg))
+                // Show the slash command the user typed, not the instructions it expanded to
+                val shown = com.example.gemini.data.remote.PromptExpansion.collapse(msg.content)
+                msgItems.add(ChatFeedItem.User(if (shown === msg.content) msg else msg.copy(content = shown)))
             }
             MessageRole.ASSISTANT -> {
                 val durTag = if (msg.thoughtDurationMs != null && msg.thoughtDurationMs > 0) ":${msg.thoughtDurationMs}" else ""

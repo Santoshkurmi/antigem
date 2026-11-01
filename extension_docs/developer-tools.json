@@ -50,7 +50,7 @@
   },
   {
     "name": "webview_extension_create",
-    "description": "Create a new draft in ~/extension-projects/<project_id>/src from the complete hello-mcp template. Does not overwrite an existing draft or install/execute its code. Read docs then edit with write_files.",
+    "description": "Create a new draft in ~/extension-projects/<project_id>/src from the complete hello-mcp template. Does not overwrite an existing draft or install/execute its code. Read docs then edit with write_files. Add skills (skills/<name>.md guides for how to use the tools) to the same draft; see skills.md.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -116,7 +116,7 @@
   },
   {
     "name": "webview_extension_write_files",
-    "description": "Create or replace UTF-8 files in an existing draft src directory. Up to 100 relative paths per call; nested directories are created. Does not change an installed worker until install/update succeeds.",
+    "description": "Create or replace UTF-8 files in an existing draft src directory. Up to 100 relative paths per call; nested directories are created. Does not change an installed worker until install/update succeeds. Skills go in skills/<name>.md, with optional detail files in skills/<name>/.",
     "inputSchema": {
       "type": "object",
       "properties": {

@@ -533,8 +533,8 @@ private fun McpPage(deps: ClaudeSettingsDeps) {
         runCatching { android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) }.getOrNull().orEmpty()
     }
     val presets = listOf(
-        "WebView Extension Developer" to ClaudeMcpAddRequest(
-            name = "webview_extension_developer_mcp", transport = "http",
+        "Custom AntiGem Plugin Developer" to ClaudeMcpAddRequest(
+            name = com.example.gemini.data.remote.AndroidLocalBridgeServer.DEVELOPER_MCP_NAME, transport = "http",
             url = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/extension_developer",
             headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
         ),
@@ -563,9 +563,10 @@ private fun McpPage(deps: ClaudeSettingsDeps) {
     }
     Text("Quick presets", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { chooseWebViewExtension = true }) { Text("+ WebView Extension MCP") }
+        OutlinedButton(onClick = { chooseWebViewExtension = true }) { Text("+ Custom AntiGem Plugin MCP") }
         presets.forEach { (label, req) ->
-            val added = servers.any { it.name == req.name }
+            // The plugin developer may already be added under its old name
+            val added = servers.any { it.name == req.name || (com.example.gemini.data.remote.AndroidLocalBridgeServer.isDeveloperMcpName(req.name) && com.example.gemini.data.remote.AndroidLocalBridgeServer.isDeveloperMcpName(it.name)) }
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),

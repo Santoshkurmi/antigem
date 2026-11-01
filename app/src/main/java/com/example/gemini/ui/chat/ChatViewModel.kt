@@ -12,6 +12,7 @@ import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.AgyHubClient
 import com.example.gemini.data.remote.AntigravityApiService
 import com.example.gemini.data.remote.GoogleOAuthManager
+import com.example.gemini.data.remote.PromptExpansion
 import com.example.gemini.data.remote.StreamEvent
 import com.example.gemini.domain.model.AgentKind
 import com.example.gemini.domain.model.AiModel
@@ -274,7 +275,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun selectModel(modelId: String) = if (isClaudeActive) claudeBackend.selectModel(modelId) else agyBackend.selectModel(modelId)
-    fun sendMessage(content: String) = if (isClaudeActive) claudeBackend.sendMessage(content) else agyBackend.sendMessage(content)
+    /** `/plu:` plugin skills and custom slash commands are expanded here, for both agents. */
+    fun sendMessage(content: String) = PromptExpansion.expand(content).let { if (isClaudeActive) claudeBackend.sendMessage(it) else agyBackend.sendMessage(it) }
     val isTranscribingAudio = agyBackend.isTranscribingAudio
     fun transcribeAudioFile(file: java.io.File, onDone: (String) -> Unit, onError: (String) -> Unit) = agyBackend.transcribeAudioFile(file, onDone, onError)
     fun retryMessage(messageId: String) = if (isClaudeActive) claudeBackend.regenerate(messageId) else agyBackend.retryMessage(messageId)
@@ -283,13 +285,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             claudeNotSupported("Editing a sent message")
             return null
         }
-        return agyBackend.prepareEditMessage(messageId)
+        return agyBackend.prepareEditMessage(messageId)?.let(PromptExpansion::collapse)
     }
-    fun revertAndEditLastUserMessage(targetMsg: ChatMessage, onRestored: (String) -> Unit) = if (isClaudeActive) claudeBackend.editMessage(targetMsg.id, restoreCode = false, onRestored = onRestored) else agyBackend.revertAndEditLastUserMessage(targetMsg, onRestored)
+    fun revertAndEditLastUserMessage(targetMsg: ChatMessage, onRestored: (String) -> Unit) = if (isClaudeActive) claudeBackend.editMessage(targetMsg.id, restoreCode = false) { onRestored(PromptExpansion.collapse(it)) } else agyBackend.revertAndEditLastUserMessage(targetMsg) { onRestored(PromptExpansion.collapse(it)) }
 
     /** Claude: edit a sent prompt in a copy of the chat that ends before it; optionally restore the files changed since. */
     fun editClaudeMessage(targetMsg: ChatMessage, restoreCode: Boolean, onRestored: (String) -> Unit) =
-        claudeBackend.editMessage(targetMsg.id, restoreCode, onRestored)
+        claudeBackend.editMessage(targetMsg.id, restoreCode) { onRestored(PromptExpansion.collapse(it)) }
 
     /** Sidebar export / share of a Claude chat that is not open. */
     suspend fun loadClaudeMessages(conversationId: String): List<ChatMessage> = claudeBackend.loadMessages(conversationId)

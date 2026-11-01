@@ -6,15 +6,16 @@
 | --- | --- |
 | `manifest_version` | `3` preferred; `2` accepts background script arrays. |
 | `id` | Stable `[A-Za-z0-9_-]+`. Explicit IDs are recommended. ZIP installation supplies one when absent; folder rename preserves it. |
-| `name`, `version`, `description` | Display metadata. Install requires a nonempty name. Use a changed version for updates. |
+| `name`, `version`, `description` | Display metadata. Install requires a nonempty name. `version` is optional but recommended: use dotted numbers such as `1.2.0` and raise it on every update. The app shows it on the plugin card and compares installed vs. ZIP version (newer, same, older) before updating; without it users see "no version" and cannot tell an old package from a new one. |
 | `background.service_worker` | Relative worker filename. |
 | `background.type` | `"module"` enables relative ES-module imports. Otherwise classic script execution. |
 | `background.scripts` | MV2 classic script array, in execution order; use instead of service_worker. No HTML background pages. |
-| `mcp_tools` | Required nonempty array for ZIP install. Each entry has a unique `name`, `description`, `inputSchema` JSON schema. Names are unique within this extension; another extension may reuse them. The worker must validate its actual arguments. |
+| `mcp_tools` | Nonempty array, required for ZIP install unless the package has [`skills/*.md`](skills.md); a skills-only package needs no background worker. Each entry has a unique `name`, `description`, `inputSchema` JSON schema. Names are unique within this extension; another extension may reuse them. The worker must validate its actual arguments. |
 | `permissions` | Permission names: `storage`, `scripting`, `debugger`, `downloads`, `alarms`, `cookies`, `antigemFiles`; `activeTab` allows the active tab. `tabs` is accepted for compatibility; basic tab enumeration does not currently enforce it. MV2 URL patterns are accepted here. |
 | `host_permissions` | URL match patterns for page scripting/debugging/cookies/automation. Prefer the narrow origins needed. |
 | `content_scripts` | `matches`, `exclude_matches`, relative `js`/`css` arrays, `run_at`, `all_frames`, `world`. See limitations below. |
 | `default_locale` | Loads `_locales/<locale>/messages.json`. Only that locale is selected; no locale fallback negotiation. |
+| `icon`, `icons` | Optional plugin icon shown in the app's plugin list, MCP chooser and `/plu` picker. Either `"icon": "icon.png"` or Chrome-style `"icons": {"48": "icons/48.png", "128": "icons/128.png"}` (the largest is used). PNG, JPG, WebP or SVG inside the package; a square 128×128 px or larger PNG works best. |
 | `action`, `browser_action`, `side_panel`, `options_page` | Do not create app UI. Nonvisual action metadata may be stored for compatibility. UI opening rejects. |
 
 Do not depend on unlisted manifest keys. CRX signatures, extension-store updates, native messaging hosts, declarativeNetRequest rules and browser-specific background pages are not implemented.

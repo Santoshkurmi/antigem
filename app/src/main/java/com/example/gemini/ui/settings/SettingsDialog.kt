@@ -87,7 +87,8 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     MAIN("Settings & Preferences", "Configure your AntiGem experience"),
     APPEARANCE("Appearance & Theme", "Theme, dark mode, and chat font scaling"),
     SERVERS("Servers & Connectivity", "Configure AGY Hub and IDE Bridge endpoints"),
-    WEBVIEW_EXTENSIONS("WebView Extensions", "Install and manage MCP extensions for the browser"),
+    WEBVIEW_EXTENSIONS("Custom AntiGem Plugins", "Install and manage plugins: MCP tools and skills"),
+    SLASH_COMMANDS("Slash Commands", "Your own / commands and what they expand to"),
     MCP("MCP Servers", "Model Context Protocol tools & integrations"),
     SKILLS_PLUGINS("Skills & Plugins", "Agent capabilities, Google plugins, and extensions"),
     AUTOMATION("Automation & Device Tools", "Browser & Terminal AI agent permissions"),
@@ -414,6 +415,8 @@ fun SettingsDialog(
 
                     SettingsSection.WEBVIEW_EXTENSIONS -> WebViewExtensionsScreen(onChanged = onRefreshMcpServers)
 
+                    SettingsSection.SLASH_COMMANDS -> CustomSlashCommandsScreen()
+
                     SettingsSection.MCP -> McpSubScreen(
                         mcpServers = mcpServers,
                         isLoading = isMcpLoading,
@@ -638,11 +641,21 @@ private fun MainSettingsMenu(
         SettingsCategoryCard(
             icon = Icons.Outlined.Extension,
             iconTint = MaterialTheme.colorScheme.primary,
-            title = "WebView Extensions",
-            subtitle = "Install ZIP, update, rename, enable or disable MCP extensions",
+            title = "Custom AntiGem Plugins",
+            subtitle = "Install ZIP, update, rename, enable or disable plugins with MCP tools and skills",
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.WEBVIEW_EXTENSIONS) }
+        )
+
+        SettingsCategoryCard(
+            icon = Icons.Outlined.Terminal,
+            iconTint = MaterialTheme.colorScheme.primary,
+            title = "Slash Commands",
+            subtitle = "Create / commands that expand into longer prompts or attach a plugin skill",
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.SLASH_COMMANDS) }
         )
 
         if (agyOn) {
@@ -2631,8 +2644,8 @@ private fun McpSubScreen(
                 showDialog = true
             }
             val presets = listOf(
-                Triple("WebView Extension Developer", "SSE", com.example.gemini.domain.model.McpServerSpec(
-                    serverName = "webview_extension_developer_mcp",
+                Triple("Custom AntiGem Plugin Developer", "SSE", com.example.gemini.domain.model.McpServerSpec(
+                    serverName = com.example.gemini.data.remote.AndroidLocalBridgeServer.DEVELOPER_MCP_NAME,
                     serverUrl = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/extension_developer",
                     headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
                 )),
@@ -2656,7 +2669,7 @@ private fun McpSubScreen(
                 shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { chooseWebViewExtension = true }
-            ) { Text("+ WebView Extension MCP", modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), fontSize = 11.5.sp, fontWeight = FontWeight.Medium) }
+            ) { Text("+ Custom AntiGem Plugin MCP", modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), fontSize = 11.5.sp, fontWeight = FontWeight.Medium) }
             presets.forEach { (pName, typeBadge, spec) ->
                 Surface(
                     shape = RoundedCornerShape(8.dp),
@@ -2665,7 +2678,9 @@ private fun McpSubScreen(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
-                            serverToEdit = spec
+                            // Already added (the plugin developer also under its old name): edit that one instead of adding a duplicate
+                            serverToEdit = mcpServers.firstOrNull { it.name == spec.serverName ||
+                                (com.example.gemini.data.remote.AndroidLocalBridgeServer.isDeveloperMcpName(spec.serverName) && com.example.gemini.data.remote.AndroidLocalBridgeServer.isDeveloperMcpName(it.name)) }?.spec ?: spec
                             showDialog = true
                         }
                 ) {
@@ -8008,7 +8023,7 @@ private fun AutomationSubScreen(
                 ) {
                     val browserTools = listOf(
                         "browser_open_url", "browser_set_view_mode", "browser_screenshot", "browser_inspect_dom",
-                        "browser_interact", "browser_eval_js", "browser_get_console_logs",
+                        "browser_interact", "browser_upload_file", "browser_eval_js", "browser_get_console_logs",
                         "browser_list_tabs", "browser_switch_tab", "browser_close_tab"
                     )
                     browserTools.forEach { tool ->
@@ -8225,7 +8240,7 @@ private fun AutomationSubScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "This switch controls the legacy Google Flow endpoint only. Install, enable or disable the current extension in Settings → WebView Extensions, then choose it in MCP settings. Tool lists come from the installed extension.",
+                    text = "This switch controls the legacy Google Flow endpoint only. Install, enable or disable the current plugin in Settings → Custom AntiGem Plugins, then choose it in MCP settings. Tool lists come from the installed extension.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )

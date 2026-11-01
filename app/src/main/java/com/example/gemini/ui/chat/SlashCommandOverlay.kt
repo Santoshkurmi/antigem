@@ -50,6 +50,8 @@ private data class SlashGroup(val title: String, val icon: ImageVector, val colo
 private fun groupOf(type: String): SlashGroup = when (type) {
     "app" -> SlashGroup("Opens in the app", Icons.AutoMirrored.Outlined.OpenInNew, AgyAccent)
     "command" -> SlashGroup("Commands", Icons.Outlined.Terminal, ClaudeTerracotta)
+    "custom" -> SlashGroup("Custom commands", Icons.Outlined.AutoAwesome, ClaudeTerracotta)
+    "plugin" -> SlashGroup("Custom AntiGem plugins", Icons.Outlined.Extension, AgyAccent)
     else -> SlashGroup("Skills & plugins", Icons.Outlined.Extension, QuotaGreen)
 }
 
@@ -65,7 +67,7 @@ fun SlashCommandOverlay(
     onPick: (SlashCommandItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val order = listOf("app", "command")
+    val order = listOf("plugin", "custom", "app", "command")
     val grouped = items.groupBy { if (it.type in order) it.type else "skill" }
         .toList()
         .sortedBy { (type, _) -> order.indexOf(type).let { if (it < 0) order.size else it } }
@@ -123,7 +125,9 @@ private fun SlashRow(item: SlashCommandItem, group: SlashGroup, query: String, r
             Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(group.color.copy(alpha = 0.13f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(if (item.type == "skill" && item.pluginName == null) Icons.Outlined.AutoAwesome else group.icon, null, tint = group.color, modifier = Modifier.size(16.dp))
+            // Custom AntiGem plugins carry their icon file in path
+            if (item.type == "plugin" && item.path.isNotBlank()) com.example.gemini.ui.settings.PluginIcon(item.path, 30.dp)
+            else Icon(if (item.type == "skill" && item.pluginName == null) Icons.Outlined.AutoAwesome else group.icon, null, tint = group.color, modifier = Modifier.size(16.dp))
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
