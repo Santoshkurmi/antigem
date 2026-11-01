@@ -40,6 +40,44 @@ object CustomSlashCommands {
                 4. Install with webview_extension_install, list its tools with webview_extension_test, then really exercise the main tools. On errors read webview_extension_logs, fix the draft, raise the version and install again until it works.
                 5. Finish by telling the user the plugin ID, its tools and skills, what you tested, and that they can add it under MCP settings → Custom AntiGem Plugin MCP and point you at it in chat with /plu:<plugin id>.
             """.trimIndent()
+        ),
+        CustomSlashCommand(
+            name = "browser_mcp",
+            description = "Do a task in AntiGem's built-in browser with the Browser Automation MCP",
+            expansion = """
+                Use AntiGem's built-in browser to do this: ${'$'}ARGUMENTS
+                If that is empty or unclear, first ask the user what to do and on which website, then continue.
+
+                1. Check that you have the Browser Automation MCP: its tools start with browser_ (server browser_mcp), such as browser_open_url, browser_screenshot, browser_inspect_dom and browser_interact. It might not be added for this agent yet. If you don't have these tools, stop and tell the user how to add it:
+                   - Antigravity: open AntiGem → Settings → MCP Servers & Tools, tap the "Browser Automation" preset under Quick Presets, and save.
+                   - Claude Code: open AntiGem → Settings → Claude Code → MCP servers, and tap the "Browser Automation" preset.
+                   - Then reload the tools or start a new chat, and send this command again.
+                   Don't try to do the task another way while the tools are missing.
+                2. Open the page with browser_open_url, then look before you act: browser_inspect_dom for the elements and selectors, browser_screenshot to see the page.
+                3. Act with browser_interact (click, type, scroll) using selectors from the latest inspection, and check the result with another inspection or screenshot after each step. Use browser_get_console_logs when something fails.
+                4. Ask the user before anything outward-facing or hard to undo: submitting forms, sending messages, posting, buying, or signing in with their account. If a page needs them to log in or solve a captcha, ask them to do it in the browser and tell you when they're done.
+                5. Finish with what you did and what you found.
+            """.trimIndent()
+        ),
+        CustomSlashCommand(
+            name = "automation",
+            description = "Control this phone (read the screen, tap, type, open apps) with the Android Automation MCP",
+            expansion = """
+                Use Android Automation to do this on the user's phone: ${'$'}ARGUMENTS
+                If that is empty or unclear, first ask the user what they want done, then continue.
+
+                1. Check that you have the Android Automation MCP: its tools start with android_ (server android_automation_mcp), such as android_get_ui_tree, android_screenshot and android_tap. It might not be set up yet. If you don't have these tools, or they return an error saying a permission is missing, stop and tell the user how to set it up:
+                   - Allow it: open AntiGem → Settings → Utilities → Android Automation, tap "Open Accessibility" and turn on "AntiGem Android Automation". On Android 13+, if the switch is greyed out ("Restricted setting"), tap "Open App info" on that page, then ⋮ (top right) → Allow restricted settings, and try again. If ADB is connected, "Turn on with ADB" on that page does it in one tap.
+                   - Optional: for key presses, installing, uninstalling, force-stopping apps and adb shell commands, connect ADB in AntiGem → Settings → Utilities → ADB Connect.
+                   - Add the MCP. For Antigravity: Settings → MCP Servers & Tools, tap the "Android Automation" preset, and save. For Claude Code: Settings → Claude Code → MCP servers, and tap the "Android Automation" preset.
+                   - Then reload the tools or start a new chat, and send this command again.
+                   Don't try to do the task another way while the tools are missing.
+                2. Start with android_get_status. If the screen is off or locked, ask the user to unlock the phone.
+                3. Look before you act: android_get_ui_tree for elements and their ids, android_screenshot when you need to see the screen. Open apps with android_launch_app (android_list_apps to find the package).
+                4. Act with element ids from the latest tree (android_tap, android_type_text, android_scroll), and read the tree again after each step, since ids change whenever the screen does. If a tool says ADB is needed, tell the user how to connect it as above.
+                5. Ask the user before anything destructive or outward-facing: uninstalling apps, deleting data, sending messages or emails, calls, payments, or changing security settings.
+                6. Finish with what you did and the state the phone is in now.
+            """.trimIndent()
         )
     )
 

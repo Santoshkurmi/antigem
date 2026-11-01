@@ -550,6 +550,12 @@ private fun McpPage(deps: ClaudeSettingsDeps) {
             url = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/terminal",
             headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
         ),
+        "Android Automation" to ClaudeMcpAddRequest(
+            name = com.example.gemini.data.remote.AndroidLocalBridgeServer.ANDROID_AUTOMATION_MCP_NAME,
+            transport = "http",
+            url = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/android",
+            headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
+        ),
         "Stitch" to ClaudeMcpAddRequest(name = "stitch", transport = "http", url = "https://stitch.googleapis.com/mcp", headers = mapOf("X-Goog-Api-Key" to ""))
     )
     var chooseWebViewExtension by remember { mutableStateOf(false) }

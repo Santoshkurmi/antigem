@@ -1,9 +1,19 @@
 {
-  "version_code": 117,
-  "version_name": "1.0.17",
+  "version_code": 118,
+  "version_name": "1.0.18",
   "min_supported_version_code": 1,
   "changelog": [
-    "Added google account verification for login option(it detect accouunt need verificaton after that user will figure out and login again once verified)"
+    "Added android automation support(MCP) in settings/utilities to let model control the phone",
+    "Added adb connect and pairing support in settings/utilities",
+    "WebView Extensions are now called Custom AntiGem Plugins",
+    "Plugins can include skills (guides that teach the model how to use the plugin's tools); a plugin can also be skills only",
+    "New /plu: slash command in chat to point the model at a plugin or one of its skills",
+    "New Settings → Slash Commands: create your own / commands, plus a built-in /custom_plugin that helps you create a plugin",
+    "Plugin repositories: add a GitHub repository to browse, install and update its plugins; includes a guide to host your own",
+    "Plugins now show their icon and version, and updates show the installed and new version",
+    "Installing a plugin that is already installed asks whether to update it or install it as a separate copy",
+    "Remove a plugin, or download it as a ZIP to share",
+    "Download the Plugin SDK as a ZIP to build plugins on your PC"
   ],
   "is_critical": false
 }

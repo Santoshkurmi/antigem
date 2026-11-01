@@ -91,7 +91,6 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     SLASH_COMMANDS("Slash Commands", "Your own / commands and what they expand to"),
     MCP("MCP Servers", "Model Context Protocol tools & integrations"),
     SKILLS_PLUGINS("Skills & Plugins", "Agent capabilities, Google plugins, and extensions"),
-    AUTOMATION("Automation & Device Tools", "Browser & Terminal AI agent permissions"),
     TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling"),
     BACKUPS("Backups & Restore", "Backup rootfs environment and AGY chat histories"),
     DATA_PROTECTION("Data Loss Protection", "Uninstall shield & App Info clear data protection"),
@@ -101,10 +100,11 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD"),
     UTILITIES("Utilities", "Handy device tools"),
     ADB_CONNECT("ADB Connect", "Connect the terminal's adb to this phone over Wireless debugging"),
+    ANDROID_AUTOMATION("Android Automation", "Let AI agents see and control this phone"),
     ABOUT("About & Info", "App version, package details, and bridge export");
 
     /** Where Back goes from this section. */
-    val parent: SettingsSection get() = if (this == ADB_CONNECT) UTILITIES else MAIN
+    val parent: SettingsSection get() = if (this == ADB_CONNECT || this == ANDROID_AUTOMATION) UTILITIES else MAIN
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -193,12 +193,6 @@ fun SettingsDialog(
     pluginActionStatusMessage: String? = null,
     pluginActionErrorMessage: String? = null,
     onClearPluginStatus: () -> Unit = {},
-    isBrowserAutomationEnabled: Boolean = true,
-    isTerminalAutomationEnabled: Boolean = true,
-    onToggleBrowserAutomation: (Boolean) -> Unit = {},
-    onToggleTerminalAutomation: (Boolean) -> Unit = {},
-    isFlowAutomationEnabled: Boolean = false,
-    onToggleFlowAutomation: (Boolean) -> Unit = {},
     isFloatingSwitcherEnabled: Boolean = true,
     floatingSwitcherOrientation: String = "HORIZONTAL",
     floatingSwitcherItems: List<String> = listOf("chat", "ide", "terminal", "browser"),
@@ -366,9 +360,6 @@ fun SettingsDialog(
                         mcpServers = mcpServers,
                         allSkills = allSkills,
                         installedPlugins = installedPlugins,
-                        isBrowserAutomationEnabled = isBrowserAutomationEnabled,
-                        isTerminalAutomationEnabled = isTerminalAutomationEnabled,
-                        isFlowAutomationEnabled = isFlowAutomationEnabled,
                         commandAutoExecutionPolicy = commandAutoExecutionPolicy,
                         commandSandboxEnabled = commandSandboxEnabled,
                         isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
@@ -467,16 +458,6 @@ fun SettingsDialog(
                         cardBorder = cardBorder
                     )
 
-                    SettingsSection.AUTOMATION -> AutomationSubScreen(
-                        isBrowserAutomationEnabled = isBrowserAutomationEnabled,
-                        isTerminalAutomationEnabled = isTerminalAutomationEnabled,
-                        onToggleBrowserAutomation = onToggleBrowserAutomation,
-                        onToggleTerminalAutomation = onToggleTerminalAutomation,
-                        isFlowAutomationEnabled = isFlowAutomationEnabled,
-                        onToggleFlowAutomation = onToggleFlowAutomation,
-                        cardBg = cardBg,
-                        cardBorder = cardBorder
-                    )
 
                     SettingsSection.TERMINAL -> TerminalSubScreen(
                         useSshTerminal = useSshTerminal,
@@ -575,6 +556,11 @@ fun SettingsDialog(
                         cardBg = cardBg,
                         cardBorder = cardBorder
                     )
+                    SettingsSection.ANDROID_AUTOMATION -> AndroidAutomationScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onOpenAdbConnect = { currentSection = SettingsSection.ADB_CONNECT }
+                    )
                     SettingsSection.ABOUT -> AboutSubScreen(
                         cardBg = cardBg,
                         cardBorder = cardBorder
@@ -595,9 +581,6 @@ private fun MainSettingsMenu(
     mcpServers: List<com.example.gemini.domain.model.McpServerState>,
     allSkills: List<com.example.gemini.data.remote.dto.SkillDefinitionDto> = emptyList(),
     installedPlugins: List<com.example.gemini.data.remote.dto.InstalledPluginDto> = emptyList(),
-    isBrowserAutomationEnabled: Boolean,
-    isTerminalAutomationEnabled: Boolean,
-    isFlowAutomationEnabled: Boolean = false,
     commandAutoExecutionPolicy: String,
     commandSandboxEnabled: Boolean,
     isFloatingDiagnosticsEnabled: Boolean = false,
@@ -759,29 +742,6 @@ private fun MainSettingsMenu(
             onClick = { onNavigate(SettingsSection.APPEARANCE) }
         )
 
-        // Section 4: Automation & Device Bridge
-        val autoActiveCount = (if (isBrowserAutomationEnabled) 1 else 0) + (if (isTerminalAutomationEnabled) 1 else 0) + (if (isFlowAutomationEnabled) 1 else 0)
-        val (autoBadge, autoColor) = when (autoActiveCount) {
-            3 -> "Full Access" to QuotaGreen
-            0 -> "Disabled" to Color(0xFFFFA000)
-            else -> "Partial" to Color(0xFF00ACC1)
-        }
-        val autoSummary = if (autoActiveCount == 0) {
-            "All Automation Disabled"
-        } else {
-            "Browser: ${if (isBrowserAutomationEnabled) "ON" else "OFF"} • Terminal: ${if (isTerminalAutomationEnabled) "ON" else "OFF"} • Flow: ${if (isFlowAutomationEnabled) "ON" else "OFF"}"
-        }
-        SettingsCategoryCard(
-            icon = Icons.Outlined.SmartToy,
-            iconTint = autoColor,
-            title = "Automation & Device Tools",
-            subtitle = autoSummary,
-            badgeText = autoBadge,
-            badgeColor = autoColor,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.AUTOMATION) }
-        )
 
         // Section 5: Terminal & Shell
         SettingsCategoryCard(
@@ -843,7 +803,7 @@ private fun MainSettingsMenu(
             icon = Icons.Outlined.Handyman,
             iconTint = Color(0xFF00ACC1),
             title = "Utilities",
-            subtitle = "ADB Connect",
+            subtitle = "ADB Connect, Android Automation",
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.UTILITIES) }
@@ -898,6 +858,24 @@ private fun UtilitiesSubScreen(
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.ADB_CONNECT) }
+        )
+        var automationAllowed by remember { mutableStateOf(com.example.gemini.data.automation.AndroidAutomation.isServiceRunning()) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                automationAllowed = com.example.gemini.data.automation.AndroidAutomation.isServiceRunning()
+                delay(1000)
+            }
+        }
+        SettingsCategoryCard(
+            icon = Icons.Outlined.TouchApp,
+            iconTint = if (automationAllowed) QuotaGreen else Color(0xFF8B5CF6),
+            title = "Android Automation",
+            subtitle = "Let AI agents read the screen, tap, type and open apps (MCP)",
+            badgeText = if (automationAllowed) "Allowed" else "Off",
+            badgeColor = if (automationAllowed) QuotaGreen else Color.Gray,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.ANDROID_AUTOMATION) }
         )
     }
 }
@@ -2720,6 +2698,11 @@ private fun McpSubScreen(
                 Triple("Terminal Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(
                     serverName = "terminal_mcp",
                     serverUrl = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/terminal",
+                    headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
+                )),
+                Triple("Android Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(
+                    serverName = com.example.gemini.data.remote.AndroidLocalBridgeServer.ANDROID_AUTOMATION_MCP_NAME,
+                    serverUrl = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/android",
                     headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
                 )),
                 Triple("Stitch", "SSE", com.example.gemini.domain.model.McpServerSpec(
@@ -7900,416 +7883,6 @@ private fun AddPermissionRuleDialog(
             }
         }
     )
-}
-
-@Composable
-private fun AutomationSubScreen(
-    isBrowserAutomationEnabled: Boolean,
-    isTerminalAutomationEnabled: Boolean,
-    onToggleBrowserAutomation: (Boolean) -> Unit,
-    onToggleTerminalAutomation: (Boolean) -> Unit,
-    isFlowAutomationEnabled: Boolean,
-    onToggleFlowAutomation: (Boolean) -> Unit,
-    cardBg: Color,
-    cardBorder: BorderStroke
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Top Info / Overview Banner
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = ClaudeTerracotta.copy(alpha = 0.08f),
-            border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.25f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.SmartToy,
-                    contentDescription = null,
-                    tint = ClaudeTerracotta,
-                    modifier = Modifier.size(24.dp)
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "AI Device Automation Controls",
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Control which device capabilities the AI model can access via the embedded MCP bridge. Toggling off any category immediately hides those tools from the AI.",
-                        fontSize = 11.5.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        lineHeight = 16.sp
-                    )
-                }
-            }
-        }
-
-        // Warning / Notice: MCP Server Configuration Requirement
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = Color(0xFFF59E0B).copy(alpha = 0.12f),
-            border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.35f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(14.dp),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = Color(0xFFF59E0B),
-                    modifier = Modifier.size(22.dp)
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "MCP Server Required",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFF59E0B)
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = "To use these automation tools, the respective automation server (browser_mcp, terminal_mcp, or google_flow_mcp) must be added in MCP Server Settings. Once added, the switches below control which specific tool permissions are granted to the AI.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                        lineHeight = 17.sp
-                    )
-                }
-            }
-        }
-
-        // 1. Browser Automation Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            border = if (isBrowserAutomationEnabled) BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.4f)) else cardBorder
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (isBrowserAutomationEnabled) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Language,
-                                    contentDescription = null,
-                                    tint = if (isBrowserAutomationEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(
-                                    text = "Browser Automation",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = if (isBrowserAutomationEnabled) QuotaGreen.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
-                                ) {
-                                    Text(
-                                        text = if (isBrowserAutomationEnabled) "ACTIVE" else "DISABLED",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isBrowserAutomationEnabled) QuotaGreen else Color.Gray,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "WebView UI, DOM inspection & screenshots",
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-                    Switch(
-                        checked = isBrowserAutomationEnabled,
-                        onCheckedChange = onToggleBrowserAutomation,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = ClaudeTerracotta
-                        )
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Allows the AI to open web URLs in background tabs, capture high-res viewport or full-page screenshots, inspect the live DOM tree with bounding rects, click elements, fill forms, and read console/network error logs.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                    lineHeight = 17.sp
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Exposed MCP Tools (9):",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val browserTools = listOf(
-                        "browser_open_url", "browser_set_view_mode", "browser_screenshot", "browser_inspect_dom",
-                        "browser_interact", "browser_upload_file", "browser_eval_js", "browser_get_console_logs",
-                        "browser_list_tabs", "browser_switch_tab", "browser_close_tab"
-                    )
-                    browserTools.forEach { tool ->
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                        ) {
-                            Text(
-                                text = tool,
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = if (isBrowserAutomationEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 2. Terminal Automation Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            border = if (isTerminalAutomationEnabled) BorderStroke(1.dp, Color(0xFF00ACC1).copy(alpha = 0.4f)) else cardBorder
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (isTerminalAutomationEnabled) Color(0xFF00ACC1).copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Terminal,
-                                    contentDescription = null,
-                                    tint = if (isTerminalAutomationEnabled) Color(0xFF00ACC1) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(
-                                    text = "Terminal Automation",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = if (isTerminalAutomationEnabled) QuotaGreen.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
-                                ) {
-                                    Text(
-                                        text = if (isTerminalAutomationEnabled) "ACTIVE" else "DISABLED",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isTerminalAutomationEnabled) QuotaGreen else Color.Gray,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "Live shell execution, output buffer & signals",
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-                    Switch(
-                        checked = isTerminalAutomationEnabled,
-                        onCheckedChange = onToggleTerminalAutomation,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF00ACC1)
-                        )
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Allows the AI to inspect active in-app terminal sessions, run background commands (e.g. dev servers, package managers), read terminal transcripts in real time, send kill/interrupt signals (Ctrl+C, SIGTERM, SIGKILL), and manage terminal tabs.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                    lineHeight = 17.sp
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Exposed MCP Tools (6):",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val terminalTools = listOf(
-                        "terminal_list_sessions", "terminal_send_command", "terminal_read_output",
-                        "terminal_kill_process", "terminal_create_session", "terminal_close_session"
-                    )
-                    terminalTools.forEach { tool ->
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                        ) {
-                            Text(
-                                text = tool,
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = if (isTerminalAutomationEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. Flow Automation Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            border = if (isFlowAutomationEnabled) BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.4f)) else cardBorder
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (isFlowAutomationEnabled) Color(0xFF8B5CF6).copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Movie,
-                                    contentDescription = null,
-                                    tint = if (isFlowAutomationEnabled) Color(0xFF8B5CF6) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(
-                                    text = "Flow Automation",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = if (isFlowAutomationEnabled) QuotaGreen.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
-                                ) {
-                                    Text(
-                                        text = if (isFlowAutomationEnabled) "ACTIVE" else "DISABLED",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isFlowAutomationEnabled) QuotaGreen else Color.Gray,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "Google Flow image & video generation",
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-                    Switch(
-                        checked = isFlowAutomationEnabled,
-                        onCheckedChange = onToggleFlowAutomation,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF8B5CF6)
-                        )
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Allows the AI to generate images and videos on Google Flow (flow.google.com) through your own signed-in session in the in-app browser, and to read your Flow projects, media and credits. Open Flow in the AntiGem browser and sign in first, and keep AntiGem open while generating. Files are kept once in ~/flow-media (never copied to your gallery) and fetched only when the AI needs them.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                    lineHeight = 17.sp
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "This switch controls the legacy Google Flow endpoint only. Install, enable or disable the current plugin in Settings → Custom AntiGem Plugins, then choose it in MCP settings. Tool lists come from the installed extension.",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-        }
-    }
 }
 
 // ==========================================

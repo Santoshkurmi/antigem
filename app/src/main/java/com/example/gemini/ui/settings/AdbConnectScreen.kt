@@ -34,7 +34,7 @@ import com.example.gemini.data.adb.AdbConnectManager.Pairing
 import com.example.gemini.theme.QuotaGreen
 import kotlinx.coroutines.delay
 
-private val Amber = Color(0xFFF59E0B)
+internal val Amber = Color(0xFFF59E0B)
 
 @Composable
 fun AdbConnectScreen(cardBg: Color, cardBorder: BorderStroke) {
@@ -247,7 +247,7 @@ private fun StatusCard(state: AdbConnectManager.State, cardBg: Color, cardBorder
 private data class Quad(val icon: ImageVector, val tint: Color, val title: String, val subtitle: String)
 
 @Composable
-private fun StepCard(
+internal fun StepCard(
     number: Int,
     title: String,
     badge: String?,
@@ -341,7 +341,7 @@ private fun ManualPairing(enabled: Boolean) {
 }
 
 @Composable
-private fun CheckRow(label: String, on: Boolean) {
+internal fun CheckRow(label: String, on: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             if (on) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked, null,
@@ -354,14 +354,14 @@ private fun CheckRow(label: String, on: Boolean) {
 }
 
 @Composable
-private fun Pill(text: String, color: Color) {
+internal fun Pill(text: String, color: Color) {
     Surface(shape = RoundedCornerShape(6.dp), color = color.copy(alpha = 0.12f)) {
         Text(text, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = color, modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp))
     }
 }
 
 @Composable
-private fun Hint(text: String) =
+internal fun Hint(text: String) =
     Text(text, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
 
 @Composable

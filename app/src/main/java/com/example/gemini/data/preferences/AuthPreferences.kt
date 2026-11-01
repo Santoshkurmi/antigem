@@ -68,9 +68,6 @@ class AuthPreferences(private val context: Context) {
         val FLOATING_SWITCHER_AUTO_COLLAPSE_SEC = androidx.datastore.preferences.core.intPreferencesKey("floating_switcher_auto_collapse_sec")
         val FLOATING_SWITCHER_POS_X = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_pos_x")
         val FLOATING_SWITCHER_POS_Y = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_pos_y")
-        val IS_BROWSER_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_browser_automation_enabled")
-        val IS_TERMINAL_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_automation_enabled")
-        val IS_FLOW_AUTOMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_flow_automation_enabled")
         val IS_FLOATING_DIAGNOSTICS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_diagnostics_enabled")
         val IS_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_network_inspector_enabled")
         val IS_FLOATING_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_network_inspector_enabled")
@@ -175,14 +172,6 @@ class AuthPreferences(private val context: Context) {
     val isLocalToolsInstalled: Flow<Boolean> = context.dataStore.data.map { it[IS_LOCAL_TOOLS_INSTALLED] ?: false }
     val localToolsInstallDate: Flow<Long?> = context.dataStore.data.map { it[LOCAL_TOOLS_INSTALL_DATE] }
     val localToolsVersion: Flow<String?> = context.dataStore.data.map { it[LOCAL_TOOLS_VERSION] }
-    val isBrowserAutomationEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_BROWSER_AUTOMATION_ENABLED] ?: true }
-    val isTerminalAutomationEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_TERMINAL_AUTOMATION_ENABLED] ?: true }
-    val isFlowAutomationEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_FLOW_AUTOMATION_ENABLED] ?: false }
-
-    fun isBrowserAutomationEnabledSync(): Boolean = syncPrefs.getBoolean("is_browser_automation_enabled", true)
-    fun isTerminalAutomationEnabledSync(): Boolean = syncPrefs.getBoolean("is_terminal_automation_enabled", true)
-    fun isFlowAutomationEnabledSync(): Boolean = syncPrefs.getBoolean("is_flow_automation_enabled", false)
-
     val agyBridgeHttpUrl: Flow<String> = context.dataStore.data.map { 
         val url = it[AGY_BRIDGE_HTTP_URL]?.let(::migrateBridgeUrl) ?: DEFAULT_BRIDGE_HTTP_URL
         currentBridgeHttpUrl = url
@@ -366,27 +355,6 @@ class AuthPreferences(private val context: Context) {
     suspend fun setDevModeEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[IS_DEV_MODE_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setBrowserAutomationEnabled(enabled: Boolean) {
-        syncPrefs.edit().putBoolean("is_browser_automation_enabled", enabled).apply()
-        context.dataStore.edit { prefs ->
-            prefs[IS_BROWSER_AUTOMATION_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setTerminalAutomationEnabled(enabled: Boolean) {
-        syncPrefs.edit().putBoolean("is_terminal_automation_enabled", enabled).apply()
-        context.dataStore.edit { prefs ->
-            prefs[IS_TERMINAL_AUTOMATION_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setFlowAutomationEnabled(enabled: Boolean) {
-        syncPrefs.edit().putBoolean("is_flow_automation_enabled", enabled).apply()
-        context.dataStore.edit { prefs ->
-            prefs[IS_FLOW_AUTOMATION_ENABLED] = enabled
         }
     }
 

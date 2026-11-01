@@ -29,13 +29,15 @@ class AndroidLocalBridgeServer private constructor() {
         BROWSER("browser_mcp"),
         TERMINAL("terminal_mcp"),
         GOOGLE_FLOW("google_flow_mcp"),
-        EXTENSION_DEVELOPER("custom_plugin_developer_mcp")
+        EXTENSION_DEVELOPER("custom_plugin_developer_mcp"),
+        ANDROID("android_automation_mcp")
     }
 
     companion object {
         /** The plugin developer MCP's preset name; older installs added it as [LEGACY_DEVELOPER_MCP_NAME] (same URL, still works). */
         const val DEVELOPER_MCP_NAME = "custom_plugin_developer_mcp"
         const val LEGACY_DEVELOPER_MCP_NAME = "webview_extension_developer_mcp"
+        const val ANDROID_AUTOMATION_MCP_NAME = "android_automation_mcp"
         fun isDeveloperMcpName(name: String) = name == DEVELOPER_MCP_NAME || name == LEGACY_DEVELOPER_MCP_NAME
         private const val TAG = "AndroidBridgeServer"
         private const val MAX_HEADER_BYTES = 64 * 1024
@@ -247,6 +249,7 @@ class AndroidLocalBridgeServer private constructor() {
                     path == "/terminal" -> handleMcpHttp(McpEndpoint.TERMINAL, method, body, out)
                     path == "/extension_developer" -> handleMcpHttp(McpEndpoint.EXTENSION_DEVELOPER, method, body, out)
                     path == "/google_flow" -> handleMcpHttp(McpEndpoint.GOOGLE_FLOW, method, body, out)
+                    path == "/android" -> handleMcpHttp(McpEndpoint.ANDROID, method, body, out)
                     path == "/api/health" -> {
                         val res = JSONObject().apply {
                             put("status", "ok")
@@ -275,7 +278,7 @@ class AndroidLocalBridgeServer private constructor() {
             if (out != null && req != null && !out.used) {
                 runCatching {
                     val path = req.rawPath.substringBefore("?")
-                    if (path == "/browser" || path == "/terminal" || path == "/google_flow" || path == "/extension_developer") {
+                    if (path == "/browser" || path == "/terminal" || path == "/google_flow" || path == "/extension_developer" || path == "/android") {
                         val id = runCatching { JSONObject(req.body).opt("id") }.getOrNull()
                         sendResponse(out, 200, "application/json", jsonRpcError(id, -32603, "Internal error: ${t.message ?: t.javaClass.simpleName}").toString())
                     } else {
@@ -397,10 +400,16 @@ class AndroidLocalBridgeServer private constructor() {
             if (id != null) put("id", id)
         }
 
+        // Android automation can control the whole phone, so it refuses to connect until the user grants it in Utilities
+        if (endpoint == McpEndpoint.ANDROID && method != "ping") {
+            com.example.gemini.data.automation.AndroidAutomation.notReadyMessage(appContext!!)?.let { return jsonRpcError(id, -32001, it) }
+        }
+
         when (method) {
             "initialize" -> {
                 val result = JSONObject().apply {
                     put("protocolVersion", "2024-11-05")
+                    if (endpoint == McpEndpoint.ANDROID) put("instructions", com.example.gemini.data.automation.AndroidAutomation.INSTRUCTIONS)
                     if (endpoint == McpEndpoint.EXTENSION_DEVELOPER) put("instructions", "Start with webview_extension_docs. Read developer-mcp.md and the required API references, create a draft, write files, install or update, discover tools with webview_extension_test, and inspect logs to fix failures. No app source or manual ZIP handling is needed.")
                     put("capabilities", JSONObject().apply {
                         put("tools", JSONObject())
@@ -447,27 +456,13 @@ class AndroidLocalBridgeServer private constructor() {
         return res
     }
 
-    private fun isBrowserAutomationEnabled(): Boolean {
-        val ctx = appContext ?: return true
-        return com.example.gemini.data.preferences.AuthPreferences(ctx).isBrowserAutomationEnabledSync()
-    }
-
-    private fun isTerminalAutomationEnabled(): Boolean {
-        val ctx = appContext ?: return true
-        return com.example.gemini.data.preferences.AuthPreferences(ctx).isTerminalAutomationEnabledSync()
-    }
-
-    private fun isFlowAutomationEnabled(): Boolean {
-        val ctx = appContext ?: return false
-        return com.example.gemini.data.preferences.AuthPreferences(ctx).isFlowAutomationEnabledSync()
-    }
-
     private suspend fun getMcpToolsList(endpoint: McpEndpoint): JSONArray {
         if (endpoint == McpEndpoint.EXTENSION_DEVELOPER) return com.example.gemini.ui.browser.WebViewExtensionDeveloper.tools(appContext!!)
+        if (endpoint == McpEndpoint.ANDROID) return com.example.gemini.data.automation.AndroidAutomation.tools()
         val tools = JSONArray()
-        val browserEnabled = isBrowserAutomationEnabled() && endpoint == McpEndpoint.BROWSER
-        val terminalEnabled = isTerminalAutomationEnabled() && endpoint == McpEndpoint.TERMINAL
-        val flowEnabled = isFlowAutomationEnabled() && endpoint == McpEndpoint.GOOGLE_FLOW
+        val browserEnabled = endpoint == McpEndpoint.BROWSER
+        val terminalEnabled = endpoint == McpEndpoint.TERMINAL
+        val flowEnabled = endpoint == McpEndpoint.GOOGLE_FLOW
 
         if (browserEnabled) {
             // 1. Browser Open URL
@@ -788,43 +783,9 @@ class AndroidLocalBridgeServer private constructor() {
         return tools
     }
 
-    private fun flowError(message: String): JSONObject = JSONObject().apply {
-        put("isError", true)
-        put("content", JSONArray().apply {
-            put(JSONObject().apply {
-                put("type", "text")
-                put("text", message)
-            })
-        })
-    }
-
     private suspend fun executeMcpToolCall(toolName: String, args: JSONObject): JSONObject {
         if (toolName.startsWith("webview_extension_")) return com.example.gemini.ui.browser.WebViewExtensionDeveloper.call(appContext!!, toolName, args)
-        if (toolName.startsWith("browser_") && !isBrowserAutomationEnabled()) {
-            return JSONObject().apply {
-                put("isError", true)
-                put("content", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("type", "text")
-                        put("text", "Error: Browser automation is currently disabled in Settings > Automation.")
-                    })
-                })
-            }
-        }
-        if (toolName.startsWith("terminal_") && !isTerminalAutomationEnabled()) {
-            return JSONObject().apply {
-                put("isError", true)
-                put("content", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("type", "text")
-                        put("text", "Error: Terminal automation is currently disabled in Settings > Automation.")
-                    })
-                })
-            }
-        }
-        if (toolName.startsWith("flow_") && !isFlowAutomationEnabled()) {
-            return flowError("Error: Flow automation is currently disabled in Settings > Automation.")
-        }
+        if (toolName.startsWith("android_")) return com.example.gemini.data.automation.AndroidAutomation.call(appContext!!, toolName, args)
 
         if (toolName.startsWith("flow_")) {
             return com.example.gemini.ui.browser.BrowserExtensionManager.instance.callTool("google-flow", toolName, args)

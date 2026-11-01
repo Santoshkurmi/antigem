@@ -2,8 +2,8 @@
     <string name="app_name">AntiGem</string>
     <string name="anti_term_name">AntiTerm</string>
     <string name="termux_name">Termux</string>
-    <string name="accessibility_service_name">AntiGem AI Automation</string>
-    <string name="accessibility_service_description">Enables AntiGem AI Assistant to inspect the screen, tap buttons, scroll, input text, and automate tasks natively on your device.</string>
+    <string name="accessibility_service_name">AntiGem Android Automation</string>
+    <string name="accessibility_service_description">Lets the AI agents you connect to AntiGem\'s Android Automation MCP read the screen, take screenshots, tap, swipe, type and open apps on this phone. It only acts when an agent calls one of those tools.</string>
     <string name="copy_text">Copy</string>
     <string name="paste_text">Paste</string>
     <string name="text_selection_more">More</string>

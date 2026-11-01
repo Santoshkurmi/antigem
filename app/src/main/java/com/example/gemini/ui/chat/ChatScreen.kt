@@ -232,9 +232,6 @@ fun ChatScreen(
     val projectsList by viewModel.projectsList.collectAsState()
     val isProjectsLoading by viewModel.isProjectsLoading.collectAsState()
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
-    val isBrowserAutomationEnabled by viewModel.isBrowserAutomationEnabled.collectAsState()
-    val isTerminalAutomationEnabled by viewModel.isTerminalAutomationEnabled.collectAsState()
-    val isFlowAutomationEnabled by viewModel.isFlowAutomationEnabled.collectAsState()
     val isFloatingSwitcherEnabled by viewModel.isFloatingSwitcherEnabled.collectAsState()
     val floatingSwitcherOrientation by viewModel.floatingSwitcherOrientation.collectAsState()
     val floatingSwitcherItems by viewModel.floatingSwitcherItems.collectAsState()
@@ -2241,12 +2238,6 @@ fun ChatScreen(
             pluginActionStatusMessage = pluginActionStatusMessage,
             pluginActionErrorMessage = pluginActionErrorMessage,
             onClearPluginStatus = { viewModel.clearPluginActionStatus() },
-            isBrowserAutomationEnabled = isBrowserAutomationEnabled,
-            isTerminalAutomationEnabled = isTerminalAutomationEnabled,
-            onToggleBrowserAutomation = { viewModel.setBrowserAutomationEnabled(it) },
-            onToggleTerminalAutomation = { viewModel.setTerminalAutomationEnabled(it) },
-            isFlowAutomationEnabled = isFlowAutomationEnabled,
-            onToggleFlowAutomation = { viewModel.setFlowAutomationEnabled(it) },
             isFloatingSwitcherEnabled = isFloatingSwitcherEnabled,
             floatingSwitcherOrientation = floatingSwitcherOrientation,
             floatingSwitcherItems = floatingSwitcherItems,

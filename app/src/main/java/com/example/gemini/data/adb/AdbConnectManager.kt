@@ -252,6 +252,27 @@ object AdbConnectManager {
         report("Disconnected $serial")
     }
 
+    // ---------------- for other features (android_automation_mcp) ----------------
+
+    /** The connected device, connecting first when it was paired and Wireless debugging is on. Null when adb isn't usable. */
+    suspend fun ensureConnected(): Device? {
+        if (!::appContext.isInitialized) return null
+        refreshNow()
+        _state.value.connectedDevice?.let { return it }
+        if (_state.value.adbInstalled != true || !_state.value.pairedOnce || !isWirelessDebuggingOn(appContext)) return null
+        connectNow(null, quiet = true)
+        return _state.value.connectedDevice
+    }
+
+    /** Runs `adb <args>` against [device] (args are passed to bash as-is). */
+    suspend fun runAdb(device: Device, args: String, seconds: Int = 30) = adb("-s ${device.serial} $args", seconds)
+
+    /** Runs [command] in `adb shell` on [device], as the shell user. */
+    suspend fun deviceShell(device: Device, command: String, seconds: Int = 30) =
+        adb("-s ${device.serial} shell ${shellQuote(command)}", seconds)
+
+    fun shellQuote(value: String) = "'" + value.replace("'", "'\\''") + "'"
+
     private fun maybeAutoConnect() {
         val s = _state.value
         if (!s.autoReconnect || !s.pairedOnce || autoConnectJob?.isActive == true || pairingJob?.isActive == true) return

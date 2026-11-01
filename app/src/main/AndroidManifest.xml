@@ -16,6 +16,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.CAMERA" />
 
@@ -247,6 +248,20 @@
                 <action android:name="com.termux.service_wake_unlock" />
                 <action android:name="com.termux.service_stop" />
             </intent-filter>
+        </service>
+
+        <!-- Android Automation (android_automation_mcp): screen reading, gestures and screenshots -->
+        <service
+            android:name="com.example.gemini.data.automation.AutomationAccessibilityService"
+            android:label="@string/accessibility_service_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/automation_accessibility_service" />
         </service>
 
         <!-- Holds the ADB pairing notification (code entry) while the user is in Developer options -->
