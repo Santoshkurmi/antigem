@@ -99,7 +99,12 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     CLAUDE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
     AGENTS("Agents", "Run Antigravity, Claude Code or both"),
     DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD"),
-    ABOUT("About & Info", "App version, package details, and bridge export")
+    UTILITIES("Utilities", "Handy device tools"),
+    ADB_CONNECT("ADB Connect", "Connect the terminal's adb to this phone over Wireless debugging"),
+    ABOUT("About & Info", "App version, package details, and bridge export");
+
+    /** Where Back goes from this section. */
+    val parent: SettingsSection get() = if (this == ADB_CONNECT) UTILITIES else MAIN
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -253,7 +258,7 @@ fun SettingsDialog(
     // Intercept system Back button
     BackHandler(enabled = true) {
         if (currentSection != SettingsSection.MAIN) {
-            currentSection = SettingsSection.MAIN
+            currentSection = currentSection.parent
         } else {
             onDismiss()
         }
@@ -302,7 +307,7 @@ fun SettingsDialog(
                 navigationIcon = {
                     IconButton(onClick = {
                         if (currentSection != SettingsSection.MAIN) {
-                            currentSection = SettingsSection.MAIN
+                            currentSection = currentSection.parent
                         } else {
                             onDismiss()
                         }
@@ -338,7 +343,7 @@ fun SettingsDialog(
             AnimatedContent(
                 targetState = currentSection,
                 transitionSpec = {
-                    if (targetState != SettingsSection.MAIN) {
+                    if (targetState != initialState.parent) {
                         (slideInHorizontally { width -> width } + fadeIn(animationSpec = tween(220)))
                             .togetherWith(slideOutHorizontally { width -> -width / 4 } + fadeOut(animationSpec = tween(180)))
                     } else {
@@ -561,6 +566,15 @@ fun SettingsDialog(
                     SettingsSection.CLAUDE -> if (claude != null) {
                         com.example.gemini.ui.claude.ClaudeSettingsScreen(claude, claudePage) { currentSection = SettingsSection.MAIN }
                     }
+                    SettingsSection.UTILITIES -> UtilitiesSubScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onNavigate = { currentSection = it }
+                    )
+                    SettingsSection.ADB_CONNECT -> AdbConnectScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder
+                    )
                     SettingsSection.ABOUT -> AboutSubScreen(
                         cardBg = cardBg,
                         cardBorder = cardBorder
@@ -824,6 +838,17 @@ private fun MainSettingsMenu(
             onClick = { onNavigate(SettingsSection.DIAGNOSTICS) }
         )
 
+        SettingsGroupHeader("Utilities", Color(0xFF00ACC1), "Handy device tools")
+        SettingsCategoryCard(
+            icon = Icons.Outlined.Handyman,
+            iconTint = Color(0xFF00ACC1),
+            title = "Utilities",
+            subtitle = "ADB Connect",
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.UTILITIES) }
+        )
+
         // Section 7: About & Info
         SettingsCategoryCard(
             icon = Icons.Outlined.Info,
@@ -835,6 +860,44 @@ private fun MainSettingsMenu(
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.ABOUT) }
+        )
+    }
+}
+
+@Composable
+private fun UtilitiesSubScreen(
+    cardBg: Color,
+    cardBorder: BorderStroke,
+    onNavigate: (SettingsSection) -> Unit
+) {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        com.example.gemini.data.adb.AdbConnectManager.init(context)
+        com.example.gemini.data.adb.AdbConnectManager.refresh()
+    }
+    val adb by com.example.gemini.data.adb.AdbConnectManager.state.collectAsState()
+    val connected = adb.connectedDevice
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SettingsCategoryCard(
+            icon = Icons.Outlined.PhonelinkSetup,
+            iconTint = if (connected != null) QuotaGreen else Color(0xFF00ACC1),
+            title = "ADB Connect",
+            subtitle = connected?.serial ?: "Use adb in the terminal over Wireless debugging",
+            badgeText = when {
+                connected != null -> "Connected"
+                adb.adbInstalled == false -> "Not installed"
+                else -> null
+            },
+            badgeColor = if (connected != null) QuotaGreen else Color(0xFFF59E0B),
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.ADB_CONNECT) }
         )
     }
 }

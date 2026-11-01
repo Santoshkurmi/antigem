@@ -2300,7 +2300,8 @@ All files created here persist inside the application.
         context: Context? = null,
         workingDir: String? = null,
         customEnv: Map<String, String>? = null,
-        timeoutSeconds: Long = 60
+        timeoutSeconds: Long = 60,
+        onOutputLine: ((String) -> Unit)? = null
     ): LocalCommandResult = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         val env = mutableMapOf<String, String>()
@@ -2397,6 +2398,7 @@ All files created here persist inside the application.
                 var line: String?
                 while (reader.readLine().also { line = it } != null) {
                     outputBuilder.append(line).append("\n")
+                    onOutputLine?.invoke(line!!)
                 }
                 val exited = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
                 val durationMs = System.currentTimeMillis() - startTime
@@ -2484,6 +2486,7 @@ All files created here persist inside the application.
             var line: String?
             while (reader.readLine().also { line = it } != null) {
                 outputBuilder.append(line).append("\n")
+                onOutputLine?.invoke(line!!)
             }
 
             val exited = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)

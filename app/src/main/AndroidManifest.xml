@@ -249,6 +249,16 @@
             </intent-filter>
         </service>
 
+        <!-- Holds the ADB pairing notification (code entry) while the user is in Developer options -->
+        <service
+            android:name="com.example.gemini.data.adb.AdbPairingService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Wireless debugging pairing code entry" />
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
