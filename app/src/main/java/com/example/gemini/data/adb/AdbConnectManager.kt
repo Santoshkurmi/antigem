@@ -73,6 +73,9 @@ object AdbConnectManager {
     data class State(
         val adbInstalled: Boolean? = null,
         val adbVersion: String? = null,
+        /** Set when adb is installed but won't run (e.g. a library it needs is out of date); [adbInstalled] is then false. */
+        val adbBroken: String? = null,
+        val refreshing: Boolean = false,
         val installing: Boolean = false,
         val installLog: List<String> = emptyList(),
         val installError: String? = null,
@@ -174,13 +177,20 @@ object AdbConnectManager {
     // `timeout` keeps a stuck adb from blocking the output reader forever
     private suspend fun adb(args: String, seconds: Int = 20) = shell("timeout $seconds adb $args", seconds + 5L)
 
-    fun refresh() = scope.launch { refreshNow() }
+    /** [quiet] skips the spinner, for background re-checks. */
+    fun refresh(quiet: Boolean = false) = scope.launch {
+        if (!quiet) _state.update { it.copy(refreshing = true) }
+        try { refreshNow() } finally { _state.update { it.copy(refreshing = false) } }
+    }
 
     private suspend fun refreshNow() {
-        val found = shell("command -v adb >/dev/null 2>&1 && adb version | head -n 1", 15)
-        val installed = found.exitCode == 0 && found.output.isNotBlank()
-        _state.update { it.copy(adbInstalled = installed, adbVersion = found.output.lineSequence().firstOrNull()?.takeIf { installed }) }
-        if (!installed) {
+        // Run adb itself: a present binary can still fail to start ("CANNOT LINK EXECUTABLE")
+        val found = shell("command -v adb >/dev/null 2>&1 || exit 127; adb version", 15)
+        val output = found.output.trim()
+        val works = found.exitCode == 0 && output.startsWith("Android Debug Bridge")
+        val broken = if (!works && found.exitCode != 127) output.ifBlank { "adb exited with code ${found.exitCode}" }.take(600) else null
+        _state.update { it.copy(adbInstalled = works, adbBroken = broken, adbVersion = output.lineSequence().firstOrNull()?.takeIf { works }) }
+        if (!works) {
             _state.update { it.copy(devices = emptyList()) }
             return
         }
@@ -200,14 +210,18 @@ object AdbConnectManager {
         if (installJob?.isActive == true) return
         installJob = scope.launch {
             _state.update { it.copy(installing = true, installLog = emptyList(), installError = null) }
-            val command = if (LocalEnvironmentManager.isTermuxPackage(appContext)) "pkg install -y android-tools"
-            else "apt-get update && apt-get install -y adb"
+            // Termux is rolling-release: installing only android-tools can leave older libraries (libprotobuf…) that the new
+            // adb can't link against, so refresh the package lists and bring its direct dependencies up to date too
+            val keepConfigs = "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+            val pkg = if (LocalEnvironmentManager.isTermuxPackage(appContext)) "android-tools" else "adb"
+            val command = "apt-get update && apt-get install -y $keepConfigs $pkg && " +
+                "apt-get install -y $keepConfigs ${'$'}(apt-cache depends $pkg | awk '/Depends:/ && ${'$'}2 !~ /^</ {print ${'$'}2}')"
             appendInstallLog("$ $command")
             val result = shell(command, 900) { line -> if (line.isNotBlank()) appendInstallLog(line) }
             refreshNow()
             val ok = _state.value.adbInstalled == true
             _state.update {
-                it.copy(installing = false, installError = if (ok) null else "Install failed (exit ${result.exitCode}). Check the log above, or run the command in the terminal.")
+                it.copy(installing = false, installError = if (ok) null else "Install failed (exit ${result.exitCode}). Check the log above, or run \"pkg upgrade\" in the terminal and try again.")
             }
             if (ok) appendInstallLog("✓ ${_state.value.adbVersion ?: "adb installed"}")
         }

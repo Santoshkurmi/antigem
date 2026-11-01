@@ -55,7 +55,7 @@ fun AdbConnectScreen(cardBg: Color, cardBorder: BorderStroke) {
             wirelessOn = AdbConnectManager.isWirelessDebuggingOn(context)
             notificationsOn = NotificationManagerCompat.from(context).areNotificationsEnabled()
             val s = AdbConnectManager.state.value
-            if (++tick % 4 == 0 && s.adbInstalled == true && s.busy == null && !s.installing) AdbConnectManager.refresh()
+            if (++tick % 4 == 0 && s.adbInstalled == true && s.busy == null && !s.installing) AdbConnectManager.refresh(quiet = true)
         }
     }
 
@@ -81,10 +81,19 @@ fun AdbConnectScreen(cardBg: Color, cardBorder: BorderStroke) {
         }
 
         // Step 1: adb in the terminal
-        StepCard(1, "Install ADB", if (installed) "Installed" else null, cardBg, cardBorder) {
+        StepCard(1, "Install ADB", if (installed) "Installed" else if (state.adbBroken != null) "Broken" else null, cardBg, cardBorder,
+            badgeColor = if (installed) QuotaGreen else MaterialTheme.colorScheme.error) {
             when {
                 state.adbInstalled == null -> Hint("Checking the terminal for adb…")
                 installed && !state.installing -> Mono(state.adbVersion ?: "adb")
+                state.adbBroken != null && !state.installing -> {
+                    Text("adb is installed but can't start:", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    Mono(state.adbBroken!!)
+                    Hint("Usually a library it needs (such as libprotobuf) is older than adb itself. Repair updates the package lists and upgrades adb and the libraries it uses.")
+                    Button(onClick = AdbConnectManager::installAdb) {
+                        Icon(Icons.Outlined.Build, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Repair ADB")
+                    }
+                }
                 !state.installing -> {
                     Hint("adb isn't installed in the terminal yet. This installs the android-tools package (adb, fastboot).")
                     Button(onClick = AdbConnectManager::installAdb) {
@@ -222,6 +231,7 @@ fun AdbConnectScreen(cardBg: Color, cardBorder: BorderStroke) {
 private fun StatusCard(state: AdbConnectManager.State, cardBg: Color, cardBorder: BorderStroke) {
     val connected = state.connectedDevice
     val (icon, tint, title, subtitle) = when {
+        state.adbBroken != null -> Quad(Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error, "ADB can't start", "Tap Repair ADB below")
         state.adbInstalled == false -> Quad(Icons.Outlined.Download, Amber, "ADB not installed", "Install it below to get started")
         connected != null -> Quad(Icons.Outlined.PhonelinkSetup, QuotaGreen, "Connected", connected.serial)
         state.busy != null -> Quad(Icons.Outlined.Sync, MaterialTheme.colorScheme.primary, "Connecting…", state.busy)
@@ -239,7 +249,8 @@ private fun StatusCard(state: AdbConnectManager.State, cardBg: Color, cardBorder
                 Text(subtitle, fontSize = 12.sp, fontFamily = if (connected != null) FontFamily.Monospace else null,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
-            IconButton(onClick = { AdbConnectManager.refresh() }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+            if (state.refreshing) CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), strokeWidth = 2.dp)
+            else IconButton(onClick = { AdbConnectManager.refresh() }) { Icon(Icons.Outlined.Refresh, "Refresh") }
         }
     }
 }
