@@ -6,6 +6,7 @@ import android.content.pm.Signature
 import android.os.Build
 import android.widget.Toast
 import com.example.gemini.data.adb.AdbConnectManager
+import com.example.gemini.data.updater.PluginUpdateCheckWorker
 import com.example.gemini.data.updater.UpdateCheckWorker
 import com.telemetrydeck.sdk.TelemetryDeck
 import java.security.MessageDigest
@@ -14,6 +15,7 @@ class AntiGemApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         UpdateCheckWorker.schedule(this)
+        PluginUpdateCheckWorker.schedule(this)
         // Reconnects adb when Wireless debugging turns back on (it gets a new port every time)
         AdbConnectManager.init(this)
         // Forks build with their own key, so only official release APKs report real usage.
