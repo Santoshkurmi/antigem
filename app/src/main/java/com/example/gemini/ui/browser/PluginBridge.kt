@@ -61,6 +61,14 @@ object PluginBridge {
         installed(JSONObject(call(Request.Builder().url(target).post(zipBody(context, uri)).build())))
     }
 
+    /** Progress of the repository install into [folder] while it runs; null when none is running. */
+    suspend fun repoProgress(folder: String): RepoInstallProgress? = withContext(Dispatchers.IO) {
+        val body = JSONObject(call(Request.Builder().url(url("repo/progress").toHttpQuery("folder" to folder)).get().build()))
+        if (!body.optBoolean("active")) null else RepoInstallProgress(
+            body.optString("phase"), body.optLong("bytes_done"), body.optLong("bytes_total"), body.optInt("files_done"), body.optInt("files_total")
+        )
+    }
+
     suspend fun repoInstall(repo: String, path: String, folder: String, updateId: String?, asNew: Boolean): Installed = withContext(Dispatchers.IO) {
         installed(post("repo/install", JSONObject().put("repo", repo).put("path", path).put("folder", folder).put("update_id", updateId.orEmpty()).put("as_new", asNew)))
     }

@@ -279,19 +279,20 @@ func (m *Manager) repoPlugin(r Repo, p string, entry, manifest map[string]interf
 
 // downloadFolder fetches only folder p into dest: its files from raw URLs after one tree call, or, when the API
 // can't be used, by streaming the repository archive and keeping that folder.
-func (m *Manager) downloadFolder(r Repo, p, dest string) error {
-	treeErr := m.downloadViaTree(r, p, dest)
+func (m *Manager) downloadFolder(r Repo, p, dest string, t *progressTracker) error {
+	treeErr := m.downloadViaTree(r, p, dest, t)
 	if treeErr == nil {
 		return nil
 	}
 	_ = os.RemoveAll(dest)
-	if err := m.downloadViaArchive(r, p, dest); err != nil {
+	t.set(func(pr *Progress) { *pr = Progress{Phase: "downloading"} })
+	if err := m.downloadViaArchive(r, p, dest, t); err != nil {
 		return fmt.Errorf("Could not download %s from %s: %v; archive: %v", p, r.slug(), treeErr, err)
 	}
 	return nil
 }
 
-func (m *Manager) downloadViaTree(r Repo, p, dest string) error {
+func (m *Manager) downloadViaTree(r Repo, p, dest string, t *progressTracker) error {
 	files, err := m.tree(r)
 	if err != nil {
 		return err
@@ -311,6 +312,7 @@ func (m *Manager) downloadViaTree(r Repo, p, dest string) error {
 	if len(wanted) > maxEntries || total > maxTotal {
 		return fmt.Errorf("%s is larger than a plugin may be", p)
 	}
+	t.set(func(pr *Progress) { *pr = Progress{Phase: "downloading", BytesTotal: total, FilesTotal: len(wanted)} })
 	sem := make(chan struct{}, 6)
 	errs := make(chan error, len(wanted))
 	var wg sync.WaitGroup
@@ -320,7 +322,11 @@ func (m *Manager) downloadViaTree(r Repo, p, dest string) error {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			errs <- m.downloadFile(m.rawURL(r, f.Path), dest, strings.TrimPrefix(f.Path, prefix))
+			err := m.downloadFile(m.rawURL(r, f.Path), dest, strings.TrimPrefix(f.Path, prefix), t)
+			if err == nil {
+				t.set(func(pr *Progress) { pr.FilesDone++ })
+			}
+			errs <- err
 		}(f)
 	}
 	wg.Wait()
@@ -333,7 +339,7 @@ func (m *Manager) downloadViaTree(r Repo, p, dest string) error {
 	return nil
 }
 
-func (m *Manager) downloadFile(u, dest, rel string) error {
+func (m *Manager) downloadFile(u, dest, rel string, t *progressTracker) error {
 	target, err := safeTarget(dest, rel)
 	if err != nil {
 		return err
@@ -346,10 +352,10 @@ func (m *Manager) downloadFile(u, dest, rel string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d for %s", resp.StatusCode, rel)
 	}
-	return writeLimited(resp.Body, target, maxFileBytes)
+	return writeLimited(t.counting(resp.Body), target, maxFileBytes)
 }
 
-func (m *Manager) downloadViaArchive(r Repo, p, dest string) error {
+func (m *Manager) downloadViaArchive(r Repo, p, dest string, t *progressTracker) error {
 	resp, err := m.get(fmt.Sprintf("https://github.com/%s/%s/archive/%s.zip", r.Owner, r.Name, encodePath(r.ref())))
 	if err != nil {
 		return err
@@ -364,7 +370,10 @@ func (m *Manager) downloadViaArchive(r Repo, p, dest string) error {
 		return err
 	}
 	defer os.Remove(tmp.Name())
-	_, err = io.Copy(tmp, io.LimitReader(resp.Body, 512<<20))
+	if resp.ContentLength > 0 {
+		t.set(func(pr *Progress) { pr.BytesTotal = resp.ContentLength })
+	}
+	_, err = io.Copy(tmp, io.LimitReader(t.counting(resp.Body), 512<<20))
 	tmp.Close()
 	if err != nil {
 		return err
@@ -374,6 +383,18 @@ func (m *Manager) downloadViaArchive(r Repo, p, dest string) error {
 		return err
 	}
 	defer zr.Close()
+	// Second phase: extracting only the plugin's folder, counted in uncompressed bytes
+	if t != nil {
+		var files int
+		var size int64
+		for _, f := range zr.File {
+			if _, inner, found := strings.Cut(strings.ReplaceAll(f.Name, "\\", "/"), "/"); found && !f.FileInfo().IsDir() && strings.HasPrefix(inner, p+"/") {
+				files++
+				size += int64(f.UncompressedSize64)
+			}
+		}
+		t.set(func(pr *Progress) { *pr = Progress{Phase: "extracting", BytesTotal: size, FilesTotal: files} })
+	}
 	count := 0
 	var total int64
 	for _, f := range zr.File {
@@ -393,11 +414,12 @@ func (m *Manager) downloadViaArchive(r Repo, p, dest string) error {
 		if err != nil {
 			return err
 		}
-		err = writeLimited(in, target, maxFileBytes)
+		err = writeLimited(t.counting(in), target, maxFileBytes)
 		in.Close()
 		if err != nil {
 			return err
 		}
+		t.set(func(pr *Progress) { pr.FilesDone++ })
 		total += int64(f.UncompressedSize64)
 		if total > maxTotal {
 			return fmt.Errorf("%s is larger than a plugin may be", p)

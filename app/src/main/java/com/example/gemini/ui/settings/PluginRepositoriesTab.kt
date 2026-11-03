@@ -142,3 +142,30 @@ private fun RepoPluginRow(repo: PluginRepo, plugin: RepoPlugin, busy: Boolean, o
         }
     }
 }
+
+/** Real progress of a repository install or update; the bar only moves without a percentage while the size is unknown. */
+@Composable
+internal fun PluginInstallProgress(progress: com.example.gemini.ui.browser.RepoInstallProgress, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    fun size(bytes: Long) = android.text.format.Formatter.formatShortFileSize(context, bytes)
+    val fraction = progress.fraction
+    val files = if (progress.filesTotal > 0) "${progress.filesDone}/${progress.filesTotal} files" else null
+    val label = when (progress.phase) {
+        "listing" -> "Reading the repository…"
+        "downloading" -> listOfNotNull(
+            "Downloading", files,
+            if (progress.bytesTotal > 0) "${size(progress.bytesDone)} / ${size(progress.bytesTotal)}" else size(progress.bytesDone)
+        ).joinToString(" · ")
+        "extracting" -> listOfNotNull("Extracting", files).joinToString(" · ")
+        "installing" -> "Installing…"
+        else -> "Starting plugin…"
+    }
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (fraction != null) LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+        else LinearProgressIndicator(Modifier.fillMaxWidth())
+        Row(Modifier.fillMaxWidth()) {
+            Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (fraction != null) Text("${(fraction * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
