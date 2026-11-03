@@ -444,11 +444,27 @@ fun UserMessageBubble(
                 // Measured, not guessed: wrapped lines count too, and short text never gets the toggle
                 var isTextOverflowing by remember(message.id, displayContent) { mutableStateOf(false) }
 
+                // Slash commands that expanded (plugins, custom commands) stand out from the typed text
+                val styledContent = remember(displayContent) {
+                    val ranges = com.example.gemini.data.remote.PromptExpansion.commandRanges(displayContent)
+                    androidx.compose.ui.text.buildAnnotatedString {
+                        append(displayContent)
+                        ranges.forEach {
+                            addStyle(
+                                androidx.compose.ui.text.SpanStyle(
+                                    color = ClaudeTerracotta,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                it.first, it.last + 1
+                            )
+                        }
+                    }
+                }
                 if (displayContent.isNotBlank() && !(audioAtts.isNotEmpty() && (displayContent == "Voice note" || displayContent == "Voice message"))) {
                     Column {
                         SelectionContainer {
                             Text(
-                                text = displayContent,
+                                text = styledContent,
                                 fontSize = 15.sp,
                                 lineHeight = 22.sp,
                                 color = MaterialTheme.colorScheme.onSurface,
