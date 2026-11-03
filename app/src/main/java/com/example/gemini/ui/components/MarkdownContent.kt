@@ -1318,7 +1318,10 @@ fun MarkdownDetailsView(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
-                    MarkdownContent(content = details.body)
+                    // Own container, rebuilt on toggle so a selection can't outlive the expand/collapse
+                    key(isExpanded) {
+                        SelectionContainer { MarkdownContent(content = details.body) }
+                    }
                 }
             }
         }

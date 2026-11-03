@@ -412,17 +412,22 @@ fun CodeBlock(
             val horizontalScroll = rememberScrollState()
 
             Box(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = displayText,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.5.sp,
-                    lineHeight = 19.sp,
-                    softWrap = false,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(horizontalScroll)
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
-                )
+                // Rebuilt on expand/collapse so a live selection can't point at swapped-out text
+                key(isExpanded) {
+                    androidx.compose.foundation.text.selection.SelectionContainer {
+                        Text(
+                            text = displayText,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.5.sp,
+                            lineHeight = 19.sp,
+                            softWrap = false,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(horizontalScroll)
+                                .padding(horizontal = 14.dp, vertical = 12.dp)
+                        )
+                    }
+                }
             }
 
             // Subtle Expand/Collapse footer for long code blocks
