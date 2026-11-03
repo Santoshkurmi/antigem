@@ -26,6 +26,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.DeveloperMode
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Cloud
@@ -82,6 +91,9 @@ import com.example.gemini.data.agent.claude.ClaudeConfigManager
 import com.example.gemini.data.agent.claude.ClaudeMcpAddRequest
 import com.example.gemini.data.agent.claude.ClaudePluginAction
 import com.example.gemini.data.agent.claude.ClaudePreferences
+import com.example.gemini.theme.ClaudeTerracotta
+import com.example.gemini.theme.GeminiBlue
+import com.example.gemini.theme.GeminiPurple
 import com.example.gemini.theme.QuotaAmber
 import com.example.gemini.theme.QuotaGreen
 import com.example.gemini.theme.QuotaRed
@@ -532,72 +544,59 @@ private fun McpPage(deps: ClaudeSettingsDeps) {
     val deviceId = remember(context) {
         runCatching { android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) }.getOrNull().orEmpty()
     }
+    val bridge = com.example.gemini.data.remote.AndroidLocalBridgeServer
+    val deviceHeaders = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
+    fun local(name: String, path: String) =
+        ClaudeMcpAddRequest(name = name, transport = "http", url = "http://127.0.0.1:${bridge.DEFAULT_PORT}$path", headers = deviceHeaders)
     val presets = listOf(
-        "Custom AntiGem Plugin Developer" to ClaudeMcpAddRequest(
-            name = com.example.gemini.data.remote.AndroidLocalBridgeServer.DEVELOPER_MCP_NAME, transport = "http",
-            url = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/extension_developer",
-            headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
-        ),
-        "Browser Automation" to ClaudeMcpAddRequest(
-            name = "browser_mcp",
-            transport = "http",
-            url = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/browser",
-            headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
-        ),
-        "Terminal Automation" to ClaudeMcpAddRequest(
-            name = "terminal_mcp",
-            transport = "http",
-            url = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/terminal",
-            headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
-        ),
-        "Android Automation" to ClaudeMcpAddRequest(
-            name = com.example.gemini.data.remote.AndroidLocalBridgeServer.ANDROID_AUTOMATION_MCP_NAME,
-            transport = "http",
-            url = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/android",
-            headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
-        ),
-        "Notes & To-dos" to ClaudeMcpAddRequest(
-            name = com.example.gemini.data.remote.AndroidLocalBridgeServer.NOTES_MCP_NAME,
-            transport = "http",
-            url = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/notes",
-            headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
-        ),
-        "Stitch" to ClaudeMcpAddRequest(name = "stitch", transport = "http", url = "https://stitch.googleapis.com/mcp", headers = mapOf("X-Goog-Api-Key" to ""))
+        ClaudeMcpPreset("Plugin Developer", "Build & test AntiGem plugins", Icons.Outlined.DeveloperMode, GeminiPurple, local(bridge.DEVELOPER_MCP_NAME, "/extension_developer")),
+        ClaudeMcpPreset("Browser", "Control the in-app browser", Icons.Outlined.Language, GeminiBlue, local("browser_mcp", "/browser")),
+        ClaudeMcpPreset("Terminal", "Run commands in the terminal", Icons.Outlined.Terminal, QuotaGreen, local("terminal_mcp", "/terminal")),
+        ClaudeMcpPreset("Android", "Tap, type & read this phone", Icons.Outlined.PhoneAndroid, Color(0xFF14B8A6), local(bridge.ANDROID_AUTOMATION_MCP_NAME, "/android")),
+        ClaudeMcpPreset("Notes & To-dos", "Read & edit your notes", Icons.Outlined.EditNote, Color(0xFFF59E0B), local(bridge.NOTES_MCP_NAME, "/notes")),
+        ClaudeMcpPreset("Stitch", "Google Stitch UI design · API key", Icons.Outlined.Palette, Color(0xFFEC4899),
+            ClaudeMcpAddRequest(name = "stitch", transport = "http", url = "https://stitch.googleapis.com/mcp", headers = mapOf("X-Goog-Api-Key" to "")))
     )
     var chooseWebViewExtension by remember { mutableStateOf(false) }
     val extensionManager = remember { com.example.gemini.ui.browser.BrowserExtensionManager.instance }
     if (chooseWebViewExtension) com.example.gemini.ui.settings.WebViewExtensionMcpPicker(onDismiss = { chooseWebViewExtension = false }) { extension ->
         addDraft = ClaudeMcpAddRequest(
             name = extensionManager.mcpServerName(extension.id), transport = "http",
-            url = extensionManager.mcpUrl(extension.id), headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
+            url = extensionManager.mcpUrl(extension.id), headers = deviceHeaders
         )
         chooseWebViewExtension = false
     }
     Text("Quick presets", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { chooseWebViewExtension = true }) { Text("+ Custom AntiGem Plugin MCP") }
-        presets.forEach { (label, req) ->
-            // The plugin developer may already be added under its old name
-            val added = servers.any { it.name == req.name || (com.example.gemini.data.remote.AndroidLocalBridgeServer.isDeveloperMcpName(req.name) && com.example.gemini.data.remote.AndroidLocalBridgeServer.isDeveloperMcpName(it.name)) }
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = !added && req.name !in ops) { addDraft = req }
-            ) {
-                Row(Modifier.padding(vertical = 8.dp, horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(if (added) "✓ $label" else "+ $label", fontSize = 11.5.sp, fontWeight = FontWeight.Medium)
-                    TransportBadge(req.transport)
+    val tiles = listOf(
+        ClaudeMcpPreset("Custom Plugin MCP", "Pick an installed plugin", Icons.Outlined.Extension, ClaudeTerracotta, null),
+    ) + presets + ClaudeMcpPreset("Custom server", "Any stdio, HTTP or SSE server", Icons.Outlined.Add, ClaudeAccent, null)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        tiles.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { p ->
+                    val req = p.request
+                    // The plugin developer may already be added under its old name
+                    val added = req != null && servers.any { it.name == req.name || (bridge.isDeveloperMcpName(req.name) && bridge.isDeveloperMcpName(it.name)) }
+                    val busy = req != null && req.name in ops
+                    com.example.gemini.ui.settings.McpPresetTile(
+                        name = p.name,
+                        subtitle = if (busy) "Adding…" else p.subtitle,
+                        icon = p.icon,
+                        accent = p.accent,
+                        added = added,
+                        addedLabel = "Added",
+                        enabled = !added && !busy,
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                    ) {
+                        when {
+                            req != null -> addDraft = req
+                            p.name == "Custom server" -> addDraft = ClaudeMcpAddRequest(name = "")
+                            else -> chooseWebViewExtension = true
+                        }
+                    }
                 }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
             }
-        }
-        Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = ClaudeAccent.copy(alpha = 0.12f),
-            border = BorderStroke(1.dp, ClaudeAccent.copy(alpha = 0.4f)),
-            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { addDraft = ClaudeMcpAddRequest(name = "") }
-        ) {
-            Text("+ Custom server", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = ClaudeAccent, modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp))
         }
     }
 
@@ -1176,3 +1175,11 @@ private fun AdvancedPage(deps: ClaudeSettingsDeps) {
         }, colors = ButtonDefaults.buttonColors(containerColor = ClaudeAccent)) { Text("Validate & save") }
     }
 }
+
+private data class ClaudeMcpPreset(
+    val name: String,
+    val subtitle: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val accent: Color,
+    val request: ClaudeMcpAddRequest?
+)
