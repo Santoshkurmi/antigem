@@ -30,7 +30,8 @@ enum class AppViewMode {
     CHAT,
     IDE,
     TERMINAL,
-    BROWSER
+    BROWSER,
+    NOTES
 }
 
 class MainActivity : ComponentActivity() {
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
         com.example.gemini.data.daemon.TermuxDaemonManager.init(this)
         com.example.gemini.ui.browser.BrowserSessionManager.instance.init(this)
         com.example.gemini.data.local.LocalTerminalBridge.instance.init(this)
+        com.example.gemini.data.notes.NotesRepository.init(this)
         com.example.gemini.data.remote.AndroidLocalBridgeServer.instance.start(this)
         handleOAuthIntent(intent)
         handleIncomingFileIntent(intent)
@@ -89,6 +91,7 @@ class MainActivity : ComponentActivity() {
                     "IDE" -> AppViewMode.IDE
                     "TERMINAL" -> AppViewMode.TERMINAL
                     "BROWSER" -> AppViewMode.BROWSER
+                    "NOTES" -> AppViewMode.NOTES
                     else -> AppViewMode.CHAT
                 }
             }
@@ -116,6 +119,11 @@ class MainActivity : ComponentActivity() {
                         "BROWSER" -> {
                             previousViewMode = currentViewMode
                             currentViewMode = AppViewMode.BROWSER
+                        }
+
+                        "NOTES" -> {
+                            previousViewMode = currentViewMode
+                            currentViewMode = AppViewMode.NOTES
                         }
                     }
                     chatViewModel.consumeRequestedViewMode()
@@ -352,6 +360,25 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
 
+                                // Persistent Notes Screen (Notes & to-do lists; open note and scroll survive switching away)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            val isVisible = currentViewMode == AppViewMode.NOTES
+                                            alpha = if (isVisible) 1f else 0f
+                                            translationX = if (isVisible) 0f else 20000f
+                                        }
+                                ) {
+                                    com.example.gemini.ui.notes.NotesScreen(
+                                        isVisible = currentViewMode == AppViewMode.NOTES,
+                                        onClose = {
+                                            currentViewMode =
+                                                if (previousViewMode == AppViewMode.NOTES) AppViewMode.CHAT else previousViewMode
+                                        }
+                                    )
+                                }
+
                                 // Floating App Switcher Across Whole App (Renders on top of Chat, IDE, Terminal, Browser)
                                 if (isFloatingSwitcherEnabled) {
                                     com.example.gemini.ui.components.FloatingSwitcherWidget(
@@ -376,6 +403,10 @@ class MainActivity : ComponentActivity() {
                                         onNavigateToTerminal = {
                                             previousViewMode = currentViewMode
                                             currentViewMode = AppViewMode.TERMINAL
+                                        },
+                                        onNavigateToNotes = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.NOTES
                                         },
                                         onPositionSaved = { x, y ->
                                             chatViewModel.saveFloatingSwitcherPosition(x, y)
