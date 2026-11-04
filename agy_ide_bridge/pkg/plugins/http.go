@@ -24,6 +24,7 @@ import (
 //	GET  /export?id=          → plugin ZIP
 //	POST /repo/list {repo}    → listing
 //	POST /repo/install {repo, path, folder, update_id, as_new} → {plugin, replaced}
+//	GET  /repo/progress?folder= → {active, phase, bytes_done, bytes_total, files_done, files_total} of that running install
 //	GET  /drafts               → {projects}   (developer MCP drafts in ~/extension-projects)
 //	POST /drafts/create {project_id, files} · /drafts/read {project_id, path?} · /drafts/write {project_id, files}
 //	POST /drafts/package {project_id} → {zip_path, manifest, …}
@@ -42,6 +43,15 @@ func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]interface{}{"plugins": plugins})
 		case "/export":
 			m.handleExport(w, r)
+		case "/repo/progress":
+			t, ok := m.installs.Load(r.URL.Query().Get("folder"))
+			if !ok {
+				writeJSON(w, http.StatusOK, map[string]interface{}{"active": false})
+				return
+			}
+			pr := t.(*progressTracker).snapshot()
+			writeJSON(w, http.StatusOK, map[string]interface{}{"active": true, "phase": pr.Phase, "bytes_done": pr.BytesDone,
+				"bytes_total": pr.BytesTotal, "files_done": pr.FilesDone, "files_total": pr.FilesTotal})
 		case "/drafts":
 			m.draftsMu.Lock()
 			projects, err := m.draftProjects()
@@ -104,11 +114,15 @@ func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer os.RemoveAll(stage)
+		t := &progressTracker{p: Progress{Phase: "listing"}}
+		m.installs.Store(req.Folder, t)
+		defer m.installs.Delete(req.Folder)
 		pkg := filepath.Join(stage, "pkg")
-		if err := m.downloadFolder(repo, p, pkg); err != nil {
+		if err := m.downloadFolder(repo, p, pkg, t); err != nil {
 			fail(w, err)
 			return
 		}
+		t.set(func(pr *Progress) { pr.Phase = "installing" })
 		if !fileExists(filepath.Join(pkg, "manifest.json")) {
 			fail(w, fmt.Errorf("%s in %s has no manifest.json", p, repo.slug()))
 			return

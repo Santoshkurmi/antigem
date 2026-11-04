@@ -8,6 +8,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import org.json.JSONArray
 
 /** A public GitHub repository holding plugin folders; [ref] is a branch or tag, blank for the default branch. */
@@ -20,6 +26,12 @@ data class PluginRepo(val owner: String, val name: String, val ref: String = "")
 data class RepoPlugin(val path: String, val id: String, val name: String, val version: String, val description: String, val iconUrl: String)
 
 data class RepoListing(val title: String, val plugins: List<RepoPlugin>, val fromIndex: Boolean)
+
+/** A running repository install: phase is listing | downloading | extracting | installing, then starting (loading it in the app). */
+data class RepoInstallProgress(val phase: String, val bytesDone: Long, val bytesTotal: Long, val filesDone: Int, val filesTotal: Int) {
+    /** 0..1 when the size is known, else null (the bar then just moves). */
+    val fraction: Float? get() = if (bytesTotal > 0 && phase in setOf("downloading", "extracting")) (bytesDone.toFloat() / bytesTotal).coerceIn(0f, 1f) else null
+}
 
 /** Dotted numeric versions, as shown and compared in the plugin screens. */
 object PluginVersions {
@@ -51,6 +63,9 @@ object PluginRepositories {
     val listings = mutableStateMapOf<String, RepoListing>()
     val errors = mutableStateMapOf<String, String>()
     val loading = mutableStateListOf<String>()
+    /** The repository install or update in progress, polled from the IDE bridge; null when none is running. */
+    var installProgress by mutableStateOf<RepoInstallProgress?>(null)
+        private set
 
     private var appContext: Context? = null
 
@@ -123,6 +138,21 @@ object PluginRepositories {
         return offered.takeIf { (PluginVersions.compare(it.version, extension.version) ?: 0) > 0 }
     }
 
-    suspend fun install(repo: PluginRepo, plugin: RepoPlugin, folder: String, updateId: String?, asNew: Boolean = false): BrowserExtension =
-        BrowserExtensionManager.instance.installFromRepo(repo.label, plugin.path, folder, updateId, asNew)
+    suspend fun install(repo: PluginRepo, plugin: RepoPlugin, folder: String, updateId: String?, asNew: Boolean = false): BrowserExtension = coroutineScope {
+        withContext(Dispatchers.Main) { installProgress = RepoInstallProgress("listing", 0, 0, 0, 0) }
+        val poller = launch(Dispatchers.IO) {
+            while (true) {
+                val p = runCatching { PluginBridge.repoProgress(folder.trim()) }.getOrNull()
+                // The bridge is done once it stops reporting; the app then loads the new files
+                withContext(Dispatchers.Main) { installProgress = p ?: installProgress?.copy(phase = "starting") }
+                delay(250)
+            }
+        }
+        try {
+            BrowserExtensionManager.instance.installFromRepo(repo.label, plugin.path, folder, updateId, asNew)
+        } finally {
+            poller.cancel()
+            withContext(Dispatchers.Main + NonCancellable) { installProgress = null }
+        }
+    }
 }

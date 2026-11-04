@@ -67,6 +67,7 @@ type Manager struct {
 	mu       sync.Mutex // plugin folders
 	draftsMu sync.Mutex // developer drafts
 	client   *http.Client
+	installs sync.Map // target folder → *progressTracker of a running repository install
 }
 
 // NewManager uses the same plugin folders, in the same order, as the app: the app's private files

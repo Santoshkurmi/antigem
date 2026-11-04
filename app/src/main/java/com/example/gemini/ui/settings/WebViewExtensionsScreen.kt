@@ -84,7 +84,9 @@ fun WebViewExtensionsScreen(onChanged: () -> Unit) {
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         notice?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
         if (tab == 1) {
-            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            val progress = PluginRepositories.installProgress
+            if (progress != null) PluginInstallProgress(progress)
+            else if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             PluginRepositoriesTab(busy, ::runOperation, ::folderTaken, ::freeFolder)
             return@Column
         }
@@ -95,6 +97,7 @@ fun WebViewExtensionsScreen(onChanged: () -> Unit) {
             OutlinedButton(enabled = !busy, onClick = { runOperation { manager.refreshExtensions(); null } }) { Text("Refresh") }
             if (busy) CircularProgressIndicator(Modifier.size(24.dp))
         }
+        PluginRepositories.installProgress?.let { PluginInstallProgress(it) }
         manager.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (manager.extensions.isEmpty()) Text("No plugins installed. Choose a ZIP containing manifest.json plus a background worker, a skills/ folder, or both.")
         manager.extensions.forEach { extension ->
