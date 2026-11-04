@@ -2434,6 +2434,70 @@ private fun ServersSubScreen(
 // ==========================================
 // SUB-SCREEN 3: MCP SERVERS & TOOLS SETTINGS
 // ==========================================
+private data class McpPreset(
+    val name: String,
+    val subtitle: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val accent: Color,
+    val spec: com.example.gemini.domain.model.McpServerSpec?
+)
+
+/** One preset in the MCP screens' grid (also used by the Claude CLI MCP settings). */
+@Composable
+internal fun McpPresetTile(
+    name: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    accent: Color,
+    added: Boolean,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    addedLabel: String = "Added · tap to edit",
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, if (added) accent.copy(alpha = 0.45f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+        modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable(enabled = enabled, onClick = onClick)
+    ) {
+        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(accent.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(19.dp))
+            }
+            Spacer(Modifier.width(9.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        name,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (added) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(Icons.Filled.CheckCircle, contentDescription = "Added", tint = QuotaGreen, modifier = Modifier.size(13.dp))
+                    }
+                }
+                Text(
+                    if (added) addedLabel else subtitle,
+                    fontSize = 10.5.sp,
+                    lineHeight = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun McpSubScreen(
     mcpServers: List<com.example.gemini.domain.model.McpServerState>,
@@ -2656,7 +2720,7 @@ private fun McpSubScreen(
             }
         }
 
-        // Quick template chips
+        // Quick presets: a two-column grid of tiles, all visible without scrolling sideways
         Text(
             text = "Quick Presets & Templates",
             fontSize = 12.5.sp,
@@ -2664,12 +2728,7 @@ private fun McpSubScreen(
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        run {
             val context = LocalContext.current
             val deviceId = remember(context) {
                 try {
@@ -2686,80 +2745,43 @@ private fun McpSubScreen(
                 chooseWebViewExtension = false
                 showDialog = true
             }
+            val bridge = com.example.gemini.data.remote.AndroidLocalBridgeServer
+            val local = "http://127.0.0.1:${bridge.DEFAULT_PORT}"
+            val deviceHeaders = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
+            fun localSpec(name: String, path: String) =
+                com.example.gemini.domain.model.McpServerSpec(serverName = name, serverUrl = "$local$path", headers = deviceHeaders)
+            // Already added (the plugin developer also under its old name): edit that one instead of adding a duplicate
+            fun existing(spec: com.example.gemini.domain.model.McpServerSpec) = mcpServers.firstOrNull {
+                it.name == spec.serverName || (bridge.isDeveloperMcpName(spec.serverName) && bridge.isDeveloperMcpName(it.name))
+            }
             val presets = listOf(
-                Triple("Custom AntiGem Plugin Developer", "SSE", com.example.gemini.domain.model.McpServerSpec(
-                    serverName = com.example.gemini.data.remote.AndroidLocalBridgeServer.DEVELOPER_MCP_NAME,
-                    serverUrl = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/extension_developer",
-                    headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
-                )),
-                Triple("Browser Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(
-                    serverName = "browser_mcp",
-                    serverUrl = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/browser",
-                    headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
-                )),
-                Triple("Terminal Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(
-                    serverName = "terminal_mcp",
-                    serverUrl = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/terminal",
-                    headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
-                )),
-                Triple("Android Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(
-                    serverName = com.example.gemini.data.remote.AndroidLocalBridgeServer.ANDROID_AUTOMATION_MCP_NAME,
-                    serverUrl = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/android",
-                    headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
-                )),
-                Triple("Notes & To-dos", "SSE", com.example.gemini.domain.model.McpServerSpec(
-                    serverName = com.example.gemini.data.remote.AndroidLocalBridgeServer.NOTES_MCP_NAME,
-                    serverUrl = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/notes",
-                    headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
-                )),
-                Triple("Stitch", "SSE", com.example.gemini.domain.model.McpServerSpec(
-                    serverName = "stitch",
-                    serverUrl = "https://stitch.googleapis.com/mcp",
-                    headers = mapOf("X-Goog-Api-Key" to "")
-                )),
+                // No spec: opens the picker for an installed plugin's own MCP
+                McpPreset("Custom Plugin MCP", "Pick an installed plugin", Icons.Outlined.Extension, ClaudeTerracotta, null),
+                McpPreset("Plugin Developer", "Build & test AntiGem plugins", Icons.Outlined.DeveloperMode, GeminiPurple,
+                    localSpec(bridge.DEVELOPER_MCP_NAME, "/extension_developer")),
+                McpPreset("Browser", "Control the in-app browser", Icons.Outlined.Language, GeminiBlue, localSpec("browser_mcp", "/browser")),
+                McpPreset("Terminal", "Run commands in the terminal", Icons.Outlined.Terminal, QuotaGreen, localSpec("terminal_mcp", "/terminal")),
+                McpPreset("Android", "Tap, type & read this phone", Icons.Outlined.PhoneAndroid, Color(0xFF14B8A6),
+                    localSpec(bridge.ANDROID_AUTOMATION_MCP_NAME, "/android")),
+                McpPreset("Notes & To-dos", "Read & edit your notes", Icons.Outlined.EditNote, Color(0xFFF59E0B), localSpec(bridge.NOTES_MCP_NAME, "/notes")),
+                McpPreset("Stitch", "Google Stitch UI design · API key", Icons.Outlined.Palette, Color(0xFFEC4899),
+                    com.example.gemini.domain.model.McpServerSpec(serverName = "stitch", serverUrl = "https://stitch.googleapis.com/mcp", headers = mapOf("X-Goog-Api-Key" to "")))
             )
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { chooseWebViewExtension = true }
-            ) { Text("+ Custom AntiGem Plugin MCP", modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), fontSize = 11.5.sp, fontWeight = FontWeight.Medium) }
-            presets.forEach { (pName, typeBadge, spec) ->
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            // Already added (the plugin developer also under its old name): edit that one instead of adding a duplicate
-                            serverToEdit = mcpServers.firstOrNull { it.name == spec.serverName ||
-                                (com.example.gemini.data.remote.AndroidLocalBridgeServer.isDeveloperMcpName(spec.serverName) && com.example.gemini.data.remote.AndroidLocalBridgeServer.isDeveloperMcpName(it.name)) }?.spec ?: spec
-                            showDialog = true
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                presets.chunked(2).forEach { row ->
+                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { p ->
+                            val found = p.spec?.let { existing(it) }
+                            McpPresetTile(p.name, p.subtitle, p.icon, p.accent, added = found != null, modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                if (p.spec == null) {
+                                    chooseWebViewExtension = true
+                                } else {
+                                    serverToEdit = found?.spec ?: p.spec
+                                    showDialog = true
+                                }
+                            }
                         }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "+ $pName",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(3.dp),
-                            color = if (typeBadge == "SSE") Color(0xFF1976D2).copy(alpha = 0.15f) else Color(0xFF7B1FA2).copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                text = typeBadge,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (typeBadge == "SSE") Color(0xFF1976D2) else Color(0xFF7B1FA2),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                            )
-                        }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
