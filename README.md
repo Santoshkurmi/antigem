@@ -1,241 +1,244 @@
-# <div align="center">⚡ AntiGem</div>
-
-<div align="center">
-  <strong>The Next-Generation Agentic AI Coding Workspace, Native Termux Terminal & Language Server Hub for Android</strong>
-</div>
-
-<br/>
-
 <div align="center">
 
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0+-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Android](https://img.shields.io/badge/Android-Jetpack%20Compose-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![gRPC](https://img.shields.io/badge/gRPC-Square%20Wire-244F7D?style=for-the-badge&logo=grpc&logoColor=white)](https://square.github.io/wire/)
-[![Go](https://img.shields.io/badge/Bridge-Go%201.23+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://golang.org)
-[![Termux](https://img.shields.io/badge/Termux-Native%20Subsystem-000000?style=for-the-badge&logo=gnubash&logoColor=white)](https://termux.dev)
+# AntiGem
+
+**An AI coding workspace for Android: Antigravity and Claude Code agents, a real Linux terminal, a code editor and a browser the agent can control, all in one app.**
+
+[![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Go](https://img.shields.io/badge/Bridge-Go-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+[![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)](LICENSE)
+[![Releases](https://img.shields.io/github/v/release/santoshkurmi/antigem?style=flat-square&label=Download)](https://github.com/santoshkurmi/antigem/releases)
+
+[Download](https://github.com/santoshkurmi/antigem/releases) · [Website](https://santoshkurmi.github.io/antigem/) · [Plugin SDK](extension_docs/README.md) · [WhatsApp community](https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV?s=cl&p=a&mlu=4&ilr=4)
 
 </div>
 
-> 💬 **Facing any issue?** Join our [WhatsApp community group](https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV?s=cl&p=a&mlu=4&ilr=4) for help and updates.
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="25%"><img src="docs/resources/chat_screen.jpg" alt="Agent chat" width="200"><br><sub>Agent chat</sub></td>
+    <td align="center" width="25%"><img src="docs/resources/ide_code_editor.jpg" alt="Code editor" width="200"><br><sub>Code editor</sub></td>
+    <td align="center" width="25%"><img src="docs/resources/linux_terminal.jpg" alt="Linux terminal" width="200"><br><sub>Linux terminal</sub></td>
+    <td align="center" width="25%"><img src="docs/resources/integrated_browser.jpg" alt="Built-in browser" width="200"><br><sub>Built-in browser</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/resources/sidebar_navigation.jpg" alt="Chat history" width="200"><br><sub>Chat history</sub></td>
+    <td align="center"><img src="docs/resources/account_profile_quota.jpg" alt="Account and quota" width="200"><br><sub>Account &amp; quota</sub></td>
+    <td align="center"><img src="docs/resources/settings_preferences.jpg" alt="Settings" width="200"><br><sub>Settings</sub></td>
+    <td></td>
+  </tr>
+</table>
 
 ---
 
-## 🌟 Overview
+## What it is
 
-**AntiGem** turns your Android device into a complete agentic AI development environment. It pairs a modern **Jetpack Compose** UI with a native **Termux Linux subsystem**, an **embedded Go IDE bridge**, and two coding agents:
+AntiGem runs two coding agents on your phone:
 
-- **Antigravity (`agy`)** — through a direct **binary gRPC connection** to the `agy` language server daemon.
-- **Claude Code** — Anthropic's official `claude` CLI, running inside the app's Linux environment.
+- **Antigravity (`agy`)**: the app talks to the `agy` language server directly over gRPC.
+- **Claude Code**: Anthropic's official `claude` CLI runs inside the app's Linux environment, and the app talks to it over its stream-json protocol, with one CLI process per chat.
 
-Pick one or both on first launch, and switch any time in **Settings → Agents**. An agent you turn off does not run at all.
+You can turn on either agent or both, on first launch or later in **Settings → Agents**. An agent you turn off does not run.
 
-Unlike traditional AI wrappers that scrape CLI output, AntiGem talks to each agent through its structured protocol: the `agy` binary over **gRPC hub mode**, and Claude Code over its **stream-json** protocol (one long-lived CLI process per chat). This unlocks fully interactive bi-directional capabilities — including real-time token streaming, multi-step subagent execution, live question-and-answer prompts, tool confirmations, and instant file synchronization.
+The app reads each agent's structured protocol, not its terminal output. That is how it shows streaming replies, tool approvals, the agent's questions, subagents and file changes as normal chat UI.
 
 ---
 
-## 📦 App Variants: Which one should you download?
+## Features
 
-AntiGem comes in two build variants:
+### Agents and chat
+- Live streaming replies, collapsible thinking, tool cards, diffs and subagent progress.
+- Tool approvals, plan approval and the agent's multiple-choice questions, answered inside the chat.
+- Switch model, effort, thinking and permission mode during a chat.
+- Image and file attachments, voice dictation, and audio playback.
+- Edit or regenerate a message, fork, rename, share, export and delete chats.
+- Slash commands, plus your own custom slash commands that expand into full prompts.
+- Markdown, syntax-highlighted code, Mermaid diagrams and an artifacts drawer.
+- A floating chat bubble you can use over other apps.
 
-| Variant | Package ID (`applicationId`) | Recommended? | How it works |
+### Claude Code
+- Install and update the official `claude` CLI from **Settings → Claude Code**.
+- Sign in with a Claude subscription or an Anthropic Console account.
+- **Third-party providers**: add any Anthropic-compatible API, such as OpenRouter, Kimi or DeepSeek, with your own key. OpenRouter is a one-tap preset that can fetch its free models. Provider models appear in the model picker next to Claude's own.
+- Usage at a glance: prompt-cache timer, context window use, 5-hour and weekly plan limits, and token counts for each reply.
+- Settings for chat defaults, permission rules, the command sandbox, MCP servers, plugins and marketplaces, `CLAUDE.md` and Claude's memory.
+
+### Antigravity
+- Direct gRPC connection to the `agy` daemon.
+- Model picker with live quota, Google sign-in and account details.
+- Security presets and per-project rules for command auto-run and file access.
+- MCP servers, skills and Google plugins.
+
+### Built-in MCP servers
+Each one is a one-tap preset in **Settings → MCP Servers**, for both agents.
+
+| MCP | What the agent can do |
+| :--- | :--- |
+| **Browser** | Open, switch and close tabs, click and type on pages, run JavaScript, inspect the DOM, read console logs, take screenshots, upload files, download URLs and control media. |
+| **Terminal** | Create terminal sessions, send commands, read output, kill processes, and change the terminal's theme and font. |
+| **Android** | Read the screen's UI tree, tap, swipe, scroll, type, press keys, take screenshots, launch and list apps, open intents, and (with ADB) install, uninstall or force-stop apps and run `adb shell`. |
+| **Notes & To-dos** | List, read, create, edit and delete your notes and to-do items. |
+| **Custom Plugin** | Use the tools of any installed AntiGem plugin. |
+| **Plugin Developer** | Create, install, test and debug AntiGem plugins from the chat. |
+| **Stitch** | Google Stitch UI design, with your own API key. |
+
+### Custom AntiGem plugins
+- Plugins are small packages with a `manifest.json` and a JavaScript worker that add MCP tools, and can include Markdown **skills** that teach the agent how to use them.
+- They run in the app's own extension host, which implements a large part of the Chrome extension API (`tabs`, `scripting`, `storage`, `debugger` and more), so many Chrome extension workers can be ported.
+- Install from a ZIP, or from a plugin repository on GitHub. The app checks repositories for updates in the background.
+- Enable, disable, reload and update plugins without restarting the app.
+- Full SDK, API reference and an example: [extension_docs/](extension_docs/README.md).
+
+### Linux terminal
+- A full Termux-based Linux environment with `apt`/`pkg`, bash, Python, Node.js, Git, Go and more. No root and no proot.
+- Multiple sessions, themes, font sizes, quick keys and text selection.
+- Background service for long-running builds, servers and scripts.
+- **ADB Connect**: connects the terminal's `adb` to the same phone over Wireless debugging, with pairing from a notification and automatic reconnects.
+
+### Code editor and Git
+- Syntax highlighting for Python, Go, Kotlin, Java, JS/TS, Rust, C/C++, HTML/CSS, JSON, YAML, Markdown and more.
+- Tabs, line numbers, find and replace, undo and redo, auto-indent and a file explorer.
+- Run commands from the editor in a terminal sheet with Ctrl keys.
+- Git: clone, status, diffs, commit, pull and push from a source control view.
+
+### Browser
+- In-app browser for previewing local dev servers and testing web apps.
+- Desktop and mobile modes, a steady browser identity that keeps Google sign-in working, and built-in Eruda DevTools.
+
+### Notes
+- Notes and to-do lists inside the app and in the floating bubble.
+- Agents can read and update them through the Notes MCP.
+
+### Backups and updates
+- Back up and restore the Linux rootfs, projects and chat history to phone storage.
+- Data loss protection: an optional uninstall shield and a guard against **Clear data** in App info.
+- In-app update checks and APK updates.
+- Diagnostics: a network inspector, live stream counts and daemon logs.
+
+---
+
+## Download
+
+Get the latest APK from [Releases](https://github.com/santoshkurmi/antigem/releases). There are two build variants:
+
+| Variant | Package name | Needs the Termux app? | Notes |
 | :--- | :--- | :---: | :--- |
-| **`termux`** | `com.termux` | **✅ Yes (Recommended)** | **All-in-one standalone environment.** You do **not** need Termux installed. The app natively runs its own full Linux environment, package manager (`apt`/`pkg`), shell, and binaries inside its own private sandbox. |
-| **`standard`** | `com.antigem` | Optional | Requires the standalone **Termux** app installed on your phone. You run `agy_ide_bridge` inside Termux and connect the AntiGem app to it over localhost. *(Note: PRoot is not used for now).* |
+| **`termux`** (recommended) | `com.termux` | No | Self-contained: the app sets up its own Linux environment. This is the one published in releases. |
+| **`standard`** | `com.antigem` | Yes | You run `agy_ide_bridge` inside a separately installed Termux app, and AntiGem connects to it over localhost. Not published; build it yourself from source. |
 
-> [!TIP]
-> **Download Note:** For the latest releases, we primarily build and publish the **`termux`** flavor (`antiGem-termux-v*-release.apk`). If you specifically prefer the `standard` variant, you can find older releases or easily fork the repository and build your own APK using Gradle or GitHub Actions.
+> [!NOTE]
+> The `standard` variant is not deprecated, but it gets little attention because almost nobody uses it. Some features, such as the Browser MCP, may not work in it right now, and it may be dropped in the future. Use the `termux` variant.
+
+> [!IMPORTANT]
+> The `termux` variant uses the package name `com.termux`, so it cannot be installed on the same phone as the official Termux app. Uninstall Termux first, or use the `standard` variant.
+
+### Why the package name is `com.termux`
+
+Termux packages are compiled for the fixed path `/data/data/com.termux/files/usr`. An app with any other package name cannot run them directly. It would have to use **proot** to fake that path, and proot slows down every program, or rebuild every package for a new path.
+
+With the package name `com.termux`, AntiGem can install the official Termux bootstrap and use the official Termux package repositories, and everything runs at full native speed. This is the only reason for the name.
+
+### This is not a Termux fork
+
+AntiGem is not a copy or modification of the Termux app. The app was written from scratch. It uses only Termux's open-source **terminal-emulator** and **terminal-view** libraries for drawing the terminal, and the Termux bootstrap and package repositories for the Linux environment. The UI, the agent integrations, the Go bridge, the MCP servers, the plugin system and everything else are AntiGem's own code.
+
+### Termux compatibility
+
+Packages, `apt`/`pkg`, the shell and almost everything else work as in Termux. The exception is **Termux:API**: in Termux you install the separate Termux:API app to get commands for location, SMS and other device features.
+
+AntiGem has a few of these built in:
+
+| Command | Built in |
+| :--- | :---: |
+| `termux-toast` | ✅ |
+| `termux-vibrate` | ✅ |
+| `termux-clipboard-get` / `termux-clipboard-set` | ✅ |
+| `termux-torch` | ✅ |
+| `termux-tts-speak` | ✅ |
+| `termux-notification` / `termux-notification-remove` | ✅ |
+| `termux-volume` | ✅ |
+| `termux-battery-status` | ✅ |
+| `termux-open` / `termux-open-url` | ✅ |
+| `termux-wake-lock` / `termux-wake-unlock` | ✅ |
+
+Other Termux:API commands are not supported. They will not be added to the app itself, because things like location, SMS and contacts would need many extra Android permissions in AntiGem.
+
+The official Termux:API app does not work with AntiGem either: Android only lets it talk to an app signed with the same key as official Termux, and AntiGem has a different signature. The plan is to build a Termux:API app that works with AntiGem. Once that is done, AntiGem will support almost everything Termux does.
 
 ---
 
-## 🏗️ How It Works
+## How it works
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                 📱 AntiGem Android App                      │
-│            (Jetpack Compose UI & Native Terminal)           │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-              Binary Protobuf / gRPC & WebSockets
-                            │
-┌───────────────────────────▼─────────────────────────────────┐
-│               🐹 Embedded Go IDE Bridge                     │
-│                   (agy_ide_bridge)                          │
-└──────────────┬───────────────────────────────┬──────────────┘
-               │                               │
-    Direct gRPC Hub Protocol        stream-json (NDJSON relay)
-               │                               │
-┌──────────────▼──────────────┐ ┌──────────────▼──────────────┐
-│  ⚡ Antigravity (agy) Core  │ │  ✻ Claude Code CLI          │
-│  (Language Server Daemon,   │ │  (one process per chat,     │
-│   Models & MCP Agents)      │ │   models, tools & MCP)      │
-└─────────────────────────────┘ └─────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                    AntiGem Android app                   │
+│     Compose UI · terminal · editor · browser · MCPs      │
+└────────────────────────────┬─────────────────────────────┘
+                             │  gRPC / WebSocket (localhost)
+┌────────────────────────────▼─────────────────────────────┐
+│                agy_ide_bridge (Go, local)                │
+│     Git · files · Claude Code relay · plugin manager     │
+└───────────────┬──────────────────────────┬───────────────┘
+                │ gRPC                     │ stream-json
+┌───────────────▼─────────────┐ ┌──────────▼───────────────┐
+│  Antigravity (agy) daemon   │ │  Claude Code CLI         │
+│                             │ │  (one process per chat)  │
+└─────────────────────────────┘ └──────────────────────────┘
 ```
 
-- **Type-Safe gRPC Protocol**: Directly speaks the protobuf schema of `agy` over Square Wire instead of scraping command-line text.
-- **Native Claude Code Protocol**: The bridge runs the official `claude` CLI in stream-json mode and relays it to the app over WebSockets, so models, effort, thinking and permission mode switch live without restarting the chat.
-- **Deep Agent Interactivity**: Supports complex agent workflows, interactive multiple-choice questions, and permission confirmations natively within the chat UI.
-- **Native Android PTY Engine**: Runs a complete PTY terminal alongside background execution services for long-running compiles, servers, and scripts.
-
 ---
 
-## 📸 App Showcase
+## Building from source
 
-<div align="center">
+**Requirements:** JDK 17+, Android SDK (API 35, Build Tools 35+) and Go 1.23+ for the bridge.
 
-### 💬 Agentic Chat & Tool Execution
-<img src="docs/resources/chat_screen.jpg" alt="Agent Chat Execution" width="90%" style="border-radius: 12px; margin-bottom: 24px;" />
-
----
-
-### 💻 Full IDE Code Editor
-<img src="docs/resources/ide_code_editor.jpg" alt="IDE Code Editor" width="90%" style="border-radius: 12px; margin-bottom: 24px;" />
-
----
-
-### 🐧 Native Linux Terminal
-<img src="docs/resources/linux_terminal.jpg" alt="Native Linux Terminal" width="90%" style="border-radius: 12px; margin-bottom: 24px;" />
-
----
-
-### 📂 Sidebar & Workspace History
-<img src="docs/resources/sidebar_navigation.jpg" alt="Sidebar Navigation" width="90%" style="border-radius: 12px; margin-bottom: 24px;" />
-
----
-
-### ⚡ Quota & Account Info
-<img src="docs/resources/account_profile_quota.jpg" alt="Account Profile & Quota" width="90%" style="border-radius: 12px; margin-bottom: 24px;" />
-
----
-
-### ⚙️ Settings, MCP & Backups
-<img src="docs/resources/settings_preferences.jpg" alt="Settings & Backups" width="90%" style="border-radius: 12px; margin-bottom: 24px;" />
-
----
-
-### 🌐 Integrated Web Browser & Automation
-<img src="docs/resources/integrated_browser.jpg" alt="Integrated Browser" width="90%" style="border-radius: 12px; margin-bottom: 24px;" />
-
-</div>
-
----
-
-## ✨ Key Features
-
-### 🤖 1. Autonomous Agentic AI
-- **Direct Wire gRPC Hub**: Type-safe, low-latency communication with `agy` using Square Wire.
-- **Live Streamed Reasoning**: Real-time token streaming, thought collapse/expansion, tool execution cards, and subagent tracking.
-- **Model Switching & Quota**: Switch between Gemini 3.7 Flash, Pro, Ultra, Claude 3.5 Sonnet, GPT-4o, and custom models with real-time prompt quota indicators.
-- **Interactive Prompts**: Supports interactive confirmation modals and multiple-choice questions generated by the AI agent.
-
-### ✻ 2. Claude Code Agent
-- **Official Claude Code**: Runs Anthropic's `claude` CLI inside the app — install or update it and sign in with your Claude subscription or Anthropic Console account from **Settings → Claude Code**.
-- **Full Chat Experience**: Live streaming with thinking summaries, tool cards with approvals (allow once / always), plan approval, Claude's questions, subagents, images and file attachments, and voice dictation.
-- **Live Chat Controls**: Switch model, effort level, thinking and permission mode (Manual, Accept edits, Plan, Auto, Don't ask) mid-chat; the app checks every change against what the CLI really runs.
-- **Usage at a Glance**: Prompt-cache timer, context window usage, 5-hour and weekly plan limits, and per-reply token counts with the model that answered.
-- **Chat Management**: Slash commands (including `/compact`), edit or regenerate a message in place, fork, rename and delete chats — all saved in Claude Code's own history.
-- **Settings**: Chat defaults, permission rules and command sandbox, MCP servers (including the in-app browser & terminal automation server), plugins and marketplaces, `CLAUDE.md` instructions and Claude's saved memory.
-
-### 💻 3. Native Linux Terminal Subsystem
-- **High-Performance PTY**: Fast terminal emulator with customizable font sizes, themes, and interactive quick-keys.
-- **Complete Linux Ecosystem**: Pre-configured bash, coreutils, Python, Node.js, Git, Go, and Glibc toolchains in `$HOME`.
-- **Live Terminal MCP**: Lets AI agents run commands, run tests, build projects, and stream output with continuous foreground execution.
-
-### 📝 4. Mobile IDE Code Editor
-- **Syntax Highlighting**: Fast editor supporting Python, Go, Kotlin, Java, JS/TS, Rust, C/C++, HTML/CSS, JSON, YAML, and Markdown.
-- **Productivity Controls**: Multi-tab switcher, line numbering, find/replace, undo/redo, auto-indentation, and file explorer.
-
-### 🌐 5. Integrated Web Browser & Automation MCP
-- **Built-in Browser**: In-app web browser for previewing local dev servers and testing web applications.
-- **Browser Automation**: Allows the AI agent to inspect live web pages, interact with DOM elements, test UI workflows, and verify frontend components.
-
-### 🎨 6. Dynamic Chat Artifacts & Diagrams
-- **Interactive Markdown & Diffs**: Expandable diff blocks, step carousels, and copyable code blocks.
-- **Mermaid Diagrams**: Native hardware-accelerated rendering for flowcharts, architecture diagrams, and state machines.
-- **Floating Chat (PIP)**: Multi-task across Android with the floating picture-in-picture overlay.
-
-### 🛡️ 7. Full Backup Suite & In-App Updates
-- **Rootfs Backup**: One-tap backup of your entire installed Linux rootfs, dotfiles, and binaries to phone storage.
-- **Chat & Auth Backup**: Export your conversation databases, brain transcripts, and credentials.
-- **One-Tap Updater**: In-app version checks and direct APK updates.
-
----
-
-## 🛠️ Building From Source
-
-### Prerequisites
-- **JDK 17+**
-- **Android SDK** (API Level 35, Build Tools 35.0.0+)
-- **Go 1.23+** (for compiling `agy_ide_bridge`)
-- **Gradle 8.11+**
-
-### Build Commands
 ```bash
-# Clone the repository
 git clone https://github.com/santoshkurmi/antigem.git
 cd antigem
 
-# Build both flavors (Debug & Release)
-./scripts/build_all_apks.sh
-
-# Or build the recommended Termux flavor directly via Gradle:
+# Build the termux variant
 ./gradlew assembleTermuxDebug
-./gradlew assembleTermuxRelease
+
+# Or build every variant
+./scripts/build_all_apks.sh
 ```
 
-Compiled APKs are saved to:
-- `build/outputs/apk_all/`
-- `app/build/outputs/apk/<flavor>/<buildType>/`
+APKs are written to `app/build/outputs/apk/<variant>/<buildType>/` and `build/outputs/apk_all/`.
 
 ---
 
-## 📂 Project Structure
+## Project structure
 
 ```text
-antiGem/
-├── app/
-│   ├── src/main/
-│   │   ├── java/com/example/gemini/
-│   │   │   ├── data/
-│   │   │   │   ├── agent/        # Agent backends: Antigravity (agy/) and Claude Code (claude/)
-│   │   │   │   ├── local/        # Terminal, Storage, and Environment Managers
-│   │   │   │   ├── receiver/     # Termux Intent & API Broadcast Receivers
-│   │   │   │   ├── remote/       # Wire gRPC Service & WebSocket Clients
-│   │   │   │   ├── service/      # TermuxService (Foreground execution)
-│   │   │   │   └── updater/      # In-App Auto-Updater
-│   │   │   ├── ui/               # Jetpack Compose Screens, Dialogs & Floating Chat
-│   │   │   └── theme/            # Design System & Theme Engine
-│   │   └── res/                  # Android XML Resources & FileProvider paths
-├── agy_ide_bridge/               # Embedded Go bridge between Android, the AGY daemon and Claude Code
-├── proto_generator/              # Square Wire Protobuf definitions & generators
-├── scripts/                      # Automated build and backup scripts
-└── version.json                  # Centralized version metadata & release manifest
+antigem/
+├── app/src/main/
+│   ├── java/com/example/gemini/
+│   │   ├── data/          # Agent backends (agy, claude), terminal, ADB, automation, notes, updater
+│   │   ├── domain/        # Chat models and parsing
+│   │   └── ui/            # Compose screens: chat, IDE, browser, notes, settings
+│   ├── java/com/termux/   # Termux terminal-view widget and com.termux service entry points
+│   └── assets/browser-runtime/  # Extension host and Chrome API for plugins
+├── agy_ide_bridge/        # Go bridge: agy hub, Claude Code relay, Git, plugins
+├── extensions/            # Bundled plugins
+├── extension_docs/        # Plugin SDK documentation and examples
+├── proto_generator/       # Protobuf definitions and generators for the agy API
+├── scripts/               # Build, backup and restore scripts
+└── version.json           # Version and changelog used by the in-app updater
 ```
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-Contributions, feature suggestions, and pull requests are welcome!
-1. Fork the repository
-2. Create your branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Issues, ideas and pull requests are welcome. For help, join the [WhatsApp community](https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV?s=cl&p=a&mlu=4&ilr=4).
 
----
+## Analytics
 
-## 📊 Analytics
+AntiGem uses [TelemetryDeck](https://telemetrydeck.com) only to count how many people use the app. It records app opens, an anonymous install ID, session counts, and general device details (phone model, Android version, app version). It does **not** collect chats, prompts, code, files, terminal output, account emails or API keys. Debug builds are marked as test data.
 
-AntiGem uses [TelemetryDeck](https://telemetrydeck.com) for a basic check of how many people use the app overall.
+## License
 
-It records that the app was opened, an anonymous install count, session counts, and general device details such as the phone model, Android version, and app version. It does not collect chat messages, prompts, code, files, terminal output, account emails, or API keys.
-
-A debug build is marked as test data and stays separate from the real user count.
-
----
-
-## 📄 License
-
-Copyright (C) 2026 Santosh Kurmi
-
-[GNU General Public License v3.0](LICENSE) or any later version.
+Copyright (C) 2026 Santosh Kurmi. Licensed under the [GNU General Public License v3.0](LICENSE) or any later version.
