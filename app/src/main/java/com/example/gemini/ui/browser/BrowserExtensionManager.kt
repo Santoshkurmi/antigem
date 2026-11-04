@@ -120,6 +120,7 @@ class BrowserExtensionManager private constructor() {
     private val hostMutex = Mutex()
     private val extensionMutex = Mutex()
     private var hostProcess: Process? = null
+    private val hostTail = ArrayDeque<String>()
     private var packaged = false
     var lastError by androidx.compose.runtime.mutableStateOf<String?>(null)
         private set
@@ -197,13 +198,39 @@ class BrowserExtensionManager private constructor() {
                 "PATH" to "${LocalEnvironmentManager.getBinDir(context).absolutePath}:/system/bin",
                 "TMPDIR" to LocalEnvironmentManager.getTmpDir(context).absolutePath,
                 "AGY_PARENT_PID" to android.os.Process.myPid().toString()))
-            hostProcess = builder.start()
-            val process = hostProcess!!
-            scope.launch { process.inputStream.bufferedReader().useLines { lines -> lines.forEach { Log.d(TAG, it) } } }
+            // Everything the host prints, plus its exit code, goes to ~/extension-host.log so a failing phone can be diagnosed.
+            val logFile = File(LocalEnvironmentManager.getHomeDir(context), "extension-host.log")
+            synchronized(hostTail) { hostTail.clear() }
+            runCatching { logFile.writeText("[${java.util.Date()}] starting: ${command.joinToString(" ")}\n") }
+            val process = try {
+                builder.start()
+            } catch (e: Exception) {
+                runCatching { logFile.appendText("failed to launch node: ${e}\n") }
+                throw IllegalStateException("Extension host failed to launch: ${e.message} (log: ${logFile.absolutePath})", e)
+            }
+            hostProcess = process
+            scope.launch {
+                runCatching {
+                    process.inputStream.bufferedReader().useLines { lines -> lines.forEach {
+                        Log.d(TAG, it)
+                        synchronized(hostTail) { hostTail.addLast(it); while (hostTail.size > 30) hostTail.removeFirst() }
+                        runCatching { logFile.appendText(it + "\n") }
+                    } }
+                }
+                val code = runCatching { process.waitFor() }.getOrNull()
+                Log.w(TAG, "Extension host exited with code $code")
+                runCatching { logFile.appendText("[${java.util.Date()}] host exited with code $code\n") }
+            }
         }
         repeat(80) {
             if (runCatching { JSONObject(hostRequest("/health")).optBoolean("ready") }.getOrDefault(false)) { lastError = null; return@withLock }
-            if (hostProcess?.isAlive != true) throw IllegalStateException("Extension host exited; see BrowserExtensionManager logs")
+            if (hostProcess?.isAlive != true) {
+                delay(150) // let the reader coroutine capture the final output and exit code
+                val tail = synchronized(hostTail) { hostTail.takeLast(8).joinToString("\n") }
+                val logPath = File(LocalEnvironmentManager.getHomeDir(context), "extension-host.log").absolutePath
+                throw IllegalStateException("Extension host exited" + (hostProcess?.let { p -> runCatching { " (code ${p.exitValue()})" }.getOrDefault("") } ?: "") +
+                    (if (tail.isNotBlank()) ":\n$tail" else "; no output") + "\nFull log: $logPath")
+            }
             delay(100)
         }
         throw IllegalStateException("Extension host did not start in time")

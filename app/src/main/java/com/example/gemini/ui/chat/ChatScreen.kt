@@ -1552,8 +1552,7 @@ fun ChatScreen(
                                                 val selectable = when (feedItem.block) {
                                                     is MarkdownBlock.Paragraph, is MarkdownBlock.Header, is MarkdownBlock.Bullet,
                                                     is MarkdownBlock.Numbered, is MarkdownBlock.Task, is MarkdownBlock.Blockquote,
-                                                    is MarkdownBlock.Alert, is MarkdownBlock.Code, is MarkdownBlock.Table,
-                                                    is MarkdownBlock.Details -> true
+                                                    is MarkdownBlock.Alert, is MarkdownBlock.Table -> true
                                                     else -> false
                                                 }
                                                 if (selectable) SelectionContainer { blockView() } else blockView()
