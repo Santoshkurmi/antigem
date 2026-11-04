@@ -10,7 +10,8 @@ import com.example.gemini.ui.browser.BrowserExtensionManager
  */
 object PromptExpansion {
     private const val TAG = "antigem-expansion"
-    private val TOKEN = Regex("(?<=^|\\s)/(plu:[A-Za-z0-9_-]+(?::[A-Za-z0-9._-]+)?|[A-Za-z0-9][A-Za-z0-9_-]{0,47})(?=\\s|$)")
+    // `/plu:<plugin>:` with no skill after the colon (left by the picker) counts as `/plu:<plugin>`
+    private val TOKEN = Regex("(?<=^|\\s)/(plu:[A-Za-z0-9_-]+(?::[A-Za-z0-9._-]*)?|[A-Za-z0-9][A-Za-z0-9_-]{0,47})(?=\\s|$)")
     private val BLOCK = Regex("<$TAG command=\"([^\"]*)\">[\\s\\S]*?</$TAG>")
 
     fun expand(text: String): String {
@@ -22,8 +23,10 @@ object PromptExpansion {
             val token = match.groupValues[1]
             if (token.startsWith("plu:")) {
                 val parts = token.removePrefix("plu:").split(':')
-                val guide = pluginGuide(parts[0], parts.getOrNull(1)) ?: continue
-                out.append(text, last, match.range.first).append(block(match.value, guide))
+                val skill = parts.getOrNull(1)?.ifBlank { null }
+                val guide = pluginGuide(parts[0], skill) ?: continue
+                // The chat shows the command without the dangling colon
+                out.append(text, last, match.range.first).append(block(if (skill == null) "/plu:${parts[0]}" else match.value, guide))
                 last = match.range.last + 1
                 continue
             }
@@ -42,6 +45,16 @@ object PromptExpansion {
         }
         if (last == 0) return text
         return out.append(text, last, text.length).toString()
+    }
+
+    /** Where [text] (as the user typed it) has a command that expands: an enabled plugin's `/plu:` or a custom command. For highlighting. */
+    fun commandRanges(text: String): List<IntRange> {
+        if (!text.contains('/')) return emptyList()
+        return TOKEN.findAll(text).filter { match ->
+            val token = match.groupValues[1]
+            if (token.startsWith("plu:")) enabledPlugin(token.removePrefix("plu:").substringBefore(':')) != null
+            else CustomSlashCommands.find(token) != null
+        }.map { it.range }.toList()
     }
 
     fun collapse(text: String): String =
