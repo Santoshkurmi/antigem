@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Language
@@ -50,6 +51,7 @@ fun FloatingSwitcherWidget(
     onNavigateToIde: () -> Unit,
     onNavigateToBrowser: () -> Unit,
     onNavigateToTerminal: () -> Unit,
+    onNavigateToNotes: () -> Unit = {},
     onPositionSaved: (Float, Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -257,6 +259,7 @@ fun FloatingSwitcherWidget(
                                     "ide" -> currentViewMode == AppViewMode.IDE
                                     "browser" -> currentViewMode == AppViewMode.BROWSER
                                     "terminal" -> currentViewMode == AppViewMode.TERMINAL
+                                    "notes" -> currentViewMode == AppViewMode.NOTES
                                     else -> false
                                 }
 
@@ -265,6 +268,7 @@ fun FloatingSwitcherWidget(
                                     "ide" -> Icons.Outlined.Code
                                     "terminal" -> Icons.Outlined.Terminal
                                     "browser" -> Icons.Outlined.Language
+                                    "notes" -> Icons.Outlined.EditNote
                                     else -> Icons.Outlined.ChatBubbleOutline
                                 }
 
@@ -273,6 +277,7 @@ fun FloatingSwitcherWidget(
                                     "ide" -> "IDE"
                                     "terminal" -> "Terminal"
                                     "browser" -> "Browser"
+                                    "notes" -> "Notes"
                                     else -> itemId
                                 }
 
@@ -287,6 +292,7 @@ fun FloatingSwitcherWidget(
                                             "ide" -> onNavigateToIde()
                                             "browser" -> onNavigateToBrowser()
                                             "terminal" -> onNavigateToTerminal()
+                                            "notes" -> onNavigateToNotes()
                                         }
                                     }
                                 )
@@ -306,6 +312,7 @@ fun FloatingSwitcherWidget(
                                     "ide" -> currentViewMode == AppViewMode.IDE
                                     "browser" -> currentViewMode == AppViewMode.BROWSER
                                     "terminal" -> currentViewMode == AppViewMode.TERMINAL
+                                    "notes" -> currentViewMode == AppViewMode.NOTES
                                     else -> false
                                 }
 
@@ -314,6 +321,7 @@ fun FloatingSwitcherWidget(
                                     "ide" -> Icons.Outlined.Code
                                     "terminal" -> Icons.Outlined.Terminal
                                     "browser" -> Icons.Outlined.Language
+                                    "notes" -> Icons.Outlined.EditNote
                                     else -> Icons.Outlined.ChatBubbleOutline
                                 }
 
@@ -322,6 +330,7 @@ fun FloatingSwitcherWidget(
                                     "ide" -> "IDE"
                                     "terminal" -> "Terminal"
                                     "browser" -> "Browser"
+                                    "notes" -> "Notes"
                                     else -> itemId
                                 }
 
@@ -336,6 +345,7 @@ fun FloatingSwitcherWidget(
                                             "ide" -> onNavigateToIde()
                                             "browser" -> onNavigateToBrowser()
                                             "terminal" -> onNavigateToTerminal()
+                                            "notes" -> onNavigateToNotes()
                                         }
                                     }
                                 )

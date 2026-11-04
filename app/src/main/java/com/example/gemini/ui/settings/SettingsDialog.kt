@@ -195,7 +195,7 @@ fun SettingsDialog(
     onClearPluginStatus: () -> Unit = {},
     isFloatingSwitcherEnabled: Boolean = true,
     floatingSwitcherOrientation: String = "HORIZONTAL",
-    floatingSwitcherItems: List<String> = listOf("chat", "ide", "terminal", "browser"),
+    floatingSwitcherItems: List<String> = listOf("chat", "ide", "terminal", "browser", "notes"),
     floatingSwitcherAutoCollapseSec: Int = 0,
     onToggleFloatingSwitcher: (Boolean) -> Unit = {},
     onSetFloatingSwitcherOrientation: (String) -> Unit = {},
@@ -1485,7 +1485,7 @@ private fun AppearanceSubScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    val allAvailable = listOf("chat", "ide", "terminal", "browser")
+                    val allAvailable = listOf("chat", "ide", "terminal", "browser", "notes")
                     val currentItems = floatingSwitcherItems.toMutableList()
                     val displayedList = currentItems + allAvailable.filterNot { currentItems.contains(it) }
 
@@ -1496,6 +1496,7 @@ private fun AppearanceSubScreen(
                             "ide" -> "IDE (Code Editor)"
                             "terminal" -> "Terminal"
                             "browser" -> "Web Browser"
+                            "notes" -> "Notes & To-dos"
                             else -> itemId
                         }
                         val itemIcon = when (itemId) {
@@ -1503,6 +1504,7 @@ private fun AppearanceSubScreen(
                             "ide" -> Icons.Outlined.Code
                             "terminal" -> Icons.Outlined.Terminal
                             "browser" -> Icons.Outlined.Language
+                            "notes" -> Icons.Outlined.EditNote
                             else -> Icons.Outlined.ChatBubbleOutline
                         }
 
@@ -2703,6 +2705,11 @@ private fun McpSubScreen(
                 Triple("Android Automation", "SSE", com.example.gemini.domain.model.McpServerSpec(
                     serverName = com.example.gemini.data.remote.AndroidLocalBridgeServer.ANDROID_AUTOMATION_MCP_NAME,
                     serverUrl = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/android",
+                    headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
+                )),
+                Triple("Notes & To-dos", "SSE", com.example.gemini.domain.model.McpServerSpec(
+                    serverName = com.example.gemini.data.remote.AndroidLocalBridgeServer.NOTES_MCP_NAME,
+                    serverUrl = "http://127.0.0.1:${com.example.gemini.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT}/notes",
                     headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
                 )),
                 Triple("Stitch", "SSE", com.example.gemini.domain.model.McpServerSpec(
