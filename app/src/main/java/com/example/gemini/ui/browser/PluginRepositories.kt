@@ -42,6 +42,8 @@ object PluginVersions {
 object PluginRepositories {
     const val INDEX = "antigem-plugins.json"
     private const val PREFS = "plugin_repositories"
+    const val DEFAULT_REPO = "dipeshkrydv/antigem_plugins"
+    private const val DEFAULT_REPO_ADDED = "default_repo_added"
     private val NAME = "[A-Za-z0-9_.-]+"
 
     val repos = mutableStateListOf<PluginRepo>()
@@ -55,8 +57,17 @@ object PluginRepositories {
     fun init(context: Context) {
         if (appContext != null) return
         appContext = context.applicationContext
-        val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("repos", null) ?: return
-        runCatching { val array = JSONArray(stored); repos.addAll((0 until array.length()).map { parse(array.getString(it)) }) }
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.getString("repos", null)?.let { stored ->
+            runCatching { val array = JSONArray(stored); repos.addAll((0 until array.length()).map { parse(array.getString(it)) }) }
+        }
+        // The official repository is added once, for new and existing users; if the user removes it, it stays removed
+        if (!prefs.getBoolean(DEFAULT_REPO_ADDED, false)) {
+            val official = parse(DEFAULT_REPO)
+            if (repos.none { it.label.equals(official.label, ignoreCase = true) }) repos.add(0, official)
+            prefs.edit().putBoolean(DEFAULT_REPO_ADDED, true).apply()
+            persist()
+        }
     }
 
     /** Accepts `owner/repo`, `owner/repo@branch`, `https://github.com/owner/repo` and `…/tree/branch` URLs. */
