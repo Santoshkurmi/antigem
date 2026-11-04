@@ -3034,6 +3034,10 @@ private val CHOICE_REGEX = Regex("<(ask_choices|user_choice)>([\\s\\S]*?)</(ask_
 private val EXEC_CMD_REGEX = Regex("<execute_command>([\\s\\S]*?)</execute_command>")
 private val WEB_SEARCH_REGEX = Regex("<web_search>([\\s\\S]*?)</web_search>")
 private val READ_URL_REGEX = Regex("<read_url>([\\s\\S]*?)</read_url>")
+private val VIDEO_OPEN_TAG_REGEX = Regex("<video\\b[^>]*>", RegexOption.IGNORE_CASE)
+private val SOURCE_TAG_REGEX = Regex("<source\\b[^>]*>", RegexOption.IGNORE_CASE)
+private val HTML_SRC_ATTR_REGEX = Regex("""\bsrc\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+private val HTML_TITLE_ATTR_REGEX = Regex("""\b(title|aria-label)\s*=\s*["']([^"']*)["']""", RegexOption.IGNORE_CASE)
 private val CHAT_TITLE_REGEX = Regex("<chat_title>[\\s\\S]*?</chat_title>\\s*", RegexOption.IGNORE_CASE)
 private val INFLIGHT_CHAT_TITLE_REGEX = Regex("<\\s*chat_title[\\s\\S]*", RegexOption.IGNORE_CASE)
 
@@ -3359,6 +3363,24 @@ fun parseMarkdownBlocks(
             result.add(MarkdownBlock.Details(summary = summary, body = bodyLines.joinToString("\n").trim(), defaultOpen = isOpen))
             i++
             continue
+        }
+
+        // 4b. HTML video: <video src="..."></video>, or <video> with <source src="..."> lines up to </video>
+        if (line.trimStart().startsWith("<video", ignoreCase = true)) {
+            var end = i
+            while (end < lines.size && end - i < 20 && !lines[end].contains("</video>", ignoreCase = true)) end++
+            // No closing tag (yet, while streaming): only the opening line counts
+            if (end >= lines.size || end - i >= 20) end = i
+            val html = lines.subList(i, end + 1).joinToString("\n")
+            val openTag = VIDEO_OPEN_TAG_REGEX.find(html)?.value.orEmpty()
+            val src = HTML_SRC_ATTR_REGEX.find(openTag)?.groupValues?.get(1)
+                ?: SOURCE_TAG_REGEX.findAll(html).firstNotNullOfOrNull { HTML_SRC_ATTR_REGEX.find(it.value)?.groupValues?.get(1) }
+            if (!src.isNullOrBlank()) {
+                val title = HTML_TITLE_ATTR_REGEX.find(openTag)?.groupValues?.get(2).orEmpty()
+                result.add(MarkdownBlock.Video(alt = title, url = src.trim()))
+                i = end + 1
+                continue
+            }
         }
 
         // 5a. Linked Markdown Images: [![alt](imgUrl)](linkUrl)
