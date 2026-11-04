@@ -187,6 +187,10 @@ fun CodeBlock(
     val isPreviewable = remember(code, language) {
         isPreviewableCode(code, language)
     }
+    val isShellCode = remember(language) {
+        language.lowercase().trim() in setOf("bash", "sh", "shell", "zsh", "console", "shellsession", "terminal")
+    }
+    var showRunDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(isCopied) {
         if (isCopied) {
@@ -369,6 +373,21 @@ fun CodeBlock(
                     )
                 }
             }
+
+            // Run Button (shell code only): edit the command, then run it in a terminal over the chat
+            if (isShellCode) {
+                IconButton(
+                    onClick = { showRunDialog = true },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = "Run in terminal",
+                        tint = ClaudeTerracotta,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
 
         HorizontalDivider(thickness = 0.7.dp, color = Color.White.copy(alpha = 0.08f))
@@ -467,6 +486,13 @@ fun CodeBlock(
     }
 
     // Fullscreen Code & Interactive Artifact Modal
+    if (showRunDialog) {
+        ChatCommandRunDialog(
+            command = code.trimEnd().lines().joinToString("\n") { it.removePrefix("$ ") },
+            onDismiss = { showRunDialog = false }
+        )
+    }
+
     if (isFullscreen) {
         Dialog(
             onDismissRequest = { isFullscreen = false },
