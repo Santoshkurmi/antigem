@@ -147,9 +147,9 @@ AntiGem is not a copy or modification of the Termux app. The app was written fro
 
 ### Termux compatibility
 
-Packages, `apt`/`pkg`, the shell and almost everything else work as in Termux. The exception is **Termux:API**: in Termux you install the separate Termux:API app to get commands for location, SMS and other device features.
+Packages, `apt`/`pkg`, the shell and almost everything else work as in Termux.
 
-AntiGem has a few of these built in:
+AntiGem has essential Termux:API commands built in with zero setup:
 
 | Command | Built in |
 | :--- | :---: |
@@ -164,9 +164,14 @@ AntiGem has a few of these built in:
 | `termux-open` / `termux-open-url` | ✅ |
 | `termux-wake-lock` / `termux-wake-unlock` | ✅ |
 
-Other Termux:API commands are not supported. They will not be added to the app itself, because things like location, SMS and contacts would need many extra Android permissions in AntiGem.
+For advanced hardware APIs (such as `termux-location`, `termux-camera-photo`, `termux-sensor`, `termux-sms-*`, `termux-wifi-*`), install the matching signed companion app:
 
-The official Termux:API app does not work with AntiGem either: Android only lets it talk to an app signed with the same key as official Termux, and AntiGem has a different signature. The plan is to build a Termux:API app that works with AntiGem. Once that is done, AntiGem will support almost everything Termux does.
+👉 **[Download AntiGem Termux:API Companion App](https://github.com/Santoshkurmi/termux-api/releases)**
+
+**How to enable:**
+1. Install the companion APK from the [releases page](https://github.com/Santoshkurmi/termux-api/releases).
+2. In AntiGem, go to **Settings → Terminal & Shell → Termux:API Integration** and select **External Termux:API App**.
+3. Tap **Reinstall Package Now** (or run `pkg reinstall termux-api` in the terminal) to restore the official dispatcher binary.
 
 ---
 

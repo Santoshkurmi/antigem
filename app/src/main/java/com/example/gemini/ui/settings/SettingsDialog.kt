@@ -3925,6 +3925,12 @@ private fun TerminalSubScreen(
     var bufferSizeState by remember { mutableIntStateOf(terminalBufferSize) }
     var themeState by remember { mutableStateOf(terminalTheme) }
 
+    var termuxApiProviderState by remember {
+        mutableStateOf(com.example.gemini.data.local.LocalEnvironmentManager.getTermuxApiProvider(context))
+    }
+    var showExternalApiInstructionDialog by remember { mutableStateOf(false) }
+    var activeCommandExecution by remember { mutableStateOf<Pair<String, String>?>(null) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -4269,6 +4275,173 @@ private fun TerminalSubScreen(
             }
         }
 
+        // Termux:API Mode Card
+        Text(
+            text = "Termux:API Integration",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Select how Termux API commands (termux-toast, termux-clipboard, termux-location, etc.) are handled.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Option 1: Built-in
+                val isBuiltin = termuxApiProviderState == com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable {
+                            if (!isBuiltin) {
+                                termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
+                                com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
+                                    context,
+                                    com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
+                                )
+                                android.widget.Toast.makeText(context, "Built-in Termux API restored", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isBuiltin) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, if (isBuiltin) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isBuiltin,
+                            onClick = {
+                                if (!isBuiltin) {
+                                    termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
+                                    com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
+                                        context,
+                                        com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
+                                    )
+                                    android.widget.Toast.makeText(context, "Built-in Termux API restored", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Built-in (Zero-setup)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Lightweight native handlers for clipboard, toast, torch, vibration, TTS, battery, volume, and notifications.",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Option 2: External App
+                val isExternal = termuxApiProviderState == com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable {
+                            if (!isExternal) {
+                                termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
+                                com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
+                                    context,
+                                    com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
+                                )
+                                showExternalApiInstructionDialog = true
+                            }
+                        },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isExternal) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, if (isExternal) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isExternal,
+                            onClick = {
+                                if (!isExternal) {
+                                    termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
+                                    com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
+                                        context,
+                                        com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
+                                    )
+                                    showExternalApiInstructionDialog = true
+                                }
+                            },
+                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "External Termux:API App",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Uses your signed Termux:API companion APK for all hardware APIs (Location, Camera, Sensors, SMS, etc.).",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            if (isExternal) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            activeCommandExecution = "Reinstall Termux:API Package" to "pkg reinstall -y termux-api"
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.5f))
+                                    ) {
+                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(13.dp), tint = ClaudeTerracotta)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Reinstall Package", fontSize = 11.sp, color = ClaudeTerracotta, fontWeight = FontWeight.SemiBold)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/santoshkurmi/termux-api/releases"))
+                                                context.startActivity(intent)
+                                            } catch (_: Exception) {}
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
+                                    ) {
+                                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(13.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Get APK", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Action Button: Open Terminal
         Button(
             onClick = onOpenLocalTerminal,
@@ -4280,6 +4453,100 @@ private fun TerminalSubScreen(
             Spacer(modifier = Modifier.width(8.dp))
             Text("Launch Terminal Now", fontWeight = FontWeight.Bold)
         }
+    }
+
+    if (showExternalApiInstructionDialog) {
+        AlertDialog(
+            onDismissRequest = { showExternalApiInstructionDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = ClaudeTerracotta,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Setup External Termux:API",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "To use the external companion app, the official Termux API binary must be reinstalled so that UNIX domain socket communication is restored.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "1. Reinstall official package: pkg reinstall termux-api",
+                                fontSize = 11.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "2. Install your signed Termux:API companion APK.",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExternalApiInstructionDialog = false
+                        activeCommandExecution = "Reinstall Termux:API Package" to "pkg reinstall -y termux-api"
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Reinstall Now", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/santoshkurmi/termux-api/releases"))
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Get APK")
+                    }
+                    TextButton(
+                        onClick = { showExternalApiInstructionDialog = false }
+                    ) {
+                        Text("Close")
+                    }
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    activeCommandExecution?.let { (title, cmd) ->
+        CommandExecutionDialog(
+            title = title,
+            command = cmd,
+            onDismiss = { activeCommandExecution = null }
+        )
     }
 
     if (showResetWarningDialog) {
@@ -6184,6 +6451,208 @@ private fun ScriptExecutionDialog(
                                 cleanLine.startsWith("⚠️") || cleanLine.contains("Note:", ignoreCase = true) || cleanLine.contains("Warning:", ignoreCase = true) -> Color(0xFFFFB74D)
                                 cleanLine.startsWith("=") || cleanLine.startsWith("[") -> Color(0xFF64B5F6)
                                 else -> Color(0xFFE2E8F0)
+                            }
+                            Text(
+                                text = cleanLine,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = lineColor,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Bottom Action Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    if (isRunning) {
+                        Button(
+                            onClick = {
+                                executionJob?.cancel()
+                                isRunning = false
+                                exitCode = 130
+                                logs.add("🛑 Execution cancelled by user.")
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48))
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Stop Execution", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    } else {
+                        Button(
+                            onClick = onDismiss,
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (exitCode == 0) QuotaGreen else MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text("Done", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommandExecutionDialog(
+    title: String,
+    command: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val logs = remember { mutableStateListOf<String>() }
+    var isRunning by remember { mutableStateOf(true) }
+    var exitCode by remember { mutableStateOf<Int?>(null) }
+    var durationMs by remember { mutableStateOf(0L) }
+    val listState = rememberLazyListState()
+    var executionJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    val activity = (context as? android.app.Activity) ?: ((context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity)
+    DisposableEffect(isRunning) {
+        val window = activity?.window
+        if (isRunning) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    LaunchedEffect(command) {
+        executionJob?.cancel()
+        executionJob = scope.launch {
+            isRunning = true
+            logs.clear()
+            logs.add("⚡ Running: $command...")
+            val result = com.example.gemini.data.local.LocalEnvironmentManager.executeCommandLive(
+                context = context,
+                command = command
+            ) { line ->
+                val trimmed = line.trim()
+                val isProgressBar = (trimmed.startsWith("[") || trimmed.contains("%")) && trimmed.contains("/")
+                val prevIsProgressBar = logs.isNotEmpty() && logs.last().let { (it.trim().startsWith("[") || it.contains("%")) && it.contains("/") }
+                if (isProgressBar && prevIsProgressBar) {
+                    logs[logs.size - 1] = line
+                } else {
+                    logs.add(line)
+                }
+            }
+            exitCode = result.exitCode
+            durationMs = result.durationMs
+            isRunning = false
+        }
+    }
+
+    LaunchedEffect(logs.size, if (logs.isNotEmpty()) logs.last() else "") {
+        if (logs.isNotEmpty()) {
+            listState.scrollToItem(logs.size - 1)
+        }
+    }
+
+    Dialog(
+        onDismissRequest = {
+            if (!isRunning) onDismiss()
+        },
+        properties = DialogProperties(
+            dismissOnBackPress = !isRunning,
+            dismissOnClickOutside = !isRunning,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .fillMaxHeight(0.80f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (isRunning) {
+                            Icon(
+                                imageVector = Icons.Default.Terminal,
+                                contentDescription = null,
+                                tint = GeminiBlue,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        } else if (exitCode == 0) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = QuotaGreen, modifier = Modifier.size(22.dp))
+                        } else {
+                            Icon(Icons.Default.Error, contentDescription = null, tint = Color.Red, modifier = Modifier.size(22.dp))
+                        }
+
+                        Column {
+                            Text(
+                                text = title,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (isRunning) "Executing in terminal environment..." else if (exitCode == 0) "Completed successfully in ${(durationMs / 1000.0)}s" else "Finished with exit code $exitCode",
+                                fontSize = 11.5.sp,
+                                color = if (isRunning) GeminiBlue else if (exitCode == 0) QuotaGreen else Color.Red
+                            )
+                        }
+                    }
+
+                    if (!isRunning) {
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Terminal output container
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFF090D16),
+                    border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(10.dp)
+                    ) {
+                        items(logs) { line ->
+                            val cleanLine = line.replace(Regex("\u001B\\[[;?0-9]*[a-zA-Z]"), "")
+                            val lineColor = when {
+                                cleanLine.contains("ERROR", ignoreCase = true) || cleanLine.contains("FAILED", ignoreCase = true) -> Color(0xFFF87171)
+                                cleanLine.contains("SUCCESS", ignoreCase = true) || cleanLine.contains("✓") || cleanLine.contains("Setting up termux-api") -> Color(0xFF4ADE80)
+                                cleanLine.startsWith("⚡") -> Color(0xFF38BDF8)
+                                else -> Color(0xFFCBD5E1)
                             }
                             Text(
                                 text = cleanLine,
