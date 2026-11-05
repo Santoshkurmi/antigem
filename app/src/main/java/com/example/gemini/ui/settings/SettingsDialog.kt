@@ -810,13 +810,14 @@ private fun MainSettingsMenu(
         )
 
         // Section 7: About & Info
+        val variantLabel = if (BuildConfig.IS_SHARED_USER_ID) "Shared UID" else "Standalone"
         SettingsCategoryCard(
             icon = Icons.Outlined.Info,
             iconTint = Color(0xFF8B5CF6),
             title = "About & Info",
-            subtitle = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • ${BuildConfig.APPLICATION_ID}",
-            badgeText = "v${BuildConfig.VERSION_NAME}",
-            badgeColor = Color(0xFF8B5CF6),
+            subtitle = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • ${BuildConfig.APPLICATION_ID} [$variantLabel]",
+            badgeText = "v${BuildConfig.VERSION_NAME} ($variantLabel)",
+            badgeColor = if (BuildConfig.IS_SHARED_USER_ID) QuotaGreen else Color(0xFF8B5CF6),
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.ABOUT) }
@@ -8916,17 +8917,20 @@ private fun AboutSubScreen(
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(10.dp))
+                val isSharedBuild = BuildConfig.IS_SHARED_USER_ID
+                val variantBadgeText = if (isSharedBuild) "Shared UID" else "Standalone"
+                val variantColor = if (isSharedBuild) QuotaGreen else Color(0xFF8B5CF6)
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color(0xFF8B5CF6).copy(alpha = 0.12f),
-                    border = BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.3f))
+                    color = variantColor.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, variantColor.copy(alpha = 0.3f))
                 ) {
                     Text(
-                        text = "Version ${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
+                        text = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • $variantBadgeText",
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = FontFamily.Monospace,
-                        color = Color(0xFF8B5CF6),
+                        color = variantColor,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
                 }
@@ -8985,6 +8989,26 @@ private fun AboutSubScreen(
                         fontWeight = FontWeight.Medium,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Variant",
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = if (BuildConfig.IS_SHARED_USER_ID) "Termux (Shared UID)" else "Termux (Standalone)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (BuildConfig.IS_SHARED_USER_ID) QuotaGreen else MaterialTheme.colorScheme.onSurface
                     )
                 }
 

@@ -48,6 +48,7 @@ android {
             buildConfigField("int", "BRIDGE_PORT", "1236")
             buildConfigField("int", "HUB_PORT", "1237")
             buildConfigField("int", "BROWSER_MCP_PORT", "8767")
+            buildConfigField("boolean", "IS_SHARED_USER_ID", "false")
         }
         create("termux") {
             dimension = "mode"
@@ -55,6 +56,15 @@ android {
             buildConfigField("int", "BRIDGE_PORT", "1234")
             buildConfigField("int", "HUB_PORT", "1235")
             buildConfigField("int", "BROWSER_MCP_PORT", "8765")
+            buildConfigField("boolean", "IS_SHARED_USER_ID", "false")
+        }
+        create("termuxShared") {
+            dimension = "mode"
+            applicationId = "com.termux"
+            buildConfigField("int", "BRIDGE_PORT", "1234")
+            buildConfigField("int", "HUB_PORT", "1235")
+            buildConfigField("int", "BROWSER_MCP_PORT", "8765")
+            buildConfigField("boolean", "IS_SHARED_USER_ID", "true")
         }
     }
 

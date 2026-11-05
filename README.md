@@ -168,6 +168,12 @@ For advanced hardware APIs (such as `termux-location`, `termux-camera-photo`, `t
 
 👉 **[Download AntiGem Termux:API Companion App](https://github.com/Santoshkurmi/termux-api/releases)**
 
+> [!IMPORTANT]
+> **AntiGem Variant Requirement for Termux:API:**
+> - To use the external Termux:API companion app, you **must install the Shared UID variant** (`antiGem-termux-shared-v...apk`). Both apps share the `com.termux` Linux UID to communicate via UNIX sockets.
+> - **Existing Users:** Android does not allow changing `sharedUserId` via an update (`INSTALL_FAILED_SHARED_USER_INCOMPATIBLE`). If you currently have the Standalone build installed, you must **backup your files, uninstall the app, and install the Shared UID build**.
+> - You can check your current variant in AntiGem under **Settings → About & Info** (shows *Shared UID Build* or *Standalone Build*).
+
 **How to enable:**
 1. Install the companion APK from the [releases page](https://github.com/Santoshkurmi/termux-api/releases).
 2. In AntiGem, go to **Settings → Terminal & Shell → Termux:API Integration** and select **External Termux:API App**.
