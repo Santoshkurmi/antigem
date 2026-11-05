@@ -83,10 +83,14 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.data.agent.claude.ClaudeChatBackend
 import com.example.gemini.data.agent.claude.ClaudeFetchRaw
+import com.example.gemini.data.agent.claude.ClaudeModelsMapping
+import com.example.gemini.data.agent.claude.ClaudeRawKey
 import com.example.gemini.data.agent.claude.ClaudeProvider
 import com.example.gemini.data.agent.claude.ClaudeProviderModel
 import com.example.gemini.data.agent.claude.ClaudeProviderTestResult
 import com.example.gemini.data.agent.claude.contextLabel
+import com.example.gemini.data.agent.claude.limitsOf
+import com.example.gemini.data.agent.claude.thinkingLabel
 import com.example.gemini.data.agent.claude.tokenLabel
 import com.example.gemini.theme.QuotaAmber
 import com.example.gemini.theme.QuotaGreen
@@ -146,6 +150,8 @@ fun ProvidersPage(deps: ClaudeSettingsDeps) {
     var editing by remember { mutableStateOf<ClaudeProvider?>(null) }
     var toDelete by remember { mutableStateOf<ClaudeProvider?>(null) }
     var importing by remember { mutableStateOf(false) }
+    var savedProvider by remember { mutableStateOf<ClaudeProvider?>(null) }
+    var restarting by remember { mutableStateOf(false) }
     val testing = remember { mutableStateMapOf<String, Boolean>() }
     val results = remember { mutableStateMapOf<String, ClaudeProviderTestResult>() }
     LaunchedEffect(Unit) { backend.refreshProviders() }
@@ -223,9 +229,42 @@ fun ProvidersPage(deps: ClaudeSettingsDeps) {
         ProviderEditor(p, backend, note = preset?.note, onDismiss = { editing = null }) { saved, done ->
             backend.saveProvider(saved) { err ->
                 done(err)
-                if (err == null) editing = null
+                if (err == null) {
+                    editing = null
+                    // chats already running keep the settings they started with
+                    if (saved.id.isNotBlank()) savedProvider = saved
+                }
             }
         }
+    }
+
+    savedProvider?.let { p ->
+        AlertDialog(
+            onDismissRequest = { savedProvider = null },
+            title = { Text("Saved ${p.name}", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "New chats and chats you reopen use these settings right away. Chats that are already running on ${p.name} keep the " +
+                        "settings they started with until they restart (the conversation is kept). You can also use \"Restart chat\" in a chat's menu.",
+                    fontSize = 13.5.sp
+                )
+            },
+            confirmButton = {
+                TextButton(enabled = !restarting, onClick = {
+                    restarting = true
+                    backend.restartProviderChats(p.id) { restarted, busy, err ->
+                        restarting = false
+                        savedProvider = null
+                        val msg = err?.let { "Could not restart: $it" } ?: buildString {
+                            append(if (restarted == 0) "No running chat needed a restart" else "Restarted $restarted chat${if (restarted == 1) "" else "s"}")
+                            if (busy > 0) append("; $busy still replying: restart ${if (busy == 1) "it" else "them"} when done")
+                        }
+                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                    }
+                }) { Text(if (restarting) "Restarting…" else "Restart idle chats now", color = ClaudeAccent) }
+            },
+            dismissButton = { TextButton(onClick = { savedProvider = null }) { Text("Later") } }
+        )
     }
 
     toDelete?.let { p ->
@@ -278,7 +317,7 @@ private fun ProviderCard(
             Column(Modifier.padding(vertical = 3.dp)) {
                 Text(m.name?.takeIf { it.isNotBlank() } ?: m.id, fontSize = 13.sp)
                 Text(
-                    listOfNotNull(m.id.takeIf { !m.name.isNullOrBlank() }, m.contextLabel() ?: "context unknown").joinToString(" · "),
+                    listOfNotNull(m.id.takeIf { !m.name.isNullOrBlank() }, m.contextLabel(p) ?: "context unknown", m.thinkingLabel(p)).joinToString(" · "),
                     fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, color = muted
                 )
             }
@@ -381,6 +420,10 @@ private fun ProviderEditor(
     var budgetText by remember { mutableStateOf(if (initial.thinking_budget > 0) initial.thinking_budget.toString() else "16000") }
     var timeoutText by remember { mutableStateOf(if (initial.timeout_sec > 0) initial.timeout_sec.toString() else "") }
     var disableBetas by remember { mutableStateOf(initial.disable_betas) }
+    // blank = the default (3), 0 = never retry, 1..10
+    var retriesText by remember { mutableStateOf(if (initial.max_retries > 0) initial.max_retries.toString() else if (initial.max_retries < 0) "0" else "") }
+    var defaultCtxText by remember { mutableStateOf(if (initial.default_context > 0) initial.default_context.toString() else "") }
+    var defaultOutText by remember { mutableStateOf(if (initial.default_max_output > 0) initial.default_max_output.toString() else "") }
     var headers by remember { mutableStateOf(headersText(initial.headers)) }
     var env by remember { mutableStateOf(envText(initial.extra_env)) }
     var newModel by remember { mutableStateOf("") }
@@ -395,11 +438,19 @@ private fun ProviderEditor(
     var fetchError by remember { mutableStateOf<String?>(null) }
     var fetchNote by remember { mutableStateOf<String?>(null) }
     var showRaw by remember { mutableStateOf(false) }
+    var mapping by remember { mutableStateOf(initial.models_map) }
+    var showMapping by remember { mutableStateOf(false) }
     var editingModel by remember { mutableStateOf<ClaudeProviderModel?>(null) }
     val openRouter = baseUrl.contains("openrouter.ai")
+    // the provider-level defaults as typed so far: model rows and the model editor resolve their labels against it
+    val draft = initial.copy(
+        default_context = parseTokens(defaultCtxText) ?: 0,
+        default_max_output = parseTokens(defaultOutText) ?: 0,
+        thinking_budget = if (sendThinking) budgetText.trim().toIntOrNull() ?: 0 else 0
+    )
 
     /** The provider as the form shows it, or the first problem with it. */
-    fun build(): Pair<ClaudeProvider?, String?> {
+    fun build(map: ClaudeModelsMapping? = mapping): Pair<ClaudeProvider?, String?> {
         val (h, hErr) = parsePairs(headers, ':', "Headers")
         if (hErr != null) return null to hErr
         val (e, eErr) = parsePairs(env, '=', "Environment")
@@ -407,11 +458,61 @@ private fun ProviderEditor(
         val budget = if (sendThinking) budgetText.trim().toIntOrNull() else 0
         if (budget == null || (budget != 0 && budget < 1024)) return null to "The thinking budget must be a number of at least 1024"
         val timeout = if (timeoutText.isBlank()) 0 else timeoutText.trim().toIntOrNull() ?: return null to "The timeout must be a number of seconds"
+        val retriesRaw = retriesText.trim().toIntOrNull()
+        if (retriesText.isNotBlank() && (retriesRaw == null || retriesRaw !in 0..10)) return null to "Retries must be a number from 0 to 10"
+        // 0 (blank) = the default, -1 = never retry
+        val retries: Int = when {
+            retriesText.isBlank() -> 0
+            retriesRaw == 0 -> -1
+            else -> retriesRaw ?: 0
+        }
+        val defCtx = parseTokens(defaultCtxText) ?: return null to "The default context window must be a number like 128k"
+        val defOut = parseTokens(defaultOutText) ?: return null to "The default max output must be a number like 8k"
         return initial.copy(
             name = name, base_url = baseUrl, api_key = key.ifBlank { null }, auth_mode = authMode,
             models_url = if (openRouter) "" else modelsUrl, small_model = smallModel, models = models,
-            headers = h, extra_env = e, timeout_sec = timeout, thinking_budget = budget, disable_betas = disableBetas
+            headers = h, extra_env = e, timeout_sec = timeout, thinking_budget = budget, disable_betas = disableBetas,
+            default_context = defCtx, default_max_output = defOut, models_map = map, max_retries = retries
         ) to null
+    }
+
+    /** Fetches the provider's model list with the form's values; [map] overrides the saved field mapping (Apply & fetch). */
+    fun runFetch(map: ClaudeModelsMapping? = mapping) {
+        val (p, err) = build(map)
+        if (p == null) {
+            error = err
+            return
+        }
+        error = null
+        fetchError = null
+        fetchNote = null
+        fetching = true
+        backend.fetchFormModels(p, freeOnly = openRouter && freeOnly) { out ->
+            fetching = false
+            fetchRaw = out.raw
+            fetchError = out.error
+            when {
+                out.error != null -> Unit
+                out.models.isNotEmpty() -> {
+                    fetched = out.models
+                    out.raw?.paging_error?.takeIf { it.isNotBlank() }?.let {
+                        Toast.makeText(context, "Only part of the list was read ($it)", Toast.LENGTH_LONG).show()
+                    }
+                }
+                else -> {
+                    val raw = out.raw
+                    fetchNote = if (raw != null && raw.entries > 0) {
+                        "The server listed ${raw.entries} entries but none could be used (no usable id" +
+                            (if (openRouter && freeOnly) ", or filtered out by \"only free models\"" else "") +
+                            "). Open Field mapping and pick the id field."
+                    } else {
+                        "The server answered${raw?.status?.takeIf { it > 0 }?.let { " (HTTP $it)" }.orEmpty()} but no models could be read. " +
+                            "If the raw response does contain models, open Field mapping and point at them; otherwise it comes from the provider " +
+                            "(empty account, permissions or headers)."
+                    }
+                }
+            }
+        }
     }
 
     fun runTest(model: String) {
@@ -518,36 +619,7 @@ private fun ProviderEditor(
                         }
                         val canFetch = openRouter || modelsUrl.isNotBlank()
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedButton(enabled = canFetch && !fetching && baseUrl.isNotBlank(), onClick = {
-                                val (p, err) = build()
-                                if (p == null) {
-                                    error = err
-                                    return@OutlinedButton
-                                }
-                                error = null
-                                fetchError = null
-                                fetchNote = null
-                                fetching = true
-                                backend.fetchFormModels(p, freeOnly = openRouter && freeOnly) { out ->
-                                    fetching = false
-                                    fetchRaw = out.raw
-                                    fetchError = out.error
-                                    when {
-                                        out.error != null -> Unit
-                                        out.models.isNotEmpty() -> fetched = out.models
-                                        else -> {
-                                            val raw = out.raw
-                                            fetchNote = if (raw != null && raw.entries > 0) {
-                                                "The server listed ${raw.entries} entries but none could be used (no \"id\" field" +
-                                                    (if (openRouter && freeOnly) ", or filtered out by \"only free models\"" else "") + "). See the raw response."
-                                            } else {
-                                                "The server answered${raw?.status?.takeIf { it > 0 }?.let { " (HTTP $it)" }.orEmpty()} but listed no models. " +
-                                                    "This comes from the provider (empty account, permissions or headers), not from the app. See the raw response."
-                                            }
-                                        }
-                                    }
-                                }
-                            }) {
+                            OutlinedButton(enabled = canFetch && !fetching && baseUrl.isNotBlank(), onClick = { runFetch() }) {
                                 Icon(Icons.Outlined.CloudDownload, null, Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Fetch the provider's list")
@@ -559,6 +631,12 @@ private fun ProviderEditor(
                                     Icon(Icons.Outlined.Code, "Show the raw response", tint = if (raw.status in 200..299) ClaudeAccent else QuotaAmber)
                                 }
                             }
+                        }
+                        TextButton(enabled = canFetch, onClick = { showMapping = true }) {
+                            Text(
+                                if (mapping == null) "Field mapping & pagination…" else "Field mapping & pagination (customised)…",
+                                color = ClaudeAccent, fontSize = 12.sp
+                            )
                         }
                         fetchError?.let { msg ->
                             Surface(shape = RoundedCornerShape(10.dp), color = QuotaRed.copy(alpha = 0.1f), border = BorderStroke(1.dp, QuotaRed.copy(alpha = 0.35f)), modifier = Modifier.fillMaxWidth()) {
@@ -584,9 +662,14 @@ private fun ProviderEditor(
                                 Column(Modifier.weight(1f).clickable { editingModel = m }.padding(vertical = 4.dp)) {
                                     Text(m.name?.takeIf { it.isNotBlank() } ?: m.id, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(
-                                        listOfNotNull(m.id.takeIf { !m.name.isNullOrBlank() }, m.contextLabel() ?: "context unknown (tap to set)").joinToString(" · "),
+                                        listOfNotNull(
+                                            m.id.takeIf { !m.name.isNullOrBlank() },
+                                            m.contextLabel(draft) ?: "context unknown (tap to set)",
+                                            m.thinkingLabel(draft),
+                                            "can reason".takeIf { m.can_think }
+                                        ).joinToString(" · "),
                                         fontSize = 10.5.sp, fontFamily = FontFamily.Monospace,
-                                        color = if (m.context_length > 0) muted else QuotaAmber, maxLines = 1, overflow = TextOverflow.Ellipsis
+                                        color = if (m.contextLabel(draft) != null) muted else QuotaAmber, maxLines = 1, overflow = TextOverflow.Ellipsis
                                     )
                                 }
                                 TextButton(enabled = !testing, onClick = { runTest(m.id) }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {
@@ -638,9 +721,28 @@ private fun ProviderEditor(
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth()
                             )
                         }
+                        Text(
+                            "This is the provider's default. Any model can override it: tap it in the list above.",
+                            fontSize = 11.sp, color = muted
+                        )
+                        Text("Defaults for models without their own size", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        OutlinedTextField(
+                            defaultCtxText, { defaultCtxText = it }, label = { Text("Default context window") }, singleLine = true,
+                            isError = parseTokens(defaultCtxText) == null, placeholder = { Text("e.g. 128k (blank = unknown)") }, modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            defaultOutText, { defaultOutText = it }, label = { Text("Default max output") }, singleLine = true,
+                            isError = parseTokens(defaultOutText) == null, placeholder = { Text("e.g. 8k (blank = unknown)") }, modifier = Modifier.fillMaxWidth()
+                        )
                         OutlinedTextField(
                             timeoutText, { timeoutText = it.filter(Char::isDigit) }, label = { Text("Request timeout, seconds (optional)") }, singleLine = true,
                             placeholder = { Text("default") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            retriesText, { retriesText = it.filter(Char::isDigit) }, label = { Text("Retries when a request fails (0-10)") }, singleLine = true,
+                            placeholder = { Text("default: 3") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            supportingText = { Text("Rate limits, rejected keys and network errors are retried with growing waits. 0 = fail at once.") }
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
@@ -672,7 +774,7 @@ private fun ProviderEditor(
     }
 
     editingModel?.let { m ->
-        ModelEditDialog(m, onDismiss = { editingModel = null }) { updated ->
+        ModelEditDialog(m, draft, onDismiss = { editingModel = null }) { updated ->
             models = models.map { if (it.id == m.id) updated else it }
             editingModel = null
         }
@@ -680,13 +782,31 @@ private fun ProviderEditor(
 
     if (showRaw) fetchRaw?.let { raw -> RawResponseDialog(raw, onDismiss = { showRaw = false }) }
 
+    if (showMapping) {
+        ModelsMappingDialog(
+            raw = fetchRaw, initial = mapping ?: ClaudeModelsMapping(),
+            onDismiss = { showMapping = false }
+        ) { chosen ->
+            val saved = chosen.takeIf { it != ClaudeModelsMapping() }
+            mapping = saved
+            showMapping = false
+            runFetch(saved)
+        }
+    }
+
     fetched?.let { list ->
         FetchedModelsDialog(initial.name.ifBlank { name }, list, models, onDismiss = { fetched = null }) { picked ->
             // fill in sizes the saved models lack, then add the new ones
             val bySize = list.associateBy { it.id }
             models = models.map { m ->
                 val f = bySize[m.id]
-                if (f != null && m.context_length == 0L) m.copy(context_length = f.context_length, max_output_tokens = m.max_output_tokens.takeIf { it > 0 } ?: f.max_output_tokens) else m
+                if (f != null && (m.context_length == 0L || (f.can_think && !m.can_think))) {
+                    m.copy(
+                        context_length = m.context_length.takeIf { it > 0 } ?: f.context_length,
+                        max_output_tokens = m.max_output_tokens.takeIf { it > 0 } ?: f.max_output_tokens,
+                        can_think = m.can_think || f.can_think
+                    )
+                } else m
             } + picked.filter { p -> models.none { it.id == p.id } }
             fetched = null
         }
@@ -702,33 +822,66 @@ private fun EditorSection(title: String, subtitle: String, content: @Composable 
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ModelEditDialog(model: ClaudeProviderModel, onDismiss: () -> Unit, onSave: (ClaudeProviderModel) -> Unit) {
+private fun ModelEditDialog(model: ClaudeProviderModel, provider: ClaudeProvider, onDismiss: () -> Unit, onSave: (ClaudeProviderModel) -> Unit) {
+    val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
     var name by remember { mutableStateOf(model.name.orEmpty()) }
     var ctx by remember { mutableStateOf(if (model.context_length > 0) model.context_length.toString() else "") }
     var out by remember { mutableStateOf(if (model.max_output_tokens > 0) model.max_output_tokens.toString() else "") }
+    var thinkMode by remember { mutableStateOf(model.thinking_mode) }
+    var budgetText by remember { mutableStateOf(if (model.thinking_budget > 0) model.thinking_budget.toString() else "16000") }
     val ctxValue = parseTokens(ctx)
     val outValue = parseTokens(out)
+    val budget = budgetText.trim().toIntOrNull()
+    val budgetOk = thinkMode != "budget" || (budget != null && budget >= 1024)
+    val inherited = if (provider.thinking_budget > 0) "thinking ${tokenLabel(provider.thinking_budget.toLong())}" else "no thinking budget"
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(model.id, fontWeight = FontWeight.Bold, fontSize = 15.sp, fontFamily = FontFamily.Monospace) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(name, { name = it }, label = { Text("Display name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(
                     ctx, { ctx = it }, label = { Text("Context window (tokens)") }, singleLine = true, isError = ctxValue == null,
-                    placeholder = { Text("e.g. 128k, 200000, 1m") }, modifier = Modifier.fillMaxWidth(),
-                    supportingText = { Text("Used by the Context chip and for auto-compact. Blank = unknown.") }
+                    placeholder = { Text(if (provider.default_context > 0) "default: ${tokenLabel(provider.default_context)}" else "e.g. 128k, 200000, 1m") },
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = { Text("Used by the Context chip and for auto-compact. Blank = the provider's default.") }
                 )
                 OutlinedTextField(
                     out, { out = it }, label = { Text("Max output (tokens, optional)") }, singleLine = true, isError = outValue == null,
-                    placeholder = { Text("e.g. 8k") }, modifier = Modifier.fillMaxWidth()
+                    placeholder = { Text(if (provider.default_max_output > 0) "default: ${tokenLabel(provider.default_max_output)}" else "e.g. 8k") },
+                    modifier = Modifier.fillMaxWidth()
                 )
+                Text("Thinking", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                if (model.can_think) Text("The provider's model list says this model can reason.", fontSize = 11.sp, color = muted)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("" to "Inherit", "off" to "Never send", "budget" to "Custom budget").forEach { (mode, label) ->
+                        FilterChip(
+                            selected = thinkMode == mode, onClick = { thinkMode = mode }, label = { Text(label) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = ClaudeAccent.copy(alpha = 0.2f))
+                        )
+                    }
+                }
+                if (thinkMode == "") Text("Inherits the provider: $inherited.", fontSize = 11.sp, color = muted)
+                if (thinkMode == "off") Text("Thinking in the chat never sends a token budget to this model.", fontSize = 11.sp, color = muted)
+                if (thinkMode == "budget") {
+                    OutlinedTextField(
+                        budgetText, { budgetText = it.filter(Char::isDigit) }, label = { Text("Thinking budget (tokens)") }, singleLine = true,
+                        isError = !budgetOk, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth(),
+                        supportingText = { Text("At least 1024. Sent when Thinking is on in the chat.") }
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(enabled = ctxValue != null && outValue != null, onClick = {
-                onSave(model.copy(name = name.trim().ifBlank { null }, context_length = ctxValue ?: 0, max_output_tokens = outValue ?: 0))
+            TextButton(enabled = ctxValue != null && outValue != null && budgetOk, onClick = {
+                onSave(
+                    model.copy(
+                        name = name.trim().ifBlank { null }, context_length = ctxValue ?: 0, max_output_tokens = outValue ?: 0,
+                        thinking_mode = thinkMode, thinking_budget = if (thinkMode == "budget") budget ?: 0 else 0
+                    )
+                )
             }) { Text("OK", color = ClaudeAccent) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
@@ -775,7 +928,7 @@ private fun FetchedModelsDialog(
                             Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
                                 Text(m.name?.takeIf { it.isNotBlank() } ?: m.id, fontSize = 13.sp)
                                 Text(
-                                    listOfNotNull(m.id, m.contextLabel(), "added".takeIf { added }).joinToString(" · "),
+                                    listOfNotNull(m.id, m.contextLabel(), "can reason".takeIf { m.can_think }, "added".takeIf { added }).joinToString(" · "),
                                     fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                                 )
                             }
@@ -864,6 +1017,14 @@ private fun RawResponseDialog(raw: ClaudeFetchRaw, onDismiss: () -> Unit) {
                 raw.request_headers.forEach { Text(it, fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, color = muted) }
                 HorizontalDivider()
                 Text("HTTP ${raw.status}  ·  ${raw.entries} listed  ·  ${raw.kept} kept", fontSize = 11.sp, color = muted)
+                if (raw.pages > 0) {
+                    Text(
+                        "${raw.pages} page${if (raw.pages == 1) "" else "s"} read · pagination: ${raw.pagination.ifBlank { "none" }}",
+                        fontSize = 11.sp, color = muted
+                    )
+                }
+                if (raw.paging_error.isNotBlank()) Text("Stopped early: ${raw.paging_error}", fontSize = 11.sp, color = QuotaAmber)
+                Text("The body below is the first page only.", fontSize = 10.5.sp, color = muted)
                 Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f), modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
                     Column(Modifier.verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(8.dp)) {
                         Text(raw.body.ifBlank { "(empty body)" } + if (raw.truncated) "\n… (cut)" else "", fontSize = 10.5.sp, fontFamily = FontFamily.Monospace)
@@ -878,5 +1039,146 @@ private fun RawResponseDialog(raw: ClaudeFetchRaw, onDismiss: () -> Unit) {
             }) { Icon(Icons.Outlined.ContentCopy, null, Modifier.size(14.dp), tint = ClaudeAccent); Spacer(Modifier.width(6.dp)); Text("Copy", color = ClaudeAccent) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
+}
+
+/** A text field for a path / name with a dropdown of suggestions (typing anything still works). */
+@Composable
+private fun SuggestField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    options: List<ClaudeRawKey>,
+    placeholder: String = "detect automatically",
+    autoLabel: String = "Detect automatically"
+) {
+    var open by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value, onValueChange, label = { Text(label) }, singleLine = true, placeholder = { Text(placeholder) },
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = { IconButton(onClick = { open = !open }) { Icon(Icons.Filled.ArrowDropDown, "Choose") } }
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 320.dp)) {
+            DropdownMenuItem(text = { Text(autoLabel, fontSize = 13.sp) }, onClick = { onValueChange(""); open = false })
+            options.forEach { o ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(o.path.ifBlank { "(top level)" }, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                            if (o.sample.isNotBlank()) Text(o.sample, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    },
+                    onClick = { onValueChange(o.path); open = false }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Tells the fetch how to read a provider whose model list the app does not understand by itself: where the array is,
+ * which field is the id / name / size, and how the pages are chained. Suggestions come from the last fetch's answer.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ModelsMappingDialog(
+    raw: ClaudeFetchRaw?,
+    initial: ClaudeModelsMapping,
+    onDismiss: () -> Unit,
+    onApply: (ClaudeModelsMapping) -> Unit
+) {
+    val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+    var m by remember { mutableStateOf(initial) }
+    val lists = raw?.lists.orEmpty()
+    val topKeys = raw?.top_keys.orEmpty()
+    // the keys of the list being mapped (the chosen path, else the first list found)
+    val current = lists.firstOrNull { it.path == m.list_path } ?: lists.firstOrNull()
+    val itemKeys = current?.keys.orEmpty()
+    var sizeText by remember { mutableStateOf(if (initial.page_size > 0) initial.page_size.toString() else "") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Field mapping & pagination", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    if (raw == null || lists.isEmpty()) "Fetch once to get suggestions from the provider's answer, or type the paths by hand. Leave a field empty to detect it."
+                    else "Suggestions come from the last answer. Leave a field empty to detect it. Paths use dots, e.g. top_provider.context_length.",
+                    fontSize = 11.5.sp, color = muted
+                )
+                Text("Where the models are", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                SuggestField(
+                    m.list_path, { m = m.copy(list_path = it) }, "List path",
+                    lists.map { ClaudeRawKey(it.path, "${it.count} items" + if (it.strings) " (ids as plain text)" else "") }
+                )
+                Text("Fields of one model", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                SuggestField(m.id_field, { m = m.copy(id_field = it) }, "Id", itemKeys)
+                SuggestField(m.name_field, { m = m.copy(name_field = it) }, "Display name", itemKeys, "none")
+                SuggestField(m.context_field, { m = m.copy(context_field = it) }, "Context window", itemKeys, "none")
+                SuggestField(m.max_output_field, { m = m.copy(max_output_field = it) }, "Max output", itemKeys, "none")
+                OutlinedTextField(
+                    m.strip_prefix, { m = m.copy(strip_prefix = it) }, label = { Text("Remove from the start of every id") },
+                    singleLine = true, placeholder = { Text("e.g. models/") }, modifier = Modifier.fillMaxWidth()
+                )
+
+                Text("Pagination", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("" to "Detect", "none" to "None", "cursor" to "Cursor", "token" to "Page token", "next_url" to "Next URL").forEach { (mode, label) ->
+                        FilterChip(
+                            selected = m.pagination == mode, onClick = { m = m.copy(pagination = mode) }, label = { Text(label) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = ClaudeAccent.copy(alpha = 0.2f))
+                        )
+                    }
+                }
+                Text(
+                    when (m.pagination) {
+                        "" -> "Detected from the first answer: has_more + last_id (Anthropic), nextPageToken / next_page_token (Google), or a next URL." +
+                            (raw?.takeIf { it.pages > 0 }?.let { " Last fetch: ${it.pages} page(s), ${it.pagination.ifBlank { "none" }}." } ?: "")
+                        "none" -> "Only the first page is read."
+                        "cursor" -> "While the flag is true, the next request sends the cursor (default: has_more / last_id → after_id)."
+                        "token" -> "The next request sends the token from the answer (default: next_page_token / nextPageToken → page_token / pageToken)."
+                        else -> "The next request goes to the URL the answer carries (default field: next)."
+                    },
+                    fontSize = 11.sp, color = muted
+                )
+                if (m.pagination == "cursor") {
+                    SuggestField(m.more_field, { m = m.copy(more_field = it) }, "Field that says more pages exist", topKeys, "has_more")
+                }
+                if (m.pagination == "cursor" || m.pagination == "token" || m.pagination == "next_url") {
+                    SuggestField(
+                        m.next_field, { m = m.copy(next_field = it) },
+                        when (m.pagination) { "cursor" -> "Field with the last id"; "token" -> "Field with the next token"; else -> "Field with the next URL" },
+                        topKeys, "default"
+                    )
+                }
+                if (m.pagination == "cursor" || m.pagination == "token") {
+                    OutlinedTextField(
+                        m.page_param, { m = m.copy(page_param = it) }, label = { Text("Query parameter to send it in") },
+                        singleLine = true, placeholder = { Text(if (m.pagination == "cursor") "after_id" else "page_token") }, modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (m.pagination != "none") {
+                    OutlinedTextField(
+                        sizeText, { sizeText = it.filter(Char::isDigit); m = m.copy(page_size = sizeText.toIntOrNull() ?: 0) },
+                        label = { Text("Page size (optional)") }, singleLine = true, placeholder = { Text("provider's default") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth()
+                    )
+                    if (m.page_size > 0) {
+                        OutlinedTextField(
+                            m.limit_param, { m = m.copy(limit_param = it) }, label = { Text("Parameter name for the page size") },
+                            singleLine = true, placeholder = { Text("limit") }, modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+                Text("At most 100 pages / 20,000 models are read; reading stops early if a page adds nothing new.", fontSize = 10.5.sp, color = muted)
+            }
+        },
+        confirmButton = { TextButton(onClick = { onApply(m) }) { Text("Apply & fetch", color = ClaudeAccent) } },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { m = ClaudeModelsMapping(); sizeText = "" }) { Text("Reset") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
     )
 }

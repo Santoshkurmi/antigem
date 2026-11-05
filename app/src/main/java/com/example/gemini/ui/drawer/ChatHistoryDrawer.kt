@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
@@ -1700,6 +1701,23 @@ private fun ChatHistoryItemRow(
                             showRename = true
                         }
                     )
+                    DropdownMenuItem(
+                        text = { Text("Restart chat", fontSize = 13.5.sp) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            claudeActions.restart(conv.id) { msg ->
+                                scope.launch { android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show() }
+                            }
+                        }
+                    )
                 }
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
@@ -2275,5 +2293,7 @@ fun SearchChatsDialog(
 /** Claude-specific chat actions for the sidebar (Claude chats are loaded and renamed through the bridge). */
 class ClaudeDrawerActions(
     val loadMessages: suspend (String) -> List<com.example.gemini.domain.model.ChatMessage>,
-    val rename: (String, String) -> Unit
+    val rename: (String, String) -> Unit,
+    /** Stops the chat's process (when idle) so its next message starts one with the current provider settings; the callback gets a message. */
+    val restart: (String, (String) -> Unit) -> Unit
 )

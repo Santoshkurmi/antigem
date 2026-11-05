@@ -118,6 +118,9 @@ class ClaudeTranscript {
     /** Cumulative session cost reported by the last `result`. */
     var sessionCostUsd: Double = 0.0
         private set
+    /** True while the chat runs on a custom provider's model: its errors are the provider's, not a Claude sign-in problem. */
+    var isCustomProvider: () -> Boolean = { false }
+
     /** The last turn failed because the CLI is not signed in. */
     var needsLogin: Boolean = false
         private set
@@ -450,10 +453,14 @@ class ClaudeTranscript {
             val interrupted = r.terminal_reason?.startsWith("aborted") == true
             if (r.is_error && !interrupted) {
                 val msg = r.errors.joinToString("\n").ifBlank { r.result.orEmpty() }.ifBlank { r.subtype }
-                if (msg.contains("/login", ignoreCase = true) || msg.contains("not logged in", ignoreCase = true) ||
-                    msg.contains("authentication", ignoreCase = true) || msg.contains("OAuth token", ignoreCase = true)
+                val custom = isCustomProvider()
+                // a provider's rejected key is not a Claude sign-in problem
+                if (!custom && (msg.contains("/login", ignoreCase = true) || msg.contains("not logged in", ignoreCase = true) ||
+                        msg.contains("authentication", ignoreCase = true) || msg.contains("OAuth token", ignoreCase = true))
                 ) needsLogin = true
-                turn.parts.add(Part.Error(errorTitle(r.subtype, msg), msg))
+                // the CLI also writes the same text as a message of its own: show it once
+                (turn.parts.lastOrNull() as? Part.Text)?.takeIf { it.text.toString().trim() == msg.trim() }?.let { turn.parts.remove(it) }
+                turn.parts.add(Part.Error(if (custom) providerErrorTitle(msg) else errorTitle(r.subtype, msg), msg))
             }
             touch(turn)
         }
@@ -850,6 +857,21 @@ class ClaudeTranscript {
                 }
             }
             return text
+        }
+
+        /** A short title for an error of a custom provider ("API Error: 429 …", "Connection refused…"). */
+        private fun providerErrorTitle(msg: String): String {
+            val status = Regex("""\b(?:API Error:?|HTTP|status)\s*(?:Request rejected\s*)?\(?(\d{3})\b""", RegexOption.IGNORE_CASE).find(msg)?.groupValues?.get(1)?.toIntOrNull()
+            return when {
+                status == 429 || msg.contains("rate limit", ignoreCase = true) -> "Provider rate limit"
+                status == 401 || status == 403 -> "Provider rejected the key"
+                status == 402 || msg.contains("insufficient", ignoreCase = true) || msg.contains("balance", ignoreCase = true) -> "Provider account problem"
+                status == 404 || (status == 400 && msg.contains("model", ignoreCase = true)) -> "Model not available"
+                status != null && status >= 500 || msg.contains("overloaded", ignoreCase = true) -> "Provider is having problems"
+                msg.contains("Connection refused", ignoreCase = true) || msg.contains("ECONN", ignoreCase = true) ||
+                    msg.contains("timed out", ignoreCase = true) || msg.contains("ENOTFOUND", ignoreCase = true) -> "Cannot reach the provider"
+                else -> "Provider error"
+            }
         }
 
         private fun errorTitle(subtype: String, msg: String): String = when {

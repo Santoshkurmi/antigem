@@ -1,7 +1,6 @@
 package claude
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,6 +29,12 @@ type ProviderModel struct {
 	ContextLength int64 `json:"context_length,omitempty"`
 	// MaxOutput is the model's maximum output tokens (0 = unknown).
 	MaxOutput int64 `json:"max_output_tokens,omitempty"`
+	// ThinkingMode overrides the provider's thinking setting for this model: "" = inherit, "off" = never send a
+	// budget, "budget" = send ThinkingBudget.
+	ThinkingMode   string `json:"thinking_mode,omitempty"`
+	ThinkingBudget int    `json:"thinking_budget,omitempty"`
+	// CanThink is set when the provider's model list says the model supports reasoning.
+	CanThink bool `json:"can_think,omitempty"`
 }
 
 // Auth modes: how the provider's key is sent.
@@ -57,9 +62,57 @@ type Provider struct {
 	TimeoutSec int `json:"timeout_sec,omitempty"`
 	// ThinkingBudget is the thinking token budget sent when Thinking is on; 0 = never send one (many providers reject it).
 	ThinkingBudget int `json:"thinking_budget,omitempty"`
+	// MaxRetries is how often the CLI retries a failed request (rate limit, bad key, network): 0 = the app's default
+	// (3), -1 = never, otherwise 1..10. The CLI's own default of 10 retries with growing waits keeps a chat on a
+	// rate-limited provider "loading" for minutes.
+	MaxRetries int `json:"max_retries,omitempty"`
+	// DefaultContext / DefaultMaxOutput apply to models that have no size of their own.
+	DefaultContext   int64 `json:"default_context,omitempty"`
+	DefaultMaxOutput int64 `json:"default_max_output,omitempty"`
 	// DisableBetas stops the CLI from sending experimental beta headers/fields, which strict gateways reject.
+	// ModelsMap tells the model-list fetch how to read this provider's answer and pages (nil = detect everything).
+	ModelsMap    *ModelsMapping  `json:"models_map,omitempty"`
 	DisableBetas bool            `json:"disable_betas,omitempty"`
 	Models       []ProviderModel `json:"models"`
+}
+
+const defaultProviderRetries = 3
+
+// retries is the number of retries the CLI gets for this provider.
+func (p Provider) retries() int {
+	switch {
+	case p.MaxRetries < 0:
+		return 0
+	case p.MaxRetries == 0:
+		return defaultProviderRetries
+	}
+	return min(p.MaxRetries, 10)
+}
+
+// ModelLimits are the settings a chat on one model runs with: the model's own value, else the provider's default.
+type ModelLimits struct {
+	Context        int64
+	MaxOutput      int64
+	ThinkingBudget int // 0 = never send a thinking budget
+}
+
+// Limits resolves the settings of model id.
+func (p Provider) Limits(id string) ModelLimits {
+	m := p.ModelInfo(id)
+	l := ModelLimits{Context: m.ContextLength, MaxOutput: m.MaxOutput, ThinkingBudget: p.ThinkingBudget}
+	if l.Context <= 0 {
+		l.Context = p.DefaultContext
+	}
+	if l.MaxOutput <= 0 {
+		l.MaxOutput = p.DefaultMaxOutput
+	}
+	switch m.ThinkingMode {
+	case "off":
+		l.ThinkingBudget = 0
+	case "budget":
+		l.ThinkingBudget = m.ThinkingBudget
+	}
+	return l
 }
 
 // ModelInfo is the saved entry of model id (zero value when unknown).
@@ -153,13 +206,15 @@ func (m *Manager) providerSettingsFile(p Provider, model string) (string, error)
 		env["ANTHROPIC_AUTH_TOKEN"] = p.APIKey
 		env["ANTHROPIC_API_KEY"] = ""
 	}
-	if info := p.ModelInfo(model); info.ContextLength > 0 {
+	limits := p.Limits(model)
+	if limits.Context > 0 {
 		// the CLI assumes a window of its own for unknown models; this makes auto-compact follow the real one
-		env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = strconv.FormatInt(info.ContextLength, 10)
+		env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = strconv.FormatInt(limits.Context, 10)
 	}
-	if info := p.ModelInfo(model); info.MaxOutput > 0 {
-		env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = strconv.FormatInt(info.MaxOutput, 10)
+	if limits.MaxOutput > 0 {
+		env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = strconv.FormatInt(limits.MaxOutput, 10)
 	}
+	env["CLAUDE_CODE_MAX_RETRIES"] = strconv.Itoa(p.retries())
 	if p.TimeoutSec > 0 {
 		env["API_TIMEOUT_MS"] = strconv.Itoa(p.TimeoutSec * 1000)
 	}
@@ -293,6 +348,7 @@ func (m *Manager) settingsConflicts() []string {
 //	PUT    /providers/{id}                   update (an empty api_key keeps the saved one)
 //	DELETE /providers/{id}
 //	POST   /providers/{id}/fetch-models      {"free_only": bool} the provider's model list
+//	POST   /providers/{id}/restart-sessions  restart idle chats running on the provider (they re-read its settings)
 //	POST   /providers/_test                  {…provider, model} one tiny request, like the CLI sends
 //	POST   /providers/_fetch                 {…provider, free_only} the model list with the form's values
 //	POST   /providers/import-settings        move the endpoint of settings.json into a provider
@@ -322,6 +378,9 @@ func (m *Manager) handleProviders(w http.ResponseWriter, r *http.Request, rest s
 			return
 		}
 		m.saveProvider(w, "", p)
+	case action == "restart-sessions" && r.Method == http.MethodPost:
+		restarted, busy := m.restartProviderSessions(id)
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "restarted": restarted, "busy": busy})
 	case id == "_test" && r.Method == http.MethodPost:
 		// tests the form's values (saved or not); an empty key falls back to the saved one
 		var body struct {
@@ -443,6 +502,17 @@ func (m *Manager) saveProvider(w http.ResponseWriter, id string, p Provider) {
 	for _, md := range p.Models {
 		md.ID = strings.TrimSpace(md.ID)
 		md.ContextLength, md.MaxOutput = max(md.ContextLength, 0), max(md.MaxOutput, 0)
+		switch md.ThinkingMode {
+		case "off":
+			md.ThinkingBudget = 0
+		case "budget":
+			if md.ThinkingBudget < 1024 {
+				writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": fmt.Sprintf("%s: a thinking budget must be at least 1024 tokens", md.ID)})
+				return
+			}
+		default:
+			md.ThinkingMode, md.ThinkingBudget = "", 0
+		}
 		if strings.ContainsAny(md.ID, " \t\r\n") {
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": fmt.Sprintf("model id %q must not contain spaces", md.ID)})
 			return
@@ -499,6 +569,23 @@ func normalizeProvider(p *Provider) error {
 		p.AuthMode = authBearer
 	}
 	p.TimeoutSec, p.ThinkingBudget = max(p.TimeoutSec, 0), max(p.ThinkingBudget, 0)
+	p.DefaultContext, p.DefaultMaxOutput = max(p.DefaultContext, 0), max(p.DefaultMaxOutput, 0)
+	p.MaxRetries = max(min(p.MaxRetries, 10), -1)
+	if mp := p.ModelsMap; mp != nil {
+		for _, f := range []*string{&mp.ListPath, &mp.IDField, &mp.NameField, &mp.ContextField, &mp.MaxOutputField, &mp.StripPrefix,
+			&mp.LimitParam, &mp.PageParam, &mp.NextField, &mp.MoreField} {
+			*f = strings.TrimSpace(*f)
+		}
+		switch mp.Pagination {
+		case "", "none", "cursor", "token", "next_url":
+		default:
+			return fmt.Errorf("unknown pagination mode %q", mp.Pagination)
+		}
+		mp.PageSize = max(mp.PageSize, 0)
+		if *mp == (ModelsMapping{}) {
+			p.ModelsMap = nil
+		}
+	}
 	if p.ThinkingBudget > 0 && p.ThinkingBudget < 1024 {
 		return errors.New("a thinking budget must be at least 1024 tokens (or 0 to never send one)")
 	}
@@ -749,6 +836,14 @@ type FetchRaw struct {
 	// free-only filter, drops some).
 	Entries int `json:"entries"`
 	Kept    int `json:"kept"`
+	// Pages is how many pages were read; Pagination the mode used ("none", "cursor", "token", "next_url").
+	Pages      int    `json:"pages,omitempty"`
+	Pagination string `json:"pagination,omitempty"`
+	// PagingError says why reading the later pages stopped (the models of the earlier pages are kept).
+	PagingError string `json:"paging_error,omitempty"`
+	// Lists and TopKeys describe the shape of the first answer, for the Field mapping dialog.
+	Lists   []RawList `json:"lists,omitempty"`
+	TopKeys []RawKey  `json:"top_keys,omitempty"`
 }
 
 func maskKey(k string) string {
@@ -758,132 +853,29 @@ func maskKey(k string) string {
 	return "…" + k[len(k)-4:]
 }
 
-// fetchProviderModelsRaw is fetchProviderModels plus the raw exchange (also filled when the fetch fails).
-func fetchProviderModelsRaw(ctx context.Context, p Provider, freeOnly bool) ([]ProviderModel, *FetchRaw, error) {
-	listURL := p.ModelsURL
-	if listURL == "" && isOpenRouter(p.BaseURL) {
-		listURL = openRouterModelsURL
+// restartProviderSessions restarts the idle running chats of provider id, so they start again with its saved settings.
+// Chats in the middle of a reply are left alone and counted as busy.
+func (m *Manager) restartProviderSessions(id string) (restarted, busy int) {
+	m.mu.Lock()
+	all := make([]*Session, 0, len(m.sessions))
+	for _, s := range m.sessions {
+		all = append(all, s)
 	}
-	if listURL == "" {
-		return nil, nil, errors.New("set the provider's models URL first")
-	}
-	raw := &FetchRaw{URL: listURL}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, listURL, nil)
-	if err != nil {
-		return nil, raw, err
-	}
-	req.Header.Set("Authorization", "Bearer "+p.APIKey)
-	if !isOpenRouter(listURL) {
-		// Anthropic-style lists want these; OpenRouter answers them with a short Anthropic-only list instead
-		req.Header.Set("x-api-key", p.APIKey)
-		req.Header.Set("anthropic-version", "2023-06-01")
-	}
-	for k, v := range p.Headers {
-		req.Header.Set(k, v)
-	}
-	for k, v := range req.Header {
-		val := strings.Join(v, ", ")
-		if strings.EqualFold(k, "Authorization") {
-			val = "Bearer " + maskKey(p.APIKey)
-		} else if strings.EqualFold(k, "X-Api-Key") {
-			val = maskKey(p.APIKey)
-		}
-		raw.RequestHeaders = append(raw.RequestHeaders, k+": "+val)
-	}
-	sort.Strings(raw.RequestHeaders)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, raw, err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
-	raw.Status = resp.StatusCode
-	shown := body
-	var pretty bytes.Buffer
-	if json.Indent(&pretty, body, "", "  ") == nil {
-		shown = pretty.Bytes()
-	}
-	if len(shown) > 256<<10 {
-		shown, raw.Truncated = shown[:256<<10], true
-	}
-	raw.Body = string(shown)
-	if err != nil {
-		return nil, raw, err
-	}
-	if resp.StatusCode/100 != 2 {
-		return nil, raw, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body[:min(len(body), 200)])))
-	}
-	type entry struct {
-		ID          string `json:"id"`
-		Name        string `json:"name"`
-		DisplayName string `json:"display_name"`
-		Pricing     *struct {
-			Prompt     string `json:"prompt"`
-			Completion string `json:"completion"`
-		} `json:"pricing"`
-		SupportedParameters []string `json:"supported_parameters"`
-		// the size fields providers use for the context window / output limit
-		ContextLength    int64 `json:"context_length"`
-		MaxInputTokens   int64 `json:"max_input_tokens"`
-		ContextWindow    int64 `json:"context_window"`
-		MaxContextLength int64 `json:"max_context_length"`
-		MaxOutputTokens  int64 `json:"max_output_tokens"`
-		MaxCompletion    int64 `json:"max_completion_tokens"`
-		MaxTokens        int64 `json:"max_tokens"`
-		TopProvider      *struct {
-			MaxCompletionTokens int64 `json:"max_completion_tokens"`
-		} `json:"top_provider"`
-	}
-	var list struct {
-		Data   []entry `json:"data"`
-		Models []entry `json:"models"`
-	}
-	if err := json.Unmarshal(body, &list); err != nil {
-		return nil, raw, fmt.Errorf("not a model list: %w", err)
-	}
-	entries := append(list.Data, list.Models...)
-	raw.Entries = len(entries)
-	out := []ProviderModel{}
-	for _, e := range entries {
-		if e.ID == "" {
+	m.mu.Unlock()
+	for _, s := range all {
+		s.mu.Lock()
+		pid, _, custom := ParseModelRef(s.opts.Model)
+		live, working := s.cmd != nil, s.pendingTurns > 0
+		s.mu.Unlock()
+		if !custom || pid != id || !live {
 			continue
 		}
-		if freeOnly {
-			free := strings.HasSuffix(e.ID, ":free") || (e.Pricing != nil && e.Pricing.Prompt == "0" && e.Pricing.Completion == "0")
-			tools := e.SupportedParameters == nil
-			for _, sp := range e.SupportedParameters {
-				tools = tools || sp == "tools"
-			}
-			if !free || !tools {
-				continue
-			}
+		if working {
+			busy++
+			continue
 		}
-		name := e.Name
-		if name == "" {
-			name = e.DisplayName
-		}
-		ctxLen := firstPositive(e.ContextLength, e.MaxInputTokens, e.ContextWindow, e.MaxContextLength)
-		maxOut := firstPositive(e.MaxOutputTokens, e.MaxCompletion)
-		if e.TopProvider != nil && maxOut == 0 {
-			maxOut = e.TopProvider.MaxCompletionTokens
-		}
-		if maxOut == 0 && e.MaxInputTokens > 0 { // Anthropic style: max_input_tokens + max_tokens (output)
-			maxOut = e.MaxTokens
-		}
-		out = append(out, ProviderModel{ID: e.ID, Name: name, ContextLength: ctxLen, MaxOutput: maxOut})
+		s.Restart()
+		restarted++
 	}
-	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].ID) < strings.ToLower(out[j].ID) })
-	raw.Kept = len(out)
-	return out, raw, nil
-}
-
-func firstPositive(vals ...int64) int64 {
-	for _, v := range vals {
-		if v > 0 {
-			return v
-		}
-	}
-	return 0
+	return restarted, busy
 }

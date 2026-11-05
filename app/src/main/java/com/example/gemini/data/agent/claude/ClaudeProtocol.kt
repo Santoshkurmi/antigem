@@ -731,7 +731,12 @@ data class ClaudeProviderModel(
     /** Context window in tokens; 0 = unknown (the CLI's default is used). */
     val context_length: Long = 0,
     /** Maximum output tokens; 0 = unknown. */
-    val max_output_tokens: Long = 0
+    val max_output_tokens: Long = 0,
+    /** "" = inherit the provider's thinking setting, "off" = never send a budget, "budget" = send [thinking_budget]. */
+    val thinking_mode: String = "",
+    val thinking_budget: Int = 0,
+    /** The provider's model list says this model supports reasoning. */
+    val can_think: Boolean = false
 )
 
 /** An Anthropic-compatible API (OpenRouter, Kimi, …). The bridge never sends the key back, only [api_key_hint]. */
@@ -755,6 +760,13 @@ data class ClaudeProvider(
     val timeout_sec: Int = 0,
     /** Thinking token budget sent when Thinking is on; 0 = never send one. */
     val thinking_budget: Int = 0,
+    /** How to read this provider's model list and its pages; null = detect everything. */
+    val models_map: ClaudeModelsMapping? = null,
+    /** Retries of a failed request: 0 = the default (3), -1 = never, otherwise 1..10. */
+    val max_retries: Int = 0,
+    /** Context window / max output of models that have no size of their own; 0 = unknown. */
+    val default_context: Long = 0,
+    val default_max_output: Long = 0,
     /** Stops the CLI from sending experimental beta fields that strict gateways reject. */
     val disable_betas: Boolean = false,
     val models: List<ClaudeProviderModel> = emptyList(),
@@ -797,7 +809,39 @@ data class ClaudeFetchRaw(
     /** Models the server listed. */
     val entries: Int = 0,
     /** Models the app accepted (entries without an id are dropped). */
-    val kept: Int = 0
+    val kept: Int = 0,
+    /** Pages read, and the pagination mode used ("none", "cursor", "token", "next_url"). */
+    val pages: Int = 0,
+    val pagination: String = "",
+    /** Why the later pages stopped being read (the earlier pages' models are kept). */
+    val paging_error: String = "",
+    /** Arrays in the answer that could be the model list, and the plain values at its top (has_more, last_id…). */
+    val lists: List<ClaudeRawList> = emptyList(),
+    val top_keys: List<ClaudeRawKey> = emptyList()
+)
+
+@Serializable
+data class ClaudeRawKey(val path: String = "", val sample: String = "")
+
+@Serializable
+data class ClaudeRawList(val path: String = "", val count: Int = 0, val strings: Boolean = false, val keys: List<ClaudeRawKey> = emptyList())
+
+/** Paths are dotted ("top_provider.context_length"); an empty string means "detect". */
+@Serializable
+data class ClaudeModelsMapping(
+    val list_path: String = "",
+    val id_field: String = "",
+    val name_field: String = "",
+    val context_field: String = "",
+    val max_output_field: String = "",
+    val strip_prefix: String = "",
+    /** "" = detect, "none", "cursor", "token", "next_url". */
+    val pagination: String = "",
+    val page_size: Int = 0,
+    val limit_param: String = "",
+    val page_param: String = "",
+    val next_field: String = "",
+    val more_field: String = ""
 )
 
 /** The outcome of a model fetch: the models, or the error, and always the raw exchange when there was one. */
@@ -817,3 +861,21 @@ data class ClaudeProviderTestResult(
 
 @Serializable
 data class ClaudeProviderTestResponse(val success: Boolean = false, val result: ClaudeProviderTestResult? = null, val error: String? = null)
+
+/** The settings a chat on [model] runs with: the model's own value, else the provider's default. */
+data class ClaudeModelLimits(val context: Long, val maxOutput: Long, val thinkingBudget: Int)
+
+fun ClaudeProvider.limitsOf(model: ClaudeProviderModel?): ClaudeModelLimits = ClaudeModelLimits(
+    context = model?.context_length?.takeIf { it > 0 } ?: default_context,
+    maxOutput = model?.max_output_tokens?.takeIf { it > 0 } ?: default_max_output,
+    thinkingBudget = when (model?.thinking_mode) {
+        "off" -> 0
+        "budget" -> model?.thinking_budget ?: 0
+        else -> thinking_budget
+    }
+)
+
+fun ClaudeProvider.limitsOf(modelId: String): ClaudeModelLimits = limitsOf(models.find { it.id == modelId })
+
+@Serializable
+data class ClaudeRestartProviderResponse(val success: Boolean = false, val restarted: Int = 0, val busy: Int = 0, val error: String? = null)

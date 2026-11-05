@@ -133,6 +133,12 @@ class ClaudeBridgeClient(
         return call(Request.Builder().url(url("/providers/_fetch")).post(json.toString().toRequestBody(jsonType)).build(), slowClient)
     }
 
+    /** Stops the chat's process (when idle); its next message starts one with the current settings. */
+    suspend fun restartSession(id: String): Result<BridgeSimpleResponse> = post("/sessions/$id/restart")
+
+    /** Restarts the idle running chats of provider [id]. */
+    suspend fun restartProviderSessions(id: String): Result<ClaudeRestartProviderResponse> = post("/providers/$id/restart-sessions")
+
     /** One tiny request to [model] with the form's values (saved or not), sent like the CLI would. */
     suspend fun testProvider(provider: ClaudeProvider, model: String): Result<ClaudeProviderTestResponse> {
         val json = buildJsonObject {

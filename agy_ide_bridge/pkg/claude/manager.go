@@ -338,7 +338,7 @@ func (s *Session) spawnLocked() error {
 		if err != nil {
 			return fmt.Errorf("custom provider settings: %w", err)
 		}
-		customProvider, thinkingBudget = true, p.ThinkingBudget
+		customProvider, thinkingBudget = true, p.Limits(model).ThinkingBudget
 		args = append(args, "--model", model, "--settings", settings)
 	} else if s.opts.Model != "" {
 		args = append(args, "--model", s.opts.Model)

@@ -1009,7 +1009,8 @@ fun ChatScreen(
                 claudeActions = remember(viewModel) {
                     com.example.gemini.ui.drawer.ClaudeDrawerActions(
                         loadMessages = { id -> viewModel.loadClaudeMessages(id) },
-                        rename = { id, title -> viewModel.renameConversation(id, title) }
+                        rename = { id, title -> viewModel.renameConversation(id, title) },
+                        restart = { id, onDone -> viewModel.claudeBackend.restartChat(id, onDone) }
                     )
                 }
             )

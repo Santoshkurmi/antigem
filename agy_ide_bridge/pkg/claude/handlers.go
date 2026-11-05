@@ -104,6 +104,18 @@ func (m *Manager) handleSessionREST(w http.ResponseWriter, r *http.Request, rest
 		action = parts[1]
 	}
 	switch {
+	case action == "restart" && r.Method == http.MethodPost:
+		// stops the chat's process; the next message starts a new one with the current settings (history is kept)
+		s := m.Existing(id)
+		switch {
+		case s == nil || !s.State().Live:
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "restarted": false})
+		case s.State().Busy:
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": "this chat is replying; restart it when the reply is done"})
+		default:
+			s.Restart()
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "restarted": true})
+		}
 	case action == "history" && r.Method == http.MethodGet:
 		st := SessionState{}
 		var maxBytes int64

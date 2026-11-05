@@ -33,6 +33,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
 
@@ -173,7 +175,7 @@ class ClaudeChatBackend(
 
     // ---- everything below is only touched on [worker]
     private val worker = Dispatchers.Default.limitedParallelism(1)
-    private val transcript = ClaudeTranscript()
+    private val transcript = ClaudeTranscript().also { it.isCustomProvider = { providerOf(_selectedModelId.value).isNotEmpty() } }
     private var attachedId: String? = null
     private var socket: ClaudeSocket? = null
     private var socketJob: Job? = null
@@ -476,6 +478,17 @@ class ClaudeChatBackend(
             switchProvider(modelId)
             return
         }
+        val sameProvider = providerOf(modelId)
+        if (sameProvider.isNotEmpty()) {
+            // context window, output limit and thinking budget are fixed when the process starts: a model of the same
+            // provider with other limits needs a new process (the chat is resumed, nothing is lost)
+            val p = _providers.value.find { it.id == sameProvider }
+            if (p != null && p.limitsOf(rawModel(modelId)) != p.limitsOf(rawModel(previous))) {
+                _controlMessages.tryEmit("${modelLabel(modelId)} has other limits: the chat restarts to apply them")
+                switchProvider(modelId)
+                return
+            }
+        }
         controlsTouched = true
         setSelectedModel(modelId)
         // keep the effort valid for the new model
@@ -567,7 +580,7 @@ class ClaudeChatBackend(
         _thinkingEnabled.value = enabled
         // a custom provider gets a thinking budget only when its page sets one (many providers reject the parameter)
         val budget = providerOf(_selectedModelId.value).let { id ->
-            if (id.isEmpty()) 31999 else _providers.value.find { it.id == id }?.thinking_budget ?: 0
+            if (id.isEmpty()) 31999 else _providers.value.find { it.id == id }?.limitsOf(rawModel(_selectedModelId.value))?.thinkingBudget ?: 0
         }
         applyControl(
             live = if (enabled && budget == 0) null else ClaudeControlRequestBody(
@@ -784,8 +797,7 @@ class ClaudeChatBackend(
     /** The context window the user saved for a custom model (0 = unknown or a Claude model). */
     fun contextLengthOf(modelId: String): Long {
         val provider = providerOf(modelId).ifEmpty { return 0 }
-        val raw = rawModel(modelId)
-        return _providers.value.find { it.id == provider }?.models?.find { it.id == raw }?.context_length ?: 0
+        return _providers.value.find { it.id == provider }?.limitsOf(rawModel(modelId))?.context ?: 0
     }
 
     /** The CLI assumes a window of its own for unknown models; with the real one the total, share and free space are right. */
@@ -881,7 +893,7 @@ class ClaudeChatBackend(
                     id = ref,
                     displayName = m.name?.takeIf { it.isNotBlank() } ?: m.id,
                     family = com.example.gemini.domain.model.ModelFamily.CLAUDE,
-                    description = listOfNotNull(p.name, m.contextLabel()).joinToString(" · "),
+                    description = listOfNotNull(p.name, m.contextLabel(p)).joinToString(" · "),
                     key = ref,
                     baseName = m.id
                 )
@@ -928,6 +940,28 @@ class ClaudeChatBackend(
         backendScope.launch {
             val res = client.fetchProviderModels(id, freeOnly).mapCatching { if (it.success) it.models else error(it.error ?: "the provider did not answer") }
             withContext(Dispatchers.Main) { onResult(res) }
+        }
+    }
+
+    /** Restarts chat [id]'s process (when idle) so its next message uses the current provider settings. */
+    fun restartChat(id: String, onDone: (String) -> Unit) {
+        backendScope.launch {
+            onDone(
+                client.restartSession(id).fold(
+                    { if (it.success) "Restarted: the next message uses the current provider settings" else it.error ?: "Could not restart the chat" },
+                    { it.message ?: "The bridge is not reachable" }
+                )
+            )
+        }
+    }
+
+    /** Restarts the idle running chats of provider [id]; [onDone] gets (restarted, busy) or an error. */
+    fun restartProviderChats(id: String, onDone: (restarted: Int, busy: Int, error: String?) -> Unit) {
+        backendScope.launch {
+            client.restartProviderSessions(id).fold(
+                { onDone(it.restarted, it.busy, if (it.success) null else it.error ?: "the bridge refused") },
+                { onDone(0, 0, it.message ?: "the bridge is not reachable") }
+            )
         }
     }
 
@@ -1214,6 +1248,10 @@ class ClaudeChatBackend(
                     awaitingProcess = false
                     clearStartupNotice()
                 }
+                if (retryNoticeShown && (type == "stream_event" || type == "assistant" || type == "result")) {
+                    retryNoticeShown = false
+                    _startupStatus.value = null
+                }
                 when (type) {
                     "result" -> {
                         queuedRestart?.let {
@@ -1226,6 +1264,7 @@ class ClaudeChatBackend(
                         refreshContextUsage()
                     }
                     "system" -> when (data["subtype"]?.jsonPrimitive?.contentOrNull) {
+                        "api_retry" -> showRetryNotice(data)
                         "session_title_changed" -> {
                             val title = data["title"]?.jsonPrimitive?.contentOrNull
                             val cur = store.currentConversation.value
@@ -1308,6 +1347,27 @@ class ClaudeChatBackend(
                 emitNow()
             }
         }
+    }
+
+    // the "Provider error … retrying" notice is showing: the next model output (or the result) removes it
+    private var retryNoticeShown = false
+
+    /** "Provider rate limit (HTTP 429). Retrying in 18s · attempt 6 of 10" from a `system/api_retry` line. */
+    private fun showRetryNotice(data: JsonObject) {
+        val attempt = data["attempt"]?.jsonPrimitive?.intOrNull ?: return
+        val max = data["max_retries"]?.jsonPrimitive?.intOrNull
+        val delaySec = ((data["retry_delay_ms"]?.jsonPrimitive?.longOrNull ?: 0L) + 999) / 1000
+        val status = data["error_status"]?.jsonPrimitive?.intOrNull
+        val reason = when {
+            status == 429 -> "rate limit (HTTP 429)"
+            status == 401 || status == 403 -> "the key was rejected (HTTP $status)"
+            status == 402 -> "payment or balance problem (HTTP 402)"
+            status != null && status >= 500 -> "the provider is having problems (HTTP $status)"
+            status != null -> "HTTP $status"
+            else -> "cannot reach the provider"
+        }
+        retryNoticeShown = true
+        _startupStatus.value = "Provider error: $reason. Retrying in ${delaySec}s · attempt $attempt${if (max != null) " of $max" else ""}"
     }
 
     private fun clearStartupNotice() {
@@ -1523,10 +1583,23 @@ class ClaudeChatBackend(
     }
 }
 
-/** "128k context · 8k output", or null when the context window is unknown. */
-fun ClaudeProviderModel.contextLabel(): String? {
-    if (context_length <= 0) return null
-    return "${tokenLabel(context_length)} context" + if (max_output_tokens > 0) " · ${tokenLabel(max_output_tokens)} output" else ""
+/** "128K context · 8K output", or null when the context window is unknown (own value, else the provider's default). */
+fun ClaudeProviderModel.contextLabel(provider: ClaudeProvider? = null): String? {
+    val limits = provider?.limitsOf(this)
+    val ctx = limits?.context ?: context_length
+    val out = limits?.maxOutput ?: max_output_tokens
+    if (ctx <= 0) return null
+    return "${tokenLabel(ctx)} context" + if (out > 0) " · ${tokenLabel(out)} output" else ""
+}
+
+/** "thinking 16K", "no thinking", or null when the model inherits a provider that sends no budget. */
+fun ClaudeProviderModel.thinkingLabel(provider: ClaudeProvider): String? {
+    val budget = provider.limitsOf(this).thinkingBudget
+    return when {
+        budget > 0 -> "thinking ${tokenLabel(budget.toLong())}"
+        thinking_mode == "off" -> "no thinking"
+        else -> null
+    }
 }
 
 /** 128000 → "128K", 1000000 → "1M". */
