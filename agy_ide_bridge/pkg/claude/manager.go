@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -327,6 +328,7 @@ func (s *Session) spawnLocked() error {
 		return err
 	}
 	args := append([]string{}, baseArgs...)
+	customProvider, thinkingBudget := false, 31999
 	if providerID, model, custom := ParseModelRef(s.opts.Model); custom {
 		p, ok := s.mgr.provider(providerID)
 		if !ok {
@@ -336,6 +338,7 @@ func (s *Session) spawnLocked() error {
 		if err != nil {
 			return fmt.Errorf("custom provider settings: %w", err)
 		}
+		customProvider, thinkingBudget = true, p.ThinkingBudget
 		args = append(args, "--model", model, "--settings", settings)
 	} else if s.opts.Model != "" {
 		args = append(args, "--model", s.opts.Model)
@@ -357,7 +360,10 @@ func (s *Session) spawnLocked() error {
 	case "off":
 		args = append(args, "--thinking", "disabled")
 	case "on":
-		args = append(args, "--max-thinking-tokens", "31999")
+		// a provider gets a thinking budget only when the user set one: many reject or ignore it
+		if !customProvider || thinkingBudget > 0 {
+			args = append(args, "--max-thinking-tokens", strconv.Itoa(thinkingBudget))
+		}
 	}
 	// attachments of every chat live under one folder Claude may read without asking
 	if root := s.mgr.attachmentsRoot(); os.MkdirAll(root, 0o700) == nil {

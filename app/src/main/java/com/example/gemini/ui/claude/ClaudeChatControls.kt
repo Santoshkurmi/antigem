@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.data.agent.claude.ClaudeAccountManager
 import com.example.gemini.data.agent.claude.ClaudeChatBackend
+import com.example.gemini.data.agent.claude.contextLabel
 import com.example.gemini.data.agent.claude.ClaudePreferences
 import com.example.gemini.theme.QuotaAmber
 import com.example.gemini.theme.QuotaGreen
@@ -400,7 +401,11 @@ fun ClaudeModelSheet(
                 SheetSectionLabel(p.name, trailing = "custom provider")
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     p.models.forEach { m ->
-                        ModelRow("@${p.id}/${m.id}", m.name?.takeIf { it.isNotBlank() } ?: m.id, if (m.name.isNullOrBlank()) "" else m.id)
+                        ModelRow(
+                            "@${p.id}/${m.id}",
+                            m.name?.takeIf { it.isNotBlank() } ?: m.id,
+                            listOfNotNull(m.id.takeIf { !m.name.isNullOrBlank() }, m.contextLabel()).joinToString(" · ")
+                        )
                     }
                 }
             }

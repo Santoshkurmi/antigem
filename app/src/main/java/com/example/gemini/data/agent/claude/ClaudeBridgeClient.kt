@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import java.util.concurrent.TimeUnit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -120,6 +123,24 @@ class ClaudeBridgeClient(
     /** The provider's model list; [freeOnly] (OpenRouter) keeps free models that can call tools. */
     suspend fun fetchProviderModels(id: String, freeOnly: Boolean): Result<ClaudeFetchModelsResponse> =
         call(Request.Builder().url(url("/providers/$id/fetch-models")).post(ClaudeJson.encodeToString(ClaudeFetchModelsRequest(freeOnly)).toRequestBody(jsonType)).build(), slowClient)
+
+    /** The model list fetched with the editor form's values (saved or not). */
+    suspend fun fetchFormModels(provider: ClaudeProvider, freeOnly: Boolean): Result<ClaudeFetchModelsResponse> {
+        val json = buildJsonObject {
+            ClaudeJson.encodeToJsonElement(ClaudeProvider.serializer(), provider).jsonObject.forEach { (k, v) -> put(k, v) }
+            put("free_only", freeOnly)
+        }
+        return call(Request.Builder().url(url("/providers/_fetch")).post(json.toString().toRequestBody(jsonType)).build(), slowClient)
+    }
+
+    /** One tiny request to [model] with the form's values (saved or not), sent like the CLI would. */
+    suspend fun testProvider(provider: ClaudeProvider, model: String): Result<ClaudeProviderTestResponse> {
+        val json = buildJsonObject {
+            ClaudeJson.encodeToJsonElement(ClaudeProvider.serializer(), provider).jsonObject.forEach { (k, v) -> put(k, v) }
+            put("model", model)
+        }
+        return call(Request.Builder().url(url("/providers/_test")).post(json.toString().toRequestBody(jsonType)).build(), slowClient)
+    }
 
     /** Moves the endpoint configured in settings.json into a provider (settings.json then uses the Claude login). */
     suspend fun importSettingsProvider(): Result<ClaudeProviderResponse> = post("/providers/import-settings")

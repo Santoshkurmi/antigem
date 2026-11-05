@@ -128,6 +128,9 @@ class ClaudeChatBackend(
     val isRefreshingModels: StateFlow<Boolean> = _isRefreshingModels.asStateFlow()
 
     // ---- custom providers (Anthropic-compatible APIs; their models are "@provider/model")
+    private val _settingsConflicts = MutableStateFlow<List<String>>(emptyList())
+    /** ANTHROPIC_* keys of settings.json that provider chats override. */
+    val settingsConflicts: StateFlow<List<String>> = _settingsConflicts.asStateFlow()
     private val _providers = MutableStateFlow<List<ClaudeProvider>>(emptyList())
     val providers: StateFlow<List<ClaudeProvider>> = _providers.asStateFlow()
 
@@ -562,10 +565,14 @@ class ClaudeChatBackend(
         val previous = _thinkingEnabled.value
         controlsTouched = true
         _thinkingEnabled.value = enabled
+        // a custom provider gets a thinking budget only when its page sets one (many providers reject the parameter)
+        val budget = providerOf(_selectedModelId.value).let { id ->
+            if (id.isEmpty()) 31999 else _providers.value.find { it.id == id }?.thinking_budget ?: 0
+        }
         applyControl(
-            live = ClaudeControlRequestBody(
+            live = if (enabled && budget == 0) null else ClaudeControlRequestBody(
                 subtype = "set_max_thinking_tokens",
-                max_thinking_tokens = if (enabled) 31999 else 0,
+                max_thinking_tokens = if (enabled) budget else 0,
                 thinking_display = if (enabled) "summarized" else null
             ),
             spawn = BridgeConfigFrame(thinking = if (enabled) "on" else "off"),
@@ -593,7 +600,7 @@ class ClaudeChatBackend(
      * spawn option of the next start (no process is started); before the chat is connected [spawnConfig] covers it.
      */
     private fun applyControl(
-        live: ClaudeControlRequestBody,
+        live: ClaudeControlRequestBody?,
         spawn: BridgeConfigFrame,
         what: String,
         revert: () -> Unit,
@@ -602,7 +609,7 @@ class ClaudeChatBackend(
         backendScope.launch(worker) {
             if (socket == null) return@launch
             if (!processLive || configureLive) send(ClaudeJson.encodeToString(spawn))
-            if (!processLive) return@launch
+            if (!processLive || live == null) return@launch
             val reply = request(live, timeoutMs = 15_000)
             when {
                 reply == null -> _controlMessages.tryEmit("Claude Code did not confirm the $what change")
@@ -774,11 +781,29 @@ class ClaudeChatBackend(
         }
     }
 
+    /** The context window the user saved for a custom model (0 = unknown or a Claude model). */
+    fun contextLengthOf(modelId: String): Long {
+        val provider = providerOf(modelId).ifEmpty { return 0 }
+        val raw = rawModel(modelId)
+        return _providers.value.find { it.id == provider }?.models?.find { it.id == raw }?.context_length ?: 0
+    }
+
+    /** The CLI assumes a window of its own for unknown models; with the real one the total, share and free space are right. */
+    private fun ClaudeContextUsage.withRealWindow(window: Long): ClaudeContextUsage {
+        if (window <= 0) return this
+        return copy(
+            maxTokens = window,
+            percentage = totalTokens * 100.0 / window,
+            categories = categories.map { if (it.name.startsWith("Free space", ignoreCase = true)) it.copy(tokens = (window - totalTokens).coerceAtLeast(0)) else it }
+        )
+    }
+
     fun refreshContextUsage() {
         backendScope.launch(worker) {
             if (!processLive || socket == null) return@launch
             request(ClaudeControlRequestBody(subtype = "get_context_usage"))?.response?.let {
                 _contextUsage.value = runCatching { ClaudeJson.decodeFromJsonElement<ClaudeContextUsage>(it) }.getOrNull()
+                    ?.withRealWindow(contextLengthOf(_selectedModelId.value))
             }
         }
     }
@@ -856,7 +881,7 @@ class ClaudeChatBackend(
                     id = ref,
                     displayName = m.name?.takeIf { it.isNotBlank() } ?: m.id,
                     family = com.example.gemini.domain.model.ModelFamily.CLAUDE,
-                    description = p.name,
+                    description = listOfNotNull(p.name, m.contextLabel()).joinToString(" · "),
                     key = ref,
                     baseName = m.id
                 )
@@ -878,6 +903,7 @@ class ClaudeChatBackend(
             if (!resp.success) return@onSuccess
             _providers.value = resp.providers
             _settingsEndpoint.value = resp.settings_endpoint?.takeIf { it.isNotBlank() }
+            _settingsConflicts.value = resp.settings_conflicts
             publishModels()
         }.onFailure { Log.w(TAG, "providers failed: ${it.message}") }
     }
@@ -902,6 +928,29 @@ class ClaudeChatBackend(
         backendScope.launch {
             val res = client.fetchProviderModels(id, freeOnly).mapCatching { if (it.success) it.models else error(it.error ?: "the provider did not answer") }
             withContext(Dispatchers.Main) { onResult(res) }
+        }
+    }
+
+    /** Fetches the model list with the editor form's values, so an unsaved provider can be fetched too. */
+    fun fetchFormModels(provider: ClaudeProvider, freeOnly: Boolean, onResult: (ClaudeFetchOutcome) -> Unit) {
+        backendScope.launch {
+            onResult(
+                client.fetchFormModels(provider, freeOnly).fold(
+                    { if (it.success) ClaudeFetchOutcome(it.models, null, it.raw) else ClaudeFetchOutcome(error = it.error ?: "the provider did not answer", raw = it.raw) },
+                    { ClaudeFetchOutcome(error = it.message ?: "the bridge is not reachable") }
+                )
+            )
+        }
+    }
+
+    /** Sends one tiny request to [model] with [provider]'s current form values; [onResult] gets the outcome. */
+    fun testProvider(provider: ClaudeProvider, model: String, onResult: (ClaudeProviderTestResult) -> Unit) {
+        backendScope.launch {
+            val res = client.testProvider(provider, model).fold(
+                { it.result ?: ClaudeProviderTestResult(error = it.error ?: "the bridge gave no answer") },
+                { ClaudeProviderTestResult(error = it.message ?: "the bridge is not reachable") }
+            )
+            onResult(res)
         }
     }
 
@@ -1472,4 +1521,17 @@ class ClaudeChatBackend(
             "dontAsk" to "Don't ask"
         )
     }
+}
+
+/** "128k context · 8k output", or null when the context window is unknown. */
+fun ClaudeProviderModel.contextLabel(): String? {
+    if (context_length <= 0) return null
+    return "${tokenLabel(context_length)} context" + if (max_output_tokens > 0) " · ${tokenLabel(max_output_tokens)} output" else ""
+}
+
+/** 128000 → "128K", 1000000 → "1M". */
+fun tokenLabel(n: Long): String = when {
+    n >= 1_000_000 -> (n / 1_000_000.0).let { if (it % 1.0 == 0.0) "${it.toLong()}M" else String.format(java.util.Locale.US, "%.1fM", it) }
+    n >= 1000 -> "${(n + 500) / 1000}K"
+    else -> n.toString()
 }

@@ -722,7 +722,14 @@ data class ClaudeSandboxInfo(
 // ---------------------------------------------------------------- custom providers (/api/claude/providers)
 
 @Serializable
-data class ClaudeProviderModel(val id: String, val name: String? = null)
+data class ClaudeProviderModel(
+    val id: String,
+    val name: String? = null,
+    /** Context window in tokens; 0 = unknown (the CLI's default is used). */
+    val context_length: Long = 0,
+    /** Maximum output tokens; 0 = unknown. */
+    val max_output_tokens: Long = 0
+)
 
 /** An Anthropic-compatible API (OpenRouter, Kimi, …). The bridge never sends the key back, only [api_key_hint]. */
 @Serializable
@@ -735,6 +742,18 @@ data class ClaudeProvider(
     val api_key_hint: String? = null,
     val models_url: String = "",
     val small_model: String = "",
+    /** "bearer" (Authorization: Bearer, ANTHROPIC_AUTH_TOKEN) or "x-api-key" (ANTHROPIC_API_KEY). */
+    val auth_mode: String = "bearer",
+    /** Extra request headers (ANTHROPIC_CUSTOM_HEADERS). */
+    val headers: Map<String, String> = emptyMap(),
+    /** Extra environment variables of the chat's process. */
+    val extra_env: Map<String, String> = emptyMap(),
+    /** Request timeout in seconds; 0 = the CLI's default. */
+    val timeout_sec: Int = 0,
+    /** Thinking token budget sent when Thinking is on; 0 = never send one. */
+    val thinking_budget: Int = 0,
+    /** Stops the CLI from sending experimental beta fields that strict gateways reject. */
+    val disable_betas: Boolean = false,
     val models: List<ClaudeProviderModel> = emptyList(),
     val openrouter: Boolean = false
 )
@@ -745,6 +764,8 @@ data class ClaudeProvidersResponse(
     val providers: List<ClaudeProvider> = emptyList(),
     /** settings.json routes every chat to this endpoint (can be moved into a provider). */
     val settings_endpoint: String? = null,
+    /** ANTHROPIC_* / CLAUDE_CODE_* keys of settings.json (a provider's chats override them). */
+    val settings_conflicts: List<String> = emptyList(),
     val error: String? = null
 )
 
@@ -755,4 +776,41 @@ data class ClaudeProviderResponse(val success: Boolean = false, val provider: Cl
 data class ClaudeFetchModelsRequest(val free_only: Boolean)
 
 @Serializable
-data class ClaudeFetchModelsResponse(val success: Boolean = false, val models: List<ClaudeProviderModel> = emptyList(), val error: String? = null)
+data class ClaudeFetchModelsResponse(
+    val success: Boolean = false,
+    val models: List<ClaudeProviderModel> = emptyList(),
+    val error: String? = null,
+    val raw: ClaudeFetchRaw? = null
+)
+
+/** What a model fetch sent and received, to tell a server problem from an app problem. */
+@Serializable
+data class ClaudeFetchRaw(
+    val url: String = "",
+    val request_headers: List<String> = emptyList(),
+    val status: Int = 0,
+    val body: String = "",
+    val truncated: Boolean = false,
+    /** Models the server listed. */
+    val entries: Int = 0,
+    /** Models the app accepted (entries without an id are dropped). */
+    val kept: Int = 0
+)
+
+/** The outcome of a model fetch: the models, or the error, and always the raw exchange when there was one. */
+data class ClaudeFetchOutcome(val models: List<ClaudeProviderModel> = emptyList(), val error: String? = null, val raw: ClaudeFetchRaw? = null)
+
+@Serializable
+data class ClaudeProviderTestResult(
+    val ok: Boolean = false,
+    val status: Int = 0,
+    val latency_ms: Long = 0,
+    val model: String = "",
+    val reply: String = "",
+    val error: String = "",
+    val hint: String = "",
+    val url: String = ""
+)
+
+@Serializable
+data class ClaudeProviderTestResponse(val success: Boolean = false, val result: ClaudeProviderTestResult? = null, val error: String? = null)
