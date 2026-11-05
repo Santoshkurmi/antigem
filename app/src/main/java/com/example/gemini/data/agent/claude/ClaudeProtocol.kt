@@ -15,6 +15,9 @@ val ClaudeJson = Json {
     explicitNulls = false
     encodeDefaults = true
     isLenient = true
+    // third-party providers (OpenRouter…) send `null` for usage counters Anthropic fills with numbers; without this the
+    // whole event fails to decode and is silently dropped
+    coerceInputValues = true
 }
 
 // ---------------------------------------------------------------- bridge frames (WebSocket)
