@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -137,7 +138,7 @@ fun LocalServerOutputDialog(
 
                         Column {
                             Text(
-                                text = "Local Server Logs",
+                                text = if (AuthPreferences.currentRemoteMode) "Server Logs (SSH)" else "Local Server Logs",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = textPrimary
@@ -300,6 +301,31 @@ fun LocalServerOutputDialog(
                                 .background(consoleBg)
                                 .padding(horizontal = 4.dp, vertical = 4.dp)
                         )
+                    } else if (AuthPreferences.currentRemoteMode) {
+                        // the bridge runs on the server: show its log, read over SSH
+                        val remoteLog by com.example.gemini.data.remote.RemoteServerManager.log.collectAsState()
+                        val sshState by com.example.gemini.data.remote.RemoteServerManager.sshState.collectAsState()
+                        LaunchedEffect(Unit) {
+                            while (true) {
+                                com.example.gemini.data.remote.RemoteServerManager.refreshLog(context)
+                                kotlinx.coroutines.delay(3000)
+                            }
+                        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(consoleBg)
+                                .padding(10.dp)
+                                .verticalScroll(androidx.compose.foundation.rememberScrollState(), reverseScrolling = true)
+                        ) {
+                            Text(
+                                text = remoteLog.ifBlank { "SSH: ${sshState.message}\n\nNo log yet. Tap 'Restart' above to start the bridge on the server." },
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.sp,
+                                lineHeight = 13.sp,
+                                color = Color(0xFFD4D4D8)
+                            )
+                        }
                     } else {
                         Box(
                             modifier = Modifier

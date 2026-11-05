@@ -187,8 +187,10 @@ object ArtifactDownloadHelper {
         // 4. Remote HTTP URL
         if (source.startsWith("http://") || source.startsWith("https://")) {
             return try {
-                val client = OkHttpClient()
-                val req = Request.Builder().url(source).get().build()
+                val fixedSource = com.example.gemini.data.preferences.AuthPreferences.rebaseBridgeUrl(source)
+                val client = if (com.example.gemini.data.preferences.AuthPreferences.isBridgeUrl(fixedSource))
+                    com.example.gemini.data.remote.AgyBridgeService.instance.client else OkHttpClient()
+                val req = Request.Builder().url(fixedSource).get().build()
                 client.newCall(req).execute().use { resp ->
                     if (resp.isSuccessful) resp.body?.bytes() else null
                 }

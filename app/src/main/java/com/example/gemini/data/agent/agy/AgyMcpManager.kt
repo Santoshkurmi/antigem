@@ -291,12 +291,15 @@ class AgyMcpManager(
                                 put("cwd", spec.cwd)
                             }
                             val envMap = spec.env.toMutableMap()
-                            // Ensure Termux stdio binaries (npx, python3, etc.) have proper loader and PATH on Android
-                            if (!envMap.containsKey("LD_PRELOAD")) {
-                                envMap["LD_PRELOAD"] = "/data/data/com.termux/files/usr/lib/libtermux-exec.so"
-                            }
-                            if (!envMap.containsKey("PATH")) {
-                                envMap["PATH"] = "/data/data/com.termux/files/home/.local/bin:/data/data/com.termux/files/usr/bin:/system/bin"
+                            // Ensure Termux stdio binaries (npx, python3, etc.) have proper loader and PATH on Android.
+                            // A server runs the MCP on its own Linux: those Termux paths would break it there.
+                            if (!AuthPreferences.currentRemoteMode) {
+                                if (!envMap.containsKey("LD_PRELOAD")) {
+                                    envMap["LD_PRELOAD"] = "/data/data/com.termux/files/usr/lib/libtermux-exec.so"
+                                }
+                                if (!envMap.containsKey("PATH")) {
+                                    envMap["PATH"] = "/data/data/com.termux/files/home/.local/bin:/data/data/com.termux/files/usr/bin:/system/bin"
+                                }
                             }
                             if (envMap.isNotEmpty()) {
                                 val envObj = org.json.JSONObject()

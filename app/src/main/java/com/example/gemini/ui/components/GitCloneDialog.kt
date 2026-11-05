@@ -93,16 +93,24 @@ fun GitCloneDialog(
             logs.add("⚡ Initializing git clone...")
             var clonedPath: String? = null
             val args = listOf(trimmedUrl) + listOfNotNull(projectName.trim().takeIf { it.isNotEmpty() })
-            val result = LocalEnvironmentManager.executeScriptLive(
-                context = context,
-                scriptName = "git_clone",
-                args = args
-            ) { line ->
+            val startedAt = System.currentTimeMillis()
+            // Remote mode: the repository is cloned by the bridge on the server, not by a script on the phone
+            val runClone: suspend ((String) -> Unit) -> Pair<Int, Long> = { sink ->
+                if (com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) {
+                    val code = com.example.gemini.data.remote.AgyBridgeService.instance
+                        .cloneRepository(trimmedUrl, projectName.trim(), onLine = sink)
+                    code to (System.currentTimeMillis() - startedAt)
+                } else {
+                    val r = LocalEnvironmentManager.executeScriptLive(context = context, scriptName = "git_clone", args = args) { sink(it) }
+                    r.exitCode to r.durationMs
+                }
+            }
+            val (resultExit, resultDuration) = runClone { line ->
                 if (line.startsWith(CLONED_PATH_MARKER)) {
                     clonedPath = line.removePrefix(CLONED_PATH_MARKER).trim()
-                    return@executeScriptLive
+                    return@runClone
                 }
-                if (line.isBlank()) return@executeScriptLive
+                if (line.isBlank() || line.startsWith("ANTIGEM_EXIT=")) return@runClone
                 // git redraws its progress ("Receiving objects:  45% (450/1000)"): keep one line per phase
                 val phase = line.substringBefore(':', "")
                 val prevPhase = logs.lastOrNull()?.substringBefore(':', "")
@@ -112,11 +120,11 @@ fun GitCloneDialog(
                     logs.add(line)
                 }
             }
-            exitCode = result.exitCode
-            durationMs = result.durationMs
+            exitCode = resultExit
+            durationMs = resultDuration
             isRunning = false
             val path = clonedPath
-            if (result.exitCode == 0 && path != null) {
+            if (resultExit == 0 && path != null) {
                 delay(800) // let the success line be seen before the chat comes back
                 onCloned(ProjectItem(File(path).name, path))
             }

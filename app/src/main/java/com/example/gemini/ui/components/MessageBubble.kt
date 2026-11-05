@@ -939,7 +939,7 @@ private fun UserMessageImageItem(
         val path = attachment.path
         when {
             !attachment.localUri.isNullOrBlank() -> attachment.localUri
-            !attachment.url.isNullOrBlank() -> attachment.url
+            !attachment.url.isNullOrBlank() -> com.example.gemini.data.preferences.AuthPreferences.rebaseBridgeUrl(attachment.url)
             path.startsWith("data:image/") || path.startsWith("http://") || path.startsWith("https://") || path.startsWith("content://") -> path
             path.startsWith("file://") -> path
             path.isNotBlank() -> "file://$path"

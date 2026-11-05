@@ -115,19 +115,7 @@ object TermuxSshManager {
         _connectionStatus.value = SshConnectionStatus.CONNECTING
         Log.d(TAG, "[SSH] Connecting to $user@$host:$port...")
 
-        val session = jsch.getSession(user, host, port)
-        session.setPassword(pass)
-
-        val config = Properties().apply {
-            put("StrictHostKeyChecking", "no")
-            put("PreferredAuthentications", "password,keyboard-interactive,publickey")
-            put("ConnectTimeout", "10000")
-            put("compression.s2c", "zlib@openssh.com,zlib,none")
-            put("compression.c2s", "zlib@openssh.com,zlib,none")
-        }
-        session.setConfig(config)
-        session.timeout = 15000
-        session.connect(10000)
+        val session = SshSessionFactory.open(host, port, user, pass, connectTimeoutMs = 10000, keepAliveMs = 20000)
 
         activeSshSession = session
         currentConfigKey = configKey

@@ -763,6 +763,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Remote hub sign-in: hands the pasted localhost redirect address to the server (see AgyBridgeService.forwardLoginCallback). */
+    fun forwardLoginCallback(url: String, onResult: (Result<String>) -> Unit) {
+        viewModelScope.launch {
+            onResult(com.example.gemini.data.remote.AgyBridgeService.instance.forwardLoginCallback(url))
+        }
+    }
+
     fun saveServerUrls(hubUrl: String, bridgeUrl: String) {
         viewModelScope.launch {
             if (hubUrl.isNotBlank()) {

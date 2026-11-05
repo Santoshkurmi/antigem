@@ -100,7 +100,10 @@ object ImageDownloadHelper {
         val input: java.io.InputStream? = when {
             source.startsWith("content://") -> context.contentResolver.openInputStream(Uri.parse(source))
             source.startsWith("http://") || source.startsWith("https://") -> {
-                val resp = OkHttpClient().newCall(Request.Builder().url(source).get().build()).execute()
+                val fixedSource = com.example.gemini.data.preferences.AuthPreferences.rebaseBridgeUrl(source)
+                val http = if (com.example.gemini.data.preferences.AuthPreferences.isBridgeUrl(fixedSource))
+                    com.example.gemini.data.remote.AgyBridgeService.instance.client else OkHttpClient()
+                val resp = http.newCall(Request.Builder().url(fixedSource).get().build()).execute()
                 if (resp.isSuccessful) resp.body?.byteStream() else { resp.close(); null }
             }
             else -> File(clean).takeIf { it.canRead() && it.length() > 0 }?.inputStream()
@@ -227,9 +230,11 @@ object ImageDownloadHelper {
 
         if (source.startsWith("http://") || source.startsWith("https://")) {
             return try {
-                val client = OkHttpClient()
+                val fixedSource = com.example.gemini.data.preferences.AuthPreferences.rebaseBridgeUrl(source)
+                val client = if (com.example.gemini.data.preferences.AuthPreferences.isBridgeUrl(fixedSource))
+                    com.example.gemini.data.remote.AgyBridgeService.instance.client else OkHttpClient()
                 val req = Request.Builder()
-                    .url(source)
+                    .url(fixedSource)
                     .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 AntiGem/1.0")
                     .get()
                     .build()

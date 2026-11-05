@@ -91,6 +91,8 @@ class AndroidLocalBridgeServer private constructor() {
                 serverSocket = socket ?: ServerSocket(0, 50, bindAddr).also { boundPort = it.localPort }
                 isRunning = true
                 Log.i(TAG, "Bridge MCP / REST Server running on http://127.0.0.1:$boundPort")
+                // a server (Remote mode) reaches this MCP server through an SSH reverse tunnel: point it at the bound port
+                com.example.gemini.data.remote.RemoteServerManager.resyncTunnels()
 
                 while (isRunning && !serverSocket!!.isClosed) {
                     val client = serverSocket!!.accept()

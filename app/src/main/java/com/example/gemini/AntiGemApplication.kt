@@ -10,14 +10,38 @@ import com.example.gemini.data.updater.PluginUpdateCheckWorker
 import com.example.gemini.data.updater.UpdateCheckWorker
 import com.telemetrydeck.sdk.TelemetryDeck
 import java.security.MessageDigest
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-class AntiGemApplication : Application() {
+class AntiGemApplication : Application(), coil.ImageLoaderFactory {
+    /**
+     * Images that live on the bridge (a server's files, attachments) need the security header, which Coil's
+     * default client does not send. Only requests to the bridge address get it.
+     */
+    override fun newImageLoader(): coil.ImageLoader {
+        val client = okhttp3.OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val req = chain.request()
+                val bridge = com.example.gemini.data.preferences.AuthPreferences.currentBridgeHttpUrl.toHttpUrlOrNull()
+                val sameServer = bridge != null && req.url.host == bridge.host && req.url.port == bridge.port
+                chain.proceed(
+                    if (sameServer) req.newBuilder()
+                        .header(com.example.gemini.data.preferences.AuthPreferences.currentFramedHeader, "true").build()
+                    else req
+                )
+            }
+            .build()
+        return coil.ImageLoader.Builder(this).okHttpClient(client).build()
+    }
+
     override fun onCreate() {
         super.onCreate()
+        // loads the saved server addresses, Remote mode and the SSH key into memory before anything connects
+        com.example.gemini.data.preferences.AuthPreferences(this)
         UpdateCheckWorker.schedule(this)
         PluginUpdateCheckWorker.schedule(this)
         // Reconnects adb when Wireless debugging turns back on (it gets a new port every time)
         AdbConnectManager.init(this)
+        com.example.gemini.data.ssh.SshSessionFactory.init(this)
         // Forks build with their own key, so only official release APKs report real usage.
         if (!BuildConfig.DEBUG && !isOfficialRelease()) {
             Toast.makeText(

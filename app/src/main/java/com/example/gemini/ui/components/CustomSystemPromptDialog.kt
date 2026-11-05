@@ -50,15 +50,16 @@ fun CustomSystemPromptDialog(
                 val wsParam = java.net.URLEncoder.encode(workspaceDir ?: "", "UTF-8")
                 val bridgeBase = AuthPreferences.currentBridgeHttpUrl.removeSuffix("/")
                 val urlStr = "$bridgeBase/api/system-prompt?conversationId=${conversationId ?: "active"}&workspaceDir=$wsParam"
-                val conn = java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 2000
-                conn.readTimeout = 2000
-                if (conn.responseCode == 200) {
-                    val body = conn.inputStream.bufferedReader().readText()
-                    val json = org.json.JSONObject(body)
-                    val p = json.optString("systemPrompt")
-                    if (p.isNotBlank()) {
-                        dynamicServerPrompt = p
+                // the bridge client sends the security header and has timeouts that fit a remote server
+                val request = okhttp3.Request.Builder().url(urlStr).get().build()
+                com.example.gemini.data.remote.AgyBridgeService.instance.client.newCall(request).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val body = resp.body?.string().orEmpty()
+                        val json = org.json.JSONObject(body)
+                        val p = json.optString("systemPrompt")
+                        if (p.isNotBlank()) {
+                            dynamicServerPrompt = p
+                        }
                     }
                 }
             } catch (e: Exception) {}

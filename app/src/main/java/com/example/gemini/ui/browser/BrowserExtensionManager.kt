@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.example.gemini.data.local.LocalEnvironmentManager
+import com.example.gemini.data.preferences.AuthPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -166,7 +167,7 @@ class BrowserExtensionManager private constructor() {
     private fun hostRequest(path: String, body: JSONObject = JSONObject()): String {
         val request = Request.Builder().url("http://127.0.0.1:${hostPort()}$path")
             .header("X-Device-Id", deviceId()).post(body.toString().toRequestBody("application/json".toMediaType())).build()
-        val client = if (path == "/health") http.newBuilder().readTimeout(1, TimeUnit.SECONDS).build() else http
+        val client = if (path == "/health") http.newBuilder().readTimeout(if (AuthPreferences.currentRemoteMode) 4 else 1, TimeUnit.SECONDS).build() else http
         return client.newCall(request).execute().use { response ->
             val text = response.body?.string().orEmpty()
             if (!response.isSuccessful) throw IllegalStateException(runCatching { JSONObject(text).optString("error") }.getOrDefault(text))
@@ -183,7 +184,15 @@ class BrowserExtensionManager private constructor() {
             packaged = true
         }
         if (runCatching { JSONObject(hostRequest("/health")).optBoolean("ready") }.getOrDefault(false)) return@withLock
-        if (hostProcess?.isAlive != true) {
+        if (AuthPreferences.currentRemoteMode) {
+            // Remote mode: the plugin host runs on the server (Node.js there), reached through an SSH port forward
+            try {
+                com.example.gemini.data.remote.RemoteServerManager.ensureExtensionHost(context)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                throw IllegalStateException(e.message ?: "The browser-plugin host could not start on the server", e)
+            }
+        } else if (hostProcess?.isAlive != true) {
             val node = File(LocalEnvironmentManager.getBinDir(context), "node")
             if (!node.canExecute()) throw IllegalStateException("Node.js is required in the local terminal to run browser extensions")
             val command = mutableListOf(node.absolutePath, "--experimental-vm-modules", runtimeFile(context).absolutePath,
@@ -224,7 +233,7 @@ class BrowserExtensionManager private constructor() {
         }
         repeat(80) {
             if (runCatching { JSONObject(hostRequest("/health")).optBoolean("ready") }.getOrDefault(false)) { lastError = null; return@withLock }
-            if (hostProcess?.isAlive != true) {
+            if (!AuthPreferences.currentRemoteMode && hostProcess?.isAlive != true) {
                 delay(150) // let the reader coroutine capture the final output and exit code
                 val tail = synchronized(hostTail) { hostTail.takeLast(8).joinToString("\n") }
                 val logPath = File(LocalEnvironmentManager.getHomeDir(context), "extension-host.log").absolutePath
@@ -257,7 +266,7 @@ class BrowserExtensionManager private constructor() {
         request("/tab/prepare", JSONObject().put("nativeId", tab.id))
     }
 
-    fun isHostRunning() = hostProcess?.isAlive == true
+    fun isHostRunning() = if (AuthPreferences.currentRemoteMode) com.example.gemini.data.remote.RemoteServerManager.extensionHostReady else hostProcess?.isAlive == true
 
     /**
      * Closes the host's DevTools session for [tab] (Google sign-in must load without one), then runs

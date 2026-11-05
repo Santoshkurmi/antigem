@@ -345,7 +345,9 @@ class AgyChatBackend(
             // 1. Poll for successful auth completion concurrently every 800ms
             loginPollJob = launch {
                 val startTime = System.currentTimeMillis()
-                while (isActive && System.currentTimeMillis() - startTime < 120_000) {
+                // a remote hub needs time for the user to paste the redirect address
+                val maxWaitMs = if (AuthPreferences.currentRemoteMode) 420_000L else 120_000L
+                while (isActive && System.currentTimeMillis() - startTime < maxWaitMs) {
                     delay(800)
 
                     if (isNetworkConnected()) {

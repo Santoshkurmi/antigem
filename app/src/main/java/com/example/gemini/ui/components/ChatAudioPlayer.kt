@@ -160,7 +160,7 @@ fun ChatAudioPlayer(
                         // 3. Direct HTTP streaming from host without caching to local disk
                         val streamUrl = when {
                             !attachment.url.isNullOrBlank() && (attachment.url.startsWith("http://") || attachment.url.startsWith("https://")) -> {
-                                attachment.url
+                                AuthPreferences.rebaseBridgeUrl(attachment.url)
                             }
                             attachment.path.isNotBlank() && (attachment.path.startsWith("http://") || attachment.path.startsWith("https://")) -> {
                                 attachment.path
@@ -173,7 +173,16 @@ fun ChatAudioPlayer(
                         }
 
                         if (!streamUrl.isNullOrBlank()) {
-                            mediaPlayer.setDataSource(streamUrl)
+                            // files on the bridge need the security header; MediaPlayer cannot set it by itself
+                            val onBridge = AuthPreferences.currentBridgeHttpUrl.trimEnd('/').let { streamUrl.startsWith(it) }
+                            if (onBridge) {
+                                mediaPlayer.setDataSource(
+                                    context, android.net.Uri.parse(streamUrl),
+                                    mapOf(AuthPreferences.currentFramedHeader to "true")
+                                )
+                            } else {
+                                mediaPlayer.setDataSource(streamUrl)
+                            }
                             mediaPlayer.prepare()
                         } else {
                             throw IllegalStateException("No audio source available for ${attachment.name}")

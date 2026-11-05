@@ -9,6 +9,7 @@ import (
 // Config holds global runtime configuration parameters.
 type Config struct {
 	Port            string
+	Bind            string
 	HomeDir         string
 	WorkspaceDir    string
 	AppDataDir      string
@@ -31,6 +32,11 @@ func LoadConfig() *Config {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "1234"
+	}
+
+	bind := os.Getenv("BIND")
+	if bind == "" {
+		bind = "0.0.0.0"
 	}
 
 	workspace := os.Getenv("WORKSPACE_DIR")
@@ -65,6 +71,7 @@ func LoadConfig() *Config {
 
 	return &Config{
 		Port:            port,
+		Bind:            bind,
 		HomeDir:         home,
 		WorkspaceDir:    workspace,
 		AppDataDir:      appData,

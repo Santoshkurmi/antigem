@@ -872,17 +872,7 @@ class LocalPtySession(
         try {
             val winIdx = tmuxWindowIndex ?: 1
             Log.d(TAG, "[$id] Starting SSH connection to $sshUser@$sshHost:$sshPort (winIdx=$winIdx)...")
-            val jsch = JSch()
-            val session = jsch.getSession(sshUser, sshHost, sshPort)
-            session.setPassword(sshPass)
-
-            val config = Properties().apply {
-                put("StrictHostKeyChecking", "no")
-                put("PreferredAuthentications", "password,keyboard-interactive,publickey")
-                put("ConnectTimeout", "10000")
-            }
-            session.setConfig(config)
-            session.connect(10000)
+            val session = com.example.gemini.data.ssh.SshSessionFactory.open(sshHost, sshPort, sshUser, sshPass, connectTimeoutMs = 10000, keepAliveMs = 20000)
             jschSession = session
             Log.d(TAG, "[$id] SSH transport connected successfully")
 
@@ -927,6 +917,19 @@ class LocalPtySession(
 
             sshIn = channel.inputStream
             sshOut = channel.outputStream
+
+            // A one-off command (Run configurations, chat commands) runs in its own tmux session on the server
+            if (!initialCommand.isNullOrBlank()) {
+                sessionScope.launch(Dispatchers.IO) {
+                    var waited = 0
+                    while (!tmuxParser.isControlModeActive && waited < 10_000) {
+                        delay(100)
+                        waited += 100
+                    }
+                    delay(400)
+                    write(initialCommand + "\n")
+                }
+            }
 
             val buffer = ByteArray(4096)
             val inputStream = channel.inputStream
@@ -1250,7 +1253,7 @@ object LocalTerminalManager {
 
         val authPrefs = AuthPreferences(context)
         val defaultUseSsh = false
-        val useSsh = authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh
+        val useSsh = AuthPreferences.currentRemoteMode || (authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh)
         val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
         val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
         val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"
@@ -1371,16 +1374,7 @@ object LocalTerminalManager {
     ): List<TmuxWindowInfo> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "[Probe] Connecting SSH to $user@$host:$port for window probe...")
-            val jsch = JSch()
-            val session = jsch.getSession(user, host, port)
-            session.setPassword(pass)
-            val config = Properties().apply {
-                put("StrictHostKeyChecking", "no")
-                put("PreferredAuthentications", "password,keyboard-interactive,publickey")
-                put("ConnectTimeout", "4000")
-            }
-            session.setConfig(config)
-            session.connect(4000)
+            val session = com.example.gemini.data.ssh.SshSessionFactory.open(host, port, user, pass, connectTimeoutMs = 4000)
 
             try {
                 val probeCmd = UNIVERSAL_SSH_PATH +
@@ -1506,7 +1500,7 @@ object LocalTerminalManager {
         val authPrefs = AuthPreferences(context)
         managerScope.launch {
             val defaultUseSsh = false
-            val useSsh = authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh
+            val useSsh = AuthPreferences.currentRemoteMode || (authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh)
             val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
             val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
             val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"

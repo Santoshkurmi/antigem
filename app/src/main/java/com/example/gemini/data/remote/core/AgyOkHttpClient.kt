@@ -18,10 +18,22 @@ object AgyOkHttpClient {
         }
         val connectionPool = ConnectionPool(32, 5, TimeUnit.MINUTES)
 
+        // A hub on this phone (or an http:// address) speaks HTTP/2 without TLS ("prior knowledge"). A hub behind
+        // nginx/Apache on https:// negotiates HTTP/2 through TLS (ALPN) like any web server, so it needs the
+        // normal protocol list. OkHttp does not allow mixing the two.
+        val hubUrl0 = AuthPreferences.currentHubUrl
+        val hubIsTls = hubUrl0.startsWith("https://", ignoreCase = true)
+        val hubIsRemote = !AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(hubUrl0))
+
         val builder = OkHttpClient.Builder()
             .dispatcher(dispatcher)
             .connectionPool(connectionPool)
-            .protocols(listOf(okhttp3.Protocol.H2_PRIOR_KNOWLEDGE))
+            .protocols(
+                if (hubIsTls) listOf(okhttp3.Protocol.HTTP_2, okhttp3.Protocol.HTTP_1_1)
+                else listOf(okhttp3.Protocol.H2_PRIOR_KNOWLEDGE)
+            )
+            // keeps the long gRPC streams alive across NATs, proxies and mobile networks
+            .pingInterval(if (hubIsRemote) 25 else 0, TimeUnit.SECONDS)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS) // Indefinite read timeout for streaming
             .writeTimeout(30, TimeUnit.SECONDS)

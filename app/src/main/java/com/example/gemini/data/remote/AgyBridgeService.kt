@@ -107,9 +107,9 @@ sealed class AgyStreamEvent {
 
 class AgyBridgeService(
     val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(if (AuthPreferences.isRemoteEndpoint()) 12 else 5, TimeUnit.SECONDS)
+        .readTimeout(if (AuthPreferences.isRemoteEndpoint()) 60 else 30, TimeUnit.SECONDS)
+        .writeTimeout(if (AuthPreferences.isRemoteEndpoint()) 60 else 30, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .addInterceptor { chain ->
             val req = chain.request().newBuilder()
@@ -129,11 +129,12 @@ class AgyBridgeService(
         val instance by lazy { AgyBridgeService() }
     }
 
-    // Fast-failing client for localhost health/status checks (500ms connect timeout)
+    // Fast-failing client for health/status checks: 500ms on this phone, a network-grade budget for a remote server
+    // (a TLS handshake over mobile data cannot finish in 500ms and would make a healthy server look offline)
     val fastClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(500, TimeUnit.MILLISECONDS)
-        .readTimeout(1000, TimeUnit.MILLISECONDS)
-        .writeTimeout(1000, TimeUnit.MILLISECONDS)
+        .connectTimeout(if (AuthPreferences.isRemoteEndpoint()) 8000 else 500, TimeUnit.MILLISECONDS)
+        .readTimeout(if (AuthPreferences.isRemoteEndpoint()) 10000 else 1000, TimeUnit.MILLISECONDS)
+        .writeTimeout(if (AuthPreferences.isRemoteEndpoint()) 10000 else 1000, TimeUnit.MILLISECONDS)
         .retryOnConnectionFailure(false)
         .addInterceptor { chain ->
             val req = chain.request().newBuilder()
@@ -149,11 +150,12 @@ class AgyBridgeService(
         .build()
 
     // Dedicated WebSocket client for live bridge monitoring with 1s connect timeout and 1s heartbeat ping
+    // (remote: 10s connect and a 15s heartbeat, so mobile-network hiccups reconnect instead of flapping Offline)
     val wsClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(1000, TimeUnit.MILLISECONDS)
+        .connectTimeout(if (AuthPreferences.isRemoteEndpoint()) 10000 else 1000, TimeUnit.MILLISECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
-        .writeTimeout(3, TimeUnit.SECONDS)
-        .pingInterval(1, TimeUnit.SECONDS)
+        .writeTimeout(if (AuthPreferences.isRemoteEndpoint()) 10 else 3, TimeUnit.SECONDS)
+        .pingInterval(if (AuthPreferences.isRemoteEndpoint()) 15 else 1, TimeUnit.SECONDS)
         .retryOnConnectionFailure(false)
         .addInterceptor { chain ->
             val req = chain.request().newBuilder()
@@ -649,6 +651,73 @@ class AgyBridgeService(
         } catch (e: Exception) {
             Log.e(TAG, "restoreConversationArchive failed: ${e.message}")
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Finishes the Google sign-in of a hub on a server: the browser ended on http://localhost:<port>/... (the phone, not
+     * the server), the user pastes that address and the bridge replays it on the server's own loopback.
+     */
+    suspend fun forwardLoginCallback(
+        callbackUrl: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().put("url", callbackUrl.trim()).toString()
+            val request = Request.Builder()
+                .url("${httpBaseUrl.trimEnd('/')}/api/auth/forward-callback")
+                .post(payload.toRequestBody(jsonMediaType))
+                .build()
+            client.newCall(request).execute().use { response ->
+                val obj = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
+                if (obj?.optBoolean("success", false) == true) {
+                    Result.success(obj.optString("message", "Sign-in forwarded"))
+                } else {
+                    Result.failure(Exception(obj?.optString("error")?.takeIf { it.isNotBlank() } ?: "HTTP ${response.code}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Clones a public https repository on the machine the bridge runs on and reports its output line by line.
+     * Returns the exit code (0 = cloned). The last lines are `ANTIGEM_CLONED_PATH=<dir>` or `ANTIGEM_EXIT=<code>`.
+     */
+    suspend fun cloneRepository(
+        repoUrl: String,
+        name: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl,
+        onLine: (String) -> Unit
+    ): Int = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().put("url", repoUrl).put("name", name).toString()
+            val request = Request.Builder()
+                .url("${httpBaseUrl.trimEnd('/')}/api/git/clone")
+                .post(payload.toRequestBody(jsonMediaType))
+                .build()
+            // a clone can take minutes: no read timeout, the server ends the stream
+            client.newBuilder().readTimeout(0, TimeUnit.MILLISECONDS).build().newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val err = runCatching { JSONObject(response.body?.string().orEmpty()).optString("error") }.getOrNull()
+                    onLine("❌ Error: ${err?.takeIf { it.isNotBlank() } ?: "the server answered HTTP ${response.code} (is the bridge up to date?)"}")
+                    return@withContext 1
+                }
+                var exit = -1
+                response.body?.source()?.let { source ->
+                    while (true) {
+                        val line = source.readUtf8Line() ?: break
+                        if (line.startsWith("ANTIGEM_EXIT=")) exit = line.removePrefix("ANTIGEM_EXIT=").trim().toIntOrNull() ?: 1
+                        if (line.startsWith("ANTIGEM_CLONED_PATH=")) exit = 0
+                        onLine(line)
+                    }
+                }
+                if (exit < 0) 1 else exit
+            }
+        } catch (e: Exception) {
+            onLine("❌ Error: ${e.message}")
+            1
         }
     }
 

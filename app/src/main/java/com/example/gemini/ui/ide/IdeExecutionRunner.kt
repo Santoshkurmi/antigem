@@ -34,6 +34,7 @@ import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 import java.util.UUID
+import kotlinx.coroutines.flow.first
 
 data class IdeExecutionRequest(
     val id: String = UUID.randomUUID().toString(),
@@ -59,25 +60,58 @@ fun IdeExecutionRunnerSheet(
     var ctrlState by remember { mutableStateOf(IdeKeyModifierState.OFF) }
     var altState by remember { mutableStateOf(IdeKeyModifierState.OFF) }
 
+    // Remote mode: the command runs on the server, in its own tmux session reached over SSH
+    val remoteRun = com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode
+    val runSessionName = remember(sessionKey) { "antigem-run-" + UUID.randomUUID().toString().take(8) }
+
     val ptySession = remember(sessionKey) {
         val displayCmd = request.command
         val escapedCmd = displayCmd.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$")
         val wrappedCmd = "echo -e \"\\033[1;32m▶ $escapedCmd\\033[0m\"; $displayCmd"
-        LocalPtySession(
-            id = "ide_run_${UUID.randomUUID()}",
-            initialTitle = request.profileName,
-            context = context,
-            forceShell = "bash",
-            initialWorkingDir = request.workingDir,
-            initialCommand = wrappedCmd
-        )
+        if (remoteRun) {
+            val prefs = com.example.gemini.data.preferences.AuthPreferences(context)
+            val (host, port, user, pass) = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                listOf(
+                    prefs.termuxSshHost.first(), prefs.termuxSshPort.first().toString(),
+                    prefs.termuxSshUser.first(), prefs.termuxSshPass.first()
+                )
+            }
+            val dir = request.workingDir?.takeIf { it.isNotBlank() }
+            val cdPart = if (dir != null) "cd '" + dir.replace("'", "'\\''") + "' 2>/dev/null; " else ""
+            LocalPtySession(
+                id = "ide_run_${UUID.randomUUID()}",
+                initialTitle = request.profileName,
+                context = context,
+                isSsh = true,
+                sshHost = host,
+                sshPort = port.toIntOrNull() ?: 22,
+                sshUser = user,
+                sshPass = pass,
+                tmuxSessionName = runSessionName,
+                initialCommand = cdPart + wrappedCmd
+            )
+        } else {
+            LocalPtySession(
+                id = "ide_run_${UUID.randomUUID()}",
+                initialTitle = request.profileName,
+                context = context,
+                forceShell = "bash",
+                initialWorkingDir = request.workingDir,
+                initialCommand = wrappedCmd
+            )
+        }
     }
 
     val isExited by ptySession.isExited.collectAsState()
 
     DisposableEffect(ptySession) {
         onDispose {
-            closeWithChildren(ptySession)
+            if (remoteRun) {
+                ptySession.close()
+                com.example.gemini.data.remote.RemoteServerManager.killTmuxSession(runSessionName)
+            } else {
+                closeWithChildren(ptySession)
+            }
         }
     }
 

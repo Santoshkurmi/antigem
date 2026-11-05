@@ -359,7 +359,7 @@ fun ChatScreen(
     val serverRestarting = serverStatus is com.example.gemini.data.local.LocalServerStatus.Starting ||
         serverStatus is com.example.gemini.data.local.LocalServerStatus.Stopping
     val restartLocalServer = {
-        com.example.gemini.ui.components.AppToastHelper.showToast("Restarting the local server…", com.example.gemini.ui.components.ChatToastType.INFO)
+        com.example.gemini.ui.components.AppToastHelper.showToast(if (AuthPreferences.currentRemoteMode) "Restarting the server over SSH…" else "Restarting the local server…", com.example.gemini.ui.components.ChatToastType.INFO)
         com.example.gemini.data.local.LocalServerManager.restartServer(context)
     }
     val recheckClaude = {
@@ -1018,6 +1018,10 @@ fun ChatScreen(
     ) {
         if (pendingLoginUrl != null) {
             val targetUrl = pendingLoginUrl!!
+            val remoteSignIn = AuthPreferences.currentRemoteMode
+            var pastedCallback by remember(targetUrl) { mutableStateOf("") }
+            var callbackStatus by remember(targetUrl) { mutableStateOf<String?>(null) }
+            var callbackBusy by remember(targetUrl) { mutableStateOf(false) }
             AlertDialog(
                 onDismissRequest = { viewModel.clearPendingLoginUrl() },
                 title = {
@@ -1035,30 +1039,83 @@ fun ChatScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "Do you want to open your browser to log in now?",
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        if (!remoteSignIn) {
+                            Text(
+                                text = "Do you want to open your browser to log in now?",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        } else {
+                            Text(
+                                text = "1. Open the browser and sign in.\n" +
+                                    "2. Your browser then shows an error page for localhost. That is expected: the sign-in " +
+                                    "finishes on the server, not on this phone.\n" +
+                                    "3. Copy that page's address from the address bar and paste it below.",
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = pastedCallback,
+                                onValueChange = { pastedCallback = it; callbackStatus = null },
+                                label = { Text("Address starting with http://localhost") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            callbackStatus?.let {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = it,
+                                    fontSize = 12.sp,
+                                    color = if (it.startsWith("✓")) Color(0xFF22C55E) else Color.Red
+                                )
+                            }
+                        }
                     }
                 },
                 confirmButton = {
-                    Button(
-                        onClick = {
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                android.util.Log.e("ChatScreen", "Failed to open browser: ${e.message}")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (remoteSignIn) {
+                            Button(
+                                onClick = {
+                                    callbackBusy = true
+                                    callbackStatus = "Sending to the server…"
+                                    viewModel.forwardLoginCallback(pastedCallback) { result ->
+                                        callbackBusy = false
+                                        result.fold(
+                                            {
+                                                callbackStatus = "✓ Sent. Finishing sign-in…"
+                                                viewModel.clearPendingLoginUrl()
+                                            },
+                                            { callbackStatus = "✗ ${it.message}" }
+                                        )
+                                    }
+                                },
+                                enabled = pastedCallback.isNotBlank() && !callbackBusy,
+                                colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                            ) {
+                                Text("Finish", fontWeight = FontWeight.SemiBold)
                             }
-                            viewModel.clearPendingLoginUrl()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                    ) {
-                        Text("Open Browser", fontWeight = FontWeight.SemiBold)
+                        }
+                        Button(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    android.util.Log.e("ChatScreen", "Failed to open browser: ${e.message}")
+                                }
+                                // a remote sign-in stays open for the paste step
+                                if (!remoteSignIn) viewModel.clearPendingLoginUrl()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                        ) {
+                            Text("Open Browser", fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 },
                 dismissButton = {
@@ -1221,7 +1278,7 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        if (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context) || systemConnectionState.status != com.example.gemini.data.remote.SystemStatus.OFFLINE) {
+                        if (isLocalToolsInstalled || AuthPreferences.currentRemoteMode || com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context) || systemConnectionState.status != com.example.gemini.data.remote.SystemStatus.OFFLINE) {
                             // upper half Antigravity, lower half Claude Code (one solid dot when they agree)
                             com.example.gemini.ui.agents.AgentStatusIndicator(
                                 entries = agentEntries,
@@ -1236,7 +1293,7 @@ fun ChatScreen(
                             )
                         }
                         IconButton(onClick = {
-                            if (useSshTerminal || (isLocalToolsInstalled && isLocalToolsEnabled)) {
+                            if (useSshTerminal || AuthPreferences.currentRemoteMode || (isLocalToolsInstalled && isLocalToolsEnabled)) {
                                 onNavigateToTerminal()
                             } else if (isLocalToolsInstalled) {
                                 viewModel.setLocalToolsEnabled(true)
@@ -1248,7 +1305,7 @@ fun ChatScreen(
                             Icon(
                                 imageVector = Icons.Outlined.Terminal,
                                 contentDescription = "Terminal",
-                                tint = if (useSshTerminal || (isLocalToolsInstalled && isLocalToolsEnabled)) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                tint = if (useSshTerminal || AuthPreferences.currentRemoteMode || (isLocalToolsInstalled && isLocalToolsEnabled)) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                             )
                         }
                         IconButton(onClick = onNavigateToIde) {
@@ -2297,7 +2354,7 @@ fun ChatScreen(
     }
 
     // asked once the local environment (rootfs) is installed, before the local server starts
-    if (!hasChosenAgents && (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context))) {
+    if (!hasChosenAgents && (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context) || AuthPreferences.currentRemoteMode)) {
         com.example.gemini.ui.agents.AgentChoiceDialog { viewModel.applyAgents(it) }
     }
     if (isApplyingAgents) {

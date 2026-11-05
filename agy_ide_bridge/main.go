@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -41,6 +42,7 @@ Flags:
   -t, --token <token>       12-character security token for API & AGY CSRF obfuscation
   -f, --force, --f          Force start AGY Hub automatically without prompting
   -p, --port <port>         Port for the Go IDE Server (default: 1234)
+  --bind <address>          Address the IDE Server listens on (default: 0.0.0.0; use 127.0.0.1 behind nginx/Apache)
   --hub-port <port>         Port for the AGY Hub RPC server (default: 1235)
   --tz-offset <seconds>     Timezone offset in seconds (e.g. 20700 for UTC+05:45)
   --tz <location>           Timezone location name (e.g. Asia/Kathmandu)
@@ -65,6 +67,16 @@ func (r *statusRecorder) WriteHeader(code int) {
 		r.ResponseWriter.WriteHeader(code)
 	}
 }
+
+// Flush lets streaming handlers (git clone progress) push each line to the client right away.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Unwrap exposes the real writer to http.ResponseController.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 func (r *statusRecorder) Write(b []byte) (int, error) {
 	if !r.wroteHeader {
@@ -165,6 +177,13 @@ func main() {
 				cfg.Port = os.Args[i+1]
 				i++
 			}
+		case strings.HasPrefix(arg, "--bind="):
+			cfg.Bind = strings.TrimPrefix(arg, "--bind=")
+		case arg == "--bind":
+			if i+1 < len(os.Args) {
+				cfg.Bind = os.Args[i+1]
+				i++
+			}
 		case strings.HasPrefix(arg, "--hub-port="):
 			hubPort = strings.TrimPrefix(arg, "--hub-port=")
 		case arg == "--hub-port":
@@ -257,7 +276,7 @@ func main() {
 	fmt.Println("\033[1;36m============================================================\033[0m")
 	fmt.Println("\033[1;32m  ⚡ antiGem Go IDE Server & AGY Hub Supervisor\033[0m")
 	fmt.Println("\033[1;36m============================================================\033[0m")
-	fmt.Printf("  \033[1m• IDE Server Port:\033[0m  http://0.0.0.0:%s\n", cfg.Port)
+	fmt.Printf("  \033[1m• IDE Server Port:\033[0m  http://%s:%s\n", cfg.Bind, cfg.Port)
 	fmt.Printf("  \033[1m• Projects Dir:\033[0m     %s\n", cfg.ProjectsBaseDir)
 	fmt.Printf("  \033[1m• Target Hub Port:\033[0m  %s\n", hubPort)
 	if resolvedAgyBin != "" {
@@ -298,6 +317,8 @@ func main() {
 	mux.HandleFunc("/api/shutdown", h.ShutdownHandler)
 	mux.HandleFunc("/api/auth/login-url", h.GetLoginURLHandler)
 	mux.HandleFunc("/api/auth/start-login", h.StartLoginHandler)
+	mux.HandleFunc("/api/auth/forward-callback", h.ForwardLoginCallbackHandler)
+	mux.HandleFunc("/api/server/info", h.ServerInfoHandler)
 	mux.HandleFunc("/api/models", h.ModelsHandler)
 	mux.HandleFunc("/api/models/refresh", h.ModelsHandler)
 	mux.HandleFunc("/api/quotas", h.QuotasHandler)
@@ -327,6 +348,7 @@ func main() {
 	// Git Source Control Endpoints
 	mux.HandleFunc("/api/git/status", h.GitStatusHandler)
 	mux.HandleFunc("/api/git/init", h.GitInitHandler)
+	mux.HandleFunc("/api/git/clone", h.GitCloneHandler)
 	mux.HandleFunc("/api/git/config", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			h.GitSetConfigHandler(w, r)
@@ -504,10 +526,12 @@ func main() {
 	})
 
 	server := &http.Server{
-		Addr:         "0.0.0.0:" + cfg.Port,
-		Handler:      recoveryHandler,
-		ReadTimeout:  60 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		Addr:    net.JoinHostPort(cfg.Bind, cfg.Port),
+		Handler: recoveryHandler,
+		// No whole-request Read/Write timeouts: over a real network (phone -> VPS) large uploads,
+		// exports and streamed downloads legitimately take longer than a minute.
+		ReadHeaderTimeout: 20 * time.Second,
+		IdleTimeout:       180 * time.Second,
 	}
 
 	stopChan := make(chan os.Signal, 1)
@@ -527,7 +551,7 @@ func main() {
 		}
 	}()
 
-	fmt.Printf(" \033[32m🚀 antiGem IDE Server running at http://0.0.0.0:%s\033[0m\n\n", cfg.Port)
+	fmt.Printf(" \033[32m🚀 antiGem IDE Server running at http://%s:%s\033[0m\n\n", cfg.Bind, cfg.Port)
 
 	// Determine if AGY Hub should be started
 	shouldStartHub := false

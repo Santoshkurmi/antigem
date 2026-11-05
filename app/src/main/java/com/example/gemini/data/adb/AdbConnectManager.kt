@@ -127,6 +127,12 @@ object AdbConnectManager {
         if (isWirelessDebuggingOn(appContext)) maybeAutoConnect()
     }
 
+    /** Ports of this phone's Wireless debugging "connect" service (changes every time Wireless debugging turns on). */
+    fun connectPorts(): Flow<Int> = localServicePorts(CONNECT_SERVICE)
+
+    /** Ports of this phone's "Pair device with pairing code" dialog while it is open. */
+    fun pairingPorts(): Flow<Int> = localServicePorts(PAIRING_SERVICE)
+
     fun isDeveloperOptionsOn(context: Context): Boolean =
         Settings.Global.getInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
 

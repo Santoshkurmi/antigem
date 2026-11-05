@@ -3,13 +3,16 @@ package security
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -341,14 +344,92 @@ func AuthMiddleware(token string, next http.Handler) http.Handler {
 			}
 		}
 
-		// 3. Also check query param ?token= (for WebSocket handshake if headers cannot be set)
-		if r.URL.Query().Get("token") == token {
+		// 3. Also check query param ?token= (for WebSocket handshake and media players that cannot set headers)
+		if q := r.URL.Query().Get("token"); q != "" && subtle.ConstantTimeCompare([]byte(q), []byte(token)) == 1 {
 			next.ServeHTTP(w, r)
 			return
 		}
+
+		ip := clientIP(r)
+		if authFailures.blocked(ip) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Retry-After", "300")
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"error":"too_many_attempts","message":"Too many unauthorized requests. Try again later."}`))
+			return
+		}
+		authFailures.fail(ip)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte(`{"error":"unauthorized","message":"Missing or invalid AntiGem security token header"}`))
 	})
+}
+
+// failureLimiter blocks an address after too many unauthorized requests (the bridge may be on the internet).
+type failureLimiter struct {
+	mu      sync.Mutex
+	entries map[string]*failureEntry
+}
+
+type failureEntry struct {
+	count int
+	first time.Time
+	until time.Time
+}
+
+const (
+	maxAuthFailures = 30
+	failureWindow   = 5 * time.Minute
+	blockDuration   = 5 * time.Minute
+)
+
+var authFailures = &failureLimiter{entries: make(map[string]*failureEntry)}
+
+func (l *failureLimiter) blocked(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	e := l.entries[ip]
+	return e != nil && time.Now().Before(e.until)
+}
+
+func (l *failureLimiter) fail(ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now()
+	e := l.entries[ip]
+	if e == nil || now.Sub(e.first) > failureWindow {
+		e = &failureEntry{first: now}
+		l.entries[ip] = e
+	}
+	e.count++
+	if e.count >= maxAuthFailures {
+		e.until = now.Add(blockDuration)
+		e.count = 0
+		e.first = now
+	}
+	if len(l.entries) > 4096 {
+		for k, v := range l.entries {
+			if now.Sub(v.first) > failureWindow && now.After(v.until) {
+				delete(l.entries, k)
+			}
+		}
+	}
+}
+
+// clientIP is the caller's address; behind a reverse proxy on this machine it is the forwarded one.
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			if i := strings.Index(xff, ","); i >= 0 {
+				xff = xff[:i]
+			}
+			return strings.TrimSpace(xff)
+		}
+	}
+	return host
 }

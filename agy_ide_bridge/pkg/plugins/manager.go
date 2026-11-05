@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -74,6 +75,11 @@ type Manager struct {
 // directory is the parent of its terminal home.
 func NewManager(home string) *Manager {
 	files := filepath.Dir(home)
+	if runtime.GOOS != "android" {
+		// On a server the home's parent is /home (not writable, shared by every user): keep the plugin
+		// folders and the extension host's storage in the user's own ~/.antigem instead.
+		files = filepath.Join(home, ".antigem")
+	}
 	return &Manager{
 		home:     home,
 		stateDir: filepath.Join(files, "browser-extensions", ".antigem-state"),

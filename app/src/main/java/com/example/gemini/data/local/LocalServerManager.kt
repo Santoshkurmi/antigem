@@ -33,6 +33,11 @@ object LocalServerManager {
     private val _status = MutableStateFlow<LocalServerStatus>(LocalServerStatus.Idle)
     val status: StateFlow<LocalServerStatus> = _status.asStateFlow()
 
+    /** The SSH-managed remote server reports through the same status flow, so the existing UI needs no change. */
+    internal fun publishRemoteStatus(status: LocalServerStatus) {
+        _status.value = status
+    }
+
     private val _serverSession = MutableStateFlow<LocalPtySession?>(null)
     val serverSession: StateFlow<LocalPtySession?> = _serverSession.asStateFlow()
 
@@ -249,6 +254,11 @@ object LocalServerManager {
      * Immediate force kill for service notification exit (closes session and finishes processes)
      */
     fun forceKillAll() {
+        if (AuthPreferences.currentRemoteMode) {
+            // Leaving the app must not stop the server: only drop the SSH connection and its forwards
+            com.example.gemini.data.remote.RemoteServerManager.disconnect()
+            return
+        }
         exitObserverJob?.cancel()
         exitObserverJob = null
         activeJob?.cancel()
@@ -275,6 +285,14 @@ object LocalServerManager {
 
     @Synchronized
     fun autoStartOnAppLaunch(context: Context) {
+        if (AuthPreferences.currentRemoteMode) {
+            // The server is another machine managed over SSH: no local bootstrap needed
+            if (hasInitialAutoStarted) return
+            if (!com.example.gemini.data.agent.AgentPreferences.hasChosenSync(context)) return
+            hasInitialAutoStarted = true
+            com.example.gemini.data.remote.RemoteServerManager.autoStart(context)
+            return
+        }
         if (hasInitialAutoStarted) {
             Log.d(
                 TAG,
@@ -300,6 +318,11 @@ object LocalServerManager {
     }
 
     fun startServer(context: Context, forceRestart: Boolean = false) {
+        if (AuthPreferences.currentRemoteMode) {
+            hasInitialAutoStarted = true
+            com.example.gemini.data.remote.RemoteServerManager.start(context, forceRestart)
+            return
+        }
         if (hasServerScript(context)) {
             hasInitialAutoStarted = true
         }
@@ -378,6 +401,10 @@ object LocalServerManager {
     }
 
     fun stopServer() {
+        if (AuthPreferences.currentRemoteMode) {
+            com.example.gemini.data.remote.RemoteServerManager.stop()
+            return
+        }
         activeJob?.cancel()
         activeJob = managerScope.launch {
             stopServerInternal()
@@ -432,6 +459,11 @@ object LocalServerManager {
 
     /** Restarts the server and waits until it is starting again (agent selection changed). */
     suspend fun restartServerAndWait(context: Context) {
+        if (AuthPreferences.currentRemoteMode) {
+            hasInitialAutoStarted = true
+            com.example.gemini.data.remote.RemoteServerManager.restartAndWait(context)
+            return
+        }
         hasInitialAutoStarted = true
         activeJob?.cancel()
         _status.value = LocalServerStatus.Starting
@@ -445,6 +477,11 @@ object LocalServerManager {
      * selection changed): nothing of the old server may keep running.
      */
     suspend fun stopServerCompletely() {
+        if (AuthPreferences.currentRemoteMode) {
+            hasInitialAutoStarted = true
+            com.example.gemini.data.remote.RemoteServerManager.stopCompletely()
+            return
+        }
         hasInitialAutoStarted = true
         activeJob?.cancel()
         stopServerInternal()
@@ -458,6 +495,11 @@ object LocalServerManager {
     }
 
     fun restartServer(context: Context) {
+        if (AuthPreferences.currentRemoteMode) {
+            hasInitialAutoStarted = true
+            com.example.gemini.data.remote.RemoteServerManager.restart(context)
+            return
+        }
         hasInitialAutoStarted = true
         activeJob?.cancel()
         activeJob = managerScope.launch {

@@ -1669,7 +1669,7 @@ func (h *Handler) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		Path:      targetPath,
 		IsImage:   isImage,
 		Size:      len(buffer),
-		URL:       fmt.Sprintf("http://127.0.0.1:%s/attachments/%s", h.Cfg.Port, uniqueName),
+		URL:       fmt.Sprintf("%s/attachments/%s", publicBaseURL(r, h.Cfg.Port), uniqueName),
 	})
 }
 
