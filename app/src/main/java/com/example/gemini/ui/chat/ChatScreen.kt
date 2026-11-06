@@ -1454,7 +1454,10 @@ fun ChatScreen(
                     val sysStatus = systemConnectionState.status
                     val isServerInitializing = sysStatus == com.example.gemini.data.remote.SystemStatus.STARTING || sysStatus == com.example.gemini.data.remote.SystemStatus.ACQUIRING_CSRF || (sysStatus == com.example.gemini.data.remote.SystemStatus.OFFLINE && isInitialGracePeriod)
                     val isServerStopped = sysStatus == com.example.gemini.data.remote.SystemStatus.OFFLINE && !isInitialGracePeriod
-                    val isExistingConversation = currentConv != null && currentConv?.title != "New Chat" && conversations.any { it.id == currentConv?.id }
+                    // Jarvis' chats are not in `conversations` (they are hidden and listed apart, under Jarvis), but they are
+                    // existing chats too: while one loads, show the loading skeleton like for any other chat
+                    val isExistingConversation = currentConv != null && currentConv?.title != "New Chat" &&
+                        (conversations.any { it.id == currentConv?.id } || jarvisConversations.any { it.id == currentConv?.id })
                     val isExistingChat = messages.isEmpty() && isExistingConversation && isLoadingConversation
                     Log.d("CHAT_OPEN_DEBUG", "🖥️ [ChatScreen Render] convId=${currentConv?.id}, title='${currentConv?.title}', isLoading=$isLoadingConversation, isExisting=$isExistingChat, msgCount=${messages.size}, error=$conversationError, isServerStopped=$isServerStopped")
 
