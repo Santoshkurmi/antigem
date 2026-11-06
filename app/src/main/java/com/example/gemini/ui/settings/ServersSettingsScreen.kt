@@ -1,5 +1,6 @@
 package com.example.gemini.ui.settings
 
+import com.example.gemini.ui.components.bouncyVerticalScroll
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
@@ -545,7 +546,7 @@ internal fun ServersSubScreen(
     val subtle = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        modifier = Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // ----- Where does the server run? -----

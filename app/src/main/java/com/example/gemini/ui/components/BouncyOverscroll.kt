@@ -15,7 +15,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
@@ -47,6 +54,70 @@ fun ProvideBouncyOverscroll(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalOverscrollFactory provides factory, content = content)
 }
 
+/**
+ * The bounce for one list, to pass to `LazyColumn(overscrollEffect = …)` or `verticalScroll(…, overscrollEffect = …)`.
+ * Pair it with [bounceWhenNotScrollable] so the list bounces even when its content fits.
+ */
+@Composable
+fun rememberBouncyOverscrollEffect(): BouncyOverscrollEffect {
+    val scope = rememberCoroutineScope()
+    return remember(scope) { BouncyOverscrollEffect(scope) }
+}
+
+/**
+ * Compose only hands a drag to a list's overscroll effect when the list can scroll, so a list whose content fits
+ * (a few chats, a short settings page) would never bounce. While [active] (the list cannot scroll: turn its own
+ * scrolling off then, `userScrollEnabled` / `enabled`), a vertical drag on it pulls [effect], and letting go springs
+ * back or, after a flick, bounces. Taps, long presses and sideways swipes are left alone (it only takes a drag once
+ * the finger has moved up or down past the touch slop).
+ */
+fun Modifier.bounceWhenNotScrollable(active: Boolean, effect: BouncyOverscrollEffect): Modifier =
+    if (!active) this else pointerInput(effect) {
+        try {
+            val tracker = VelocityTracker()
+            detectVerticalDragGestures(
+                onDragStart = { tracker.resetTracking() },
+                onDragEnd = { effect.release(tracker.calculateVelocity()) },
+                onDragCancel = { effect.release(Velocity.Zero) },
+                onVerticalDrag = { change, dy ->
+                    tracker.addPointerInputChange(change)
+                    change.consume()
+                    effect.applyToScroll(Offset(0f, dy), NestedScrollSource.UserInput) { Offset.Zero }
+                }
+            )
+        } finally {
+            // taken off in the middle of a drag (the list became scrollable): never leave the content moved
+            effect.settle()
+        }
+    }
+
+/**
+ * `verticalScroll` with the iOS bounce at both ends, also when the content fits and nothing can scroll (a short page):
+ * a drag then still pulls the whole content and springs back.
+ */
+@Composable
+fun Modifier.bouncyVerticalScroll(state: ScrollState): Modifier {
+    val bounce = rememberBouncyOverscrollEffect()
+    val canScroll = state.canScrollForward || state.canScrollBackward
+    return this
+        .bounceWhenNotScrollable(!canScroll, bounce)
+        .verticalScroll(state, enabled = canScroll, overscrollEffect = bounce)
+}
+
+/** What a LazyColumn needs for the bounce (see [rememberBouncyLazyScroll]). */
+class BouncyLazyScroll(val modifier: Modifier, val userScrollEnabled: Boolean, val overscrollEffect: OverscrollEffect)
+
+/**
+ * The iOS bounce for a LazyColumn, also when its items fit: add [BouncyLazyScroll.modifier] to its modifier and pass
+ * [BouncyLazyScroll.userScrollEnabled] and [BouncyLazyScroll.overscrollEffect] to it, with the same [state].
+ */
+@Composable
+fun rememberBouncyLazyScroll(state: LazyListState): BouncyLazyScroll {
+    val bounce = rememberBouncyOverscrollEffect()
+    val canScroll = state.canScrollForward || state.canScrollBackward
+    return BouncyLazyScroll(Modifier.bounceWhenNotScrollable(!canScroll, bounce), canScroll, bounce)
+}
+
 private class BouncyOverscrollFactory(private val scope: CoroutineScope) : OverscrollFactory {
     override fun createOverscrollEffect(): OverscrollEffect = BouncyOverscrollEffect(scope)
     override fun equals(other: Any?): Boolean = other is BouncyOverscrollFactory && other.scope == scope
@@ -58,7 +129,7 @@ private class BouncyOverscrollFactory(private val scope: CoroutineScope) : Overs
  * the finger's direction (positive = moved down / right). They are plain state, changed in the same frame as the
  * drag, so the content never lags or jumps.
  */
-internal class BouncyOverscrollEffect(private val scope: CoroutineScope) : OverscrollEffect {
+class BouncyOverscrollEffect internal constructor(private val scope: CoroutineScope) : OverscrollEffect {
     var offsetX by mutableFloatStateOf(0f)
         private set
     var offsetY by mutableFloatStateOf(0f)
@@ -103,26 +174,51 @@ internal class BouncyOverscrollEffect(private val scope: CoroutineScope) : Overs
 
     override suspend fun applyToFling(velocity: Velocity, performFling: suspend (Velocity) -> Velocity) {
         stopRelease()
-        val bounce: Velocity
-        if (isInProgress) {
-            // let go while pulled: no fling, the content springs back. A throw further outward carries it a bit
-            // more before it returns; a throw back toward the content is left out, so it never springs past its edge.
+        val job = if (isInProgress) {
+            // let go while pulled: no fling, the content springs back
             performFling(Velocity.Zero)
-            bounce = Velocity(
-                if (offsetX != 0f && sign(velocity.x) == sign(offsetX)) velocity.x * PULL_RELEASE_VELOCITY else 0f,
-                if (offsetY != 0f && sign(velocity.y) == sign(offsetY)) velocity.y * PULL_RELEASE_VELOCITY else 0f
-            )
+            startRelease(pullReleaseBounce(velocity))
         } else {
             // a normal fling; when it hits the end, the speed left makes the content bounce past it and back
-            val left = velocity - performFling(velocity)
-            bounce = Velocity(
-                if (abs(left.x) > MIN_BOUNCE_VELOCITY) left.x * FLING_BOUNCE_VELOCITY else 0f,
-                if (abs(left.y) > MIN_BOUNCE_VELOCITY) left.y * FLING_BOUNCE_VELOCITY else 0f
-            )
+            startRelease(flingBounce(velocity - performFling(velocity)))
         }
+        job?.join()
+    }
+
+    /**
+     * Lets go of a drag that did not go through the list's own scrolling ([bounceWhenNotScrollable]: the content fits,
+     * so the list cannot scroll): springs back when pulled, or bounces with the flick's [velocity].
+     */
+    fun release(velocity: Velocity) {
+        stopRelease()
+        startRelease(if (isInProgress) pullReleaseBounce(velocity) else flingBounce(velocity))
+    }
+
+    /** Springs back from where it is, unless that is already happening (never leaves the content moved). */
+    fun settle() {
+        if (releaseJob?.isActive != true && isInProgress) release(Velocity.Zero)
+    }
+
+    /**
+     * Speed to spring back with after letting go while pulled: a throw further outward carries it a bit more before it
+     * returns; a throw back toward the content is left out, so it never springs past its edge.
+     */
+    private fun pullReleaseBounce(velocity: Velocity) = Velocity(
+        if (offsetX != 0f && sign(velocity.x) == sign(offsetX)) velocity.x * PULL_RELEASE_VELOCITY else 0f,
+        if (offsetY != 0f && sign(velocity.y) == sign(offsetY)) velocity.y * PULL_RELEASE_VELOCITY else 0f
+    )
+
+    /** Speed to bounce out with when a fling with [left] speed hits the end. */
+    private fun flingBounce(left: Velocity) = Velocity(
+        if (abs(left.x) > MIN_BOUNCE_VELOCITY) left.x * FLING_BOUNCE_VELOCITY else 0f,
+        if (abs(left.y) > MIN_BOUNCE_VELOCITY) left.y * FLING_BOUNCE_VELOCITY else 0f
+    )
+
+    /** Starts the spring back to 0 from where the content is now, with [bounce] speed; null when there is nothing to do. */
+    private fun startRelease(bounce: Velocity): Job? {
         val startX = offsetX
         val startY = offsetY
-        if (startX == 0f && startY == 0f && bounce == Velocity.Zero) return
+        if (startX == 0f && startY == 0f && bounce == Velocity.Zero) return null
         val job = scope.launch {
             coroutineScope {
                 if (startX != 0f || bounce.x != 0f) launch { springTo0(startX, bounce.x, width) { offsetX = it } }
@@ -130,7 +226,7 @@ internal class BouncyOverscrollEffect(private val scope: CoroutineScope) : Overs
             }
         }
         releaseJob = job
-        job.join()
+        return job
     }
 
     /** Springs from [from] back to 0 (with [velocity], if any), never further out than a sixth of the list. */

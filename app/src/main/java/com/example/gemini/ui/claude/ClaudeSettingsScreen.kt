@@ -1,5 +1,6 @@
 package com.example.gemini.ui.claude
 
+import com.example.gemini.ui.components.bouncyVerticalScroll
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -182,7 +183,7 @@ fun ClaudeSettingsScreen(deps: ClaudeSettingsDeps, page: ClaudeSettingsPage, onB
         return
     }
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         when (page) {
@@ -892,10 +893,15 @@ private fun PluginsPage(deps: ClaudeSettingsDeps) {
             return@Column
         }
         val installedIds = remember(d) { d.plugins.installed.map { it.key }.toSet() }
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        val bounce = com.example.gemini.ui.components.rememberBouncyLazyScroll(listState)
         androidx.compose.foundation.lazy.LazyColumn(
-            Modifier.fillMaxSize(),
+            Modifier.fillMaxSize().then(bounce.modifier),
+            state = listState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            userScrollEnabled = bounce.userScrollEnabled,
+            overscrollEffect = bounce.overscrollEffect
         ) {
             when (tab) {
                 0 -> {

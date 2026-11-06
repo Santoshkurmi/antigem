@@ -1,5 +1,6 @@
 package com.example.gemini.ui.agents
 
+import com.example.gemini.ui.components.bouncyVerticalScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -165,7 +166,7 @@ fun AgentsSettingsPage(
 ) {
     var selected by remember(enabled) { mutableStateOf(enabled) }
     var confirm by remember { mutableStateOf(false) }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Column(modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(
             "Agents you turn off do not run at all: the local server starts without them and their settings and chats are hidden (chats stay on disk).",
             fontSize = 12.5.sp,

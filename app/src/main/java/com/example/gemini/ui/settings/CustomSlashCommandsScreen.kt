@@ -1,5 +1,6 @@
 package com.example.gemini.ui.settings
 
+import com.example.gemini.ui.components.bouncyVerticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -22,7 +23,7 @@ fun CustomSlashCommandsScreen() {
     var creating by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<CustomSlashCommand?>(null) }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Create your own / commands for chat. When you send one, the model gets the text it expands to, while the chat keeps showing the short command.", style = MaterialTheme.typography.bodyMedium)
         Text("Use \$ARGUMENTS in the expansion to insert whatever you type after the command. A command can also attach a custom AntiGem plugin and one of its skills, like /plu: does.", style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

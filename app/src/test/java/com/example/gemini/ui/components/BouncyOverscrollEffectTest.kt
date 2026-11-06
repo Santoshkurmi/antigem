@@ -213,4 +213,64 @@ class BouncyOverscrollEffectTest {
         assertEquals(150f, consumed.x, 0.001f)
         assertTrue(e.offsetX > 0f && abs(e.offsetY) == 0f)
     }
+
+    // ---- a list whose content fits (cannot scroll): the drag comes from bounceWhenNotScrollable
+
+    private fun BouncyOverscrollEffect.dragFitting(dy: Float) =
+        applyToScroll(Offset(0f, dy), NestedScrollSource.UserInput) { Offset.Zero }
+
+    @Test
+    fun contentThatFits_pullsBothWays() = runTest {
+        val down = effect(); down.dragFitting(200f)
+        assertTrue(down.offsetY > 0f && down.offsetY < 200f)
+        val up = effect(); up.dragFitting(-200f)
+        assertTrue(up.offsetY < 0f && up.offsetY > -200f)
+    }
+
+    @Test
+    fun contentThatFits_lettingGoSpringsBackToZero() = runTest {
+        val e = effect()
+        e.dragFitting(300f)
+        e.release(Velocity.Zero)
+        val samples = mutableListOf<Float>()
+        while (e.isInProgress) { advanceTimeBy(16); runCurrent(); samples += e.offsetY; if (samples.size > 200) break }
+        assertEquals(0f, e.offsetY, 0f)
+        assertTrue(samples.all { it >= 0f })
+        assertTrue("about half a second back (${samples.size * 16} ms)", samples.size * 16 in 300..1200)
+    }
+
+    @Test
+    fun contentThatFits_aFlickBouncesAndComesBack() = runTest {
+        val e = effect()
+        e.release(Velocity(0f, 4000f)) // a quick flick down that never got past the edge
+        val samples = mutableListOf<Float>()
+        repeat(120) { advanceTimeBy(16); runCurrent(); samples += e.offsetY } // 2 s
+        assertTrue(samples.max() > 5f)
+        assertTrue(samples.all { it >= 0f })
+        assertEquals(0f, e.offsetY, 0f)
+    }
+
+    @Test
+    fun contentThatFits_aSlowLetGoWithoutPullDoesNothing() = runTest {
+        val e = effect()
+        e.release(Velocity(0f, 20f))
+        advanceTimeBy(500); runCurrent()
+        assertEquals(0f, e.offsetY, 0f)
+        assertTrue(!e.isInProgress)
+    }
+
+    @Test
+    fun settle_springsBackWhenTheDragIsCutOff_butDoesNotRestartARunningSpring() = runTest {
+        val e = effect()
+        e.dragFitting(300f)
+        e.settle() // the drag handler was taken off mid-pull
+        advanceTimeBy(100); runCurrent()
+        val mid = e.offsetY
+        assertTrue(mid > 0f)
+        e.settle() // again while the spring runs: it must keep going, not start over
+        advanceTimeBy(16); runCurrent()
+        assertTrue("keeps going down: ${e.offsetY} < $mid", e.offsetY < mid)
+        advanceTimeBy(2000); runCurrent()
+        assertEquals(0f, e.offsetY, 0f)
+    }
 }

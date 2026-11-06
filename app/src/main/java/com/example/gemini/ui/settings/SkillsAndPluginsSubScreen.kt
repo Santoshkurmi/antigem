@@ -276,9 +276,14 @@ private fun SkillsTabView(
                 )
             }
         } else {
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            val bounce = com.example.gemini.ui.components.rememberBouncyLazyScroll(listState)
             LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                state = listState,
+                modifier = Modifier.weight(1f).fillMaxWidth().then(bounce.modifier),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                userScrollEnabled = bounce.userScrollEnabled,
+                overscrollEffect = bounce.overscrollEffect
             ) {
                 items(skills, key = { it.path.ifBlank { it.name } }) { skill ->
                     SkillItemCard(skill = skill, onClick = { onSkillClick(skill) })
@@ -469,9 +474,14 @@ private fun InstalledPluginsTabView(
                 Text("No plugin bundles installed in ~/.gemini/config/plugins/.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
         } else {
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            val bounce = com.example.gemini.ui.components.rememberBouncyLazyScroll(listState)
             LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                state = listState,
+                modifier = Modifier.weight(1f).fillMaxWidth().then(bounce.modifier),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                userScrollEnabled = bounce.userScrollEnabled,
+                overscrollEffect = bounce.overscrollEffect
             ) {
                 items(plugins, key = { it.name }) { plugin ->
                     InstalledPluginCard(
@@ -708,9 +718,14 @@ private fun GooglePluginsStoreTabView(
                 Text("No official Google plugins catalog available.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
         } else {
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            val bounce = com.example.gemini.ui.components.rememberBouncyLazyScroll(listState)
             LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                state = listState,
+                modifier = Modifier.weight(1f).fillMaxWidth().then(bounce.modifier),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                userScrollEnabled = bounce.userScrollEnabled,
+                overscrollEffect = bounce.overscrollEffect
             ) {
                 items(catalog, key = { it.plugin?.uid ?: "" }) { item ->
                     val p = item.plugin ?: return@items

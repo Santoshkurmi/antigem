@@ -1,6 +1,7 @@
 package com.example.gemini.ui.drawer
 
 import com.example.gemini.ui.components.accent
+import com.example.gemini.ui.components.bounceWhenNotScrollable
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.animation.AnimatedVisibility
@@ -950,9 +951,16 @@ fun ChatHistoryDrawer(
                     }
 
                     else -> {
+                        // iOS-style bounce at both ends, also when the chats fit and the list cannot scroll
+                        val chatListBounce = com.example.gemini.ui.components.rememberBouncyOverscrollEffect()
+                        val chatListCanScroll = listState.canScrollForward || listState.canScrollBackward
                         LazyColumn(
                             state = listState,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .bounceWhenNotScrollable(!chatListCanScroll, chatListBounce),
+                            userScrollEnabled = chatListCanScroll,
+                            overscrollEffect = chatListBounce
                         ) {
                             if (!groupByWorkspace) {
                                 val visibleTree =

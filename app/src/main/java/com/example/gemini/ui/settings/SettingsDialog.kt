@@ -1,5 +1,6 @@
 package com.example.gemini.ui.settings
 
+import com.example.gemini.ui.components.bouncyVerticalScroll
 import com.example.gemini.ui.components.ClaudeAccent
 import android.Manifest
 import android.content.ComponentName
@@ -785,7 +786,7 @@ private fun AppearanceSubScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .bouncyVerticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -1777,7 +1778,7 @@ private fun McpSubScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .bouncyVerticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 16.dp)
                 .padding(bottom = 68.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -3168,7 +3169,7 @@ private fun TerminalSubScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .bouncyVerticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -4083,7 +4084,7 @@ private fun BackupsSubScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .bouncyVerticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -5985,7 +5986,7 @@ private fun DataProtectionSubScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .bouncyVerticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -6439,7 +6440,7 @@ private fun CommandsSubScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .bouncyVerticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -7714,7 +7715,7 @@ private fun DiagnosticsSubScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .bouncyVerticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -8114,7 +8115,7 @@ private fun AboutSubScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .bouncyVerticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {

@@ -1,5 +1,6 @@
 package com.example.gemini.ui.settings
 
+import com.example.gemini.ui.components.bouncyVerticalScroll
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -53,7 +54,7 @@ fun AndroidAutomationScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbCo
     val adbDevice = adb.connectedDevice
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Status

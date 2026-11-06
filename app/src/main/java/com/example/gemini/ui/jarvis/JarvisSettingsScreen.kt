@@ -1,5 +1,6 @@
 package com.example.gemini.ui.jarvis
 
+import com.example.gemini.ui.components.bouncyVerticalScroll
 import android.Manifest
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -43,7 +44,7 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
     val agent = runCatching { AgentKind.valueOf(agentName) }.getOrDefault(AgentKind.CLAUDE)
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // ---------------------------------------------------------------- master switch

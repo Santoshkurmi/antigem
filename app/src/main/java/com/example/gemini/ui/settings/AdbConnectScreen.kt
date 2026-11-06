@@ -1,5 +1,6 @@
 package com.example.gemini.ui.settings
 
+import com.example.gemini.ui.components.bouncyVerticalScroll
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -63,7 +64,7 @@ fun AdbConnectScreen(cardBg: Color, cardBorder: BorderStroke) {
     val connected = state.connectedDevice
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         StatusCard(state, cardBg, cardBorder)
