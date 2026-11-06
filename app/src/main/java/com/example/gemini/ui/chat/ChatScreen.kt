@@ -154,6 +154,8 @@ fun ChatScreen(
     }
 
     val conversations by viewModel.conversations.collectAsState()
+    val jarvisConversations by viewModel.jarvisConversations.collectAsState()
+    val jarvisEnabled by com.example.gemini.data.jarvis.JarvisPreferences.enabled.state.collectAsState()
     val currentConv by viewModel.currentConversation.collectAsState()
     val newChatAgent by viewModel.newChatAgent.collectAsState()
     val isClaudeChat = currentConv?.agent == com.example.gemini.domain.model.AgentKind.CLAUDE
@@ -932,6 +934,8 @@ fun ChatScreen(
         drawerContent = {
             ChatHistoryDrawer(
                 conversations = conversations,
+                jarvisEnabled = jarvisEnabled,
+                jarvisConversations = jarvisConversations,
                 currentConversationId = currentConv?.id,
                 activeInstances = activeInstances,
                 isLoading = isConversationsLoading,

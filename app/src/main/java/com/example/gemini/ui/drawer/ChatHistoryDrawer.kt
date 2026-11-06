@@ -110,6 +110,9 @@ fun ChatHistoryDrawer(
     /** Antigravity runs: its hub start-up and first sync drive the list's loading states. */
     agyEnabled: Boolean = true,
     claudeActions: ClaudeDrawerActions? = null,
+    /** Jarvis (voice mode) is on: the filter row gets a Jarvis chip listing Jarvis' hidden chats. */
+    jarvisEnabled: Boolean = false,
+    jarvisConversations: List<Conversation> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -134,8 +137,11 @@ fun ChatHistoryDrawer(
 
     var agentFilter by remember { mutableStateOf<com.example.gemini.domain.model.AgentKind?>(null) }
     val hasBothAgents = remember(conversations) { conversations.map { it.agent }.distinct().size > 1 }
-    val filtered = remember(conversations, searchQuery, agentFilter) {
-        val byAgent = agentFilter?.let { a -> conversations.filter { it.agent == a } } ?: conversations
+    var jarvisFilter by remember { mutableStateOf(false) }
+    if (!jarvisEnabled && jarvisFilter) jarvisFilter = false
+    val filtered = remember(conversations, jarvisConversations, searchQuery, agentFilter, jarvisFilter) {
+        val byAgent = if (jarvisFilter) jarvisConversations
+        else agentFilter?.let { a -> conversations.filter { it.agent == a } } ?: conversations
         if (searchQuery.isBlank()) byAgent
         else byAgent.filter {
             it.title.contains(searchQuery, ignoreCase = true) ||
@@ -821,7 +827,7 @@ fun ChatHistoryDrawer(
                 }
             }
 
-            if (hasBothAgents || agentFilter != null) {
+            if (hasBothAgents || agentFilter != null || jarvisEnabled) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -833,7 +839,7 @@ fun ChatHistoryDrawer(
                         com.example.gemini.domain.model.AgentKind.AGY to "Antigravity",
                         com.example.gemini.domain.model.AgentKind.CLAUDE to "Claude"
                     ).forEach { (agent, label) ->
-                        val selected = agentFilter == agent
+                        val selected = !jarvisFilter && agentFilter == agent
                         val accent = agent?.accent() ?: ClaudeTerracotta
                         Text(
                             text = label,
@@ -843,7 +849,21 @@ fun ChatHistoryDrawer(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (selected) accent.copy(alpha = 0.14f) else Color.Transparent)
-                                .clickable { agentFilter = agent }
+                                .clickable { jarvisFilter = false; agentFilter = agent }
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                    if (jarvisEnabled) {
+                        val jarvisAccent = Color(0xFF22D3EE)
+                        Text(
+                            text = "Jarvis",
+                            fontSize = 11.5.sp,
+                            fontWeight = if (jarvisFilter) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (jarvisFilter) jarvisAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (jarvisFilter) jarvisAccent.copy(alpha = 0.14f) else Color.Transparent)
+                                .clickable { agentFilter = null; jarvisFilter = true }
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         )
                     }

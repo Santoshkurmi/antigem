@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         instanceRef = java.lang.ref.WeakReference(this)
+        com.example.gemini.data.jarvis.JarvisPreferences.init(this)
         com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled =
             chatViewModel.authPreferences.getNetworkInspectorEnabledSync()
         com.example.gemini.data.remote.inspector.NetworkInspectorManager.isFloatingBubbleEnabled =
@@ -72,6 +73,8 @@ class MainActivity : ComponentActivity() {
         com.example.gemini.data.local.LocalTerminalBridge.instance.init(this)
         com.example.gemini.data.notes.NotesRepository.init(this)
         com.example.gemini.data.remote.AndroidLocalBridgeServer.instance.start(this)
+        com.example.gemini.data.jarvis.JarvisController.attach(application, chatViewModel)
+        com.example.gemini.data.agent.ChatCompletionMonitor.start(application, chatViewModel)
         handleOAuthIntent(intent)
         handleIncomingFileIntent(intent)
 
@@ -156,6 +159,11 @@ class MainActivity : ComponentActivity() {
                 } else {
                     com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.stop()
                 }
+            }
+
+            // Jarvis (voice mode) needs to know which screen the user is on
+            LaunchedEffect(currentViewMode) {
+                com.example.gemini.data.jarvis.JarvisController.screen.value = currentViewMode.name.lowercase()
             }
 
             val context = androidx.compose.ui.platform.LocalContext.current
@@ -418,6 +426,9 @@ class MainActivity : ComponentActivity() {
 
                                 // Floating Video Player Overlay for active background/in-app playback controls
                                 com.example.gemini.ui.components.FloatingVideoPlayerOverlay()
+
+                                // Jarvis: voice orb (only when Jarvis is turned on in Settings)
+                                com.example.gemini.ui.jarvis.JarvisOverlay()
 
                                 // Real-time floating live diagnostics overlay (JVM Threads, OkHttp queues, connections, lag)
                                 if (isFloatingDiagnosticsEnabled) {
