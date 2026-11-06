@@ -144,7 +144,7 @@ object RemoteServerManager {
         _ssh.value = SshState(false, "Not connected")
     }
 
-    private fun friendly(e: Throwable): String {
+    internal fun friendly(e: Throwable): String {
         val m = e.message.orEmpty()
         return when {
             m.contains("Auth fail", true) || m.contains("Auth cancel", true) ->

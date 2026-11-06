@@ -12,6 +12,7 @@ type Progress struct {
 	BytesTotal int64  `json:"bytes_total"` // 0 while unknown (an archive GitHub sends without a length)
 	FilesDone  int    `json:"files_done"`
 	FilesTotal int    `json:"files_total"`
+	Note       string `json:"note,omitempty"` // why the download started over (shown to the user)
 }
 
 // progressTracker is safe to use from the parallel file downloads; a nil tracker ignores every update.

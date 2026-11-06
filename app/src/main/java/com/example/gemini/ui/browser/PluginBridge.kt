@@ -65,7 +65,7 @@ object PluginBridge {
     suspend fun repoProgress(folder: String): RepoInstallProgress? = withContext(Dispatchers.IO) {
         val body = JSONObject(call(Request.Builder().url(url("repo/progress").toHttpQuery("folder" to folder)).get().build()))
         if (!body.optBoolean("active")) null else RepoInstallProgress(
-            body.optString("phase"), body.optLong("bytes_done"), body.optLong("bytes_total"), body.optInt("files_done"), body.optInt("files_total")
+            body.optString("phase"), body.optLong("bytes_done"), body.optLong("bytes_total"), body.optInt("files_done"), body.optInt("files_total"), body.optString("note")
         )
     }
 

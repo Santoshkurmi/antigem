@@ -872,6 +872,13 @@ class LocalPtySession(
         try {
             val winIdx = tmuxWindowIndex ?: 1
             Log.d(TAG, "[$id] Starting SSH connection to $sshUser@$sshHost:$sshPort (winIdx=$winIdx)...")
+            if (sshHost.isBlank() || sshUser.isBlank()) {
+                notifySessionClosed(
+                    if (AuthPreferences.currentRemoteMode) "SSH is not set up. Open Settings > Servers and enter the SSH host, user and password or key."
+                    else "SSH is not set up. Open Settings > Terminal and enter the SSH host and user."
+                )
+                return@withContext
+            }
             val session = com.example.gemini.data.ssh.SshSessionFactory.open(sshHost, sshPort, sshUser, sshPass, connectTimeoutMs = 10000, keepAliveMs = 20000)
             jschSession = session
             Log.d(TAG, "[$id] SSH transport connected successfully")
@@ -945,10 +952,13 @@ class LocalPtySession(
             }
         } catch (e: Exception) {
             Log.e(TAG, "[$id] SSH session error", e)
-            notifySessionClosed("SSH Error: ${e.localizedMessage}")
+            notifySessionClosed(
+                "SSH not connected to $sshUser@$sshHost:$sshPort. " +
+                    com.example.gemini.data.remote.RemoteServerManager.friendly(e)
+            )
         } finally {
             Log.d(TAG, "[$id] SSH loop terminated")
-            notifySessionClosed()
+            notifySessionClosed(if (tmuxParser.isControlModeActive) null else "The SSH connection to $sshHost:$sshPort closed before the terminal started.")
         }
     }
 
@@ -956,7 +966,8 @@ class LocalPtySession(
         if (_isExited.value) return
         _isExited.value = true
         Log.d(TAG, "[$id] notifySessionClosed: reason=$reason")
-        val msg = "\r\n\r\n\u001b[1;33m[Process completed - Press Enter to close tab]\u001b[0m\r\n"
+        val why = if (reason.isNullOrBlank()) "" else "\r\n\r\n\u001b[1;31m$reason\u001b[0m"
+        val msg = "$why\r\n\r\n\u001b[1;33m[Process completed - Press Enter to close tab]\u001b[0m\r\n"
         writeToEmulator(msg)
     }
 

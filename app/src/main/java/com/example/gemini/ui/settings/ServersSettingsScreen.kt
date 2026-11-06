@@ -8,7 +8,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -151,6 +154,7 @@ private suspend fun probeBridge(base: String, token: String): Pair<Boolean, Stri
 }
 
 @Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 internal fun ServersSubScreen(
     currentHubUrl: String,
     currentBridgeUrl: String,
@@ -206,6 +210,12 @@ internal fun ServersSubScreen(
     var showRestartDialog by remember { mutableStateOf(false) }
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showServerLog by remember { mutableStateOf(false) }
+    var showProfileMenu by remember { mutableStateOf(false) }
+    var showSaveProfile by remember { mutableStateOf(false) }
+    var profileName by remember { mutableStateOf("") }
+    var profileWithSecrets by remember { mutableStateOf(false) }
+    var profileToDelete by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+    var profileTick by remember { mutableIntStateOf(0) }
 
     fun snapshot() = listOf(
         remote, hubText.trim(), bridgeText.trim(), bridgeBinPath.trim(), agyBinPath.trim(), claudeBinPath.trim(),
@@ -213,6 +223,35 @@ internal fun ServersSubScreen(
         remoteBridgeBin.trim(), remoteAgyBin.trim(), remoteClaudeBin.trim(), remoteInstallDir.trim(),
         listenBridge.trim(), listenHub.trim(), listenBind.trim()
     ).joinToString("\u0001")
+
+    // Each mode keeps its own saved settings (JSON), so switching back and forth does not make you type everything again.
+    fun profileJson(forRemote: Boolean, withSecrets: Boolean): org.json.JSONObject = org.json.JSONObject().apply {
+        put("hub", hubText.trim()); put("bridge", bridgeText.trim())
+        if (forRemote) {
+            put("sshHost", sshHost.trim()); put("sshPort", sshPort.trim()); put("sshUser", sshUser.trim())
+            if (withSecrets) { put("sshPass", sshPass); put("sshKey", sshKey.trim()); put("sshPassphrase", sshPassphrase) }
+            put("bridgeBin", remoteBridgeBin.trim()); put("agyBin", remoteAgyBin.trim()); put("claudeBin", remoteClaudeBin.trim())
+            put("installDir", remoteInstallDir.trim())
+            put("listenBridge", listenBridge.trim()); put("listenHub", listenHub.trim()); put("listenBind", listenBind.trim())
+        } else {
+            put("bridgeBin", bridgeBinPath.trim()); put("agyBin", agyBinPath.trim()); put("claudeBin", claudeBinPath.trim())
+        }
+    }
+
+    fun applyProfile(forRemote: Boolean, o: org.json.JSONObject) {
+        hubText = o.optString("hub", hubText); bridgeText = o.optString("bridge", bridgeText)
+        if (forRemote) {
+            sshHost = o.optString("sshHost"); sshPort = o.optString("sshPort", "22").ifBlank { "22" }
+            sshUser = o.optString("sshUser")
+            if (o.has("sshPass")) { sshPass = o.optString("sshPass"); sshKey = o.optString("sshKey"); sshPassphrase = o.optString("sshPassphrase") }
+            remoteBridgeBin = o.optString("bridgeBin"); remoteAgyBin = o.optString("agyBin"); remoteClaudeBin = o.optString("claudeBin")
+            remoteInstallDir = o.optString("installDir")
+            listenBridge = o.optString("listenBridge"); listenHub = o.optString("listenHub"); listenBind = o.optString("listenBind")
+        } else {
+            bridgeBinPath = o.optString("bridgeBin", bridgeBinPath); agyBinPath = o.optString("agyBin", agyBinPath)
+            claudeBinPath = o.optString("claudeBin", claudeBinPath)
+        }
+    }
 
     var savedSnapshot by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
@@ -327,6 +366,121 @@ internal fun ServersSubScreen(
         )
     }
 
+    if (showProfileMenu) {
+        val list = remember(profileTick) { authPrefs.listProfiles(true) + authPrefs.listProfiles(false) }
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { showProfileMenu = false },
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.background,
+            tonalElevation = 0.dp,
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+                Text("Saved profiles", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text("Tap one to load it. Its mode is selected for you; press Save to apply.", fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
+                if (list.isEmpty()) {
+                    Text("Nothing saved yet. Fill in the settings and tap \"Save as profile\".", fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(vertical = 24.dp))
+                }
+                Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()).heightIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    list.forEach { o ->
+                        val r = o.optBoolean("remote")
+                        val accent = if (r) QuotaGreen else ClaudeTerracotta
+                        val where = AuthPreferences.hostOf(o.optString("bridge")).ifBlank { AuthPreferences.hostOf(o.optString("hub")) }
+                            .let { h -> if (r && o.optString("sshUser").isNotBlank()) "${o.optString("sshUser")}@${o.optString("sshHost").ifBlank { h }}" else h }
+                        Surface(
+                            onClick = {
+                                remote = r
+                                applyProfile(r, o)
+                                showProfileMenu = false
+                                saveFeedback = "Loaded profile \"${o.optString("name")}\". Tap Save below to apply it."
+                                saveIsError = false
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            color = cardBg,
+                            border = cardBorder,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(if (r) Icons.Outlined.Dns else Icons.Outlined.Terminal, null, tint = accent, modifier = Modifier.size(22.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(o.optString("name"), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                                        Spacer(Modifier.width(8.dp))
+                                        Surface(shape = RoundedCornerShape(4.dp), color = accent.copy(alpha = 0.15f)) {
+                                            Text(if (r) "SERVER" else "LOCAL", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = accent,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp))
+                                        }
+                                    }
+                                    if (where.isNotBlank()) Text(where, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), maxLines = 1)
+                                }
+                                TextButton(onClick = { profileToDelete = r to o.optString("name") }) {
+                                    Text("Delete", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showSaveProfile) {
+        AlertDialog(
+            onDismissRequest = { showSaveProfile = false },
+            title = { Text(if (remote) "Save server profile" else "Save local profile", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            text = {
+                Column {
+                    OutlinedTextField(profileName, { profileName = it }, label = { Text("Profile name") }, singleLine = true, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth())
+                    if (remote) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.Checkbox(checked = profileWithSecrets, onCheckedChange = { profileWithSecrets = it })
+                            Column {
+                                Text("Include SSH password and key", fontSize = 13.sp)
+                                Text("Off by default: anyone using this phone could read them.", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            }
+                        }
+                    }
+                    if (authPrefs.listProfiles(remote).any { it.optString("name") == profileName.trim() } && profileName.isNotBlank()) {
+                        Text("A profile with this name will be replaced.", fontSize = 11.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = profileName.isNotBlank(),
+                    onClick = {
+                        authPrefs.saveProfile(remote, profileName.trim(), profileJson(remote, remote && profileWithSecrets))
+                        showSaveProfile = false; profileTick++
+                        saveFeedback = "Profile \"${profileName.trim()}\" saved on this phone."; saveIsError = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta), shape = RoundedCornerShape(8.dp)
+                ) { Text("Save", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { showSaveProfile = false }) { Text("Cancel") } },
+            shape = RoundedCornerShape(16.dp), containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    profileToDelete?.let { (delRemote, name) ->
+        AlertDialog(
+            onDismissRequest = { profileToDelete = null },
+            title = { Text("Delete profile?", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            text = { Text("\"$name\" (${if (delRemote) "server" else "local"}) will be removed from this phone.", fontSize = 13.5.sp) },
+            confirmButton = {
+                Button(
+                    onClick = { authPrefs.deleteProfile(delRemote, name); profileToDelete = null; profileTick++ },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), shape = RoundedCornerShape(8.dp)
+                ) { Text("Delete", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { profileToDelete = null }) { Text("Cancel") } },
+            shape = RoundedCornerShape(16.dp), containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
     if (showServerLog) ServerLogDialog(context) { showServerLog = false }
 
     val subtle = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
@@ -366,6 +520,24 @@ internal fun ServersSubScreen(
                         colors = SwitchDefaults.colors(checkedTrackColor = QuotaGreen)
                     )
                 }
+
+                // ----- Saved profiles (saved only when the user taps "Save as profile") -----
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(thickness = 0.6.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { profileTick++; showProfileMenu = true },
+                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)
+                    ) {
+                        val n = remember(profileTick) { authPrefs.listProfiles(true).size + authPrefs.listProfiles(false).size }
+                        Text("Saved profiles ($n)", fontSize = 12.sp)
+                    }
+                    OutlinedButton(onClick = { profileName = ""; showSaveProfile = true }, shape = RoundedCornerShape(8.dp)) {
+                        Text("Save as profile", fontSize = 12.sp)
+                    }
+                }
+                Text("Picking a profile switches to its mode. Profiles are saved only when you tap Save as profile, and only on this phone.", fontSize = 10.5.sp, color = subtle, modifier = Modifier.padding(top = 4.dp))
             }
         }
 

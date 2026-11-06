@@ -748,8 +748,8 @@ private fun MainSettingsMenu(
             icon = Icons.Outlined.Terminal,
             iconTint = Color(0xFF00ACC1),
             title = "Terminal & Shell Execution",
-            subtitle = if (useSshTerminal) "SSH Mode (Termux sshd)" else "Local Linux Environment",
-            badgeText = if (useSshTerminal) "SSH" else "Local",
+            subtitle = if (com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) "Runs on the remote server (SSH)" else if (useSshTerminal) "SSH Mode (Termux sshd)" else "Local Linux Environment",
+            badgeText = if (useSshTerminal || com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) "SSH" else "Local",
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.TERMINAL) }
@@ -3326,6 +3326,7 @@ private fun TerminalSubScreen(
     onOpenLocalTerminal: () -> Unit
 ) {
     val context = LocalContext.current
+    val remoteMode = com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode
     val coroutineScope = rememberCoroutineScope()
     var showResetWarningDialog by remember { mutableStateOf(false) }
     var showResetPasswordDialog by remember { mutableStateOf(false) }
@@ -3380,14 +3381,14 @@ private fun TerminalSubScreen(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "Use Terminal via SSH", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                            Text(text = if (remoteMode) "Terminal on the remote server" else "Use Terminal via SSH", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                             Spacer(modifier = Modifier.width(6.dp))
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
                                 color = if (useSshTerminal) QuotaGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                             ) {
                                 Text(
-                                    text = if (useSshTerminal) "SSH Mode" else "Local Mode",
+                                    text = if (useSshTerminal || remoteMode) "SSH Mode" else "Local Mode",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (useSshTerminal) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
@@ -3396,12 +3397,12 @@ private fun TerminalSubScreen(
                             }
                         }
                         Text(
-                            text = if (useSshTerminal) "Direct SSH to Termux sshd without local rootfs" else "Built-in chroot rootfs environment",
+                            text = if (remoteMode) "Runs on your remote server over SSH" else if (useSshTerminal) "Direct SSH to Termux sshd without local rootfs" else "Built-in chroot rootfs environment",
                             fontSize = 11.5.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
-                    Switch(
+                    if (!remoteMode) Switch(
                         checked = useSshTerminal,
                         onCheckedChange = { onToggleUseSshTerminal(it) },
                         colors = SwitchDefaults.colors(
@@ -3411,7 +3412,17 @@ private fun TerminalSubScreen(
                     )
                 }
 
-                if (useSshTerminal) {
+                if (remoteMode) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Remote server mode is on: the terminal and shell runs use the SSH login from Settings > Servers" +
+                            (if (sshHost.isNotBlank()) " ($sshUser@$sshHost:$sshPort)" else "") + ". Nothing to set here.",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+
+                if (useSshTerminal && !remoteMode) {
                     Spacer(modifier = Modifier.height(14.dp))
                     HorizontalDivider(thickness = 0.6.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                     Spacer(modifier = Modifier.height(14.dp))

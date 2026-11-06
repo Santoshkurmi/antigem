@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 const repoIndex = "antigem-plugins.json"
@@ -285,7 +286,13 @@ func (m *Manager) downloadFolder(r Repo, p, dest string, t *progressTracker) err
 		return nil
 	}
 	_ = os.RemoveAll(dest)
-	t.set(func(pr *Progress) { *pr = Progress{Phase: "downloading"} })
+	reason := treeErr.Error()
+	if len(reason) > 120 {
+		reason = reason[:120]
+	}
+	t.set(func(pr *Progress) {
+		*pr = Progress{Phase: "downloading", Note: "Downloading file by file failed (" + reason + "), downloading the whole repository instead"}
+	})
 	if err := m.downloadViaArchive(r, p, dest, t); err != nil {
 		return fmt.Errorf("Could not download %s from %s: %v; archive: %v", p, r.slug(), treeErr, err)
 	}
@@ -322,7 +329,14 @@ func (m *Manager) downloadViaTree(r Repo, p, dest string, t *progressTracker) er
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			err := m.downloadFile(m.rawURL(r, f.Path), dest, strings.TrimPrefix(f.Path, prefix), t)
+			var err error
+			for attempt := 0; attempt < 3; attempt++ {
+				err = m.downloadFile(m.rawURL(r, f.Path), dest, strings.TrimPrefix(f.Path, prefix), t)
+				if err == nil {
+					break
+				}
+				time.Sleep(time.Duration(attempt+1) * 400 * time.Millisecond)
+			}
 			if err == nil {
 				t.set(func(pr *Progress) { pr.FilesDone++ })
 			}

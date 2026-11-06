@@ -28,7 +28,7 @@ data class RepoPlugin(val path: String, val id: String, val name: String, val ve
 data class RepoListing(val title: String, val plugins: List<RepoPlugin>, val fromIndex: Boolean)
 
 /** A running repository install: phase is listing | downloading | extracting | installing, then starting (loading it in the app). */
-data class RepoInstallProgress(val phase: String, val bytesDone: Long, val bytesTotal: Long, val filesDone: Int, val filesTotal: Int) {
+data class RepoInstallProgress(val phase: String, val bytesDone: Long, val bytesTotal: Long, val filesDone: Int, val filesTotal: Int, val note: String = "") {
     /** 0..1 when the size is known, else null (the bar then just moves). */
     val fraction: Float? get() = if (bytesTotal > 0 && phase in setOf("downloading", "extracting")) (bytesDone.toFloat() / bytesTotal).coerceIn(0f, 1f) else null
 }

@@ -548,6 +548,33 @@ class AuthPreferences(private val context: Context) {
         syncPrefs.edit().putBoolean("remote_mode", enabled).commit()
     }
 
+    /** Named connection profiles the user saved by hand ("remote" = server mode, otherwise local). Stored as JSON on the phone. */
+    fun listProfiles(remote: Boolean): List<org.json.JSONObject> = runCatching {
+        val arr = org.json.JSONArray(syncPrefs.getString("profiles_json", "[]"))
+        (0 until arr.length()).map { arr.getJSONObject(it) }.filter { it.optBoolean("remote") == remote }
+    }.getOrDefault(emptyList())
+
+    fun saveProfile(remote: Boolean, name: String, data: org.json.JSONObject) {
+        val arr = runCatching { org.json.JSONArray(syncPrefs.getString("profiles_json", "[]")) }.getOrDefault(org.json.JSONArray())
+        val out = org.json.JSONArray()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            if (!(o.optBoolean("remote") == remote && o.optString("name") == name)) out.put(o)
+        }
+        out.put(data.put("name", name).put("remote", remote))
+        syncPrefs.edit().putString("profiles_json", out.toString()).apply()
+    }
+
+    fun deleteProfile(remote: Boolean, name: String) {
+        val arr = runCatching { org.json.JSONArray(syncPrefs.getString("profiles_json", "[]")) }.getOrDefault(org.json.JSONArray())
+        val out = org.json.JSONArray()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            if (!(o.optBoolean("remote") == remote && o.optString("name") == name)) out.put(o)
+        }
+        syncPrefs.edit().putString("profiles_json", out.toString()).remove("profile_remote").remove("profile_local").apply()
+    }
+
     fun saveSshKeySync(privateKey: String, passphrase: String) {
         currentSshPrivateKey = privateKey.trim()
         currentSshKeyPassphrase = passphrase

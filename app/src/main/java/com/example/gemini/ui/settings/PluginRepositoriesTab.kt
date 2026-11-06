@@ -163,6 +163,7 @@ internal fun PluginInstallProgress(progress: com.example.gemini.ui.browser.RepoI
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (fraction != null) LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
         else LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (progress.note.isNotBlank()) Text(progress.note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
         Row(Modifier.fillMaxWidth()) {
             Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (fraction != null) Text("${(fraction * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
