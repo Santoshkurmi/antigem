@@ -24,6 +24,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -52,12 +56,10 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import android.net.Uri
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -153,8 +155,8 @@ fun ChatInputBar(
     selectedModel: AiModel,
     quota: ModelQuota?,
     thinkingPreference: ThinkingPreference,
-    textFieldValue: TextFieldValue,
-    onTextFieldValueChange: (TextFieldValue) -> Unit,
+    /** The typed text; the keyboard edits it directly, so typing never waits on the screen redrawing. */
+    textFieldState: TextFieldState,
     onOpenModelSelector: () -> Unit,
     onOpenThinkingSelector: () -> Unit,
     isStreaming: Boolean,
@@ -392,15 +394,15 @@ fun ChatInputBar(
             return
         }
 
-        baseTextBeforeDictation = textFieldValue.text
+        baseTextBeforeDictation = textFieldState.text.toString()
         isLiveDictating = true
         isDictationPaused = false
         recordMode = AudioRecordMode.LIVE_DICTATION
 
-        val selStart = textFieldValue.selection.start.coerceIn(0, textFieldValue.text.length)
-        val selEnd = textFieldValue.selection.end.coerceIn(0, textFieldValue.text.length)
-        val pre = textFieldValue.text.substring(0, selStart)
-        val post = textFieldValue.text.substring(selEnd)
+        val selStart = textFieldState.selection.start.coerceIn(0, textFieldState.text.length)
+        val selEnd = textFieldState.selection.end.coerceIn(0, textFieldState.text.length)
+        val pre = textFieldState.text.substring(0, selStart)
+        val post = textFieldState.text.substring(selEnd)
 
         sm.startTranscriptionSession(
             scope = coroutineScope,
@@ -410,12 +412,12 @@ fun ChatInputBar(
             onPartialText = { partial ->
                 val sep = if (baseTextBeforeDictation.isNotBlank() && !baseTextBeforeDictation.endsWith(" ")) " " else ""
                 val combined = baseTextBeforeDictation + sep + partial
-                onTextFieldValueChange(TextFieldValue(combined, selection = TextRange(combined.length)))
+                textFieldState.setTextAndPlaceCursorAtEnd(combined)
             },
             onFinalText = { finalText ->
                 val sep = if (baseTextBeforeDictation.isNotBlank() && !baseTextBeforeDictation.endsWith(" ")) " " else ""
                 val combined = baseTextBeforeDictation + sep + finalText
-                onTextFieldValueChange(TextFieldValue(combined, selection = TextRange(combined.length)))
+                textFieldState.setTextAndPlaceCursorAtEnd(combined)
                 baseTextBeforeDictation = combined
             },
             onError = { err ->
@@ -433,7 +435,7 @@ fun ChatInputBar(
             if (finalText.isNotBlank()) {
                 val sep = if (baseTextBeforeDictation.isNotBlank() && !baseTextBeforeDictation.endsWith(" ")) " " else ""
                 val combined = baseTextBeforeDictation + sep + finalText
-                onTextFieldValueChange(TextFieldValue(combined, selection = TextRange(combined.length)))
+                textFieldState.setTextAndPlaceCursorAtEnd(combined)
             }
         }
         isLiveDictating = false
@@ -459,7 +461,7 @@ fun ChatInputBar(
             return
         }
 
-        baseTextBeforeDictation = textFieldValue.text
+        baseTextBeforeDictation = textFieldState.text.toString()
         recordMode = AudioRecordMode.TRANSCRIBE
         isRecordingAudio = true
         isRecordingPaused = false
@@ -476,10 +478,10 @@ fun ChatInputBar(
             }
         }
 
-        val selStart = textFieldValue.selection.start.coerceIn(0, textFieldValue.text.length)
-        val selEnd = textFieldValue.selection.end.coerceIn(0, textFieldValue.text.length)
-        val pre = textFieldValue.text.substring(0, selStart)
-        val post = textFieldValue.text.substring(selEnd)
+        val selStart = textFieldState.selection.start.coerceIn(0, textFieldState.text.length)
+        val selEnd = textFieldState.selection.end.coerceIn(0, textFieldState.text.length)
+        val pre = textFieldState.text.substring(0, selStart)
+        val post = textFieldState.text.substring(selEnd)
 
         sm.startTranscriptionSession(
             scope = coroutineScope,
@@ -490,7 +492,7 @@ fun ChatInputBar(
             onFinalText = { finalText ->
                 val sep = if (baseTextBeforeDictation.isNotBlank() && !baseTextBeforeDictation.endsWith(" ")) " " else ""
                 val combined = baseTextBeforeDictation + sep + finalText
-                onTextFieldValueChange(TextFieldValue(combined, selection = TextRange(combined.length)))
+                textFieldState.setTextAndPlaceCursorAtEnd(combined)
             },
             onError = { err ->
                 Toast.makeText(context, "Transcribe: $err", Toast.LENGTH_SHORT).show()
@@ -511,13 +513,13 @@ fun ChatInputBar(
                     val cur = baseTextBeforeDictation
                     val sep = if (cur.isNotBlank() && !cur.endsWith(" ")) " " else ""
                     val combined = cur + sep + finalText
-                    onTextFieldValueChange(TextFieldValue(combined, selection = TextRange(combined.length)))
+                    textFieldState.setTextAndPlaceCursorAtEnd(combined)
                     if (andSend) {
                         if (!isAuth) {
                             Toast.makeText(context, "Please sign in first to send messages.", Toast.LENGTH_SHORT).show()
                         } else {
                             onSendMessage(combined.trim())
-                            onTextFieldValueChange(TextFieldValue(""))
+                            textFieldState.clearText()
                         }
                     }
                 } else {
@@ -565,9 +567,9 @@ fun ChatInputBar(
                     onAddAttachment(att)
                 } else {
                     onAddAttachment(att)
-                    val trimmed = textFieldValue.text.trim()
+                    val trimmed = textFieldState.text.toString().trim()
                     onSendMessage(trimmed)
-                    onTextFieldValueChange(TextFieldValue(""))
+                    textFieldState.clearText()
                 }
             } else {
                 onAddAttachment(att)
@@ -575,7 +577,9 @@ fun ChatInputBar(
         }
     }
 
-    val canSend = textFieldValue.text.trim().isNotEmpty() || attachments.isNotEmpty()
+    // derived, so the bar redraws only when the box turns empty / non-empty, not on every key press
+    val hasText by remember(textFieldState) { derivedStateOf { textFieldState.text.isNotBlank() } }
+    val canSend = hasText || attachments.isNotEmpty()
     val familyColor = if (selectedModel.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
     val fileLinkHandler = LocalFileLinkHandler.current
     var previewImageUrl by remember { mutableStateOf<String?>(null) }
@@ -878,8 +882,7 @@ fun ChatInputBar(
 
                         // 1. Text Field Area on Top
                         TextField(
-                        value = textFieldValue,
-                        onValueChange = onTextFieldValueChange,
+                        state = textFieldState,
                         placeholder = {
                             Text(
                                 text = "Reply to ${selectedModel.displayName.split(" ").firstOrNull() ?: "Gemini"}...",
@@ -905,7 +908,7 @@ fun ChatInputBar(
                             fontSize = 15.sp,
                             lineHeight = 21.sp
                         ),
-                        maxLines = 6,
+                        lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 6),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default)
                     )
 
@@ -1224,7 +1227,7 @@ fun ChatInputBar(
                             val sendBtnColor = if (!isAuth) Color(0xFF6B7280) else if (!isOnline) Color(0xFF6B7280) else if (isBackgroundActive) Color(0xFFFFB300) else ClaudeTerracotta
                             Surface(
                                 onClick = {
-                                    val trimmed = textFieldValue.text.trim()
+                                    val trimmed = textFieldState.text.toString().trim()
                                         if (!isAuth) {
                                             Toast.makeText(context, "Please sign in first to send messages.", Toast.LENGTH_SHORT).show()
                                             return@Surface
@@ -1237,7 +1240,7 @@ fun ChatInputBar(
                                             stopLiveDictation()
                                         }
                                         onSendMessage(trimmed)
-                                        onTextFieldValueChange(TextFieldValue(""))
+                                        textFieldState.clearText()
                                 },
                                 shape = CircleShape,
                                 color = sendBtnColor,

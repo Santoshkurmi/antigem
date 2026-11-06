@@ -28,6 +28,9 @@ import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -55,7 +58,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.TextRange
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -460,21 +462,55 @@ fun ChatScreen(
         }
     }
     var activeConversationKey by remember { mutableStateOf(currentConv?.id ?: "new") }
-    var textFieldValue by remember {
-        mutableStateOf(viewModel.getDraft(currentConv?.id ?: "new"))
+    // The keyboard edits this buffer directly (like a native EditText). Holding the text as a TextFieldValue here made
+    // every key press round-trip through this screen; with long text that lagged and some keyboards (e.g. Samsung)
+    // lost track of the word being typed, merging words ("I a" -> "Ia").
+    val inputState = remember {
+        viewModel.getDraft(currentConv?.id ?: "new").let { TextFieldState(it.text, it.selection) }
     }
 
     LaunchedEffect(currentConv?.id) {
         val newKey = currentConv?.id ?: "new"
         if (newKey != activeConversationKey) {
-            viewModel.setDraft(activeConversationKey, textFieldValue)
+            viewModel.setDraft(activeConversationKey, TextFieldValue(inputState.text.toString(), inputState.selection))
             activeConversationKey = newKey
-            textFieldValue = viewModel.getDraft(newKey)
+            val draft = viewModel.getDraft(newKey)
+            inputState.edit {
+                replace(0, length, draft.text)
+                selection = draft.selection
+            }
             ToolCallExpansionCache.setChat(newKey)
             CodeBlockExpansionCache.setChat(newKey)
         }
     }
-    val inputText = textFieldValue.text
+    // Keep the open chat's draft in step with the input, after each frame rather than inside the key press
+    LaunchedEffect(inputState) {
+        snapshotFlow { activeConversationKey to TextFieldValue(inputState.text.toString(), inputState.selection) }
+            .collect { (key, value) ->
+                viewModel.setDraft(key, value)
+                if (value.text.isNotEmpty()) viewModel.onUserStartedTyping()
+            }
+    }
+    // The `/` and `@` popups depend only on the command / mention being typed, so ordinary typing doesn't redraw this screen
+    val slashTrigger by remember {
+        derivedStateOf {
+            val text = inputState.text
+            val index = text.lastIndexOf('/')
+            val isCommand = index == 0 || (index > 0 && text[index - 1].isWhitespace())
+            if (isCommand && !text.subSequence(index, text.length).contains(' ')) {
+                SlashTrigger(index, text.subSequence(index + 1, text.length).toString(), text.subSequence(0, index).isBlank())
+            } else null
+        }
+    }
+    val mentionTrigger by remember {
+        derivedStateOf {
+            val text = inputState.text
+            val index = text.lastIndexOf('@')
+            if (index >= 0 && !text.subSequence(index + 1, text.length).contains(' ')) {
+                MentionTrigger(index, text.subSequence(index + 1, text.length).toString())
+            } else null
+        }
+    }
     var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
     val thinkingPref by viewModel.thinkingPreference.collectAsState()
     val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
@@ -1578,9 +1614,7 @@ fun ChatScreen(
                                                         pendingMessageAction = PendingMessageAction(MessageActionType.EDIT, targetMsg)
                                                     } else {
                                                         viewModel.revertAndEditLastUserMessage(targetMsg) { restoredText ->
-                                                            val tfv = TextFieldValue(restoredText, selection = TextRange(restoredText.length))
-                                                            textFieldValue = tfv
-                                                            viewModel.setDraft(activeConversationKey, tfv)
+                                                            inputState.setTextAndPlaceCursorAtEnd(restoredText)
                                                         }
                                                     }
                                                 },
@@ -1758,10 +1792,10 @@ fun ChatScreen(
                     }
 
                     // Floating Slash Commands & Skills Autocomplete Suggestions
-                    val slashIndex = inputText.lastIndexOf('/')
-                    val isSlashCommand = slashIndex == 0 || (slashIndex > 0 && inputText.getOrNull(slashIndex - 1)?.isWhitespace() == true)
-                    val isSlashActive = isSlashCommand && !inputText.substring(slashIndex).contains(" ")
-                    val slashQuery = if (isSlashActive) inputText.substring(slashIndex + 1) else ""
+                    val slash = slashTrigger
+                    val slashIndex = slash?.index ?: -1
+                    val isSlashActive = slash != null
+                    val slashQuery = slash?.query ?: ""
 
                     // `/plu:` browses custom AntiGem plugins and their skills; custom commands join the normal list
                     val customCommands = com.example.gemini.data.remote.CustomSlashCommands.commands.toList()
@@ -1782,7 +1816,7 @@ fun ChatScreen(
                     // a Claude command that needs no argument runs on tap (when nothing else is typed and no turn runs)
                     val slashRunsOnTap: (com.example.gemini.data.remote.SlashCommandItem) -> Boolean = { item ->
                         isClaudeChat && item.type != "app" && item.type != "plugin" && item.type != "custom" && item.argumentHint.isBlank() &&
-                            inputText.substring(0, slashIndex.coerceAtLeast(0)).isBlank() && !isActivelyRunning && attachments.isEmpty()
+                            (slash == null || slash.nothingBefore) && !isActivelyRunning && attachments.isEmpty()
                     }
                     androidx.compose.animation.AnimatedVisibility(
                         visible = slashSuggestions.isNotEmpty(),
@@ -1797,13 +1831,11 @@ fun ChatScreen(
                             query = slashQuery,
                             runsOnTap = slashRunsOnTap,
                             onPick = { item ->
-                                val before = inputText.substring(0, slashIndex)
+                                val before = inputState.text.substring(0, slashIndex)
                                 val appCmd = if (isClaudeChat && item.type == "app") claudeBackend.appCommand(item.command) else null
                                 when {
                                     appCmd != null -> {
-                                        val tfv = TextFieldValue(before, selection = TextRange(before.length))
-                                        textFieldValue = tfv
-                                        viewModel.setDraft(activeConversationKey, tfv)
+                                        inputState.setTextAndPlaceCursorAtEnd(before)
                                         focusManager.clearFocus(force = true)
                                         keyboardController?.hide()
                                         handleClaudeCommand(appCmd)
@@ -1813,16 +1845,14 @@ fun ChatScreen(
                                         viewModel.sendMessage(item.command)
                                         userSentMessageTrigger++
                                         viewModel.clearDraft(activeConversationKey)
-                                        textFieldValue = TextFieldValue("")
+                                        inputState.clearText()
                                         focusManager.clearFocus(force = true)
                                         keyboardController?.hide()
                                     }
                                     else -> {
                                         // "/plu:" and "/plu:<plugin>:" keep the picker open for the next level
                                         val newText = if (item.command.endsWith(":")) "$before${item.command}" else "$before${item.command} "
-                                        val tfv = TextFieldValue(newText, selection = TextRange(newText.length))
-                                        textFieldValue = tfv
-                                        viewModel.setDraft(activeConversationKey, tfv)
+                                        inputState.setTextAndPlaceCursorAtEnd(newText)
                                     }
                                 }
                             }
@@ -1830,9 +1860,10 @@ fun ChatScreen(
                     }
 
                     // Floating File Autocomplete Suggestions when user types @
-                    val atIndex = inputText.lastIndexOf('@')
-                    val isAtMentioning = atIndex >= 0 && (atIndex == inputText.length - 1 || !inputText.substring(atIndex + 1).contains(" "))
-                    val atQuery = if (atIndex >= 0 && atIndex < inputText.length) inputText.substring(atIndex + 1) else ""
+                    val mention = mentionTrigger
+                    val atIndex = mention?.index ?: -1
+                    val isAtMentioning = mention != null
+                    val atQuery = mention?.query ?: ""
 
                     val fileSuggestions = remember(atQuery, chatProjectFiles, isAtMentioning) {
                         if (!isAtMentioning || chatProjectFiles.isEmpty()) emptyList()
@@ -1870,13 +1901,8 @@ fun ChatScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                val newText = inputText.substring(0, atIndex) + "@${file.path} "
-                                                val tfv = TextFieldValue(
-                                                    text = newText,
-                                                    selection = TextRange(newText.length)
-                                                )
-                                                textFieldValue = tfv
-                                                viewModel.setDraft(activeConversationKey, tfv)
+                                                val newText = inputState.text.substring(0, atIndex) + "@${file.path} "
+                                                inputState.setTextAndPlaceCursorAtEnd(newText)
                                             }
                                             .padding(horizontal = 12.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically
@@ -2105,14 +2131,7 @@ fun ChatScreen(
                     selectedModel = currentModel,
                     quota = currentQuota,
                     thinkingPreference = thinkingPref,
-                    textFieldValue = textFieldValue,
-                    onTextFieldValueChange = {
-                        textFieldValue = it
-                        viewModel.setDraft(activeConversationKey, it)
-                        if (it.text.isNotEmpty()) {
-                            viewModel.onUserStartedTyping()
-                        }
-                    },
+                    textFieldState = inputState,
                     onOpenModelSelector = {
                         focusManager.clearFocus(force = true)
                         keyboardController?.hide()
@@ -2145,7 +2164,7 @@ fun ChatScreen(
                             userSentMessageTrigger++
                         }
                         viewModel.clearDraft(activeConversationKey)
-                        textFieldValue = TextFieldValue("")
+                        inputState.clearText()
                     },
                     onStopStreaming = { showStopConfirmDialog = true },
                     attachments = attachments,
@@ -2452,16 +2471,12 @@ fun ChatScreen(
                         val target = action.message
                         if (isClaudeChat && action.type == MessageActionType.EDIT) {
                             viewModel.editClaudeMessage(target, restoreCodeOnEdit) { restoredText ->
-                                val tfv = TextFieldValue(restoredText, selection = TextRange(restoredText.length))
-                                textFieldValue = tfv
-                                viewModel.setDraft(activeConversationKey, tfv)
+                                inputState.setTextAndPlaceCursorAtEnd(restoredText)
                             }
                             restoreCodeOnEdit = false
                         } else if (action.type == MessageActionType.EDIT) {
                             viewModel.revertAndEditLastUserMessage(target) { restoredText ->
-                                val tfv = TextFieldValue(restoredText, selection = TextRange(restoredText.length))
-                                textFieldValue = tfv
-                                viewModel.setDraft(activeConversationKey, tfv)
+                                inputState.setTextAndPlaceCursorAtEnd(restoredText)
                             }
                         } else {
                             viewModel.retryMessage(target.id)
@@ -3035,6 +3050,12 @@ fun ChatToastBanner(
 
 enum class MessageActionType { EDIT, RETRY }
 data class PendingMessageAction(val type: MessageActionType, val message: ChatMessage)
+
+/** A `/command` being typed (no space after it yet): where its `/` is, the text after it, and whether only blanks precede it. */
+private data class SlashTrigger(val index: Int, val query: String, val nothingBefore: Boolean)
+
+/** An `@file` mention being typed (no space after it yet): where its `@` is and the text after it. */
+private data class MentionTrigger(val index: Int, val query: String)
 
 private fun flattenFileNodes(nodes: List<com.example.gemini.data.daemon.FileNode>): List<com.example.gemini.data.daemon.FileNode> {
     val result = mutableListOf<com.example.gemini.data.daemon.FileNode>()
