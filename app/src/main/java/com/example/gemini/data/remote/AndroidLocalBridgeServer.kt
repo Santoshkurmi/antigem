@@ -411,7 +411,7 @@ class AndroidLocalBridgeServer private constructor() {
             if (id != null) put("id", id)
         }
 
-        // Android automation can control the whole phone, so it refuses to connect until the user grants it in Utilities
+        // Android automation can control the whole phone, so it refuses to connect until the user grants it in Settings → Android Automation
         if (endpoint == McpEndpoint.ANDROID && method != "ping") {
             com.example.gemini.data.automation.AndroidAutomation.notReadyMessage(appContext!!)?.let { return jsonRpcError(id, -32001, it) }
         }

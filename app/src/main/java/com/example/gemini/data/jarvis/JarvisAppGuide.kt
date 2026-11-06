@@ -42,7 +42,7 @@ are there too. MCP servers, skills and Google plugins are in Settings → Antigr
             Entry("mcp", listOf("mcp", "server", "tool", "jarvis mcp", "browser mcp", "terminal mcp", "android mcp", "notes mcp", "add mcp", "preset"), """
 MCP servers give the agents tools. Antigravity: Settings → Antigravity → MCP Servers. Claude Code: Settings → Claude Code → MCP. Both have
 one-tap presets for the built-in servers: Browser (open pages, click, type, read, screenshots), Terminal (sessions, commands,
-output), Android (see and control the phone; must be allowed in Utilities → Android Automation), Notes & To-dos, Custom Plugin,
+output), Android (see and control the phone; must be allowed in Settings → Android Automation), Notes & To-dos, Custom Plugin,
 Plugin Developer, Stitch, and Jarvis (this voice control). The Jarvis server must be added to the agent that runs Jarvis:
 Settings → Jarvis → Setup has a one-tap Add button.
 """.trim()),
@@ -53,7 +53,7 @@ Your own slash commands that expand into full prompts are in Settings → Slash 
 """.trim()),
             Entry("terminal", listOf("terminal", "shell", "linux", "ssh", "apt", "pkg", "command line", "font", "theme terminal"), """
 The terminal is a full Linux environment (apt/pkg, bash, Python, Node.js, Git, Go). Multiple sessions, themes, font sizes and
-quick keys. Settings → Terminal & Shell has SSH options, local tools and styling. ADB Connect (Utilities) links the terminal's adb
+quick keys. Settings → Terminal & Shell has SSH options, local tools and styling. Settings → ADB Connect links the terminal's adb
 to this phone over Wireless debugging.
 """.trim()),
             Entry("ide", listOf("ide", "editor", "code", "file", "project", "open project", "git", "commit", "push", "clone"), """

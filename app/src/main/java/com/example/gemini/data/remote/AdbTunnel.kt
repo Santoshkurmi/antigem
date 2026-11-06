@@ -50,7 +50,7 @@ object AdbTunnel {
     private var forwardedPort: Int? = null
     private var forwardedPair: Int? = null
     private var cachedWirelessPort: Int? = null
-    /** A phone adb port the user typed in Utilities > ADB Connect; tried before the automatic search. */
+    /** A phone adb port the user typed in Settings > ADB Connect; tried before the automatic search. */
     @Volatile private var manualPhonePort: Int? = null
 
     /** A new SSH session has none of the forwards: forget what was forwarded so the next sync re-creates them. */
@@ -217,7 +217,7 @@ object AdbTunnel {
     }
 
     /**
-     * Utilities > ADB Connect in server mode: forwards this phone's adb to the server and connects the SERVER's adb to it.
+     * Settings > ADB Connect in server mode: forwards this phone's adb to the server and connects the SERVER's adb to it.
      * [phonePort] = a port typed by the user, or null to find it. Success means the server's `adb devices` lists the phone.
      */
     suspend fun connectServer(context: Context, phonePort: Int?): Result<String> {

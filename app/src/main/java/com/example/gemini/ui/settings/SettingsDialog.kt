@@ -135,7 +135,6 @@ enum class SettingsSection(val title: String, val subtitle: String) {
 
     /** Where Back goes from this section. */
     val parent: SettingsSection get() = when (this) {
-        ADB_CONNECT, ANDROID_AUTOMATION -> UTILITIES
         AGY_CLI, MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
         CLAUDE_PAGE -> CLAUDE
         else -> if (jarvisPage != null) JARVIS else MAIN
@@ -658,6 +657,7 @@ private fun MainSettingsMenu(
     }
     val jarvisOn by com.example.gemini.data.jarvis.JarvisPreferences.enabled.state.collectAsState()
     val activeMcp = mcpServers.count { it.isEnabled }
+    val deviceTools = rememberDeviceToolRows(onNavigate)
 
     // Claude Code's row shows the account state (signed in / plan / signed out)
     var claudeValue: String? = null
@@ -699,10 +699,13 @@ private fun MainSettingsMenu(
                 row(SettingsSection.WEBVIEW_EXTENSIONS, Icons.Outlined.Extension, c.accentAlt),
                 row(SettingsSection.SLASH_COMMANDS, Icons.Outlined.Bolt, c.warning)
             ),
-            listOf(
+            listOfNotNull(
                 row(SettingsSection.TERMINAL, Icons.Outlined.Terminal, c.accentIndigo,
                     if (useSshTerminal || com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) "SSH" else "Local"),
-                row(SettingsSection.UTILITIES, Icons.Outlined.Handyman, c.accentTeal),
+                deviceTools.adb,
+                deviceTools.automation,
+                // Utilities only shows once it has something in it (its old items are rows of their own now)
+                if (utilityRows(onNavigate).isNotEmpty()) row(SettingsSection.UTILITIES, Icons.Outlined.Handyman, c.accentTeal) else null,
                 row(SettingsSection.DIAGNOSTICS, Icons.Outlined.Speed, c.success,
                     if (isFloatingDiagnosticsEnabled) "HUD on" else null, if (isFloatingDiagnosticsEnabled) QuotaGreen else null)
             ),
@@ -765,11 +768,22 @@ private fun AntigravitySettingsMenu(
     )
 }
 
+/** What Settings → Utilities lists. Empty for now: when it is, the Utilities row is hidden. Add future handy tools here. */
+private fun utilityRows(onNavigate: (SettingsSection) -> Unit): List<SettingsRowItem> = emptyList()
+
 @Composable
 private fun UtilitiesSubScreen(
     cardBg: Color,
     onNavigate: (SettingsSection) -> Unit
 ) {
+    SettingsRowList(cardBg = cardBg, groups = listOf(utilityRows(onNavigate)))
+}
+
+/** The ADB Connect and Android Automation rows of the main settings page, with their live state. */
+private class DeviceToolRows(val adb: SettingsRowItem, val automation: SettingsRowItem)
+
+@Composable
+private fun rememberDeviceToolRows(onNavigate: (SettingsSection) -> Unit): DeviceToolRows {
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         com.example.gemini.data.adb.AdbConnectManager.init(context)
@@ -785,25 +799,20 @@ private fun UtilitiesSubScreen(
         }
     }
     val c = com.example.gemini.theme.AppColors
-    SettingsRowList(
-        cardBg = cardBg,
-        groups = listOf(
-            listOf(
-                SettingsRowItem(
-                    Icons.Outlined.PhonelinkSetup, c.accentTeal, SettingsSection.ADB_CONNECT.title,
-                    when {
-                        connected != null -> "Connected"
-                        adb.adbInstalled == false -> "Not installed"
-                        else -> null
-                    },
-                    if (connected != null) QuotaGreen else if (adb.adbInstalled == false) c.warning else null
-                ) { onNavigate(SettingsSection.ADB_CONNECT) },
-                SettingsRowItem(
-                    Icons.Outlined.TouchApp, c.accentAlt, SettingsSection.ANDROID_AUTOMATION.title,
-                    if (automationAllowed) "Allowed" else "Off", if (automationAllowed) QuotaGreen else null
-                ) { onNavigate(SettingsSection.ANDROID_AUTOMATION) }
-            )
-        )
+    return DeviceToolRows(
+        adb = SettingsRowItem(
+            Icons.Outlined.PhonelinkSetup, c.accentTeal, SettingsSection.ADB_CONNECT.title,
+            when {
+                connected != null -> "Connected"
+                adb.adbInstalled == false -> "Not installed"
+                else -> null
+            },
+            if (connected != null) QuotaGreen else if (adb.adbInstalled == false) c.warning else null
+        ) { onNavigate(SettingsSection.ADB_CONNECT) },
+        automation = SettingsRowItem(
+            Icons.Outlined.TouchApp, c.accentAlt, SettingsSection.ANDROID_AUTOMATION.title,
+            if (automationAllowed) "Allowed" else "Off", if (automationAllowed) QuotaGreen else null
+        ) { onNavigate(SettingsSection.ANDROID_AUTOMATION) }
     )
 }
 
