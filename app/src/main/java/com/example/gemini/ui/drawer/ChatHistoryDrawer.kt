@@ -43,6 +43,7 @@ import com.example.gemini.ui.components.ChatToastType
 import android.widget.Toast
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -100,6 +101,8 @@ fun ChatHistoryDrawer(
     onTerminateInstance: (String) -> Unit = {},
     onSearchQueryChange: (String) -> Unit = {},
     onOpenSettings: () -> Unit,
+    /** Opens the floating theme picker (a palette button next to Settings; hidden when null). */
+    onOpenThemes: (() -> Unit)? = null,
     onLogin: () -> Unit = {},
     onLogout: () -> Unit = {},
     onCheckAuth: () -> Unit = {},
@@ -1179,6 +1182,23 @@ fun ChatHistoryDrawer(
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                // Themes: a floating picker over the sidebar and chat, to try themes and see them live
+                if (onOpenThemes != null) {
+                    Surface(
+                        onClick = onOpenThemes,
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Transparent,
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Palette,
+                            contentDescription = "Themes",
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(8.dp).size(20.dp)
                         )
                     }
                 }

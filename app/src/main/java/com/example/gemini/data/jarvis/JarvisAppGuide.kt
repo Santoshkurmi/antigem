@@ -70,9 +70,10 @@ Notes and to-do lists are on the notes screen and in the floating bubble. Agents
 (add the Notes preset in MCP settings).
 """.trim()),
             Entry("appearance", listOf("theme", "dark", "light", "font", "size", "appearance", "look", "bubble", "switcher", "floating"), """
-Settings → Appearance & Theme: the mode (Light, Dark or Auto), a gallery to pick one light theme and one dark theme (AntiGem Light,
-Paper, Sakura, Mint, Linen, Sky, Lavender, Solarized Light; AntiGem Dark, Obsidian, Graphite, Aurora, Mocha, Neon City, Ember,
-Velvet, Midnight, Nord, Dracula, Deep Ocean, Forest, Sunset, Solarized Dark, High Contrast, plus custom ones; the chat, the IDE editor, the terminal and the code blocks all follow it), chat font size, grouping chats by workspace, the floating switcher and the floating bubble.
+Settings → Appearance & Theme: the mode (Light, Dark or Auto), a gallery to pick one light theme and one dark theme (light:
+Porcelain (default), Lavender, Sky (these three recommended), Sakura, Mint, Linen, Paper, Solarized Light; dark: Midnight Aurora (default),
+Obsidian, Graphite (these three recommended), Midnight, High Contrast, Amber Night (AntiGem's original dark look), Mocha, Neon City,
+Aurora, Nord, Dracula, Velvet, Deep Ocean, Ember, Forest, Sunset, Solarized Dark, plus custom ones; the chat, the IDE editor, the terminal and the code blocks all follow it), chat font size, grouping chats by workspace, the floating switcher and the floating bubble.
 Jarvis switches with jarvis_set_setting key=theme (or theme_mode) when the user allowed app settings. New themes are made by any chat
 with the Theme MCP (Settings → MCP Servers → Theme preset): "create a neon cyberpunk dark theme".
 """.trim()),

@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.theme.AppTheme
+import com.example.gemini.theme.BuiltInThemes
 import com.example.gemini.theme.ThemeManager
 
 /**
@@ -90,9 +92,12 @@ private fun ThemeGrid(themes: List<AppTheme>, selectedId: String, cardBg: Color,
     }
 }
 
-/** A small live preview: the theme's background, a card with text lines and a button, your bubble, and status dots. */
+/**
+ * A small live preview: the theme's background, a card with text lines and a button, your bubble, and status dots.
+ * Also used by the floating [ThemeQuickPanel].
+ */
 @Composable
-private fun ThemeCard(t: AppTheme, selected: Boolean, cardBg: Color, modifier: Modifier, onClick: () -> Unit, onDelete: (() -> Unit)?) {
+internal fun ThemeCard(t: AppTheme, selected: Boolean, cardBg: Color, modifier: Modifier, onClick: () -> Unit, onDelete: (() -> Unit)?) {
     val c = remember(t) { ThemeManager.resolvedColors(t).mapValues { Color(it.value.toInt()) } }
     fun col(k: String, d: Color = Color.Gray) = c[k] ?: d
     val accent = MaterialTheme.colorScheme.primary
@@ -140,6 +145,7 @@ private fun ThemeCard(t: AppTheme, selected: Boolean, cardBg: Color, modifier: M
                 Text(t.name, fontSize = 12.5.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface)
                 if (!t.builtIn) Text("Custom", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                BuiltInThemes.recommendedRank(t)?.let { rank -> RecommendedBadge(rank) }
             }
             if (onDelete != null) {
                 Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
@@ -148,5 +154,28 @@ private fun ThemeCard(t: AppTheme, selected: Boolean, cardBg: Color, modifier: M
             }
             if (selected) Icon(Icons.Filled.CheckCircle, "In use", tint = accent, modifier = Modifier.size(18.dp))
         }
+    }
+}
+
+/** Marks the top built-in themes of a side: the default (rank 0) as a solid pill, the next recommended ones as a soft one. */
+@Composable
+private fun RecommendedBadge(rank: Int) {
+    val accent = MaterialTheme.colorScheme.primary
+    val isDefault = rank == 0
+    val fg = if (isDefault) MaterialTheme.colorScheme.onPrimary else accent
+    Row(
+        Modifier
+            .padding(top = 3.dp)
+            .clip(RoundedCornerShape(50))
+            .background(if (isDefault) accent else accent.copy(alpha = 0.14f))
+            .padding(horizontal = 6.dp, vertical = 1.5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Filled.Star, null, tint = fg, modifier = Modifier.size(10.dp))
+        Spacer(Modifier.width(3.dp))
+        Text(
+            if (isDefault) "Default · Top pick" else "Recommended",
+            fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis
+        )
     }
 }

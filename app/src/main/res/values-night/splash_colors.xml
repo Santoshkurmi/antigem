@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Dark side of the startup splash (the app tells Android its own light / dark mode, so this follows it) -->
-    <color name="splash_bg">#FF181816</color>
-    <bool name="splash_light_bars">false</bool>
-</resources>

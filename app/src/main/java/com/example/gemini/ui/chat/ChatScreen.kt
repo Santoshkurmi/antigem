@@ -220,6 +220,8 @@ fun ChatScreen(
     val sshUser by viewModel.termuxSshUser.collectAsState(initial = "root")
     val sshPass by viewModel.termuxSshPass.collectAsState(initial = "root")
     val themeMode by viewModel.themeMode.collectAsState(initial = viewModel.authPreferences.getThemeModeSync())
+    // the floating theme picker opened from the sidebar's palette button
+    var showThemePanel by remember { mutableStateOf(false) }
     val agyHubUrl by viewModel.agyHubUrl.collectAsState(initial = AuthPreferences.currentHubUrl)
     val agyBridgeHttpUrl by viewModel.agyBridgeHttpUrl.collectAsState(initial = AuthPreferences.currentBridgeHttpUrl)
     val terminalFontSize by viewModel.terminalFontSize.collectAsState(initial = 14)
@@ -1046,7 +1048,9 @@ fun ChatScreen(
                     showSettingsDialog = true
                     scope.launch { drawerState.close() }
                 },
-                agyEnabled = com.example.gemini.domain.model.AgentKind.AGY in enabledAgents,
+                // the sidebar stays open: the picker floats over it so the new look shows on the sidebar and the chat
+                onOpenThemes = { showThemePanel = !showThemePanel },
+                agyEnabled =com.example.gemini.domain.model.AgentKind.AGY in enabledAgents,
                 accountsButton = {
                     com.example.gemini.ui.agents.AccountsButton(
                         agy = agyEntry,
@@ -2967,6 +2971,16 @@ fun ChatScreen(
     if (showNetworkInspectorDialog) {
         com.example.gemini.ui.components.NetworkInspectorDialog(
             onDismiss = { showNetworkInspectorDialog = false }
+        )
+    }
+
+    // Floating theme picker: above the sidebar and the chat, touches outside it still reach them
+    if (showThemePanel) {
+        com.example.gemini.ui.settings.ThemeQuickPanel(
+            themeMode = themeMode,
+            onSetThemeMode = { viewModel.setThemeMode(it) },
+            onClose = { showThemePanel = false },
+            modifier = Modifier.align(Alignment.BottomCenter).zIndex(9999f)
         )
     }
     } // End of Box
