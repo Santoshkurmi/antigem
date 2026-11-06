@@ -179,7 +179,13 @@ object JarvisController {
     /** Quiet mode: the reply counts as "speaking" until then (the card shows it, follow-ups still work). */
     @Volatile private var quietUntil = 0L
 
-    private data class Outgoing(val text: String, val origin: Origin? = null, val event: Boolean = false)
+    /** [sendPhrase]: the send phrase that ended the sentence and was cut off (the model is told, in case it belonged to the request). */
+    private data class Outgoing(val text: String, val origin: Origin? = null, val event: Boolean = false, val sendPhrase: String? = null)
+    /** History of what was heard in this capture: the normalized words at each change and when (oldest first). */
+    private val textHistory = ArrayList<Pair<String, Long>>()
+    private val _autoSendNow = MutableStateFlow(false)
+    /** The sentence being heard is sent after a pause (auto send on, or a short answer to Jarvis' question). */
+    val autoSendNow: StateFlow<Boolean> = _autoSendNow.asStateFlow()
     private val outbox = Channel<Outgoing>(Channel.UNLIMITED)
     @Volatile private var carryText = ""
     private val handledPermissions: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet<String>())
@@ -296,7 +302,12 @@ object JarvisController {
                     val now = System.currentTimeMillis()
                     if (speakEndedAt > 0 && !speaking && !isBusy && !listening.value && pendingAsk == null && now - speakEndedAt > 650) {
                         speakEndedAt = 0
-                        val wanted = inConversation && (JarvisPreferences.conversationMode.value || listenAfterRequested)
+                        // the model decides (jarvis_speak listen_after, or a question); "always" also listens after plain answers
+                        val wanted = when (JarvisPreferences.listenAfter.value) {
+                            "never" -> false
+                            "always" -> listenAfterRequested || inConversation
+                            else -> listenAfterRequested
+                        }
                         listenAfterRequested = false
                         if (wanted) startListening(origin = Origin.FOLLOWUP)
                     }
@@ -438,8 +449,9 @@ object JarvisController {
             val spoken = limitSpoken(text)
             if (spoken.isNotBlank()) {
                 addLog("Jarvis", spoken)
+                // a plain-text answer that asks something still opens the microphone for the reply
+                if (spoken.trimEnd().endsWith("?")) { listenAfterRequested = true; expectingReply = true }
                 speakOut(spoken)
-                if (JarvisPreferences.conversationMode.value) inConversation = true
             }
         }
     }
@@ -742,10 +754,15 @@ object JarvisController {
         lastChangeAt = now
         lastLoudAt = now
         startedAt = now
+        synchronized(textHistory) {
+            textHistory.clear()
+            textHistory += JarvisPhrases.normalize(initial) to now
+        }
         listenOrigin = origin
         if (origin == Origin.BUTTON || origin == Origin.WAKE || origin == Origin.HEADSET) expectingReply = false
         _holding.value = false
         _sendProgress.value = 0f
+        _autoSendNow.value = autoSendFor(origin)
         listening.value = true
         inConversation = true
         _phase.value = Phase.LISTENING
@@ -759,13 +776,11 @@ object JarvisController {
             postCursorText = "",
             onPartialText = { p ->
                 synchronized(lock) { partial = p }
-                _heard.value = joinText(snapshotCommitted(), p)
-                lastChangeAt = System.currentTimeMillis()
+                onHeardChanged(joinText(snapshotCommitted(), p))
             },
             onFinalText = { f ->
                 synchronized(lock) { committed.add(f); partial = "" }
-                _heard.value = joinText(snapshotCommitted(), "")
-                lastChangeAt = System.currentTimeMillis()
+                onHeardChanged(joinText(snapshotCommitted(), ""))
             },
             onError = { err -> onSttError(t, err) }
         )
@@ -773,6 +788,31 @@ object JarvisController {
         endpointJob = scope.launch { endpointLoop(origin) }
         return true
     }
+
+    /**
+     * The recognizer reported text. The agents' dictation repeats the same text many times a second while you are
+     * quiet; only a real change of the words (not of case or punctuation) counts as you talking, otherwise the pause
+     * that sends would never be reached.
+     */
+    private fun onHeardChanged(text: String) {
+        _heard.value = text
+        val norm = JarvisPhrases.normalize(text)
+        val now = System.currentTimeMillis()
+        synchronized(textHistory) {
+            if (textHistory.lastOrNull()?.first == norm) return
+            textHistory += norm to now
+            if (textHistory.size > 400) textHistory.removeAt(0)
+        }
+        lastChangeAt = now
+    }
+
+    private fun historySnapshot(): List<Pair<String, Long>> = synchronized(textHistory) { textHistory.toList() }
+
+    /** Whether what is being said now is sent after a pause (auto send, or a short answer to Jarvis' own question). */
+    private fun autoSendFor(origin: Origin): Boolean = !_holding.value && (
+        JarvisPreferences.autoSend.value ||
+            (JarvisPreferences.autoSendAnswers.value && (origin == Origin.ASK || expectingReply))
+        )
 
     /**
      * Tells speech from background noise by the microphone level, whatever scale the recognizer reports (the agents'
@@ -799,16 +839,22 @@ object JarvisController {
         }
     }
 
-    /** Decides when the sentence is over, by the chosen send mode. */
+    /**
+     * Decides when the sentence is over: a send phrase sends at once and a cancel phrase throws it away (in every mode);
+     * with auto send (or for a short answer to Jarvis' own question) a pause sends; otherwise it waits for Send.
+     */
     private suspend fun endpointLoop(origin: Origin) {
         val detector = VoiceDetector()
+        var checkedText = ""
+        var phraseMatch: JarvisPhrases.Match? = null
         while (scope.isActive && listening.value) {
             delay(100)
             val n = System.currentTimeMillis()
             val amp = activeStt?.latestAmplitude?.value ?: 0f
             if (detector.isVoice(amp)) lastLoudAt = n
             val text = joinText(snapshotCommitted(), partial)
-            val mode = if (_holding.value) "manual" else JarvisPreferences.sendMode.value
+            val auto = autoSendFor(origin)
+            _autoSendNow.value = auto
             if (text.isBlank()) {
                 _sendProgress.value = 0f
                 val limit = when (origin) {
@@ -817,6 +863,8 @@ object JarvisController {
                     else -> NO_SPEECH_MS
                 }
                 if (n - startedAt > limit && n - lastLoudAt > 1200) {
+                    // no word at all: the microphone closes (a soft tone tells the user it stopped waiting)
+                    if (origin == Origin.FOLLOWUP) cue(4)
                     cancelListening()
                     inConversation = false
                     expectingReply = false
@@ -825,13 +873,18 @@ object JarvisController {
                 continue
             }
             if (n - startedAt > JarvisPreferences.maxListenSeconds.value.coerceIn(15, 300) * 1000L) { finishListening(); return }
-            if (mode == "manual") { _sendProgress.value = 0f; continue }
-            if (mode == "word") {
-                _sendProgress.value = 0f
-                if (endsWithSendWord(text) != null && n - lastChangeAt > 350) { finishListening(); return }
-                continue
+            // a send or cancel phrase at the end, once the words stopped changing (so "send" is not the start of "sending")
+            if (text != checkedText) {
+                checkedText = text
+                phraseMatch = JarvisPhrases.match(text, historySnapshot(), expectingReply || origin == Origin.ASK)
             }
-            val pause = effectivePause(text, origin, mode)
+            val pm = phraseMatch
+            if (pm != null && n - lastChangeAt >= 450) {
+                if (pm.kind == JarvisPhrases.Kind.CANCEL) cancelByPhrase() else finishListening()
+                return
+            }
+            if (!auto) { _sendProgress.value = 0f; continue }
+            val pause = effectivePause(text, origin, JarvisPreferences.sendMode.value)
             val quietFor = n - lastChangeAt
             val voiceQuiet = n - lastLoudAt
             // the text stopped changing and the microphone went quiet (or the text has been still for long: a noisy room)
@@ -868,18 +921,15 @@ object JarvisController {
         return (base * f).toLong().coerceIn(500, 6000)
     }
 
-    private fun sendWordList(): List<String> = JarvisPreferences.sendWords.value.split(',')
-        .map { it.trim().lowercase().trim('.', '!', '?') }.filter { it.isNotEmpty() }.sortedByDescending { it.length }
-
-    private fun endsWithSendWord(text: String): String? {
-        val t = text.lowercase().trim().trimEnd('.', '!', '?', ',', ' ')
-        return sendWordList().firstOrNull { w -> t == w || t.endsWith(" $w") }
-    }
-
-    private fun stripSendWord(text: String): String {
-        val w = endsWithSendWord(text) ?: return text
-        val t = text.trim().trimEnd('.', '!', '?', ',', ' ')
-        return t.dropLast(w.length).trim().trimEnd(',').trim()
+    /** A cancel phrase ended the sentence: nothing is sent. */
+    private fun cancelByPhrase() {
+        val asking = pendingAsk
+        cancelListening()
+        inConversation = false
+        expectingReply = false
+        _heard.value = ""
+        postStatus("Cancelled", explicit = false)
+        if (asking != null) asking.complete("") else scope.launch { speakOut("Cancelled.") }
     }
 
     private fun snapshotCommitted(): List<String> = synchronized(lock) { committed.toList() }
@@ -973,7 +1023,22 @@ object JarvisController {
 
     private suspend fun deliver(text: String, origin: Origin) {
         var said = text.trim()
-        if (JarvisPreferences.sendMode.value == "word") said = stripSendWord(said)
+        // a send phrase at the end is the command, not the message; a cancel phrase throws everything away
+        var sendPhrase: String? = null
+        val pm = JarvisPhrases.match(said, historySnapshot(), expectingReply || origin == Origin.ASK)
+        when {
+            pm?.kind == JarvisPhrases.Kind.CANCEL -> {
+                _heard.value = ""
+                cue(2)
+                inConversation = false
+                expectingReply = false
+                postStatus("Cancelled", explicit = false)
+                pendingAsk?.let { it.complete(""); return }
+                speakOut("Cancelled.")
+                return
+            }
+            pm != null && !pm.whole -> { said = pm.content; sendPhrase = pm.phrase }
+        }
         _heard.value = said
         cue(2)
         if (said.isBlank()) { inConversation = false; return }
@@ -986,7 +1051,7 @@ object JarvisController {
         }
         addLog("You", said)
         if (handleLocalCommand(said, origin)) return
-        outbox.trySend(Outgoing(said, if (wasExpecting && origin == Origin.FOLLOWUP) Origin.ASK else origin))
+        outbox.trySend(Outgoing(said, if (wasExpecting && origin == Origin.FOLLOWUP) Origin.ASK else origin, sendPhrase = sendPhrase))
     }
 
     /** The model (jarvis_ignore) or the side-talk filter decided the words were not for Jarvis. */
@@ -1033,13 +1098,16 @@ object JarvisController {
             }
             repeatWords.matches(text) -> {
                 val last = _said.value.ifBlank { _log.value.lastOrNull { it.first == "Jarvis" }?.second.orEmpty() }
+                // repeating a question opens the microphone for its answer again
+                if (last.trimEnd().endsWith("?")) { listenAfterRequested = true; expectingReply = true }
                 speakOut(last.ifBlank { "I haven't said anything yet." })
-                if (JarvisPreferences.conversationMode.value) inConversation = true
                 return true
             }
             slowerWords.matches(text) || fasterWords.matches(text) -> {
                 val faster = fasterWords.matches(text)
                 JarvisPreferences.ttsRate.set((JarvisPreferences.ttsRate.value + if (faster) 0.15f else -0.15f).coerceIn(0.5f, 2f))
+                listenAfterRequested = true
+                expectingReply = true
                 speakOut(if (faster) "Is this better?" else "Is this easier to follow?")
                 return true
             }
@@ -1213,7 +1281,13 @@ object JarvisController {
         else heardVia?.let { "heard_via: $it" }.orEmpty()
         val note = buildString {
             append(if (needsBoot) JarvisSkill.bootPack(context) else JarvisSkill.preamble(context))
+            // the user changed the persona or their notes in Settings since this chat was told: tell it once
+            if (!needsBoot && JarvisPreferences.profileSentFor.value != "$chatId|${JarvisSkill.profileHash()}") {
+                append("\n\n[Updated by the user in Settings → Jarvis, follow from now on]\n")
+                append(JarvisSkill.profileSection() ?: "The persona and the notes about the user were cleared: drop what they said.")
+            }
             if (interrupted) append("\n(The user interrupted your previous turn with this message: switch to it.)")
+            m.sendPhrase?.let { append("\n(The user ended with “$it”, which the app took as the send command and cut off. If it was meant as part of the request, take it into account.)") }
             if (carry.isNotBlank()) append("\n\n").append(carry)
         }
         turnSpoke = false
@@ -1240,6 +1314,7 @@ object JarvisController {
             throw e
         }
         if (needsBoot) JarvisPreferences.bootSentFor.set("${JarvisPreferences.currentChatId.value}|${JarvisSkill.version}")
+        JarvisPreferences.profileSentFor.set("${JarvisPreferences.currentChatId.value}|${JarvisSkill.profileHash()}")
         JarvisPreferences.currentChatMessages.set(JarvisPreferences.currentChatMessages.value + 1)
         touch()
         // Claude reports a missing chat as an error of the chat, a moment after sending
@@ -1396,11 +1471,17 @@ object JarvisController {
     }
 
     /** Jarvis says [text] (called by the jarvis_speak tool). With [listenAfter] the microphone opens afterwards. */
-    suspend fun say(text: String, listenAfter: Boolean = false, wait: Boolean = false) {
+    /**
+     * Jarvis says [text] (the jarvis_speak tool). [listenAfter]: the model expects an answer (true) or not (false); null
+     * = it did not say, then a question opens the microphone. The last call of a turn decides.
+     */
+    suspend fun say(text: String, listenAfter: Boolean? = null, wait: Boolean = false) {
         addLog("Jarvis", text)
         turnSpoke = true
-        if (listenAfter) { inConversation = true; listenAfterRequested = true; expectingReply = true }
-        else if (text.trimEnd().endsWith("?")) expectingReply = true
+        val wants = listenAfter ?: text.trimEnd().endsWith("?")
+        listenAfterRequested = wants
+        expectingReply = wants
+        if (wants) inConversation = true
         speakOut(text, wait = wait)
     }
 
@@ -1408,6 +1489,8 @@ object JarvisController {
     suspend fun ask(question: String, timeoutMs: Long = ASK_TIMEOUT_MS): String? = askMutex.withLock {
         val d = CompletableDeferred<String>()
         pendingAsk = d
+        // the answer comes back to the model here: no extra listening afterwards for an earlier jarvis_speak of this turn
+        listenAfterRequested = false
         try {
             addLog("Jarvis", question)
             turnSpoke = true
@@ -1711,16 +1794,17 @@ object JarvisController {
     @Suppress("DEPRECATION")
     private fun cue(kind: Int) {
         runCatching {
-            if (JarvisPreferences.haptics.value) {
+            // 1 = mic opens, 2 = heard / sent, 3 = quiet-mode reply (buzz only), 4 = mic closed waiting for a reply (tone only)
+            if (JarvisPreferences.haptics.value && kind != 4) {
                 val v = app.getSystemService(Vibrator::class.java)
                 val ms = when (kind) { 1 -> 25L; 3 -> 10L; else -> 15L }
                 if (Build.VERSION.SDK_INT >= 26) v?.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
                 else v?.vibrate(ms)
             }
             if (kind != 3 && JarvisPreferences.earcons.value) {
-                val tg = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 55)
-                tg.startTone(if (kind == 1) ToneGenerator.TONE_PROP_BEEP else ToneGenerator.TONE_PROP_ACK, 110)
-                scope.launch { delay(300); tg.release() }
+                val tg = ToneGenerator(AudioManager.STREAM_NOTIFICATION, if (kind == 4) 35 else 55)
+                tg.startTone(when (kind) { 1 -> ToneGenerator.TONE_PROP_BEEP; 4 -> ToneGenerator.TONE_PROP_BEEP2; else -> ToneGenerator.TONE_PROP_ACK }, 110)
+                scope.launch { delay(400); tg.release() }
             }
         }
     }

@@ -125,7 +125,7 @@ fun JarvisOverlay() {
     val showTranscript by JarvisPreferences.showTranscript.state.collectAsState()
     val showActivity by JarvisPreferences.showActivity.state.collectAsState()
     val orbSize by JarvisPreferences.orbSize.state.collectAsState()
-    val sendMode by JarvisPreferences.sendMode.state.collectAsState()
+    val autoNow by JarvisController.autoSendNow.collectAsState()
     val quiet by JarvisPreferences.quietMode.state.collectAsState()
 
     var level by remember { mutableFloatStateOf(0f) }
@@ -162,12 +162,12 @@ fun JarvisOverlay() {
     val attention = mcpProblem || tasks.any { it.state.needsUser }
 
     if (style == "fullscreen" && expanded) {
-        FullScreenJarvis(phase, level, steps, line, showTranscript, showActivity, sendProgress, holding, sendMode, quiet, onTap)
+        FullScreenJarvis(phase, level, steps, line, showTranscript, showActivity, sendProgress, holding, autoNow, quiet, onTap)
     } else {
         OrbLayer(
             phase = phase, level = level, expanded = expanded, showPill = showPill, steps = steps, line = line,
             showTranscript = showTranscript, showActivity = showActivity, sendProgress = sendProgress, holding = holding,
-            sendMode = sendMode, quiet = quiet, notice = notice, orbSize = orbSize, activeTasks = activeTasks,
+            auto = autoNow, quiet = quiet, notice = notice, orbSize = orbSize, activeTasks = activeTasks,
             attention = attention, tasks = tasks, onTap = onTap, onNoticeAction = onNoticeAction
         )
     }
@@ -179,7 +179,7 @@ fun JarvisOverlay() {
 @Composable
 private fun OrbLayer(
     phase: Phase, level: Float, expanded: Boolean, showPill: Boolean, steps: List<JarvisController.Step>, line: String,
-    showTranscript: Boolean, showActivity: Boolean, sendProgress: Float, holding: Boolean, sendMode: String, quiet: Boolean,
+    showTranscript: Boolean, showActivity: Boolean, sendProgress: Float, holding: Boolean, auto: Boolean, quiet: Boolean,
     notice: JarvisController.Notice?, orbSize: String, activeTasks: Int, attention: Boolean, tasks: List<JarvisTasks.Task>,
     onTap: () -> Unit, onNoticeAction: (String) -> Unit
 ) {
@@ -242,7 +242,7 @@ private fun OrbLayer(
                     enter = fadeIn(tween(180)) + scaleIn(tween(240), initialScale = 0.85f) + expandVertically(tween(240)),
                     exit = fadeOut(tween(160)) + scaleOut(tween(200), targetScale = 0.9f) + shrinkVertically(tween(220))
                 ) {
-                    ActivityCard(phase, level, steps, line, showActivity, showTranscript, sendProgress, holding, sendMode, quiet, tasks, onTap)
+                    ActivityCard(phase, level, steps, line, showActivity, showTranscript, sendProgress, holding, auto, quiet, tasks, onTap)
                 }
                 AnimatedVisibility(visible = !expanded && showPill, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                     StatusPill(phase, steps)
@@ -299,7 +299,7 @@ private fun OrbLayer(
 @Composable
 private fun ActivityCard(
     phase: Phase, level: Float, steps: List<JarvisController.Step>, line: String, showActivity: Boolean, showTranscript: Boolean,
-    sendProgress: Float, holding: Boolean, sendMode: String, quiet: Boolean, tasks: List<JarvisTasks.Task>, onTap: () -> Unit
+    sendProgress: Float, holding: Boolean, auto: Boolean, quiet: Boolean, tasks: List<JarvisTasks.Task>, onTap: () -> Unit
 ) {
     val accent by animateColor(accentOf(phase))
     val shape = RoundedCornerShape(24.dp)
@@ -327,10 +327,10 @@ private fun ActivityCard(
         }
         if (phase == Phase.LISTENING) {
             Spacer(Modifier.height(8.dp))
-            SendMeter(sendProgress, holding, sendMode)
+            SendMeter(sendProgress, holding, auto)
         }
         Spacer(Modifier.height(10.dp))
-        ActionButtons(phase, holding, sendMode, quiet, onTap, big = false)
+        ActionButtons(phase, holding, auto, quiet, onTap, big = false)
         val live = tasks.filter { it.active }.take(3)
         if (live.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
@@ -344,15 +344,16 @@ private fun ActivityCard(
  * auto modes a thin bar fades in and fills only during a real pause, and empties again when you go on talking.
  */
 @Composable
-private fun SendMeter(progress: Float, holding: Boolean, mode: String) {
+private fun SendMeter(progress: Float, holding: Boolean, auto: Boolean) {
+    val phrase = remember { com.example.gemini.data.jarvis.JarvisPhrases.exampleSend() }
     val hint = when {
-        holding -> "Waiting for you · tap Send"
-        mode == "manual" -> "Tap Send when you're done"
-        mode == "word" -> "End with “${JarvisPreferences.sendWords.value.substringBefore(',').trim()}” to send"
-        else -> "Pause to send"
+        holding -> if (phrase != null) "Waiting · say “$phrase” or tap Send" else "Waiting for you · tap Send"
+        auto -> if (phrase != null) "Pause to send · or say “$phrase”" else "Pause to send"
+        phrase != null -> "Say “$phrase” or tap Send"
+        else -> "Tap Send when you're done"
     }
     Column {
-        if (!holding && (mode == "smart" || mode == "pause")) {
+        if (!holding && auto) {
             val p by animateFloatAsState(progress, tween(120), label = "send")
             val shown by animateFloatAsState(if (progress > 0f) 1f else 0f, tween(if (progress > 0f) 220 else 160), label = "sendAlpha")
             Box(
@@ -463,12 +464,12 @@ internal fun taskColor(s: JarvisTasks.State): Color = when (s) {
 
 /** What the user can do right now: cancel / wait / send while listening, stop / reply while Jarvis speaks. */
 @Composable
-private fun ActionButtons(phase: Phase, holding: Boolean, sendMode: String, quiet: Boolean, onTap: () -> Unit, big: Boolean) {
+private fun ActionButtons(phase: Phase, holding: Boolean, auto: Boolean, quiet: Boolean, onTap: () -> Unit, big: Boolean) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         when (phase) {
             Phase.LISTENING -> {
                 PillButton("Cancel", Icons.Filled.Close, Danger, big) { JarvisController.cancelCapture() }
-                if (!holding && (sendMode == "smart" || sendMode == "pause")) PillButton("Wait", Icons.Filled.PauseCircle, Amber, big) { JarvisController.holdListening() }
+                if (!holding && auto) PillButton("Wait", Icons.Filled.PauseCircle, Amber, big) { JarvisController.holdListening() }
                 PillButton("Send", Icons.Filled.Send, Cyan, big, filled = true) { JarvisController.finishListening() }
             }
             Phase.SPEAKING -> {
@@ -559,7 +560,7 @@ internal fun PulseDot(color: Color, working: Boolean) {
 @Composable
 private fun FullScreenJarvis(
     phase: Phase, level: Float, steps: List<JarvisController.Step>, line: String, showTranscript: Boolean, showActivity: Boolean,
-    sendProgress: Float, holding: Boolean, sendMode: String, quiet: Boolean, onTap: () -> Unit
+    sendProgress: Float, holding: Boolean, auto: Boolean, quiet: Boolean, onTap: () -> Unit
 ) {
     Box(
         Modifier
@@ -579,10 +580,10 @@ private fun FullScreenJarvis(
             }
             if (phase == Phase.LISTENING) {
                 Spacer(Modifier.height(16.dp))
-                Box(Modifier.widthIn(max = 320.dp)) { SendMeter(sendProgress, holding, sendMode) }
+                Box(Modifier.widthIn(max = 320.dp)) { SendMeter(sendProgress, holding, auto) }
             }
             Spacer(Modifier.height(30.dp))
-            ActionButtons(phase, holding, sendMode, quiet, onTap, big = true)
+            ActionButtons(phase, holding, auto, quiet, onTap, big = true)
         }
     }
 }

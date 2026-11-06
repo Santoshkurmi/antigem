@@ -69,7 +69,8 @@ object JarvisMcp {
                 "no markdown, code or paths. Returns at once; later calls are spoken in order.",
             listOf("text"),
             "text" to prop("string", "What to say"),
-            "listen_after" to prop("boolean", "Leave the microphone open for the answer after speaking (default false)"),
+            "listen_after" to prop("boolean", "true whenever your words invite a reply (a question, an offer like \"Want me to run it?\", a choice, a confirmation): " +
+                "the microphone opens and the answer comes as the user's next message. false for a final statement. Omitted: listens only if the text ends with a question mark."),
             "wait" to prop("boolean", "Return only after it has been said (default false)")))
         put(tool("jarvis_ask",
             "Ask the user a question out loud and wait for the spoken answer (up to about 45 seconds). Returns the answer text, or \"no answer\". " +
@@ -285,7 +286,8 @@ object JarvisMcp {
                 "jarvis_speak" -> {
                     val t = args.optString("text").trim()
                     if (t.isEmpty()) return error("text is empty")
-                    JarvisController.say(t, args.optBoolean("listen_after"), args.optBoolean("wait"))
+                    val listenAfter = if (args.has("listen_after") && !args.isNull("listen_after")) args.optBoolean("listen_after") else null
+                    JarvisController.say(t, listenAfter, args.optBoolean("wait"))
                     text("Said.")
                 }
                 "jarvis_ask" -> {
@@ -710,7 +712,7 @@ object JarvisMcp {
                 put("phase", JarvisController.phase.value.name.lowercase())
                 put("hands_free", JarvisPreferences.handsFree.value)
                 put("quiet_mode", JarvisPreferences.quietMode.value)
-                put("send_mode", JarvisPreferences.sendMode.value)
+                put("auto_send", JarvisPreferences.autoSend.value)
                 put("permission_policy", JarvisPreferences.permissionPolicy.value)
                 put("chat_messages", JarvisPreferences.currentChatMessages.value)
             })
@@ -776,7 +778,7 @@ object JarvisMcp {
                 if (AgentKind.CLAUDE in vm.enabledAgents.value) out.put("claude_code", claude())
                 if (AgentKind.AGY in vm.enabledAgents.value) out.put("antigravity", agy())
                 out.put("jarvis", JSONObject().put("agent", JarvisPreferences.agent.value.lowercase()).put("model", JarvisPreferences.modelId.value.ifBlank { "default" })
-                    .put("permission_policy", JarvisPreferences.permissionPolicy.value).put("send_mode", JarvisPreferences.sendMode.value)
+                    .put("permission_policy", JarvisPreferences.permissionPolicy.value).put("auto_send", JarvisPreferences.autoSend.value)
                     .put("trigger", if (JarvisPreferences.hotword.value == "phrase") "wake phrase \"${JarvisPreferences.wakePhrase.value}\"" else "button")
                     .put("hands_free", JarvisPreferences.handsFree.value).put("app_settings_allowed", JarvisPreferences.allowSettingChanges.value))
                 out.put("theme", vm.themeMode.value)
@@ -1081,11 +1083,21 @@ object JarvisMcp {
             num("jarvis_voice_pitch", "Voice pitch", true, 0.5f..2f, { P.ttsPitch.value }, { P.ttsPitch.set(it) }),
             choice("jarvis_voice_engine", "Voice: device, Google Cloud or OpenAI-compatible (online ones need a key in settings)", true, listOf("android", "google_cloud", "openai"), { P.ttsEngine.value }, { P.ttsEngine.set(it) }),
             bool("jarvis_speak_progress", "Say short progress lines during long work", true, { P.speakProgress.value }, { P.speakProgress.set(it) }),
-            choice("jarvis_send_mode", "When speech is sent: smart pause, fixed pause, send word, or manual", true, listOf("smart", "pause", "word", "manual"), { P.sendMode.value }, { P.sendMode.set(it) }),
-            num("jarvis_pause_seconds", "Pause that ends a sentence", true, 0.8f..3.5f, { P.silenceMs.value / 1000f }, { P.silenceMs.set((it * 1000).toInt()) }),
-            textS("jarvis_send_words", "Send words for word mode, comma separated", true, { P.sendWords.value }, { P.sendWords.set(it.lowercase()) }),
-            bool("jarvis_conversation_mode", "Keep listening after Jarvis answers", true, { P.conversationMode.value }, { P.conversationMode.set(it) }),
-            int("jarvis_follow_up_seconds", "How long the mic stays open for a follow-up", true, 2..30, { P.followUpSeconds.value }, { P.followUpSeconds.set(it) }),
+            bool("jarvis_auto_send", "Send by itself when the user pauses (off: only a send phrase, Send or the headset button sends)", true, { P.autoSend.value }, { P.autoSend.set(it) }),
+            choice("jarvis_auto_send_style", "With auto send: smart pause (longer when unfinished) or a fixed pause", true, listOf("smart", "pause"), { if (P.sendMode.value == "pause") "pause" else "smart" }, { P.sendMode.set(it) }),
+            num("jarvis_pause_seconds", "Pause that ends a sentence (auto send)", true, 0.8f..3.5f, { P.silenceMs.value / 1000f }, { P.silenceMs.set((it * 1000).toInt()) }),
+            bool("jarvis_auto_send_answers", "Short answers to Jarvis' own questions send by themselves", true, { P.autoSendAnswers.value }, { P.autoSendAnswers.set(it) }),
+            bool("jarvis_send_phrases_on", "Ending with a send phrase sends at once", true, { P.sendPhrasesOn.value }, { P.sendPhrasesOn.set(it) }),
+            textS("jarvis_send_phrases", "Send phrases, separated by | (replaces the whole list; read it first and keep what the user did not ask to remove)", true,
+                { JarvisPhrases.parse(P.sendPhrases.value).joinToString(" | ") }, { P.sendPhrases.set(JarvisPhrases.format(JarvisPhrases.parse(it))) }),
+            bool("jarvis_cancel_phrases_on", "Ending with a cancel phrase throws the message away", true, { P.cancelPhrasesOn.value }, { P.cancelPhrasesOn.set(it) }),
+            textS("jarvis_cancel_phrases", "Cancel phrases, separated by | (replaces the whole list; read it first and keep what the user did not ask to remove)", true,
+                { JarvisPhrases.parse(P.cancelPhrases.value).joinToString(" | ") }, { P.cancelPhrases.set(JarvisPhrases.format(JarvisPhrases.parse(it))) }),
+            choice("jarvis_listen_after", "Open the mic after Jarvis speaks: auto (when it expects an answer), always, or never", true, listOf("auto", "always", "never"), { P.listenAfter.value }, { P.listenAfter.set(it) }),
+            int("jarvis_follow_up_seconds", "How long the mic waits for a reply after Jarvis spoke (no word at all closes it)", true, 2..30, { P.followUpSeconds.value }, { P.followUpSeconds.set(it) }),
+            Setting("jarvis_persona", "Whom Jarvis speaks as (grammatical gender for itself, e.g. Hindi kar rahi / kar raha hoon)", "female|male|neutral|unset", true,
+                get = { P.persona.value.ifBlank { "unset" } },
+                set = { v -> when (val x = v.trim().lowercase()) { "female", "male", "neutral" -> { P.persona.set(x); null }; "unset", "none", "" -> { P.persona.set(""); null }; else -> "Use female, male, neutral or unset." } }),
             int("jarvis_max_listen_seconds", "Longest single capture", true, 15..300, { P.maxListenSeconds.value }, { P.maxListenSeconds.set(it) }),
             choice("jarvis_side_talk", "Ignore what is said to other people", true, listOf("off", "smart", "strict"), { P.sideTalk.value }, { P.sideTalk.set(it) }),
             Setting("jarvis_trigger", "How Jarvis wakes: button only or wake phrase (needs hands-free)", "button|wake_phrase", true,
@@ -1116,7 +1128,8 @@ object JarvisMcp {
             ro("jarvis_model", "Model of the Jarvis chat") { P.modelId.value.ifBlank { "default" } },
             ro("jarvis_permission_policy", "Approval policy") { P.permissionPolicy.value },
             ro("jarvis_task_approvals", "Approvals inside tasks") { P.taskApprovals.value },
-            ro("jarvis_allow_setting_changes", "Jarvis may change app settings") { P.allowSettingChanges.value }
+            ro("jarvis_allow_setting_changes", "Jarvis may change app settings") { P.allowSettingChanges.value },
+            ro("jarvis_about_user", "The user's own notes for Jarvis (edited by the user in Settings → Jarvis; use jarvis_memory_write for your own notes)") { P.aboutUser.value.ifBlank { "(empty)" } }
         )
     }
 

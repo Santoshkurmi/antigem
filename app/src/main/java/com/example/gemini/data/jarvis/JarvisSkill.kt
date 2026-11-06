@@ -56,6 +56,12 @@ the phone. Their words come from speech-to-text, so expect small mistakes and wo
 8. Words not meant for you: a message marked heard_via=follow-up may be the user talking to someone else, the TV or background
    speech. If it clearly was not said to you, call `jarvis_ignore` and nothing else. If it could be for you, answer it.
 9. "Stop", "cancel", "never mind": stop and confirm in two or three words.
+10. Keep the conversation going yourself. After you speak, decide whether the user will most likely answer. Whenever your
+    words invite a reply (a question, an offer like "Want me to run it?", a choice, a request to confirm, or anything that
+    can only go on with the user), call `jarvis_speak` with `listen_after=true`: the microphone opens and their answer comes
+    back as their next message. For a plain final statement ("Done, the file is saved.") pass `listen_after=false`. If you say
+    several things in one turn, only the last call decides. Use `jarvis_ask` instead when you need the answer to continue
+    this same turn (an approval, a missing detail); it returns the answer to you directly.
 
 ## Do it yourself, delegate big jobs
 Questions, lookups (weather, facts, news), maths, timers, opening things, reading chats, app help and controlling the app you do
@@ -124,6 +130,7 @@ says when the user has to allow it first). Models and chat controls: `jarvis_set
         append(guide()).append("\n\n")
         append("## jarvis_mcp tools: name(params; * = required) — what it does\n").append(catalog()).append("\n\n")
         append("## Approval policy\n").append(policyText()).append("\n\n")
+        profileSection()?.let { append(it).append("\n\n") }
         val mem = JarvisPreferences.memory.value.trim()
         if (mem.isNotBlank()) append("## Jarvis memory (from earlier chats)\n").append(mem.take(3000)).append("\n\n")
         append("## Live context now\n").append(context).append("\n\n")
@@ -134,9 +141,47 @@ says when the user has to allow it first). Models and chat controls: `jarvis_set
     fun preamble(context: String): String = buildString {
         append("[Jarvis] Voice turn. Rules and the full jarvis_mcp tool list are in this chat's first message (jarvis_help repeats them). ")
         append("Call the jarvis_mcp tools directly: no tool search beyond one ToolSearch select, no config or skill reading. ")
-        append("Speak only via jarvis_speak / jarvis_ask. No jarvis_mcp tools at all → reply exactly $MCP_MISSING.\n")
+        append("Speak only via jarvis_speak / jarvis_ask; listen_after=true whenever you expect an answer. ")
+        append("No jarvis_mcp tools at all → reply exactly $MCP_MISSING.\n")
+        personaLine()?.let { append(it).append('\n') }
         append(context)
     }
+
+    // ------------------------------------------------------------------ persona and the user's own notes
+
+    private fun personaText(): String? = when (JarvisPreferences.persona.value) {
+        "female" -> "You speak as a woman. Use feminine grammatical forms whenever you refer to yourself, in every language that has them " +
+            "(Hindi: \"main kar rahi hoon\", \"main dekh rahi hoon\", \"main samajh gayi\"; Spanish: \"estoy lista\"; French: \"je suis prête\")."
+        "male" -> "You speak as a man. Use masculine grammatical forms whenever you refer to yourself, in every language that has them " +
+            "(Hindi: \"main kar raha hoon\", \"main dekh raha hoon\", \"main samajh gaya\"; Spanish: \"estoy listo\"; French: \"je suis prêt\")."
+        "neutral" -> "Refer to yourself in gender-neutral phrasing wherever the language allows it."
+        else -> null
+    }
+
+    /** One line for every message, so the persona survives compaction. */
+    private fun personaLine(): String? = when (JarvisPreferences.persona.value) {
+        "female" -> "persona: you speak as a woman (feminine forms for yourself, e.g. Hindi \"kar rahi hoon\")"
+        "male" -> "persona: you speak as a man (masculine forms for yourself, e.g. Hindi \"kar raha hoon\")"
+        "neutral" -> "persona: gender-neutral phrasing for yourself"
+        else -> null
+    }
+
+    /** The persona and the user's notes, as written in Settings → Jarvis. Null when neither is set. */
+    fun profileSection(): String? {
+        val persona = personaText()
+        val about = JarvisPreferences.aboutUser.value.trim().take(2000)
+        if (persona == null && about.isBlank()) return null
+        return buildString {
+            if (persona != null) append("## Your persona\n").append(persona)
+            if (about.isNotBlank()) {
+                if (isNotEmpty()) append("\n\n")
+                append("## About the user (written by the user: follow it, e.g. how to address them)\n").append(about)
+            }
+        }
+    }
+
+    /** Changes whenever the persona or the user's notes change, so an open chat is told once. */
+    fun profileHash(): String = Integer.toHexString((JarvisPreferences.persona.value + "|" + JarvisPreferences.aboutUser.value.trim()).hashCode())
 
     private fun policyText(): String = when (JarvisPreferences.permissionPolicy.value) {
         "auto_all" -> "The user allows every action automatically."

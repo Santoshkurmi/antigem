@@ -87,6 +87,24 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                 "big jobs run as tasks in their own chats.")
         }
 
+        // ---------------------------------------------------------------- personality and the user's notes
+        JCard(cardBg, cardBorder, "Personality and you") {
+            val persona by P.persona.state.collectAsState()
+            Text("Jarvis speaks as", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("" to "Not set", "female" to "Female", "male" to "Male", "neutral" to "Neutral"), persona) { P.persona.set(it) }
+            JHint("The grammatical gender Jarvis uses for itself. It matters in languages like Hindi (“main kar rahi hoon” / “main kar raha hoon”). " +
+                "Pick a matching voice under Voice output.")
+            val about by P.aboutUser.state.collectAsState()
+            OutlinedTextField(
+                value = about, onValueChange = { P.aboutUser.set(it.take(2000)) },
+                label = { Text("About you and extra instructions") },
+                placeholder = { Text("e.g. Call me Santosh. Reply in Hinglish. I mostly work on the antigem project.", fontSize = 12.sp) },
+                modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 8
+            )
+            JHint("Sent with the first message of every new Jarvis chat. When you change it (or the persona), the open chat is told with your next message. " +
+                "Jarvis' own memory note (Jarvis chat card below) is separate: Jarvis edits that one itself.")
+        }
+
         // ---------------------------------------------------------------- setup checklist
         if (enabled) {
             JCard(cardBg, cardBorder, "Setup for ${if (agent == AgentKind.CLAUDE) "Claude Code" else "Antigravity"}") {
@@ -192,28 +210,61 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
 
         // ---------------------------------------------------------------- listening and sending
         JCard(cardBg, cardBorder, "Listening and sending") {
-            val mode by P.sendMode.state.collectAsState()
-            Text("When what you say is sent", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            JChips(listOf("smart" to "Smart", "pause" to "After a pause", "word" to "Send word", "manual" to "Manual"), mode) { P.sendMode.set(it) }
-            JHint(when (mode) {
-                "pause" -> "Sent after a fixed pause. A bar on the card fills up while it counts down; tap Wait to keep talking."
-                "word" -> "Sent only when you end with a send word (the word itself is not sent). Best for noisy places or slow thinkers."
-                "manual" -> "Sent when you tap Send, press the headset button or the notification's Send. Nothing is sent by itself."
-                else -> "Sent after a pause, but Jarvis waits longer when you sound unfinished (“…and”, “…the”), and less for short answers."
-            })
-            if (mode == "smart" || mode == "pause") {
+            JHint("You can always send with the Send button on the card, the headset button or the notification's Send.")
+            val auto by P.autoSend.state.collectAsState()
+            JSwitch(
+                "Send automatically when I pause",
+                "Off: nothing is sent while you take a break to think. Say a send phrase or tap Send when you're done.",
+                auto
+            ) { P.autoSend.set(it) }
+            if (auto) {
+                val mode by P.sendMode.state.collectAsState()
+                JChips(listOf("smart" to "Smart pause", "pause" to "Fixed pause"), if (mode == "pause") "pause" else "smart") { P.sendMode.set(it) }
+                JHint(if (mode == "pause") "Sent after a fixed pause. A bar on the card fills while it counts down; tap Wait to keep talking."
+                else "Jarvis waits longer when you sound unfinished (“…and”, “…the”) and less for short answers. Tap Wait to keep talking.")
                 val silence by P.silenceMs.state.collectAsState()
                 JSlider("Pause that ends your sentence", silence.toFloat(), 800f..3500f, "%.1f s".format(silence / 1000f)) { P.silenceMs.set(it.toInt()) }
+            } else {
+                val answers by P.autoSendAnswers.state.collectAsState()
+                JSwitch("Answers to Jarvis' questions send by themselves", "“Yes”, “the second one”: sent after a short pause when Jarvis just asked you something.", answers) { P.autoSendAnswers.set(it) }
             }
-            if (mode == "word") {
-                val words by P.sendWords.state.collectAsState()
-                JField("Send words, comma separated", words) { P.sendWords.set(it.lowercase()) }
+
+            // send phrases
+            val sendOn by P.sendPhrasesOn.state.collectAsState()
+            val sendRaw by P.sendPhrases.state.collectAsState()
+            val cancelOn by P.cancelPhrasesOn.state.collectAsState()
+            val cancelRaw by P.cancelPhrases.state.collectAsState()
+            val sendList = remember(sendRaw) { com.example.gemini.data.jarvis.JarvisPhrases.parse(sendRaw) }
+            val cancelList = remember(cancelRaw) { com.example.gemini.data.jarvis.JarvisPhrases.parse(cancelRaw) }
+            JSwitch("Send with a phrase", "End with one of these and it is sent at once (the phrase itself is not sent).", sendOn) { P.sendPhrasesOn.set(it) }
+            if (sendOn) {
+                PhraseEditor(sendList, cancelList, "cancel", com.example.gemini.data.jarvis.JarvisPhrases.DEFAULT_SEND) {
+                    P.sendPhrases.set(com.example.gemini.data.jarvis.JarvisPhrases.format(it))
+                }
             }
-            val conv by P.conversationMode.state.collectAsState()
-            JSwitch("Keep listening after Jarvis answers", "Opens the microphone again so you can reply without touching anything.", conv) { P.conversationMode.set(it) }
-            if (conv) {
+            JSwitch("Cancel with a phrase", "End with one of these and nothing is sent.", cancelOn) { P.cancelPhrasesOn.set(it) }
+            if (cancelOn) {
+                PhraseEditor(cancelList, sendList, "send", com.example.gemini.data.jarvis.JarvisPhrases.DEFAULT_CANCEL) {
+                    P.cancelPhrases.set(com.example.gemini.data.jarvis.JarvisPhrases.format(it))
+                }
+            }
+            if (sendOn || cancelOn) {
+                JHint("A phrase only counts at the very end. “…and send it”, “…to send it”, “can you do it” and “don't send it” stay part of your " +
+                    "message. Short or everyday phrases (“send”, “over”, “do it”) only count when you say them on their own after a short pause. " +
+                    "When a phrase keeps firing by mistake, remove it or add a longer sentence instead (e.g. “jarvis send it now”).")
+            }
+            val listenAfter by P.listenAfter.state.collectAsState()
+            Text("After Jarvis speaks, listen for your reply", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("auto" to "When it expects an answer", "always" to "Always", "never" to "Never"), listenAfter) { P.listenAfter.set(it) }
+            JHint(when (listenAfter) {
+                "always" -> "The microphone opens after every answer while you are talking to Jarvis."
+                "never" -> "The microphone only opens when you tap or wake Jarvis (and when it asks you something it needs right away)."
+                else -> "Jarvis decides: after “Done, want me to run it?” the microphone opens; after “Saved the file.” it does not. Questions always open it."
+            })
+            if (listenAfter != "never") {
                 val follow by P.followUpSeconds.state.collectAsState()
-                JSlider("Follow-up window", follow.toFloat(), 3f..20f, "$follow s") { P.followUpSeconds.set(it.toInt()) }
+                JSlider("Wait for a reply", follow.toFloat(), 3f..20f, "$follow s") { P.followUpSeconds.set(it.toInt()) }
+                JHint("If you say nothing at all in this time, the microphone closes with a soft tone.")
             }
             val maxListen by P.maxListenSeconds.state.collectAsState()
             JSlider("Longest single message", maxListen.toFloat(), 20f..240f, "$maxListen s") { P.maxListenSeconds.set(it.toInt()) }
@@ -401,6 +452,57 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
 }
 
 // ---------------------------------------------------------------------------- small building blocks
+
+/**
+ * Editable list of phrases (one chip each, tap × to remove), a box to add a word or a whole sentence, and reset.
+ * [other] is the opposite list (send ↔ cancel): the same phrase cannot be in both.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PhraseEditor(phrases: List<String>, other: List<String>, otherName: String, defaults: List<String>, onChange: (List<String>) -> Unit) {
+    val J = com.example.gemini.data.jarvis.JarvisPhrases
+    var input by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf<String?>(null) }
+    fun add() {
+        val p = J.normalize(input)
+        if (p.isBlank()) return
+        note = when {
+            p in phrases -> "“$p” is already in the list."
+            p in other -> "“$p” is already a $otherName phrase. Remove it there first."
+            else -> {
+                onChange(phrases + p)
+                input = ""
+                if (J.isRisky(p)) "Added. “$p” is short or common, so it only counts when said on its own after a short pause." else null
+            }
+        }
+    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        phrases.forEach { p ->
+            InputChip(
+                selected = false,
+                onClick = { onChange(phrases - p) },
+                label = { Text(p, fontSize = 12.sp) },
+                trailingIcon = { Text("×", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)) }
+            )
+        }
+        if (phrases.isEmpty()) Text("No phrases yet.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = input, onValueChange = { input = it; note = null },
+            label = { Text("Add a word or a whole sentence", fontSize = 12.sp) }, singleLine = true,
+            modifier = Modifier.weight(1f),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { add() })
+        )
+        Spacer(Modifier.width(8.dp))
+        OutlinedButton(onClick = { add() }, enabled = input.isNotBlank()) { Text("Add", fontSize = 12.sp) }
+    }
+    note?.let { Text(it, fontSize = 12.sp, color = Color(0xFFF59E0B)) }
+    if (phrases != defaults.map { J.normalize(it) }) {
+        TextButton(onClick = { onChange(defaults.filter { J.normalize(it) !in other }); note = null }) { Text("Reset to defaults", fontSize = 12.sp) }
+    }
+}
 
 @Composable
 private fun JCard(bg: Color, border: BorderStroke, title: String, content: @Composable ColumnScope.() -> Unit) {

@@ -58,7 +58,7 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit) {
     val steps by JarvisController.steps.collectAsState()
     val handsFree by JarvisPreferences.handsFree.state.collectAsState()
     val quiet by JarvisPreferences.quietMode.state.collectAsState()
-    val sendMode by JarvisPreferences.sendMode.state.collectAsState()
+    val autoSend by JarvisPreferences.autoSend.state.collectAsState()
     val screenOn by JarvisPreferences.keepScreenOn.state.collectAsState()
     val hotword by JarvisPreferences.hotword.state.collectAsState()
     val agent by JarvisPreferences.agent.state.collectAsState()
@@ -113,9 +113,8 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 QuickChip("Hands-free", if (handsFree) "On" else "Off", handsFree) { JarvisController.setHandsFree(!handsFree) }
                 QuickChip("Voice", if (quiet) "Quiet" else "Speaking", !quiet) { JarvisPreferences.quietMode.set(!quiet) }
-                QuickChip("Send", sendLabel(sendMode), true) {
-                    val order = listOf("smart", "pause", "word", "manual")
-                    JarvisPreferences.sendMode.set(order[(order.indexOf(sendMode) + 1).mod(order.size)])
+                QuickChip("Send", if (autoSend) "Auto on pause" else "Manual / phrase", autoSend) {
+                    JarvisPreferences.autoSend.set(!autoSend)
                 }
                 QuickChip("Wake", if (hotword == "phrase") "Phrase" else "Button", hotword == "phrase") {
                     JarvisPreferences.hotword.set(if (hotword == "phrase") "push" else "phrase")
@@ -195,13 +194,6 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit) {
             }
         }
     }
-}
-
-private fun sendLabel(mode: String) = when (mode) {
-    "pause" -> "After pause"
-    "word" -> "Send word"
-    "manual" -> "Manual"
-    else -> "Smart"
 }
 
 @Composable

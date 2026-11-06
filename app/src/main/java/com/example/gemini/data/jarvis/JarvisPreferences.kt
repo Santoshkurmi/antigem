@@ -83,6 +83,17 @@ object JarvisPreferences {
     /** Quiet mode: Jarvis shows its answers on the card instead of saying them (meetings, night). */
     val quietMode = pref("quiet_mode", false)
 
+    // ---- personality and the user's own notes (sent with the first message of every Jarvis chat)
+    /**
+     * Whom Jarvis speaks as: "female", "male", "neutral" or "" (not set). It decides the grammatical gender Jarvis uses
+     * for itself, which matters in languages like Hindi ("kar rahi hoon" / "kar raha hoon").
+     */
+    val persona = pref("persona", "")
+    /** What the user wants Jarvis to know: what to call them, language, context, standing instructions. */
+    val aboutUser = pref("about_user", "")
+    /** "<chat id>|<hash>": the chat that already knows the current persona and notes. */
+    val profileSentFor = pref("profile_sent_for", "")
+
     // ---- voice input
     /** "auto" (the Jarvis agent's own dictation), "claude", "agy" or "android". */
     val sttEngine = pref("stt_engine", "auto")
@@ -95,17 +106,32 @@ object JarvisPreferences {
     val wakePhrase = pref("wake_phrase", "hey jarvis")
     /** "phrase" (the whole phrase must be heard) or "name" (the name alone, e.g. "Jarvis, …", wakes it). */
     val wakeMatch = pref("wake_match", "phrase")
-    /** Keep listening for a follow-up after Jarvis speaks. */
+    /** Old on/off switch of follow-up listening; replaced by [listenAfter], kept so old settings still load. */
     val conversationMode = pref("conversation_mode", true)
-    /** How long the microphone stays open for a follow-up after Jarvis spoke (seconds). */
+    /**
+     * Opening the microphone after Jarvis spoke: "auto" (when Jarvis expects an answer: the model decides with
+     * jarvis_speak listen_after, and a question always counts), "always" (after every answer while you are talking to
+     * it) or "never" (only jarvis_ask still listens).
+     */
+    val listenAfter = pref("listen_after", "auto")
+    /** How long the microphone waits for a reply after Jarvis spoke; no word at all in this time closes it (seconds). */
     val followUpSeconds = pref("follow_up_s", 8)
     /**
-     * When what you said is sent: "smart" (after a pause, longer when the sentence sounds unfinished), "pause" (after a
-     * fixed pause), "word" (only when you end with a send word, e.g. "over"), "manual" (only on Send / headset button).
+     * Send by itself when you pause. Off (the default): what you say is sent only by a send phrase, the Send button, the
+     * headset button or the notification, so taking a break to think never sends half a sentence.
      */
+    val autoSend = pref("auto_send", false)
+    /** How the pause is judged when [autoSend] is on: "smart" (longer when the sentence sounds unfinished) or "pause" (fixed). */
     val sendMode = pref("send_mode", "smart")
-    /** Send words for the "word" mode, separated by commas; the word itself is not sent. */
-    val sendWords = pref("send_words", "over, send it, go ahead, that's it")
+    /** Short answers to Jarvis' own questions ("yes", "the second one") send after a pause even with [autoSend] off. */
+    val autoSendAnswers = pref("auto_send_answers", true)
+    /** Saying one of [sendPhrases] at the end sends at once (the phrase itself is not sent). */
+    val sendPhrasesOn = pref("send_phrases_on", true)
+    /** One phrase per line; see [JarvisPhrases] for when a phrase counts. */
+    val sendPhrases = pref("send_phrases", JarvisPhrases.DEFAULT_SEND.joinToString("\n"))
+    /** Saying one of [cancelPhrases] at the end throws the capture away. */
+    val cancelPhrasesOn = pref("cancel_phrases_on", true)
+    val cancelPhrases = pref("cancel_phrases", JarvisPhrases.DEFAULT_CANCEL.joinToString("\n"))
     /** Longest single capture (seconds); what was heard is sent then. */
     val maxListenSeconds = pref("max_listen_s", 90)
     /**

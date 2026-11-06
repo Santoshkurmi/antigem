@@ -87,9 +87,13 @@ The full guide is docs/remote-server.md in the AntiGem repository.
 Jarvis (Settings → Jarvis): talk to the app hands-free. Triggers: tap the orb, the notification's Talk button, the Quick Settings
 tile "Jarvis", a headset / Bluetooth button (one press talks or sends, two presses stop), or a wake phrase while hands-free is on.
 Long-press the orb for the Jarvis panel (tasks, conversation, typing, quick switches).
-Sending: smart (after a pause, longer when you sound unfinished), pause (fixed pause), word (end with a send word such as "over"),
-manual (Send button or headset button). Follow-up listening keeps the mic open after an answer; the side-talk filter ignores what
-you say to other people. Quiet mode shows answers instead of speaking. Keep-screen-on, orb size and look are in the Look section.
+Sending: by default nothing is sent while you pause to think; end with a send phrase ("send it", "send kar do", "bhej do") or tap
+Send / press the headset button. A cancel phrase ("scratch that", "never mind", "rehne do") throws the message away. Both phrase
+lists are editable in Settings → Jarvis → Listening and sending, where "Send automatically when I pause" can also be switched on.
+After Jarvis speaks it listens for a reply when it expects one (or always / never); with no word at all for a few seconds the
+mic closes. Settings → Jarvis → Personality and you: whom Jarvis speaks as (female, male, neutral: matters in Hindi and similar
+languages) and notes about you (what to call you, language, context), sent with the first message of every Jarvis chat.
+The side-talk filter ignores what you say to other people. Quiet mode shows answers instead of speaking. Keep-screen-on, orb size and look are in the Look section.
 Jarvis' own options can be changed by voice (jarvis_set_setting keys starting with jarvis_).
 """.trim()),
             Entry("tasks", listOf("task", "background", "monitor", "manager", "running", "progress", "status", "redirect"), """
