@@ -39,26 +39,6 @@ import com.example.gemini.theme.QuotaRed
 import com.example.gemini.theme.isAppInDarkTheme
 import com.example.gemini.ui.components.ClaudeAccent
 
-/** Uppercase group label used to separate Antigravity / Claude Code / App settings. */
-@Composable
-fun SettingsGroupHeader(title: String, accent: Color, subtitle: String? = null, modifier: Modifier = Modifier) {
-    Column(modifier = modifier.padding(top = 10.dp, bottom = 2.dp, start = 4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(accent))
-            Spacer(Modifier.width(8.dp))
-            Text(title.uppercase(), fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = accent, letterSpacing = 1.sp)
-        }
-        if (subtitle != null) {
-            Text(
-                subtitle,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                modifier = Modifier.padding(start = 16.dp, top = 1.dp)
-            )
-        }
-    }
-}
-
 @Composable
 fun claudeCardColor(): Color = com.example.gemini.theme.AppColors.card
 

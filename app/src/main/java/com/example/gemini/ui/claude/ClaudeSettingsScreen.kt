@@ -126,9 +126,9 @@ class ClaudeSettingsDeps(
 
 private val prettyJson = Json { prettyPrint = true }
 
-/** Claude Code cards for the main settings menu (each opens one page). */
+/** Claude Code's own settings page: a list of rows, each opening one page (Settings → Claude Code). */
 @Composable
-fun ClaudeSettingsGroup(deps: ClaudeSettingsDeps, onOpen: (ClaudeSettingsPage) -> Unit) {
+fun ClaudeSettingsGroup(deps: ClaudeSettingsDeps, cardBg: Color, onOpen: (ClaudeSettingsPage) -> Unit) {
     val status by deps.account.status.collectAsState()
     val settings by deps.config.settings.collectAsState()
     val mcp by deps.config.mcpServers.collectAsState()
@@ -144,27 +144,25 @@ fun ClaudeSettingsGroup(deps: ClaudeSettingsDeps, onOpen: (ClaudeSettingsPage) -
         else -> state.label
     }
     val accountColor = state.dotColor
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ClaudeNavCard(
-            Icons.Outlined.AccountCircle,
-            ClaudeSettingsPage.ACCOUNT.title,
-            listOfNotNull(auth?.email, status?.version).joinToString(" · ").ifBlank { ClaudeSettingsPage.ACCOUNT.subtitle },
-            badge = accountBadge,
-            badgeColor = accountColor
-        ) { onOpen(ClaudeSettingsPage.ACCOUNT) }
-        ClaudeNavCard(Icons.Outlined.Tune, ClaudeSettingsPage.DEFAULTS.title, ClaudeSettingsPage.DEFAULTS.subtitle) { onOpen(ClaudeSettingsPage.DEFAULTS) }
-        val providers by deps.backend.providers.collectAsState()
-        ClaudeNavCard(Icons.Outlined.Cloud, ClaudeSettingsPage.PROVIDERS.title, ClaudeSettingsPage.PROVIDERS.subtitle,
-            badge = providers.size.takeIf { it > 0 }?.let { "$it added" }) { onOpen(ClaudeSettingsPage.PROVIDERS) }
-        val allowCount = settings?.let { deps.config.rules("allow").size } ?: 0
-        ClaudeNavCard(Icons.Outlined.Security, ClaudeSettingsPage.PERMISSIONS.title, ClaudeSettingsPage.PERMISSIONS.subtitle,
-            badge = allowCount.takeIf { it > 0 }?.let { "$it allowed" }) { onOpen(ClaudeSettingsPage.PERMISSIONS) }
-        ClaudeNavCard(Icons.Outlined.Hub, ClaudeSettingsPage.MCP.title, ClaudeSettingsPage.MCP.subtitle,
-            badge = mcp.size.takeIf { it > 0 }?.let { "$it servers" }) { onOpen(ClaudeSettingsPage.MCP) }
-        ClaudeNavCard(Icons.Outlined.Extension, ClaudeSettingsPage.PLUGINS.title, ClaudeSettingsPage.PLUGINS.subtitle) { onOpen(ClaudeSettingsPage.PLUGINS) }
-        ClaudeNavCard(Icons.Outlined.Description, ClaudeSettingsPage.MEMORY.title, ClaudeSettingsPage.MEMORY.subtitle) { onOpen(ClaudeSettingsPage.MEMORY) }
-        ClaudeNavCard(Icons.Outlined.Code, ClaudeSettingsPage.ADVANCED.title, ClaudeSettingsPage.ADVANCED.subtitle) { onOpen(ClaudeSettingsPage.ADVANCED) }
-    }
+    val providers by deps.backend.providers.collectAsState()
+    val allowCount = settings?.let { deps.config.rules("allow").size } ?: 0
+    fun row(page: ClaudeSettingsPage, icon: androidx.compose.ui.graphics.vector.ImageVector, value: String? = null, valueColor: Color? = null) =
+        com.example.gemini.ui.settings.SettingsRowItem(icon, ClaudeAccent, page.title, value, valueColor) { onOpen(page) }
+    com.example.gemini.ui.settings.SettingsRowList(
+        cardBg = cardBg,
+        groups = listOf(
+            listOf(row(ClaudeSettingsPage.ACCOUNT, Icons.Outlined.AccountCircle, accountBadge, accountColor)),
+            listOf(
+                row(ClaudeSettingsPage.DEFAULTS, Icons.Outlined.Tune),
+                row(ClaudeSettingsPage.PROVIDERS, Icons.Outlined.Cloud, providers.size.takeIf { it > 0 }?.let { "$it added" }),
+                row(ClaudeSettingsPage.PERMISSIONS, Icons.Outlined.Security, allowCount.takeIf { it > 0 }?.let { "$it allowed" }),
+                row(ClaudeSettingsPage.MCP, Icons.Outlined.Hub, mcp.size.takeIf { it > 0 }?.let { "$it servers" }),
+                row(ClaudeSettingsPage.PLUGINS, Icons.Outlined.Extension),
+                row(ClaudeSettingsPage.MEMORY, Icons.Outlined.Description)
+            ),
+            listOf(row(ClaudeSettingsPage.ADVANCED, Icons.Outlined.Code))
+        )
+    )
 }
 
 /** One Claude settings page (the settings top bar shows its title); [onBack] returns to the main settings menu. */

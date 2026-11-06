@@ -10,7 +10,7 @@ object JarvisAppGuide {
 
     private fun settingsPages(): String = runCatching {
         com.example.gemini.ui.settings.SettingsSection.values()
-            .filter { it != com.example.gemini.ui.settings.SettingsSection.MAIN }
+            .filter { it != com.example.gemini.ui.settings.SettingsSection.MAIN && it != com.example.gemini.ui.settings.SettingsSection.CLAUDE_PAGE }
             .joinToString("\n") { "- ${it.title} (jarvis_open_settings section=${it.name.lowercase()}): ${it.subtitle}" }
     }.getOrDefault("")
 
@@ -36,11 +36,11 @@ model, effort, thinking and permission mode any time (jarvis_set_model / set_eff
 """.trim()),
             Entry("antigravity", listOf("antigravity", "agy", "google", "quota", "gemini", "sign in google", "hub"), """
 Antigravity: the app talks to the agy language server (the hub). Sign in with Google from the account area; the model picker
-shows live quota. Settings → Commands & Permissions has the auto-run policy, the sandbox and tool approvals; per-project rules
-are there too. MCP servers, skills and Google plugins are in Settings → MCP Servers and Skills & Plugins.
+shows live quota. Settings → Antigravity → Commands & Permissions has the auto-run policy, the sandbox and tool approvals; per-project rules
+are there too. MCP servers, skills and Google plugins are in Settings → Antigravity → MCP Servers and Skills & Plugins.
 """.trim()),
             Entry("mcp", listOf("mcp", "server", "tool", "jarvis mcp", "browser mcp", "terminal mcp", "android mcp", "notes mcp", "add mcp", "preset"), """
-MCP servers give the agents tools. Antigravity: Settings → MCP Servers. Claude Code: Settings → Claude Code → MCP. Both have
+MCP servers give the agents tools. Antigravity: Settings → Antigravity → MCP Servers. Claude Code: Settings → Claude Code → MCP. Both have
 one-tap presets for the built-in servers: Browser (open pages, click, type, read, screenshots), Terminal (sessions, commands,
 output), Android (see and control the phone; must be allowed in Utilities → Android Automation), Notes & To-dos, Custom Plugin,
 Plugin Developer, Stitch, and Jarvis (this voice control). The Jarvis server must be added to the agent that runs Jarvis:
@@ -75,7 +75,7 @@ Porcelain (default), Lavender, Sky (these three recommended), Sakura, Mint, Line
 Obsidian, Graphite (these three recommended), Midnight, High Contrast, Amber Night (AntiGem's original dark look), Mocha, Neon City,
 Aurora, Nord, Dracula, Velvet, Deep Ocean, Ember, Forest, Sunset, Solarized Dark, plus custom ones; the chat, the IDE editor, the terminal and the code blocks all follow it), chat font size, grouping chats by workspace, the floating switcher and the floating bubble.
 Jarvis switches with jarvis_set_setting key=theme (or theme_mode) when the user allowed app settings. New themes are made by any chat
-with the Theme MCP (Settings → MCP Servers → Theme preset): "create a neon cyberpunk dark theme".
+with the Theme MCP (Theme preset in Settings → Antigravity → MCP Servers or Claude Code → MCP): "create a neon cyberpunk dark theme".
 """.trim()),
             Entry("backups", listOf("backup", "restore", "rootfs", "uninstall", "clear data", "update", "apk"), """
 Settings → Backups & Restore backs up and restores the Linux rootfs, projects and chat history to phone storage. Data Loss

@@ -1,6 +1,5 @@
 package com.example.gemini.ui.settings
 
-import com.example.gemini.ui.claude.SettingsGroupHeader
 import com.example.gemini.ui.components.ClaudeAccent
 import android.Manifest
 import android.content.ComponentName
@@ -95,7 +94,10 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     BACKUPS("Backups & Restore", "Backup rootfs environment and AGY chat histories"),
     DATA_PROTECTION("Data Loss Protection", "Uninstall shield & App Info clear data protection"),
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
+    ANTIGRAVITY("Antigravity", "MCP servers, skills & plugins, commands & permissions"),
     CLAUDE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
+    /** One Claude Code page (which one: the dialog's claudePage); not a page of its own for Jarvis. */
+    CLAUDE_PAGE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
     AGENTS("Agents", "Run Antigravity, Claude Code or both"),
     JARVIS("Jarvis", "Hands-free voice control of the whole app"),
     DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD"),
@@ -105,7 +107,12 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     ABOUT("About & Info", "App version, package details, and bridge export");
 
     /** Where Back goes from this section. */
-    val parent: SettingsSection get() = if (this == ADB_CONNECT || this == ANDROID_AUTOMATION) UTILITIES else MAIN
+    val parent: SettingsSection get() = when (this) {
+        ADB_CONNECT, ANDROID_AUTOMATION -> UTILITIES
+        MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
+        CLAUDE_PAGE -> CLAUDE
+        else -> MAIN
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -247,7 +254,7 @@ fun SettingsDialog(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var currentSection by remember { mutableStateOf(initialSection ?: if (initialClaudePage != null && claude != null) SettingsSection.CLAUDE else SettingsSection.MAIN) }
+    var currentSection by remember { mutableStateOf(initialSection ?: if (initialClaudePage != null && claude != null) SettingsSection.CLAUDE_PAGE else SettingsSection.MAIN) }
     var claudePage by remember { mutableStateOf(initialClaudePage ?: com.example.gemini.ui.claude.ClaudeSettingsPage.ACCOUNT) }
     LaunchedEffect(initialSection) { if (initialSection != null) currentSection = initialSection }
     // Hoisted so the main list keeps its position while a sub-section is open
@@ -281,7 +288,7 @@ fun SettingsDialog(
             TopAppBar(
                 title = {
                     // a Claude Code page names itself here (it has no header of its own)
-                    val isClaudePage = currentSection == SettingsSection.CLAUDE && claude != null
+                    val isClaudePage = currentSection == SettingsSection.CLAUDE_PAGE && claude != null
                     Column {
                         Text(
                             text = if (isClaudePage) "Claude Code · ${claudePage.title}" else currentSection.title,
@@ -357,29 +364,16 @@ fun SettingsDialog(
                 when (section) {
                     SettingsSection.MAIN -> MainSettingsMenu(
                         themeMode = themeMode,
-                        chatFontScale = chatFontScale,
                         isServerOnline = isServerOnline,
                         isBridgeOnline = isBridgeOnline,
                         useSshTerminal = useSshTerminal,
                         mcpServers = mcpServers,
-                        allSkills = allSkills,
-                        installedPlugins = installedPlugins,
-                        commandAutoExecutionPolicy = commandAutoExecutionPolicy,
-                        commandSandboxEnabled = commandSandboxEnabled,
                         isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
                         isLocalToolsInstalled = isLocalToolsInstalled,
                         cardBg = cardBg,
-                        cardBorder = cardBorder,
                         scrollState = mainMenuScrollState,
                         enabledAgents = enabledAgents,
-                        claudeGroup = claude?.let { deps ->
-                            {
-                                com.example.gemini.ui.claude.ClaudeSettingsGroup(deps) { page ->
-                                    claudePage = page
-                                    currentSection = SettingsSection.CLAUDE
-                                }
-                            }
-                        },
+                        claude = claude,
                         onNavigate = { currentSection = it }
                     )
 
@@ -552,12 +546,25 @@ fun SettingsDialog(
                         cardBg = cardBg,
                         cardBorder = cardBorder
                     )
+                    SettingsSection.ANTIGRAVITY -> AntigravitySettingsMenu(
+                        mcpServers = mcpServers,
+                        allSkills = allSkills,
+                        installedPlugins = installedPlugins,
+                        commandAutoExecutionPolicy = commandAutoExecutionPolicy,
+                        cardBg = cardBg,
+                        onNavigate = { currentSection = it }
+                    )
                     SettingsSection.CLAUDE -> if (claude != null) {
-                        com.example.gemini.ui.claude.ClaudeSettingsScreen(claude, claudePage) { currentSection = SettingsSection.MAIN }
+                        com.example.gemini.ui.claude.ClaudeSettingsGroup(claude, cardBg) { page ->
+                            claudePage = page
+                            currentSection = SettingsSection.CLAUDE_PAGE
+                        }
+                    }
+                    SettingsSection.CLAUDE_PAGE -> if (claude != null) {
+                        com.example.gemini.ui.claude.ClaudeSettingsScreen(claude, claudePage) { currentSection = SettingsSection.CLAUDE }
                     }
                     SettingsSection.UTILITIES -> UtilitiesSubScreen(
                         cardBg = cardBg,
-                        cardBorder = cardBorder,
                         onNavigate = { currentSection = it }
                     )
                     SettingsSection.ADB_CONNECT -> AdbConnectScreen(
@@ -579,276 +586,137 @@ fun SettingsDialog(
     }
 }
 
+/**
+ * The main settings page: rounded groups of rows (no group titles, no descriptions), like a phone's settings app.
+ * Antigravity and Claude Code are one row each that open their own page.
+ */
 @Composable
 private fun MainSettingsMenu(
     themeMode: String,
-    chatFontScale: Float,
     isServerOnline: Boolean,
     isBridgeOnline: Boolean,
     useSshTerminal: Boolean,
     mcpServers: List<com.example.gemini.domain.model.McpServerState>,
-    allSkills: List<com.example.gemini.data.remote.dto.SkillDefinitionDto> = emptyList(),
-    installedPlugins: List<com.example.gemini.data.remote.dto.InstalledPluginDto> = emptyList(),
-    commandAutoExecutionPolicy: String,
-    commandSandboxEnabled: Boolean,
     isFloatingDiagnosticsEnabled: Boolean = false,
     isLocalToolsInstalled: Boolean = false,
     cardBg: Color,
-    cardBorder: BorderStroke,
     scrollState: androidx.compose.foundation.ScrollState,
-    claudeGroup: (@Composable () -> Unit)? = null,
+    claude: com.example.gemini.ui.claude.ClaudeSettingsDeps? = null,
     enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = setOf(com.example.gemini.domain.model.AgentKind.AGY),
     onNavigate: (SettingsSection) -> Unit
 ) {
     val agyOn = com.example.gemini.domain.model.AgentKind.AGY in enabledAgents
     val claudeOn = com.example.gemini.domain.model.AgentKind.CLAUDE in enabledAgents
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        SettingsGroupHeader("Agents", MaterialTheme.colorScheme.primary, "Which agents run, and the local server they share")
-        SettingsCategoryCard(
-            icon = Icons.Outlined.SmartToy,
-            iconTint = MaterialTheme.colorScheme.primary,
-            title = "Agents",
-            subtitle = when {
-                agyOn && claudeOn -> "Antigravity and Claude Code"
-                claudeOn -> "Claude Code only"
-                else -> "Antigravity only"
-            },
-            badgeText = "${enabledAgents.size} on",
-            badgeColor = MaterialTheme.colorScheme.primary,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.AGENTS) }
-        )
-        val jarvisOn by com.example.gemini.data.jarvis.JarvisPreferences.enabled.state.collectAsState()
-        SettingsCategoryCard(
-            icon = Icons.Outlined.RecordVoiceOver,
-            iconTint = com.example.gemini.theme.AppColors.accentTeal,
-            title = "Jarvis",
-            subtitle = "Hands-free voice control: talk to your agents, open projects, answer permissions",
-            badgeText = if (jarvisOn) "On" else "Off",
-            badgeColor = if (jarvisOn) QuotaGreen else Color.Gray,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.JARVIS) }
-        )
-        // Section 2: Servers & Network
-        val (serverBadge, serverColor) = when {
-            isServerOnline && isBridgeOnline -> "Online" to QuotaGreen
-            isServerOnline || isBridgeOnline -> "Partial" to com.example.gemini.theme.AppColors.warning
-            else -> "Offline" to Color.Red
-        }
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Dns,
-            iconTint = serverColor,
-            title = "Servers & Connectivity",
-            subtitle = "AGY Hub & IDE Bridge endpoints",
-            badgeText = serverBadge,
-            badgeColor = serverColor,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.SERVERS) }
-        )
+    val c = com.example.gemini.theme.AppColors
+    fun row(section: SettingsSection, icon: ImageVector, tint: Color, value: String? = null, valueColor: Color? = null) =
+        SettingsRowItem(icon, tint, section.title, value, valueColor) { onNavigate(section) }
 
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Extension,
-            iconTint = MaterialTheme.colorScheme.primary,
-            title = "Custom AntiGem Plugins",
-            subtitle = "Install ZIP, update, rename, enable or disable plugins with MCP tools and skills",
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.WEBVIEW_EXTENSIONS) }
-        )
-
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Terminal,
-            iconTint = MaterialTheme.colorScheme.primary,
-            title = "Slash Commands",
-            subtitle = "Create / commands that expand into longer prompts or attach a plugin skill",
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.SLASH_COMMANDS) }
-        )
-
-        if (agyOn) {
-        SettingsGroupHeader("Antigravity", GeminiBlue, "Google Antigravity agent (agy hub)")
-        // Section 3: MCP Servers & Tools
-        val activeMcpCount = mcpServers.count { it.isEnabled }
-        val totalMcpCount = mcpServers.size
-        val mcpBadge = when {
-            totalMcpCount == 0 -> "0 Configured"
-            activeMcpCount > 0 -> "$activeMcpCount Active"
-            else -> "Disabled"
-        }
-        val mcpColor = when {
-            activeMcpCount > 0 -> QuotaGreen
-            totalMcpCount > 0 -> com.example.gemini.theme.AppColors.warning
-            else -> ClaudeTerracotta
-        }
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Extension,
-            iconTint = mcpColor,
-            title = "MCP Servers & Tools",
-            subtitle = if (totalMcpCount > 0) "$totalMcpCount server(s) • global mcp_config.json" else "Model Context Protocol tools & integrations",
-            badgeText = mcpBadge,
-            badgeColor = mcpColor,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.MCP) }
-        )
-
-        // Section 3.5: Skills & Plugins
-        val totalSkillsCount = allSkills.size
-        val totalPluginsCount = installedPlugins.size
-        val skillsBadge = "$totalSkillsCount Skills • $totalPluginsCount Plugins"
-        SettingsCategoryCard(
-            icon = Icons.Outlined.AutoAwesome,
-            iconTint = GeminiBlue,
-            title = "Skills & Plugins",
-            subtitle = "Installed skills, Google plugins catalog, and markdown guides",
-            badgeText = skillsBadge,
-            badgeColor = GeminiBlue,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.SKILLS_PLUGINS) }
-        )
-
-        // Section 5: Commands & Permissions
-        val (policyBadge, policyColor) = when {
-            commandAutoExecutionPolicy.contains("EAGER", ignoreCase = true) -> "⚡ Auto-Run" to QuotaGreen
-            commandAutoExecutionPolicy.contains("AUTO", ignoreCase = true) -> "🛡️ Smart Safety" to com.example.gemini.theme.AppColors.accentTeal
-            else -> "✋ Ask User" to com.example.gemini.theme.AppColors.warning
-        }
-        val sandboxSummary = if (commandSandboxEnabled) "Sandbox ON" else "Sandbox OFF"
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Security,
-            iconTint = policyColor,
-            title = "Commands & Permissions",
-            subtitle = "Policy: $policyBadge • $sandboxSummary",
-            badgeText = policyBadge,
-            badgeColor = policyColor,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.COMMANDS) }
-        )
-
-        }
-
-        if (claudeGroup != null && claudeOn) {
-            SettingsGroupHeader("Claude Code", ClaudeAccent, "Anthropic Claude Code CLI")
-            claudeGroup()
-        }
-
-        SettingsGroupHeader("App", MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), "Shared by both agents")
-        // Section 1: Appearance & Display
-        val themeLabel = when (themeMode) {
-            "DARK" -> "Dark Mode"
-            "LIGHT" -> "Light Mode"
-            else -> "Auto (System)"
-        }
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Palette,
-            iconTint = ClaudeTerracotta,
-            title = "Appearance & Theme",
-            subtitle = "${com.example.gemini.theme.ThemeManager.current.name} • $themeLabel • ${(chatFontScale * 100).toInt()}% text",
-            badgeText = themeLabel,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.APPEARANCE) }
-        )
-
-
-        // Section 5: Terminal & Shell
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Terminal,
-            iconTint = com.example.gemini.theme.AppColors.accentTeal,
-            title = "Terminal & Shell Execution",
-            subtitle = if (com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) "Runs on the remote server (SSH)" else if (useSshTerminal) "SSH Mode (Termux sshd)" else "Local Linux Environment",
-            badgeText = if (useSshTerminal || com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) "SSH" else "Local",
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.TERMINAL) }
-        )
-
-        // Section 5.5: Backups & Restore (only for rootfs installed app; these back up the phone, not a server)
-        if (isLocalToolsInstalled && !com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) {
-            SettingsCategoryCard(
-                icon = Icons.Outlined.Backup,
-                iconTint = GeminiBlue,
-                title = "Backups & Restore",
-                subtitle = "Backup rootfs environment and AGY chat histories",
-                badgeText = "Rootfs Active",
-                badgeColor = GeminiBlue,
-                cardBg = cardBg,
-                cardBorder = cardBorder,
-                onClick = { onNavigate(SettingsSection.BACKUPS) }
-            )
-        }
-
-        // Section 5.6: Data Loss Protection
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Security,
-            iconTint = com.example.gemini.theme.AppColors.success,
-            title = "Data Loss Protection",
-            subtitle = "Accidental uninstall shield & App Info clear data protection",
-            badgeText = "Shield",
-            badgeColor = com.example.gemini.theme.AppColors.success,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.DATA_PROTECTION) }
-        )
-
-        // Section 6: Diagnostics & Performance
-        val diagBadge = if (isFloatingDiagnosticsEnabled) "HUD ON" else "HUD OFF"
-        val diagColor = if (isFloatingDiagnosticsEnabled) QuotaGreen else Color.Gray
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Speed,
-            iconTint = if (isFloatingDiagnosticsEnabled) QuotaGreen else com.example.gemini.theme.AppColors.accentTeal,
-            title = "Diagnostics & Performance",
-            subtitle = if (isFloatingDiagnosticsEnabled) "Floating live metrics HUD enabled" else "Live network connections, active streams & thread HUD",
-            badgeText = diagBadge,
-            badgeColor = diagColor,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.DIAGNOSTICS) }
-        )
-
-        SettingsGroupHeader("Utilities", com.example.gemini.theme.AppColors.accentTeal, "Handy device tools")
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Handyman,
-            iconTint = com.example.gemini.theme.AppColors.accentTeal,
-            title = "Utilities",
-            subtitle = "ADB Connect, Android Automation",
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.UTILITIES) }
-        )
-
-        // Section 7: About & Info
-        val variantLabel = if (BuildConfig.IS_SHARED_USER_ID) "Shared UID" else "Standalone"
-        SettingsCategoryCard(
-            icon = Icons.Outlined.Info,
-            iconTint = com.example.gemini.theme.AppColors.accentAlt,
-            title = "About & Info",
-            subtitle = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • ${BuildConfig.APPLICATION_ID} [$variantLabel]",
-            badgeText = "v${BuildConfig.VERSION_NAME} ($variantLabel)",
-            badgeColor = if (BuildConfig.IS_SHARED_USER_ID) QuotaGreen else com.example.gemini.theme.AppColors.accentAlt,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.ABOUT) }
-        )
+    val (serverValue, serverColor) = when {
+        isServerOnline && isBridgeOnline -> "Online" to QuotaGreen
+        isServerOnline || isBridgeOnline -> "Partial" to c.warning
+        else -> "Offline" to c.danger
     }
+    val jarvisOn by com.example.gemini.data.jarvis.JarvisPreferences.enabled.state.collectAsState()
+    val activeMcp = mcpServers.count { it.isEnabled }
+
+    // Claude Code's row shows the account state (signed in / plan / signed out)
+    var claudeValue: String? = null
+    var claudeColor: Color? = null
+    if (claude != null && claudeOn) {
+        val status by claude.account.status.collectAsState()
+        val state by claude.account.state.collectAsState()
+        LaunchedEffect(Unit) { if (status == null) claude.account.refreshStatus() }
+        claudeValue = when (state) {
+            com.example.gemini.data.agent.claude.ClaudeStatus.READY ->
+                status?.auth?.subscriptionType?.let { com.example.gemini.ui.agents.claudePlanLabel(it) } ?: "Signed in"
+            com.example.gemini.data.agent.claude.ClaudeStatus.SIGNED_OUT -> "Signed out"
+            else -> state.label
+        }
+        claudeColor = state.dotColor
+    }
+
+    SettingsRowList(
+        scrollState = scrollState,
+        cardBg = cardBg,
+        groups = listOf(
+            listOf(
+                row(SettingsSection.APPEARANCE, Icons.Outlined.Palette, c.accentPink, com.example.gemini.theme.ThemeManager.current.name),
+                row(SettingsSection.SERVERS, Icons.Outlined.Dns, c.info, serverValue, serverColor)
+            ),
+            listOfNotNull(
+                row(SettingsSection.AGENTS, Icons.Outlined.SmartToy, MaterialTheme.colorScheme.primary, when {
+                    agyOn && claudeOn -> "Both"
+                    claudeOn -> "Claude Code"
+                    else -> "Antigravity"
+                }),
+                if (agyOn) row(SettingsSection.ANTIGRAVITY, Icons.Outlined.RocketLaunch, GeminiBlue,
+                    if (activeMcp > 0) "$activeMcp MCP" else null) else null,
+                if (claude != null && claudeOn) row(SettingsSection.CLAUDE, Icons.Outlined.AutoAwesome, ClaudeAccent, claudeValue, claudeColor) else null,
+                row(SettingsSection.JARVIS, Icons.Outlined.RecordVoiceOver, c.accentTeal, if (jarvisOn) "On" else "Off",
+                    if (jarvisOn) QuotaGreen else null)
+            ),
+            listOf(
+                row(SettingsSection.WEBVIEW_EXTENSIONS, Icons.Outlined.Extension, c.accentAlt),
+                row(SettingsSection.SLASH_COMMANDS, Icons.Outlined.Bolt, c.warning)
+            ),
+            listOf(
+                row(SettingsSection.TERMINAL, Icons.Outlined.Terminal, c.accentIndigo,
+                    if (useSshTerminal || com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) "SSH" else "Local"),
+                row(SettingsSection.UTILITIES, Icons.Outlined.Handyman, c.accentTeal),
+                row(SettingsSection.DIAGNOSTICS, Icons.Outlined.Speed, c.success,
+                    if (isFloatingDiagnosticsEnabled) "HUD on" else null, if (isFloatingDiagnosticsEnabled) QuotaGreen else null)
+            ),
+            listOfNotNull(
+                // backups are of the phone's own Linux environment, so only with it installed and not in server mode
+                if (isLocalToolsInstalled && !com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode)
+                    row(SettingsSection.BACKUPS, Icons.Outlined.Backup, c.info) else null,
+                row(SettingsSection.DATA_PROTECTION, Icons.Outlined.Security, c.success)
+            ),
+            listOf(
+                row(SettingsSection.ABOUT, Icons.Outlined.Info, c.accentAlt, "v${BuildConfig.VERSION_NAME}")
+            )
+        )
+    )
+}
+
+/** Antigravity's own page: its MCP servers, skills & plugins, and commands & permissions. */
+@Composable
+private fun AntigravitySettingsMenu(
+    mcpServers: List<com.example.gemini.domain.model.McpServerState>,
+    allSkills: List<com.example.gemini.data.remote.dto.SkillDefinitionDto>,
+    installedPlugins: List<com.example.gemini.data.remote.dto.InstalledPluginDto>,
+    commandAutoExecutionPolicy: String,
+    cardBg: Color,
+    onNavigate: (SettingsSection) -> Unit
+) {
+    val c = com.example.gemini.theme.AppColors
+    val activeMcp = mcpServers.count { it.isEnabled }
+    val (mcpValue, mcpColor) = when {
+        mcpServers.isEmpty() -> "None" to null
+        activeMcp > 0 -> "$activeMcp active" to QuotaGreen
+        else -> "All off" to c.warning
+    }
+    val (policyValue, policyColor) = when {
+        commandAutoExecutionPolicy.contains("EAGER", ignoreCase = true) -> "Auto-run" to QuotaGreen
+        commandAutoExecutionPolicy.contains("AUTO", ignoreCase = true) -> "Smart safety" to c.accentTeal
+        else -> "Ask first" to c.warning
+    }
+    SettingsRowList(
+        cardBg = cardBg,
+        groups = listOf(
+            listOf(
+                SettingsRowItem(Icons.Outlined.Hub, GeminiBlue, SettingsSection.MCP.title, mcpValue, mcpColor) { onNavigate(SettingsSection.MCP) },
+                SettingsRowItem(Icons.Outlined.AutoAwesome, c.accentAlt, SettingsSection.SKILLS_PLUGINS.title,
+                    "${allSkills.size} skills · ${installedPlugins.size} plugins") { onNavigate(SettingsSection.SKILLS_PLUGINS) },
+                SettingsRowItem(Icons.Outlined.Security, c.warning, SettingsSection.COMMANDS.title, policyValue, policyColor) { onNavigate(SettingsSection.COMMANDS) }
+            )
+        )
+    )
 }
 
 @Composable
 private fun UtilitiesSubScreen(
     cardBg: Color,
-    cardBorder: BorderStroke,
     onNavigate: (SettingsSection) -> Unit
 ) {
     val context = LocalContext.current
@@ -858,135 +726,34 @@ private fun UtilitiesSubScreen(
     }
     val adb by com.example.gemini.data.adb.AdbConnectManager.state.collectAsState()
     val connected = adb.connectedDevice
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        SettingsCategoryCard(
-            icon = Icons.Outlined.PhonelinkSetup,
-            iconTint = if (connected != null) QuotaGreen else com.example.gemini.theme.AppColors.accentTeal,
-            title = "ADB Connect",
-            subtitle = connected?.serial ?: "Use adb in the terminal over Wireless debugging",
-            badgeText = when {
-                connected != null -> "Connected"
-                adb.adbInstalled == false -> "Not installed"
-                else -> null
-            },
-            badgeColor = if (connected != null) QuotaGreen else com.example.gemini.theme.AppColors.warning,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.ADB_CONNECT) }
-        )
-        var automationAllowed by remember { mutableStateOf(com.example.gemini.data.automation.AndroidAutomation.isServiceRunning()) }
-        LaunchedEffect(Unit) {
-            while (true) {
-                automationAllowed = com.example.gemini.data.automation.AndroidAutomation.isServiceRunning()
-                delay(1000)
-            }
+    var automationAllowed by remember { mutableStateOf(com.example.gemini.data.automation.AndroidAutomation.isServiceRunning()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            automationAllowed = com.example.gemini.data.automation.AndroidAutomation.isServiceRunning()
+            delay(1000)
         }
-        SettingsCategoryCard(
-            icon = Icons.Outlined.TouchApp,
-            iconTint = if (automationAllowed) QuotaGreen else com.example.gemini.theme.AppColors.accentAlt,
-            title = "Android Automation",
-            subtitle = "Let AI agents read the screen, tap, type and open apps (MCP)",
-            badgeText = if (automationAllowed) "Allowed" else "Off",
-            badgeColor = if (automationAllowed) QuotaGreen else Color.Gray,
-            cardBg = cardBg,
-            cardBorder = cardBorder,
-            onClick = { onNavigate(SettingsSection.ANDROID_AUTOMATION) }
-        )
     }
-}
-
-@Composable
-private fun SettingsCategoryCard(
-    icon: ImageVector,
-    iconTint: Color,
-    title: String,
-    subtitle: String,
-    badgeText: String? = null,
-    badgeColor: Color = ClaudeTerracotta,
-    cardBg: Color,
-    cardBorder: BorderStroke,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable { onClick() },
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = cardBg),
-        border = cardBorder
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(iconTint.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    fontSize = 11.5.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            if (badgeText != null) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = badgeColor.copy(alpha = 0.12f)
-                ) {
-                    Text(
-                        text = badgeText,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = badgeColor,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(6.dp))
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                modifier = Modifier.size(20.dp)
+    val c = com.example.gemini.theme.AppColors
+    SettingsRowList(
+        cardBg = cardBg,
+        groups = listOf(
+            listOf(
+                SettingsRowItem(
+                    Icons.Outlined.PhonelinkSetup, c.accentTeal, SettingsSection.ADB_CONNECT.title,
+                    when {
+                        connected != null -> "Connected"
+                        adb.adbInstalled == false -> "Not installed"
+                        else -> null
+                    },
+                    if (connected != null) QuotaGreen else if (adb.adbInstalled == false) c.warning else null
+                ) { onNavigate(SettingsSection.ADB_CONNECT) },
+                SettingsRowItem(
+                    Icons.Outlined.TouchApp, c.accentAlt, SettingsSection.ANDROID_AUTOMATION.title,
+                    if (automationAllowed) "Allowed" else "Off", if (automationAllowed) QuotaGreen else null
+                ) { onNavigate(SettingsSection.ANDROID_AUTOMATION) }
             )
-        }
-    }
+        )
+    )
 }
 
 // ==========================================
