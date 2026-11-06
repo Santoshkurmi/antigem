@@ -50,6 +50,8 @@ object AdbTunnel {
     private var forwardedPort: Int? = null
     private var forwardedPair: Int? = null
     private var cachedWirelessPort: Int? = null
+    /** A phone adb port the user typed in Utilities > ADB Connect; tried before the automatic search. */
+    @Volatile private var manualPhonePort: Int? = null
 
     /** A new SSH session has none of the forwards: forget what was forwarded so the next sync re-creates them. */
     fun onNewSession() {
@@ -95,6 +97,7 @@ object AdbTunnel {
     }
 
     private suspend fun findPhoneAdb(context: Context): Pair<Int, String>? {
+        manualPhonePort?.takeIf { reachable(it) }?.let { return it to "wireless" }
         configuredTcpipPorts().firstOrNull { reachable(it) }?.let { return it to "tcpip" }
         cachedWirelessPort?.takeIf { reachable(it) }?.let { return it to "wireless" }
         cachedWirelessPort = null
@@ -154,22 +157,90 @@ object AdbTunnel {
                 return@withLock
             }
             // connect the server's adb right away (needs adb installed there, and the key paired once for Wireless debugging)
-            val result = runCatching {
-                RemoteServerManager.exec(
-                    s,
-                    "command -v adb >/dev/null 2>&1 || { echo NO_ADB; exit 0; }; timeout 12 adb connect 127.0.0.1:$serverPort 2>&1",
-                    20_000
-                ).second.trim()
-            }.getOrDefault("")
-            val msg = when {
-                result.contains("NO_ADB") -> "adb is not installed on the server (sudo apt install adb). The tunnel is open on 127.0.0.1:$serverPort."
-                result.contains("connected to") && !result.contains("failed") -> "Server adb connected to the phone (127.0.0.1:$serverPort)."
-                result.isNotBlank() -> "Tunnel open on 127.0.0.1:$serverPort. adb connect said: ${result.take(140)}"
-                else -> "Tunnel open on 127.0.0.1:$serverPort."
-            }
+            val msg = describeServerAdb(serverPort, mode, ensureServerAdb(s, serverPort))
             _state.value = _state.value.copy(enabled = true, serverPort = serverPort, serverPairPort = pairPort, phonePort = port, phoneMode = mode, message = msg)
         } else {
-            _state.value = _state.value.copy(enabled = true, serverPort = serverPort, serverPairPort = pairPort, phonePort = port, phoneMode = mode)
+            // same port as before: the server's adb may still have lost the device (adb server restarted, phone toggled
+            // Wireless debugging, key not authorized), so check what `adb devices` really says there and reconnect if needed
+            val msg = describeServerAdb(serverPort, mode, ensureServerAdb(s, serverPort))
+            _state.value = _state.value.copy(enabled = true, serverPort = serverPort, serverPairPort = pairPort, phonePort = port, phoneMode = mode, message = msg)
+        }
+    }
+
+    /**
+     * Makes sure the server's own `adb devices` lists 127.0.0.1:[serverPort] as `device`: reconnects when it is missing,
+     * offline or unauthorized. Returns "STATE:<device|unauthorized|offline|none>" or "NO_ADB", plus adb's own words.
+     */
+    private fun ensureServerAdb(s: Session, serverPort: Int): String = runCatching {
+        RemoteServerManager.exec(
+            s,
+            """
+            command -v adb >/dev/null 2>&1 || { echo NO_ADB; exit 0; }
+            t=127.0.0.1:$serverPort
+            st() { timeout 8 adb devices 2>/dev/null | awk -v t="${'$'}t" '${'$'}1==t{print ${'$'}2}'; }
+            cur=${'$'}(st)
+            out=""
+            if [ "${'$'}cur" != device ]; then
+              timeout 5 adb disconnect "${'$'}t" >/dev/null 2>&1
+              out=${'$'}(timeout 12 adb connect "${'$'}t" 2>&1 | tail -n 1)
+              sleep 1
+              cur=${'$'}(st)
+            fi
+            echo "ADBSAID:${'$'}out"
+            echo "STATE:${'$'}{cur:-none}"
+            """.trimIndent(),
+            40_000
+        ).second.trim()
+    }.getOrDefault("")
+
+    private fun describeServerAdb(serverPort: Int, mode: String, result: String): String {
+        val state = Regex("STATE:(\\w+)").find(result)?.groupValues?.get(1)
+        val said = Regex("ADBSAID:(.*)").find(result)?.groupValues?.get(1)?.trim().orEmpty()
+        return when {
+            result.contains("NO_ADB") -> "adb is not installed on the server (sudo apt install adb). The tunnel is open on 127.0.0.1:$serverPort."
+            state == "device" -> "Connected: `adb devices` on the server lists the phone (127.0.0.1:$serverPort)."
+            state == "unauthorized" -> "The tunnel works but the phone has not authorized the server's adb. " +
+                (if (mode == "tcpip") "Accept the \"Allow USB debugging\" prompt on the phone." else "Use \"Pair the server (Wireless debugging)\" below.")
+            state == "offline" -> "The server's adb sees the phone as offline. " +
+                (if (mode == "wireless") "Wireless debugging needs the server paired once (\"Pair the server\" below) and an adb version 30 or newer on the server." else "Toggle USB debugging / restart adbd on the phone.")
+            result.isBlank() -> "Tunnel open on 127.0.0.1:$serverPort, but the server's adb could not be checked."
+            else -> "Tunnel open on 127.0.0.1:$serverPort but the phone is not in the server's `adb devices`." +
+                if (said.isNotBlank()) " adb connect said: ${said.take(140)}" else ""
+        }
+    }
+
+    private fun markEnabled(context: Context, enabled: Boolean) {
+        val prefs = AuthPreferences(context)
+        val (c, p) = prefs.getAdbTunnelPortsSync()
+        prefs.saveAdbTunnelSync(enabled, c, p)
+        _state.value = _state.value.copy(enabled = enabled, serverPort = c, serverPairPort = p)
+    }
+
+    /**
+     * Utilities > ADB Connect in server mode: forwards this phone's adb to the server and connects the SERVER's adb to it.
+     * [phonePort] = a port typed by the user, or null to find it. Success means the server's `adb devices` lists the phone.
+     */
+    suspend fun connectServer(context: Context, phonePort: Int?): Result<String> {
+        val s = RemoteServerManager.controlSession()
+            ?: return Result.failure(IllegalStateException("SSH to the server is not connected. Check Settings > Servers."))
+        markEnabled(context, true)
+        manualPhonePort = phonePort
+        lastCheck = 0L
+        forwardedPort = null
+        sync(context, s)
+        val msg = _state.value.message
+        return if (msg.startsWith("Connected")) Result.success(msg) else Result.failure(IllegalStateException(msg.ifBlank { "Could not connect the server's adb." }))
+    }
+
+    /** Takes the phone away from the server's adb again (closes the forward, `adb disconnect` there). */
+    suspend fun disconnectServer(context: Context) {
+        markEnabled(context, false)
+        manualPhonePort = null
+        RemoteServerManager.controlSession()?.let { s ->
+            sync(context, s)
+            // also when this app run never opened the forward (app restarted): drop the server's stale entry
+            val (serverPort, _) = AuthPreferences(context).getAdbTunnelPortsSync()
+            runCatching { RemoteServerManager.exec(s, "timeout 8 adb disconnect 127.0.0.1:$serverPort >/dev/null 2>&1; true", 12_000) }
         }
     }
 
@@ -200,6 +271,7 @@ object AdbTunnel {
     suspend fun pairServer(context: Context, code: String, manualPort: Int?): Result<String> {
         val digits = code.filter { it.isDigit() }
         if (digits.length != 6) return Result.failure(IllegalArgumentException("The pairing code has 6 digits."))
+        markEnabled(context, true)
         val s = RemoteServerManager.controlSession() ?: return Result.failure(IllegalStateException("SSH is not connected"))
         val forwarded = forwardPairing(context, manualPort)
         val serverPairPort = forwarded.getOrElse { return Result.failure(it) }

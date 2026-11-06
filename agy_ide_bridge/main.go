@@ -319,6 +319,8 @@ func main() {
 	mux.HandleFunc("/api/auth/start-login", h.StartLoginHandler)
 	mux.HandleFunc("/api/auth/forward-callback", h.ForwardLoginCallbackHandler)
 	mux.HandleFunc("/api/server/info", h.ServerInfoHandler)
+	mux.HandleFunc("/api/agy/cli", h.AgyCliHandler)
+	mux.HandleFunc("/api/agy/cli/install", h.AgyCliInstallHandler)
 	mux.HandleFunc("/api/models", h.ModelsHandler)
 	mux.HandleFunc("/api/models/refresh", h.ModelsHandler)
 	mux.HandleFunc("/api/quotas", h.QuotasHandler)
@@ -432,7 +434,8 @@ func main() {
 	corsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, "+framedHeader)
+		// "*" lets any request header through without ever naming the secret one
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, *")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -527,7 +530,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:    net.JoinHostPort(cfg.Bind, cfg.Port),
-		Handler: recoveryHandler,
+		Handler: security.GuardResponse(secToken, recoveryHandler),
 		// No whole-request Read/Write timeouts: over a real network (phone -> VPS) large uploads,
 		// exports and streamed downloads legitimately take longer than a minute.
 		ReadHeaderTimeout: 20 * time.Second,

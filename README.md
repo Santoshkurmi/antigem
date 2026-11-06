@@ -122,12 +122,13 @@ Each one is a one-tap preset in **Settings → MCP Servers**, for both agents.
 
 ## Download
 
-Get the latest APK from [Releases](https://github.com/santoshkurmi/antigem/releases). There are two build variants:
+Get the latest APK from [Releases](https://github.com/santoshkurmi/antigem/releases). There are two build variants, and one extra **mode** that works with either of them:
 
 | Variant | Package name | Needs the Termux app? | Notes |
 | :--- | :--- | :---: | :--- |
 | **`termux`** (recommended) | `com.termux` | No | Self-contained: the app sets up its own Linux environment. This is the one published in releases. |
 | **`standard`** | `com.antigem` | Yes | You run `agy_ide_bridge` inside a separately installed Termux app, and AntiGem connects to it over localhost. Not published; build it yourself from source. |
+| **Server mode** (a mode, not a third build) | the same as the build you installed (`com.termux` or `com.antigem`) | No | The bridge, the agents (`agy`, Claude Code), your projects and the terminal run on **your own server (a VPS)**, and the phone is only the screen. Switch it on in **Settings → Servers**. Works with both variants. See [Server mode](#server-mode-run-it-on-a-vps) below. |
 
 > [!NOTE]
 > The `standard` variant is not deprecated, but it gets little attention because almost nobody uses it. Some features, such as the Browser MCP, may not work in it right now, and it may be dropped in the future. Use the `termux` variant.
@@ -199,6 +200,44 @@ For advanced hardware APIs (such as `termux-location`, `termux-camera-photo`, `t
 │                             │ │  (one process per chat)  │
 └─────────────────────────────┘ └──────────────────────────┘
 ```
+
+---
+
+## Server mode (run it on a VPS)
+
+By default everything runs on the phone. In **Server mode** the heavy part moves to a Linux server that you own (a VPS, a home server, a spare PC): the **IDE bridge**, the **Antigravity hub (`agy`)**, **Claude Code**, your **projects, files, git and the shell** all live there, and AntiGem on the phone only shows the UI. It is the same app and the same interface, but the chats, the files and the agents' accounts live on the server (they are separate from any chats you have in local mode), so the agents keep working when the phone sleeps, and the phone stays light.
+
+It is **not a separate APK**. Both the `termux` and the `standard` variant can use it: open **Settings → Servers** and turn on **Remote server (SSH)**. The Linux environment on the phone is not needed in this mode. (Default ports differ per variant: `termux` uses 1234 / 1235 for the bridge / hub, `standard` uses 1236 / 1237.)
+
+```
+phone (AntiGem app)                              your server (Linux, x86_64 or arm64)
+ ├─ https://bridge.example.com  ──────────────►  nginx / Caddy / Apache ──► agy_ide_bridge (127.0.0.1)
+ ├─ https://hub.example.com     ──────────────►  nginx / Caddy / Apache ──► agy hub        (127.0.0.1)
+ └─ SSH                          ──────────────►  sshd
+      · the app starts / stops the bridge for you (in tmux), shows its log
+      · the terminal runs here
+      · reverse tunnels: the server's agents can use the phone's browser, Android and notes tools (and adb, if you connect it)
+```
+
+### How to set it up (short version)
+
+1. **Prepare the server:** a normal (non-root) user, `sshd`, `tmux`, `git`. Use a **dedicated VPS and a dedicated user**.
+2. **Get the bridge on the server:** the app does **not** contain it and never uploads anything. Build it once with Go (`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build` in `agy_ide_bridge/`, or `arm64`), copy it to `~/.antigem/agy_ide_bridge` and `chmod +x` it. Build it from the **same version as your app**: the app compares versions on every launch and tells you when the bridge is out of date.
+3. **Install the agents on the server:** `curl -fsSL https://antigravity.google/cli/install.sh | bash` for Antigravity, `curl -fsSL https://claude.ai/install.sh | bash` for Claude Code (both end up in `~/.local/bin`). You can also install `agy` from the app (**Settings → Agents**) once the bridge is running.
+4. **Put a reverse proxy with TLS in front** (nginx, Caddy or Apache) on two sub-domains, one for the bridge and one for the hub. Strongly recommended: add the **proxy access header** (a second secret that the proxy checks), and open only SSH, 80 and 443 in the firewall.
+5. **In the app (Settings → Servers):** turn on Remote server, enter the two addresses, the SSH host, user and key, check the server paths (they are pre-filled with the defaults), optionally the proxy access header, **Save**, **Reopen**. The app connects over SSH, starts the bridge, and shows its state and log.
+6. **Sign in** to Antigravity (a Google redirect page that you paste back into the app) and to Claude Code, and start chatting.
+
+**The full, step-by-step guide, with ready-to-paste nginx, Caddy and Apache configurations, the app settings explained field by field, adb from the server to the phone, updating, and debugging, is here: 👉 [docs/remote-server.md](docs/remote-server.md).**
+
+> [!CAUTION]
+> **A server on the internet is a target, and nothing here is guaranteed to be secure.** The bridge gives whoever controls it the power of the server user: every file that user can read or write, the agents (which run commands), git, and the logins stored in its home folder. This software is young and has **not been independently audited**; parts of it have had real bugs, and more exist. **Assume your server can be hacked**: use a dedicated VPS and an unprivileged user, keep nothing on it that you cannot afford to lose, use `https://` only, add the proxy access header, open only the ports you need, and keep everything updated.
+>
+> **Test your protections yourself.** A proxy rule or a firewall setting that you typed in but never checked may do nothing. The guide lists concrete checks to run from another machine (is the access header really enforced, does the bridge refuse a request without the token, which ports are open, does an answer ever contain the secret) in [section 15.5](docs/remote-server.md#155-test-it-yourself-do-not-skip). Repeat them after every change.
+>
+> **Ask a strong AI model to audit it:** give it this repository's source code and your own proxy configuration, and ask it to look for more bugs and security problems, as described in [section 15.6](docs/remote-server.md#156-ask-an-ai-model-to-look-for-more-bugs). Verify whatever it claims by running it. If you find a real problem, please report it.
+
+The Backups & Restore screen is for the phone's own data and is hidden in Server mode: back up `~/.gemini` and your project folders on the server yourself.
 
 ---
 

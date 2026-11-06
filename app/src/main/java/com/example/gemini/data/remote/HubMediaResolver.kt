@@ -64,6 +64,59 @@ object HubMediaResolver {
         }
     }
 
+    /**
+     * Where the bridge serves [source] from, or null when the app can use it directly: a normal link, a `content://`
+     * uri, or (local mode) a file on this phone. A link to the bridge needs its security header, and in Server mode a
+     * plain path such as `/home/me/clip.mp4` is a file on the SERVER, so it is read through the bridge as well.
+     */
+    fun bridgeUrlFor(source: String): String? {
+        val s = source.trim()
+        if (s.isEmpty()) return null
+        if (s.startsWith("http://") || s.startsWith("https://")) {
+            val fixed = com.example.gemini.data.preferences.AuthPreferences.rebaseBridgeUrl(s)
+            return fixed.takeIf { com.example.gemini.data.preferences.AuthPreferences.isBridgeUrl(it) }
+        }
+        if (s.startsWith("content://")) return null
+        if (!com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) return null
+        val path = s.removePrefix("file://")
+        // a file that exists on this phone (for example a video you attached) is always used directly
+        if (runCatching { File(path).canRead() }.getOrDefault(false)) return null
+        val base = com.example.gemini.data.preferences.AuthPreferences.currentBridgeHttpUrl.trimEnd('/')
+        return "$base/api/file/read?path=" + java.net.URLEncoder.encode(path, "UTF-8")
+    }
+
+    private fun mediaCacheFile(context: Context, url: String): File {
+        val dir = File(context.cacheDir, "bridge-media").apply { mkdirs() }
+        val hash = java.security.MessageDigest.getInstance("SHA-1").digest(url.toByteArray()).joinToString("") { "%02x".format(it) }.take(24)
+        val ext = java.net.URLDecoder.decode(url, "UTF-8").substringBefore('#').substringAfterLast('.', "")
+            .takeIf { it.length in 2..5 && it.all { c -> c.isLetterOrDigit() } } ?: "bin"
+        return File(dir, "$hash.$ext")
+    }
+
+    /** The file if this bridge media was downloaded before (null otherwise). */
+    fun cachedBridgeMedia(context: Context, url: String): File? =
+        mediaCacheFile(context, url).takeIf { it.exists() && it.length() > 0 }
+
+    /** Streams a bridge file (video) into the app cache with the authenticated client; reused next time. Null on failure. */
+    suspend fun downloadBridgeMedia(context: Context, url: String): File? = withContext(Dispatchers.IO) {
+        cachedBridgeMedia(context, url)?.let { return@withContext it }
+        val target = mediaCacheFile(context, url)
+        val part = File(target.parentFile, target.name + ".part")
+        try {
+            AgyBridgeService.instance.client.newCall(okhttp3.Request.Builder().url(url).get().build()).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext null
+                val body = resp.body ?: return@withContext null
+                body.byteStream().use { input -> part.outputStream().use { out -> input.copyTo(out) } }
+            }
+            if (part.length() > 0 && part.renameTo(target)) target else null
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not download bridge media: ${e.message}")
+            null
+        } finally {
+            if (part.exists()) part.delete()
+        }
+    }
+
     fun clearRamCache() {
         imageRamCache.clear()
         imageBytesCache.clear()

@@ -63,6 +63,9 @@ echo -e "   ${DIM}Target: GOOS=android GOARCH=arm64 (CGO_ENABLED=0)${NC}"
 
 START_TIME=$(date +%s%N 2>/dev/null || date +%s)
 
+# the bridge reports the app's version (see agy_ide_bridge/pkg/buildinfo)
+cp "$PROJECT_ROOT/version.json" "$SERVER_DIR/pkg/buildinfo/version.json"
+
 (
     cd "$SERVER_DIR"
     CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -ldflags="-s -w" -o "$OUTPUT_BINARY" main.go

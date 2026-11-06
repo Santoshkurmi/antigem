@@ -110,6 +110,33 @@ class AuthPreferences(private val context: Context) {
         @Volatile
         var currentSecurityToken: String = ""
 
+        // ---- Server mode: an extra header the reverse proxy (nginx / Apache / Caddy) in front of the server checks ----
+        const val DEFAULT_EDGE_HEADER_NAME = "X-AntiGem-Key"
+        const val EDGE_VALUE_LENGTH = 20
+        private const val EDGE_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+        @Volatile
+        var currentEdgeHeaderName: String = DEFAULT_EDGE_HEADER_NAME
+        @Volatile
+        var currentEdgeHeaderValue: String = ""
+
+        fun generateEdgeHeaderValue(): String {
+            val sb = StringBuilder(EDGE_VALUE_LENGTH)
+            for (i in 0 until EDGE_VALUE_LENGTH) sb.append(EDGE_CHARSET[secureRandom.nextInt(EDGE_CHARSET.length)])
+            return sb.toString()
+        }
+
+        /** Header names: letters, digits and dashes (no underscore: nginx drops those unless told not to). */
+        fun isValidEdgeName(name: String) = name.isNotBlank() && name.length <= 64 && name.all { it.isLetterOrDigit() && it.code < 128 || it == '-' }
+        fun isValidEdgeValue(value: String) = value.length in 8..200 && value.all { it.code in 33..126 && it != '"' && it != '\\' && it != '\'' }
+
+        /** The extra proxy header to send to a server, or null when it is off (local mode, or no value set). */
+        fun edgeHeader(): Pair<String, String>? {
+            val n = currentEdgeHeaderName.trim()
+            val v = currentEdgeHeaderValue
+            return if (currentRemoteMode && n.isNotEmpty() && v.isNotEmpty()) n to v else null
+        }
+
         val currentFramedHeader: String
             get() = buildFramedHeader(currentSecurityToken)
 
@@ -239,6 +266,16 @@ class AuthPreferences(private val context: Context) {
             syncPrefs.edit().putString("security_token", token).apply()
         }
         currentSecurityToken = token
+        currentEdgeHeaderName = syncPrefs.getString("edge_header_name", null)?.takeIf { it.isNotBlank() } ?: DEFAULT_EDGE_HEADER_NAME
+        currentEdgeHeaderValue = syncPrefs.getString("edge_header_value", "") ?: ""
+    }
+
+    fun getEdgeHeaderSync(): Pair<String, String> = currentEdgeHeaderName to currentEdgeHeaderValue
+
+    fun saveEdgeHeaderSync(name: String, value: String) {
+        currentEdgeHeaderName = name.trim().ifBlank { DEFAULT_EDGE_HEADER_NAME }
+        currentEdgeHeaderValue = value.trim()
+        syncPrefs.edit().putString("edge_header_name", currentEdgeHeaderName).putString("edge_header_value", currentEdgeHeaderValue).commit()
     }
 
     val groupChatsByWorkspace: Flow<Boolean> = context.dataStore.data.map { it[GROUP_CHATS_BY_WORKSPACE] ?: false }

@@ -188,6 +188,11 @@ fun AdbConnectScreen(cardBg: Color, cardBorder: BorderStroke) {
                     onClick = { AdbConnectManager.setHost(host); AdbConnectManager.connect(port.toIntOrNull()) }
                 ) { Text("Connect") }
                 if (state.busy != null) {
+                    OutlinedButton(onClick = AdbConnectManager::cancelConnect) { Text("Cancel") }
+                } else if (connected != null) {
+                    OutlinedButton(onClick = AdbConnectManager::disconnectAll) { Text("Disconnect") }
+                }
+                if (state.busy != null) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     Text(state.busy!!, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.weight(1f))
                 }

@@ -112,10 +112,10 @@ class AgyBridgeService(
         .writeTimeout(if (AuthPreferences.isRemoteEndpoint()) 60 else 30, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .addInterceptor { chain ->
-            val req = chain.request().newBuilder()
+            val b = chain.request().newBuilder()
                 .header(AuthPreferences.currentFramedHeader, "true")
-                .build()
-            chain.proceed(req)
+            AuthPreferences.edgeHeader()?.let { (n, v) -> b.header(n, v) }
+            chain.proceed(b.build())
         }
         .apply {
             if (com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled) {
@@ -137,10 +137,10 @@ class AgyBridgeService(
         .writeTimeout(if (AuthPreferences.isRemoteEndpoint()) 10000 else 1000, TimeUnit.MILLISECONDS)
         .retryOnConnectionFailure(false)
         .addInterceptor { chain ->
-            val req = chain.request().newBuilder()
+            val b = chain.request().newBuilder()
                 .header(AuthPreferences.currentFramedHeader, "true")
-                .build()
-            chain.proceed(req)
+            AuthPreferences.edgeHeader()?.let { (n, v) -> b.header(n, v) }
+            chain.proceed(b.build())
         }
         .apply {
             if (com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled) {
@@ -158,10 +158,10 @@ class AgyBridgeService(
         .pingInterval(if (AuthPreferences.isRemoteEndpoint()) 15 else 1, TimeUnit.SECONDS)
         .retryOnConnectionFailure(false)
         .addInterceptor { chain ->
-            val req = chain.request().newBuilder()
+            val b = chain.request().newBuilder()
                 .header(AuthPreferences.currentFramedHeader, "true")
-                .build()
-            chain.proceed(req)
+            AuthPreferences.edgeHeader()?.let { (n, v) -> b.header(n, v) }
+            chain.proceed(b.build())
         }
         .build()
 

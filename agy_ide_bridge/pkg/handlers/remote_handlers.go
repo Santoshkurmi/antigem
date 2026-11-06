@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gemini-server/pkg/buildinfo"
 	"io"
 	"net"
 	"net/http"
@@ -55,7 +56,7 @@ func (h *Handler) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
 		hubPort = h.HubManager.HubPort
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"version":      "2.0.0",
+		"version":      buildinfo.Version(),
 		"os":           runtime.GOOS,
 		"arch":         runtime.GOARCH,
 		"hostname":     hostname,

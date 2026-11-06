@@ -25,7 +25,9 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
                 val sameServer = bridge != null && req.url.host == bridge.host && req.url.port == bridge.port
                 chain.proceed(
                     if (sameServer) req.newBuilder()
-                        .header(com.example.gemini.data.preferences.AuthPreferences.currentFramedHeader, "true").build()
+                        .header(com.example.gemini.data.preferences.AuthPreferences.currentFramedHeader, "true")
+                        .apply { com.example.gemini.data.preferences.AuthPreferences.edgeHeader()?.let { (n, v) -> header(n, v) } }
+                        .build()
                     else req
                 )
             }

@@ -18,7 +18,12 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import com.example.gemini.R
+import com.example.gemini.data.local.LocalCommandResult
 import com.example.gemini.data.local.LocalEnvironmentManager
+import com.example.gemini.data.preferences.AuthPreferences
+import com.example.gemini.data.remote.AdbTunnel
+import com.example.gemini.data.remote.RemoteServerManager
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -174,11 +179,26 @@ object AdbConnectManager {
 
     // ---------------- adb ----------------
 
-    private suspend fun shell(command: String, timeoutSeconds: Long = 30, onLine: ((String) -> Unit)? = null) =
-        LocalEnvironmentManager.executeCommand(
+    /** In server mode adb means the SERVER's adb: everything here runs there, over the app's SSH connection. */
+    private val remote get() = AuthPreferences.currentRemoteMode
+
+    private suspend fun shell(command: String, timeoutSeconds: Long = 30, onLine: ((String) -> Unit)? = null): LocalCommandResult {
+        if (remote) return serverShell(command, timeoutSeconds, onLine)
+        return LocalEnvironmentManager.executeCommand(
             "( $command ) < /dev/null", appContext, timeoutSeconds = timeoutSeconds,
             customEnv = mapOf("DEBIAN_FRONTEND" to "noninteractive"), onOutputLine = onLine
         )
+    }
+
+    private suspend fun serverShell(command: String, timeoutSeconds: Long, onLine: ((String) -> Unit)?): LocalCommandResult = withContext(Dispatchers.IO) {
+        val s = RemoteServerManager.controlSession()
+            ?: return@withContext LocalCommandResult(255, "SSH to the server is not connected. Check Settings > Servers.", 0)
+        val started = System.currentTimeMillis()
+        val (code, out) = runCatching { RemoteServerManager.exec(s, "( $command ) < /dev/null", timeoutSeconds * 1000) }
+            .getOrElse { 255 to (it.message ?: "SSH error") }
+        if (onLine != null) out.lineSequence().forEach(onLine)
+        LocalCommandResult(code, out, System.currentTimeMillis() - started)
+    }
 
     // `timeout` keeps a stuck adb from blocking the output reader forever
     private suspend fun adb(args: String, seconds: Int = 20) = shell("timeout $seconds adb $args", seconds + 5L)
@@ -216,6 +236,14 @@ object AdbConnectManager {
         if (installJob?.isActive == true) return
         installJob = scope.launch {
             _state.update { it.copy(installing = true, installLog = emptyList(), installError = null) }
+            if (remote) {
+                appendInstallLog("Installing adb on the server…")
+                val r = AdbTunnel.installServerAdb()
+                appendInstallLog(r.fold({ it }, { it.message ?: "Install failed" }))
+                refreshNow()
+                _state.update { it.copy(installing = false, installError = r.exceptionOrNull()?.message) }
+                return@launch
+            }
             // Termux is rolling-release: installing only android-tools can leave older libraries (libprotobuf…) that the new
             // adb can't link against, so refresh the package lists and bring its direct dependencies up to date too
             val keepConfigs = "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
@@ -237,12 +265,40 @@ object AdbConnectManager {
         _state.update { it.copy(installLog = (it.installLog + line).takeLast(400)) }
 
     /** Connects to [port], or finds this device's Wireless debugging port over mDNS when [port] is null. */
-    fun connect(port: Int?) = scope.launch {
-        if (_state.value.busy != null) return@launch
-        connectNow(port, quiet = false)
+    fun connect(port: Int?) {
+        if (_state.value.busy != null) return
+        connectJob = scope.launch { connectNow(port, quiet = false) }
+    }
+
+    private var connectJob: Job? = null
+
+    /** Stops a running search/connect (for example the Wireless debugging port search) right away. */
+    fun cancelConnect() {
+        connectJob?.cancel()
+        autoConnectJob?.cancel()
+        _state.update { it.copy(busy = null) }
+        report("Cancelled.")
+    }
+
+    /** Disconnects every device (in server mode: takes the phone away from the server's adb). */
+    fun disconnectAll() = scope.launch {
+        if (remote) AdbTunnel.disconnectServer(appContext) else adb("disconnect", 10)
+        _state.update { it.copy(devices = listDevices()) }
+        report("Disconnected.")
     }
 
     private suspend fun connectNow(port: Int?, quiet: Boolean): Boolean {
+        if (remote) {
+            try {
+                _state.update { it.copy(busy = "Connecting the server's adb to this phone…") }
+                val r = AdbTunnel.connectServer(appContext, port)
+                r.fold({ report(it) }, { if (!quiet) report(it.message ?: "Could not connect", true) })
+                _state.update { it.copy(devices = listDevices()) }
+                return r.isSuccess
+            } finally {
+                _state.update { it.copy(busy = null) }
+            }
+        }
         val host = _state.value.host
         try {
             val target = port ?: run {
@@ -267,7 +323,7 @@ object AdbConnectManager {
     }
 
     fun disconnect(serial: String) = scope.launch {
-        adb("disconnect $serial", 10)
+        if (remote) AdbTunnel.disconnectServer(appContext) else adb("disconnect $serial", 10)
         _state.update { it.copy(devices = listDevices()) }
         report("Disconnected $serial")
     }
@@ -364,7 +420,8 @@ object AdbConnectManager {
     private fun pair(context: Context, port: Int, code: String) = scope.launch {
         setPairing(Pairing.InProgress(port))
         val host = _state.value.host
-        val out = adb("pair $host:$port $code", 25).output.trim()
+        val out = if (remote) AdbTunnel.pairServer(appContext, code, port).fold({ "Successfully paired" }, { it.message ?: "Pairing failed" })
+        else adb("pair $host:$port $code", 25).output.trim()
         if (!out.contains("Successfully paired")) {
             val reason = out.lineSequence().lastOrNull { it.isNotBlank() }?.removePrefix("error: ") ?: "No response from adb"
             setPairing(Pairing.Failed("$reason. Check the code and try again.", port))

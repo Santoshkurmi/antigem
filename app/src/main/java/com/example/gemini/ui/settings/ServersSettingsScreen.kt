@@ -73,7 +73,6 @@ import com.example.gemini.BuildConfig
 import com.example.gemini.data.local.LocalServerManager
 import com.example.gemini.data.local.LocalServerStatus
 import com.example.gemini.data.preferences.AuthPreferences
-import com.example.gemini.data.remote.AdbTunnel
 import com.example.gemini.data.remote.RemoteServerManager
 import com.example.gemini.data.ssh.SshSessionFactory
 import com.example.gemini.theme.ClaudeTerracotta
@@ -99,13 +98,21 @@ private fun describeNetworkError(e: Throwable): String = when (e) {
     is java.net.SocketTimeoutException -> "timed out (firewall or wrong port?)"
     is java.net.ConnectException -> "connection refused (is the service running and the port open?)"
     is javax.net.ssl.SSLException -> "TLS problem: ${e.message?.take(80)}"
-    else -> e.message?.take(100) ?: e.javaClass.simpleName
+    is java.net.SocketException, is java.io.EOFException ->
+        "the connection was closed (a proxy that requires the access header closes it when the header is missing or wrong: check \"Proxy access header\")"
+    else -> {
+        val m = e.message.orEmpty()
+        if (m.contains("unexpected end of stream", true) || m.contains("connection reset", true))
+            "the connection was closed with no answer: a proxy that requires the access header does this when the header is missing or the value is wrong (check \"Proxy access header\" against the proxy)"
+        else m.take(100).ifBlank { e.javaClass.simpleName }
+    }
 }
 
 /** HTTP reachability of the hub address (any answer below 500 means something answers; 502-504 is a proxy that cannot reach the hub). */
-private suspend fun probeHub(url: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+private suspend fun probeHub(url: String, edge: Pair<String, String>? = null): Pair<Boolean, String> = withContext(Dispatchers.IO) {
     try {
         val conn = URL(url).openConnection() as HttpURLConnection
+        edge?.let { conn.setRequestProperty(it.first, it.second) }
         conn.connectTimeout = 10_000
         conn.readTimeout = 10_000
         val code = try { conn.responseCode } finally { conn.disconnect() }
@@ -120,18 +127,18 @@ private suspend fun probeHub(url: String): Pair<Boolean, String> = withContext(D
 }
 
 /** Health + token check of the bridge, using the token typed in the field (even before it is saved). */
-private suspend fun probeBridge(base: String, token: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+private suspend fun probeBridge(base: String, token: String, edge: Pair<String, String>? = null): Pair<Boolean, String> = withContext(Dispatchers.IO) {
     val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS).callTimeout(15, TimeUnit.SECONDS)
         .build()
     try {
-        val health = client.newCall(Request.Builder().url("${base.trimEnd('/')}/api/health").build()).execute()
+        val health = client.newCall(Request.Builder().url("${base.trimEnd('/')}/api/health").apply { edge?.let { header(it.first, it.second) } }.build()).execute()
         health.use {
             if (!it.isSuccessful) return@withContext false to "health check answered HTTP ${it.code}"
         }
         val header = AuthPreferences.buildFramedHeader(token)
         val info = client.newCall(
-            Request.Builder().url("${base.trimEnd('/')}/api/server/info").header(header, "true").build()
+            Request.Builder().url("${base.trimEnd('/')}/api/server/info").header(header, "true").apply { edge?.let { header(it.first, it.second) } }.build()
         ).execute()
         info.use {
             when (it.code) {
@@ -189,15 +196,26 @@ internal fun ServersSubScreen(
     var sshPassphrase by remember { mutableStateOf(AuthPreferences.currentSshKeyPassphrase) }
 
     // server side paths and ports (blank = automatic)
-    var remoteBridgeBin by remember { mutableStateOf(authPrefs.getRemoteBridgeBinSync()) }
-    var remoteAgyBin by remember { mutableStateOf(authPrefs.getRemoteAgyBinSync()) }
-    var remoteClaudeBin by remember { mutableStateOf(authPrefs.getRemoteClaudeBinSync()) }
+    // a blank saved value means "the default", so the default itself is shown (and saved) instead of an empty box
+    fun storedBridgeBin() = authPrefs.getRemoteBridgeBinSync().ifBlank { RemoteServerManager.defaultBridgeBin(authPrefs.getRemoteInstallDirSync()) }
+    fun storedAgyBin() = authPrefs.getRemoteAgyBinSync().ifBlank { RemoteServerManager.DEFAULT_AGY_BIN }
+    fun storedClaudeBin() = authPrefs.getRemoteClaudeBinSync().ifBlank { RemoteServerManager.DEFAULT_CLAUDE_BIN }
+    var remoteBridgeBin by remember { mutableStateOf(storedBridgeBin()) }
+    var remoteAgyBin by remember { mutableStateOf(storedAgyBin()) }
+    var remoteClaudeBin by remember { mutableStateOf(storedClaudeBin()) }
     var remoteInstallDir by remember { mutableStateOf(authPrefs.getRemoteInstallDirSync()) }
     val (initListenBridge, initListenHub, initListenBind) = remember { authPrefs.getRemoteListenSync() }
     var listenBridge by remember { mutableStateOf(initListenBridge) }
     var listenHub by remember { mutableStateOf(initListenHub) }
     var listenBind by remember { mutableStateOf(initListenBind) }
     var showAdvanced by remember { mutableStateOf(false) }
+
+    // Server mode: an extra header the reverse proxy checks before it lets a request through to the bridge or the hub
+    val (initEdgeName, initEdgeValue) = remember { authPrefs.getEdgeHeaderSync() }
+    var edgeName by remember { mutableStateOf(initEdgeName) }
+    var edgeValue by remember { mutableStateOf(initEdgeValue) }
+    fun edgeOrNull(): Pair<String, String>? =
+        if (remote && edgeName.trim().isNotEmpty() && edgeValue.trim().isNotEmpty()) edgeName.trim() to edgeValue.trim() else null
 
     var hubTestStatus by remember { mutableStateOf<String?>(null) }
     var isTestingHub by remember { mutableStateOf(false) }
@@ -215,13 +233,15 @@ internal fun ServersSubScreen(
     var profileName by remember { mutableStateOf("") }
     var profileWithSecrets by remember { mutableStateOf(false) }
     var profileToDelete by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+    var profileToUpdate by remember { mutableStateOf<org.json.JSONObject?>(null) }
+    var loadedProfile by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
     var profileTick by remember { mutableIntStateOf(0) }
 
     fun snapshot() = listOf(
         remote, hubText.trim(), bridgeText.trim(), bridgeBinPath.trim(), agyBinPath.trim(), claudeBinPath.trim(),
         securityToken.trim(), sshHost.trim(), sshPort.trim(), sshUser.trim(), sshPass, sshKey.trim(), sshPassphrase,
         remoteBridgeBin.trim(), remoteAgyBin.trim(), remoteClaudeBin.trim(), remoteInstallDir.trim(),
-        listenBridge.trim(), listenHub.trim(), listenBind.trim()
+        listenBridge.trim(), listenHub.trim(), listenBind.trim(), edgeName.trim(), edgeValue.trim()
     ).joinToString("\u0001")
 
     // Each mode keeps its own saved settings (JSON), so switching back and forth does not make you type everything again.
@@ -229,7 +249,8 @@ internal fun ServersSubScreen(
         put("hub", hubText.trim()); put("bridge", bridgeText.trim())
         if (forRemote) {
             put("sshHost", sshHost.trim()); put("sshPort", sshPort.trim()); put("sshUser", sshUser.trim())
-            if (withSecrets) { put("sshPass", sshPass); put("sshKey", sshKey.trim()); put("sshPassphrase", sshPassphrase) }
+            put("edgeName", edgeName.trim())
+            if (withSecrets) { put("sshPass", sshPass); put("sshKey", sshKey.trim()); put("sshPassphrase", sshPassphrase); put("edgeValue", edgeValue.trim()) }
             put("bridgeBin", remoteBridgeBin.trim()); put("agyBin", remoteAgyBin.trim()); put("claudeBin", remoteClaudeBin.trim())
             put("installDir", remoteInstallDir.trim())
             put("listenBridge", listenBridge.trim()); put("listenHub", listenHub.trim()); put("listenBind", listenBind.trim())
@@ -244,8 +265,12 @@ internal fun ServersSubScreen(
             sshHost = o.optString("sshHost"); sshPort = o.optString("sshPort", "22").ifBlank { "22" }
             sshUser = o.optString("sshUser")
             if (o.has("sshPass")) { sshPass = o.optString("sshPass"); sshKey = o.optString("sshKey"); sshPassphrase = o.optString("sshPassphrase") }
-            remoteBridgeBin = o.optString("bridgeBin"); remoteAgyBin = o.optString("agyBin"); remoteClaudeBin = o.optString("claudeBin")
-            remoteInstallDir = o.optString("installDir")
+            edgeName = o.optString("edgeName").ifBlank { AuthPreferences.DEFAULT_EDGE_HEADER_NAME }
+            if (o.has("edgeValue")) edgeValue = o.optString("edgeValue")
+            remoteInstallDir = o.optString("installDir").ifBlank { ".antigem" }
+            remoteBridgeBin = o.optString("bridgeBin").ifBlank { RemoteServerManager.defaultBridgeBin(remoteInstallDir) }
+            remoteAgyBin = o.optString("agyBin").ifBlank { RemoteServerManager.DEFAULT_AGY_BIN }
+            remoteClaudeBin = o.optString("claudeBin").ifBlank { RemoteServerManager.DEFAULT_CLAUDE_BIN }
             listenBridge = o.optString("listenBridge"); listenHub = o.optString("listenHub"); listenBind = o.optString("listenBind")
         } else {
             bridgeBinPath = o.optString("bridgeBin", bridgeBinPath); agyBinPath = o.optString("agyBin", agyBinPath)
@@ -312,11 +337,12 @@ internal fun ServersSubScreen(
                     claudeBinPath = authPrefs.getClaudeBinaryPathSync()
                     sshKey = AuthPreferences.currentSshPrivateKey
                     sshPassphrase = AuthPreferences.currentSshKeyPassphrase
-                    remoteBridgeBin = authPrefs.getRemoteBridgeBinSync()
-                    remoteAgyBin = authPrefs.getRemoteAgyBinSync()
-                    remoteClaudeBin = authPrefs.getRemoteClaudeBinSync()
+                    remoteBridgeBin = storedBridgeBin()
+                    remoteAgyBin = storedAgyBin()
+                    remoteClaudeBin = storedClaudeBin()
                     remoteInstallDir = authPrefs.getRemoteInstallDirSync()
                     listenBridge = initListenBridge; listenHub = initListenHub; listenBind = initListenBind
+                    edgeName = initEdgeName; edgeValue = initEdgeValue
                     coroutineScope.launch {
                         sshHost = authPrefs.termuxSshHost.first().takeIf { AuthPreferences.currentRemoteMode } ?: ""
                         sshPort = (authPrefs.termuxSshPort.first().takeIf { AuthPreferences.currentRemoteMode } ?: 22).toString()
@@ -337,7 +363,7 @@ internal fun ServersSubScreen(
             title = { Text("Reopen AntiGem?", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
             text = {
                 Text(
-                    if (remote) "Settings saved. Reopening the app connects over SSH, installs or updates the bridge on the server if needed, starts it and opens the connections with the new settings."
+                    if (remote) "Settings saved. Reopening the app connects over SSH, starts the bridge that is already on the server and opens the connections with the new settings."
                     else "Settings saved. Reopening the app restarts the local bridge and daemon so every connection uses the new settings.",
                     fontSize = 13.5.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                 )
@@ -377,7 +403,7 @@ internal fun ServersSubScreen(
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
                 Text("Saved profiles", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("Tap one to load it. Its mode is selected for you; press Save to apply.", fontSize = 12.sp,
+                Text("Tap one to load it. Its mode is selected for you; press Save to apply. Update overwrites a profile with what is in the form now (same mode only).", fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
                 if (list.isEmpty()) {
                     Text("Nothing saved yet. Fill in the settings and tap \"Save as profile\".", fontSize = 13.sp,
@@ -393,6 +419,7 @@ internal fun ServersSubScreen(
                             onClick = {
                                 remote = r
                                 applyProfile(r, o)
+                                loadedProfile = r to o.optString("name")
                                 showProfileMenu = false
                                 saveFeedback = "Loaded profile \"${o.optString("name")}\". Tap Save below to apply it."
                                 saveIsError = false
@@ -415,6 +442,9 @@ internal fun ServersSubScreen(
                                         }
                                     }
                                     if (where.isNotBlank()) Text(where, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), maxLines = 1)
+                                }
+                                TextButton(enabled = r == remote, onClick = { profileToUpdate = o }) {
+                                    Text("Update", fontSize = 12.sp)
                                 }
                                 TextButton(onClick = { profileToDelete = r to o.optString("name") }) {
                                     Text("Delete", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
@@ -461,6 +491,35 @@ internal fun ServersSubScreen(
                 ) { Text("Save", fontWeight = FontWeight.Bold) }
             },
             dismissButton = { TextButton(onClick = { showSaveProfile = false }) { Text("Cancel") } },
+            shape = RoundedCornerShape(16.dp), containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    profileToUpdate?.let { o ->
+        val uRemote = o.optBoolean("remote")
+        val uName = o.optString("name")
+        val hadSecrets = o.has("sshPass")
+        AlertDialog(
+            onDismissRequest = { profileToUpdate = null },
+            title = { Text("Update profile?", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            text = {
+                Text(
+                    "\"$uName\" will be overwritten with the values currently in the form" +
+                        (if (uRemote) (if (hadSecrets) ", including the SSH password and key (it had them before)." else ", without the SSH password and key (it had none before).") else "."),
+                    fontSize = 13.5.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        authPrefs.saveProfile(uRemote, uName, profileJson(uRemote, uRemote && hadSecrets))
+                        profileToUpdate = null; profileTick++
+                        saveFeedback = "Profile \"$uName\" updated."; saveIsError = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta), shape = RoundedCornerShape(8.dp)
+                ) { Text("Update", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { profileToUpdate = null }) { Text("Cancel") } },
             shape = RoundedCornerShape(16.dp), containerColor = MaterialTheme.colorScheme.surface
         )
     }
@@ -533,7 +592,7 @@ internal fun ServersSubScreen(
                         val n = remember(profileTick) { authPrefs.listProfiles(true).size + authPrefs.listProfiles(false).size }
                         Text("Saved profiles ($n)", fontSize = 12.sp)
                     }
-                    OutlinedButton(onClick = { profileName = ""; showSaveProfile = true }, shape = RoundedCornerShape(8.dp)) {
+                    OutlinedButton(onClick = { profileName = loadedProfile?.takeIf { it.first == remote }?.second.orEmpty(); showSaveProfile = true }, shape = RoundedCornerShape(8.dp)) {
                         Text("Save as profile", fontSize = 12.sp)
                     }
                 }
@@ -604,6 +663,7 @@ internal fun ServersSubScreen(
                 Spacer(Modifier.height(6.dp))
                 StatusLine(isBridgeOnline || bridgeTestStatus?.startsWith("✓") == true, "Bridge", AuthPreferences.normalizeServerUrl(bridgeText, BuildConfig.BRIDGE_PORT) ?: "invalid address")
                 bridgeTestStatus?.let { Text(it, fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = if (it.startsWith("✓")) QuotaGreen else Color.Red, modifier = Modifier.padding(top = 4.dp)) }
+                com.example.gemini.ui.agents.BridgeVersionLine(Modifier.padding(top = 6.dp))
 
                 Spacer(Modifier.height(14.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -614,7 +674,7 @@ internal fun ServersSubScreen(
                             isTestingHub = true
                             hubTestStatus = "Contacting $url…"
                             coroutineScope.launch {
-                                val (ok, msg) = probeHub(url)
+                                val (ok, msg) = probeHub(url, edgeOrNull())
                                 isTestingHub = false
                                 hubTestStatus = if (ok) "✓ Hub reachable ($msg)" else "✗ Hub: $msg"
                             }
@@ -631,7 +691,7 @@ internal fun ServersSubScreen(
                             isTestingBridge = true
                             bridgeTestStatus = "Contacting $url…"
                             coroutineScope.launch {
-                                val (ok, msg) = probeBridge(url, securityToken)
+                                val (ok, msg) = probeBridge(url, securityToken, edgeOrNull())
                                 isTestingBridge = false
                                 bridgeTestStatus = if (ok) "✓ Bridge reachable ($msg)" else "✗ Bridge: $msg"
                             }
@@ -646,6 +706,63 @@ internal fun ServersSubScreen(
         }
 
         if (remote) {
+            // ----- Proxy access header: a second lock in front of the bridge and the hub -----
+            Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Security, null, tint = QuotaGreen, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Proxy access header (second layer)", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(
+                                "Optional. The app adds this header to every request to the bridge and the hub. Make nginx / Apache / Caddy refuse " +
+                                    "requests without exactly this value, so strangers never reach the bridge or agy. Leave the value empty if your proxy does not check it.",
+                                fontSize = 11.5.sp, color = subtle
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = edgeName, onValueChange = { edgeName = it.trim(); saveFeedback = null },
+                        label = { Text("Header name") }, singleLine = true, shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = edgeValue, onValueChange = { edgeValue = it.trim(); saveFeedback = null },
+                        label = { Text("Header value (secret)") }, singleLine = true, shape = RoundedCornerShape(10.dp),
+                        placeholder = { Text("empty = off") },
+                        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { edgeValue = AuthPreferences.generateEdgeHeaderValue(); saveFeedback = null },
+                            modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)
+                        ) { Icon(Icons.Outlined.Shuffle, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text("Generate", fontSize = 12.sp) }
+                        OutlinedButton(
+                            enabled = edgeValue.isNotBlank(),
+                            onClick = {
+                                val nginxVar = "http_" + edgeName.trim().lowercase().replace('-', '_')
+                                val snippet = "map \$$nginxVar \$antigem_key_ok { default 0; \"${edgeValue.trim()}\" 1; }\n\n" +
+                                    "# put this in every server { } block of the bridge and of the hub:\nif (\$antigem_key_ok = 0) { return 444; }"
+                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                cm?.setPrimaryClip(android.content.ClipData.newPlainText("nginx rule", snippet))
+                                Toast.makeText(context, "nginx rule copied", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)
+                        ) { Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text("Copy nginx rule", fontSize = 12.sp) }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "If you set a value, the proxy MUST check the same one, or every request is refused. Test Hub and Test Bridge use it too. " +
+                            "It only protects traffic that goes through the proxy, and only over https://.",
+                        fontSize = 11.sp, color = subtle
+                    )
+                }
+            }
+
             // ----- SSH -----
             Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
                 Column(Modifier.padding(16.dp)) {
@@ -775,18 +892,26 @@ internal fun ServersSubScreen(
                         TextButton(onClick = { showAdvanced = !showAdvanced }) { Text(if (showAdvanced) "Hide" else "Show", fontSize = 12.sp) }
                     }
                     if (showAdvanced) {
-                        Text("Leave blank for automatic.", fontSize = 11.sp, color = subtle)
+                        Text(
+                            "These are the paths on the server (~ is the SSH user's home). The app never uploads the bridge: copy agy_ide_bridge " +
+                                "(linux amd64 / arm64 build) to the bridge path yourself and run chmod +x on it.",
+                            fontSize = 11.sp, color = subtle
+                        )
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(remoteBridgeBin, { remoteBridgeBin = it; saveFeedback = null }, label = { Text("Bridge binary on the server") },
-                            placeholder = { Text("~/.antigem/agy_ide_bridge (uploaded by the app)") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(remoteAgyBin, { remoteAgyBin = it; saveFeedback = null }, label = { Text("agy binary on the server") },
-                            placeholder = { Text("found automatically (~/.local/bin/agy …)") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(remoteClaudeBin, { remoteClaudeBin = it; saveFeedback = null }, label = { Text("claude binary on the server") },
-                            placeholder = { Text("claude from PATH") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                         Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(remoteInstallDir, { remoteInstallDir = it; saveFeedback = null }, label = { Text("Install folder (in the server home)") },
+                        OutlinedTextField(remoteInstallDir, {
+                            // while the bridge path is still the default of the old folder, it follows the folder
+                            if (remoteBridgeBin == RemoteServerManager.defaultBridgeBin(remoteInstallDir)) remoteBridgeBin = RemoteServerManager.defaultBridgeBin(it)
+                            remoteInstallDir = it; saveFeedback = null
+                        }, label = { Text("Bridge folder (in the server home)") },
                             modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     }
                 }
@@ -926,6 +1051,10 @@ internal fun ServersSubScreen(
                     remote && sshUser.isBlank() -> "Enter the SSH user."
                     remote && sshPass.isBlank() && !SshSessionFactory.looksLikePrivateKey(sshKey) -> "Enter an SSH password or a private key."
                     remote && sshKey.isNotBlank() && !SshSessionFactory.looksLikePrivateKey(sshKey) -> "The SSH key is not a valid private key."
+                    remote && edgeValue.isNotBlank() && !AuthPreferences.isValidEdgeName(edgeName.trim()) ->
+                        "The access header name may only contain letters, digits and dashes."
+                    remote && edgeValue.isNotBlank() && !AuthPreferences.isValidEdgeValue(edgeValue.trim()) ->
+                        "The access header value must be 8 to 200 visible characters, without quotes or backslashes."
                     else -> null
                 }
                 if (problem != null || hub == null || bridge == null) {
@@ -948,6 +1077,7 @@ internal fun ServersSubScreen(
                         authPrefs.saveRemoteBinariesSync(remoteBridgeBin, remoteAgyBin, remoteClaudeBin)
                         authPrefs.saveRemoteInstallDirSync(remoteInstallDir)
                         authPrefs.saveRemoteListenSync(listenBridge, listenHub, listenBind)
+                        authPrefs.saveEdgeHeaderSync(edgeName, edgeValue)
                     } else {
                         authPrefs.saveAgyBridgeBinaryPath(bridgeBinPath.trim().ifBlank { authPrefs.getDefaultBridgeBinaryPath() })
                         authPrefs.saveAgyBinaryPath(agyBinPath.trim().ifBlank { authPrefs.getDefaultAgyBinaryPath() })
@@ -1026,136 +1156,8 @@ private fun RemoteServerCard(cardBg: Color, cardBorder: BorderStroke, subtle: Co
             }
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = onShowLog, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) { Text("Server log", fontSize = 12.sp) }
-
-            Spacer(Modifier.height(14.dp))
-            HorizontalDivider(thickness = 0.6.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-            Spacer(Modifier.height(12.dp))
-            AdbTunnelSection(subtle)
         }
     }
-}
-
-/** "Let the server use this phone's adb": a reverse tunnel for the server's own `adb`. */
-@Composable
-private fun AdbTunnelSection(subtle: Color) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val adb by AdbTunnel.state.collectAsState()
-    LaunchedEffect(Unit) { AdbTunnel.load(context) }
-    var showPair by remember { mutableStateOf(false) }
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text("Let the server use this phone's adb", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-            Text(
-                "Opens 127.0.0.1:${adb.serverPort} on the server to this phone's adb. Full control of the phone: only enable it for a server you trust.",
-                fontSize = 11.sp, color = subtle
-            )
-        }
-        Switch(
-            checked = adb.enabled,
-            onCheckedChange = { AdbTunnel.setEnabled(context, it) },
-            colors = SwitchDefaults.colors(checkedTrackColor = QuotaGreen)
-        )
-    }
-    if (adb.enabled) {
-        Spacer(Modifier.height(6.dp))
-        val status = when {
-            adb.phonePort == null -> "Phone adb: not found"
-            adb.phoneMode == "tcpip" -> "Phone adb: fixed port ${adb.phonePort} (adb tcpip)"
-            else -> "Phone adb: Wireless debugging, port ${adb.phonePort}"
-        }
-        Text(status, fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = if (adb.phonePort != null) QuotaGreen else Color(0xFFF59E0B))
-        if (adb.message.isNotBlank()) Text(adb.message, fontSize = 11.sp, color = subtle)
-        Spacer(Modifier.height(6.dp))
-        Text("On the server:", fontSize = 11.sp, color = subtle)
-        Text("adb connect 127.0.0.1:${adb.serverPort}", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
-        Spacer(Modifier.height(8.dp))
-        var installMsg by remember { mutableStateOf<String?>(null) }
-        var installing by remember { mutableStateOf(false) }
-        if (adb.message.contains("not installed on the server")) {
-            OutlinedButton(
-                enabled = !installing,
-                onClick = {
-                    installing = true; installMsg = "Installing adb on the server…"
-                    scope.launch {
-                        val r = AdbTunnel.installServerAdb()
-                        installing = false
-                        installMsg = r.fold({ it }, { it.message ?: "Install failed" })
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)
-            ) { Text("Install adb on the server", fontSize = 12.sp) }
-            installMsg?.let { Text(it, fontSize = 11.sp, color = subtle, modifier = Modifier.padding(top = 4.dp)) }
-            Spacer(Modifier.height(6.dp))
-        }
-        if (adb.phoneMode != "tcpip") {
-            OutlinedButton(onClick = { showPair = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-                Text("Pair the server (Wireless debugging)", fontSize = 12.sp)
-            }
-        }
-    }
-    if (showPair) AdbPairDialog(adb, onDismiss = {
-        showPair = false
-        scope.launch { AdbTunnel.stopPairingForward(context) }
-    })
-}
-
-@Composable
-private fun AdbPairDialog(adb: AdbTunnel.State, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var code by remember { mutableStateOf("") }
-    var manualPort by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Pair the server's adb", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
-        text = {
-            Column {
-                Text(
-                    "Wireless debugging only accepts a computer once it has been paired.\n\n" +
-                        "1. On this phone open Developer options > Wireless debugging > \"Pair device with pairing code\". Keep that dialog open.\n" +
-                        "2. Type the 6-digit code it shows here, and tap Pair. The app does the rest on the server.",
-                    fontSize = 12.5.sp, lineHeight = 17.sp
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = code, onValueChange = { code = it.filter(Char::isDigit).take(6) },
-                    label = { Text("6-digit pairing code") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-                Spacer(Modifier.height(6.dp))
-                OutlinedTextField(
-                    value = manualPort, onValueChange = { manualPort = it.filter(Char::isDigit) },
-                    label = { Text("Port shown in the dialog (only if it is not found by itself)") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-                result?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(it.second, fontSize = 12.sp, color = if (it.first) QuotaGreen else Color.Red)
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                enabled = !busy && code.length == 6,
-                onClick = {
-                    busy = true; result = null
-                    scope.launch {
-                        val r = AdbTunnel.pairServer(context, code, manualPort.toIntOrNull())
-                        busy = false
-                        result = r.fold({ true to it }, { false to (it.message ?: "Pairing failed") })
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-            ) { Text(if (busy) "Pairing…" else "Pair") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-        shape = RoundedCornerShape(16.dp),
-        containerColor = MaterialTheme.colorScheme.surface
-    )
 }
 
 @Composable

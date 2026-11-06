@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -62,6 +63,8 @@ type HubManager struct {
 	monitorStop chan struct{}
 	recentLogs  []string
 	mu          sync.Mutex
+	// agyBinShadow mirrors AgyBinPath so the status endpoints never wait for mu
+	agyBinShadow atomic.Value
 }
 
 // FindAllAgyBinaries discovers all existing AGY binaries in candidate paths and PATH.
@@ -191,7 +194,7 @@ func NewHubManager(hubPort, workspaceDir, appDataDir, securityToken, agyBinPath 
 	if hubPort == "" {
 		hubPort = "1235"
 	}
-	return &HubManager{
+	m := &HubManager{
 		HubPort:       hubPort,
 		WorkspaceDir:  workspaceDir,
 		AppDataDir:    appDataDir,
@@ -201,6 +204,8 @@ func NewHubManager(hubPort, workspaceDir, appDataDir, securityToken, agyBinPath 
 		recentLogs:    make([]string, 0, 50),
 		monitorStop:   make(chan struct{}),
 	}
+	m.agyBinShadow.Store(agyBinPath)
+	return m
 }
 
 // isHubReady probes if port 1235 is active and accepting connections, logging probe details for debugging
@@ -362,6 +367,22 @@ func (m *HubManager) StartContinuousMonitor() {
 			}
 		}
 	}()
+}
+
+// GetAgyBin returns the agy binary the hub uses ("" if none was found yet).
+func (m *HubManager) GetAgyBin() string {
+	if v, ok := m.agyBinShadow.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
+// SetAgyBin sets the agy binary to use (for example right after it was installed).
+func (m *HubManager) SetAgyBin(path string) {
+	m.agyBinShadow.Store(path)
+	m.mu.Lock()
+	m.AgyBinPath = path
+	m.mu.Unlock()
 }
 
 // IsPortActive checks if the hub port is currently listening.

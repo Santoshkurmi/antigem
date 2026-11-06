@@ -1642,9 +1642,17 @@ fun MarkdownVideoView(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val videoUri = remember(video.url) {
+    // A video on the bridge (a link to it, or a path on the server in Server mode) is downloaded with the security header
+    // when it is played; a normal link or a file on this phone is used directly.
+    val bridgeUrl = remember(video.url) { HubMediaResolver.bridgeUrlFor(video.url) }
+    var fetched by remember(video.url) {
+        mutableStateOf(bridgeUrl?.let { HubMediaResolver.cachedBridgeMedia(context.applicationContext, it) })
+    }
+    val ready = bridgeUrl == null || fetched != null
+    val videoUri = remember(video.url, fetched) {
         val raw = video.url.trim()
-        if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("content://") || raw.startsWith("file://")) {
+        if (fetched != null) Uri.fromFile(fetched)
+        else if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("content://") || raw.startsWith("file://")) {
             Uri.parse(raw)
         } else {
             Uri.fromFile(java.io.File(raw))
@@ -1655,8 +1663,8 @@ fun MarkdownVideoView(
     var thumbnail by remember(video.url) {
         mutableStateOf(VideoThumbnailCache.peek(video.url))
     }
-    LaunchedEffect(video.url) {
-        thumbnail = VideoThumbnailCache.load(context.applicationContext, video.url, videoUri)
+    LaunchedEffect(video.url, fetched) {
+        if (ready) thumbnail = VideoThumbnailCache.load(context.applicationContext, video.url, videoUri)
     }
     var isPrepared by remember(video.url) { mutableStateOf(false) }
     var isPlaying by remember(video.url) { mutableStateOf(false) }
@@ -1665,8 +1673,15 @@ fun MarkdownVideoView(
     var positionMs by remember(video.url) { mutableIntStateOf(0) }
     var isSeeking by remember(video.url) { mutableStateOf(false) }
 
-    val player = remember(video.url, playbackRequested) {
-        if (playbackRequested) android.media.MediaPlayer() else null
+    LaunchedEffect(playbackRequested) {
+        if (playbackRequested && bridgeUrl != null && fetched == null) {
+            val file = HubMediaResolver.downloadBridgeMedia(context.applicationContext, bridgeUrl)
+            if (file != null) fetched = file else hasError = true
+        }
+    }
+
+    val player = remember(video.url, playbackRequested, ready) {
+        if (playbackRequested && ready) android.media.MediaPlayer() else null
     }
 
     if (player != null) {

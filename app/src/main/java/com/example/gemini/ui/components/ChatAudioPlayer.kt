@@ -178,7 +178,10 @@ fun ChatAudioPlayer(
                             if (onBridge) {
                                 mediaPlayer.setDataSource(
                                     context, android.net.Uri.parse(streamUrl),
-                                    mapOf(AuthPreferences.currentFramedHeader to "true")
+                                    buildMap {
+                                        put(AuthPreferences.currentFramedHeader, "true")
+                                        AuthPreferences.edgeHeader()?.let { (n, v) -> put(n, v) }
+                                    }
                                 )
                             } else {
                                 mediaPlayer.setDataSource(streamUrl)

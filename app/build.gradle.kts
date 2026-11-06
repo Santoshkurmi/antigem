@@ -11,6 +11,14 @@ val parsedVersion = if (versionFile.exists()) {
 val appVersionCode = (parsedVersion["version_code"] as? Number)?.toInt() ?: 1
 val appVersionName = (parsedVersion["version_name"] as? String) ?: "1.0.0"
 
+// The IDE bridge (Go) reports the same version as the app: its build embeds a copy of version.json, refreshed here on
+// every Gradle build so the two can never differ and nobody has to remember it.
+val syncBridgeVersion by tasks.registering(Copy::class) {
+    from(versionFile)
+    into(rootProject.file("agy_ide_bridge/pkg/buildinfo"))
+}
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(syncBridgeVersion) }
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
@@ -229,6 +237,7 @@ wire {
 }
 
 val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
+  dependsOn(syncBridgeVersion) // the bridge embeds the app's version
   val binDir = layout.projectDirectory.dir("src/main/assets/bin")
   val bridgeSourceDir = layout.projectDirectory.dir("../agy_ide_bridge")
 

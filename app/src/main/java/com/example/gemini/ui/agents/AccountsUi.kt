@@ -39,6 +39,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -175,6 +178,12 @@ fun AccountsDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    // `agy --version`, asked from the bridge (this phone's or the server's) each time the dialog opens
+    val agyCli by com.example.gemini.data.remote.BridgeInfo.agyCli.collectAsState()
+    LaunchedEffect(Unit) { com.example.gemini.data.remote.BridgeInfo.refreshAgyCli() }
+    val agyVersion = agyCli?.takeIf { it.installed }?.version?.let { v ->
+        Regex("\\d+(\\.\\d+)+\\S*").find(v)?.value ?: v.takeIf { it.isNotBlank() }
+    }
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(24.dp),
@@ -203,8 +212,9 @@ fun AccountsDialog(
                         title = if (entry.isReady) agyAuth.displayName.ifBlank { AgentKind.AGY.label() } else AgentKind.AGY.label(),
                         subtitle = if (entry.isReady) agyAuth.email.ifBlank { null } else entry.detail,
                         facts = if (entry.isReady) listOfNotNull(
-                            agyAuth.userTier.ifBlank { agyAuth.planName }.ifBlank { null }
-                        ) else emptyList()
+                            agyAuth.userTier.ifBlank { agyAuth.planName }.ifBlank { null },
+                            agyVersion?.let { "CLI $it" }
+                        ) else listOfNotNull(agyVersion?.let { "CLI $it" })
                     ) {
                         when {
                             entry.isReady -> {

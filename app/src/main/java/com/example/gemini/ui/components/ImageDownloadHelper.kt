@@ -97,7 +97,14 @@ object ImageDownloadHelper {
         val safeTitle = title.replace(Regex("[^A-Za-z0-9_-]"), "_").take(30).trimEnd('_')
         val fileName = if (safeTitle.isNotBlank()) "VID_${safeTitle}_$timestamp.$extension" else "VID_$timestamp.$extension"
 
+        // in Server mode a plain path is a file on the server: read it through the bridge
+        val serverUrl = if (source.startsWith("http://") || source.startsWith("https://")) null
+        else com.example.gemini.data.remote.HubMediaResolver.bridgeUrlFor(source)
         val input: java.io.InputStream? = when {
+            serverUrl != null -> {
+                val resp = com.example.gemini.data.remote.AgyBridgeService.instance.client.newCall(Request.Builder().url(serverUrl).get().build()).execute()
+                if (resp.isSuccessful) resp.body?.byteStream() else { resp.close(); null }
+            }
             source.startsWith("content://") -> context.contentResolver.openInputStream(Uri.parse(source))
             source.startsWith("http://") || source.startsWith("https://") -> {
                 val fixedSource = com.example.gemini.data.preferences.AuthPreferences.rebaseBridgeUrl(source)

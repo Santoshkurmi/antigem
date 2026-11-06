@@ -1,9 +1,9 @@
 package security
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
-	"crypto/subtle"
 	"errors"
 	"fmt"
 	"math/big"
@@ -344,11 +344,7 @@ func AuthMiddleware(token string, next http.Handler) http.Handler {
 			}
 		}
 
-		// 3. Also check query param ?token= (for WebSocket handshake and media players that cannot set headers)
-		if q := r.URL.Query().Get("token"); q != "" && subtle.ConstantTimeCompare([]byte(q), []byte(token)) == 1 {
-			next.ServeHTTP(w, r)
-			return
-		}
+		// The token is never accepted in the URL: URLs end up in proxy access logs, browser history and referrers.
 
 		ip := clientIP(r)
 		if authFailures.blocked(ip) {
@@ -433,3 +429,68 @@ func clientIP(r *http.Request) string {
 	}
 	return host
 }
+
+// GuardResponse is the last line of defence against the secret leaving this process in a response: whatever a handler
+// does, a response header whose value contains the token or the framed header name is removed before it is sent.
+func GuardResponse(token string, next http.Handler) http.Handler {
+	if strings.TrimSpace(token) == "" {
+		return next
+	}
+	secrets := []string{strings.ToLower(token), strings.ToLower(BuildFramedHeader(token))}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(&guardWriter{ResponseWriter: w, secrets: secrets}, r)
+	})
+}
+
+type guardWriter struct {
+	http.ResponseWriter
+	secrets []string
+	sent    bool
+}
+
+func (g *guardWriter) scrub() {
+	if g.sent {
+		return
+	}
+	g.sent = true
+	h := g.ResponseWriter.Header()
+	for name, values := range h {
+	check:
+		for _, v := range values {
+			lv := strings.ToLower(v)
+			for _, s := range g.secrets {
+				if s != "" && strings.Contains(lv, s) {
+					h.Del(name)
+					break check
+				}
+			}
+		}
+	}
+}
+
+func (g *guardWriter) WriteHeader(code int) {
+	g.scrub()
+	g.ResponseWriter.WriteHeader(code)
+}
+
+func (g *guardWriter) Write(b []byte) (int, error) {
+	g.scrub()
+	return g.ResponseWriter.Write(b)
+}
+
+func (g *guardWriter) Flush() {
+	g.scrub()
+	if f, ok := g.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Hijack keeps WebSocket upgrades working.
+func (g *guardWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := g.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, errors.New("hijacking not supported")
+}
+
+func (g *guardWriter) Unwrap() http.ResponseWriter { return g.ResponseWriter }

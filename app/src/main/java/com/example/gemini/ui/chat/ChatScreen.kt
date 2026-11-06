@@ -1016,6 +1016,7 @@ fun ChatScreen(
             )
         }
     ) {
+        com.example.gemini.ui.agents.BridgeVersionDialog()
         if (pendingLoginUrl != null) {
             val targetUrl = pendingLoginUrl!!
             val remoteSignIn = AuthPreferences.currentRemoteMode

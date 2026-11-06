@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"gemini-server/pkg/buildinfo"
 	"io"
 	"net/http"
 	"os"
@@ -75,7 +76,7 @@ func (h *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":    "ok",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"version":   "2.0.0",
+		"version":   buildinfo.Version(),
 	})
 }
 
@@ -110,7 +111,7 @@ func (h *Handler) StatusHandler(w http.ResponseWriter, r *http.Request) {
 		"status":    "ok",
 		"uptime":    time.Since(startTime).Seconds(),
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"version":   "2.0.0",
+		"version":   buildinfo.Version(),
 		"hub": map[string]interface{}{
 			"active":     hubActive,
 			"status":     hubStatus,

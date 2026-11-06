@@ -1,0 +1,11 @@
+{
+  "version_code": 119,
+  "version_name": "1.0.19",
+  "min_supported_version_code": 1,
+  "changelog": [
+    "Added notes and todos in the app(see in floating one) and its mcp",
+    "Fix bug of copying on expand of code causing crash",
+    "Added video better preview support"
+  ],
+  "is_critical": false
+}

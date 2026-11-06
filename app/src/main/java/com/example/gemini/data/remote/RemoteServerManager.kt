@@ -9,7 +9,6 @@ import com.example.gemini.data.ssh.SshSessionFactory
 import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.Session
-import com.jcraft.jsch.SftpProgressMonitor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,7 +32,7 @@ import java.security.MessageDigest
  * Remote mode: the IDE bridge and the agents run on a server (VPS) and the app manages them over SSH.
  *
  * One long-lived SSH connection ("control session") is kept open and re-opened when it drops. Over it the app
- *  - uploads the right Linux build of the bridge (by `uname -m`) when the server has none or an older one,
+ *  - checks that the bridge binary is on the server (the user copies it there; the app never uploads it),
  *  - starts/stops/restarts the bridge inside a tmux session (it survives the SSH connection),
  *  - reads the bridge log,
  *  - opens reverse port forwards so the agents on the server can reach the MCP servers that live in this app
@@ -67,7 +66,6 @@ object RemoteServerManager {
 
     @Volatile private var control: Session? = null
     private var supervisor: Job? = null
-    private var opJob: Job? = null
     @Volatile private var appContext: Context? = null
 
     val isRemote: Boolean get() = AuthPreferences.currentRemoteMode
@@ -96,10 +94,12 @@ object RemoteServerManager {
         if (supervisor?.isActive == true) return
         supervisor = scope.launch {
             var backoff = 3_000L
+            var tick = 0
             while (isActive && isRemote) {
                 val s = control
                 if (s != null && s.isConnected) {
                     appContext?.let { ctx -> runCatching { AdbTunnel.sync(ctx, s) } }
+                    if (++tick % 3 == 0) runCatching { reconcileStatus() }
                     delay(4_000)
                     backoff = 3_000L
                     continue
@@ -113,6 +113,24 @@ object RemoteServerManager {
                     backoff = (backoff * 2).coerceAtMost(30_000L)
                 }
             }
+        }
+    }
+
+    private var downStrikes = 0
+
+    /** Keeps the shown status true: a bridge that died shows an error, one that is up (started elsewhere) shows running. */
+    private suspend fun reconcileStatus() {
+        if (pendingOps.isNotEmpty() || opLock.isLocked) return
+        val st = LocalServerManager.status.value
+        if (st is LocalServerStatus.Starting || st is LocalServerStatus.Stopping) return
+        if (bridgeReachable()) {
+            downStrikes = 0
+            if (st !is LocalServerStatus.Running) LocalServerManager.publishRemoteStatus(LocalServerStatus.Running())
+        } else if (st is LocalServerStatus.Running && ++downStrikes >= 2) {
+            downStrikes = 0
+            LocalServerManager.publishRemoteStatus(LocalServerStatus.Error(
+                "The app cannot reach the bridge at ${AuthPreferences.currentBridgeHttpUrl}. It may have stopped or the network dropped. Tap Start to check."
+            ))
         }
     }
 
@@ -289,135 +307,90 @@ object RemoteServerManager {
         return out.trim().endsWith("200")
     }
 
-    private fun assetNameFor(arch: String): String? = when (arch.trim()) {
-        "x86_64", "amd64" -> "agy_ide_bridge_linux_amd64"
-        "aarch64", "arm64" -> "agy_ide_bridge_linux_arm64"
-        else -> null
-    }
+    /** Defaults shown in Settings (and used when a field is left blank). `~` is the SSH user's home on the server. */
+    const val DEFAULT_AGY_BIN = "~/.local/bin/agy"
+    const val DEFAULT_CLAUDE_BIN = "~/.local/bin/claude"
+    fun defaultBridgeBin(installDir: String): String =
+        "~/" + installDir.trim().trim('/').ifBlank { ".antigem" } + "/agy_ide_bridge"
 
-    /** SHA-256 and size of a bundled file (read once; the server copy is compared against it). */
-    private fun assetDigest(context: Context, asset: String): Pair<String, Long> {
-        val md = MessageDigest.getInstance("SHA-256")
-        var size = 0L
-        context.assets.open("bin/$asset").use { input ->
-            val buf = ByteArray(64 * 1024)
-            while (true) {
-                val n = input.read(buf)
-                if (n < 0) break
-                md.update(buf, 0, n)
-                size += n
-            }
-        }
-        return md.digest().joinToString("") { "%02x".format(it) } to size
-    }
+    private fun effectiveBridgeBin(prefs: AuthPreferences): String =
+        prefs.getRemoteBridgeBinSync().trim().ifBlank { defaultBridgeBin(prefs.getRemoteInstallDirSync()) }
 
-    /** Makes sure a bridge binary exists on the server and returns its absolute path there. */
-    private fun ensureBridgeBinary(context: Context, s: Session): String {
-        val custom = AuthPreferences(context).getRemoteBridgeBinSync()
-        if (custom.isNotBlank()) {
-            val (code, _) = exec(s, "test -x ${q(custom)}")
-            if (code != 0) throw IllegalStateException("The bridge binary on the server was not found or is not executable: $custom")
-            return custom
-        }
+    private fun effectiveAgyBin(prefs: AuthPreferences): String = prefs.getRemoteAgyBinSync().trim().ifBlank { DEFAULT_AGY_BIN }
+    private fun effectiveClaudeBin(prefs: AuthPreferences): String = prefs.getRemoteClaudeBinSync().trim().ifBlank { DEFAULT_CLAUDE_BIN }
 
-        _detail.value = "Checking the server…"
-        val (unameCode, uname) = exec(s, "uname -sm")
-        if (unameCode != 0 || !uname.startsWith("Linux")) {
-            throw IllegalStateException("Only Linux servers are supported (found: ${uname.ifBlank { "unknown" }}).")
-        }
-        val arch = uname.substringAfter(' ')
-        val asset = assetNameFor(arch)
-            ?: throw IllegalStateException("Unsupported server CPU: $arch (supported: x86_64, aarch64).")
-
+    private fun serverHome(s: Session): String {
         val (_, home) = exec(s, "printf %s \"\$HOME\"")
         if (home.isBlank()) throw IllegalStateException("Could not read the server's home directory.")
-        val dir = home.trimEnd('/') + "/" + AuthPreferences(context).getRemoteInstallDirSync().trim('/')
-        val path = "$dir/agy_ide_bridge"
-
-        val (localSha, total) = try {
-            assetDigest(context, asset)
-        } catch (e: java.io.FileNotFoundException) {
-            throw IllegalStateException(
-                "This app build has no Linux server bridge ($asset). Build it with scripts/build_server_bridge.sh, " +
-                    "or put the bridge on the server yourself and set \"Bridge binary on the server\"."
-            )
-        }
-        val (_, remoteSha) = exec(s, "sha256sum ${q(path)} 2>/dev/null | cut -d' ' -f1")
-        if (remoteSha.trim() == localSha) return path
-
-        _detail.value = "Uploading the bridge…"
-        exec(s, "mkdir -p ${q(dir)}")
-        val temp = "$path.new"
-        val onProgress = { done: Long ->
-            if (total > 0) _detail.value = "Uploading the bridge… ${(done * 100 / total).coerceAtMost(100)}%"
-        }
-        try {
-            val sftp = s.openChannel("sftp") as ChannelSftp
-            sftp.connect(15_000)
-            try {
-                context.assets.open("bin/$asset").use { input ->
-                    sftp.put(input, temp, object : SftpProgressMonitor {
-                        private var done = 0L
-                        override fun init(op: Int, src: String?, dest: String?, max: Long) {}
-                        override fun count(count: Long): Boolean {
-                            done += count
-                            onProgress(done)
-                            return true
-                        }
-                        override fun end() {}
-                    }, ChannelSftp.OVERWRITE)
-                }
-            } finally {
-                sftp.disconnect()
-            }
-        } catch (e: Exception) {
-            // sshd without the SFTP subsystem: stream the file through a plain `cat > file`
-            Log.w(TAG, "SFTP upload failed (${e.message}), falling back to cat")
-            val ch = s.openChannel("exec") as ChannelExec
-            ch.setCommand("cat > ${q(temp)}")
-            val out = ch.outputStream
-            ch.connect(15_000)
-            try {
-                context.assets.open("bin/$asset").use { input ->
-                    val buf = ByteArray(32 * 1024)
-                    var done = 0L
-                    while (true) {
-                        val n = input.read(buf)
-                        if (n < 0) break
-                        out.write(buf, 0, n)
-                        done += n
-                        onProgress(done)
-                    }
-                }
-                out.flush()
-                out.close()
-                var waited = 0
-                while (!ch.isClosed && waited < 20_000) { Thread.sleep(50); waited += 50 }
-            } finally {
-                ch.disconnect()
-            }
-        }
-        val (mvCode, mvOut) = exec(s, "chmod +x ${q("$path.new")} && mv -f ${q("$path.new")} ${q(path)}")
-        if (mvCode != 0) throw IllegalStateException("Could not install the bridge on the server: $mvOut")
-        return path
+        return home.trim().trimEnd('/')
     }
 
-    private fun launchScript(context: Context, bin: String, installDir: String): String {
+    private fun expandHome(path: String, home: String): String = when {
+        path == "~" -> home
+        path.startsWith("~/") -> home + path.substring(1)
+        else -> path
+    }
+
+    /**
+     * The bridge binary is never uploaded by the app: the user puts it in the server folder. Returns its absolute path
+     * or throws a message that says exactly what to do.
+     */
+    private fun ensureBridgeBinary(context: Context, s: Session, home: String): String {
+        val path = expandHome(effectiveBridgeBin(AuthPreferences(context)), home)
+        _detail.value = "Checking the bridge on the server…"
+        val (_, state) = exec(
+            s,
+            "p=${q(path)}; if [ ! -e \"\$p\" ]; then echo missing; elif [ -d \"\$p\" ]; then echo dir; " +
+                "elif [ ! -x \"\$p\" ]; then echo noexec; else echo ok; fi"
+        )
+        when (state.trim().lines().lastOrNull()) {
+            "ok" -> return path
+            "dir" -> throw IllegalStateException("The bridge path on the server is a folder, not a file: $path")
+            "noexec" -> throw IllegalStateException("The bridge on the server is not executable. Run on the server: chmod +x $path")
+            else -> {
+                val arch = exec(s, "uname -m").second.trim().ifBlank { "unknown CPU" }
+                val build = when (arch) {
+                    "x86_64", "amd64" -> "agy_ide_bridge_linux_amd64"
+                    "aarch64", "arm64" -> "agy_ide_bridge_linux_arm64"
+                    else -> "a Linux build for $arch"
+                }
+                throw IllegalStateException(
+                    "The bridge is not on the server. Copy $build there yourself as $path and make it executable " +
+                        "(chmod +x). The app does not upload it. Server CPU: $arch."
+                )
+            }
+        }
+    }
+
+    /**
+     * The path to hand to the bridge for an agent, or null to let the bridge find it itself. A missing agent must not stop
+     * the bridge from starting (the app can install agy from Settings > Agents), so a path that does not exist is left
+     * out; a bare name such as `claude` is always passed (the bridge looks it up in PATH).
+     */
+    private fun agentPathOrNull(s: Session, path: String): String? {
+        if (!path.contains('/')) return path
+        return if (exec(s, "test -x ${q(path)}").first == 0) path else null
+    }
+
+    /** Where the app expects the bridge binary on the server (with `~` for the home folder). */
+    fun bridgeBinaryPath(context: Context): String = effectiveBridgeBin(AuthPreferences(context))
+
+    private fun launchScript(context: Context, bin: String, agyPath: String?, claudePath: String?): String {
         val prefs = AuthPreferences(context)
+        val installDir = bin.substringBeforeLast('/')
         val p = plan(context)
         val tz = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 1000
-        val agy = prefs.getRemoteAgyBinSync()
-        val claude = prefs.getRemoteClaudeBinSync()
-        val claudeEnabled = com.example.gemini.domain.model.AgentKind.CLAUDE in
-            com.example.gemini.data.agent.AgentPreferences.enabledSync(context)
+        val enabledAgents = com.example.gemini.data.agent.AgentPreferences.enabledSync(context)
+        val claudeEnabled = com.example.gemini.domain.model.AgentKind.CLAUDE in enabledAgents
+        val agyEnabled = com.example.gemini.domain.model.AgentKind.AGY in enabledAgents
         val core = buildString {
             append(q(bin)).append(" -f --token ").append(AuthPreferences.currentSecurityToken)
             append(" -p ").append(p.bridgePort)
             append(" --hub-port ").append(p.hubPort)
             append(" --bind ").append(q(p.bind))
             append(" --tz-offset ").append(tz)
-            if (agy.isNotBlank()) append(" --bin ").append(q(agy))
-            if (claude.isNotBlank() && claudeEnabled) append(" --claude-bin ").append(q(claude))
+            if (agyEnabled && agyPath != null) append(" --bin ").append(q(agyPath))
+            if (claudeEnabled && claudePath != null) append(" --claude-bin ").append(q(claudePath))
             append(com.example.gemini.data.agent.AgentPreferences.bridgeFlags(context))
         }
         val log = "$installDir/bridge.log"
@@ -441,6 +414,17 @@ object RemoteServerManager {
     // Public controls (same names LocalServerManager has, so the callers just forward here)
     // ---------------------------------------------------------------------------------------------------------
 
+    // Operations are never cancelled half way (a cancelled SSH command keeps running on the server anyway): they run
+    // one after the other, and asking for an operation that is already running or queued does nothing.
+    private val pendingOps = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    private fun submit(kind: String, block: suspend () -> Unit) {
+        if (!pendingOps.add(kind)) return
+        scope.launch {
+            try { block() } finally { pendingOps.remove(kind) }
+        }
+    }
+
     fun autoStart(context: Context) {
         if (!isRemote) return
         ensureSupervisor(context)
@@ -450,20 +434,17 @@ object RemoteServerManager {
     fun start(context: Context, force: Boolean = false) {
         appContext = context.applicationContext
         ensureSupervisor(context)
-        opJob?.cancel()
-        opJob = scope.launch { startInternal(context.applicationContext, force) }
+        submit(if (force) "restart" else "start") { startInternal(context.applicationContext, force) }
     }
 
     fun stop() {
-        opJob?.cancel()
-        opJob = scope.launch { stopInternal() }
+        submit("stop") { stopInternal() }
     }
 
     fun restart(context: Context) {
         appContext = context.applicationContext
         ensureSupervisor(context)
-        opJob?.cancel()
-        opJob = scope.launch { startInternal(context.applicationContext, force = true) }
+        submit("restart") { startInternal(context.applicationContext, force = true) }
     }
 
     suspend fun restartAndWait(context: Context) {
@@ -476,6 +457,18 @@ object RemoteServerManager {
         stopInternal()
     }
 
+    /** `[a]gy_ide_bridge.* -f --token`: matches the running bridge but not the shell that runs pgrep. */
+    private fun bridgePattern(context: Context): String {
+        val name = effectiveBridgeBin(AuthPreferences(context)).substringAfterLast('/').ifBlank { "agy_ide_bridge" }
+        return "[" + name.first() + "]" + name.drop(1) + ".* -f --token"
+    }
+
+    private fun bridgeProcessAlive(s: Session, context: Context): Boolean =
+        exec(s, "pgrep -f ${q(bridgePattern(context))} >/dev/null 2>&1 && echo yes || echo no", 8_000).second.trim().endsWith("yes")
+
+    private fun logTail(s: Session, bin: String): String =
+        runCatching { exec(s, "tail -n 12 ${q(bin.substringBeforeLast('/') + "/bridge.log")} 2>/dev/null | sed 's/\\x1b\\[[0-9;]*[A-Za-z]//g'", 8_000).second }.getOrDefault("")
+
     private suspend fun startInternal(context: Context, force: Boolean) = opLock.withLock {
         withContext(Dispatchers.IO) {
             LocalServerManager.publishRemoteStatus(LocalServerStatus.Starting)
@@ -483,25 +476,50 @@ object RemoteServerManager {
                 _detail.value = "Connecting over SSH…"
                 val s = session()
                 val p = plan(context)
+                val prefs = AuthPreferences(context)
 
-                if (!force && bridgeReachable()) {
-                    LocalServerManager.publishRemoteStatus(LocalServerStatus.Running())
-                    _detail.value = ""
-                    refreshLogInternal(context, s)
-                    return@withContext
+                if (!force) {
+                    if (bridgeReachable()) {
+                        LocalServerManager.publishRemoteStatus(LocalServerStatus.Running())
+                        _detail.value = ""
+                        refreshLogInternal(context, s)
+                        return@withContext
+                    }
+                    // Running on the server but the app cannot reach it: do not kill a healthy bridge, say what is wrong
+                    if (runCatching { serverLoopbackHealthy(s, p.bridgePort) }.getOrDefault(false)) {
+                        _detail.value = ""
+                        LocalServerManager.publishRemoteStatus(LocalServerStatus.Error(
+                            "The bridge is running on the server (port ${p.bridgePort}) but the app cannot reach " +
+                                "${AuthPreferences.currentBridgeHttpUrl}. Check the reverse proxy, the firewall and the URL " +
+                                "(Restart relaunches the bridge)."
+                        ))
+                        refreshLogInternal(context, s)
+                        return@withContext
+                    }
                 }
-                if (force) stopServerProcesses(s, context, graceful = true)
 
-                val bin = ensureBridgeBinary(context, s)
+                // check everything first, so a Restart with a missing binary does not stop a working bridge
+                val home = serverHome(s)
+                val bin = ensureBridgeBinary(context, s, home)
+                val enabledAgents = com.example.gemini.data.agent.AgentPreferences.enabledSync(context)
+                val agyPath = agentPathOrNull(s, expandHome(effectiveAgyBin(prefs), home))
+                val claudePath = agentPathOrNull(s, expandHome(effectiveClaudeBin(prefs), home))
+
+                // Never launch over an old copy: graceful on a restart, only leftovers on a plain start
+                _detail.value = if (force) "Stopping the old bridge…" else "Starting the bridge…"
+                stopServerProcesses(s, context, graceful = force)
+
                 _detail.value = "Starting the bridge…"
-                val installDir = bin.substringBeforeLast('/')
-                val (code, out) = exec(s, launchScript(context, bin, installDir), 30_000)
+                val (code, out) = exec(s, launchScript(context, bin, agyPath, claudePath), 30_000)
                 if (code != 0) throw IllegalStateException("Could not start the bridge: $out")
 
                 _detail.value = "Waiting for the bridge…"
                 var up = false
+                var died = false
                 for (i in 0 until 80) {
                     if (bridgeReachable()) { up = true; break }
+                    // after a few seconds, stop waiting if the process is gone: it crashed, no need to wait 40 s
+                    if (i >= 6 && i % 4 == 2 && !bridgeProcessAlive(s, context)) { died = true; break }
                     delay(500)
                 }
                 if (up) {
@@ -509,11 +527,15 @@ object RemoteServerManager {
                     syncTunnels(s)
                 } else {
                     val onLoopback = runCatching { serverLoopbackHealthy(s, p.bridgePort) }.getOrDefault(false)
-                    val msg = if (onLoopback) {
-                        "The bridge is running on the server (port ${p.bridgePort}) but the app cannot reach " +
-                            "${AuthPreferences.currentBridgeHttpUrl}. Check the reverse proxy, the firewall and the URL."
-                    } else {
-                        "The bridge did not start on the server. See the server log."
+                    val msg = when {
+                        onLoopback ->
+                            "The bridge is running on the server (port ${p.bridgePort}) but the app cannot reach " +
+                                "${AuthPreferences.currentBridgeHttpUrl}. Check the reverse proxy, the firewall and the URL."
+                        else -> {
+                            val tail = logTail(s, bin).trim()
+                            (if (died) "The bridge stopped right after it was started on the server." else "The bridge did not come up on the server in time.") +
+                                if (tail.isNotBlank()) "\nLast log lines:\n$tail" else " See the server log."
+                        }
                     }
                     LocalServerManager.publishRemoteStatus(LocalServerStatus.Error(msg))
                 }
@@ -534,11 +556,27 @@ object RemoteServerManager {
             LocalServerManager.publishRemoteStatus(LocalServerStatus.Stopping)
             try {
                 val ctx = appContext
-                val s = control?.takeIf { it.isConnected }
-                if (s != null && ctx != null) stopServerProcesses(s, ctx, graceful = true)
-                else gracefulShutdownOverHttp()
-                AgyBridgeService.instance.notifyLocalStopped()
-                LocalServerManager.publishRemoteStatus(LocalServerStatus.Stopped(exitCode = 0))
+                // try to bring SSH back if it dropped: stopping through the tmux session is the reliable way
+                val s = runCatching { session() }.getOrNull()
+                if (s != null && ctx != null) {
+                    stopServerProcesses(s, ctx, graceful = true)
+                } else {
+                    gracefulShutdownOverHttp()
+                    for (i in 0 until 16) { if (!bridgeReachable()) break; delay(250) }
+                }
+                val stillUp = bridgeReachable() ||
+                    (s != null && ctx != null && runCatching { serverLoopbackHealthy(s, plan(ctx).bridgePort) }.getOrDefault(false))
+                if (stillUp) {
+                    LocalServerManager.publishRemoteStatus(LocalServerStatus.Error(
+                        if (s == null) "Could not stop the bridge: SSH is not connected and the bridge did not accept the shutdown request."
+                        else "The bridge is still running on the server after the stop request."
+                    ))
+                } else {
+                    AgyBridgeService.instance.notifyLocalStopped()
+                    LocalServerManager.publishRemoteStatus(LocalServerStatus.Stopped(exitCode = 0))
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "stop failed", e)
                 LocalServerManager.publishRemoteStatus(LocalServerStatus.Error(friendly(e)))
@@ -568,13 +606,15 @@ object RemoteServerManager {
                 delay(250)
             }
         }
+        extensionHostReady = false // the plugin host session is killed below too
+        val pat = q(bridgePattern(context))
         // The bracket in [a] keeps these patterns from matching the shell that runs them.
         exec(
             s,
             "tmux kill-session -t $TMUX_SESSION 2>/dev/null; tmux kill-session -t $EXT_TMUX 2>/dev/null; " +
-                "pids=\$(pgrep -f '[a]gy_ide_bridge.* -f --token'); [ -n \"\$pids\" ] && kill \$pids 2>/dev/null; " +
-                "sleep 1; " +
-                "pids=\$(pgrep -f '[a]gy_ide_bridge.* -f --token'); [ -n \"\$pids\" ] && kill -9 \$pids 2>/dev/null; true",
+                "pids=\$(pgrep -f $pat); " +
+                "if [ -n \"\$pids\" ]; then kill \$pids 2>/dev/null; sleep 1; " +
+                "pids=\$(pgrep -f $pat); [ -n \"\$pids\" ] && kill -9 \$pids 2>/dev/null; fi; true",
             20_000
         )
         // an agent hub the bridge could not stop itself (only when it is still bound to the port)
@@ -746,9 +786,7 @@ object RemoteServerManager {
     private fun refreshLogInternal(context: Context, s: Session) {
         try {
             val prefs = AuthPreferences(context)
-            val custom = prefs.getRemoteBridgeBinSync()
-            val dir = if (custom.isNotBlank()) custom.substringBeforeLast('/')
-            else "\$HOME/" + prefs.getRemoteInstallDirSync().trim('/')
+            val dir = effectiveBridgeBin(prefs).substringBeforeLast('/').replaceFirst("~", "\$HOME")
             val (_, out) = exec(s, "tail -n 300 \"$dir/bridge.log\" 2>/dev/null | sed 's/\\x1b\\[[0-9;]*[A-Za-z]//g'", 10_000)
             _log.value = out
         } catch (e: Exception) {

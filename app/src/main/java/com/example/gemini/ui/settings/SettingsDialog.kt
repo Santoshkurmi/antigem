@@ -755,8 +755,8 @@ private fun MainSettingsMenu(
             onClick = { onNavigate(SettingsSection.TERMINAL) }
         )
 
-        // Section 5.5: Backups & Restore (only for rootfs installed app)
-        if (isLocalToolsInstalled) {
+        // Section 5.5: Backups & Restore (only for rootfs installed app; these back up the phone, not a server)
+        if (isLocalToolsInstalled && !com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) {
             SettingsCategoryCard(
                 icon = Icons.Outlined.Backup,
                 iconTint = GeminiBlue,
@@ -8382,6 +8382,34 @@ private fun AboutSubScreen(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+
+                val bridgeVersion by com.example.gemini.data.remote.BridgeInfo.version.collectAsState()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "IDE Bridge (connected)",
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val bv = bridgeVersion
+                    val bridgeMatches = bv != null && com.example.gemini.data.remote.BridgeInfo.compareBridgeToApp(bv) == 0
+                    Text(
+                        text = when {
+                            bv == null -> "not connected"
+                            bridgeMatches -> "v$bv"
+                            else -> "v$bv (app is v${BuildConfig.VERSION_NAME})"
+                        },
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (bv == null || bridgeMatches) MaterialTheme.colorScheme.onSurface else Color(0xFFF59E0B)
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

@@ -314,6 +314,43 @@ class AgyChatBackend(
         }
     }
 
+    /** Waits for the hub to report a signed-in account; keeps the "Signing in…" state on until it does or time runs out. */
+    private fun startLoginPoll(hubUrl: String) {
+        _isAuthBusy.value = true
+        agyBridgeService.updateAuthChecking(true)
+        loginPollJob?.cancel()
+        loginPollJob = backendScope.launch {
+                val startTime = System.currentTimeMillis()
+                // a remote hub needs time for the user to paste the redirect address
+                val maxWaitMs = if (AuthPreferences.currentRemoteMode) 420_000L else 120_000L
+                while (isActive && System.currentTimeMillis() - startTime < maxWaitMs) {
+                    delay(800)
+
+                    if (isNetworkConnected()) {
+                        val res = agyHubClient.fetchDetailedAuthInfo(hubUrl)
+                        if (res.isSuccess && res.getOrThrow().isLoggedIn) {
+                            val authed = res.getOrThrow()
+                            _agyAuthInfo.value = authed
+                            agyBridgeService.updateAuthState(isAuth = true, isChecking = false)
+                            lastAuthCheckTimeMs = System.currentTimeMillis()
+                            _isAuthBusy.value = false
+                            _pendingLoginUrl.value = null
+                            _authFeedbackMessage.tryEmit("Signed in successfully!")
+                            refreshQuotas(force = true)
+                            break
+                        }
+                    }
+                }
+                _isAuthBusy.value = false
+                agyBridgeService.updateAuthChecking(false)
+            }
+    }
+
+    /** Remote sign-in: the pasted address reached the server, so the sign-in is finishing: show "Signing in…" until it is done. */
+    fun onLoginCallbackForwarded() {
+        startLoginPoll(AuthPreferences.currentHubUrl)
+    }
+
     fun loginToAgyHub(force: Boolean = false) {
         if (_isAuthBusy.value && !force) return
         if (!isNetworkConnected()) {
@@ -343,31 +380,7 @@ class AgyChatBackend(
             _authFeedbackMessage.tryEmit("Initiating sign-in with Antigravity...")
 
             // 1. Poll for successful auth completion concurrently every 800ms
-            loginPollJob = launch {
-                val startTime = System.currentTimeMillis()
-                // a remote hub needs time for the user to paste the redirect address
-                val maxWaitMs = if (AuthPreferences.currentRemoteMode) 420_000L else 120_000L
-                while (isActive && System.currentTimeMillis() - startTime < maxWaitMs) {
-                    delay(800)
-
-                    if (isNetworkConnected()) {
-                        val res = agyHubClient.fetchDetailedAuthInfo(hubUrl)
-                        if (res.isSuccess && res.getOrThrow().isLoggedIn) {
-                            val authed = res.getOrThrow()
-                            _agyAuthInfo.value = authed
-                            agyBridgeService.updateAuthState(isAuth = true, isChecking = false)
-                            lastAuthCheckTimeMs = System.currentTimeMillis()
-                            _isAuthBusy.value = false
-                            _pendingLoginUrl.value = null
-                            _authFeedbackMessage.tryEmit("Signed in successfully!")
-                            refreshQuotas(force = true)
-                            break
-                        }
-                    }
-                }
-                _isAuthBusy.value = false
-                agyBridgeService.updateAuthChecking(false)
-            }
+            startLoginPoll(hubUrl)
 
             // 2. Kick off login RPC on daemon (Login RPC opens browser / triggers auth flow)
             launch {
@@ -490,6 +503,8 @@ class AgyChatBackend(
                 try {
                     val wsUrl = AuthPreferences.currentBridgeWsUrl
                     agyBridgeService.monitorHubStatus(wsUrl).collect { status ->
+                        // the bridge answers: learn its version (the app warns when it differs from the app's)
+                        com.example.gemini.data.remote.BridgeInfo.refreshVersionIfUnknown()
                         when (status.status) {
                             "online" -> {
                                 _isServerOnline.value = true
@@ -533,6 +548,7 @@ class AgyChatBackend(
                     _isServerOnline.value = false
                     _isBridgeOnline.value = false
                     agyBridgeService.resetState()
+                    com.example.gemini.data.remote.BridgeInfo.reset()
                     delay(1000)
                 }
             }
@@ -542,6 +558,8 @@ class AgyChatBackend(
             agyBridgeService.loginUrlEvents.collect { url ->
                 if (url.isNotBlank()) {
                     _pendingLoginUrl.value = url
+                    // a sign-in has started (even one the server started): show "Signing in…" until it finishes
+                    if (!_isAuthBusy.value && !_agyAuthInfo.value.isLoggedIn) startLoginPoll(AuthPreferences.currentHubUrl)
                 }
             }
         }
