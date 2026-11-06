@@ -1574,10 +1574,15 @@ fun ChatScreen(
                             androidx.compose.ui.platform.LocalDensity provides customDensity,
                             com.example.gemini.ui.components.LocalQuestionPanelActive provides true
                         ) {
+                                // iOS-style vertical bounce at the top and bottom (also for a short chat that cannot scroll);
+                                // only this list: code blocks and other sideways scrollers keep Android's own edge effect
+                                val chatBounce = com.example.gemini.ui.components.rememberBouncyLazyScroll(listState)
                                 LazyColumn(
                                     state = listState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp)
+                                    modifier = Modifier.fillMaxSize().then(chatBounce.modifier),
+                                    contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp),
+                                    userScrollEnabled = chatBounce.userScrollEnabled,
+                                    overscrollEffect = chatBounce.overscrollEffect
                                 ) {
                                     items(
                                         items = feedItems,
