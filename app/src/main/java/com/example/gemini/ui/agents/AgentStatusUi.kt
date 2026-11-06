@@ -288,45 +288,56 @@ fun AgentStatusIndicator(
             size = if (bottom != null && bottom != top) 12.dp else 11.dp,
             pulsing = entries.any { it.pending }
         )
-        DropdownMenu(
-            expanded = open,
-            onDismissRequest = { open = false },
-            shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
-            shadowElevation = 8.dp,
-            modifier = Modifier.width(300.dp)
+        AgentStatusMenu(entries, expanded = open, onDismiss = { open = false }, onOpenServerLogs = onOpenServerLogs)
+    }
+}
+
+/** The agents' status popup (each agent's state with its fix, and the server logs); anchored to its parent. */
+@Composable
+fun AgentStatusMenu(
+    entries: List<AgentStatusEntry>,
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onOpenServerLogs: () -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
+        shadowElevation = 8.dp,
+        modifier = Modifier.width(300.dp)
+    ) {
+        Text(
+            "AGENTS",
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
+        )
+        Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            entries.forEach { AgentStatusRow(it) { onDismiss() } }
+        }
+        HorizontalDivider(
+            Modifier.padding(top = 12.dp),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+        )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable {
+                    onDismiss()
+                    onOpenServerLogs()
+                }
+                .padding(horizontal = 16.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                "AGENTS",
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
-            )
-            Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                entries.forEach { AgentStatusRow(it) { open = false } }
-            }
-            HorizontalDivider(
-                Modifier.padding(top = 12.dp),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-            )
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        open = false
-                        onOpenServerLogs()
-                    }
-                    .padding(horizontal = 16.dp, vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Outlined.Terminal, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Server logs", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
-            }
+            Icon(Icons.Outlined.Terminal, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.size(17.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("Server logs", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
         }
     }
 }

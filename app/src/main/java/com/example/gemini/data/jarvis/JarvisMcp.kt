@@ -1074,7 +1074,6 @@ object JarvisMcp {
                 v.trim().removeSuffix("x").toFloatOrNull()?.let { vm.setChatFontScale(it.coerceIn(0.8f, 1.6f)); null } ?: "Not a number."
             }),
             bool("group_chats_by_workspace", "Group the chat list by project", false, { vm.groupChatsByWorkspace.value }, { vm.setGroupChatsByWorkspace(it) }),
-            bool("floating_switcher", "Floating app switcher over all screens", false, { vm.isFloatingSwitcherEnabled.value }, { vm.setFloatingSwitcherEnabled(it) }),
             bool("floating_bubble", "Floating chat bubble over other apps", false, { vm.isFloatingBubbleEnabled.value }, { vm.setFloatingBubbleEnabled(it) }),
             bool("vibrate_when_chat_done", "A light buzz when a chat finishes", false, { ChatCompletionMonitor.vibrate.value }, { ChatCompletionMonitor.setVibrate(it) }),
             Setting("new_chat_agent", "Agent of new chats", "claude|agy", false, get = { vm.newChatAgent.value.name.lowercase() }, set = { v ->

@@ -136,7 +136,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val isFloatingSwitcherEnabled by chatViewModel.isFloatingSwitcherEnabled.collectAsState()
             val floatingSwitcherOrientation by chatViewModel.floatingSwitcherOrientation.collectAsState()
             val floatingSwitcherItems by chatViewModel.floatingSwitcherItems.collectAsState()
             val floatingSwitcherAutoCollapseSec by chatViewModel.floatingSwitcherAutoCollapseSec.collectAsState()
@@ -392,38 +391,66 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
 
-                                // Floating App Switcher Across Whole App (Renders on top of Chat, IDE, Terminal, Browser)
-                                if (isFloatingSwitcherEnabled) {
-                                    com.example.gemini.ui.components.FloatingSwitcherWidget(
-                                        currentViewMode = currentViewMode,
-                                        orientation = floatingSwitcherOrientation,
-                                        items = floatingSwitcherItems,
-                                        autoCollapseTimeoutSec = floatingSwitcherAutoCollapseSec,
-                                        savedPosXRatio = floatingSwitcherPosX,
-                                        savedPosYRatio = floatingSwitcherPosY,
-                                        onNavigateToChat = {
-                                            previousViewMode = currentViewMode
-                                            currentViewMode = AppViewMode.CHAT
-                                        },
-                                        onNavigateToIde = {
-                                            previousViewMode = currentViewMode
-                                            currentViewMode = AppViewMode.IDE
-                                        },
-                                        onNavigateToBrowser = {
-                                            previousViewMode = currentViewMode
-                                            currentViewMode = AppViewMode.BROWSER
-                                        },
-                                        onNavigateToTerminal = {
+                                // Floating App Switcher Across Whole App (always on; renders on top of Chat, IDE, Terminal, Browser)
+                                // Its Terminal needs a shell: SSH, server mode, or the local Linux tools (turned on here when
+                                // installed but off); without any, it offers to install the Linux tools instead.
+                                val switcherUseSsh by chatViewModel.useSshTerminal.collectAsState(initial = false)
+                                val switcherToolsInstalled by chatViewModel.isLocalToolsInstalled.collectAsState(initial = false)
+                                val switcherToolsEnabled by chatViewModel.isLocalToolsEnabled.collectAsState(initial = false)
+                                var showSwitcherToolsInstall by remember { mutableStateOf(false) }
+                                com.example.gemini.ui.components.FloatingSwitcherWidget(
+                                    currentViewMode = currentViewMode,
+                                    orientation = floatingSwitcherOrientation,
+                                    items = floatingSwitcherItems,
+                                    autoCollapseTimeoutSec = floatingSwitcherAutoCollapseSec,
+                                    savedPosXRatio = floatingSwitcherPosX,
+                                    savedPosYRatio = floatingSwitcherPosY,
+                                    onNavigateToChat = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.CHAT
+                                    },
+                                    onNavigateToIde = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.IDE
+                                    },
+                                    onNavigateToBrowser = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.BROWSER
+                                    },
+                                    onNavigateToTerminal = {
+                                        val ready = switcherUseSsh ||
+                                            com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode ||
+                                            (switcherToolsInstalled && switcherToolsEnabled)
+                                        when {
+                                            ready -> {
+                                                previousViewMode = currentViewMode
+                                                currentViewMode = AppViewMode.TERMINAL
+                                            }
+                                            switcherToolsInstalled -> {
+                                                chatViewModel.setLocalToolsEnabled(true)
+                                                previousViewMode = currentViewMode
+                                                currentViewMode = AppViewMode.TERMINAL
+                                            }
+                                            else -> showSwitcherToolsInstall = true
+                                        }
+                                    },
+                                    onNavigateToNotes = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.NOTES
+                                    },
+                                    onPositionSaved = { x, y ->
+                                        chatViewModel.saveFloatingSwitcherPosition(x, y)
+                                    }
+                                )
+                                if (showSwitcherToolsInstall) {
+                                    com.example.gemini.ui.settings.LocalToolsInstallDialog(
+                                        authPreferences = chatViewModel.authPreferences,
+                                        onOpenTerminal = {
+                                            showSwitcherToolsInstall = false
                                             previousViewMode = currentViewMode
                                             currentViewMode = AppViewMode.TERMINAL
                                         },
-                                        onNavigateToNotes = {
-                                            previousViewMode = currentViewMode
-                                            currentViewMode = AppViewMode.NOTES
-                                        },
-                                        onPositionSaved = { x, y ->
-                                            chatViewModel.saveFloatingSwitcherPosition(x, y)
-                                        }
+                                        onDismiss = { showSwitcherToolsInstall = false }
                                     )
                                 }
 

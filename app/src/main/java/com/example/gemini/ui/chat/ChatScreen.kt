@@ -44,6 +44,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
@@ -96,7 +97,6 @@ import com.example.gemini.ui.components.parseMarkdownBlocks
 import com.example.gemini.ui.components.UserMessageBubble
 import com.example.gemini.ui.components.AssistantMessageFooter
 import com.example.gemini.ui.components.ThinkingAccordion
-import com.example.gemini.ui.components.ModelTypingIndicator
 import com.example.gemini.ui.components.ConnectionStatusBadge
 import com.example.gemini.ui.components.FileLinkHandler
 import com.example.gemini.ui.components.LocalFileLinkHandler
@@ -198,8 +198,6 @@ fun ChatScreen(
     val incomingMarkdownPreview by viewModel.incomingMarkdownPreview.collectAsState()
     val isDevModeEnabled by viewModel.isDevModeEnabled.collectAsState()
     val chatFontScale by viewModel.chatFontScale.collectAsState(initial = 1.0f)
-    val workingAnimationEnabled by viewModel.authPreferences.workingAnimationEnabled.collectAsState(initial = true)
-    val chatDividersEnabled by viewModel.authPreferences.chatDividersEnabled.collectAsState(initial = true)
     val claudeCompacting by claudeBackend.isCompacting.collectAsState()
     val bridgeStatusMessage by viewModel.bridgeStatusMessage.collectAsState()
     val isServerOnline by viewModel.isServerOnline.collectAsState()
@@ -238,7 +236,6 @@ fun ChatScreen(
     val projectsList by viewModel.projectsList.collectAsState()
     val isProjectsLoading by viewModel.isProjectsLoading.collectAsState()
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
-    val isFloatingSwitcherEnabled by viewModel.isFloatingSwitcherEnabled.collectAsState()
     val floatingSwitcherOrientation by viewModel.floatingSwitcherOrientation.collectAsState()
     val floatingSwitcherItems by viewModel.floatingSwitcherItems.collectAsState()
     val floatingSwitcherAutoCollapseSec by viewModel.floatingSwitcherAutoCollapseSec.collectAsState()
@@ -577,8 +574,9 @@ fun ChatScreen(
             }
         }
     }
-    val feedItems = remember(messages, selectedModelId, chatDividersEnabled, modelNameOf) {
-        ChatFeedCache.buildFeedItems(messages, selectedModelId, dividers = chatDividersEnabled, modelName = modelNameOf)
+    val feedItems = remember(messages, selectedModelId, modelNameOf) {
+        // the date and model dividers are always on
+        ChatFeedCache.buildFeedItems(messages, selectedModelId, dividers = true, modelName = modelNameOf)
     }
 
     // Fresh LazyListState per conversation — restores saved position if returning, or initializes directly at bottom
@@ -810,7 +808,7 @@ fun ChatScreen(
     // the user (an approval or a question)
     val waitingForUser = (isClaudeChat && claudePending.isNotEmpty()) ||
         lastToolCalls.any { it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE" }
-    val showWorkingRow = workingAnimationEnabled && (isRunningOrStreaming || holdingTail) && !waitingForUser && !footerShown
+    val showWorkingRow = (isRunningOrStreaming || holdingTail) && !waitingForUser && !footerShown
 
     val currentModel = if (isClaudeChat) {
         claudeModelList.find { it.id == selectedModelId } ?: AiModel(
@@ -1225,7 +1223,29 @@ fun ChatScreen(
         Scaffold(
             snackbarHost = {},
             topBar = {
+                // The chat's title on the left, the agents' status dot with the project on the right. A thin line shows
+                // under the bar only once messages scroll beneath it.
+                val scrolledUnder by remember(listState) { derivedStateOf { listState.canScrollBackward } }
+                val topBarLineAlpha by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = if (scrolledUnder && messages.isNotEmpty()) 1f else 0f,
+                    animationSpec = tween(180),
+                    label = "top_bar_line"
+                )
+                val topBarLineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                 TopAppBar(
+                    // shorter than Material's 64dp: one line of title and the small project pill need less
+                    expandedHeight = 52.dp,
+                    modifier = Modifier.drawWithContent {
+                        drawContent()
+                        if (topBarLineAlpha > 0f) {
+                            drawLine(
+                                color = topBarLineColor.copy(alpha = topBarLineColor.alpha * topBarLineAlpha),
+                                start = androidx.compose.ui.geometry.Offset(0f, size.height - 0.5f),
+                                end = androidx.compose.ui.geometry.Offset(size.width, size.height - 0.5f),
+                                strokeWidth = 1f
+                            )
+                        }
+                    },
                     title = {
                         val displayedChatTitle = remember(currentConv?.title, conversations, currentConv?.id) {
                             val fromList = conversations.firstOrNull { it.id == currentConv?.id }
@@ -1238,62 +1258,128 @@ fun ChatScreen(
                             listTitle ?: activeTitle ?: currentConv?.title?.takeIf { it.isNotBlank() } ?: "Antigravity Chat"
                         }
 
-                        Column {
-                            Text(
-                                text = displayedChatTitle,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                val isChatStarted = messages.isNotEmpty()
-                                val displayedProjectName = remember(currentConv?.workspaceUri, isChatStarted) {
-                                    val convUri = currentConv?.workspaceUri
-                                    if (!convUri.isNullOrBlank()) {
-                                        val clean = convUri.removePrefix("file://").trimEnd('/')
-                                        File(clean).name.ifBlank { "Workspace" }
-                                    } else {
-                                        if (isChatStarted) "Outside" else "Select Project"
-                                    }
-                                }
+                        val isChatStarted = messages.isNotEmpty()
+                        val displayedProjectName = remember(currentConv?.workspaceUri, isChatStarted) {
+                            val convUri = currentConv?.workspaceUri
+                            if (!convUri.isNullOrBlank()) {
+                                val clean = convUri.removePrefix("file://").trimEnd('/')
+                                File(clean).name.ifBlank { "Workspace" }
+                            } else {
+                                if (isChatStarted) "Outside" else "Select Project"
+                            }
+                        }
+                        val showStatusDot = isLocalToolsInstalled || AuthPreferences.currentRemoteMode ||
+                            com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context) ||
+                            systemConnectionState.status != com.example.gemini.data.remote.SystemStatus.OFFLINE
+                        var statusMenuOpen by remember { mutableStateOf(false) }
 
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isChatStarted) 0.4f else 0.6f),
-                                    modifier = if (isChatStarted) Modifier else Modifier.clickable {
-                                        showProjectPickerDialog = true
-                                    }
+                        // title on the left; "◐ project" and the new-chat button on the right. Title and project shorten
+                        // with "…" and keep a gap between them and from the screen edge, so nothing runs into anything.
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(end = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // the real title fades in when the chat gets one (instead of jumping from "New Chat")
+                            Crossfade(
+                                targetState = displayedChatTitle,
+                                animationSpec = tween(250),
+                                label = "chat_title",
+                                modifier = Modifier.weight(1f)
+                            ) { chatTitle ->
+                                Text(
+                                    text = chatTitle,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Box {
+                                // before the chat starts a tap picks the project; after, it shows the agents' status
+                                Row(
+                                    modifier = Modifier
+                                        .widthIn(max = 150.dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                                        .clickable {
+                                            if (!isChatStarted) showProjectPickerDialog = true
+                                            else if (showStatusDot) statusMenuOpen = true
+                                        }
+                                        .padding(start = if (showStatusDot) 4.dp else 10.dp, end = if (isChatStarted) 10.dp else 4.dp, top = 3.dp, bottom = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Folder,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(11.dp),
-                                            tint = if (isChatStarted) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = displayedProjectName,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontSize = 11.sp,
-                                            color = if (isChatStarted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        if (!isChatStarted) {
-                                            Icon(
-                                                imageVector = Icons.Default.ArrowDropDown,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(14.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    if (showStatusDot) {
+                                        // upper half Antigravity, lower half Claude Code (one solid dot when they agree);
+                                        // the dot itself always opens the agents' status, also before the chat starts
+                                        val agyEntry = agentEntries.find { it.agent == com.example.gemini.domain.model.AgentKind.AGY }
+                                        val claudeEntry = agentEntries.find { it.agent == com.example.gemini.domain.model.AgentKind.CLAUDE }
+                                        val dotTop = agyEntry?.color ?: claudeEntry?.color ?: com.example.gemini.data.remote.SystemStatus.OFFLINE.dotColor
+                                        val dotBottom = if (agyEntry != null) claudeEntry?.color else null
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .clickable { statusMenuOpen = true },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            com.example.gemini.ui.agents.AgentStatusDot(
+                                                top = dotTop,
+                                                bottom = dotBottom,
+                                                size = 8.dp,
+                                                pulsing = agentEntries.any { it.pending }
                                             )
                                         }
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                    }
+                                    Text(
+                                        text = displayedProjectName,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isChatStarted) 0.65f else 0.8f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    if (!isChatStarted) {
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = "Choose project",
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
                                     }
                                 }
+                                com.example.gemini.ui.agents.AgentStatusMenu(
+                                    entries = agentEntries,
+                                    expanded = statusMenuOpen,
+                                    onDismiss = { statusMenuOpen = false },
+                                    onOpenServerLogs = { showLocalServerOutputDialog = true }
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            // new chat (same as the sidebar's New chat)
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        val currentId = currentConv?.id
+                                        if (!currentId.isNullOrBlank() && feedItems.isNotEmpty()) {
+                                            ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
+                                        }
+                                        conversationBackStack.clear()
+                                        viewModel.startNewChat()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AddComment,
+                                    contentDescription = "New chat",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                    modifier = Modifier.size(19.dp)
+                                )
                             }
                         }
                     },
@@ -1317,6 +1403,7 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        // Browser, Terminal and the IDE are in the floating switcher (always on)
                         if (isInFloatingWindow) {
                             IconButton(onClick = onMinimizeWindow) {
                                 Icon(
@@ -1332,43 +1419,6 @@ fun ChatScreen(
                                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                                 )
                             }
-                        }
-                        if (isLocalToolsInstalled || AuthPreferences.currentRemoteMode || com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context) || systemConnectionState.status != com.example.gemini.data.remote.SystemStatus.OFFLINE) {
-                            // upper half Antigravity, lower half Claude Code (one solid dot when they agree)
-                            com.example.gemini.ui.agents.AgentStatusIndicator(
-                                entries = agentEntries,
-                                onOpenServerLogs = { showLocalServerOutputDialog = true }
-                            )
-                        }
-                        IconButton(onClick = onNavigateToBrowser) {
-                            Icon(
-                                imageVector = Icons.Outlined.Language,
-                                contentDescription = "Web Browser Preview",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                            )
-                        }
-                        IconButton(onClick = {
-                            if (useSshTerminal || AuthPreferences.currentRemoteMode || (isLocalToolsInstalled && isLocalToolsEnabled)) {
-                                onNavigateToTerminal()
-                            } else if (isLocalToolsInstalled) {
-                                viewModel.setLocalToolsEnabled(true)
-                                onNavigateToTerminal()
-                            } else {
-                                showLocalToolsInstallDialog = true
-                            }
-                        }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Terminal,
-                                contentDescription = "Terminal",
-                                tint = if (useSshTerminal || AuthPreferences.currentRemoteMode || (isLocalToolsInstalled && isLocalToolsEnabled)) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-                            )
-                        }
-                        IconButton(onClick = onNavigateToIde) {
-                            Icon(
-                                imageVector = Icons.Default.Code,
-                                contentDescription = "Code Editor IDE",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
                         }
                         if (isDevModeEnabled) {
                             IconButton(onClick = { showChatTelemetryDialog = true }) {
@@ -1675,15 +1725,8 @@ fun ChatScreen(
                                             }
                                         }
                                         // with the working animation on, the working row below replaces these dots
-                                        is ChatFeedItem.AssistantTyping -> if (!workingAnimationEnabled) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                                            ) {
-                                                ModelTypingIndicator(modelId = feedItem.modelId)
-                                            }
-                                        }
+                                        // progress shows in the working row under the reply (the working animation is always on)
+                                        is ChatFeedItem.AssistantTyping -> Unit
                                         is ChatFeedItem.AssistantFooter -> {
                                             AssistantMessageFooter(
                                                 message = feedItem.message,
@@ -2338,11 +2381,9 @@ fun ChatScreen(
             pluginActionStatusMessage = pluginActionStatusMessage,
             pluginActionErrorMessage = pluginActionErrorMessage,
             onClearPluginStatus = { viewModel.clearPluginActionStatus() },
-            isFloatingSwitcherEnabled = isFloatingSwitcherEnabled,
             floatingSwitcherOrientation = floatingSwitcherOrientation,
             floatingSwitcherItems = floatingSwitcherItems,
             floatingSwitcherAutoCollapseSec = floatingSwitcherAutoCollapseSec,
-            onToggleFloatingSwitcher = { viewModel.setFloatingSwitcherEnabled(it) },
             onSetFloatingSwitcherOrientation = { viewModel.setFloatingSwitcherOrientation(it) },
             onSetFloatingSwitcherItems = { viewModel.setFloatingSwitcherItems(it) },
             onSetFloatingSwitcherAutoCollapseSec = { viewModel.setFloatingSwitcherAutoCollapseSec(it) },

@@ -73,7 +73,7 @@ Notes and to-do lists are on the notes screen and in the floating bubble. Agents
 Settings → Appearance & Theme: the mode (Light, Dark or Auto), a gallery to pick one light theme and one dark theme (light:
 Porcelain (default), Lavender, Sky (these three recommended), Sakura, Mint, Linen, Paper, Solarized Light; dark: Midnight Aurora (default),
 Obsidian, Graphite (these three recommended), Midnight, High Contrast, Amber Night (AntiGem's original dark look), Mocha, Neon City,
-Aurora, Nord, Dracula, Velvet, Deep Ocean, Ember, Forest, Sunset, Solarized Dark, plus custom ones; the chat, the IDE editor, the terminal and the code blocks all follow it), chat font size, grouping chats by workspace, the floating switcher and the floating bubble.
+Aurora, Nord, Dracula, Velvet, Deep Ocean, Ember, Forest, Sunset, Solarized Dark, plus custom ones; the chat, the IDE editor, the terminal and the code blocks all follow it), chat font size, grouping chats by workspace, the floating switcher (always on: its layout, items and their order) and the floating bubble.
 Jarvis switches with jarvis_set_setting key=theme (or theme_mode) when the user allowed app settings. New themes are made by any chat
 with the Theme MCP (Theme preset in Settings → Antigravity → MCP Servers or Claude Code → MCP): "create a neon cyberpunk dark theme".
 """.trim()),
