@@ -169,8 +169,10 @@ object JarvisMcp {
             "Models available to each agent, marking the selected one.",
             emptyList(), "agent" to prop("string", "Which agent (default the chat on screen, or both)", listOf("all", "claude", "agy"))))
         put(tool("jarvis_set_model",
-            "Change the model. scope=screen changes the chat on screen, scope=jarvis the model of the Jarvis chat itself. The model can be a part of its name.",
+            "Change the model. With id it changes that chat (also one that is not on screen, e.g. a chat you just started); without id scope=screen changes the chat on screen, " +
+                "scope=jarvis the model of the Jarvis chat itself. The model can be a part of its name. The change applies to the chat's next message.",
             listOf("model"),
+            "id" to prop("string", "Chat id to change (from jarvis_list_chats / jarvis_new_chat)"),
             "model" to prop("string", "Model id or part of its name, e.g. opus, sonnet, flash"),
             "scope" to prop("string", "screen (default) or jarvis", listOf("screen", "jarvis"))))
         put(tool("jarvis_set_effort",
@@ -754,9 +756,16 @@ object JarvisMcp {
         })
     }
 
-    private fun setModel(args: JSONObject): JSONObject {
+    private suspend fun setModel(args: JSONObject): JSONObject {
         val wanted = args.optString("model").trim()
         if (wanted.isEmpty()) return error("model is required")
+        val chatId = args.optString("id").trim()
+        if (chatId.isNotEmpty() && chatId != vm.currentConversation.value?.id) {
+            val kind = JarvisController.agentOfChat(chatId)
+            val m = findModel(wanted, modelsFor(kind)) ?: return error("No ${kind.name.lowercase()} model matches \"$wanted\".")
+            JarvisController.setChatModel(chatId, kind, m.id)
+            return text("Chat model set to ${m.displayName.ifBlank { m.id }}.")
+        }
         if (args.optString("scope", "screen") == "jarvis") {
             val kind = JarvisPreferences.agentKind
             val m = findModel(wanted, modelsFor(kind)) ?: return error("No ${kind.name.lowercase()} model matches \"$wanted\".")
@@ -764,7 +773,7 @@ object JarvisMcp {
             if (kind == AgentKind.CLAUDE && JarvisPreferences.currentChatId.value.isNotBlank()) JarvisController.jarvisClaude.selectModel(m.id)
             return text("The Jarvis chat now uses ${m.displayName.ifBlank { m.id }}.")
         }
-        val conv = vm.currentConversation.value ?: return error("No chat on screen.")
+        val conv = vm.currentConversation.value ?: return error("No chat on screen. Pass id to change another chat.")
         val m = findModel(wanted, modelsFor(conv.agent)) ?: return error("No ${conv.agent.name.lowercase()} model matches \"$wanted\".")
         vm.selectModel(m.id)
         return text("Model set to ${m.displayName.ifBlank { m.id }}.")

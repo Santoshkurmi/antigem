@@ -134,6 +134,9 @@ object JarvisController {
     @Volatile private var wakeChangedAt = 0L
 
     private val outbox = Channel<String>(Channel.UNLIMITED)
+    /** Chats Jarvis started or wrote to (id → the task), so the phone can tell Jarvis when they finish. */
+    private val watched: MutableMap<String, String> = java.util.Collections.synchronizedMap(LinkedHashMap())
+    private val EVENT = "\u0001"
     @Volatile private var carryText = ""
     private val handledPermissions: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet<String>())
     private val permQueue = Channel<Perm>(Channel.UNLIMITED)
@@ -451,7 +454,24 @@ object JarvisController {
 
     /** A chat finished working: tell the user (when they turned announcements on). */
     private suspend fun onChatDone(c: Conversation) {
-        if (!JarvisPreferences.enabled.value || !JarvisPreferences.announceDone.value) return
+        if (!JarvisPreferences.enabled.value) return
+        val task = watched.remove(c.id)
+        if (task != null) {
+            // Jarvis started or wrote to this chat: the phone tells Jarvis, who tells the user (and can follow up)
+            val last = runCatching {
+                readChat(c.id).lastOrNull { it.role == MessageRole.ASSISTANT && it.content.isNotBlank() }?.content
+            }.getOrNull()?.let { PromptExpansion.collapse(it).trim() }.orEmpty()
+            val title = c.title.trim().take(60).ifBlank { "untitled" }
+            postStatus("Done: $title", explicit = false)
+            outbox.trySend(EVENT + buildString {
+                append("[Phone event, not from the user] The chat \"$title\" (id ${c.id}, ${c.agent.name.lowercase()}) that you started or wrote to has finished working.\n")
+                append("Its task was: ${task.take(200)}\n")
+                append(if (last.isNotBlank()) "Its last reply (may be cut):\n${last.takeLast(900)}\n" else "It left no text reply; use jarvis_read_chat if you need details.\n")
+                append("Tell the user briefly with jarvis_speak what happened. If the chat is asking the user something, ask the user and pass the answer on with jarvis_send_to_chat (reason continues_that_chats_work). Do not open the chat or start other work unless the user asks.")
+            })
+            return
+        }
+        if (!JarvisPreferences.announceDone.value) return
         if (JarvisPreferences.announceOffscreenOnly.value && vm.currentConversation.value?.id == c.id && screen.value == "chat") return
         val title = c.title.trim().take(40).ifBlank { "A chat" }
         var msg = "$title is done. Please check it."
@@ -705,8 +725,18 @@ object JarvisController {
     // ------------------------------------------------------------------ the Jarvis chat
 
     private suspend fun sendLoop() {
-        for (text in outbox) {
+        for (raw in outbox) {
+            val isEvent = raw.startsWith(EVENT)
+            val text = if (isEvent) raw.removePrefix(EVENT) else raw
             try {
+                if (isEvent) {
+                    // a phone event never interrupts: wait until the user is not talking and Jarvis is free
+                    var w = 0
+                    while ((listening.value || pendingAsk != null || computeBusy()) && w < 1200) { delay(500); w++ }
+                    if (!JarvisPreferences.enabled.value) continue
+                    sendToJarvis(text)
+                    continue
+                }
                 if (computeBusy()) {
                     // never talk over a running task: wait for it (the user can say stop)
                     JarvisVoice.speak("Okay, I'll do that when I'm done with this.", wait = false)
@@ -829,6 +859,12 @@ object JarvisController {
 
     /** Sends [text] to any chat by id. Does not change the chat on screen. */
     suspend fun sendToChat(id: String, text: String): String {
+        val result = sendToChatNow(id, text)
+        if (result == "Sent.") watched[id] = text.trim().replace(Regex("\\s+"), " ").take(200)
+        return result
+    }
+
+    private suspend fun sendToChatNow(id: String, text: String): String {
         if (vm.allConversations.value.find { it.id == id }?.isRunning == true) {
             return "That chat is busy working, so nothing was sent. Do not interrupt it: handle the request yourself, or ask the user."
         }
@@ -851,8 +887,24 @@ object JarvisController {
                 "Sent."
             }
             AgentKind.AGY -> {
-                val modelEnum = AgyHubClient.resolveModelEnum(vm.agyBackend.selectedModelId.value)
+                val modelEnum = AgyHubClient.resolveModelEnum(vm.agyBackend.modelOfChat(id))
                 hub.sendUserPrompt(id, PromptExpansion.expand(text), modelEnum).fold({ "Sent." }, { "Could not send: ${it.message}" })
+            }
+        }
+    }
+
+    /** Sets the model of a chat that is not on screen. Applies to its next message. */
+    suspend fun setChatModel(id: String, kind: AgentKind, modelId: String) {
+        when (kind) {
+            AgentKind.AGY -> vm.agyBackend.rememberChatModel(id, modelId)
+            AgentKind.CLAUDE -> {
+                if (id == JarvisPreferences.currentChatId.value && JarvisPreferences.currentChatAgent.value == AgentKind.CLAUDE.name) {
+                    jarvisClaude.selectModel(modelId)
+                } else {
+                    val b = opsClaude
+                    if (b.currentConversation.value?.id != id) { b.selectConversation(id); delay(900) }
+                    b.selectModel(modelId)
+                }
             }
         }
     }
@@ -900,15 +952,19 @@ object JarvisController {
                 val id = b.currentConversation.value?.id ?: error("Could not create the chat")
                 modelId?.takeIf { it.isNotBlank() }?.let { b.selectModel(it) }
                 b.sendMessage(PromptExpansion.expand(text))
+                watched[id] = text.trim().replace(Regex("\\s+"), " ").take(200)
                 scope.launch { delay(4000); runCatching { vm.claudeBackend.refreshSessions() } }
                 id
             }
             AgentKind.AGY -> {
                 val id = UUID.randomUUID().toString()
-                val enum = AgyHubClient.resolveModelEnum(modelId?.takeIf { it.isNotBlank() } ?: vm.agyBackend.selectedModelId.value)
+                val chosen = modelId?.takeIf { it.isNotBlank() } ?: vm.agyBackend.selectedModelId.value
+                val enum = AgyHubClient.resolveModelEnum(chosen)
                 val ws = projectPath ?: defaultWorkspace().removePrefix("file://")
                 hub.startCascade(id, enum, if (ws.startsWith("file://")) ws else "file://$ws").getOrThrow()
+                vm.agyBackend.rememberChatModel(id, chosen)
                 hub.sendUserPrompt(id, PromptExpansion.expand(text), enum).getOrThrow()
+                watched[id] = text.trim().replace(Regex("\\s+"), " ").take(200)
                 scope.launch { delay(2500); runCatching { vm.agyBackend.syncAgyConversations(force = true) } }
                 id
             }
