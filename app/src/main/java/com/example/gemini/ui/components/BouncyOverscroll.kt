@@ -8,6 +8,7 @@ import androidx.compose.foundation.OverscrollEffect
 import androidx.compose.foundation.OverscrollFactory
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -98,7 +99,8 @@ fun Modifier.bounceWhenNotScrollable(active: Boolean, effect: BouncyOverscrollEf
 @Composable
 fun Modifier.bouncyVerticalScroll(state: ScrollState): Modifier {
     val bounce = rememberBouncyOverscrollEffect()
-    val canScroll = state.canScrollForward || state.canScrollBackward
+    // derived: recomposes only when the answer changes, not each time an edge flag flips
+    val canScroll by remember(state) { derivedStateOf { state.canScrollForward || state.canScrollBackward } }
     return this
         .bounceWhenNotScrollable(!canScroll, bounce)
         .verticalScroll(state, enabled = canScroll, overscrollEffect = bounce)
@@ -114,7 +116,9 @@ class BouncyLazyScroll(val modifier: Modifier, val userScrollEnabled: Boolean, v
 @Composable
 fun rememberBouncyLazyScroll(state: LazyListState): BouncyLazyScroll {
     val bounce = rememberBouncyOverscrollEffect()
-    val canScroll = state.canScrollForward || state.canScrollBackward
+    // derived: recomposes only when the answer changes, not each time an edge flag flips (a streaming chat at its
+    // bottom flips canScrollForward with every new chunk of text)
+    val canScroll by remember(state) { derivedStateOf { state.canScrollForward || state.canScrollBackward } }
     return BouncyLazyScroll(Modifier.bounceWhenNotScrollable(!canScroll, bounce), canScroll, bounce)
 }
 
@@ -141,6 +145,8 @@ class BouncyOverscrollEffect internal constructor(private val scope: CoroutineSc
     private var releaseJob: Job? = null
 
     override val isInProgress: Boolean get() = offsetX != 0f || offsetY != 0f
+    /** [isInProgress] as state that only changes when a bounce starts or ends (read while drawing, so the draw is not redone every frame). */
+    private val moved = derivedStateOf { offsetX != 0f || offsetY != 0f }
 
     override fun applyToScroll(delta: Offset, source: NestedScrollSource, performScroll: (Offset) -> Offset): Offset {
         // flings are handled in applyToFling (the list stops at its end and hands back the speed left)
@@ -247,7 +253,7 @@ class BouncyOverscrollEffect internal constructor(private val scope: CoroutineSc
         // while moved, the content is cut at the list's own edges: it slides inside its area and never draws over
         // what is above or below the list (a top bar, a header); the gap shows what is behind the list
         override fun ContentDrawScope.draw() {
-            if (isInProgress) clipRect { this@draw.drawContent() } else drawContent()
+            if (moved.value) clipRect { this@draw.drawContent() } else drawContent()
         }
 
         override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {

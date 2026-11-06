@@ -26,7 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.gemini.ui.components.bounceWhenNotScrollable
+import com.example.gemini.ui.components.bouncyVerticalScroll
 
 /**
  * One row of a settings list: an icon in a soft colored square, the title, an optional short value on the right
@@ -50,12 +50,9 @@ fun SettingsRowList(
     scrollState: ScrollState = rememberScrollState()
 ) {
     // iOS-style bounce, also when the page is short and cannot scroll
-    val bounce = com.example.gemini.ui.components.rememberBouncyOverscrollEffect()
-    val canScroll = scrollState.canScrollForward || scrollState.canScrollBackward
     Column(
         modifier.fillMaxSize()
-            .bounceWhenNotScrollable(!canScroll, bounce)
-            .verticalScroll(scrollState, overscrollEffect = bounce, enabled = canScroll)
+            .bouncyVerticalScroll(scrollState)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
