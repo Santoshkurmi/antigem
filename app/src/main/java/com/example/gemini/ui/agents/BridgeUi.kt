@@ -101,7 +101,7 @@ fun BridgeVersionLine(modifier: Modifier = Modifier) {
     Text(text, fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = color, modifier = modifier)
 }
 
-/** Settings > Agents: the Antigravity CLI on the bridge's machine (this phone or the server): version and install. */
+/** Settings > Antigravity > Antigravity CLI: the agy CLI on the bridge's machine (this phone or the server): version and install. */
 @Composable
 fun AgyCliCard(modifier: Modifier = Modifier) {
     val cli by BridgeInfo.agyCli.collectAsState()

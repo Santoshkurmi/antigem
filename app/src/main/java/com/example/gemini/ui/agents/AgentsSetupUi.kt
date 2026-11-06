@@ -175,10 +175,6 @@ fun AgentsSettingsPage(
         )
         Spacer(Modifier.height(14.dp))
         AgentSelector(selected, { selected = it })
-        if (AgentKind.AGY in enabled) {
-            Spacer(Modifier.height(14.dp))
-            AgyCliCard()
-        }
         Spacer(Modifier.height(18.dp))
         Button(
             onClick = { confirm = true },

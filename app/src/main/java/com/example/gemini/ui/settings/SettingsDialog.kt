@@ -95,7 +95,8 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     BACKUPS("Backups & Restore", "Backup rootfs environment and AGY chat histories"),
     DATA_PROTECTION("Data Loss Protection", "Uninstall shield & App Info clear data protection"),
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
-    ANTIGRAVITY("Antigravity", "MCP servers, skills & plugins, commands & permissions"),
+    ANTIGRAVITY("Antigravity", "CLI, MCP servers, skills & plugins, commands & permissions"),
+    AGY_CLI("Antigravity CLI", "agy version and install, on this device or the server"),
     CLAUDE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
     /** One Claude Code page (which one: the dialog's claudePage); not a page of its own for Jarvis. */
     CLAUDE_PAGE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
@@ -110,7 +111,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     /** Where Back goes from this section. */
     val parent: SettingsSection get() = when (this) {
         ADB_CONNECT, ANDROID_AUTOMATION -> UTILITIES
-        MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
+        AGY_CLI, MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
         CLAUDE_PAGE -> CLAUDE
         else -> MAIN
     }
@@ -557,6 +558,11 @@ fun SettingsDialog(
                         cardBg = cardBg,
                         onNavigate = { currentSection = it }
                     )
+                    SettingsSection.AGY_CLI -> Column(
+                        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)
+                    ) {
+                        com.example.gemini.ui.agents.AgyCliCard()
+                    }
                     SettingsSection.CLAUDE -> if (claude != null) {
                         com.example.gemini.ui.claude.ClaudeSettingsGroup(claude, cardBg) { page ->
                             claudePage = page
@@ -705,9 +711,20 @@ private fun AntigravitySettingsMenu(
         commandAutoExecutionPolicy.contains("AUTO", ignoreCase = true) -> "Smart safety" to c.accentTeal
         else -> "Ask first" to c.warning
     }
+    // the CLI row shows the installed version (like Claude Code's Account & CLI row)
+    val cli by com.example.gemini.data.remote.BridgeInfo.agyCli.collectAsState()
+    LaunchedEffect(Unit) { if (cli == null) com.example.gemini.data.remote.BridgeInfo.refreshAgyCli() }
+    val (cliValue, cliColor) = when {
+        cli == null -> null to null
+        cli!!.installed -> cli!!.version.ifBlank { "Installed" } to QuotaGreen
+        else -> "Not installed" to c.warning
+    }
     SettingsRowList(
         cardBg = cardBg,
         groups = listOf(
+            listOf(
+                SettingsRowItem(Icons.Outlined.Terminal, GeminiBlue, SettingsSection.AGY_CLI.title, cliValue, cliColor) { onNavigate(SettingsSection.AGY_CLI) }
+            ),
             listOf(
                 SettingsRowItem(Icons.Outlined.Hub, GeminiBlue, SettingsSection.MCP.title, mcpValue, mcpColor) { onNavigate(SettingsSection.MCP) },
                 SettingsRowItem(Icons.Outlined.AutoAwesome, c.accentAlt, SettingsSection.SKILLS_PLUGINS.title,
