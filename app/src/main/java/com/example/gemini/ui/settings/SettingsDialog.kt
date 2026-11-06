@@ -102,18 +102,43 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     CLAUDE_PAGE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
     AGENTS("Agents", "Run Antigravity, Claude Code or both"),
     JARVIS("Jarvis", "Hands-free voice control of the whole app"),
+    JARVIS_AGENT("Jarvis · Agent", "Which agent and model Jarvis talks to"),
+    JARVIS_PERSONALITY("Jarvis · Personality & you", "How Jarvis speaks, and what it should know about you"),
+    JARVIS_SETUP("Jarvis · Setup", "The Jarvis MCP server, permissions and the microphone"),
+    JARVIS_WAKE("Jarvis · Waking Jarvis", "Button, wake phrase, hands-free mode and the headset button"),
+    JARVIS_LISTEN("Jarvis · Listening & sending", "When your words are sent, send and cancel phrases, speech recognition"),
+    JARVIS_VOICE("Jarvis · Voice output", "Jarvis' voice, speed, pitch and quiet mode"),
+    JARVIS_TASKS("Jarvis · Manager & tasks", "What Jarvis tells you about tasks and other chats"),
+    JARVIS_APPROVALS("Jarvis · Approvals", "Approvals by voice and app setting changes"),
+    JARVIS_SCREEN("Jarvis · Screen & look", "Screen on, the orb and what Jarvis shows"),
+    JARVIS_CHAT("Jarvis · Jarvis chat", "Live context, fresh chats and Jarvis' memory"),
     DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD"),
     UTILITIES("Utilities", "Handy device tools"),
     ADB_CONNECT("ADB Connect", "Connect the terminal's adb to this phone over Wireless debugging"),
     ANDROID_AUTOMATION("Android Automation", "Let AI agents see and control this phone"),
     ABOUT("About & Info", "App version, package details, and bridge export");
 
+    /** The Jarvis section this page shows (Settings → Jarvis → …), or null. */
+    val jarvisPage: com.example.gemini.ui.jarvis.JarvisSettingsPage? get() = when (this) {
+        JARVIS_AGENT -> com.example.gemini.ui.jarvis.JarvisSettingsPage.AGENT
+        JARVIS_PERSONALITY -> com.example.gemini.ui.jarvis.JarvisSettingsPage.PERSONALITY
+        JARVIS_SETUP -> com.example.gemini.ui.jarvis.JarvisSettingsPage.SETUP
+        JARVIS_WAKE -> com.example.gemini.ui.jarvis.JarvisSettingsPage.WAKE
+        JARVIS_LISTEN -> com.example.gemini.ui.jarvis.JarvisSettingsPage.LISTEN
+        JARVIS_VOICE -> com.example.gemini.ui.jarvis.JarvisSettingsPage.VOICE
+        JARVIS_TASKS -> com.example.gemini.ui.jarvis.JarvisSettingsPage.TASKS
+        JARVIS_APPROVALS -> com.example.gemini.ui.jarvis.JarvisSettingsPage.APPROVALS
+        JARVIS_SCREEN -> com.example.gemini.ui.jarvis.JarvisSettingsPage.SCREEN
+        JARVIS_CHAT -> com.example.gemini.ui.jarvis.JarvisSettingsPage.CHAT
+        else -> null
+    }
+
     /** Where Back goes from this section. */
     val parent: SettingsSection get() = when (this) {
         ADB_CONNECT, ANDROID_AUTOMATION -> UTILITIES
         AGY_CLI, MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
         CLAUDE_PAGE -> CLAUDE
-        else -> MAIN
+        else -> if (jarvisPage != null) JARVIS else MAIN
     }
 }
 
@@ -543,6 +568,15 @@ fun SettingsDialog(
                         onApply = onApplyAgents
                     )
                     SettingsSection.JARVIS -> com.example.gemini.ui.jarvis.JarvisSettingsScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onOpen = { page -> currentSection = SettingsSection.entries.first { it.jarvisPage == page } }
+                    )
+                    SettingsSection.JARVIS_AGENT, SettingsSection.JARVIS_PERSONALITY, SettingsSection.JARVIS_SETUP,
+                    SettingsSection.JARVIS_WAKE, SettingsSection.JARVIS_LISTEN, SettingsSection.JARVIS_VOICE,
+                    SettingsSection.JARVIS_TASKS, SettingsSection.JARVIS_APPROVALS, SettingsSection.JARVIS_SCREEN,
+                    SettingsSection.JARVIS_CHAT -> com.example.gemini.ui.jarvis.JarvisSettingsSectionPage(
+                        page = section.jarvisPage!!,
                         cardBg = cardBg,
                         cardBorder = cardBorder
                     )

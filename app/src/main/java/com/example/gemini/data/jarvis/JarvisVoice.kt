@@ -243,7 +243,9 @@ object JarvisVoice {
     /** Voices installed on the device, for the settings screen. */
     suspend fun deviceVoices(): List<Pair<String, String>> {
         val engine = ensureTts() ?: return emptyList()
-        return withContext(Dispatchers.Main) {
+        // off the main thread: asking the engine for its voices is a slow call into the TTS service (Google's engine
+        // has hundreds), and on the main thread it froze whatever was on screen (the Jarvis settings page) meanwhile
+        return withContext(Dispatchers.Default) {
             runCatching { engine.voices.orEmpty().map { it.name to "${it.locale.displayName} · ${it.name}" } }
                 .getOrDefault(emptyList())
                 .sortedBy { it.second }

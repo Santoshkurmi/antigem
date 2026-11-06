@@ -92,9 +92,9 @@ tile "Jarvis", a headset / Bluetooth button (one press talks or sends, two press
 Long-press the orb for the Jarvis panel (tasks, conversation, typing, quick switches).
 Sending: by default nothing is sent while you pause to think; end with a send phrase ("send it", "send kar do", "bhej do") or tap
 Send / press the headset button. A cancel phrase ("scratch that", "never mind", "rehne do") throws the message away. Both phrase
-lists are editable in Settings → Jarvis → Listening and sending, where "Send automatically when I pause" can also be switched on.
+lists are editable in Settings → Jarvis → Listening & sending (the phrase lists open with Edit), where "Send automatically when I pause" can also be switched on.
 After Jarvis speaks it listens for a reply when it expects one (or always / never); with no word at all for a few seconds the
-mic closes. Settings → Jarvis → Personality and you: whom Jarvis speaks as (female, male, neutral: matters in Hindi and similar
+mic closes. Settings → Jarvis → Personality & you: whom Jarvis speaks as (female, male, neutral: matters in Hindi and similar
 languages) and notes about you (what to call you, language, context), sent with the first message of every Jarvis chat.
 The side-talk filter ignores what you say to other people. Quiet mode shows answers instead of speaking. Keep-screen-on, orb size and look are in the Look section.
 Jarvis' own options can be changed by voice (jarvis_set_setting keys starting with jarvis_).
