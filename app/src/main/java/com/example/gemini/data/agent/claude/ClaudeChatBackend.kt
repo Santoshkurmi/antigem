@@ -257,6 +257,16 @@ class ClaudeChatBackend(
         }
     }
 
+    /** Sets the folder of the fresh chat that was just started (nothing sent yet), without changing the active project. */
+    fun setWorkspaceOfNewChat(path: String) {
+        val conv = store.currentConversation.value ?: return
+        if (conv.agent != AgentKind.CLAUDE || _messages.value.isNotEmpty() || path.isBlank()) return
+        val uri = if (path.startsWith("file://")) path else "file://$path"
+        val updated = conv.copy(workspaceUri = uri)
+        store.currentConversation.value = updated
+        upsertLocal(updated)
+    }
+
     override fun selectConversation(id: String) {
         val conv = _conversations.value.find { it.id == id }
             ?: Conversation(id = id, title = "Claude Chat", sessionId = id, agent = AgentKind.CLAUDE)

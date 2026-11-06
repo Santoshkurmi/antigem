@@ -77,6 +77,7 @@ class MainActivity : ComponentActivity() {
         com.example.gemini.data.agent.ChatCompletionMonitor.start(application, chatViewModel)
         handleOAuthIntent(intent)
         handleIncomingFileIntent(intent)
+        handleJarvisIntent(intent)
 
         setContent {
             val initialThemeMode = remember { chatViewModel.authPreferences.getThemeModeSync() }
@@ -482,6 +483,16 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         handleOAuthIntent(intent)
         handleIncomingFileIntent(intent)
+        handleJarvisIntent(intent)
+    }
+
+    /** The Jarvis Quick Settings tile opened the app: start listening once the window is in front. */
+    private fun handleJarvisIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(com.example.gemini.data.jarvis.JarvisTileService.EXTRA_TALK, false) != true) return
+        intent.removeExtra(com.example.gemini.data.jarvis.JarvisTileService.EXTRA_TALK)
+        window.decorView.postDelayed({
+            if (com.example.gemini.data.jarvis.JarvisController.isAttached) com.example.gemini.data.jarvis.JarvisController.startListening()
+        }, 700)
     }
 
     private fun handleOAuthIntent(intent: Intent?) {

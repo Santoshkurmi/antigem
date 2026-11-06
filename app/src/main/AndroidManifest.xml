@@ -271,6 +271,18 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- Jarvis Quick Settings tile: tap to talk from anywhere -->
+        <service
+            android:name="com.example.gemini.data.jarvis.JarvisTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_jarvis_mic"
+            android:label="Jarvis"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- Holds the ADB pairing notification (code entry) while the user is in Developer options -->
         <service
             android:name="com.example.gemini.data.adb.AdbPairingService"

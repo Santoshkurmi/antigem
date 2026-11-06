@@ -219,7 +219,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun loginToAgyHub(force: Boolean = false) = agyBackend.loginToAgyHub(force)
     fun logoutFromAgyHub() = agyBackend.logoutFromAgyHub()
     val activeInstances = agyBackend.activeInstances
-    val isAnyGenerationOrTaskActive = agyBackend.isAnyGenerationOrTaskActive
+    /**
+     * Keeps the screen on: an Antigravity chat or task is working, a Claude Code chat is working (the one on screen, or
+     * any other the session list shows as running), a Jarvis task runs, or Jarvis' keep-screen-on setting asks for it.
+     */
+    val isAnyGenerationOrTaskActive: StateFlow<Boolean> = combine(
+        agyBackend.isAnyGenerationOrTaskActive,
+        claudeBackend.isCurrentChatActivelyRunning,
+        claudeBackend.conversations,
+        com.example.gemini.data.jarvis.JarvisController.keepScreenAwake,
+        com.example.gemini.data.jarvis.JarvisTasks.anyActive
+    ) { agy, claudeTurn, claudeChats, jarvis, tasks ->
+        agy || claudeTurn || claudeChats.any { it.isRunning } || jarvis || tasks
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val isCurrentChatActivelyRunning = byAgent(agyBackend.isCurrentChatActivelyRunning, claudeBackend.isCurrentChatActivelyRunning)
     val isCurrentChatBackgroundActive = byAgent(agyBackend.isCurrentChatBackgroundActive, alwaysFalse)
     val connectionState = agyBackend.connectionState

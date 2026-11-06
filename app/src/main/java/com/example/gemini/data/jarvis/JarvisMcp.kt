@@ -1,6 +1,7 @@
 package com.example.gemini.data.jarvis
 
 import android.content.Context
+import com.example.gemini.data.agent.ChatCompletionMonitor
 import com.example.gemini.data.daemon.IdeApiClient
 import com.example.gemini.data.daemon.FileNode
 import com.example.gemini.data.daemon.ProjectItem
@@ -22,20 +23,19 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * jarvis_mcp: lets the model drive the AntiGem app directly (no tapping or scrolling): chats of both agents, models and
- * chat settings, permissions, screens, the IDE's projects and files, usage, and Jarvis' own voice and memory.
- * Served by AndroidLocalBridgeServer at /jarvis. All state is read and changed through the app's own objects.
+ * jarvis_mcp: lets the model drive the AntiGem app directly (no tapping or scrolling): its voice, tasks it manages in their
+ * own chats, chats of both agents, models and chat settings, approvals, screens and settings pages, the IDE's projects and
+ * files, app help and configuration, usage, and Jarvis' own memory. Served by AndroidLocalBridgeServer at /jarvis. All
+ * state is read and changed through the app's own objects.
  */
 object JarvisMcp {
 
-    const val INSTRUCTIONS = "Jarvis controls the AntiGem app for a user who is talking hands-free. Everything the user should hear goes " +
-        "through jarvis_speak (short, plain sentences, no markdown); jarvis_ask asks a question and returns the spoken answer. " +
-        "Call jarvis_get_state first when you do not know what is going on. Chats: jarvis_list_chats (paged), jarvis_get_chat, " +
-        "jarvis_read_chat (paged), jarvis_send_to_chat, jarvis_new_chat, jarvis_stop_chat, jarvis_open_chat. Models: jarvis_list_models, " +
-        "jarvis_set_model, jarvis_set_effort, jarvis_set_thinking, jarvis_set_permission_mode. Permissions: jarvis_list_permissions, " +
-        "jarvis_resolve_permission. IDE: jarvis_ide_list_projects, jarvis_ide_open_project, jarvis_ide_open_file. Plan usage: jarvis_get_usage. " +
-        "Before every longer step call jarvis_status with 2-6 words so the user sees progress. Also: jarvis_set_timer, jarvis_open_url, jarvis_ide_search_code, " +
-        "jarvis_get_health, jarvis_stop_all. These tools change the app directly; never use tap/scroll tools for what they can do. Ask before deleting anything."
+    const val INSTRUCTIONS = "Jarvis controls the AntiGem app for a user who is talking hands-free. The first message of a Jarvis chat " +
+        "has the full guide and tool list; jarvis_help repeats it. Call these tools directly by name (no searching, no config reading). " +
+        "Everything the user should hear goes through jarvis_speak (short, plain sentences, no markdown); jarvis_ask asks and returns the " +
+        "spoken answer. Big jobs go to jarvis_task_start (its own watched chat); the phone reports back with [Phone event] messages. " +
+        "Before longer steps call jarvis_status with 2-6 words. App help: jarvis_app_guide, jarvis_get_config, jarvis_open_settings. " +
+        "These tools change the app directly; never use tap/scroll tools for what they can do. Ask before deleting anything."
 
     private const val DEFAULT_LIMIT = 15
     private const val MAX_LIMIT = 50
@@ -58,32 +58,66 @@ object JarvisMcp {
     }
 
     private val chatId = "id" to prop("string", "Chat id from jarvis_list_chats (default: the chat on screen)")
+    private val taskId = "id" to prop("string", "Task id (from the context note, jarvis_task_list or jarvis_task_start; the first 8 characters are enough)")
     private val limit = "limit" to prop("integer", "Entries per page, 1-$MAX_LIMIT (default $DEFAULT_LIMIT)")
     private val offset = "offset" to prop("integer", "Entries to skip (default 0)")
 
     fun tools(): JSONArray = JSONArray().apply {
         // ---- voice
         put(tool("jarvis_speak",
-            "Say something to the user out loud. This is the only way the user hears you. Keep it to one to three short sentences, no markdown, " +
-                "code or paths. Returns at once; later calls are spoken in order.",
+            "Say something to the user out loud (in quiet mode it is shown instead). This is the only way the user hears you. One to three short sentences, " +
+                "no markdown, code or paths. Returns at once; later calls are spoken in order.",
             listOf("text"),
             "text" to prop("string", "What to say"),
             "listen_after" to prop("boolean", "Leave the microphone open for the answer after speaking (default false)"),
             "wait" to prop("boolean", "Return only after it has been said (default false)")))
         put(tool("jarvis_ask",
             "Ask the user a question out loud and wait for the spoken answer (up to about 45 seconds). Returns the answer text, or \"no answer\". " +
-                "Use it before destructive or ambiguous actions.",
+                "Use it before destructive or ambiguous actions, and whenever you are not sure what the user wants.",
             listOf("question"),
             "question" to prop("string", "The question, short and answerable with a few words"),
             "timeout_seconds" to prop("integer", "How long to wait, 5-90 (default 45)")))
         put(tool("jarvis_status",
-            "Show the user a short live status on the Jarvis card (2 to 6 words, e.g. \"Checking the build\", \"Reading the logs\"). Call it BEFORE every " +
-                "longer or special step so the user sees what is happening while they wait. It is silent unless speak=true. Returns at once.",
+            "Show a short live status on the Jarvis card (2 to 6 words, e.g. \"Checking the build\"). Call it BEFORE every longer step so the user " +
+                "sees progress. Silent unless speak=true. Returns at once.",
             listOf("text"),
             "text" to prop("string", "What you are doing now, present tense, 2-6 words"),
             "speak" to prop("boolean", "Also say it out loud (only if the user enabled spoken progress)")))
+        put(tool("jarvis_ignore",
+            "The words were not meant for you (the user talking to someone else, the TV, background speech): stay silent and stop listening. Call nothing else.",
+            emptyList(), "reason" to prop("string", "A few words why (shown to the user)")))
+        put(tool("jarvis_help",
+            "Repeat the Jarvis guide and the full tool list (when your first message was compacted away or you are unsure how to do something).",
+            emptyList()))
+        // ---- tasks (Jarvis as a manager)
+        put(tool("jarvis_task_start",
+            "Start a big, independent job as a TASK in its own new chat that the phone watches for you (a build, a refactor, a bug fix, a long " +
+                "investigation). The phone tells you with a [Phone event] message when it finishes, fails, gets stuck, needs an approval or asks " +
+                "something. Do quick things yourself instead. Returns the task id.",
+            listOf("goal"),
+            "goal" to prop("string", "Full instructions for the task's agent, as clear and complete as the user's intent allows"),
+            "title" to prop("string", "Short name, 2-5 words (e.g. \"Release build\")"),
+            "agent" to prop("string", "claude or agy (default: the app's new-chat agent)", listOf("claude", "agy")),
+            "model" to prop("string", "Model id or part of its name (default: the agent's default)"),
+            "project" to prop("string", "Project name or path to work in (default: the active project)"),
+            "open" to prop("boolean", "Also show the chat on screen (default false)")))
+        put(tool("jarvis_task_list", "The tasks Jarvis manages: state (starting, running, waiting for approval, asking a question, no progress, done, failed, stopped), age and last note.",
+            emptyList(), "include_finished" to prop("boolean", "Also list finished tasks (default true)"), limit))
+        put(tool("jarvis_task_get", "One task in detail: goal, state, last note, and its latest reply or progress. Use it for \"how is X going?\".",
+            listOf("id"), taskId, "messages" to prop("integer", "Also include this many of its newest messages (default 3, 0-10)")))
+        put(tool("jarvis_task_reply",
+            "Send the task a follow-up, a correction or a new direction (\"also run the tests\", \"use the other API\"). With interrupt=true a task " +
+                "that is still working is stopped first and then gets this message.",
+            listOf("id", "message"), taskId, "message" to prop("string", "What to tell the task's agent"),
+            "interrupt" to prop("boolean", "Stop the running task first (default false)")))
+        put(tool("jarvis_task_answer", "Answer the multiple-choice question a task is asking (option number, option name, or free text; \"skip\" lets it decide).",
+            listOf("id", "answer"), taskId, "answer" to prop("string", "The answer")))
+        put(tool("jarvis_task_stop", "Stop what a task is doing right now.", listOf("id"), taskId))
+        put(tool("jarvis_task_open", "Show a task's chat on screen.", listOf("id"), taskId))
+        put(tool("jarvis_task_close", "Stop watching a task and remove it from the list (the chat itself stays).", listOf("id"), taskId))
+        // ---- everyday
         put(tool("jarvis_set_timer",
-            "Set a timer that Jarvis announces out loud when it ends (cooking, laundry, breaks). Give seconds or minutes. Timers live while the app runs (hands-free mode keeps it running).",
+            "Set a timer that Jarvis announces out loud when it ends (cooking, laundry, breaks). Give seconds or minutes.",
             emptyList(),
             "minutes" to prop("number", "Length in minutes (can be fractional)"),
             "seconds" to prop("integer", "Length in seconds (added to minutes)"),
@@ -97,16 +131,21 @@ object JarvisMcp {
         put(tool("jarvis_open_url", "Open a web page in the in-app browser and show it. Use the browser tools afterwards to read or click on it.",
             listOf("url"), "url" to prop("string", "Address, e.g. https://example.com"),
             "new_tab" to prop("boolean", "Open in a new tab (default true)")))
-        put(tool("jarvis_ide_search_code",
-            "Search text in the files of the active project (or another project). Returns file, line number and the line, paged.",
-            listOf("query"), "query" to prop("string", "Text to find"),
-            "project" to prop("string", "Project name or path (default: the active project)"), limit, offset))
         put(tool("jarvis_stop_all",
-            "Emergency stop: silence Jarvis, drop queued messages, and stop the Jarvis chat's current work. Use when the user says stop or cancel.", emptyList()))
-        // ---- state
+            "Emergency stop: silence Jarvis, drop queued messages, and stop the Jarvis chat's current work (tasks keep running). Use when the user says stop or cancel.", emptyList()))
+        // ---- state and app help
         put(tool("jarvis_get_state",
-            "Where the user is and what is going on: the screen, the IDE project and open files, the chat on screen, running chats, requests waiting " +
-                "for approval, and Jarvis' own settings. Call this first when unsure."))
+            "Where the user is and what is going on: the screen, the IDE project and open files, the chat on screen, tasks, running chats, " +
+                "approvals waiting, and Jarvis' own mode. The context note of each message already has most of this."))
+        put(tool("jarvis_app_guide",
+            "How to use AntiGem: where a setting is, how to add an MCP server, sign in, use the terminal, IDE, git, browser, notes, plugins, " +
+                "server mode, Jarvis' own features, troubleshooting. Give a topic or the user's words.",
+            listOf("topic"), "topic" to prop("string", "A topic (overview, settings, agents, claude, antigravity, mcp, plugins, terminal, ide, browser, notes, appearance, backups, server_mode, jarvis, tasks, troubleshooting) or words")))
+        put(tool("jarvis_get_config",
+            "The user's configuration: agents, Claude Code and Antigravity accounts and policies, MCP servers of both agents, Jarvis settings, look, projects.",
+            emptyList(), "area" to prop("string", "What to read (default overview)", listOf("overview", "agents", "claude", "antigravity", "mcp", "jarvis", "appearance", "projects"))))
+        put(tool("jarvis_open_settings", "Show a settings page (e.g. jarvis, appearance, mcp, claude, agents, servers, terminal, commands).",
+            listOf("section"), "section" to prop("string", "Settings page name (jarvis_app_guide topic settings lists them)")))
         put(tool("jarvis_get_usage",
             "Plan usage: the 5-hour window and the 7-day window with percent used, percent left and when each resets (Claude Code and Antigravity), " +
                 "plus context use and cost of the Claude chat on screen. Always name both windows when answering.",
@@ -126,7 +165,7 @@ object JarvisMcp {
             limit, offset,
             "page" to prop("integer", "1-based page number, instead of offset")))
         put(tool("jarvis_get_chat",
-            "Status of one chat: running or idle, agent, model, project, waiting permissions and a preview of the last messages.",
+            "Status of one chat: running or idle, agent, model, project, waiting approvals and a preview of the last messages.",
             emptyList(), chatId))
         put(tool("jarvis_read_chat",
             "Read what is inside a chat, in pages. By default the newest messages first (from_end=true). Summarize for the user; do not read it out word for word.",
@@ -142,8 +181,8 @@ object JarvisMcp {
             "deep" to prop("boolean", "Also search message text of the 12 newest chats (slower)"),
             limit))
         put(tool("jarvis_new_chat",
-            "Start a separate new chat for a big task. Use it ONLY when the user asked for a new chat, or the job is large and independent enough " +
-                "that it should run on its own. Simple questions, lookups, weather, app control and short tasks you do yourself. Returns the chat id.",
+            "Start a new chat. With a message it runs as a watched task (same as jarvis_task_start); without one an empty chat opens on screen. " +
+                "Use it only when the user asked for a new chat; prefer jarvis_task_start for delegated work.",
             emptyList(),
             "agent" to prop("string", "claude or agy (default: the app's current new-chat agent)", listOf("claude", "agy")),
             "message" to prop("string", "The first message / task"),
@@ -151,9 +190,9 @@ object JarvisMcp {
             "project" to prop("string", "Project name or path to work in (default: the active project)"),
             "open" to prop("boolean", "Also show the chat on screen (default false)")))
         put(tool("jarvis_send_to_chat",
-            "Send a message to ANOTHER existing chat. Use it ONLY when the user told you to (\"tell the build chat to run the tests\", \"in my app chat…\") " +
-                "or the request clearly continues exactly what that chat is working on. NEVER use it for general questions, lookups, weather, app control " +
-                "or anything you can do yourself, and never for a chat that is running. The chat must be idle.",
+            "Send a message to ANOTHER existing chat (it then becomes a watched task). Use it ONLY when the user told you to (\"tell the build chat to run the tests\") " +
+                "or the request clearly continues exactly what that chat is working on. NEVER for general questions or anything you can do yourself, " +
+                "and never for a chat that is running.",
             listOf("id", "message", "reason"),
             chatId, "message" to prop("string", "The message"),
             "reason" to prop("string", "Why this goes to that chat", listOf("user_named_this_chat", "continues_that_chats_work"))))
@@ -169,10 +208,10 @@ object JarvisMcp {
             "Models available to each agent, marking the selected one.",
             emptyList(), "agent" to prop("string", "Which agent (default the chat on screen, or both)", listOf("all", "claude", "agy"))))
         put(tool("jarvis_set_model",
-            "Change the model. With id it changes that chat (also one that is not on screen, e.g. a chat you just started); without id scope=screen changes the chat on screen, " +
-                "scope=jarvis the model of the Jarvis chat itself. The model can be a part of its name. The change applies to the chat's next message.",
+            "Change the model. With id it changes that chat or task (also one that is not on screen); without id scope=screen changes the chat on screen, " +
+                "scope=jarvis the model of the Jarvis chat itself. The model can be a part of its name. Applies to the chat's next message.",
             listOf("model"),
-            "id" to prop("string", "Chat id to change (from jarvis_list_chats / jarvis_new_chat)"),
+            "id" to prop("string", "Chat or task id to change"),
             "model" to prop("string", "Model id or part of its name, e.g. opus, sonnet, flash"),
             "scope" to prop("string", "screen (default) or jarvis", listOf("screen", "jarvis"))))
         put(tool("jarvis_set_effort",
@@ -184,21 +223,21 @@ object JarvisMcp {
             "Claude Code chat on screen: how it asks for approval. default = ask for everything, acceptEdits = file edits are allowed, plan = plan only, " +
                 "auto = decides itself, dontAsk = no prompts.",
             listOf("mode"), "mode" to prop("string", "The mode", listOf("default", "acceptEdits", "plan", "auto", "dontAsk"))))
-        put(tool("jarvis_get_setting", "Read the app settings Jarvis may see (theme, font size, Jarvis voice options).",
+        put(tool("jarvis_get_setting", "Read app and Jarvis settings (theme, font size, floating bubble, Jarvis' voice, listening, triggers, look…) with their allowed values.",
             emptyList(), "key" to prop("string", "One key, or omit for all")))
         put(tool("jarvis_set_setting",
-            "Change an app setting. Allowed keys: theme_mode (LIGHT, DARK, SYSTEM), chat_font_scale (0.8-1.6), group_chats_by_workspace, " +
-                "jarvis_speech_rate, jarvis_speech_pitch, jarvis_conversation_mode, jarvis_speak_progress. Only works when the user allowed it in Settings → Jarvis.",
+            "Change a setting (keys from jarvis_get_setting). Jarvis' own options (keys starting with jarvis_) can always be changed; app settings " +
+                "(theme_mode, chat_font_scale, floating_bubble…) only when the user allowed it. Approval and security policies cannot be changed here.",
             listOf("key", "value"),
             "key" to prop("string", "Setting key"), "value" to prop("string", "New value")))
         // ---- permissions
         put(tool("jarvis_list_permissions",
-            "Requests waiting for approval in the chats Jarvis can reach (the Jarvis chat, chats it started, and the chat on screen), with the exact action and a risk level.",
+            "Requests waiting for approval in the chats Jarvis can reach (the Jarvis chat, tasks, chats it drives, and the chat on screen), with the exact action and a risk level.",
             emptyList()))
         put(tool("jarvis_resolve_permission",
             "Approve or reject waiting requests: one by key, or all. Read risky actions back to the user first.",
             listOf("approve"),
-            "key" to prop("string", "Key from jarvis_list_permissions (omit with all=true)"),
+            "key" to prop("string", "Key from jarvis_list_permissions or the event (omit with all=true)"),
             "approve" to prop("boolean", "true = approve, false = reject"),
             "all" to prop("boolean", "Apply to every waiting request"),
             "reason" to prop("string", "When rejecting: what to tell the agent")))
@@ -219,6 +258,10 @@ object JarvisMcp {
         put(tool("jarvis_ide_close_file", "Close an editor tab (default: the active one). Refuses when it has unsaved changes unless discard=true.",
             emptyList(), "file" to prop("string", "Path or file name"), "discard" to prop("boolean", "Close even with unsaved changes")))
         put(tool("jarvis_ide_get_open_files", "The IDE's open tabs, the active file and unsaved changes.", emptyList()))
+        put(tool("jarvis_ide_search_code",
+            "Search text in the files of the active project (or another project). Returns file, line number and the line, paged.",
+            listOf("query"), "query" to prop("string", "Text to find"),
+            "project" to prop("string", "Project name or path (default: the active project)"), limit, offset))
         // ---- session and memory
         put(tool("jarvis_new_session",
             "Start a fresh Jarvis chat on the next message (the user asked to start again, or the chat got long). Never do this by yourself while work is running.",
@@ -235,6 +278,7 @@ object JarvisMcp {
     suspend fun call(context: Context, name: String, args: JSONObject): JSONObject {
         if (!JarvisController.isAttached) return error("The app is still starting. Try again in a moment.")
         if (!JarvisPreferences.enabled.value) return error("Jarvis is turned off. The user can turn it on in Settings → Jarvis.")
+        JarvisController.onToolCall(name)
         friendlyStatus(name, args)?.let { JarvisController.postStatus(it, explicit = false) }
         return try {
             when (name) {
@@ -255,6 +299,34 @@ object JarvisMcp {
                     if (t.isEmpty()) return error("text is empty")
                     JarvisController.postStatus(t, speak = args.optBoolean("speak"), explicit = true)
                     text("ok")
+                }
+                "jarvis_ignore" -> { JarvisController.onIgnored(args.optString("reason")); text("Ignored. Say nothing.") }
+                "jarvis_help" -> text(JarvisSkill.guide() + "\n\n## jarvis_mcp tools\n" + JarvisSkill.catalog())
+                "jarvis_task_start" -> taskStart(args)
+                "jarvis_task_list" -> taskList(args)
+                "jarvis_task_get" -> taskGet(args)
+                "jarvis_task_reply" -> {
+                    val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id. Use jarvis_task_list.")
+                    text(JarvisTasks.reply(t.id, args.optString("message"), args.optBoolean("interrupt")))
+                }
+                "jarvis_task_answer" -> {
+                    val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id.")
+                    text(JarvisController.answerTaskQuestion(t.id, args.optString("answer")))
+                }
+                "jarvis_task_stop" -> {
+                    val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id.")
+                    text(JarvisTasks.stop(t.id))
+                }
+                "jarvis_task_open" -> {
+                    val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id.")
+                    vm.selectConversation(t.id)
+                    vm.requestViewMode("CHAT")
+                    text("Showing ${t.title}.")
+                }
+                "jarvis_task_close" -> {
+                    val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id.")
+                    JarvisTasks.close(t.id)
+                    text("No longer watching ${t.title}.")
                 }
                 "jarvis_set_timer" -> {
                     val total = Math.round(args.optDouble("minutes", 0.0) * 60).toInt() + args.optInt("seconds", 0)
@@ -283,6 +355,9 @@ object JarvisMcp {
                 "jarvis_ide_search_code" -> ideSearchCode(args)
                 "jarvis_stop_all" -> { JarvisController.stopEverything(); text("Stopped.") }
                 "jarvis_get_state" -> getState()
+                "jarvis_app_guide" -> appGuide(args)
+                "jarvis_get_config" -> getConfig(args)
+                "jarvis_open_settings" -> openSettings(args)
                 "jarvis_get_usage" -> getUsage(args)
                 "jarvis_list_chats" -> listChats(args)
                 "jarvis_get_chat" -> getChat(args)
@@ -323,6 +398,7 @@ object JarvisMcp {
                     val id = args.optString("id").ifBlank { return error("id is required") }
                     if (!args.optBoolean("confirm")) return error("Ask the user first, then call again with confirm=true.")
                     if (JarvisPreferences.isJarvisChat(id) && id == JarvisPreferences.currentChatId.value) return error("That is the Jarvis chat itself. Use jarvis_new_session instead.")
+                    JarvisTasks.close(id)
                     JarvisController.vm.deleteConversation(id)
                     text("Deleted.")
                 }
@@ -389,9 +465,19 @@ object JarvisMcp {
 
     /** The card line for a tool, so the user sees progress even when the model forgets jarvis_status. */
     private fun friendlyStatus(name: String, args: JSONObject): String? = when (name) {
-        "jarvis_speak", "jarvis_ask", "jarvis_status", "jarvis_stop_all", "jarvis_list_timers" -> null
+        "jarvis_speak", "jarvis_ask", "jarvis_status", "jarvis_stop_all", "jarvis_list_timers", "jarvis_ignore", "jarvis_help" -> null
         "jarvis_get_state" -> "Checking what's on screen"
         "jarvis_get_usage" -> "Checking your usage"
+        "jarvis_task_start" -> "Starting ${args.optString("title").take(30).ifBlank { "a task" }}"
+        "jarvis_task_list", "jarvis_task_get" -> "Checking your tasks"
+        "jarvis_task_reply" -> "Updating the task"
+        "jarvis_task_answer" -> "Answering the task"
+        "jarvis_task_stop" -> "Stopping the task"
+        "jarvis_task_open" -> "Opening the task"
+        "jarvis_task_close" -> "Closing the task"
+        "jarvis_app_guide" -> "Looking it up"
+        "jarvis_get_config" -> "Reading your setup"
+        "jarvis_open_settings" -> "Opening settings"
         "jarvis_list_chats", "jarvis_search_chats" -> "Looking through your chats"
         "jarvis_get_chat", "jarvis_read_chat" -> "Reading a chat"
         "jarvis_new_chat" -> "Starting a new chat"
@@ -433,9 +519,11 @@ object JarvisMcp {
                     claude.version?.let { put("version", it) }
                     (claude.error ?: claude.auth_error)?.let { put("problem", it) }
                 }
+                put("status", vm.claudeAccount.state.value.label)
             })
             put("jarvis", JSONObject().put("agent", JarvisPreferences.agent.value.lowercase())
-                .put("voice_engine", JarvisPreferences.ttsEngine.value).put("mic_allowed", JarvisController.hasMic()))
+                .put("voice_engine", JarvisPreferences.ttsEngine.value).put("mic_allowed", JarvisController.hasMic())
+                .put("quiet_mode", JarvisPreferences.quietMode.value))
             JarvisVoice.lastError.value?.let { put("voice_problem", it) }
         })
     }
@@ -486,7 +574,7 @@ object JarvisMcp {
     }
 
     private fun resolveId(args: JSONObject): String? =
-        args.optString("id").ifBlank { null } ?: vm.currentConversation.value?.id
+        args.optString("id").trim().ifBlank { null }?.let { JarvisTasks.find(it)?.id ?: it } ?: vm.currentConversation.value?.id
 
     private fun claudeOnScreen() =
         if (vm.currentConversation.value?.agent == AgentKind.CLAUDE) vm.claudeBackend else null
@@ -500,13 +588,14 @@ object JarvisMcp {
         if (c.modelId.isNotBlank()) put("model", c.modelId)
         put("updated", ago(c.updatedAt))
         if (JarvisPreferences.isJarvisChat(c.id)) put("jarvis_chat", true)
+        if (JarvisTasks.isTask(c.id)) put("task", true)
         if (vm.currentConversation.value?.id == c.id) put("on_screen", true)
     }
 
     private fun pageArgs(args: JSONObject): Triple<Int, Int, Int> {
         val l = args.optInt("limit", DEFAULT_LIMIT).coerceIn(1, MAX_LIMIT)
         val off = if (args.has("page")) (args.optInt("page", 1).coerceAtLeast(1) - 1) * l else args.optInt("offset", 0).coerceAtLeast(0)
-        return Triple(l, off, if (l == 0) 1 else off / l + 1)
+        return Triple(l, off, off / l + 1)
     }
 
     private fun pagedJson(key: String, items: List<JSONObject>, args: JSONObject, extra: JSONObject.() -> Unit = {}): JSONObject {
@@ -523,7 +612,72 @@ object JarvisMcp {
         }
     }
 
-    // ---------------- state and usage
+    // ---------------- tasks
+
+    private fun agentArg(raw: String): AgentKind = when (raw.lowercase()) {
+        "claude" -> AgentKind.CLAUDE
+        "agy", "antigravity" -> AgentKind.AGY
+        else -> vm.newChatAgent.value.takeIf { it in vm.enabledAgents.value } ?: vm.enabledAgents.value.firstOrNull() ?: AgentKind.CLAUDE
+    }
+
+    private suspend fun taskStart(args: JSONObject): JSONObject {
+        val goal = args.optString("goal").trim()
+        if (goal.isEmpty()) return error("goal is required")
+        val agent = agentArg(args.optString("agent"))
+        if (agent !in vm.enabledAgents.value) return error("${if (agent == AgentKind.CLAUDE) "Claude Code" else "Antigravity"} is turned off (Settings → Agents).")
+        val projectArg = args.optString("project").trim()
+        val project = if (projectArg.isBlank()) null else findProject(projectArg) ?: return error("No project matches \"$projectArg\". Use jarvis_ide_list_projects.")
+        val model = args.optString("model").trim().takeIf { it.isNotEmpty() }?.let { findModel(it, modelsFor(agent))?.id ?: return error("No ${agent.name.lowercase()} model matches \"$it\".") }
+        val t = JarvisTasks.start(agent, goal, args.optString("title").ifBlank { null }, model, project?.path)
+        if (args.optBoolean("open")) {
+            delay(2500)
+            vm.selectConversation(t.id)
+            vm.requestViewMode("CHAT")
+        }
+        return json(JSONObject().put("task_id", t.id).put("title", t.title).put("agent", agent.name.lowercase()).put("status", "started")
+            .put("note", "The phone will tell you when it finishes or needs something. Tell the user it started, then stop."))
+    }
+
+    private fun taskJson(t: JarvisTasks.Task) = JSONObject().apply {
+        put("id", t.id); put("title", t.title); put("agent", t.agent.name.lowercase()); put("state", t.state.label)
+        put("started", ago(t.createdAt)); put("last_change", ago(t.updatedAt))
+        if (t.note.isNotBlank()) put("note", t.note)
+        if (t.project.isNotBlank()) put("project", t.project.substringAfterLast('/'))
+        if (t.followUps > 0) put("follow_ups", t.followUps)
+        if (vm.currentConversation.value?.id == t.id) put("on_screen", true)
+    }
+
+    private fun taskList(args: JSONObject): JSONObject {
+        val all = JarvisTasks.tasks.value
+        val list = if (args.optBoolean("include_finished", true)) all else all.filter { it.active }
+        return json(pagedJson("tasks", list.map { taskJson(it) }, args) { put("active", all.count { it.active }) })
+    }
+
+    private suspend fun taskGet(args: JSONObject): JSONObject {
+        val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id. Use jarvis_task_list.")
+        val n = args.optInt("messages", 3).coerceIn(0, 10)
+        val o = taskJson(t).put("goal", t.goal)
+        if (t.result.isNotBlank()) o.put("result", t.result)
+        val pending = JarvisController.allPending().filter { it.chatId == t.id }
+        if (pending.isNotEmpty()) o.put("waiting_approvals", JSONArray().apply { pending.forEach { put(JSONObject().put("key", it.key).put("what", it.summary).put("risk", it.risk.name.lowercase())) } })
+        JarvisTasks.pendingQuestion(t.id)?.second?.questionnaire?.questions?.firstOrNull()?.let { q ->
+            o.put("question", JSONObject().put("text", q.prompt).put("options", JSONArray(q.options.filter { !it.isCustomInput }.map { it.label })))
+        }
+        if (n > 0) {
+            val msgs = (JarvisTasks.backendOf(t.id)?.messages?.value?.takeIf { it.isNotEmpty() } ?: runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList()))
+                .filter { it.content.isNotBlank() || it.toolCalls.isNotEmpty() }.takeLast(n)
+            o.put("latest", JSONArray().apply {
+                msgs.forEach { m ->
+                    put(JSONObject().put("role", roleName(m)).put("text", cleanText(m.content, 500)).apply {
+                        m.toolCalls.lastOrNull()?.let { tc -> put("last_tool", "${tc.name} ${tc.command.take(80)} (${tc.status.lowercase()})".trim()) }
+                    })
+                }
+            })
+        }
+        return json(o)
+    }
+
+    // ---------------- state, config and help
 
     private fun getState(): JSONObject {
         val conv = vm.currentConversation.value
@@ -541,23 +695,113 @@ object JarvisMcp {
                 convJson(it).put("busy", vm.isStreaming.value)
                     .put("model", (if (it.agent == AgentKind.CLAUDE) vm.claudeBackend.selectedModelId.value else vm.agyBackend.selectedModelId.value))
             } ?: JSONObject.NULL)
+            put("tasks", JSONArray().apply { JarvisTasks.tasks.value.take(8).forEach { put(taskJson(it)) } })
             put("running_chats", JSONArray().apply {
-                vm.allConversations.value.filter { it.isRunning }.take(10).forEach { put(convJson(it)) }
+                vm.allConversations.value.filter { it.isRunning && !JarvisPreferences.isJarvisChat(it.id) }.take(10).forEach { put(convJson(it)) }
             })
             put("pending_permissions", JSONObject().apply {
                 put("count", pending.size)
                 put("items", JSONArray().apply {
-                    pending.take(5).forEach { put(JSONObject().put("key", it.key).put("what", it.summary).put("risk", it.risk.name.lowercase())) }
+                    pending.take(5).forEach { put(JSONObject().put("key", it.key).put("what", it.summary).put("risk", it.risk.name.lowercase()).put("from", it.source)) }
                 })
             })
             put("jarvis", JSONObject().apply {
                 put("agent", JarvisPreferences.agent.value.lowercase())
                 put("phase", JarvisController.phase.value.name.lowercase())
                 put("hands_free", JarvisPreferences.handsFree.value)
+                put("quiet_mode", JarvisPreferences.quietMode.value)
+                put("send_mode", JarvisPreferences.sendMode.value)
                 put("permission_policy", JarvisPreferences.permissionPolicy.value)
                 put("chat_messages", JarvisPreferences.currentChatMessages.value)
             })
         })
+    }
+
+    private fun appGuide(args: JSONObject): JSONObject {
+        val topic = args.optString("topic").trim()
+        val hits = JarvisAppGuide.lookup(topic.ifBlank { "overview" })
+        if (hits.isEmpty()) return text("Nothing specific about \"$topic\". Topics: ${JarvisAppGuide.topics().joinToString()}. Explain from what you know, and say where in Settings it most likely is.")
+        return text(hits.joinToString("\n\n") { "## ${it.topic}\n${it.text}" } + "\n\nExplain it in one or two spoken sentences and offer to open the page.")
+    }
+
+    private suspend fun getConfig(args: JSONObject): JSONObject {
+        val area = args.optString("area", "overview").lowercase().ifBlank { "overview" }
+        val out = JSONObject()
+        fun agents() = JSONObject().apply {
+            put("enabled", JSONArray(vm.enabledAgents.value.map { it.name.lowercase() }))
+            put("new_chat_agent", vm.newChatAgent.value.name.lowercase())
+        }
+        fun claude() = JSONObject().apply {
+            val st = vm.claudeAccount.status.value
+            put("status", vm.claudeAccount.state.value.label)
+            if (st != null) { put("installed", st.installed); st.version?.let { put("version", it) } }
+            put("models", JSONArray(vm.claudeBackend.availableModels.value.take(12).map { it.displayName.ifBlank { it.id } }))
+            put("default_permission_mode", vm.claudePrefs.cachedDefaultMode())
+            vm.claudeAccount.usage.value?.subscription_type?.let { put("plan", it) }
+        }
+        suspend fun agy(): JSONObject = JSONObject().apply {
+            val a = vm.agyBackend.agyAuthInfo.value
+            put("signed_in", a.isLoggedIn)
+            if (a.email.isNotBlank()) put("account", a.email)
+            if (a.userTier.isNotBlank()) put("tier", a.userTier)
+            put("hub", if (vm.systemConnectionState.value.isHubOnline) "online" else "offline")
+            put("selected_model", vm.agyBackend.selectedModelId.value)
+            runCatching { put("command_auto_run", vm.commandAutoExecutionPolicy.first().removePrefix("CASCADE_COMMANDS_AUTO_EXECUTION_").lowercase()) }
+            runCatching { put("command_sandbox", vm.commandSandboxEnabled.first()) }
+        }
+        when (area) {
+            "agents" -> out.put("agents", agents())
+            "claude" -> out.put("claude_code", claude())
+            "antigravity", "agy" -> out.put("antigravity", agy())
+            "mcp" -> {
+                runCatching { vm.claudeConfig.loadMcp(null) }
+                runCatching { vm.loadMcpServers() }
+                delay(2500)
+                if (AgentKind.CLAUDE in vm.enabledAgents.value) out.put("claude_code_mcp", JSONArray().apply {
+                    vm.claudeConfig.mcpServers.value.forEach { s -> put(JSONObject().put("name", s.name).put("status", s.status).apply { s.error?.let { put("error", it.take(120)) } }) }
+                })
+                if (AgentKind.AGY in vm.enabledAgents.value) out.put("antigravity_mcp", JSONArray().apply {
+                    vm.mcpServers.value.forEach { s -> put(JSONObject().put("name", s.name).put("status", s.status.removePrefix("MCP_SERVER_STATUS_").lowercase()).put("enabled", s.isEnabled).put("tools", s.tools.size)) }
+                })
+                out.put("where", "Claude Code: Settings → Claude Code → MCP. Antigravity: Settings → MCP Servers.")
+            }
+            "jarvis" -> out.put("jarvis", JSONObject().apply { settings.filter { it.own || it.readOnly }.forEach { put(it.key, it.get() ?: JSONObject.NULL) } })
+            "appearance" -> out.put("appearance", JSONObject().apply { settings.filter { !it.own && !it.readOnly }.forEach { put(it.key, it.get() ?: JSONObject.NULL) } })
+            "projects" -> out.put("projects", JSONObject().apply {
+                put("active", TermuxDaemonManager.activeProject.value?.name ?: JSONObject.NULL)
+                put("list", JSONArray(projects().take(15).map { it.name }))
+            })
+            else -> {
+                out.put("agents", agents())
+                if (AgentKind.CLAUDE in vm.enabledAgents.value) out.put("claude_code", claude())
+                if (AgentKind.AGY in vm.enabledAgents.value) out.put("antigravity", agy())
+                out.put("jarvis", JSONObject().put("agent", JarvisPreferences.agent.value.lowercase()).put("model", JarvisPreferences.modelId.value.ifBlank { "default" })
+                    .put("permission_policy", JarvisPreferences.permissionPolicy.value).put("send_mode", JarvisPreferences.sendMode.value)
+                    .put("trigger", if (JarvisPreferences.hotword.value == "phrase") "wake phrase \"${JarvisPreferences.wakePhrase.value}\"" else "button")
+                    .put("hands_free", JarvisPreferences.handsFree.value).put("app_settings_allowed", JarvisPreferences.allowSettingChanges.value))
+                out.put("theme", vm.themeMode.value)
+            }
+        }
+        return json(out)
+    }
+
+    private fun openSettings(args: JSONObject): JSONObject {
+        val want = args.optString("section").trim().lowercase().replace(' ', '_')
+        val all = com.example.gemini.ui.settings.SettingsSection.values()
+        val s = all.firstOrNull { it.name.lowercase() == want }
+            ?: all.firstOrNull { it.title.lowercase().contains(want.replace('_', ' ')) }
+            ?: all.firstOrNull { it.name.lowercase().contains(want) || want.contains(it.name.lowercase()) }
+            ?: when (want) {
+                "theme", "dark_mode", "font" -> com.example.gemini.ui.settings.SettingsSection.APPEARANCE
+                "voice", "hands_free" -> com.example.gemini.ui.settings.SettingsSection.JARVIS
+                "plugins" -> com.example.gemini.ui.settings.SettingsSection.WEBVIEW_EXTENSIONS
+                "permissions", "approvals" -> com.example.gemini.ui.settings.SettingsSection.COMMANDS
+                "server", "remote" -> com.example.gemini.ui.settings.SettingsSection.SERVERS
+                else -> null
+            }
+            ?: return error("No settings page \"$want\". Pages: ${all.filter { it != com.example.gemini.ui.settings.SettingsSection.MAIN }.joinToString { it.name.lowercase() }}")
+        JarvisController.requestSettings(s.name)
+        return text("Opened Settings → ${s.title}.")
     }
 
     private fun windowJson(usedFraction: Double, resetMs: Long?, label: String): JSONObject = JSONObject().apply {
@@ -704,33 +948,22 @@ object JarvisMcp {
     }
 
     private suspend fun newChat(args: JSONObject): JSONObject {
-        val agent = when (args.optString("agent").lowercase()) {
-            "claude" -> AgentKind.CLAUDE
-            "agy", "antigravity" -> AgentKind.AGY
-            else -> vm.newChatAgent.value
-        }
+        val agent = agentArg(args.optString("agent"))
         val message = args.optString("message").trim()
+        if (message.isNotEmpty()) {
+            return taskStart(JSONObject(args.toString()).put("goal", message).put("agent", agent.name.lowercase()))
+        }
         val projectArg = args.optString("project").trim()
         val project = if (projectArg.isBlank()) null else findProject(projectArg) ?: return error("No project matches \"$projectArg\". Use jarvis_ide_list_projects.")
         val model = args.optString("model").trim().takeIf { it.isNotEmpty() }?.let { findModel(it, modelsFor(agent))?.id ?: return error("No $agent model matches \"$it\".") }
-        val open = args.optBoolean("open")
-        if (message.isEmpty()) {
-            if (project != null) { TermuxDaemonManager.setActiveProject(project); vm.onProjectChanged(project.path) }
-            vm.startNewChat(agent)
-            model?.let { vm.selectModel(it) }
-            vm.requestViewMode("CHAT")
-            return text("Started an empty ${agent.name.lowercase()} chat on screen.")
-        }
-        val id = JarvisController.newChatWithMessage(agent, message, model, project?.path)
-        if (open) {
-            delay(2500)
-            vm.selectConversation(id)
-            vm.requestViewMode("CHAT")
-        }
-        return json(JSONObject().put("chat_id", id).put("agent", agent.name.lowercase()).put("status", "started"))
+        if (project != null) { TermuxDaemonManager.setActiveProject(project); vm.onProjectChanged(project.path) }
+        vm.startNewChat(agent)
+        model?.let { vm.selectModel(it) }
+        vm.requestViewMode("CHAT")
+        return text("Started an empty ${agent.name.lowercase()} chat on screen.")
     }
 
-    // ---------------- models and settings
+    // ---------------- models
 
     private fun modelsFor(agent: AgentKind): List<AiModel> =
         if (agent == AgentKind.CLAUDE) vm.claudeBackend.availableModels.value else vm.agyBackend.enabledModels.value
@@ -759,7 +992,7 @@ object JarvisMcp {
     private suspend fun setModel(args: JSONObject): JSONObject {
         val wanted = args.optString("model").trim()
         if (wanted.isEmpty()) return error("model is required")
-        val chatId = args.optString("id").trim()
+        val chatId = args.optString("id").trim().let { JarvisTasks.find(it)?.id ?: it }
         if (chatId.isNotEmpty() && chatId != vm.currentConversation.value?.id) {
             val kind = JarvisController.agentOfChat(chatId)
             val m = findModel(wanted, modelsFor(kind)) ?: return error("No ${kind.name.lowercase()} model matches \"$wanted\".")
@@ -779,44 +1012,139 @@ object JarvisMcp {
         return text("Model set to ${m.displayName.ifBlank { m.id }}.")
     }
 
-    private val settingKeys = listOf(
-        "theme_mode", "chat_font_scale", "group_chats_by_workspace",
-        "jarvis_speech_rate", "jarvis_speech_pitch", "jarvis_conversation_mode", "jarvis_speak_progress"
+    // ---------------- settings
+
+    /** One setting Jarvis can read (and maybe change). [own] = Jarvis' own option (always changeable). */
+    private class Setting(
+        val key: String,
+        val about: String,
+        val values: String,
+        val own: Boolean,
+        val readOnly: Boolean = false,
+        val get: suspend () -> Any?,
+        val set: (suspend (String) -> String?)? = null
     )
 
-    private suspend fun settingValue(key: String): Any? = when (key) {
-        "theme_mode" -> vm.themeMode.value
-        "chat_font_scale" -> vm.chatFontScale.first()
-        "group_chats_by_workspace" -> vm.groupChatsByWorkspace.value
-        "jarvis_speech_rate" -> JarvisPreferences.ttsRate.value
-        "jarvis_speech_pitch" -> JarvisPreferences.ttsPitch.value
-        "jarvis_conversation_mode" -> JarvisPreferences.conversationMode.value
-        "jarvis_speak_progress" -> JarvisPreferences.speakProgress.value
+    private fun parseBool(v: String): Boolean? = when (v.trim().lowercase()) {
+        "true", "on", "yes", "1", "enable", "enabled" -> true
+        "false", "off", "no", "0", "disable", "disabled" -> false
         else -> null
     }
 
-    private suspend fun getSetting(args: JSONObject): JSONObject {
-        val key = args.optString("key").trim()
-        if (key.isNotEmpty()) return settingValue(key)?.let { text("$key = $it") } ?: error("Unknown setting. Known: ${settingKeys.joinToString()}")
-        return json(JSONObject().apply { settingKeys.forEach { put(it, settingValue(it)) } })
+    private fun bool(key: String, about: String, own: Boolean, get: () -> Boolean, set: (Boolean) -> Unit) =
+        Setting(key, about, "true|false", own, get = { get() }, set = { v -> parseBool(v)?.let { set(it); null } ?: "Use true or false." })
+
+    private fun choice(key: String, about: String, own: Boolean, choices: List<String>, get: () -> String, set: (String) -> Unit) =
+        Setting(key, about, choices.joinToString("|"), own, get = { get() }, set = { v ->
+            choices.firstOrNull { it.equals(v.trim(), true) }?.let { set(it); null } ?: "Use one of ${choices.joinToString()}."
+        })
+
+    private fun num(key: String, about: String, own: Boolean, range: ClosedFloatingPointRange<Float>, get: () -> Float, set: (Float) -> Unit) =
+        Setting(key, about, "${range.start}-${range.endInclusive}", own, get = { get() }, set = { v ->
+            v.trim().removeSuffix("x").toFloatOrNull()?.let { set(it.coerceIn(range)); null } ?: "Not a number."
+        })
+
+    private fun int(key: String, about: String, own: Boolean, range: IntRange, get: () -> Int, set: (Int) -> Unit) =
+        Setting(key, about, "${range.first}-${range.last}", own, get = { get() }, set = { v ->
+            v.trim().toFloatOrNull()?.let { set(it.toInt().coerceIn(range)); null } ?: "Not a number."
+        })
+
+    private fun textS(key: String, about: String, own: Boolean, get: () -> String, set: (String) -> Unit) =
+        Setting(key, about, "text", own, get = { get() }, set = { v -> if (v.isBlank()) "The value is empty." else { set(v.trim()); null } })
+
+    private fun ro(key: String, about: String, get: () -> Any?) = Setting(key, about, "read-only", own = true, readOnly = true, get = { get() })
+
+    private val P = JarvisPreferences
+
+    private val settings: List<Setting> by lazy {
+        listOf(
+            // ---- app (only when the user allowed it)
+            choice("theme_mode", "App theme", false, listOf("LIGHT", "DARK", "SYSTEM"), { vm.themeMode.value }, { vm.setThemeMode(it) }),
+            Setting("chat_font_scale", "Chat text size", "0.8-1.6", false, get = { vm.chatFontScale.first() }, set = { v ->
+                v.trim().removeSuffix("x").toFloatOrNull()?.let { vm.setChatFontScale(it.coerceIn(0.8f, 1.6f)); null } ?: "Not a number."
+            }),
+            bool("group_chats_by_workspace", "Group the chat list by project", false, { vm.groupChatsByWorkspace.value }, { vm.setGroupChatsByWorkspace(it) }),
+            bool("floating_switcher", "Floating app switcher over all screens", false, { vm.isFloatingSwitcherEnabled.value }, { vm.setFloatingSwitcherEnabled(it) }),
+            bool("floating_bubble", "Floating chat bubble over other apps", false, { vm.isFloatingBubbleEnabled.value }, { vm.setFloatingBubbleEnabled(it) }),
+            bool("vibrate_when_chat_done", "A light buzz when a chat finishes", false, { ChatCompletionMonitor.vibrate.value }, { ChatCompletionMonitor.setVibrate(it) }),
+            Setting("new_chat_agent", "Agent of new chats", "claude|agy", false, get = { vm.newChatAgent.value.name.lowercase() }, set = { v ->
+                val a = when (v.trim().lowercase()) { "claude" -> AgentKind.CLAUDE; "agy", "antigravity" -> AgentKind.AGY; else -> null }
+                when {
+                    a == null -> "Use claude or agy."
+                    a !in vm.enabledAgents.value -> "That agent is turned off (Settings → Agents)."
+                    else -> { vm.setNewChatAgent(a); null }
+                }
+            }),
+            // ---- Jarvis' own options (always allowed)
+            bool("jarvis_quiet_mode", "Show answers instead of speaking them", true, { P.quietMode.value }, { P.quietMode.set(it) }),
+            num("jarvis_voice_speed", "Speaking speed", true, 0.5f..2f, { P.ttsRate.value }, { P.ttsRate.set(it) }),
+            num("jarvis_voice_pitch", "Voice pitch", true, 0.5f..2f, { P.ttsPitch.value }, { P.ttsPitch.set(it) }),
+            choice("jarvis_voice_engine", "Voice: device, Google Cloud or OpenAI-compatible (online ones need a key in settings)", true, listOf("android", "google_cloud", "openai"), { P.ttsEngine.value }, { P.ttsEngine.set(it) }),
+            bool("jarvis_speak_progress", "Say short progress lines during long work", true, { P.speakProgress.value }, { P.speakProgress.set(it) }),
+            choice("jarvis_send_mode", "When speech is sent: smart pause, fixed pause, send word, or manual", true, listOf("smart", "pause", "word", "manual"), { P.sendMode.value }, { P.sendMode.set(it) }),
+            num("jarvis_pause_seconds", "Pause that ends a sentence", true, 0.8f..3.5f, { P.silenceMs.value / 1000f }, { P.silenceMs.set((it * 1000).toInt()) }),
+            textS("jarvis_send_words", "Send words for word mode, comma separated", true, { P.sendWords.value }, { P.sendWords.set(it.lowercase()) }),
+            bool("jarvis_conversation_mode", "Keep listening after Jarvis answers", true, { P.conversationMode.value }, { P.conversationMode.set(it) }),
+            int("jarvis_follow_up_seconds", "How long the mic stays open for a follow-up", true, 2..30, { P.followUpSeconds.value }, { P.followUpSeconds.set(it) }),
+            int("jarvis_max_listen_seconds", "Longest single capture", true, 15..300, { P.maxListenSeconds.value }, { P.maxListenSeconds.set(it) }),
+            choice("jarvis_side_talk", "Ignore what is said to other people", true, listOf("off", "smart", "strict"), { P.sideTalk.value }, { P.sideTalk.set(it) }),
+            Setting("jarvis_trigger", "How Jarvis wakes: button only or wake phrase (needs hands-free)", "button|wake_phrase", true,
+                get = { if (P.hotword.value == "phrase") "wake_phrase" else "button" },
+                set = { v -> when (v.trim().lowercase()) { "button", "push" -> { P.hotword.set("push"); null }; "wake_phrase", "phrase", "wake" -> { P.hotword.set("phrase"); null }; else -> "Use button or wake_phrase." } }),
+            textS("jarvis_wake_phrase", "Wake phrase(s), comma separated", true, { P.wakePhrase.value }, { P.wakePhrase.set(it.lowercase()) }),
+            choice("jarvis_wake_match", "Whole phrase, or the name alone wakes Jarvis", true, listOf("phrase", "name"), { P.wakeMatch.value }, { P.wakeMatch.set(it) }),
+            bool("jarvis_headset_button", "Headset button talks and stops (hands-free)", true, { P.headsetButton.value }, { P.headsetButton.set(it) }),
+            bool("jarvis_hands_free", "Hands-free mode (mic service, works with the screen off)", true, { P.handsFree.value }, { JarvisController.setHandsFree(it) }),
+            choice("jarvis_busy_behavior", "Speaking while Jarvis works: wait, interrupt, or interrupt on corrections", true, listOf("queue", "interrupt", "smart"), { P.busyBehavior.value }, { P.busyBehavior.set(it) }),
+            choice("jarvis_keep_screen_on", "Keep the screen on", true, listOf("off", "active", "always"), { P.keepScreenOn.value }, { P.keepScreenOn.set(it) }),
+            choice("jarvis_idle_orb", "Orb size while idle", true, listOf("tiny", "small", "normal", "hidden"), { P.orbSize.value }, { P.orbSize.set(it) }),
+            choice("jarvis_orb_style", "Floating card or full screen while active", true, listOf("floating", "fullscreen"), { P.orbStyle.value }, { P.orbStyle.set(it) }),
+            bool("jarvis_show_transcript", "Show what Jarvis heard and said", true, { P.showTranscript.value }, { P.showTranscript.set(it) }),
+            bool("jarvis_show_activity", "Show what Jarvis is doing", true, { P.showActivity.value }, { P.showActivity.set(it) }),
+            bool("jarvis_haptics", "Vibrate when listening starts", true, { P.haptics.value }, { P.haptics.set(it) }),
+            bool("jarvis_earcons", "Tones when the mic opens and closes", true, { P.earcons.value }, { P.earcons.set(it) }),
+            bool("jarvis_announce_done", "Say when any chat finishes", true, { P.announceDone.value }, { P.announceDone.set(it) }),
+            bool("jarvis_announce_summary", "Also read the start of its reply", true, { P.announceSummary.value }, { P.announceSummary.set(it) }),
+            bool("jarvis_announce_usage_low", "Warn when the 5-hour usage is almost gone", true, { P.announceUsageLow.value }, { P.announceUsageLow.set(it) }),
+            choice("jarvis_event_routing", "Task news: Jarvis decides what to do, or just announces", true, listOf("model", "speak"), { P.eventRouting.value }, { P.eventRouting.set(it) }),
+            int("jarvis_stall_minutes", "Report a task with no progress after this many minutes (0 = never)", true, 0..240, { P.stallMinutes.value }, { P.stallMinutes.set(it) }),
+            int("jarvis_rotate_idle_minutes", "Fresh Jarvis chat after this many idle minutes (0 = never)", true, 0..1440, { P.rotateIdleMinutes.value }, { P.rotateIdleMinutes.set(it) }),
+            int("jarvis_rotate_max_messages", "Fresh Jarvis chat after this many messages (0 = never)", true, 0..500, { P.rotateMaxMessages.value }, { P.rotateMaxMessages.set(it) }),
+            bool("jarvis_context_in_prompt", "Send live context with every message", true, { P.contextInPrompt.value }, { P.contextInPrompt.set(it) }),
+            // ---- read only (changed by the user in Settings → Jarvis)
+            ro("jarvis_agent", "Agent that runs Jarvis") { P.agent.value.lowercase() },
+            ro("jarvis_model", "Model of the Jarvis chat") { P.modelId.value.ifBlank { "default" } },
+            ro("jarvis_permission_policy", "Approval policy") { P.permissionPolicy.value },
+            ro("jarvis_task_approvals", "Approvals inside tasks") { P.taskApprovals.value },
+            ro("jarvis_allow_setting_changes", "Jarvis may change app settings") { P.allowSettingChanges.value }
+        )
     }
 
-    private fun setSetting(args: JSONObject): JSONObject {
-        if (!JarvisPreferences.allowSettingChanges.value) return error("The user has not allowed Jarvis to change settings (Settings → Jarvis → Permissions).")
-        val key = args.optString("key").trim()
-        val v = args.optString("value").trim()
-        fun bool() = v.equals("true", true) || v.equals("on", true) || v.equals("yes", true)
-        when (key) {
-            "theme_mode" -> { if (v.uppercase() !in listOf("LIGHT", "DARK", "SYSTEM")) return error("Use LIGHT, DARK or SYSTEM"); vm.setThemeMode(v.uppercase()) }
-            "chat_font_scale" -> vm.setChatFontScale((v.toFloatOrNull() ?: return error("Not a number")).coerceIn(0.8f, 1.6f))
-            "group_chats_by_workspace" -> vm.setGroupChatsByWorkspace(bool())
-            "jarvis_speech_rate" -> JarvisPreferences.ttsRate.set((v.toFloatOrNull() ?: return error("Not a number")).coerceIn(0.5f, 2f))
-            "jarvis_speech_pitch" -> JarvisPreferences.ttsPitch.set((v.toFloatOrNull() ?: return error("Not a number")).coerceIn(0.5f, 2f))
-            "jarvis_conversation_mode" -> JarvisPreferences.conversationMode.set(bool())
-            "jarvis_speak_progress" -> JarvisPreferences.speakProgress.set(bool())
-            else -> return error("Unknown or protected setting. Allowed: ${settingKeys.joinToString()}")
+    private suspend fun getSetting(args: JSONObject): JSONObject {
+        val key = args.optString("key").trim().lowercase()
+        if (key.isNotEmpty()) {
+            val s = settings.firstOrNull { it.key == key } ?: return error("Unknown setting. Known: ${settings.joinToString { it.key }}")
+            return text("${s.key} = ${s.get()} (${s.values}) — ${s.about}${if (!s.own && !JarvisPreferences.allowSettingChanges.value) "; changing it needs the user's permission" else ""}")
         }
-        return text("$key set to $v.")
+        return json(JSONObject().apply {
+            put("app_settings_changeable", JarvisPreferences.allowSettingChanges.value)
+            put("settings", JSONArray().apply {
+                settings.forEach { s -> put(JSONObject().put("key", s.key).put("value", s.get() ?: JSONObject.NULL).put("values", s.values).put("about", s.about)) }
+            })
+        })
+    }
+
+    private suspend fun setSetting(args: JSONObject): JSONObject {
+        val key = args.optString("key").trim().lowercase()
+        val v = args.optString("value").trim()
+        val s = settings.firstOrNull { it.key == key } ?: return error("Unknown setting. Known: ${settings.filter { !it.readOnly }.joinToString { it.key }}")
+        val setter = s.set
+        if (s.readOnly || setter == null) return error("$key can only be changed by the user in Settings → Jarvis. Offer to open it (jarvis_open_settings section=jarvis).")
+        if (!s.own && !JarvisPreferences.allowSettingChanges.value) {
+            return error("The user has not allowed Jarvis to change app settings. They can allow it in Settings → Jarvis → Approvals (\"Let Jarvis change app settings\"), or change it themselves in Settings → Appearance & Theme.")
+        }
+        setter(v)?.let { return error("$key: $it") }
+        return text("$key set to ${s.get()}.")
     }
 
     private fun listPermissions(): JSONObject {

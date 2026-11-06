@@ -80,6 +80,8 @@ object JarvisPreferences {
     val ttsModel = pref("tts_model", "")
     /** Jarvis says short progress updates while it works. */
     val speakProgress = pref("speak_progress", false)
+    /** Quiet mode: Jarvis shows its answers on the card instead of saying them (meetings, night). */
+    val quietMode = pref("quiet_mode", false)
 
     // ---- voice input
     /** "auto" (the Jarvis agent's own dictation), "claude", "agy" or "android". */
@@ -89,9 +91,36 @@ object JarvisPreferences {
     val silenceMs = pref("silence_ms", 1500)
     /** "push" (button only) or "phrase" (say the wake phrase while hands-free is on). */
     val hotword = pref("hotword", "push")
+    /** One or more wake phrases, separated by commas ("hey jarvis, ok jarvis"). */
     val wakePhrase = pref("wake_phrase", "hey jarvis")
+    /** "phrase" (the whole phrase must be heard) or "name" (the name alone, e.g. "Jarvis, …", wakes it). */
+    val wakeMatch = pref("wake_match", "phrase")
     /** Keep listening for a follow-up after Jarvis speaks. */
     val conversationMode = pref("conversation_mode", true)
+    /** How long the microphone stays open for a follow-up after Jarvis spoke (seconds). */
+    val followUpSeconds = pref("follow_up_s", 8)
+    /**
+     * When what you said is sent: "smart" (after a pause, longer when the sentence sounds unfinished), "pause" (after a
+     * fixed pause), "word" (only when you end with a send word, e.g. "over"), "manual" (only on Send / headset button).
+     */
+    val sendMode = pref("send_mode", "smart")
+    /** Send words for the "word" mode, separated by commas; the word itself is not sent. */
+    val sendWords = pref("send_words", "over, send it, go ahead, that's it")
+    /** Longest single capture (seconds); what was heard is sent then. */
+    val maxListenSeconds = pref("max_listen_s", 90)
+    /**
+     * Talking to other people near the phone: "off" (everything is for Jarvis), "smart" (the model ignores follow-ups that
+     * were clearly said to someone else), "strict" (follow-ups must name Jarvis unless it just asked you something).
+     */
+    val sideTalk = pref("side_talk", "smart")
+    /** Short tones when the microphone opens and closes. */
+    val earcons = pref("earcons", true)
+    /** You speak while Jarvis is still working: "queue" (wait), "interrupt" (stop it and send), "smart" (corrections interrupt). */
+    val busyBehavior = pref("busy_behavior", "smart")
+    /** The headset / Bluetooth button talks (one press) and stops (two presses) while hands-free is on. */
+    val headsetButton = pref("headset_button", true)
+    /** Live context (screen, project, chats, tasks) goes with every message so Jarvis rarely has to look it up. */
+    val contextInPrompt = pref("context_in_prompt", true)
 
     // ---- permissions
     /** "ask_each", "auto_readonly", "auto_except_risky" or "auto_all". */
@@ -109,9 +138,24 @@ object JarvisPreferences {
     /** Warn once per window when the 5-hour usage is nearly used up. */
     val announceUsageLow = pref("announce_usage_low", false)
 
+    // ---- manager (tasks Jarvis runs in their own chats)
+    /** Task news (done, failed, stuck, questions): "model" (Jarvis reads it and decides what to say or do) or "speak" (just announce). */
+    val eventRouting = pref("event_routing", "model")
+    /** Approvals inside tasks: "policy" (the approval rules below, asking you by voice) or "jarvis" (Jarvis decides from the task's goal; risky ones still ask you). */
+    val taskApprovals = pref("task_approvals", "policy")
+    /** Tell Jarvis when a running task shows no progress for this many minutes (0 = never). */
+    val stallMinutes = pref("stall_minutes", 10)
+
     // ---- look
     /** "floating" orb or "fullscreen" overlay. */
     val orbStyle = pref("orb_style", "floating")
+    /** Size of the orb while Jarvis is idle: "tiny", "small", "normal" or "hidden" (only shown while active). */
+    val orbSize = pref("orb_size", "small")
+    /** Edge the orb rests on ("left" / "right") and its height (0 = top, 1 = bottom). */
+    val orbSide = pref("orb_side", "right")
+    val orbY = pref("orb_y", 0.78f)
+    /** Keep the screen on: "off", "active" (while Jarvis listens, works, speaks or a task runs) or "always" (while Jarvis is on). */
+    val keepScreenOn = pref("keep_screen_on", "always")
     val haptics = pref("haptics", true)
     val showTranscript = pref("show_transcript", true)
     /** A small card shows what Jarvis is doing while it works. */
@@ -125,6 +169,8 @@ object JarvisPreferences {
     val currentChatMessages = pref("chat_msgs", 0)
     val lastActivityAt = pref("last_activity", 0L)
     val setupSkillInstalled = pref("skill_installed", "")
+    /** "<chat id>|<guide version>": the chat that already got the full Jarvis guide (boot message). */
+    val bootSentFor = pref("boot_sent_for", "")
 
     private val _chatIds = MutableStateFlow<Set<String>>(emptySet())
     /** Ids of every chat Jarvis ever opened (they are listed under the Jarvis filter, not in the normal lists). */

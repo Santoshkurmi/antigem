@@ -303,6 +303,16 @@ fun ChatScreen(
         }
     }
 
+    // Jarvis (voice or its panel) asked to show a settings page
+    var requestedSettingsSection by remember { mutableStateOf<com.example.gemini.ui.settings.SettingsSection?>(null) }
+    val jarvisSettingsRequest by com.example.gemini.data.jarvis.JarvisController.settingsRequest.collectAsState()
+    LaunchedEffect(jarvisSettingsRequest) {
+        val name = jarvisSettingsRequest ?: return@LaunchedEffect
+        requestedSettingsSection = runCatching { com.example.gemini.ui.settings.SettingsSection.valueOf(name) }.getOrNull()
+        showSettingsDialog = true
+        com.example.gemini.data.jarvis.JarvisController.consumeSettingsRequest()
+    }
+
     val pendingApprovals by viewModel.pendingApprovals.collectAsState()
 
     var currentToast by remember { mutableStateOf<ChatToast?>(null) }
@@ -2344,12 +2354,14 @@ fun ChatScreen(
             onOpenNetworkInspector = { showNetworkInspectorDialog = true },
             claude = claudeSettingsDeps,
             initialClaudePage = claudeSettingsPage,
+            initialSection = requestedSettingsSection,
             enabledAgents = enabledAgents,
             isApplyingAgents = isApplyingAgents,
             onApplyAgents = { viewModel.applyAgents(it) },
             onDismiss = {
                 showSettingsDialog = false
                 claudeSettingsPage = null
+                requestedSettingsSection = null
             }
         )
     }

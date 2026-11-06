@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 
 private val JarvisCyan = Color(0xFF22D3EE)
 
-/** Settings → Jarvis: everything about the hands-free voice mode in one place. */
+/** Settings → Jarvis: everything about the hands-free voice assistant in one place. */
 @Composable
 fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
     val context = LocalContext.current
@@ -50,10 +50,11 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
         JCard(cardBg, cardBorder, "Jarvis") {
             JSwitch(
                 "Turn on Jarvis",
-                "Talk to your agents hands-free: open projects and files, start and stop chats, change models, answer permissions, " +
-                    "ask for your usage. Off by default; nothing listens until you turn it on.",
+                "A hands-free assistant for the whole app: talk to open projects and files, run and watch tasks, answer approvals, " +
+                    "change settings, ask for help or your usage. Off by default; nothing listens until you turn it on.",
                 enabled
             ) { JarvisController.setEnabled(it) }
+            JHint("Tap the orb to talk, long-press it for the Jarvis panel (tasks, conversation, typing, quick switches).")
         }
         if (!JarvisController.isAttached) {
             Text("Jarvis is starting…", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
@@ -82,8 +83,8 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                     }
                 }
             }
-            JHint("Jarvis talks to a normal hidden chat of this agent. A smaller, faster model feels best for voice. " +
-                "Find the chat under Jarvis in the chat list.")
+            JHint("Jarvis talks to a normal hidden chat of this agent (find it under Jarvis in the chat list). A fast model feels best for voice; " +
+                "big jobs run as tasks in their own chats.")
         }
 
         // ---------------------------------------------------------------- setup checklist
@@ -95,6 +96,13 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                 val headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
                 val url = "http://127.0.0.1:${AndroidLocalBridgeServer.DEFAULT_PORT}/jarvis"
                 val name = AndroidLocalBridgeServer.JARVIS_MCP_NAME
+                val mcpProblem by JarvisController.mcpProblem.collectAsState()
+                if (mcpProblem) {
+                    Text(
+                        "Jarvis reported that its app tools are missing in ${if (agent == AgentKind.CLAUDE) "Claude Code" else "Antigravity"}. Add the Jarvis MCP server below (then start a fresh Jarvis chat).",
+                        fontSize = 12.5.sp, color = Color(0xFFF59E0B)
+                    )
+                }
 
                 // 1. the MCP server
                 val claudeServers by vm.claudeConfig.mcpServers.collectAsState()
@@ -105,7 +113,7 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                 val mcpAdded = if (agent == AgentKind.CLAUDE) claudeServers.any { it.name == name } else agyServers.any { it.name == name }
                 JStep(
                     "1. Add the Jarvis MCP server",
-                    if (mcpAdded) "Added" + (mcpState?.let { " · $it" } ?: "") else "The agent needs it to control the app.",
+                    if (mcpAdded) "Added" + (mcpState?.let { " · $it" } ?: "") else "Required: these are the tools Jarvis controls the app with.",
                     mcpAdded, if (mcpAdded) "Refresh" else "Add"
                 ) {
                     if (agent == AgentKind.CLAUDE) {
@@ -129,12 +137,21 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                     ) { vm.claudeConfig.addRule("allow", "mcp__$name") }
                 }
 
-                // 3. the skill
+                // 3. the microphone
+                var hasMic by remember { mutableStateOf(JarvisController.hasMic()) }
+                val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { hasMic = it }
+                JStep(
+                    "${if (agent == AgentKind.CLAUDE) "3" else "2"}. Allow the microphone",
+                    if (hasMic) "Allowed" else "Needed to hear you.",
+                    hasMic, "Allow"
+                ) { micLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+
+                // 4. the optional skill
                 var skillInstalled by remember(agent) { mutableStateOf<Boolean?>(null) }
                 LaunchedEffect(agent) { skillInstalled = runCatching { JarvisSkill.isInstalled(agent) }.getOrDefault(false) }
                 JStep(
-                    "${if (agent == AgentKind.CLAUDE) "3" else "2"}. Install the Jarvis skill",
-                    when (skillInstalled) { true -> "Installed"; false -> "Teaches the model how to answer by voice."; null -> "Checking…" },
+                    "Optional: install the Jarvis skill",
+                    when (skillInstalled) { true -> "Installed"; false -> "Not needed: the guide goes with the first message."; null -> "Checking…" },
                     skillInstalled == true, if (skillInstalled == true) "Reinstall" else "Install"
                 ) {
                     scope.launch {
@@ -143,21 +160,88 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                             .onFailure { Toast.makeText(context, it.message ?: "Install failed", Toast.LENGTH_LONG).show() }
                     }
                 }
-
-                // 4. the microphone
-                var hasMic by remember { mutableStateOf(JarvisController.hasMic()) }
-                val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { hasMic = it }
-                JStep(
-                    "${if (agent == AgentKind.CLAUDE) "4" else "3"}. Allow the microphone",
-                    if (hasMic) "Allowed" else "Needed to hear you.",
-                    hasMic, "Allow"
-                ) { micLauncher.launch(Manifest.permission.RECORD_AUDIO) }
-                JHint("Every voice message also carries a short hidden note, so Jarvis keeps working even if the agent does not load the skill.")
+                JHint("The first message of every Jarvis chat carries the whole guide and the list of its tools with their parameters, so the " +
+                    "model acts at once instead of searching. If the Jarvis MCP server is missing, Jarvis says so and this card shows a warning.")
             }
+        }
+
+        // ---------------------------------------------------------------- waking Jarvis
+        JCard(cardBg, cardBorder, "Waking Jarvis") {
+            val hotword by P.hotword.state.collectAsState()
+            Text("Trigger", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("push" to "Button / tile / headset", "phrase" to "Wake phrase too"), hotword) { P.hotword.set(it) }
+            if (hotword == "phrase") {
+                val phrase by P.wakePhrase.state.collectAsState()
+                JField("Wake phrase(s), comma separated", phrase) { P.wakePhrase.set(it.lowercase()) }
+                val match by P.wakeMatch.state.collectAsState()
+                JChips(listOf("phrase" to "Whole phrase", "name" to "The name alone"), match) { P.wakeMatch.set(it) }
+                JHint("“Hey Jarvis, open my project” starts right away. Common mishearings of “Jarvis” count too. The wake phrase needs " +
+                    "hands-free mode and keeps the device recognizer busy, which uses battery.")
+            }
+            val hands by P.handsFree.state.collectAsState()
+            JSwitch(
+                "Hands-free mode",
+                "Keeps Jarvis' microphone service running so the wake phrase and the headset button work with the screen off or another app open. " +
+                    "A notification shows its state with Talk / Send / Stop.",
+                hands, enabledSwitch = enabled
+            ) { JarvisController.setHandsFree(it) }
+            val headset by P.headsetButton.state.collectAsState()
+            JSwitch("Headset button", "With hands-free on: one press talks (or sends), two presses stop. Works while no music app holds the button.", headset) { P.headsetButton.set(it) }
+            JHint("Quick Settings tile: pull down the notification shade, edit the tiles and add “Jarvis” to talk from anywhere with one tap.")
+        }
+
+        // ---------------------------------------------------------------- listening and sending
+        JCard(cardBg, cardBorder, "Listening and sending") {
+            val mode by P.sendMode.state.collectAsState()
+            Text("When what you say is sent", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("smart" to "Smart", "pause" to "After a pause", "word" to "Send word", "manual" to "Manual"), mode) { P.sendMode.set(it) }
+            JHint(when (mode) {
+                "pause" -> "Sent after a fixed pause. A bar on the card fills up while it counts down; tap Wait to keep talking."
+                "word" -> "Sent only when you end with a send word (the word itself is not sent). Best for noisy places or slow thinkers."
+                "manual" -> "Sent when you tap Send, press the headset button or the notification's Send. Nothing is sent by itself."
+                else -> "Sent after a pause, but Jarvis waits longer when you sound unfinished (“…and”, “…the”), and less for short answers."
+            })
+            if (mode == "smart" || mode == "pause") {
+                val silence by P.silenceMs.state.collectAsState()
+                JSlider("Pause that ends your sentence", silence.toFloat(), 800f..3500f, "%.1f s".format(silence / 1000f)) { P.silenceMs.set(it.toInt()) }
+            }
+            if (mode == "word") {
+                val words by P.sendWords.state.collectAsState()
+                JField("Send words, comma separated", words) { P.sendWords.set(it.lowercase()) }
+            }
+            val conv by P.conversationMode.state.collectAsState()
+            JSwitch("Keep listening after Jarvis answers", "Opens the microphone again so you can reply without touching anything.", conv) { P.conversationMode.set(it) }
+            if (conv) {
+                val follow by P.followUpSeconds.state.collectAsState()
+                JSlider("Follow-up window", follow.toFloat(), 3f..20f, "$follow s") { P.followUpSeconds.set(it.toInt()) }
+            }
+            val maxListen by P.maxListenSeconds.state.collectAsState()
+            JSlider("Longest single message", maxListen.toFloat(), 20f..240f, "$maxListen s") { P.maxListenSeconds.set(it.toInt()) }
+            val side by P.sideTalk.state.collectAsState()
+            Text("Talking to other people nearby", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("off" to "Off", "smart" to "Smart", "strict" to "Strict"), side) { P.sideTalk.set(it) }
+            JHint(when (side) {
+                "off" -> "Everything heard is for Jarvis."
+                "strict" -> "During follow-up listening Jarvis only reacts when you say its name (or answer its question)."
+                else -> "During follow-up listening Jarvis ignores what was clearly said to someone else, and filler like “um”."
+            })
+            val busyB by P.busyBehavior.state.collectAsState()
+            Text("Speaking while Jarvis is still working", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("smart" to "Corrections interrupt", "queue" to "Wait for it", "interrupt" to "Always interrupt"), busyB) { P.busyBehavior.set(it) }
+            val earcons by P.earcons.state.collectAsState()
+            JSwitch("Tones when the microphone opens and closes", null, earcons) { P.earcons.set(it) }
+            val stt by P.sttEngine.state.collectAsState()
+            Text("Speech recognition", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("auto" to "Same as agent", "claude" to "Claude", "agy" to "Antigravity", "android" to "This device"), stt) { P.sttEngine.set(it) }
+            JHint("“This device” uses Android's recognizer and needs no sign-in. If the agent's dictation fails, Jarvis switches to the device for the rest of the session.")
+            val lang by P.sttLanguage.state.collectAsState()
+            JField("Language (e.g. en, hi, es)", lang) { P.sttLanguage.set(it) }
         }
 
         // ---------------------------------------------------------------- voice output
         JCard(cardBg, cardBorder, "Voice output (Jarvis speaking)") {
+            val quiet by P.quietMode.state.collectAsState()
+            JSwitch("Quiet mode", "Jarvis shows its answers on the card instead of saying them (meetings, night). Say “quiet mode off” to undo.", quiet) { P.quietMode.set(it) }
             val engine by P.ttsEngine.state.collectAsState()
             JChips(listOf("android" to "This device", "google_cloud" to "Google Cloud", "openai" to "OpenAI-compatible"), engine) { P.ttsEngine.set(it) }
             val voice by P.ttsVoice.state.collectAsState()
@@ -199,76 +283,40 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
             err?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
             OutlinedButton(onClick = { scope.launch { JarvisVoice.speak("Hello, I'm Jarvis. This is how I sound.", wait = false) } }) { Text("Test voice") }
             val progress by P.speakProgress.state.collectAsState()
-            JSwitch("Speak progress updates", "Jarvis says a short line while a long task runs.", progress) { P.speakProgress.set(it) }
+            JSwitch("Speak progress updates", "Jarvis says a short line while a long step runs.", progress) { P.speakProgress.set(it) }
+            JHint("You can also say “speak slower”, “faster” or “repeat that”: Jarvis handles those at once, without asking the model.")
         }
 
-        // ---------------------------------------------------------------- voice input
-        JCard(cardBg, cardBorder, "Voice input (hearing you)") {
-            val stt by P.sttEngine.state.collectAsState()
-            JChips(listOf("auto" to "Same as agent", "claude" to "Claude", "agy" to "Antigravity", "android" to "This device"), stt) { P.sttEngine.set(it) }
-            JHint("“This device” uses Android's speech recognizer and needs no sign-in. The agent's dictation needs that agent signed in.")
-            val lang by P.sttLanguage.state.collectAsState()
-            JField("Language (e.g. en, hi, es)", lang) { P.sttLanguage.set(it) }
-            val silence by P.silenceMs.state.collectAsState()
-            JSlider("Pause that ends your sentence", silence.toFloat(), 800f..3500f, "%.1f s".format(silence / 1000f)) { P.silenceMs.set(it.toInt()) }
-            val conv by P.conversationMode.state.collectAsState()
-            JSwitch("Keep listening after Jarvis answers", "Opens the microphone again so you can reply without touching anything.", conv) { P.conversationMode.set(it) }
-            val hotword by P.hotword.state.collectAsState()
-            JChips(listOf("push" to "Button only", "phrase" to "Wake phrase"), hotword) { P.hotword.set(it) }
-            if (hotword == "phrase") {
-                val phrase by P.wakePhrase.state.collectAsState()
-                JField("Wake phrase", phrase) { P.wakePhrase.set(it.lowercase()) }
-                JHint("The wake phrase works while hands-free mode is on, using the device's recognizer. It keeps the microphone busy, which uses battery.")
-            }
-            val hands by P.handsFree.state.collectAsState()
-            JSwitch(
-                "Hands-free mode",
-                "Keeps the microphone service running so you can talk with the screen off or another app open. A notification shows its state.",
-                hands, enabledSwitch = enabled
-            ) { JarvisController.setHandsFree(it) }
-        }
-
-        // ---------------------------------------------------------------- chat rotation
-        JCard(cardBg, cardBorder, "Jarvis chat") {
-            val idle by P.rotateIdleMinutes.state.collectAsState()
-            Text("Start a fresh chat after idle time", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            JChips(listOf("0" to "Never", "5" to "5 min", "15" to "15 min", "30" to "30 min", "60" to "1 h", "180" to "3 h"), idle.toString()) { P.rotateIdleMinutes.set(it.toInt()) }
-            val maxMsgs by P.rotateMaxMessages.state.collectAsState()
-            Text("Start a fresh chat after this many messages", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            JChips(listOf("0" to "Never", "10" to "10", "20" to "20", "40" to "40", "80" to "80"), maxMsgs.toString()) { P.rotateMaxMessages.set(it.toInt()) }
-            JHint("Both are off by default so Jarvis never forgets mid-task. A chat is only replaced when you speak the next message, never while it is working. " +
-                "You can always say “start again” or “new session”.")
-            val carry by P.carryOver.state.collectAsState()
-            JSwitch("Carry the memory over", "A new chat starts with the Jarvis memory note and the last lines of the old conversation.", carry) { P.carryOver.set(it) }
-            val count by P.currentChatMessages.state.collectAsState()
-            Text("Current chat: $count message${if (count == 1) "" else "s"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-            OutlinedButton(onClick = { JarvisController.newSession(carry = carry); Toast.makeText(context, "The next message starts a new Jarvis chat", Toast.LENGTH_SHORT).show() }) {
-                Text("Start a fresh chat now")
-            }
-            val memory by P.memory.state.collectAsState()
-            OutlinedTextField(
-                value = memory, onValueChange = { P.memory.set(it.take(4000)) },
-                label = { Text("Jarvis memory (Jarvis can edit this too)") },
-                modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 8
-            )
-        }
-
-        // ---------------------------------------------------------------- announcements
-        JCard(cardBg, cardBorder, "Announcements") {
+        // ---------------------------------------------------------------- manager and tasks
+        JCard(cardBg, cardBorder, "Manager and tasks") {
+            JHint("Say “build the release and tell me when it's done”: Jarvis starts a task in its own chat and watches it. You can ask how it is going, " +
+                "redirect it (“also run the tests”), stop it, or answer its questions by voice. Tasks are listed in the Jarvis panel.")
+            val routing by P.eventRouting.state.collectAsState()
+            Text("When a task finishes, fails or gets stuck", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("model" to "Jarvis decides", "speak" to "Just tell me"), routing) { P.eventRouting.set(it) }
+            JHint(if (routing == "model") "Jarvis reads the result, tells you the gist and follows up (asks you, passes answers on). Uses a model turn per event."
+            else "Jarvis just announces it (“Release build is done”), without a model turn.")
+            val taskAppr by P.taskApprovals.state.collectAsState()
+            Text("Approvals inside tasks", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("policy" to "Use my approval rules", "jarvis" to "Jarvis decides"), taskAppr) { P.taskApprovals.set(it) }
+            JHint(if (taskAppr == "jarvis") "Jarvis approves what clearly serves the task's goal and asks you about anything risky or unclear (needs “Jarvis decides” above)."
+            else "Approvals follow “Approvals by voice” below: approved automatically or read out to you.")
+            val stall by P.stallMinutes.state.collectAsState()
+            Text("Report a task with no progress after", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("0" to "Never", "5" to "5 min", "10" to "10 min", "20" to "20 min", "45" to "45 min"), stall.toString()) { P.stallMinutes.set(it.toInt()) }
             val done by P.announceDone.state.collectAsState()
-            JSwitch("Say when a chat finishes", "“<chat title> is done. Please check it.” for any Claude or Antigravity chat.", done) { P.announceDone.set(it) }
+            JSwitch("Say when any other chat finishes", "“<chat title> is done. Please check it.” for chats that are not Jarvis tasks.", done) { P.announceDone.set(it) }
             if (done) {
                 val off by P.announceOffscreenOnly.state.collectAsState()
                 JSwitch("Not for the chat I'm looking at", null, off) { P.announceOffscreenOnly.set(it) }
-                val sum by P.announceSummary.state.collectAsState()
-                JSwitch("Also read the start of its last reply", null, sum) { P.announceSummary.set(it) }
             }
+            val sum by P.announceSummary.state.collectAsState()
+            JSwitch("Also read the start of the reply", "For announcements without a model turn.", sum) { P.announceSummary.set(it) }
             val low by P.announceUsageLow.state.collectAsState()
             JSwitch("Warn when the 5-hour usage is almost gone", "Once per window, at about 15% left (Claude Code).", low) { P.announceUsageLow.set(it) }
-            JHint("Jarvis stays quiet while you are speaking to it. A light vibration when any chat finishes is in Settings → Appearance.")
         }
 
-        // ---------------------------------------------------------------- permissions
+        // ---------------------------------------------------------------- approvals
         JCard(cardBg, cardBorder, "Approvals by voice") {
             val policy by P.permissionPolicy.state.collectAsState()
             var confirmAll by remember { mutableStateOf(false) }
@@ -282,7 +330,7 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                     "auto_except_risky" -> "Everything is approved except risky actions (deleting, pushing, installing from the web), which are read out first."
                     "auto_all" -> "Nothing is asked. Use only if you fully trust what the agents do."
                     else -> "Jarvis reads each request out (“It wants to run the command…”) and waits for your yes or no."
-                } + " Jarvis' own tools never need approval. Chats on screen are only handled while hands-free mode is on."
+                } + " Jarvis' own tools never need approval. The chat on screen is only handled while hands-free mode is on (tasks always are)."
             )
             if (confirmAll) {
                 AlertDialog(
@@ -294,19 +342,59 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                 )
             }
             val allow by P.allowSettingChanges.state.collectAsState()
-            JSwitch("Let Jarvis change app settings", "Theme, font size and Jarvis' voice only. Security and permission settings are never available to it.", allow) { P.allowSettingChanges.set(it) }
+            JSwitch(
+                "Let Jarvis change app settings",
+                "Theme, chat font size, floating bubble and switcher, new-chat agent. Jarvis' own voice and listening options can always be changed by voice; " +
+                    "approval and security settings never.",
+                allow
+            ) { P.allowSettingChanges.set(it) }
         }
 
-        // ---------------------------------------------------------------- look
-        JCard(cardBg, cardBorder, "Look and feel") {
+        // ---------------------------------------------------------------- screen and look
+        JCard(cardBg, cardBorder, "Screen and look") {
+            val screenOn by P.keepScreenOn.state.collectAsState()
+            Text("Keep the screen on", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("always" to "While Jarvis is on", "active" to "While it's active", "off" to "Never"), screenOn) { P.keepScreenOn.set(it) }
+            JHint("“While it's active”: while Jarvis listens, works or speaks, or a task runs. Running chats of both agents keep the screen on anyway.")
+            val size by P.orbSize.state.collectAsState()
+            Text("Orb while idle", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("tiny" to "Tiny", "small" to "Small", "normal" to "Normal", "hidden" to "Hidden"), size) { P.orbSize.set(it) }
+            JHint("Drag the orb anywhere: it rests on the nearest edge. “Hidden” shows it only while Jarvis is active (use the tile, headset or wake phrase).")
             val style by P.orbStyle.state.collectAsState()
-            JChips(listOf("floating" to "Floating orb", "fullscreen" to "Full screen"), style) { P.orbStyle.set(it) }
+            JChips(listOf("floating" to "Floating card", "fullscreen" to "Full screen"), style) { P.orbStyle.set(it) }
             val haptics by P.haptics.state.collectAsState()
             JSwitch("Vibrate when listening starts", null, haptics) { P.haptics.set(it) }
             val activity by P.showActivity.state.collectAsState()
-            JSwitch("Show what Jarvis is doing", "A small card with flowing waves and a live line (“Checking the build…”) while it works.", activity) { P.showActivity.set(it) }
+            JSwitch("Show what Jarvis is doing", "A slim status line (“Checking the build…”) while it works.", activity) { P.showActivity.set(it) }
             val transcript by P.showTranscript.state.collectAsState()
             JSwitch("Show what Jarvis heard and said", null, transcript) { P.showTranscript.set(it) }
+        }
+
+        // ---------------------------------------------------------------- the Jarvis chat
+        JCard(cardBg, cardBorder, "Jarvis chat") {
+            val ctx by P.contextInPrompt.state.collectAsState()
+            JSwitch("Send live context with every message", "Screen, project, chat on screen, tasks, approvals and timers, so Jarvis rarely has to look them up.", ctx) { P.contextInPrompt.set(it) }
+            val idle by P.rotateIdleMinutes.state.collectAsState()
+            Text("Start a fresh chat after idle time", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("0" to "Never", "5" to "5 min", "15" to "15 min", "30" to "30 min", "60" to "1 h", "180" to "3 h"), idle.toString()) { P.rotateIdleMinutes.set(it.toInt()) }
+            val maxMsgs by P.rotateMaxMessages.state.collectAsState()
+            Text("Start a fresh chat after this many messages", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            JChips(listOf("0" to "Never", "10" to "10", "20" to "20", "40" to "40", "80" to "80"), maxMsgs.toString()) { P.rotateMaxMessages.set(it.toInt()) }
+            JHint("Both are off by default so Jarvis never forgets mid-task. A chat is only replaced when you speak the next message, never while it is working. " +
+                "You can always say “start again” or “new session”.")
+            val carry by P.carryOver.state.collectAsState()
+            JSwitch("Carry the conversation over", "A new chat starts with the Jarvis memory note and the last lines of the old conversation.", carry) { P.carryOver.set(it) }
+            val count by P.currentChatMessages.state.collectAsState()
+            Text("Current chat: $count message${if (count == 1) "" else "s"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            OutlinedButton(onClick = { JarvisController.newSession(carry = carry); Toast.makeText(context, "The next message starts a new Jarvis chat", Toast.LENGTH_SHORT).show() }) {
+                Text("Start a fresh chat now")
+            }
+            val memory by P.memory.state.collectAsState()
+            OutlinedTextField(
+                value = memory, onValueChange = { P.memory.set(it.take(4000)) },
+                label = { Text("Jarvis memory (Jarvis can edit this too)") },
+                modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 8
+            )
         }
         Spacer(Modifier.height(24.dp))
     }

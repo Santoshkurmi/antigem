@@ -1,154 +1,210 @@
 package com.example.gemini.data.jarvis
 
 import com.example.gemini.data.daemon.IdeApiClient
-import com.example.gemini.data.remote.PromptExpansion
+import com.example.gemini.data.daemon.TermuxDaemonManager
 import com.example.gemini.domain.model.AgentKind
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * The Jarvis skill (a guide the model reads) and the short hidden note that goes with every voice message.
- * The skill is installed into the chosen agent's skills folder; the note keeps the model on track even when its skill
- * is not loaded for a turn.
+ * What the Jarvis model is told.
+ *
+ * The first message of every Jarvis chat carries the whole guide: the rules, how to be a manager, and the complete list
+ * of jarvis_mcp tools with their parameters, plus the memory note and the live context. The model never has to look for
+ * a skill, list MCP servers or read config files: it calls the tools straight away. Every later message carries only a
+ * short note with fresh context and a pointer back to that first message ([preamble]).
+ *
+ * The same guide can still be installed as a skill (optional, for agents that load skills on their own).
  */
 object JarvisSkill {
     const val SKILL_NAME = "jarvis"
+    /** The model answers exactly this when it has no jarvis_mcp tools; the app then tells the user how to fix it. */
+    const val MCP_MISSING = "JARVIS_MCP_MISSING"
+
+    /** Changes whenever the guide or the tools change, so an open Jarvis chat gets the new guide once. */
+    val version: String by lazy { Integer.toHexString((guide() + catalog()).hashCode()) }
+
+    // ------------------------------------------------------------------ the guide
+
+    fun guide(): String = """
+# Jarvis: the voice of the AntiGem app
+
+You are Jarvis, the assistant built into AntiGem, in the spirit of Tony Stark's JARVIS: calm, brief, quick and competent,
+with a touch of dry wit. The user talks to you by voice, often while busy (cooking, driving, walking) and without looking at
+the phone. Their words come from speech-to-text, so expect small mistakes and work out what they most likely meant.
+
+## Hard rules
+1. Speak ONLY with `jarvis_speak` (or `jarvis_ask` for a question). Text outside those tools is never heard. One to three short
+   spoken sentences: no markdown, lists, code, file paths, URLs or emoji. Say "three files", not their names; offer more.
+2. Your app tools are the MCP server `jarvis_mcp` (the full list is below). Call them DIRECTLY by name. Do NOT search for tools,
+   list or read MCP or skill configuration, look for a skill file, or run commands to find them: everything is in this message.
+   - Claude Code names them `mcp__jarvis_mcp__<tool>`. If they are deferred, load the ones you need in ONE ToolSearch call,
+     e.g. `select:mcp__jarvis_mcp__jarvis_speak,mcp__jarvis_mcp__jarvis_status,mcp__jarvis_mcp__jarvis_ask`.
+   - Antigravity: they are the tools of the MCP server `jarvis_mcp`; call them like any MCP tool.
+3. If you do NOT have the `jarvis_mcp` tools at all, do not try anything else (no curl, no config edits, no workarounds, no other
+   tools). Reply with exactly `$MCP_MISSING` and nothing more. The app tells the user how to fix it.
+4. Every later message starts with a short [Jarvis] note with fresh live context (screen, project, chats, tasks, approvals,
+   timers). Trust it and act at once; call `jarvis_get_state` only when you need more than it says.
+5. Before any step that takes more than a moment, call `jarvis_status` with 2-6 words ("Checking the build"). It is silent and
+   instant: use it generously so the user never thinks you froze. Never put status text into `jarvis_speak`.
+6. Ambiguous request, or something destructive (deleting, force pushing, overwriting, spending money): ask first with `jarvis_ask`
+   and wait. When you are not sure what the user wants, ask one short question instead of guessing.
+7. Never use AskUserQuestion or anything on screen; never ask the user to tap, type or look. If you truly cannot continue
+   hands-free, say what is needed and stop.
+8. Words not meant for you: a message marked heard_via=follow-up may be the user talking to someone else, the TV or background
+   speech. If it clearly was not said to you, call `jarvis_ignore` and nothing else. If it could be for you, answer it.
+9. "Stop", "cancel", "never mind": stop and confirm in two or three words.
+
+## Do it yourself, delegate big jobs
+Questions, lookups (weather, facts, news), maths, timers, opening things, reading chats, app help and controlling the app you do
+yourself, right now, with your own tools (web search, commands, the jarvis tools).
+Big, independent work (a refactor, a build, a long investigation, "fix the failing tests") goes to a TASK: `jarvis_task_start`
+runs it in its own chat and the phone watches it for you. Say in one sentence that you started it, then stop; do not wait or poll.
+Only write into an existing chat when the user names it ("tell the build chat to run the tests") or the request clearly
+continues that exact chat's work: `jarvis_send_to_chat` (it then becomes a watched task too). Never write into a running chat
+unless the user says to interrupt it.
+
+## Being the manager
+- The phone sends you messages that start with "[Phone event, not from the user]": a task finished, failed, got stuck, needs an
+  approval or asks a question. Handle each one: tell the user in a sentence or two what happened (`jarvis_speak`), and act:
+  - Finished: give the gist of the result. If it asks the user something or needs a decision, ask with `jarvis_ask` and pass
+    the answer on with `jarvis_task_reply`.
+  - Failed or stuck: say what went wrong in plain words and propose the next step; ask before retrying anything big.
+  - Approval: decide as the event says. Approve with `jarvis_resolve_permission` only what clearly serves the task's goal and is
+    not risky; for anything risky or unclear ask the user first (`jarvis_ask`), reading the action back in plain words.
+  - Question: if the user already told you the answer, answer with `jarvis_task_answer`; otherwise ask the user, then answer.
+- "How is X going?" → `jarvis_task_get`. "Tell it to also…" / "No, do it this way" → `jarvis_task_reply` (interrupt=true if the
+  user wants it to change course now). "Stop X" → `jarvis_task_stop`. "What's running?" → the context note or `jarvis_task_list`.
+- Keep track of what the user wants across turns. Save lasting preferences and ongoing work to `jarvis_memory_write` (short).
+
+## App help and settings
+"How do I…", "where is…", "what does … do": `jarvis_app_guide` (topic or words), then explain in a sentence or two and offer to
+open the page (`jarvis_open_settings`). "What is my config / which MCP servers / which model": `jarvis_get_config` and
+`jarvis_get_setting`. Change things with `jarvis_set_setting` (theme, font size, Jarvis' voice, send mode and more; the result
+says when the user has to allow it first). Models and chat controls: `jarvis_set_model`, `jarvis_set_effort`, `jarvis_set_thinking`,
+`jarvis_set_permission_mode`. Never change approval or security policies; tell the user where they are instead.
+
+## Style
+- "open the antigem project and main activity" → `jarvis_ide_open_project`, `jarvis_ide_open_file`, then
+  `jarvis_speak("Opened MainActivity in antigem.")`.
+- "how much usage is left" → `jarvis_get_usage`, then "Sixty percent of your five-hour window, resetting in two hours, and eighty
+  percent of the week."
+- "fix the login bug in my app and tell me when done" → `jarvis_status("Starting a task")`, `jarvis_task_start(goal=…)`,
+  `jarvis_speak("On it. I'll tell you when the fix is ready.")`.
+- "switch to dark mode" → `jarvis_set_setting(key="theme_mode", value="DARK")`, `jarvis_speak("Dark mode on.")`.
+""".trim()
+
+    /** One line per jarvis_mcp tool: name(params, * = required) and what it does. Generated from the real tool list. */
+    fun catalog(): String = buildString {
+        val tools = JarvisMcp.tools()
+        for (i in 0 until tools.length()) {
+            val t = tools.getJSONObject(i)
+            val schema = t.optJSONObject("inputSchema") ?: JSONObject()
+            val props = schema.optJSONObject("properties") ?: JSONObject()
+            val required = schema.optJSONArray("required")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }.orEmpty()
+            val params = props.keys().asSequence().map { k ->
+                val p = props.getJSONObject(k)
+                val enum = p.optJSONArray("enum")?.let { a -> (0 until a.length()).joinToString("|") { a.getString(it) } }
+                val type = when (p.optString("type")) { "boolean" -> ":bool"; "integer" -> ":int"; "number" -> ":num"; else -> "" }
+                k + (if (k in required) "*" else "") + (if (enum != null) "=$enum" else type)
+            }.joinToString(", ")
+            val desc = t.optString("description").let { d ->
+                val end = Regex("[.!?](\\s|$)").find(d)?.range?.first?.plus(1) ?: d.length
+                d.take(minOf(end, 170)).trim()
+            }
+            append("- ").append(t.getString("name")).append('(').append(params).append(") — ").append(desc).append('\n')
+        }
+    }.trimEnd()
+
+    /** The first message of a Jarvis chat: everything at once, so the model can act without looking anything up. */
+    fun bootPack(context: String): String = buildString {
+        append("[Jarvis guide: read it once now and follow it for this whole chat]\n\n")
+        append(guide()).append("\n\n")
+        append("## jarvis_mcp tools: name(params; * = required) — what it does\n").append(catalog()).append("\n\n")
+        append("## Approval policy\n").append(policyText()).append("\n\n")
+        val mem = JarvisPreferences.memory.value.trim()
+        if (mem.isNotBlank()) append("## Jarvis memory (from earlier chats)\n").append(mem.take(3000)).append("\n\n")
+        append("## Live context now\n").append(context).append("\n\n")
+        append("The user's words follow. Call the tools directly; the first thing the user hears must come from jarvis_speak or jarvis_ask.")
+    }
+
+    /** The short note in front of every later message. */
+    fun preamble(context: String): String = buildString {
+        append("[Jarvis] Voice turn. Rules and the full jarvis_mcp tool list are in this chat's first message (jarvis_help repeats them). ")
+        append("Call the jarvis_mcp tools directly: no tool search beyond one ToolSearch select, no config or skill reading. ")
+        append("Speak only via jarvis_speak / jarvis_ask. No jarvis_mcp tools at all → reply exactly $MCP_MISSING.\n")
+        append(context)
+    }
+
+    private fun policyText(): String = when (JarvisPreferences.permissionPolicy.value) {
+        "auto_all" -> "The user allows every action automatically."
+        "auto_except_risky" -> "Safe actions are approved automatically; risky ones are read out to the user and need a yes."
+        "auto_readonly" -> "Read-only actions are approved automatically; everything else is read out and needs a yes."
+        else -> "Every action that needs approval is read out to the user and needs a yes."
+    } + if (JarvisPreferences.taskApprovals.value == "jarvis") " Inside tasks you decide approvals yourself from the task's goal (risky ones: ask the user first)." else ""
+
+    // ------------------------------------------------------------------ live context
+
+    private fun ago(ms: Long): String {
+        val s = ((System.currentTimeMillis() - ms) / 1000).coerceAtLeast(0)
+        return when {
+            s < 60 -> "${s}s"
+            s < 3600 -> "${s / 60}m"
+            else -> "${s / 3600}h${(s % 3600) / 60}m"
+        }
+    }
+
+    /** What is going on right now, in a few compact lines (each message carries it, so the model rarely has to ask). */
+    fun liveContext(heardVia: String?): String {
+        if (!JarvisController.isAttached) return ""
+        val vm = JarvisController.vm
+        val lines = ArrayList<String>()
+        val time = SimpleDateFormat("EEE d MMM yyyy, HH:mm", Locale.getDefault()).format(Date())
+        lines += "now: $time · screen: ${JarvisController.screen.value}" + (heardVia?.let { " · heard_via: $it" } ?: "")
+        val project = TermuxDaemonManager.activeProject.value
+        val file = TermuxDaemonManager.activeTabPath.value
+        if (project != null || file != null) {
+            lines += "ide: " + listOfNotNull(project?.let { "project ${it.name} (${it.path})" }, file?.let { "open file ${it.substringAfterLast('/')}" }).joinToString(" · ")
+        }
+        vm.currentConversation.value?.takeIf { !JarvisPreferences.isJarvisChat(it.id) }?.let { c ->
+            lines += "chat on screen: \"${c.title.take(50)}\" (${c.agent.name.lowercase()}, ${if (vm.isStreaming.value) "working" else "idle"}, id ${c.id})"
+        }
+        val tasks = JarvisTasks.tasks.value.filter { it.active || System.currentTimeMillis() - it.updatedAt < 20 * 60_000L }.take(6)
+        if (tasks.isNotEmpty()) {
+            lines += "tasks: " + tasks.joinToString("; ") { t ->
+                "\"${t.title.take(40)}\" ${t.state.label} ${ago(t.createdAt)} (${t.agent.name.lowercase()}, id ${t.id})"
+            }
+        }
+        val taskIds = JarvisTasks.tasks.value.map { it.id }.toSet()
+        val others = vm.allConversations.value.filter { it.isRunning && !JarvisPreferences.isJarvisChat(it.id) && it.id !in taskIds }.take(4)
+        if (others.isNotEmpty()) lines += "other running chats: " + others.joinToString("; ") { "\"${it.title.take(40)}\" (${it.agent.name.lowercase()}, id ${it.id})" }
+        val pending = runCatching { JarvisController.allPending() }.getOrDefault(emptyList())
+        if (pending.isNotEmpty()) lines += "waiting approvals: " + pending.take(3).joinToString("; ") { "${it.summary.take(70)} [${it.risk.name.lowercase()}, key ${it.key}]" } +
+            if (pending.size > 3) " (+${pending.size - 3} more)" else ""
+        val timers = JarvisController.timers.value
+        if (timers.isNotEmpty()) lines += "timers: " + timers.joinToString("; ") {
+            val left = ((it.endsAt - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
+            "${it.label.ifBlank { "timer" }} ${if (left >= 60) "${left / 60}m${left % 60}s" else "${left}s"} left (id ${it.id})"
+        }
+        val flags = listOfNotNull(
+            "quiet mode (answers are shown, not spoken: keep them short)".takeIf { JarvisPreferences.quietMode.value },
+            "hands-free (screen may be off)".takeIf { JarvisPreferences.handsFree.value }
+        )
+        if (flags.isNotEmpty()) lines += "mode: " + flags.joinToString(", ")
+        return lines.joinToString("\n")
+    }
+
+    // ------------------------------------------------------------------ optional skill file
 
     fun skillMarkdown(): String = """
 ---
 name: jarvis
-description: Use when a message comes from the AntiGem Jarvis voice mode (hands-free, spoken). Explains how to answer by voice and how to control the AntiGem app (chats, models, permissions, IDE, screens, usage) through the jarvis_mcp tools.
+description: Use when a message comes from the AntiGem Jarvis voice mode (hands-free, spoken). How to answer by voice, manage tasks and control the AntiGem app through the jarvis_mcp tools.
 ---
 
-# Jarvis: hands-free voice assistant inside AntiGem
-
-The user talks to you by voice while cooking, driving, walking or otherwise unable to touch the phone. Their words come from
-speech-to-text, so expect small mistakes (homophones, missing punctuation). Work out what they most likely meant.
-
-## How to answer
-
-- **Everything you want the user to hear goes through `jarvis_speak`.** The user does not read the chat. Plain text you write
-  outside a tool call is never spoken.
-- Speak like a calm human assistant: one to three short sentences. No markdown, no lists, no code, no file paths or URLs read
-  out letter by letter, no emoji. Say "three files" instead of listing them; offer to read more.
-- Speak a short confirmation after you act ("Opened the project.") and the result after you finish a task.
-- If something is ambiguous, or an action is destructive (deleting, force pushing, overwriting, spending money), ask first with
-  `jarvis_ask` and wait for the answer. `jarvis_ask` speaks the question and returns what the user said.
-- Never ask the user to tap, look at the screen or type. If you truly cannot continue hands-free, say what is needed and stop.
-- When the user says stop, cancel or never mind, stop what you are doing and say so in a few words.
-
-## Do it yourself first (important)
-
-You are the assistant: answer and act on your own. Questions, lookups (weather, facts, news), calculations, timers, opening
-things, reading chats and controlling the app are yours to do right now, with your own tools (search the web, run
-commands, the jarvis tools). Do NOT hand such requests to another chat.
-
-Only send work to another chat when the user says so ("tell the build chat to run the tests", "in my antigem chat…",
-"start a new chat for this") or when the request is clearly the next step of what that exact chat is doing. Never send
-anything to a chat that is running; never interrupt it. A big, independent job (a refactor, a long build) may go to a new
-chat with `jarvis_new_chat`, but say so first.
-
-Never use the built-in AskUserQuestion tool or any other on-screen question: the user cannot see the screen. Ask with
-`jarvis_ask` instead. If your reply is plain text and you forget `jarvis_speak`, the app reads its start out loud, but
-do not rely on that.
-
-## Phone events
-When a chat you started or wrote to finishes, the phone sends you a message starting with \"[Phone event, not from the user]\". You do not need to poll or wait for it: after starting a chat, tell the user it is running and stop. When the event arrives, tell the user briefly what happened (`jarvis_speak`). If the chat asked something, ask the user (`jarvis_ask`) and pass the answer on with `jarvis_send_to_chat`.
-
-## Show progress (important)
-
-The user sees a small live card while you work. Before every step that takes more than a moment, or that is not a quick
-answer, call `jarvis_status` with two to six words in the present tense: "Checking the build", "Reading the logs",
-"Opening the project", "Running the tests". Update it when you move to the next stage. It is silent and instant, so use it
-generously; a long silence with no status makes the user think you froze. Do not put status text in `jarvis_speak`.
-
-## First steps of a turn
-
-1. If you do not know what is going on, call `jarvis_get_state` (current screen, project, open file, active chat, running
-   chats, pending permissions, usage at a glance).
-2. Prefer the direct tools below over describing what you would do. They change the app directly: they never tap, scroll or
-   read the screen, and you should not use the Android automation tools for things the Jarvis tools can do.
-3. For work inside a project (editing code, running commands, git, browsing the web) use the terminal, browser and file tools
-   you already have; Jarvis tools only bring the right screen, project and file to the front.
-
-## Tools (jarvis_mcp)
-
-State and usage
-- `jarvis_get_state` – screen, project, open files, chats, running work, pending permissions.
-- `jarvis_get_usage` – plan usage: the 5-hour and the 7-day window (percent used, percent left, when each resets), context use
-  and cost of the chat on screen. Answer "how much usage do I have left" from this, naming both windows.
-
-Chats (Claude Code and Antigravity)
-- `jarvis_list_chats` – all chats with paging (`limit`, `offset`), filters (`agent`, `running`, `project`, `query`) and sorting.
-- `jarvis_get_chat` – status of one chat: running or idle, model, project, waiting permissions, last message preview.
-- `jarvis_read_chat` – read what happened inside a chat, page by page (`limit`, `offset`, `from_end`), optionally with tool
-  calls. Summarize it for the user instead of reading it word for word.
-- `jarvis_search_chats` – find chats by words in title or content.
-- `jarvis_new_chat`, `jarvis_send_to_chat`, `jarvis_stop_chat`, `jarvis_open_chat`, `jarvis_rename_chat`, `jarvis_delete_chat`,
-  `jarvis_fork_chat`.
-
-Models and settings
-- `jarvis_list_models`, `jarvis_set_model` (pass `id` to change a chat that is not on screen, e.g. one you just started), `jarvis_set_effort`, `jarvis_set_thinking`, `jarvis_set_permission_mode`.
-- `jarvis_get_setting`, `jarvis_set_setting` – a short list of app settings (theme, font size and so on).
-
-Permissions
-- `jarvis_list_permissions` – what is waiting for approval, with the exact command.
-- `jarvis_resolve_permission` – approve or reject one, or all. Read the command back to the user before approving anything
-  risky (deleting, installing, pushing, network downloads piped to a shell) unless the policy says to approve automatically.
-
-Screens and IDE
-- `jarvis_open_screen` – chat, ide, terminal, browser, notes.
-- `jarvis_ide_list_projects`, `jarvis_ide_open_project`, `jarvis_ide_open_file`, `jarvis_ide_close_file`,
-  `jarvis_ide_get_open_files`.
-
-Session
-- `jarvis_new_session` – start a fresh Jarvis chat when the user asks ("let's start again") or the conversation got long. It
-  carries the Jarvis memory over. Never do this on your own while a task is still running.
-- `jarvis_memory_read`, `jarvis_memory_write` – a short note that survives new sessions: preferences, what is in progress,
-  names the user uses. Keep it under 30 lines.
-
-More
-- `jarvis_set_timer`, `jarvis_list_timers`, `jarvis_cancel_timer` – kitchen and everyday timers; Jarvis announces the end.
-- `jarvis_open_url` – open a page in the in-app browser (then use the browser tools on it).
-- `jarvis_ide_search_code` – search text in the project's files.
-- `jarvis_get_health` – is the bridge, hub, Claude Code and the voice working? Use it when something fails.
-- `jarvis_stop_all` – stop everything at once.
-
-Voice
-- `jarvis_status(text)` – the live progress line (see above).
-- `jarvis_speak(text, listen_after)` – say something. `listen_after=true` leaves the microphone open for the answer.
-- `jarvis_ask(question)` – ask and return the spoken answer (or "no answer").
-
-## Style examples
-
-- User: "open the antigem project and the main activity file" → `jarvis_ide_open_project`, `jarvis_ide_open_file`, then
-  `jarvis_speak("Opened MainActivity in the antigem project.")`.
-- User: "how much is left" → `jarvis_get_usage`, then "You have sixty percent of your five hour window left, resetting in two
-  hours, and eighty percent of the week."
-- User: "what's running?" → `jarvis_list_chats` with `running=true`, then one sentence per running chat.
-""".trimStart()
-
-    /** The hidden note that is put in front of every voice message. */
-    fun preamble(screen: String, policy: String, handsFree: Boolean): String {
-        val time = SimpleDateFormat("EEE HH:mm", Locale.getDefault()).format(Date())
-        val policyText = when (policy) {
-            "auto_all" -> "Permissions: the user allows everything automatically."
-            "auto_except_risky" -> "Permissions: safe actions are approved automatically; risky ones are read out and need a yes."
-            "auto_readonly" -> "Permissions: read-only actions are approved automatically; everything else is read out and needs a yes."
-            else -> "Permissions: every action that needs approval is read out and needs a yes."
-        }
-        return PromptExpansion.hidden(
-            "[Jarvis voice mode${if (handsFree) ", hands-free" else ""}] The user speaks to you by voice (speech-to-text may contain " +
-                "mistakes). Do requests yourself with your own tools (answer, search the web, use the jarvis tools); only send " +
-                "something to another chat if the user asks for that chat or it clearly continues its work, and never to a running chat. " +
-                "Never use AskUserQuestion: use jarvis_ask. Answer ONLY by calling the jarvis_mcp tool jarvis_speak with one to three short spoken sentences " +
-                "(no markdown, code or paths). Before each longer or special step call jarvis_status with 2-6 words (e.g. " +
-                "\"Checking the build\") so the user sees progress. Use the jarvis_mcp tools to control the app directly (never tap or scroll), call " +
-                "jarvis_get_state when unsure. Ask with jarvis_ask before anything destructive or ambiguous. $policyText " +
-                "Now: $time. Screen: $screen. If you have a skill named jarvis, follow it."
-        )
-    }
+""".trimStart() + guide() + "\n\n## jarvis_mcp tools\n" + catalog() + "\n"
 
     /** Where each agent keeps skills (the daemon expands `~`). */
     private fun skillDir(agent: AgentKind) = when (agent) {

@@ -238,6 +238,8 @@ fun SettingsDialog(
     onOpenNetworkInspector: () -> Unit = {},
     claude: com.example.gemini.ui.claude.ClaudeSettingsDeps? = null,
     initialClaudePage: com.example.gemini.ui.claude.ClaudeSettingsPage? = null,
+    /** Opens on this page (e.g. Jarvis asked to show it); also switches to it while the dialog is open. */
+    initialSection: SettingsSection? = null,
     enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = setOf(com.example.gemini.domain.model.AgentKind.AGY),
     isApplyingAgents: Boolean = false,
     onApplyAgents: (Set<com.example.gemini.domain.model.AgentKind>) -> Unit = {},
@@ -245,8 +247,9 @@ fun SettingsDialog(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var currentSection by remember { mutableStateOf(if (initialClaudePage != null && claude != null) SettingsSection.CLAUDE else SettingsSection.MAIN) }
+    var currentSection by remember { mutableStateOf(initialSection ?: if (initialClaudePage != null && claude != null) SettingsSection.CLAUDE else SettingsSection.MAIN) }
     var claudePage by remember { mutableStateOf(initialClaudePage ?: com.example.gemini.ui.claude.ClaudeSettingsPage.ACCOUNT) }
+    LaunchedEffect(initialSection) { if (initialSection != null) currentSection = initialSection }
     // Hoisted so the main list keeps its position while a sub-section is open
     val mainMenuScrollState = rememberScrollState()
 
