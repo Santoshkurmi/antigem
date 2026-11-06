@@ -273,6 +273,8 @@ fun SettingsDialog(
     val cardBg = com.example.gemini.theme.AppColors.card
     val cardBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
+    // every list in settings bounces at its ends like iOS instead of Android's stretch
+    com.example.gemini.ui.components.ProvideBouncyOverscroll {
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -584,6 +586,7 @@ fun SettingsDialog(
             }
         }
     }
+    } // ProvideBouncyOverscroll
 }
 
 /**
