@@ -144,7 +144,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             .format(java.util.Date(epochSeconds * 1000))
 
     private fun agentOf(conversationId: String): AgentKind =
-        conversations.value.find { it.id == conversationId }?.agent
+        allConversations.value.find { it.id == conversationId }?.agent
             ?: store.currentConversation.value?.takeIf { it.id == conversationId }?.agent
             ?: AgentKind.AGY
 
@@ -385,11 +385,25 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private val _conversations = store.conversations
-    /** Sidebar list: Antigravity and Claude Code conversations together, newest first. */
-    val conversations: StateFlow<List<Conversation>> = combine(_conversations, claudeBackend.conversations, enabledAgents) { agy, claude, enabled ->
+    /** Every conversation of the enabled agents, Jarvis' own chats included. */
+    val allConversations: StateFlow<List<Conversation>> = combine(_conversations, claudeBackend.conversations, enabledAgents) { agy, claude, enabled ->
         // a disabled agent's chats stay on disk but are not listed
         ((if (AgentKind.AGY in enabled) agy else emptyList()) + (if (AgentKind.CLAUDE in enabled) claude else emptyList()))
             .sortedByDescending { it.updatedAt }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Sidebar list: Antigravity and Claude Code conversations together, newest first. Jarvis' hidden chats are not in it. */
+    val conversations: StateFlow<List<Conversation>> = combine(
+        allConversations, com.example.gemini.data.jarvis.JarvisPreferences.chatIds, com.example.gemini.data.jarvis.JarvisPreferences.enabled.state
+    ) { all, jarvisIds, jarvisOn ->
+        if (!jarvisOn || jarvisIds.isEmpty()) all else all.filter { it.id !in jarvisIds }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** The Jarvis filter in the sidebar: the chats Jarvis opened. */
+    val jarvisConversations: StateFlow<List<Conversation>> = combine(
+        allConversations, com.example.gemini.data.jarvis.JarvisPreferences.chatIds, com.example.gemini.data.jarvis.JarvisPreferences.enabled.state
+    ) { all, jarvisIds, jarvisOn ->
+        if (!jarvisOn) emptyList() else all.filter { it.id in jarvisIds }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _currentConversation = store.currentConversation

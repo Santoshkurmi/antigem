@@ -14,6 +14,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
@@ -263,6 +264,12 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/automation_accessibility_service" />
         </service>
+
+        <!-- Jarvis hands-free mode: keeps the microphone available while it listens for the wake phrase -->
+        <service
+            android:name="com.example.gemini.data.jarvis.JarvisService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- Holds the ADB pairing notification (code entry) while the user is in Developer options -->
         <service

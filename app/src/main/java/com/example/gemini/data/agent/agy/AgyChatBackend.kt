@@ -907,6 +907,7 @@ class AgyChatBackend(
                 ?: Conversation(id = id, title = "Antigravity Chat", sessionId = id)
             Log.d("CHAT_OPEN_DEBUG", "👉 [ChatViewModel.selectConversation] Launching stream for conv: title='${conv.title}', id=${conv.id}")
             _currentConversation.value = conv
+            chatModels[id]?.let { _selectedModelId.value = it }
             knownDaemonCascadeIds.add(id)
 
             // Connect persistent stream for real-time live streaming.
@@ -1130,7 +1131,20 @@ class AgyChatBackend(
         }
     }
 
+    /** The model each chat was last given (the picker shows it when the chat is opened). */
+    private val chatModels = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    fun rememberChatModel(chatId: String, modelId: String) {
+        if (chatId.isBlank() || modelId.isBlank()) return
+        chatModels[chatId] = modelId
+        if (_currentConversation.value?.id == chatId) _selectedModelId.value = modelId
+    }
+
+    /** The model a message to [chatId] should use: the one set for that chat, else the picker's. */
+    fun modelOfChat(chatId: String): String = chatModels[chatId] ?: _selectedModelId.value
+
     fun selectModel(modelId: String) {
+        _currentConversation.value?.takeIf { it.agent == AgentKind.AGY }?.let { chatModels[it.id] = modelId }
         _selectedModelId.value = modelId
         _bridgeStatusMessage.value = null
         val conv = _currentConversation.value

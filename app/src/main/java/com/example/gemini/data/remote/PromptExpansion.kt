@@ -62,6 +62,9 @@ object PromptExpansion {
 
     private fun block(command: String, body: String) = "<$TAG command=\"${escape(command)}\">\n$body\n</$TAG>"
 
+    /** Instructions for the model that the chat never shows (the block collapses to nothing for display). */
+    fun hidden(body: String) = block("", body)
+
     private fun enabledPlugin(id: String): BrowserExtension? =
         BrowserExtensionManager.instance.extensions.firstOrNull { it.isEnabled && it.id.equals(id, ignoreCase = true) }
 

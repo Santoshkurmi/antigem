@@ -97,6 +97,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
     CLAUDE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
     AGENTS("Agents", "Run Antigravity, Claude Code or both"),
+    JARVIS("Jarvis", "Hands-free voice control of the whole app"),
     DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD"),
     UTILITIES("Utilities", "Handy device tools"),
     ADB_CONNECT("ADB Connect", "Connect the terminal's adb to this phone over Wireless debugging"),
@@ -544,6 +545,10 @@ fun SettingsDialog(
                         isApplying = isApplyingAgents,
                         onApply = onApplyAgents
                     )
+                    SettingsSection.JARVIS -> com.example.gemini.ui.jarvis.JarvisSettingsScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder
+                    )
                     SettingsSection.CLAUDE -> if (claude != null) {
                         com.example.gemini.ui.claude.ClaudeSettingsScreen(claude, claudePage) { currentSection = SettingsSection.MAIN }
                     }
@@ -616,6 +621,18 @@ private fun MainSettingsMenu(
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.AGENTS) }
+        )
+        val jarvisOn by com.example.gemini.data.jarvis.JarvisPreferences.enabled.state.collectAsState()
+        SettingsCategoryCard(
+            icon = Icons.Outlined.RecordVoiceOver,
+            iconTint = Color(0xFF22D3EE),
+            title = "Jarvis",
+            subtitle = "Hands-free voice control: talk to your agents, open projects, answer permissions",
+            badgeText = if (jarvisOn) "On" else "Off",
+            badgeColor = if (jarvisOn) QuotaGreen else Color.Gray,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onClick = { onNavigate(SettingsSection.JARVIS) }
         )
         // Section 2: Servers & Network
         val (serverBadge, serverColor) = when {
@@ -999,6 +1016,23 @@ private fun AppearanceSubScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        val vibrateOnDone by com.example.gemini.data.agent.ChatCompletionMonitor.vibrate.collectAsState()
+        Surface(
+            shape = RoundedCornerShape(12.dp), color = cardBg,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+        ) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Vibrate when a chat finishes", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        "One light buzz when a chat stops running (its dot in the chat list goes away).",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                Switch(checked = vibrateOnDone, onCheckedChange = { com.example.gemini.data.agent.ChatCompletionMonitor.setVibrate(it) })
+            }
+        }
+
         // Theme Selector Header
         Text(
             text = "Color Theme",
@@ -2185,6 +2219,7 @@ private fun McpSubScreen(
                 McpPreset("Android", "Tap, type & read this phone", Icons.Outlined.PhoneAndroid, Color(0xFF14B8A6),
                     localSpec(bridge.ANDROID_AUTOMATION_MCP_NAME, "/android")),
                 McpPreset("Notes & To-dos", "Read & edit your notes", Icons.Outlined.EditNote, Color(0xFFF59E0B), localSpec(bridge.NOTES_MCP_NAME, "/notes")),
+                McpPreset("Jarvis", "Voice control of this app", Icons.Outlined.RecordVoiceOver, Color(0xFF22D3EE), localSpec(bridge.JARVIS_MCP_NAME, "/jarvis")),
                 McpPreset("Stitch", "Google Stitch UI design · API key", Icons.Outlined.Palette, Color(0xFFEC4899),
                     com.example.gemini.domain.model.McpServerSpec(serverName = "stitch", serverUrl = "https://stitch.googleapis.com/mcp", headers = mapOf("X-Goog-Api-Key" to "")))
             )
