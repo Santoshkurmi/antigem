@@ -402,7 +402,7 @@ fun ProjectSidebar(
                             Icon(
                                 imageVector = Icons.Default.CloudOff,
                                 contentDescription = null,
-                                tint = Color(0xFFFF5252),
+                                tint = com.example.gemini.theme.AppColors.danger,
                                 modifier = Modifier.size(32.dp)
                             )
                             Spacer(modifier = Modifier.height(8.dp))
@@ -778,7 +778,7 @@ fun FileTreeNodeItem(
                                 Icon(
                                     imageVector = Icons.Default.Terminal,
                                     contentDescription = null,
-                                    tint = Color(0xFF4CAF50),
+                                    tint = com.example.gemini.theme.AppColors.success,
                                     modifier = Modifier.size(18.dp)
                                 )
                             },

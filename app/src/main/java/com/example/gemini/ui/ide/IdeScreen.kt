@@ -321,7 +321,7 @@ fun IdeScreen(
         gesturesEnabled = isVisible && (drawerState.isOpen || runnerSession == null),
         drawerContent = {
             ModalDrawerSheet(
-                drawerContainerColor = Color(0xFF252526),
+                drawerContainerColor = com.example.gemini.theme.AppColors.editorPanel,
                 modifier = Modifier.width(300.dp)
             ) {
                 ProjectSidebar(
@@ -628,7 +628,7 @@ fun IdeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isCustomMode) GeminiBlue.copy(alpha = 0.18f) else Color(0xFF4CAF50).copy(alpha = 0.14f))
+                                    .background(if (isCustomMode) GeminiBlue.copy(alpha = 0.18f) else com.example.gemini.theme.AppColors.success.copy(alpha = 0.14f))
                             ) {
                                 IconButton(
                                     onClick = {
@@ -664,7 +664,7 @@ fun IdeScreen(
                                         Icon(
                                             imageVector = Icons.Default.PlayArrow,
                                             contentDescription = if (isCustomMode) "Run Profile: $selectedProfileName" else "Run Active File",
-                                            tint = if (isCustomMode) GeminiBlue else Color(0xFF4CAF50),
+                                            tint = if (isCustomMode) GeminiBlue else com.example.gemini.theme.AppColors.success,
                                             modifier = Modifier.size(20.dp)
                                         )
                                         if (isCustomMode) {
@@ -691,7 +691,7 @@ fun IdeScreen(
                                     Icon(
                                         imageVector = Icons.Default.ArrowDropDown,
                                         contentDescription = "Run Configurations",
-                                        tint = if (isCustomMode) GeminiBlue else Color(0xFF4CAF50),
+                                        tint = if (isCustomMode) GeminiBlue else com.example.gemini.theme.AppColors.success,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -726,7 +726,7 @@ fun IdeScreen(
                                         Icon(
                                             imageVector = Icons.Default.PlayArrow,
                                             contentDescription = null,
-                                            tint = if (isAutoMode) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            tint = if (isAutoMode) com.example.gemini.theme.AppColors.success else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(18.dp)
                                         )
                                     },
@@ -735,7 +735,7 @@ fun IdeScreen(
                                             Icon(
                                                 Icons.Default.Check,
                                                 contentDescription = "Selected",
-                                                tint = Color(0xFF4CAF50),
+                                                tint = com.example.gemini.theme.AppColors.success,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         }
@@ -909,7 +909,7 @@ fun IdeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF1E1E1E))
+                    .background(com.example.gemini.theme.AppColors.editorBg)
             ) {
                 // Open File Tabs Bar
                 if (openTabs.isNotEmpty()) {
@@ -918,14 +918,14 @@ fun IdeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(38.dp)
-                            .background(Color(0xFF252526))
+                            .background(com.example.gemini.theme.AppColors.editorPanel)
                     ) {
                         items(openTabs) { tab ->
                             val isSelected = tab.path == activeTabPath
                             Row(
                                 modifier = Modifier
                                     .height(38.dp)
-                                    .background(if (isSelected) Color(0xFF1E1E1E) else Color(0xFF2D2D2D))
+                                    .background(if (isSelected) com.example.gemini.theme.AppColors.editorBg else com.example.gemini.theme.AppColors.editorLine)
                                     .clickable { TermuxDaemonManager.setActiveTabPath(tab.path) }
                                     .padding(horizontal = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -942,7 +942,7 @@ fun IdeScreen(
                                     Icon(
                                         imageVector = Icons.Default.Lock,
                                         contentDescription = "Read-Only",
-                                        tint = Color(0xFFFBBF24).copy(alpha = 0.85f),
+                                        tint = com.example.gemini.theme.AppColors.warning.copy(alpha = 0.85f),
                                         modifier = Modifier.size(12.dp)
                                     )
                                     Spacer(modifier = Modifier.width(5.dp))
@@ -950,7 +950,7 @@ fun IdeScreen(
                                 Text(
                                     text = if (tab.isModified) "${tab.name} *" else tab.name,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (isSelected) (if (tab.isDiff) ClaudeTerracotta else if (tab.isReadOnly) Color(0xFFFDE68A) else Color.White) else (if (tab.isReadOnly) Color(0xFF9CA3AF) else Color.LightGray),
+                                    color = if (isSelected) (if (tab.isDiff) ClaudeTerracotta else if (tab.isReadOnly) com.example.gemini.theme.AppColors.warning else Color.White) else (if (tab.isReadOnly) com.example.gemini.theme.AppColors.editorMuted else Color.LightGray),
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -994,7 +994,7 @@ fun IdeScreen(
                         } catch (_: Exception) {}
                     }
                     Surface(
-                        color = Color(0xFF252526),
+                        color = com.example.gemini.theme.AppColors.editorPanel,
                         shadowElevation = 4.dp,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1010,7 +1010,7 @@ fun IdeScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(34.dp)
-                                    .background(Color(0xFF3C3C3C), shape = RoundedCornerShape(4.dp))
+                                    .background(com.example.gemini.theme.AppColors.editorLine, shape = RoundedCornerShape(4.dp))
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
@@ -1044,7 +1044,7 @@ fun IdeScreen(
                                             fontFamily = FontFamily.Monospace
                                         ),
                                         singleLine = true,
-                                        cursorBrush = SolidColor(Color(0xFF007ACC)),
+                                        cursorBrush = SolidColor(com.example.gemini.theme.AppColors.info),
                                         modifier = Modifier
                                             .weight(1f)
                                             .focusRequester(findFocusRequester),
@@ -1052,7 +1052,7 @@ fun IdeScreen(
                                             if (findQuery.isEmpty()) {
                                                 Text(
                                                     text = "Find in file...",
-                                                    color = Color(0xFF888888),
+                                                    color = com.example.gemini.theme.AppColors.editorMuted,
                                                     fontSize = 13.sp,
                                                     fontFamily = FontFamily.Monospace
                                                 )
@@ -1090,7 +1090,7 @@ fun IdeScreen(
                                 }
                                 Text(
                                     text = matchText,
-                                    color = if (searchMatchCount > 0) Color.LightGray else Color(0xFFEF4444),
+                                    color = if (searchMatchCount > 0) Color.LightGray else com.example.gemini.theme.AppColors.danger,
                                     fontSize = 11.5.sp,
                                     fontFamily = FontFamily.Monospace,
                                     modifier = Modifier.padding(horizontal = 4.dp)
@@ -1136,7 +1136,7 @@ fun IdeScreen(
                             ) {
                                 Text(
                                     text = "Aa",
-                                    color = if (isCaseSensitive) Color(0xFF007ACC) else Color.Gray,
+                                    color = if (isCaseSensitive) com.example.gemini.theme.AppColors.info else Color.Gray,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
@@ -1168,7 +1168,7 @@ fun IdeScreen(
                 // Auto-Reload Info Banner
                 if (autoUpdateNotification != null) {
                     Surface(
-                        color = Color(0xFF1E3A8A),
+                        color = com.example.gemini.theme.AppColors.editorInfoBg,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -1180,14 +1180,14 @@ fun IdeScreen(
                             Icon(
                                 imageVector = Icons.Default.Sync,
                                 contentDescription = null,
-                                tint = Color(0xFF93C5FD),
+                                tint = com.example.gemini.theme.AppColors.info,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = autoUpdateNotification!!,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFDBEAFE),
+                                color = com.example.gemini.theme.AppColors.editorInfoText,
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -1197,7 +1197,7 @@ fun IdeScreen(
                 // Read-Only Warning Banner
                 if (activeTab != null && activeTab.isReadOnly && !activeTab.isDiff) {
                     Surface(
-                        color = Color(0xFF1E293B),
+                        color = com.example.gemini.theme.AppColors.editorBorder,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -1209,7 +1209,7 @@ fun IdeScreen(
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = Color(0xFFFBBF24),
+                                tint = com.example.gemini.theme.AppColors.warning,
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -1217,7 +1217,7 @@ fun IdeScreen(
                                 text = "Historical Revision • Read-Only",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontSize = 11.5.sp,
-                                color = Color(0xFFCBD5E1),
+                                color = com.example.gemini.theme.AppColors.editorText,
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -1227,7 +1227,7 @@ fun IdeScreen(
                 // Disk Conflict Warning Banner
                 if (activeTab != null && activeTab.diskConflict) {
                     Surface(
-                        color = Color(0xFF451A03),
+                        color = com.example.gemini.theme.AppColors.editorLine,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -1239,21 +1239,21 @@ fun IdeScreen(
                             Icon(
                                 imageVector = Icons.Default.Warning,
                                 contentDescription = null,
-                                tint = Color(0xFFF59E0B),
+                                tint = com.example.gemini.theme.AppColors.warning,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "File modified on disk externally",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFFDE68A),
+                                color = com.example.gemini.theme.AppColors.warning,
                                 modifier = Modifier.weight(1f)
                             )
                             TextButton(
                                 onClick = { conflictDialogTab = activeTab },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                             ) {
-                                Text("Resolve", color = Color(0xFFF59E0B), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Resolve", color = com.example.gemini.theme.AppColors.warning, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1476,7 +1476,7 @@ fun IdeScreen(
                                 TermuxDaemonManager.closeTab(target.path)
                             }
                         ) {
-                            Text("Don't Save", color = Color(0xFFE57373))
+                            Text("Don't Save", color = com.example.gemini.theme.AppColors.danger)
                         }
                     }
                 )
@@ -1487,7 +1487,7 @@ fun IdeScreen(
                 val conflictingTarget = conflictDialogTab!!
                 AlertDialog(
                     onDismissRequest = { conflictDialogTab = null },
-                    icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFFFA726)) },
+                    icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = com.example.gemini.theme.AppColors.warning) },
                     title = { Text("File Conflict Detected", fontWeight = FontWeight.Bold) },
                     text = {
                         Column {
@@ -1533,7 +1533,7 @@ fun IdeScreen(
                                 Toast.makeText(context, "Reverted to disk version", Toast.LENGTH_SHORT).show()
                             }
                         ) {
-                            Text("Revert to Disk", color = Color(0xFFE57373))
+                            Text("Revert to Disk", color = com.example.gemini.theme.AppColors.danger)
                         }
                     }
                 )
@@ -1637,7 +1637,7 @@ fun IdeScreen(
                         Icon(
                             imageVector = Icons.Default.WarningAmber,
                             contentDescription = null,
-                            tint = Color(0xFFF59E0B),
+                            tint = com.example.gemini.theme.AppColors.warning,
                             modifier = Modifier.size(32.dp)
                         )
                     },
@@ -1665,7 +1665,7 @@ fun IdeScreen(
                                 binaryWarningDialog = null
                                 coroutineScope.launch { drawerState.close() }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B))
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.warning)
                         ) {
                             Text("Open Anyway", color = Color.Black, fontWeight = FontWeight.Bold)
                         }
@@ -1712,15 +1712,15 @@ fun IdeScreen(
                             .fillMaxWidth()
                             .height(panelHeightDp),
                         shape = if (isRunnerMaximized) RoundedCornerShape(0.dp) else RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp),
-                        color = Color(0xFF1E1E1E),
-                        border = if (isRunnerMaximized) null else BorderStroke(1.dp, Color(0x33FFFFFF)),
+                        color = com.example.gemini.theme.AppColors.editorBg,
+                        border = if (isRunnerMaximized) null else BorderStroke(1.dp, com.example.gemini.theme.AppColors.editorText.copy(alpha = 0.2f)),
                         shadowElevation = 0.dp,
                         tonalElevation = 0.dp
                     ) {
                         LocalTerminalContent(
                             customSession = session,
                             showFloatingPill = false,
-                            backgroundColor = Color(0xFF1E1E1E),
+                            backgroundColor = com.example.gemini.theme.AppColors.terminalBg,
                             isMaximized = isRunnerMaximized,
                             onToggleMaximize = {
                                 if (isRunnerMaximized) {
@@ -1792,7 +1792,7 @@ private fun AddRunProfileDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            Icon(Icons.Default.Tune, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(28.dp))
+            Icon(Icons.Default.Tune, contentDescription = null, tint = com.example.gemini.theme.AppColors.success, modifier = Modifier.size(28.dp))
         },
         title = {
             Text("Add Run Configuration", fontWeight = FontWeight.Bold, fontSize = 17.sp)
@@ -1888,7 +1888,7 @@ private fun AddRunProfileDialog(
                     )
                     onSaveProfile(config)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.success)
             ) {
                 Text("Save Profile", fontWeight = FontWeight.Bold)
             }

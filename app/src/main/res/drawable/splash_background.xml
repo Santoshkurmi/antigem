@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Pure white splash background -->
-    <item android:drawable="@android:color/white" />
+    <!-- Splash background: light or dark with the app's mode -->
+    <item android:drawable="@color/splash_bg" />
 
     <!-- Centered AntiGem Logo -->
     <item

@@ -58,7 +58,7 @@ fun RawPayloadDialog(
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = Color(0xFF13141C),
+            color = com.example.gemini.theme.AppColors.editorBg,
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
             modifier = Modifier
                 .fillMaxWidth(0.98f)
@@ -111,7 +111,7 @@ fun RawPayloadDialog(
                             selectedContainerColor = ClaudeTerracotta.copy(alpha = 0.25f),
                             selectedLabelColor = Color.White,
                             selectedLeadingIconColor = ClaudeTerracotta,
-                            containerColor = Color(0xFF1E202E),
+                            containerColor = com.example.gemini.theme.AppColors.editorPanel,
                             labelColor = Color.White.copy(alpha = 0.7f)
                         ),
                         border = BorderStroke(1.dp, if (wrapLines) ClaudeTerracotta.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.1f))
@@ -130,7 +130,7 @@ fun RawPayloadDialog(
                 // JSON Content Box
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF0A0B10),
+                    color = com.example.gemini.theme.AppColors.terminalBg,
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -155,7 +155,7 @@ fun RawPayloadDialog(
                             fontSize = 11.5.sp,
                             lineHeight = 16.5.sp,
                             fontFamily = FontFamily.Monospace,
-                            color = Color(0xFF8BE9FD),
+                            color = com.example.gemini.theme.AppColors.accentTeal,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -175,7 +175,7 @@ fun RawPayloadDialog(
                             clipboard.setPrimaryClip(ClipData.newPlainText("Raw Payload JSON", prettyJson))
                             Toast.makeText(context, "Formatted JSON copied to clipboard!", Toast.LENGTH_SHORT).show()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E202E)),
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.editorPanel),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Icon(

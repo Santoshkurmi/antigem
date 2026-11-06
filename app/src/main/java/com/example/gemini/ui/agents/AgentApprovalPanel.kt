@@ -61,8 +61,8 @@ import com.example.gemini.ui.components.MarkdownContent
 import com.example.gemini.ui.components.accent
 import com.example.gemini.ui.components.label
 
-private val AllowGreen = Color(0xFF16A34A)
-private val DenyRed = Color(0xFFDC2626)
+private val AllowGreen: androidx.compose.ui.graphics.Color get() = com.example.gemini.theme.AppColors.success
+private val DenyRed: androidx.compose.ui.graphics.Color get() = com.example.gemini.theme.AppColors.danger
 
 class ApprovalChoice(val label: String, val description: String? = null, val onClick: () -> Unit)
 
@@ -325,7 +325,7 @@ private fun previewText(raw: String): AnnotatedString = buildAnnotatedString {
             line.startsWith("+ ") -> withStyle(SpanStyle(color = AllowGreen)) { append(line) }
             line.startsWith("- ") -> withStyle(SpanStyle(color = DenyRed)) { append(line) }
             line.startsWith("$ ") -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(line) }
-            line.startsWith("# ") -> withStyle(SpanStyle(color = Color(0xFF9CA3AF))) { append(line) }
+            line.startsWith("# ") -> withStyle(SpanStyle(color = com.example.gemini.theme.AppColors.textSecondary)) { append(line) }
             else -> append(line)
         }
     }

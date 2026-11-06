@@ -10,19 +10,21 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import java.util.regex.Pattern
 
+/** The IDE's syntax colors: the app theme's syntax tokens, so the editor follows the theme. */
 object CodeSyntaxColors {
-    val Keyword = Color(0xFFC586C0)      // Soft Purple
-    val ControlKeyword = Color(0xFFD16D9E)// Pink Rose
-    val Type = Color(0xFF4EC9B0)         // Cyan / Teal
-    val Function = Color(0xFFDCDCAA)     // Soft Yellow
-    val String = Color(0xFFCE9178)       // Amber / Orange
-    val Number = Color(0xFFB5CEA8)       // Mint Green
-    val Comment = Color(0xFF6A9955)      // Muted Green
-    val Tag = Color(0xFF569CD6)          // Soft Blue
-    val Attribute = Color(0xFF9CDCFE)    // Light Cyan
-    val Property = Color(0xFF9CDCFE)     // Light Blue Property
-    val NumberLiteral = Color(0xFFB5CEA8)// Number mint
-    val Default = Color(0xFFD4D4D4)      // VSCode Default Foreground
+    private val c get() = com.example.gemini.theme.AppColors
+    val Keyword: Color get() = c.syntaxKeyword
+    val ControlKeyword: Color get() = c.syntaxControl
+    val Type: Color get() = c.syntaxType
+    val Function: Color get() = c.syntaxFunction
+    val String: Color get() = c.syntaxString
+    val Number: Color get() = c.syntaxNumber
+    val Comment: Color get() = c.syntaxComment
+    val Tag: Color get() = c.syntaxTag
+    val Attribute: Color get() = c.syntaxAttribute
+    val Property: Color get() = c.syntaxAttribute
+    val NumberLiteral: Color get() = c.syntaxNumber
+    val Default: Color get() = c.editorText
 }
 
 class CodeSyntaxVisualTransformation(private val fileName: String) : VisualTransformation {

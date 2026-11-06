@@ -49,11 +49,11 @@ import com.example.gemini.ui.components.ClaudeAccent
 /** Color of a permission mode (chip, picker icon). */
 @Composable
 fun permissionModeColor(mode: String): Color = when (mode) {
-    "plan" -> Color(0xFF0EA5E9)
-    "acceptEdits" -> Color(0xFF16A34A)
-    "auto" -> Color(0xFF8B5CF6)
-    "bypassPermissions" -> Color(0xFFDC2626)
-    "dontAsk" -> Color(0xFFD97706)
+    "plan" -> com.example.gemini.theme.AppColors.accentTeal
+    "acceptEdits" -> com.example.gemini.theme.AppColors.success
+    "auto" -> com.example.gemini.theme.AppColors.accentAlt
+    "bypassPermissions" -> com.example.gemini.theme.AppColors.danger
+    "dontAsk" -> com.example.gemini.theme.AppColors.warning
     else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
 }
 

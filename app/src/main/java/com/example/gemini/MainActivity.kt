@@ -88,6 +88,8 @@ class MainActivity : ComponentActivity() {
                 "LIGHT" -> false
                 else -> isSystemDark
             }
+            // the startup splash follows the app's own light / dark mode
+            LaunchedEffect(themeMode) { com.example.gemini.theme.ThemeManager.syncSystemNightMode(themeMode) }
 
             val requestedMode by chatViewModel.requestedViewMode.collectAsState()
             val initialViewMode = remember {

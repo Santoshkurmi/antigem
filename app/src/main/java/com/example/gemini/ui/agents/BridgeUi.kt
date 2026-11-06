@@ -44,8 +44,8 @@ import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.BridgeInfo
 import com.example.gemini.data.remote.RemoteServerManager
 
-private val Ok = Color(0xFF22C55E)
-private val Warn = Color(0xFFF59E0B)
+private val Ok: androidx.compose.ui.graphics.Color get() = com.example.gemini.theme.AppColors.success
+private val Warn: androidx.compose.ui.graphics.Color get() = com.example.gemini.theme.AppColors.warning
 
 /** Asks to update the IDE bridge when its version is not the app's. Shown once per version pair unless "Later". */
 @Composable

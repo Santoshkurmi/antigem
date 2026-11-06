@@ -35,12 +35,12 @@ fun ConnectionStatusBadge(
     var showDialog by remember { mutableStateOf(false) }
 
     val (dotColor, labelText) = when (state) {
-        BridgeConnectionState.CONNECTED_READY -> Pair(Color(0xFF4CAF50), "Bridge Ready")
-        BridgeConnectionState.STREAMING -> Pair(Color(0xFF4CAF50), "Generating...")
-        BridgeConnectionState.SPAWNING_INSTANCE -> Pair(Color(0xFFFFB300), "Warming Instance...")
-        BridgeConnectionState.CONNECTING -> Pair(Color(0xFF2196F3), "Connecting...")
-        BridgeConnectionState.RECONNECTING -> Pair(Color(0xFF2196F3), "Reconnecting...")
-        BridgeConnectionState.OFFLINE_ERROR -> Pair(Color(0xFFF44336), "Bridge Offline")
+        BridgeConnectionState.CONNECTED_READY -> Pair(com.example.gemini.theme.AppColors.success, "Bridge Ready")
+        BridgeConnectionState.STREAMING -> Pair(com.example.gemini.theme.AppColors.success, "Generating...")
+        BridgeConnectionState.SPAWNING_INSTANCE -> Pair(com.example.gemini.theme.AppColors.warning, "Warming Instance...")
+        BridgeConnectionState.CONNECTING -> Pair(com.example.gemini.theme.AppColors.info, "Connecting...")
+        BridgeConnectionState.RECONNECTING -> Pair(com.example.gemini.theme.AppColors.info, "Reconnecting...")
+        BridgeConnectionState.OFFLINE_ERROR -> Pair(com.example.gemini.theme.AppColors.danger, "Bridge Offline")
     }
 
     Box(

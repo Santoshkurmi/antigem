@@ -64,9 +64,9 @@ fun FloatingVideoPlayerOverlay(
     var offsetY by remember { mutableStateOf(screenHeightPx * 0.25f) }
 
     val isDark = isAppInDarkTheme()
-    val bgColor = if (isDark) Color(0xFF1E1F22) else Color(0xFFFFFFFF)
-    val borderColor = if (isDark) Color(0xFF35373C) else Color(0xFFE2E4E9)
-    val contentColor = if (isDark) Color(0xFFE4E4E7) else Color(0xFF18181B)
+    val bgColor = com.example.gemini.theme.AppColors.card
+    val borderColor = com.example.gemini.theme.AppColors.border
+    val contentColor = com.example.gemini.theme.AppColors.onBackground
 
     Box(
         modifier = modifier

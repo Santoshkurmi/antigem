@@ -365,7 +365,7 @@ private fun SectionButton(
     onClick: () -> Unit
 ) {
     val color = when {
-        danger -> Color(0xFFEF4444)
+        danger -> com.example.gemini.theme.AppColors.danger
         primary != null -> primary
         else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
     }

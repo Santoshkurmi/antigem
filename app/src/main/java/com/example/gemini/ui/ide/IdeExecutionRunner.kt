@@ -147,7 +147,7 @@ fun IdeExecutionRunnerSheet(
     }
 
     Surface(
-        color = Color(0xFF141418),
+        color = com.example.gemini.theme.AppColors.editorBg,
         modifier = modifier.fillMaxSize()
     ) {
         Column(
@@ -159,8 +159,8 @@ fun IdeExecutionRunnerSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF1E1E24))
-                    .border(BorderStroke(0.5.dp, Color(0xFF2E2E38)))
+                    .background(com.example.gemini.theme.AppColors.editorPanel)
+                    .border(BorderStroke(0.5.dp, com.example.gemini.theme.AppColors.editorBorder))
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Row(
@@ -172,7 +172,7 @@ fun IdeExecutionRunnerSheet(
                         modifier = Modifier
                             .size(10.dp)
                             .clip(CircleShape)
-                            .background(if (!isExited) Color(0xFF4CAF50) else Color(0xFFEF4444))
+                            .background(if (!isExited) com.example.gemini.theme.AppColors.success else com.example.gemini.theme.AppColors.danger)
                     )
 
                     Column {
@@ -189,7 +189,7 @@ fun IdeExecutionRunnerSheet(
                             fontSize = 11.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = if (!isExited) Color(0xFF4CAF50) else Color(0xFFEF4444)
+                            color = if (!isExited) com.example.gemini.theme.AppColors.success else com.example.gemini.theme.AppColors.danger
                         )
                     }
                 }
@@ -228,7 +228,7 @@ fun IdeExecutionRunnerSheet(
                         Icon(
                             imageVector = Icons.Default.Stop,
                             contentDescription = "Stop",
-                            tint = if (!isExited) Color(0xFFEF4444) else Color.DarkGray,
+                            tint = if (!isExited) com.example.gemini.theme.AppColors.danger else Color.DarkGray,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -271,7 +271,7 @@ fun IdeExecutionRunnerSheet(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .background(Color(0xFF0F0F12))
+                    .background(com.example.gemini.theme.AppColors.terminalBg)
                     .padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
                 key(sessionKey) {
@@ -397,8 +397,8 @@ fun IdeExecutionRunnerSheet(
 
             // Bottom Extra Keys Bar (Quick access to terminal navigation)
             Surface(
-                color = Color(0xFF141418),
-                border = BorderStroke(0.5.dp, Color(0xFF26262E)),
+                color = com.example.gemini.theme.AppColors.editorBg,
+                border = BorderStroke(0.5.dp, com.example.gemini.theme.AppColors.editorBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -514,23 +514,23 @@ private fun IdeTermKey(
     }
 
     val backgroundColor = when {
-        isPressed -> Color(0xFF383844)
+        isPressed -> com.example.gemini.theme.AppColors.editorLine
         isLocked -> ClaudeTerracotta.copy(alpha = 0.5f)
         isActive -> ClaudeTerracotta.copy(alpha = 0.25f)
-        else -> Color(0xFF202028)
+        else -> com.example.gemini.theme.AppColors.editorPanel
     }
 
     val textColor = when {
         isPressed -> Color.White
         isLocked -> Color.White
         isActive -> ClaudeTerracotta
-        else -> Color(0xFFE2E2E6)
+        else -> com.example.gemini.theme.AppColors.editorText
     }
 
     val border = when {
         isLocked -> BorderStroke(1.dp, ClaudeTerracotta)
         isActive -> BorderStroke(0.5.dp, ClaudeTerracotta.copy(alpha = 0.5f))
-        else -> BorderStroke(0.5.dp, Color(0xFF32323E))
+        else -> BorderStroke(0.5.dp, com.example.gemini.theme.AppColors.editorBorder)
     }
 
     Surface(

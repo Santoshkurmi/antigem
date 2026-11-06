@@ -68,7 +68,7 @@ fun FloatingTerminalInspector(
         Surface(
             onClick = { isInspectorOpen = true },
             shape = RoundedCornerShape(20.dp),
-            color = Color(0xFF1E1E2E).copy(alpha = 0.94f),
+            color = com.example.gemini.theme.AppColors.editorBg.copy(alpha = 0.94f),
             border = androidx.compose.foundation.BorderStroke(
                 1.dp,
                 if (runningCommandsCount > 0) ClaudeTerracotta.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.15f)
@@ -200,7 +200,7 @@ private fun TerminalInspectorDialogContent(
             .fillMaxSize()
             .padding(12.dp),
         shape = RoundedCornerShape(18.dp),
-        color = Color(0xFF0F1117),
+        color = com.example.gemini.theme.AppColors.editorBg,
         tonalElevation = 8.dp,
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
     ) {
@@ -209,7 +209,7 @@ private fun TerminalInspectorDialogContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF161822))
+                    .background(com.example.gemini.theme.AppColors.editorPanel)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -248,7 +248,7 @@ private fun TerminalInspectorDialogContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF13151F))
+                    .background(com.example.gemini.theme.AppColors.editorBg)
                     .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -263,7 +263,7 @@ private fun TerminalInspectorDialogContent(
                             .padding(end = 6.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { onSelectTab(tab.id) },
-                        color = if (isSelected) Color(0xFF222536) else Color(0xFF181A26),
+                        color = if (isSelected) com.example.gemini.theme.AppColors.editorLine else com.example.gemini.theme.AppColors.editorBg,
                         shape = RoundedCornerShape(8.dp),
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
@@ -317,7 +317,7 @@ private fun TerminalInspectorDialogContent(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { onCreateTab() },
-                    color = Color(0xFF1C1E2C),
+                    color = com.example.gemini.theme.AppColors.editorPanel,
                     shape = RoundedCornerShape(8.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
                 ) {
@@ -340,7 +340,7 @@ private fun TerminalInspectorDialogContent(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF161822))
+                        .background(com.example.gemini.theme.AppColors.editorPanel)
                         .padding(horizontal = 12.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -382,7 +382,7 @@ private fun TerminalInspectorDialogContent(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .background(Color(0xFF090A0F))
+                    .background(com.example.gemini.theme.AppColors.terminalBg)
                     .padding(8.dp)
             ) {
                 if (activeTab == null || activeTab.commands.isEmpty()) {
@@ -428,7 +428,7 @@ private fun TerminalInspectorDialogContent(
             // Interactive Manual Command Execution Bar
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = Color(0xFF13151F),
+                color = com.example.gemini.theme.AppColors.editorBg,
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
             ) {
                 Row(
@@ -457,8 +457,8 @@ private fun TerminalInspectorDialogContent(
                             unfocusedTextColor = Color.White,
                             focusedBorderColor = ClaudeTerracotta,
                             unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
-                            focusedContainerColor = Color(0xFF0C0D13),
-                            unfocusedContainerColor = Color(0xFF0C0D13)
+                            focusedContainerColor = com.example.gemini.theme.AppColors.terminalBg,
+                            unfocusedContainerColor = com.example.gemini.theme.AppColors.terminalBg
                         )
                     )
 
@@ -530,7 +530,7 @@ private fun TerminalCommandCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF13151F),
+        color = com.example.gemini.theme.AppColors.editorBg,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
             when {
@@ -619,7 +619,7 @@ private fun TerminalCommandCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF08090D))
+                    .background(com.example.gemini.theme.AppColors.terminalBg)
                     .padding(6.dp)
             ) {
                 if (command.output.isEmpty()) {
@@ -635,7 +635,7 @@ private fun TerminalCommandCard(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
                         lineHeight = 15.sp,
-                        color = Color(0xFFD4D4D8),
+                        color = com.example.gemini.theme.AppColors.editorText,
                         modifier = Modifier
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState())

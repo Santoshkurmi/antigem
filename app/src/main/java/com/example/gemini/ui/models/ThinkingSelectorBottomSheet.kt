@@ -84,7 +84,7 @@ fun ThinkingSelectorBottomSheet(
                 val isDark = isAppInDarkTheme()
                 val isSelected = selectedLevel == level
                 val borderColor = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                val unselectedBg = if (isDark) ClaudeDarkSurface else Color.White
+                val unselectedBg = com.example.gemini.theme.AppColors.card
                 val bgColor = if (isSelected) ClaudeTerracotta.copy(alpha = 0.08f) else unselectedBg
 
                 Card(

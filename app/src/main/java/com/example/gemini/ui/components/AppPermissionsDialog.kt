@@ -298,7 +298,7 @@ fun AppPermissionsDialog(
                     Text(
                         text = "👉 Please enable Notifications above to proceed",
                         fontSize = 12.5.sp,
-                        color = Color(0xFFEF4444),
+                        color = com.example.gemini.theme.AppColors.danger,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.height(10.dp))
@@ -314,8 +314,8 @@ fun AppPermissionsDialog(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ClaudeTerracotta,
                         contentColor = Color.White,
-                        disabledContainerColor = if (isDark) Color(0xFF282724) else Color(0xFFE5E7EB),
-                        disabledContentColor = if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)
+                        disabledContainerColor = com.example.gemini.theme.AppColors.fill,
+                        disabledContentColor = com.example.gemini.theme.AppColors.textSecondary
                     )
                 ) {
                     Text(
@@ -341,16 +341,12 @@ private fun PermissionCard(
     isGranted: Boolean,
     onGrantClick: () -> Unit
 ) {
-    val cardBg = if (isDark) {
-        if (isGranted) Color(0xFF232320) else Color(0xFF272623)
-    } else {
-        if (isGranted) Color(0xFFF9FAFB) else Color(0xFFFFFFFF)
-    }
+    val cardBg = com.example.gemini.theme.AppColors.card.let { if (isGranted) androidx.compose.ui.graphics.lerp(it, com.example.gemini.theme.AppColors.background, 0.4f) else it }
 
     val cardBorder = if (isGranted) {
-        BorderStroke(1.dp, Color(0xFF22C55E).copy(alpha = if (isDark) 0.5f else 0.4f))
+        BorderStroke(1.dp, com.example.gemini.theme.AppColors.success.copy(alpha = if (isDark) 0.5f else 0.4f))
     } else {
-        BorderStroke(1.dp, if (isDark) Color(0xFF383733) else Color(0xFFE5E7EB))
+        BorderStroke(1.dp, com.example.gemini.theme.AppColors.border)
     }
 
     val textPrimary = if (isDark) TextPrimaryDark else TextPrimaryLight
@@ -373,7 +369,7 @@ private fun PermissionCard(
                     .size(42.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (isGranted) Color(0xFF22C55E).copy(alpha = if (isDark) 0.16f else 0.12f)
+                        if (isGranted) com.example.gemini.theme.AppColors.success.copy(alpha = if (isDark) 0.16f else 0.12f)
                         else accentColor.copy(alpha = if (isDark) 0.16f else 0.12f)
                     ),
                 contentAlignment = Alignment.Center
@@ -381,7 +377,7 @@ private fun PermissionCard(
                 Icon(
                     imageVector = if (isGranted) Icons.Default.CheckCircle else icon,
                     contentDescription = null,
-                    tint = if (isGranted) Color(0xFF22C55E) else accentColor,
+                    tint = if (isGranted) com.example.gemini.theme.AppColors.success else accentColor,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -409,7 +405,7 @@ private fun PermissionCard(
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = if (isGranted) {
-                            Color(0xFF22C55E).copy(alpha = if (isDark) 0.18f else 0.12f)
+                            com.example.gemini.theme.AppColors.success.copy(alpha = if (isDark) 0.18f else 0.12f)
                         } else {
                             badgeColor.copy(alpha = if (isDark) 0.18f else 0.12f)
                         }
@@ -420,7 +416,7 @@ private fun PermissionCard(
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             softWrap = false,
-                            color = if (isGranted) Color(0xFF22C55E) else badgeColor,
+                            color = if (isGranted) com.example.gemini.theme.AppColors.success else badgeColor,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -445,13 +441,13 @@ private fun PermissionCard(
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = null,
-                            tint = Color(0xFF22C55E),
+                            tint = com.example.gemini.theme.AppColors.success,
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
                             text = "Permission active",
                             fontSize = 11.5.sp,
-                            color = Color(0xFF22C55E),
+                            color = com.example.gemini.theme.AppColors.success,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -460,7 +456,7 @@ private fun PermissionCard(
                         onClick = onGrantClick,
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = if (isDark) Color(0xFF383733) else Color(0xFFE5E7EB),
+                            containerColor = com.example.gemini.theme.AppColors.fill,
                             contentColor = textPrimary
                         ),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),

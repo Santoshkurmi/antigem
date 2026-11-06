@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Startup splash and window background before the app's theme loads (light side; the dark side is in values-night) -->
+    <color name="splash_bg">#FFF9F9FB</color>
+    <bool name="splash_light_bars">true</bool>
+</resources>

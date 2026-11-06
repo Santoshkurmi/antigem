@@ -51,8 +51,8 @@ fun ChoiceQuestionnaireCard(
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
             shape = RoundedCornerShape(12.dp),
-            color = Color(0xFF1E1F24),
-            border = BorderStroke(1.dp, Color(0xFF2C2D33))
+            color = com.example.gemini.theme.AppColors.card,
+            border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.border)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -67,14 +67,14 @@ fun ChoiceQuestionnaireCard(
                         text = "Questionnaire",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFE5E7EB)
+                        color = com.example.gemini.theme.AppColors.onBackground
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = toolCall.command,
                     fontSize = 12.sp,
-                    color = Color(0xFF9CA3AF)
+                    color = com.example.gemini.theme.AppColors.textSecondary
                 )
             }
         }
@@ -101,10 +101,10 @@ fun ChoiceQuestionnaireCard(
             .fillMaxWidth()
             .padding(vertical = 6.dp),
         shape = RoundedCornerShape(14.dp),
-        color = Color(0xFF1B1C21),
+        color = com.example.gemini.theme.AppColors.card,
         border = BorderStroke(
             1.2.dp,
-            if (isCompleted) QuotaGreen.copy(alpha = 0.5f) else Color(0xFF2E3038)
+            if (isCompleted) QuotaGreen.copy(alpha = 0.5f) else com.example.gemini.theme.AppColors.border
         )
     ) {
         Column(
@@ -129,7 +129,7 @@ fun ChoiceQuestionnaireCard(
                         text = "Preferences Submitted",
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFE5E7EB)
+                        color = com.example.gemini.theme.AppColors.onBackground
                     )
                 }
 
@@ -143,8 +143,8 @@ fun ChoiceQuestionnaireCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF141519))
-                        .border(BorderStroke(1.dp, Color(0xFF25272E)), RoundedCornerShape(8.dp))
+                        .background(com.example.gemini.theme.AppColors.fill)
+                        .border(BorderStroke(1.dp, com.example.gemini.theme.AppColors.border), RoundedCornerShape(8.dp))
                         .padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -159,14 +159,14 @@ fun ChoiceQuestionnaireCard(
                                     text = "Q:",
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF93C5FD),
+                                    color = com.example.gemini.theme.AppColors.info,
                                     modifier = Modifier.padding(end = 6.dp)
                                 )
                                 Text(
                                     text = item.question,
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFFE5E7EB),
+                                    color = com.example.gemini.theme.AppColors.onBackground,
                                     lineHeight = 17.sp,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -190,7 +190,7 @@ fun ChoiceQuestionnaireCard(
                                     text = item.answer,
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = Color(0xFFD1D5DB),
+                                    color = com.example.gemini.theme.AppColors.onBackground,
                                     lineHeight = 17.sp,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -199,7 +199,7 @@ fun ChoiceQuestionnaireCard(
 
                         if (index < pairs.lastIndex) {
                             HorizontalDivider(
-                                color = Color(0xFF23242A),
+                                color = com.example.gemini.theme.AppColors.card,
                                 thickness = 1.dp,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
@@ -244,7 +244,7 @@ fun ChoiceQuestionnaireCard(
                     if (qIndex < questionnaire.questions.lastIndex) {
                         Spacer(modifier = Modifier.height(18.dp))
                         HorizontalDivider(
-                            color = Color(0xFF26272E),
+                            color = com.example.gemini.theme.AppColors.card,
                             thickness = 1.dp,
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
@@ -269,7 +269,7 @@ fun ChoiceQuestionnaireCard(
                         Text(
                             text = "Cancel",
                             fontSize = 12.5.sp,
-                            color = Color(0xFF9CA3AF)
+                            color = com.example.gemini.theme.AppColors.textSecondary
                         )
                     }
 
@@ -293,7 +293,7 @@ fun ChoiceQuestionnaireCard(
                             Text(
                                 text = "Skip",
                                 fontSize = 12.5.sp,
-                                color = Color(0xFF9CA3AF)
+                                color = com.example.gemini.theme.AppColors.textSecondary
                             )
                         }
 
@@ -385,7 +385,7 @@ private fun QuestionBlockView(
             Icon(
                 imageVector = Icons.Outlined.ChatBubbleOutline,
                 contentDescription = null,
-                tint = Color(0xFF9CA3AF),
+                tint = com.example.gemini.theme.AppColors.textSecondary,
                 modifier = Modifier.size(16.dp)
             )
 
@@ -395,7 +395,7 @@ private fun QuestionBlockView(
                 text = question.prompt,
                 fontSize = 13.5.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFFE5E7EB),
+                color = com.example.gemini.theme.AppColors.onBackground,
                 modifier = Modifier.weight(1f)
             )
 
@@ -403,14 +403,14 @@ private fun QuestionBlockView(
                 Spacer(modifier = Modifier.width(8.dp))
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = Color(0xFF2C2E36),
+                    color = com.example.gemini.theme.AppColors.fill,
                     modifier = Modifier.padding(start = 4.dp)
                 ) {
                     Text(
                         text = "Multi-select",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF9CA3AF),
+                        color = com.example.gemini.theme.AppColors.textSecondary,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
@@ -418,14 +418,14 @@ private fun QuestionBlockView(
                 Spacer(modifier = Modifier.width(8.dp))
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = Color(0xFF2C2E36),
+                    color = com.example.gemini.theme.AppColors.fill,
                     modifier = Modifier.padding(start = 4.dp)
                 ) {
                     Text(
                         text = "$questionNumber of $totalQuestions",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF9CA3AF),
+                        color = com.example.gemini.theme.AppColors.textSecondary,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
@@ -437,7 +437,7 @@ private fun QuestionBlockView(
             Text(
                 text = question.description,
                 fontSize = 11.5.sp,
-                color = Color(0xFF9CA3AF),
+                color = com.example.gemini.theme.AppColors.textSecondary,
                 modifier = Modifier.padding(start = 24.dp)
             )
         }
@@ -491,21 +491,21 @@ private fun QuestionBlockView(
                             Text(
                                 text = "Type your custom answer here...",
                                 fontSize = 12.sp,
-                                color = Color(0xFF6B7280)
+                                color = com.example.gemini.theme.AppColors.textSecondary
                             )
                         },
                         textStyle = androidx.compose.ui.text.TextStyle(
                             fontSize = 12.5.sp,
-                            color = Color(0xFFE5E7EB)
+                            color = com.example.gemini.theme.AppColors.onBackground
                         ),
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 3,
                         shape = RoundedCornerShape(8.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = ClaudeTerracotta,
-                            unfocusedBorderColor = Color(0xFF374151),
-                            focusedContainerColor = Color(0xFF141519),
-                            unfocusedContainerColor = Color(0xFF141519)
+                            unfocusedBorderColor = com.example.gemini.theme.AppColors.border,
+                            focusedContainerColor = com.example.gemini.theme.AppColors.fill,
+                            unfocusedContainerColor = com.example.gemini.theme.AppColors.fill
                         )
                     )
                 }
@@ -523,8 +523,8 @@ private fun OptionRow(
     isMultiSelect: Boolean,
     onClick: () -> Unit
 ) {
-    val bgColor = if (isSelected) Color(0xFF2C2F38) else Color(0xFF1E2026)
-    val borderColor = if (isSelected) ClaudeTerracotta.copy(alpha = 0.8f) else Color(0xFF272931)
+    val bgColor = if (isSelected) com.example.gemini.theme.AppColors.fill else com.example.gemini.theme.AppColors.card
+    val borderColor = if (isSelected) ClaudeTerracotta.copy(alpha = 0.8f) else com.example.gemini.theme.AppColors.border
 
     Surface(
         modifier = Modifier
@@ -544,7 +544,7 @@ private fun OptionRow(
             // Number Box [ 1 ], [ 2 ], etc. matching screenshot
             Surface(
                 shape = RoundedCornerShape(4.dp),
-                color = if (isSelected) ClaudeTerracotta else Color(0xFF2A2D36),
+                color = if (isSelected) ClaudeTerracotta else com.example.gemini.theme.AppColors.fill,
                 modifier = Modifier.size(20.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -553,7 +553,7 @@ private fun OptionRow(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isSelected) Color.White else Color(0xFFD1D5DB)
+                        color = if (isSelected) Color.White else com.example.gemini.theme.AppColors.onBackground
                     )
                 }
             }
@@ -566,13 +566,13 @@ private fun OptionRow(
                     text = label,
                     fontSize = 12.5.sp,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) Color(0xFFF3F4F6) else Color(0xFFD1D5DB)
+                    color = if (isSelected) com.example.gemini.theme.AppColors.onBackground else com.example.gemini.theme.AppColors.onBackground
                 )
                 if (!description.isNullOrBlank()) {
                     Text(
                         text = description,
                         fontSize = 10.5.sp,
-                        color = Color(0xFF9CA3AF)
+                        color = com.example.gemini.theme.AppColors.textSecondary
                     )
                 }
             }
@@ -587,7 +587,7 @@ private fun OptionRow(
                     .background(if (isSelected) ClaudeTerracotta else Color.Transparent)
                     .border(
                         1.2.dp,
-                        if (isSelected) ClaudeTerracotta else Color(0xFF4B5563),
+                        if (isSelected) ClaudeTerracotta else com.example.gemini.theme.AppColors.textSecondary,
                         if (isMultiSelect) RoundedCornerShape(4.dp) else CircleShape
                     ),
                 contentAlignment = Alignment.Center

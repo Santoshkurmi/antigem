@@ -70,9 +70,11 @@ Notes and to-do lists are on the notes screen and in the floating bubble. Agents
 (add the Notes preset in MCP settings).
 """.trim()),
             Entry("appearance", listOf("theme", "dark", "light", "font", "size", "appearance", "look", "bubble", "switcher", "floating"), """
-Settings → Appearance & Theme: theme (light, dark, system), chat font size, grouping chats by workspace, the floating app switcher
-and the floating chat bubble. Jarvis can change these with jarvis_set_setting when the user allowed it (Settings → Jarvis → Approvals:
-"Let Jarvis change app settings"): theme_mode, chat_font_scale, group_chats_by_workspace, floating_switcher, floating_bubble.
+Settings → Appearance & Theme: the mode (Light, Dark or Auto), a gallery to pick one light theme and one dark theme (AntiGem Light,
+Paper, Sakura, Mint, Linen, Sky, Lavender, Solarized Light; AntiGem Dark, Obsidian, Graphite, Aurora, Mocha, Neon City, Ember,
+Velvet, Midnight, Nord, Dracula, Deep Ocean, Forest, Sunset, Solarized Dark, High Contrast, plus custom ones; the chat, the IDE editor, the terminal and the code blocks all follow it), chat font size, grouping chats by workspace, the floating switcher and the floating bubble.
+Jarvis switches with jarvis_set_setting key=theme (or theme_mode) when the user allowed app settings. New themes are made by any chat
+with the Theme MCP (Settings → MCP Servers → Theme preset): "create a neon cyberpunk dark theme".
 """.trim()),
             Entry("backups", listOf("backup", "restore", "rootfs", "uninstall", "clear data", "update", "apk"), """
 Settings → Backups & Restore backs up and restores the Linux rootfs, projects and chat history to phone storage. Data Loss

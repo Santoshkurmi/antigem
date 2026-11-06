@@ -59,6 +59,16 @@ The app reads each agent's structured protocol, not its terminal output. That is
 - Markdown, syntax-highlighted code, Mermaid diagrams and an artifacts drawer.
 - A floating chat bubble you can use over other apps.
 
+### Jarvis voice assistant
+Use the whole app hands-free by voice, on top of Claude Code or Antigravity. Full guide: **[docs/jarvis.md](docs/jarvis.md)**.
+- Open projects and files, switch screens, models and settings (theme too), search code, read chats, check your usage, set timers, and ask how the app works.
+- **Tasks:** hand over big jobs ("fix the failing tests and tell me when it's done"). Each runs in its own chat; Jarvis tells you when it finishes, fails, gets stuck, needs an approval or asks a question, and you can redirect or stop it by voice.
+- Approvals read out loud and answered by voice, with policies from "ask me each time" to "auto except risky".
+- Wake it with the floating orb, a Quick Settings tile, the notification, a headset button, or a wake phrase (hands-free mode, works with the screen off).
+- Send with your own phrases ("send it", "bhej do"), cancel with others ("scratch that"), or auto-send on a pause; it ignores what you say to other people.
+- Listens again when it expects an answer, quiet mode, male / female / neutral persona, notes about you, device or online voices.
+- Turn it on in **Settings → Jarvis**; it is off by default.
+
 ### Claude Code
 - Install and update the official `claude` CLI from **Settings → Claude Code**.
 - Sign in with a Claude subscription or an Anthropic Console account.
@@ -83,6 +93,8 @@ Each one is a one-tap preset in **Settings → MCP Servers**, for both agents.
 | **Notes & To-dos** | List, read, create, edit and delete your notes and to-do items. |
 | **Custom Plugin** | Use the tools of any installed AntiGem plugin. |
 | **Plugin Developer** | Create, install, test and debug AntiGem plugins from the chat. |
+| **Jarvis** | Control the app for the Jarvis voice mode: speak and ask, run and watch tasks, chats, models, settings, approvals, the IDE and more ([docs/jarvis.md](docs/jarvis.md)). |
+| **Theme** | List, switch, create, edit, import and export the app's color themes. |
 | **Stitch** | Google Stitch UI design, with your own API key. |
 
 ### Custom AntiGem plugins

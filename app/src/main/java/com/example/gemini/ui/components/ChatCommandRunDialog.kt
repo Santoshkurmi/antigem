@@ -58,8 +58,8 @@ fun ChatCommandRunDialog(command: String, onDismiss: () -> Unit) {
         if (running != null) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = Color(0xFF141418),
-                border = BorderStroke(1.dp, Color(0xFF2E2E38)),
+                color = com.example.gemini.theme.AppColors.editorBg,
+                border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.editorBorder),
                 modifier = Modifier
                     .fillMaxWidth(0.97f)
                     .fillMaxHeight(0.92f)
@@ -91,8 +91,8 @@ private fun CommandConfirmCard(initial: String, onCancel: () -> Unit, onRun: (St
 
     Surface(
         shape = RoundedCornerShape(18.dp),
-        color = Color(0xFF16161C),
-        border = BorderStroke(1.dp, Color(0xFF2E2E38)),
+        color = com.example.gemini.theme.AppColors.editorBg,
+        border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.editorBorder),
         shadowElevation = 16.dp,
         modifier = Modifier.fillMaxWidth(0.94f).imePadding()
     ) {
@@ -107,13 +107,13 @@ private fun CommandConfirmCard(initial: String, onCancel: () -> Unit, onRun: (St
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text("Run in terminal", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Text("Opens a new terminal session. Edit the command if needed.", fontSize = 12.sp, color = Color(0xFF9A9AA6))
+                    Text("Opens a new terminal session. Edit the command if needed.", fontSize = 12.sp, color = com.example.gemini.theme.AppColors.editorMuted)
                 }
             }
 
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = Color(0xFF0D0E15),
+                color = com.example.gemini.theme.AppColors.terminalBg,
                 border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.35f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -124,7 +124,7 @@ private fun CommandConfirmCard(initial: String, onCancel: () -> Unit, onRun: (St
                         onValueChange = { value = it },
                         singleLine = singleLine,
                         maxLines = if (singleLine) 1 else 12,
-                        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp, color = Color(0xFFE2E8F0)),
+                        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp, color = com.example.gemini.theme.AppColors.editorText),
                         cursorBrush = androidx.compose.ui.graphics.SolidColor(ClaudeTerracotta),
                         keyboardOptions = KeyboardOptions(
                             capitalization = KeyboardCapitalization.None,
@@ -147,11 +147,11 @@ private fun CommandConfirmCard(initial: String, onCancel: () -> Unit, onRun: (St
                 if (singleLine) "Press Enter to run · closing the terminal stops everything in it"
                 else "Shift+Enter or Run to start · closing the terminal stops everything in it",
                 fontSize = 11.sp,
-                color = Color(0xFF7A7A86)
+                color = com.example.gemini.theme.AppColors.editorMuted
             )
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onCancel) { Text("Cancel", color = Color(0xFFB0B0BA)) }
+                TextButton(onClick = onCancel) { Text("Cancel", color = com.example.gemini.theme.AppColors.editorMuted) }
                 Spacer(Modifier.width(6.dp))
                 Button(
                     onClick = run,

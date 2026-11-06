@@ -446,13 +446,13 @@ fun NewChatOfflinePromptCard(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFE53935).copy(alpha = 0.12f)),
+                    .background(com.example.gemini.theme.AppColors.danger.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.CloudOff,
                     contentDescription = null,
-                    tint = Color(0xFFE53935),
+                    tint = com.example.gemini.theme.AppColors.danger,
                     modifier = Modifier.size(18.dp)
                 )
             }

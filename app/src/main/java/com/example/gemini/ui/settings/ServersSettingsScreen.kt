@@ -1119,11 +1119,11 @@ private fun RemoteServerCard(cardBg: Color, cardBorder: BorderStroke, subtle: Co
 
     val (label, color) = when (val s = status) {
         is LocalServerStatus.Running -> "Bridge running on the server" to QuotaGreen
-        is LocalServerStatus.Starting -> "Starting…" to Color(0xFFF59E0B)
-        is LocalServerStatus.Stopping -> "Stopping…" to Color(0xFFF59E0B)
-        is LocalServerStatus.Stopped -> "Bridge stopped" to Color(0xFF9CA3AF)
+        is LocalServerStatus.Starting -> "Starting…" to com.example.gemini.theme.AppColors.warning
+        is LocalServerStatus.Stopping -> "Stopping…" to com.example.gemini.theme.AppColors.warning
+        is LocalServerStatus.Stopped -> "Bridge stopped" to com.example.gemini.theme.AppColors.textSecondary
         is LocalServerStatus.Error -> s.message to Color.Red
-        is LocalServerStatus.Idle -> "Not started" to Color(0xFF9CA3AF)
+        is LocalServerStatus.Idle -> "Not started" to com.example.gemini.theme.AppColors.textSecondary
     }
 
     Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {

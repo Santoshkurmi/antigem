@@ -323,7 +323,7 @@ fun BrowserScreen(
                 modifier = Modifier.fillMaxWidth(),
                 color = barBackgroundColor,
                 shadowElevation = 2.dp,
-                border = if (!isDarkTheme) BorderStroke(0.5.dp, Color(0xFFE5E7EB)) else null
+                border = if (!isDarkTheme) BorderStroke(0.5.dp, com.example.gemini.theme.AppColors.border) else null
             ) {
                 Column(
                     modifier = Modifier
@@ -393,11 +393,11 @@ fun BrowserScreen(
                                     }
                                 },
                             shape = RoundedCornerShape(20.dp),
-                            color = if (isDarkTheme) Color(0xFF2B2B2B) else Color(0xFFEFEFEF),
+                            color = com.example.gemini.theme.AppColors.fill,
                             border = BorderStroke(
                                 1.dp,
                                 if (isAddressFocused) ClaudeTerracotta.copy(alpha = 0.7f)
-                                else if (isDarkTheme) Color(0xFF383838) else Color(0xFFE0E0E0)
+                                else com.example.gemini.theme.AppColors.border
                             )
                         ) {
                             Row(
@@ -412,7 +412,7 @@ fun BrowserScreen(
                                     imageVector = if (isHttps) Icons.Default.Lock else if (isLocal) Icons.Default.Computer else Icons.Default.Language,
                                     contentDescription = null,
                                     modifier = Modifier.size(15.dp),
-                                    tint = if (isHttps) Color(0xFF22C55E) else if (isLocal) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    tint = if (isHttps) com.example.gemini.theme.AppColors.success else if (isLocal) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
 
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -544,7 +544,7 @@ fun BrowserScreen(
                     },
                 color = barBackgroundColor,
                 shadowElevation = 8.dp,
-                border = if (!isDarkTheme) BorderStroke(0.5.dp, Color(0xFFE5E7EB)) else null
+                border = if (!isDarkTheme) BorderStroke(0.5.dp, com.example.gemini.theme.AppColors.border) else null
             ) {
                 Row(
                     modifier = Modifier
@@ -956,9 +956,9 @@ private fun SearchHistoryOverlay(
                     indication = null
                 ) {}, // consume clicks inside card to prevent dismiss
             shape = RoundedCornerShape(16.dp),
-            color = if (isDark) Color(0xFF222222) else Color.White,
+            color = com.example.gemini.theme.AppColors.card,
             shadowElevation = 8.dp,
-            border = BorderStroke(1.dp, if (isDark) Color(0xFF333333) else Color(0xFFE5E7EB))
+            border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.border)
         ) {
             Column(
                 modifier = Modifier
@@ -1000,7 +1000,7 @@ private fun SearchHistoryOverlay(
                                 .graphicsLayer { rotationZ = 135f } // North-East Arrow
                         )
                     }
-                    HorizontalDivider(color = if (isDark) Color(0xFF2E2E2E) else Color(0xFFF0F0F0))
+                    HorizontalDivider(color = com.example.gemini.theme.AppColors.border)
                 }
 
                 if (filteredHistory.isEmpty()) {
@@ -1269,8 +1269,8 @@ private fun ShortcutItemView(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val circleBg = if (isDark) Color(0xFF242426) else Color(0xFFF3F4F6)
-    val circleBorder = if (isDark) Color(0xFF38383A) else Color(0xFFE5E7EB)
+    val circleBg = com.example.gemini.theme.AppColors.fill
+    val circleBorder = com.example.gemini.theme.AppColors.border
 
     val isGoogle = shortcut.title.equals("google", ignoreCase = true)
     val isYouTube = shortcut.title.equals("youtube", ignoreCase = true)
@@ -1346,8 +1346,8 @@ private fun AddShortcutItemView(
     isDark: Boolean,
     onClick: () -> Unit
 ) {
-    val circleBg = if (isDark) Color(0xFF242426) else Color(0xFFF3F4F6)
-    val circleBorder = if (isDark) Color(0xFF38383A) else Color(0xFFE5E7EB)
+    val circleBg = com.example.gemini.theme.AppColors.fill
+    val circleBorder = com.example.gemini.theme.AppColors.border
 
     Column(
         modifier = Modifier
@@ -1423,11 +1423,11 @@ private fun TabOverviewScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = if (isDarkTheme) Color(0xFF141211) else Color(0xFFF2F2F7),
+        containerColor = com.example.gemini.theme.AppColors.background,
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = if (isDarkTheme) Color(0xFF1E1E1E) else Color.White,
+                color = com.example.gemini.theme.AppColors.card,
                 shadowElevation = 2.dp
             ) {
                 Row(
@@ -1484,9 +1484,9 @@ private fun TabOverviewScreen(
         bottomBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = if (isDarkTheme) Color(0xFF1E1E1E) else Color.White,
+                color = com.example.gemini.theme.AppColors.card,
                 shadowElevation = 8.dp,
-                border = if (!isDarkTheme) BorderStroke(0.5.dp, Color(0xFFE5E7EB)) else null
+                border = if (!isDarkTheme) BorderStroke(0.5.dp, com.example.gemini.theme.AppColors.border) else null
             ) {
                 Row(
                     modifier = Modifier
@@ -1563,9 +1563,9 @@ private fun TabOverviewScreen(
             ) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = if (isDarkTheme) Color(0xFF2C2C2C) else Color(0xFF323232),
+                    color = com.example.gemini.theme.AppColors.inverseSurface,
                     shadowElevation = 8.dp,
-                    border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF444444) else Color(0xFF555555))
+                    border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.border)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -1671,10 +1671,10 @@ private fun TabCardView(
             }
             .clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
-        color = if (isDark) Color(0xFF222222) else Color.White,
+        color = com.example.gemini.theme.AppColors.card,
         border = BorderStroke(
             if (isSelected) 2.dp else 1.dp,
-            if (isSelected) ClaudeTerracotta else if (isDark) Color(0xFF333333) else Color(0xFFE5E7EB)
+            if (isSelected) ClaudeTerracotta else com.example.gemini.theme.AppColors.border
         ),
         shadowElevation = if (isSelected) 4.dp else 1.dp
     ) {
@@ -1684,7 +1684,7 @@ private fun TabCardView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(38.dp)
-                    .background(if (isDark) Color(0xFF2C2C2C) else Color(0xFFF3F4F6))
+                    .background(com.example.gemini.theme.AppColors.fill)
                     .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -1697,7 +1697,7 @@ private fun TabCardView(
                         imageVector = if (tab.url.startsWith("https://")) Icons.Default.Lock else Icons.Outlined.Language,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
-                        tint = if (tab.url.startsWith("https://")) Color(0xFF22C55E) else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (tab.url.startsWith("https://")) com.example.gemini.theme.AppColors.success else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
@@ -1727,7 +1727,7 @@ private fun TabCardView(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(if (isDark) Color(0xFF181818) else Color(0xFFFAFAFA)),
+                    .background(com.example.gemini.theme.AppColors.background),
                 contentAlignment = Alignment.TopCenter
             ) {
                 val preview = tab.previewBitmap
@@ -1799,8 +1799,8 @@ fun BrowserDiagnosticOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                if (isDark) Color(0xFF141211).copy(alpha = 0.94f)
-                else Color(0xFFFAF9F6).copy(alpha = 0.96f)
+                if (isDark) com.example.gemini.theme.AppColors.background.copy(alpha = 0.94f)
+                else com.example.gemini.theme.AppColors.background.copy(alpha = 0.96f)
             )
             .padding(20.dp),
         contentAlignment = Alignment.Center
@@ -1808,9 +1808,9 @@ fun BrowserDiagnosticOverlay(
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = if (isDark) Color(0xFF23201D) else Color.White
+                containerColor = com.example.gemini.theme.AppColors.card
             ),
-            border = BorderStroke(1.dp, if (isDark) Color(0xFF383430) else Color(0xFFE5E7EB)),
+            border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.border),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
             modifier = Modifier
                 .fillMaxWidth()
@@ -1843,7 +1843,7 @@ fun BrowserDiagnosticOverlay(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (isDark) Color(0xFFEDE8DF) else Color(0xFF181513),
+                    color = com.example.gemini.theme.AppColors.onBackground,
                     textAlign = TextAlign.Center
                 )
 
@@ -1853,8 +1853,8 @@ fun BrowserDiagnosticOverlay(
                 if (targetUrl.isNotBlank() && targetUrl != "about:blank") {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = if (isDark) Color(0xFF2C2825) else Color(0xFFF3F4F6),
-                        border = BorderStroke(0.8.dp, if (isDark) Color(0xFF383430) else Color(0xFFE5E7EB)),
+                        color = com.example.gemini.theme.AppColors.fill,
+                        border = BorderStroke(0.8.dp, com.example.gemini.theme.AppColors.border),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
@@ -1862,7 +1862,7 @@ fun BrowserDiagnosticOverlay(
                             style = TextStyle(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp,
-                                color = if (isDark) Color(0xFFEDE8DF) else Color(0xFF181513)
+                                color = com.example.gemini.theme.AppColors.onBackground
                             ),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
@@ -1877,7 +1877,7 @@ fun BrowserDiagnosticOverlay(
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (isDark) Color(0xFFB8B2A8) else Color(0xFF525252),
+                    color = com.example.gemini.theme.AppColors.textSecondary,
                     textAlign = TextAlign.Center,
                     lineHeight = 20.sp
                 )
@@ -1920,7 +1920,7 @@ fun BrowserDiagnosticOverlay(
                     AnimatedVisibility(visible = showDetails) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (isDark) Color(0xFF100E0D) else Color(0xFFF3F4F6),
+                            color = com.example.gemini.theme.AppColors.fill,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 8.dp)
@@ -1933,7 +1933,7 @@ fun BrowserDiagnosticOverlay(
                                         style = TextStyle(
                                             fontFamily = FontFamily.Monospace,
                                             fontSize = 11.sp,
-                                            color = if (log.level == "ERROR") Color(0xFFEF4444) else errColor
+                                            color = if (log.level == "ERROR") com.example.gemini.theme.AppColors.danger else errColor
                                         ),
                                         maxLines = 3,
                                         overflow = TextOverflow.Ellipsis,
@@ -2047,7 +2047,7 @@ private fun BrowserAiLockOverlay(busy: Boolean, onUnlock: () -> Unit) {
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                         modifier = Modifier.height(28.dp)
                     ) {
-                        Text("Unlock", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFFFB38A))
+                        Text("Unlock", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = com.example.gemini.theme.AppColors.warning)
                     }
                 }
             }

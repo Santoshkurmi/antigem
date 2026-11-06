@@ -60,7 +60,7 @@ fun SettingsGroupHeader(title: String, accent: Color, subtitle: String? = null, 
 }
 
 @Composable
-fun claudeCardColor(): Color = if (isAppInDarkTheme()) ClaudeDarkSurface else Color.White
+fun claudeCardColor(): Color = com.example.gemini.theme.AppColors.card
 
 /** Navigation card matching the existing settings cards. */
 @Composable

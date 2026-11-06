@@ -281,7 +281,7 @@ private fun ArtifactCardItem(
                     val (icon, bgTint, iconTint) = when {
                         isPlan -> Triple(Icons.Outlined.AutoAwesome, ClaudeTerracotta.copy(alpha = 0.16f), ClaudeTerracotta)
                         isWalkthrough -> Triple(Icons.Outlined.Description, GeminiBlue.copy(alpha = 0.16f), GeminiBlue)
-                        else -> Triple(Icons.AutoMirrored.Outlined.InsertDriveFile, Color(0xFF8BE9FD).copy(alpha = 0.16f), Color(0xFF8BE9FD))
+                        else -> Triple(Icons.AutoMirrored.Outlined.InsertDriveFile, com.example.gemini.theme.AppColors.accentTeal.copy(alpha = 0.16f), com.example.gemini.theme.AppColors.accentTeal)
                     }
                     Box(
                         modifier = Modifier

@@ -1061,7 +1061,14 @@ object JarvisMcp {
     private val settings: List<Setting> by lazy {
         listOf(
             // ---- app (only when the user allowed it)
-            choice("theme_mode", "App theme", false, listOf("LIGHT", "DARK", "SYSTEM"), { vm.themeMode.value }, { vm.setThemeMode(it) }),
+            choice("theme_mode", "Light, dark or follow the system", false, listOf("LIGHT", "DARK", "SYSTEM"), { vm.themeMode.value }, { vm.setThemeMode(it) }),
+            Setting("theme", "Color theme by id or name (switches the app to its light or dark side). Creating themes: the theme_mcp tools.",
+                com.example.gemini.theme.BuiltInThemes.all.joinToString("|") { it.id } + "|or a custom theme's name", false,
+                get = { com.example.gemini.theme.ThemeManager.current.let { "${it.id} (${it.name}, ${if (it.dark) "dark" else "light"})" } },
+                set = { v ->
+                    com.example.gemini.theme.ThemeManager.find(v)?.let { com.example.gemini.theme.ThemeManager.select(it); null }
+                        ?: "No theme \"$v\". Themes: ${com.example.gemini.theme.ThemeManager.all().joinToString { "${it.name} (${it.id})" }}"
+                }),
             Setting("chat_font_scale", "Chat text size", "0.8-1.6", false, get = { vm.chatFontScale.first() }, set = { v ->
                 v.trim().removeSuffix("x").toFloatOrNull()?.let { vm.setChatFontScale(it.coerceIn(0.8f, 1.6f)); null } ?: "Not a number."
             }),

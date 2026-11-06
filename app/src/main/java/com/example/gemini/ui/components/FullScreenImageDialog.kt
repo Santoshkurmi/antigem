@@ -99,7 +99,7 @@ fun FullScreenImageDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF090A0F).copy(alpha = 0.96f))
+                .background(com.example.gemini.theme.AppColors.terminalBg.copy(alpha = 0.96f))
         ) {
             // Main Zoomable & Pannable Image Area
             Box(

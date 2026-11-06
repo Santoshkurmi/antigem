@@ -231,7 +231,7 @@ fun MessageBubble(
                                 Icon(
                                     imageVector = Icons.Outlined.DataObject,
                                     contentDescription = "View Raw Request Payload",
-                                    tint = Color(0xFF8BE9FD),
+                                    tint = com.example.gemini.theme.AppColors.accentTeal,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -324,7 +324,7 @@ fun MessageBubble(
                                     Icon(
                                         imageVector = Icons.Outlined.DataObject,
                                         contentDescription = "View Raw Request Payload",
-                                        tint = Color(0xFF8BE9FD),
+                                        tint = com.example.gemini.theme.AppColors.accentTeal,
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
@@ -558,7 +558,7 @@ fun UserMessageBubble(
                         Icon(
                             imageVector = Icons.Outlined.DataObject,
                             contentDescription = "View Raw Request Payload",
-                            tint = Color(0xFF8BE9FD),
+                            tint = com.example.gemini.theme.AppColors.accentTeal,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -682,7 +682,7 @@ fun AssistantMessageFooter(
                     Icon(
                         imageVector = Icons.Outlined.DataObject,
                         contentDescription = "View Raw Request Payload",
-                        tint = Color(0xFF8BE9FD),
+                        tint = com.example.gemini.theme.AppColors.accentTeal,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -802,9 +802,9 @@ fun TokenUsageTelemetryPill(
     } else 0
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val inputColor = if (isDark) Color(0xFF64B5F6) else Color(0xFF1565C0)
-    val outputColor = if (isDark) Color(0xFF81C784) else Color(0xFF2E7D32)
-    val cacheColor = if (isDark) Color(0xFFFFD54F) else Color(0xFFB45309)
+    val inputColor = if (isDark) com.example.gemini.theme.AppColors.info else com.example.gemini.theme.AppColors.info
+    val outputColor = if (isDark) com.example.gemini.theme.AppColors.success else com.example.gemini.theme.AppColors.success
+    val cacheColor = com.example.gemini.theme.AppColors.warning
 
     Surface(
         shape = RoundedCornerShape(6.dp),

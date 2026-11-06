@@ -80,10 +80,10 @@ fun LocalServerOutputDialog(
         }
     }
 
-    val dialogBg = if (isDark) Color(0xFF141414) else Color(0xFF1E1E1E)
-    val dialogBorder = BorderStroke(1.dp, Color(0xFF2C2C2C))
-    val consoleBg = Color(0xFF000000)
-    val textPrimary = Color(0xFFEEEEEE)
+    val dialogBg = com.example.gemini.theme.AppColors.editorBg
+    val dialogBorder = BorderStroke(1.dp, com.example.gemini.theme.AppColors.editorBorder)
+    val consoleBg = com.example.gemini.theme.AppColors.terminalBg
+    val textPrimary = com.example.gemini.theme.AppColors.editorText
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -121,12 +121,12 @@ fun LocalServerOutputDialog(
                     ) {
                         // Static Status Dot (no animation/blinking)
                         val dotColor = when (status) {
-                            is LocalServerStatus.Running -> Color(0xFF22C55E)
-                            is LocalServerStatus.Starting -> Color(0xFFF59E0B)
-                            is LocalServerStatus.Stopping -> Color(0xFFF59E0B)
-                            is LocalServerStatus.Stopped -> Color(0xFF9CA3AF)
-                            is LocalServerStatus.Error -> Color(0xFFEF4444)
-                            is LocalServerStatus.Idle -> Color(0xFF9CA3AF)
+                            is LocalServerStatus.Running -> com.example.gemini.theme.AppColors.success
+                            is LocalServerStatus.Starting -> com.example.gemini.theme.AppColors.warning
+                            is LocalServerStatus.Stopping -> com.example.gemini.theme.AppColors.warning
+                            is LocalServerStatus.Stopped -> com.example.gemini.theme.AppColors.editorMuted
+                            is LocalServerStatus.Error -> com.example.gemini.theme.AppColors.danger
+                            is LocalServerStatus.Idle -> com.example.gemini.theme.AppColors.editorMuted
                         }
 
                         Box(
@@ -189,7 +189,7 @@ fun LocalServerOutputDialog(
                                 Icon(
                                     imageVector = Icons.Default.Stop,
                                     contentDescription = "Stop Server",
-                                    tint = Color(0xFFEF4444),
+                                    tint = com.example.gemini.theme.AppColors.danger,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -219,7 +219,7 @@ fun LocalServerOutputDialog(
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp)),
                     color = consoleBg,
-                    border = BorderStroke(1.dp, Color(0xFF222222))
+                    border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.editorBorder)
                 ) {
                     val currentSession = serverSession
                     if (currentSession != null) {
@@ -323,7 +323,7 @@ fun LocalServerOutputDialog(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 10.sp,
                                 lineHeight = 13.sp,
-                                color = Color(0xFFD4D4D8)
+                                color = com.example.gemini.theme.AppColors.editorText
                             )
                         }
                     } else {
@@ -338,7 +338,7 @@ fun LocalServerOutputDialog(
                                 text = "No bridge process running.\nTap 'Restart' above to run agy_ide_bridge",
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp,
-                                color = Color(0xFF71717A),
+                                color = com.example.gemini.theme.AppColors.editorMuted,
                                 lineHeight = 18.sp
                             )
                         }

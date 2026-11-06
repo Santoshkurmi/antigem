@@ -383,37 +383,37 @@ fun MarkdownAlertView(
     val isDark = isAppInDarkTheme()
     val style = when (alert.type) {
         AlertType.NOTE -> AlertStyle(
-            accentColor = Color(0xFF3B82F6),
-            lightBg = Color(0xFFEFF6FF),
-            darkBg = Color(0x223B82F6),
+            accentColor = com.example.gemini.theme.AppColors.info,
+            lightBg = com.example.gemini.theme.AppColors.infoContainer,
+            darkBg = com.example.gemini.theme.AppColors.info.copy(alpha = 0.13f),
             defaultTitle = "Note",
             icon = Icons.Outlined.Info
         )
         AlertType.TIP -> AlertStyle(
-            accentColor = Color(0xFF10B981),
-            lightBg = Color(0xFFECFDF5),
-            darkBg = Color(0x2210B981),
+            accentColor = com.example.gemini.theme.AppColors.success,
+            lightBg = com.example.gemini.theme.AppColors.successContainer,
+            darkBg = com.example.gemini.theme.AppColors.success.copy(alpha = 0.13f),
             defaultTitle = "Tip",
             icon = Icons.Outlined.Lightbulb
         )
         AlertType.IMPORTANT -> AlertStyle(
-            accentColor = Color(0xFF8B5CF6),
-            lightBg = Color(0xFFF5F3FF),
-            darkBg = Color(0x228B5CF6),
+            accentColor = com.example.gemini.theme.AppColors.accentAlt,
+            lightBg = com.example.gemini.theme.AppColors.fill,
+            darkBg = com.example.gemini.theme.AppColors.accentAlt.copy(alpha = 0.13f),
             defaultTitle = "Important",
             icon = Icons.Outlined.PriorityHigh
         )
         AlertType.WARNING -> AlertStyle(
-            accentColor = Color(0xFFF59E0B),
-            lightBg = Color(0xFFFFFBEB),
-            darkBg = Color(0x22F59E0B),
+            accentColor = com.example.gemini.theme.AppColors.warning,
+            lightBg = com.example.gemini.theme.AppColors.warningContainer,
+            darkBg = com.example.gemini.theme.AppColors.warning.copy(alpha = 0.13f),
             defaultTitle = "Warning",
             icon = Icons.Outlined.Warning
         )
         AlertType.CAUTION -> AlertStyle(
-            accentColor = Color(0xFFEF4444),
-            lightBg = Color(0xFFFEF2F2),
-            darkBg = Color(0x22EF4444),
+            accentColor = com.example.gemini.theme.AppColors.danger,
+            lightBg = com.example.gemini.theme.AppColors.dangerContainer,
+            darkBg = com.example.gemini.theme.AppColors.danger.copy(alpha = 0.13f),
             defaultTitle = "Caution",
             icon = Icons.Outlined.Report
         )
@@ -1341,9 +1341,9 @@ fun AgentErrorCard(
     var isExpanded by remember { mutableStateOf(false) }
     val isDark = isAppInDarkTheme()
 
-    val cardBg = if (isDark) Color(0xFF2A1515) else Color(0xFFFDECEC)
-    val cardBorder = if (isDark) Color(0xFF742A2A) else Color(0xFFF5C2C2)
-    val errorColor = if (isDark) Color(0xFFFF6B6B) else Color(0xFFD32F2F)
+    val cardBg = com.example.gemini.theme.AppColors.dangerContainer
+    val cardBorder = com.example.gemini.theme.AppColors.dangerContainer
+    val errorColor = if (isDark) com.example.gemini.theme.AppColors.danger else com.example.gemini.theme.AppColors.danger
 
     Surface(
         modifier = modifier
@@ -1481,7 +1481,7 @@ fun AgentErrorCard(
                             .fillMaxWidth()
                             .padding(top = 6.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (isDark) Color(0xFF1E1010) else Color(0xFFF7E2E2))
+                            .background(com.example.gemini.theme.AppColors.dangerContainer)
                             .padding(8.dp)
                     ) {
                         if (error.errorId.isNotBlank()) {
@@ -2662,9 +2662,9 @@ private fun buildRichAnnotatedString(
                 )
                 builder.pushStyle(
                     SpanStyle(
-                        color = Color(0xFF7C3AED),
+                        color = com.example.gemini.theme.AppColors.accentAlt,
                         fontWeight = FontWeight.SemiBold,
-                        background = Color(0xFF7C3AED).copy(alpha = 0.12f)
+                        background = com.example.gemini.theme.AppColors.accentAlt.copy(alpha = 0.12f)
                     )
                 )
                 builder.append(" 💬 $displayLabel ")
@@ -2738,9 +2738,9 @@ private fun buildRichAnnotatedString(
                 )
                 builder.pushStyle(
                     SpanStyle(
-                        color = Color(0xFF7C3AED),
+                        color = com.example.gemini.theme.AppColors.accentAlt,
                         fontWeight = FontWeight.SemiBold,
-                        background = Color(0xFF7C3AED).copy(alpha = 0.12f)
+                        background = com.example.gemini.theme.AppColors.accentAlt.copy(alpha = 0.12f)
                     )
                 )
                 builder.append(" 💬 $displayLabel ")
@@ -2798,9 +2798,9 @@ private fun buildRichAnnotatedString(
             )
             builder.pushStyle(
                 SpanStyle(
-                    color = Color(0xFF7C3AED),
+                    color = com.example.gemini.theme.AppColors.accentAlt,
                     fontWeight = FontWeight.SemiBold,
-                    background = Color(0xFF7C3AED).copy(alpha = 0.12f)
+                    background = com.example.gemini.theme.AppColors.accentAlt.copy(alpha = 0.12f)
                 )
             )
             builder.append(" 💬 $displayLabel ")
@@ -2857,7 +2857,7 @@ private fun buildRichAnnotatedString(
                         fontFamily = FontFamily.Monospace,
                         background = parsedColor.copy(alpha = if (isDark) 0.22f else 0.14f),
                         fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color(0xFFF1F1F4) else Color(0xFF1E1E24),
+                        color = com.example.gemini.theme.AppColors.onBackground,
                         fontSize = 12.5.sp
                     )
                 )
@@ -2867,7 +2867,7 @@ private fun buildRichAnnotatedString(
                 builder.pushStyle(
                     SpanStyle(
                         fontFamily = FontFamily.Monospace,
-                        background = Color(0x24D97706),
+                        background = com.example.gemini.theme.AppColors.warning.copy(alpha = 0.14f),
                         fontWeight = FontWeight.SemiBold,
                         color = ClaudeTerracotta,
                         fontSize = 12.5.sp
@@ -3010,8 +3010,8 @@ private fun buildRichAnnotatedString(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    background = if (isDark) Color(0xFF2A2B36) else Color(0xFFE2E8F0),
-                    color = if (isDark) Color(0xFFF1F1F4) else Color(0xFF1E293B)
+                    background = com.example.gemini.theme.AppColors.fill,
+                    color = com.example.gemini.theme.AppColors.onBackground
                 )
             )
             builder.append(" $content ")

@@ -26,30 +26,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-private val DarkColorScheme = darkColorScheme(
-    primary = ClaudeTerracotta,
-    secondary = ClaudeTerracottaDark,
-    background = ClaudeDarkBg,
-    surface = ClaudeDarkBg,
-    surfaceTint = Color.Transparent,
-    onPrimary = Color.White,
-    onBackground = TextPrimaryDark,
-    onSurface = TextPrimaryDark,
-    surfaceVariant = ClaudeUserBubbleDark
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = ClaudeTerracotta,
-    secondary = ClaudeTerracottaDark,
-    background = ClaudeCream,
-    surface = ClaudeCream,
-    surfaceTint = Color.Transparent,
-    onPrimary = Color.White,
-    onBackground = TextPrimaryLight,
-    onSurface = TextPrimaryLight,
-    surfaceVariant = ClaudeUserBubbleLight
-)
-
 val LocalIsDarkTheme = staticCompositionLocalOf { false }
 
 @Composable
@@ -113,7 +89,12 @@ fun GeminiTheme(
     darkTheme: Boolean = isSystemInDarkThemeRobust(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    // the light or dark theme the user picked (Settings → Appearance, or theme_mcp); see ThemeManager
+    ThemeManager.setEffectiveDark(darkTheme)
+    val colorScheme = ThemeManager.schemeOf(ThemeManager.themeFor(darkTheme))
+    // the terminal emulator takes its colors from the theme too
+    val themeColors = ThemeManager.colors
+    SideEffect { ThemeTerminal.apply(themeColors) }
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -123,6 +104,8 @@ fun GeminiTheme(
                 val window = activity.window
                 window.statusBarColor = colorScheme.background.toArgb()
                 window.navigationBarColor = colorScheme.background.toArgb()
+                // what shows behind the app during transitions: the theme, not the white splash layer
+                window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(colorScheme.background.toArgb()))
                 val insetsController = WindowCompat.getInsetsController(window, view)
                 insetsController.isAppearanceLightStatusBars = !darkTheme
                 insetsController.isAppearanceLightNavigationBars = !darkTheme

@@ -39,6 +39,8 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
         super.onCreate()
         // loads the saved server addresses, Remote mode and the SSH key into memory before anything connects
         com.example.gemini.data.preferences.AuthPreferences(this)
+        // the chosen light / dark themes and the custom ones, before the first screen draws
+        com.example.gemini.theme.ThemeManager.init(this)
         UpdateCheckWorker.schedule(this)
         PluginUpdateCheckWorker.schedule(this)
         // Reconnects adb when Wireless debugging turns back on (it gets a new port every time)

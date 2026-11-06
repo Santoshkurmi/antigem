@@ -266,8 +266,8 @@ fun GitCloneDialog(
                     // Terminal output container
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF090D16),
-                        border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                        color = com.example.gemini.theme.AppColors.terminalBg,
+                        border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.editorBorder),
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -281,11 +281,11 @@ fun GitCloneDialog(
                             items(logs) { line ->
                                 val cleanLine = line.replace(Regex("\u001B\\[[;\\d]*m"), "")
                                 val lineColor = when {
-                                    cleanLine.startsWith("❌") || cleanLine.startsWith("fatal:") || cleanLine.startsWith("error:") -> Color(0xFFFF5252)
-                                    cleanLine.startsWith("✅") -> Color(0xFF4CAF50)
-                                    cleanLine.startsWith("⚠️") || cleanLine.startsWith("warning:") -> Color(0xFFFFB74D)
-                                    cleanLine.startsWith("=") || cleanLine.startsWith("[") -> Color(0xFF64B5F6)
-                                    else -> Color(0xFFE2E8F0)
+                                    cleanLine.startsWith("❌") || cleanLine.startsWith("fatal:") || cleanLine.startsWith("error:") -> com.example.gemini.theme.AppColors.danger
+                                    cleanLine.startsWith("✅") -> com.example.gemini.theme.AppColors.success
+                                    cleanLine.startsWith("⚠️") || cleanLine.startsWith("warning:") -> com.example.gemini.theme.AppColors.warning
+                                    cleanLine.startsWith("=") || cleanLine.startsWith("[") -> com.example.gemini.theme.AppColors.info
+                                    else -> com.example.gemini.theme.AppColors.editorText
                                 }
                                 Text(
                                     text = cleanLine,
@@ -313,7 +313,7 @@ fun GitCloneDialog(
                                     logs.add("🛑 Clone cancelled by user.")
                                 },
                                 shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48))
+                                colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.danger)
                             ) {
                                 Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))

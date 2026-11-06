@@ -854,7 +854,7 @@ fun ChatHistoryDrawer(
                         )
                     }
                     if (jarvisEnabled) {
-                        val jarvisAccent = Color(0xFF22D3EE)
+                        val jarvisAccent = com.example.gemini.theme.AppColors.accentTeal
                         Text(
                             text = "Jarvis",
                             fontSize = 11.5.sp,
@@ -1448,8 +1448,8 @@ private fun ChatHistoryItemRow(
     val isSubagent = depth > 0
     val startPadding = if (isSubagent) (12 + (depth * 14)).dp else 0.dp
     val statusDotColor = when {
-        isActivelyRunning -> Color(0xFF4CAF50)
-        isScheduledOrBackground -> Color(0xFFFFB300)
+        isActivelyRunning -> com.example.gemini.theme.AppColors.success
+        isScheduledOrBackground -> com.example.gemini.theme.AppColors.warning
         else -> null
     }
     Row(
@@ -1589,8 +1589,8 @@ private fun ChatHistoryItemRow(
         if (activeInst != null) {
             Surface(
                 shape = RoundedCornerShape(4.dp),
-                color = Color(0xFF4CAF50).copy(alpha = 0.15f),
-                border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.5f)),
+                color = com.example.gemini.theme.AppColors.success.copy(alpha = 0.15f),
+                border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.success.copy(alpha = 0.5f)),
                 modifier = Modifier
                     .clip(RoundedCornerShape(4.dp))
                     .clickable {
@@ -1604,14 +1604,14 @@ private fun ChatHistoryItemRow(
                     Box(
                         modifier = Modifier
                             .size(6.dp)
-                            .background(Color(0xFF4CAF50), CircleShape)
+                            .background(com.example.gemini.theme.AppColors.success, CircleShape)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "RUNNING",
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2E7D32)
+                        color = com.example.gemini.theme.AppColors.success
                     )
                 }
             }
@@ -1774,7 +1774,7 @@ private fun ChatHistoryItemRow(
                         Icon(
                             imageVector = Icons.Outlined.Code,
                             contentDescription = null,
-                            tint = Color(0xFF34D399),
+                            tint = com.example.gemini.theme.AppColors.success,
                             modifier = Modifier.size(18.dp)
                         )
                     },

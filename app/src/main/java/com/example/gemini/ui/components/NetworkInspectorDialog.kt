@@ -109,13 +109,13 @@ fun NetworkInspectorDialog(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF0284C7).copy(alpha = 0.15f)),
+                                .background(com.example.gemini.theme.AppColors.info.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Language,
                                 contentDescription = null,
-                                tint = Color(0xFF0284C7),
+                                tint = com.example.gemini.theme.AppColors.info,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -279,12 +279,12 @@ private fun NetworkLogItemRow(
     onClick: () -> Unit
 ) {
     val methodColor = when (entry.method.uppercase()) {
-        "GRPC" -> Color(0xFF8B5CF6) // Purple
-        "GET" -> Color(0xFF10B981) // Green
-        "POST" -> Color(0xFF3B82F6) // Blue
-        "PUT", "PATCH" -> Color(0xFFF59E0B) // Amber
-        "DELETE" -> Color(0xFFEF4444) // Red
-        else -> Color(0xFF6B7280)
+        "GRPC" -> com.example.gemini.theme.AppColors.accentAlt // Purple
+        "GET" -> com.example.gemini.theme.AppColors.success // Green
+        "POST" -> com.example.gemini.theme.AppColors.info // Blue
+        "PUT", "PATCH" -> com.example.gemini.theme.AppColors.warning // Amber
+        "DELETE" -> com.example.gemini.theme.AppColors.danger // Red
+        else -> com.example.gemini.theme.AppColors.textSecondary
     }
 
     val isConnected = entry.isConnected
@@ -313,9 +313,9 @@ private fun NetworkLogItemRow(
     }
 
     val statusColor = when {
-        isConnected -> Color(0xFF10B981)
-        !entry.isSuccess -> Color(0xFFEF4444)
-        else -> Color(0xFF10B981)
+        isConnected -> com.example.gemini.theme.AppColors.success
+        !entry.isSuccess -> com.example.gemini.theme.AppColors.danger
+        else -> com.example.gemini.theme.AppColors.success
     }
 
     Row(
@@ -357,13 +357,13 @@ private fun NetworkLogItemRow(
                     Spacer(modifier = Modifier.width(6.dp))
                     Surface(
                         shape = RoundedCornerShape(3.dp),
-                        color = Color(0xFF10B981).copy(alpha = 0.15f)
+                        color = com.example.gemini.theme.AppColors.success.copy(alpha = 0.15f)
                     ) {
                         Text(
                             text = if (isConnected) "STREAMING" else "STREAM",
                             fontSize = 8.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF10B981),
+                            color = com.example.gemini.theme.AppColors.success,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                         )
                     }
@@ -392,7 +392,7 @@ private fun NetworkLogItemRow(
         Column(horizontalAlignment = Alignment.End) {
             Surface(
                 shape = RoundedCornerShape(4.dp),
-                color = if (isConnected) Color(0xFF10B981).copy(alpha = 0.15f) else statusColor.copy(alpha = 0.12f)
+                color = if (isConnected) com.example.gemini.theme.AppColors.success.copy(alpha = 0.15f) else statusColor.copy(alpha = 0.12f)
             ) {
                 Text(
                     text = when {
@@ -405,7 +405,7 @@ private fun NetworkLogItemRow(
                     },
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isConnected) Color(0xFF10B981) else statusColor,
+                    color = if (isConnected) com.example.gemini.theme.AppColors.success else statusColor,
                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                 )
             }
@@ -416,7 +416,7 @@ private fun NetworkLogItemRow(
                 text = liveDurationText,
                 fontSize = 10.5.sp,
                 fontWeight = FontWeight.Medium,
-                color = if (isConnected) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                color = if (isConnected) com.example.gemini.theme.AppColors.success else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                 fontFamily = FontFamily.Monospace
             )
         }

@@ -1120,7 +1120,7 @@ private fun resolveFileColor(item: FsItemNode): Color {
         ".py" -> Color(0xFF3776AB)
         ".html", ".htm" -> Color(0xFFE34F26)
         ".css" -> Color(0xFF1572B6)
-        ".json", ".yaml", ".yml" -> Color(0xFF4CAF50)
+        ".json", ".yaml", ".yml" -> com.example.gemini.theme.AppColors.success
         ".png", ".jpg", ".jpeg", ".webp", ".svg" -> Color(0xFF9C27B0)
         ".mp3", ".wav", ".m4a" -> Color(0xFF00BCD4)
         ".md", ".txt" -> Color(0xFF9E9E9E)

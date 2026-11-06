@@ -553,10 +553,11 @@ private fun McpPage(deps: ClaudeSettingsDeps) {
         ClaudeMcpPreset("Plugin Developer", "Build & test AntiGem plugins", Icons.Outlined.DeveloperMode, GeminiPurple, local(bridge.DEVELOPER_MCP_NAME, "/extension_developer")),
         ClaudeMcpPreset("Browser", "Control the in-app browser", Icons.Outlined.Language, GeminiBlue, local("browser_mcp", "/browser")),
         ClaudeMcpPreset("Terminal", "Run commands in the terminal", Icons.Outlined.Terminal, QuotaGreen, local("terminal_mcp", "/terminal")),
-        ClaudeMcpPreset("Android", "Tap, type & read this phone", Icons.Outlined.PhoneAndroid, Color(0xFF14B8A6), local(bridge.ANDROID_AUTOMATION_MCP_NAME, "/android")),
-        ClaudeMcpPreset("Notes & To-dos", "Read & edit your notes", Icons.Outlined.EditNote, Color(0xFFF59E0B), local(bridge.NOTES_MCP_NAME, "/notes")),
-        ClaudeMcpPreset("Jarvis", "Voice control of this app", Icons.Outlined.RecordVoiceOver, Color(0xFF22D3EE), local(bridge.JARVIS_MCP_NAME, "/jarvis")),
-        ClaudeMcpPreset("Stitch", "Google Stitch UI design · API key", Icons.Outlined.Palette, Color(0xFFEC4899),
+        ClaudeMcpPreset("Android", "Tap, type & read this phone", Icons.Outlined.PhoneAndroid, com.example.gemini.theme.AppColors.accentTeal, local(bridge.ANDROID_AUTOMATION_MCP_NAME, "/android")),
+        ClaudeMcpPreset("Notes & To-dos", "Read & edit your notes", Icons.Outlined.EditNote, com.example.gemini.theme.AppColors.warning, local(bridge.NOTES_MCP_NAME, "/notes")),
+        ClaudeMcpPreset("Jarvis", "Voice control of this app", Icons.Outlined.RecordVoiceOver, com.example.gemini.theme.AppColors.accentTeal, local(bridge.JARVIS_MCP_NAME, "/jarvis")),
+        ClaudeMcpPreset("Theme", "Create & switch app themes", Icons.Outlined.Palette, com.example.gemini.theme.AppColors.accentAlt, local(bridge.THEME_MCP_NAME, "/theme")),
+        ClaudeMcpPreset("Stitch", "Google Stitch UI design · API key", Icons.Outlined.Palette, com.example.gemini.theme.AppColors.accentPink,
             ClaudeMcpAddRequest(name = "stitch", transport = "http", url = "https://stitch.googleapis.com/mcp", headers = mapOf("X-Goog-Api-Key" to "")))
     )
     var chooseWebViewExtension by remember { mutableStateOf(false) }
@@ -748,7 +749,7 @@ private fun McpPage(deps: ClaudeSettingsDeps) {
     }
 }
 
-private fun transportColor(transport: String) = if (transport == "stdio") Color(0xFF7B1FA2) else Color(0xFF1976D2)
+private fun transportColor(transport: String) = if (transport == "stdio") com.example.gemini.theme.AppColors.accentAlt else com.example.gemini.theme.AppColors.info
 
 @Composable
 private fun TransportBadge(transport: String) = Badge(if (transport == "stdio") "Stdio" else transport.uppercase(), transportColor(transport))

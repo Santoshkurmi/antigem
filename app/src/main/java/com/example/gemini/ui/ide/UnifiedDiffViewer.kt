@@ -65,11 +65,11 @@ fun UnifiedDiffViewer(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF1E1E1E))
+            .background(com.example.gemini.theme.AppColors.editorBg)
     ) {
         // --- 1. Diff Header Toolbar ---
         Surface(
-            color = Color(0xFF252526),
+            color = com.example.gemini.theme.AppColors.editorPanel,
             tonalElevation = 2.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -97,7 +97,7 @@ fun UnifiedDiffViewer(
                             fontSize = 13.5.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = Color(0xFFCCCCCC),
+                            color = com.example.gemini.theme.AppColors.editorText,
                             modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -105,8 +105,8 @@ fun UnifiedDiffViewer(
                             shape = RoundedCornerShape(4.dp),
                             color = when {
                                 commitHash != null -> ClaudeTerracotta.copy(alpha = 0.25f)
-                                isStaged -> Color(0xFF2E7D32).copy(alpha = 0.25f)
-                                else -> Color(0xFFE65100).copy(alpha = 0.25f)
+                                isStaged -> com.example.gemini.theme.AppColors.success.copy(alpha = 0.25f)
+                                else -> com.example.gemini.theme.AppColors.warning.copy(alpha = 0.25f)
                             }
                         ) {
                             Text(
@@ -120,8 +120,8 @@ fun UnifiedDiffViewer(
                                 maxLines = 1,
                                 color = when {
                                     commitHash != null -> ClaudeTerracotta
-                                    isStaged -> Color(0xFF81C784)
-                                    else -> Color(0xFFFFB74D)
+                                    isStaged -> com.example.gemini.theme.AppColors.success
+                                    else -> com.example.gemini.theme.AppColors.warning
                                 },
                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                             )
@@ -132,7 +132,7 @@ fun UnifiedDiffViewer(
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = Color(0xFF888888)
+                        color = com.example.gemini.theme.AppColors.editorMuted
                     )
                 }
 
@@ -142,12 +142,12 @@ fun UnifiedDiffViewer(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .background(Color(0xFF1E1E1E), RoundedCornerShape(4.dp))
+                        .background(com.example.gemini.theme.AppColors.editorBg, RoundedCornerShape(4.dp))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
-                    Text(text = "+$additionsCount", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                    Text(text = "+$additionsCount", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = com.example.gemini.theme.AppColors.success)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "-$deletionsCount", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF44336))
+                    Text(text = "-$deletionsCount", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = com.example.gemini.theme.AppColors.danger)
                 }
 
                 Spacer(modifier = Modifier.width(6.dp))
@@ -160,7 +160,7 @@ fun UnifiedDiffViewer(
                     Icon(
                         imageVector = Icons.Default.Edit,
                         contentDescription = "Open Current File (Editable)",
-                        tint = Color(0xFF81C784),
+                        tint = com.example.gemini.theme.AppColors.success,
                         modifier = Modifier.size(17.dp)
                     )
                 }
@@ -186,7 +186,7 @@ fun UnifiedDiffViewer(
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Close Diff",
-                        tint = Color(0xFF888888),
+                        tint = com.example.gemini.theme.AppColors.editorMuted,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -231,11 +231,11 @@ fun UnifiedDiffViewer(
 @Composable
 private fun DiffLineRow(line: ParsedDiffLine) {
     val (bgColor, textColor, gutterSign) = when (line.type) {
-        DiffLineType.Addition -> Triple(Color(0xFF1B4728), Color(0xFFB9F6CA), "+")
-        DiffLineType.Deletion -> Triple(Color(0xFF4B1E1E), Color(0xFFFFCDD2), "-")
-        DiffLineType.HunkHeader -> Triple(Color(0xFF1E293B), Color(0xFF90CAF9), "@")
-        DiffLineType.Meta -> Triple(Color(0xFF252526), Color(0xFF757575), " ")
-        DiffLineType.Context -> Triple(Color.Transparent, Color(0xFFD4D4D4), " ")
+        DiffLineType.Addition -> Triple(com.example.gemini.theme.AppColors.editorAddedBg, com.example.gemini.theme.AppColors.editorAddedText, "+")
+        DiffLineType.Deletion -> Triple(com.example.gemini.theme.AppColors.editorRemovedBg, com.example.gemini.theme.AppColors.editorRemovedText, "-")
+        DiffLineType.HunkHeader -> Triple(com.example.gemini.theme.AppColors.editorInfoBg, com.example.gemini.theme.AppColors.editorInfoText, "@")
+        DiffLineType.Meta -> Triple(com.example.gemini.theme.AppColors.editorPanel, com.example.gemini.theme.AppColors.editorMuted, " ")
+        DiffLineType.Context -> Triple(Color.Transparent, com.example.gemini.theme.AppColors.editorText, " ")
     }
 
     Row(
@@ -249,7 +249,7 @@ private fun DiffLineRow(line: ParsedDiffLine) {
         Row(
             modifier = Modifier
                 .width(68.dp)
-                .background(Color(0xFF181818))
+                .background(com.example.gemini.theme.AppColors.editorBg)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -257,13 +257,13 @@ private fun DiffLineRow(line: ParsedDiffLine) {
                 text = line.oldLineNum?.toString() ?: "",
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
-                color = Color(0xFF6E7681)
+                color = com.example.gemini.theme.AppColors.editorMuted
             )
             Text(
                 text = line.newLineNum?.toString() ?: "",
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
-                color = Color(0xFF6E7681)
+                color = com.example.gemini.theme.AppColors.editorMuted
             )
         }
 

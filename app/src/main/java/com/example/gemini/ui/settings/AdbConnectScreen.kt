@@ -34,7 +34,7 @@ import com.example.gemini.data.adb.AdbConnectManager.Pairing
 import com.example.gemini.theme.QuotaGreen
 import kotlinx.coroutines.delay
 
-internal val Amber = Color(0xFFF59E0B)
+internal val Amber: androidx.compose.ui.graphics.Color get() = com.example.gemini.theme.AppColors.warning
 
 @Composable
 fun AdbConnectScreen(cardBg: Color, cardBorder: BorderStroke) {
@@ -391,8 +391,8 @@ private fun LogBox(lines: List<String>) {
     LaunchedEffect(lines.size) { scroll.animateScrollTo(scroll.maxValue) }
     Box(
         Modifier.fillMaxWidth().heightIn(max = 180.dp).clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF111418)).verticalScroll(scroll).padding(10.dp)
+            .background(com.example.gemini.theme.AppColors.terminalBg).verticalScroll(scroll).padding(10.dp)
     ) {
-        Text(lines.joinToString("\n"), fontFamily = FontFamily.Monospace, fontSize = 10.5.sp, color = Color(0xFFD1D5DB), lineHeight = 14.sp)
+        Text(lines.joinToString("\n"), fontFamily = FontFamily.Monospace, fontSize = 10.5.sp, color = com.example.gemini.theme.AppColors.editorText, lineHeight = 14.sp)
     }
 }

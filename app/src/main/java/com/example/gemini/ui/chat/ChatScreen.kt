@@ -1120,7 +1120,7 @@ fun ChatScreen(
                                 Text(
                                     text = it,
                                     fontSize = 12.sp,
-                                    color = if (it.startsWith("✓")) Color(0xFF22C55E) else Color.Red
+                                    color = if (it.startsWith("✓")) com.example.gemini.theme.AppColors.success else Color.Red
                                 )
                             }
                         }
@@ -2571,7 +2571,7 @@ fun ChatScreen(
                     Icon(
                         imageVector = Icons.Default.Cancel,
                         contentDescription = null,
-                        tint = Color(0xFFEF4444),
+                        tint = com.example.gemini.theme.AppColors.danger,
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -2592,7 +2592,7 @@ fun ChatScreen(
                     Spacer(modifier = Modifier.height(6.dp))
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF0D0E15),
+                        color = com.example.gemini.theme.AppColors.terminalBg,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
@@ -2980,18 +2980,18 @@ fun ChatToastBanner(
     modifier: Modifier = Modifier
 ) {
     val bgColor = when (toast.type) {
-        ChatToastType.SUCCESS -> Color(0xFF143324)
-        ChatToastType.ERROR -> Color(0xFF381919)
-        ChatToastType.INFO -> Color(0xFF1F222A)
+        ChatToastType.SUCCESS -> com.example.gemini.theme.AppColors.successContainer
+        ChatToastType.ERROR -> com.example.gemini.theme.AppColors.dangerContainer
+        ChatToastType.INFO -> com.example.gemini.theme.AppColors.card
     }
     val borderColor = when (toast.type) {
-        ChatToastType.SUCCESS -> Color(0xFF34D399).copy(alpha = 0.7f)
-        ChatToastType.ERROR -> Color(0xFFF87171).copy(alpha = 0.7f)
+        ChatToastType.SUCCESS -> com.example.gemini.theme.AppColors.success.copy(alpha = 0.7f)
+        ChatToastType.ERROR -> com.example.gemini.theme.AppColors.danger.copy(alpha = 0.7f)
         ChatToastType.INFO -> ClaudeTerracotta.copy(alpha = 0.7f)
     }
     val iconColor = when (toast.type) {
-        ChatToastType.SUCCESS -> Color(0xFF34D399)
-        ChatToastType.ERROR -> Color(0xFFF87171)
+        ChatToastType.SUCCESS -> com.example.gemini.theme.AppColors.success
+        ChatToastType.ERROR -> com.example.gemini.theme.AppColors.danger
         ChatToastType.INFO -> ClaudeTerracotta
     }
     val icon = when (toast.type) {
@@ -2999,7 +2999,7 @@ fun ChatToastBanner(
         ChatToastType.ERROR -> Icons.Outlined.ErrorOutline
         ChatToastType.INFO -> Icons.Outlined.Info
     }
-    val textColor = Color(0xFFF9FAFB)
+    val textColor = com.example.gemini.theme.AppColors.onBackground
 
     Surface(
         modifier = modifier

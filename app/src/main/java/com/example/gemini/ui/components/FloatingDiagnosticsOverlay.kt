@@ -69,8 +69,8 @@ fun FloatingDiagnosticsOverlay(
         ) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = Color(0xEE121316),
-                border = BorderStroke(1.dp, if (snapshot.isLagging || snapshot.agyQueued > 0) Color(0xFFFF5252) else Color(0x444CAF50)),
+                color = com.example.gemini.theme.AppColors.editorPanel.copy(alpha = 0.93f),
+                border = BorderStroke(1.dp, if (snapshot.isLagging || snapshot.agyQueued > 0) com.example.gemini.theme.AppColors.danger else com.example.gemini.theme.AppColors.success.copy(alpha = 0.27f)),
                 shadowElevation = 8.dp,
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
@@ -89,14 +89,14 @@ fun FloatingDiagnosticsOverlay(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(if (snapshot.isLagging || snapshot.agyQueued > 0) Color(0xFFFF5252) else Color(0xFF4CAF50))
+                                .background(if (snapshot.isLagging || snapshot.agyQueued > 0) com.example.gemini.theme.AppColors.danger else com.example.gemini.theme.AppColors.success)
                         )
 
                         Text(
                             text = "🧵 ${snapshot.activeJvmThreads}",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFE0E0E0),
+                            color = com.example.gemini.theme.AppColors.editorText,
                             fontFamily = FontFamily.Monospace
                         )
 
@@ -104,7 +104,7 @@ fun FloatingDiagnosticsOverlay(
                             text = "⚡${snapshot.agyRunning + snapshot.ideRunning}r",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (snapshot.agyRunning > 0) Color(0xFF81D4FA) else Color(0xFF9E9E9E),
+                            color = if (snapshot.agyRunning > 0) com.example.gemini.theme.AppColors.info else com.example.gemini.theme.AppColors.editorMuted,
                             fontFamily = FontFamily.Monospace
                         )
 
@@ -113,7 +113,7 @@ fun FloatingDiagnosticsOverlay(
                                 text = "⏳${snapshot.agyQueued + snapshot.ideQueued}q",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFF5252),
+                                color = com.example.gemini.theme.AppColors.danger,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
@@ -121,14 +121,14 @@ fun FloatingDiagnosticsOverlay(
                         Text(
                             text = "🔌${snapshot.agyConns + snapshot.ideConns}c",
                             fontSize = 11.sp,
-                            color = Color(0xFFB0BEC5),
+                            color = com.example.gemini.theme.AppColors.editorMuted,
                             fontFamily = FontFamily.Monospace
                         )
 
                         Text(
                             text = if (snapshot.ioLagMs >= 0) "${snapshot.ioLagMs}ms" else "ERR",
                             fontSize = 10.sp,
-                            color = if (snapshot.isLagging) Color(0xFFFF5252) else Color(0xFF81C784),
+                            color = if (snapshot.isLagging) com.example.gemini.theme.AppColors.danger else com.example.gemini.theme.AppColors.success,
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -141,13 +141,13 @@ fun FloatingDiagnosticsOverlay(
                                 .widthIn(max = 280.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            HorizontalDivider(color = Color(0x33FFFFFF), thickness = 0.5.dp)
+                            HorizontalDivider(color = com.example.gemini.theme.AppColors.editorText.copy(alpha = 0.2f), thickness = 0.5.dp)
 
                             // Groups
                             Text(
                                 text = "Thread Groups: ${snapshot.threadGroupSummary}",
                                 fontSize = 10.sp,
-                                color = Color(0xFFB0BEC5),
+                                color = com.example.gemini.theme.AppColors.editorMuted,
                                 fontFamily = FontFamily.Monospace
                             )
 
@@ -160,13 +160,13 @@ fun FloatingDiagnosticsOverlay(
                                     text = "AgyGrpc Hub:",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF90CAF9),
+                                    color = com.example.gemini.theme.AppColors.editorInfoText,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
                                     text = "Run=${snapshot.agyRunning} | Q=${snapshot.agyQueued} | Pool=${snapshot.agyConns} (${snapshot.agyIdleConns} idle)",
                                     fontSize = 10.sp,
-                                    color = Color(0xFFE0E0E0),
+                                    color = com.example.gemini.theme.AppColors.editorText,
                                     fontFamily = FontFamily.Monospace
                                 )
                             }
@@ -180,13 +180,13 @@ fun FloatingDiagnosticsOverlay(
                                     text = "IDE Bridge:",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFA5D6A7),
+                                    color = com.example.gemini.theme.AppColors.success,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
                                     text = "Run=${snapshot.ideRunning} | Q=${snapshot.ideQueued} | Pool=${snapshot.ideConns} (${snapshot.ideIdleConns} idle)",
                                     fontSize = 10.sp,
-                                    color = Color(0xFFE0E0E0),
+                                    color = com.example.gemini.theme.AppColors.editorText,
                                     fontFamily = FontFamily.Monospace
                                 )
                             }
@@ -197,14 +197,14 @@ fun FloatingDiagnosticsOverlay(
                                     text = "Blocked Socket Reads:",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFFB74D),
+                                    color = com.example.gemini.theme.AppColors.warning,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 snapshot.topBlockedThreads.forEach { trace ->
                                     Text(
                                         text = "• $trace",
                                         fontSize = 9.sp,
-                                        color = Color(0xFFFFCC80),
+                                        color = com.example.gemini.theme.AppColors.warning,
                                         fontFamily = FontFamily.Monospace,
                                         maxLines = 1
                                     )
@@ -222,7 +222,7 @@ fun FloatingDiagnosticsOverlay(
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
-                                    Text("Hide HUD", fontSize = 10.sp, color = Color(0xFFEF5350))
+                                    Text("Hide HUD", fontSize = 10.sp, color = com.example.gemini.theme.AppColors.danger)
                                 }
                             }
                         }

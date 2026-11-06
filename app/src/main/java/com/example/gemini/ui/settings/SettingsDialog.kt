@@ -263,7 +263,7 @@ fun SettingsDialog(
     }
 
     val isDark = isAppInDarkTheme()
-    val cardBg = if (isDark) ClaudeDarkSurface else Color.White
+    val cardBg = com.example.gemini.theme.AppColors.card
     val cardBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
     Surface(
@@ -628,7 +628,7 @@ private fun MainSettingsMenu(
         val jarvisOn by com.example.gemini.data.jarvis.JarvisPreferences.enabled.state.collectAsState()
         SettingsCategoryCard(
             icon = Icons.Outlined.RecordVoiceOver,
-            iconTint = Color(0xFF22D3EE),
+            iconTint = com.example.gemini.theme.AppColors.accentTeal,
             title = "Jarvis",
             subtitle = "Hands-free voice control: talk to your agents, open projects, answer permissions",
             badgeText = if (jarvisOn) "On" else "Off",
@@ -640,7 +640,7 @@ private fun MainSettingsMenu(
         // Section 2: Servers & Network
         val (serverBadge, serverColor) = when {
             isServerOnline && isBridgeOnline -> "Online" to QuotaGreen
-            isServerOnline || isBridgeOnline -> "Partial" to Color(0xFFFFA000)
+            isServerOnline || isBridgeOnline -> "Partial" to com.example.gemini.theme.AppColors.warning
             else -> "Offline" to Color.Red
         }
         SettingsCategoryCard(
@@ -687,7 +687,7 @@ private fun MainSettingsMenu(
         }
         val mcpColor = when {
             activeMcpCount > 0 -> QuotaGreen
-            totalMcpCount > 0 -> Color(0xFFFFA000)
+            totalMcpCount > 0 -> com.example.gemini.theme.AppColors.warning
             else -> ClaudeTerracotta
         }
         SettingsCategoryCard(
@@ -721,8 +721,8 @@ private fun MainSettingsMenu(
         // Section 5: Commands & Permissions
         val (policyBadge, policyColor) = when {
             commandAutoExecutionPolicy.contains("EAGER", ignoreCase = true) -> "⚡ Auto-Run" to QuotaGreen
-            commandAutoExecutionPolicy.contains("AUTO", ignoreCase = true) -> "🛡️ Smart Safety" to Color(0xFF00ACC1)
-            else -> "✋ Ask User" to Color(0xFFF59E0B)
+            commandAutoExecutionPolicy.contains("AUTO", ignoreCase = true) -> "🛡️ Smart Safety" to com.example.gemini.theme.AppColors.accentTeal
+            else -> "✋ Ask User" to com.example.gemini.theme.AppColors.warning
         }
         val sandboxSummary = if (commandSandboxEnabled) "Sandbox ON" else "Sandbox OFF"
         SettingsCategoryCard(
@@ -755,7 +755,7 @@ private fun MainSettingsMenu(
             icon = Icons.Outlined.Palette,
             iconTint = ClaudeTerracotta,
             title = "Appearance & Theme",
-            subtitle = "$themeLabel • ${(chatFontScale * 100).toInt()}% text scale",
+            subtitle = "${com.example.gemini.theme.ThemeManager.current.name} • $themeLabel • ${(chatFontScale * 100).toInt()}% text",
             badgeText = themeLabel,
             cardBg = cardBg,
             cardBorder = cardBorder,
@@ -766,7 +766,7 @@ private fun MainSettingsMenu(
         // Section 5: Terminal & Shell
         SettingsCategoryCard(
             icon = Icons.Outlined.Terminal,
-            iconTint = Color(0xFF00ACC1),
+            iconTint = com.example.gemini.theme.AppColors.accentTeal,
             title = "Terminal & Shell Execution",
             subtitle = if (com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) "Runs on the remote server (SSH)" else if (useSshTerminal) "SSH Mode (Termux sshd)" else "Local Linux Environment",
             badgeText = if (useSshTerminal || com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) "SSH" else "Local",
@@ -793,11 +793,11 @@ private fun MainSettingsMenu(
         // Section 5.6: Data Loss Protection
         SettingsCategoryCard(
             icon = Icons.Outlined.Security,
-            iconTint = Color(0xFF10B981),
+            iconTint = com.example.gemini.theme.AppColors.success,
             title = "Data Loss Protection",
             subtitle = "Accidental uninstall shield & App Info clear data protection",
             badgeText = "Shield",
-            badgeColor = Color(0xFF10B981),
+            badgeColor = com.example.gemini.theme.AppColors.success,
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.DATA_PROTECTION) }
@@ -808,7 +808,7 @@ private fun MainSettingsMenu(
         val diagColor = if (isFloatingDiagnosticsEnabled) QuotaGreen else Color.Gray
         SettingsCategoryCard(
             icon = Icons.Outlined.Speed,
-            iconTint = if (isFloatingDiagnosticsEnabled) QuotaGreen else Color(0xFF00ACC1),
+            iconTint = if (isFloatingDiagnosticsEnabled) QuotaGreen else com.example.gemini.theme.AppColors.accentTeal,
             title = "Diagnostics & Performance",
             subtitle = if (isFloatingDiagnosticsEnabled) "Floating live metrics HUD enabled" else "Live network connections, active streams & thread HUD",
             badgeText = diagBadge,
@@ -818,10 +818,10 @@ private fun MainSettingsMenu(
             onClick = { onNavigate(SettingsSection.DIAGNOSTICS) }
         )
 
-        SettingsGroupHeader("Utilities", Color(0xFF00ACC1), "Handy device tools")
+        SettingsGroupHeader("Utilities", com.example.gemini.theme.AppColors.accentTeal, "Handy device tools")
         SettingsCategoryCard(
             icon = Icons.Outlined.Handyman,
-            iconTint = Color(0xFF00ACC1),
+            iconTint = com.example.gemini.theme.AppColors.accentTeal,
             title = "Utilities",
             subtitle = "ADB Connect, Android Automation",
             cardBg = cardBg,
@@ -833,11 +833,11 @@ private fun MainSettingsMenu(
         val variantLabel = if (BuildConfig.IS_SHARED_USER_ID) "Shared UID" else "Standalone"
         SettingsCategoryCard(
             icon = Icons.Outlined.Info,
-            iconTint = Color(0xFF8B5CF6),
+            iconTint = com.example.gemini.theme.AppColors.accentAlt,
             title = "About & Info",
             subtitle = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) • ${BuildConfig.APPLICATION_ID} [$variantLabel]",
             badgeText = "v${BuildConfig.VERSION_NAME} ($variantLabel)",
-            badgeColor = if (BuildConfig.IS_SHARED_USER_ID) QuotaGreen else Color(0xFF8B5CF6),
+            badgeColor = if (BuildConfig.IS_SHARED_USER_ID) QuotaGreen else com.example.gemini.theme.AppColors.accentAlt,
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.ABOUT) }
@@ -867,7 +867,7 @@ private fun UtilitiesSubScreen(
     ) {
         SettingsCategoryCard(
             icon = Icons.Outlined.PhonelinkSetup,
-            iconTint = if (connected != null) QuotaGreen else Color(0xFF00ACC1),
+            iconTint = if (connected != null) QuotaGreen else com.example.gemini.theme.AppColors.accentTeal,
             title = "ADB Connect",
             subtitle = connected?.serial ?: "Use adb in the terminal over Wireless debugging",
             badgeText = when {
@@ -875,7 +875,7 @@ private fun UtilitiesSubScreen(
                 adb.adbInstalled == false -> "Not installed"
                 else -> null
             },
-            badgeColor = if (connected != null) QuotaGreen else Color(0xFFF59E0B),
+            badgeColor = if (connected != null) QuotaGreen else com.example.gemini.theme.AppColors.warning,
             cardBg = cardBg,
             cardBorder = cardBorder,
             onClick = { onNavigate(SettingsSection.ADB_CONNECT) }
@@ -889,7 +889,7 @@ private fun UtilitiesSubScreen(
         }
         SettingsCategoryCard(
             icon = Icons.Outlined.TouchApp,
-            iconTint = if (automationAllowed) QuotaGreen else Color(0xFF8B5CF6),
+            iconTint = if (automationAllowed) QuotaGreen else com.example.gemini.theme.AppColors.accentAlt,
             title = "Android Automation",
             subtitle = "Let AI agents read the screen, tap, type and open apps (MCP)",
             badgeText = if (automationAllowed) "Allowed" else "Off",
@@ -1091,6 +1091,9 @@ private fun AppearanceSubScreen(
                 }
             }
         }
+
+        // Which light theme and which dark theme (built-in and custom ones)
+        ThemeGallery(cardBg = cardBg, themeMode = themeMode, onSetThemeMode = onSetThemeMode)
 
         Spacer(modifier = Modifier.height(6.dp))
 
@@ -2219,11 +2222,12 @@ private fun McpSubScreen(
                     localSpec(bridge.DEVELOPER_MCP_NAME, "/extension_developer")),
                 McpPreset("Browser", "Control the in-app browser", Icons.Outlined.Language, GeminiBlue, localSpec("browser_mcp", "/browser")),
                 McpPreset("Terminal", "Run commands in the terminal", Icons.Outlined.Terminal, QuotaGreen, localSpec("terminal_mcp", "/terminal")),
-                McpPreset("Android", "Tap, type & read this phone", Icons.Outlined.PhoneAndroid, Color(0xFF14B8A6),
+                McpPreset("Android", "Tap, type & read this phone", Icons.Outlined.PhoneAndroid, com.example.gemini.theme.AppColors.accentTeal,
                     localSpec(bridge.ANDROID_AUTOMATION_MCP_NAME, "/android")),
-                McpPreset("Notes & To-dos", "Read & edit your notes", Icons.Outlined.EditNote, Color(0xFFF59E0B), localSpec(bridge.NOTES_MCP_NAME, "/notes")),
-                McpPreset("Jarvis", "Voice control of this app", Icons.Outlined.RecordVoiceOver, Color(0xFF22D3EE), localSpec(bridge.JARVIS_MCP_NAME, "/jarvis")),
-                McpPreset("Stitch", "Google Stitch UI design · API key", Icons.Outlined.Palette, Color(0xFFEC4899),
+                McpPreset("Notes & To-dos", "Read & edit your notes", Icons.Outlined.EditNote, com.example.gemini.theme.AppColors.warning, localSpec(bridge.NOTES_MCP_NAME, "/notes")),
+                McpPreset("Jarvis", "Voice control of this app", Icons.Outlined.RecordVoiceOver, com.example.gemini.theme.AppColors.accentTeal, localSpec(bridge.JARVIS_MCP_NAME, "/jarvis")),
+                McpPreset("Theme", "Create & switch app themes", Icons.Outlined.Palette, com.example.gemini.theme.AppColors.accentAlt, localSpec(bridge.THEME_MCP_NAME, "/theme")),
+                McpPreset("Stitch", "Google Stitch UI design · API key", Icons.Outlined.Palette, com.example.gemini.theme.AppColors.accentPink,
                     com.example.gemini.domain.model.McpServerSpec(serverName = "stitch", serverUrl = "https://stitch.googleapis.com/mcp", headers = mapOf("X-Goog-Api-Key" to "")))
             )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2401,7 +2405,7 @@ private fun McpSubScreen(
                 !server.isEnabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                 server.status.contains("RUNNING", ignoreCase = true) || server.status.contains("OK", ignoreCase = true) || server.tools.isNotEmpty() -> QuotaGreen
                 server.status.contains("ERROR", ignoreCase = true) || !server.error.isNullOrBlank() -> Color.Red
-                else -> Color(0xFFFFA000)
+                else -> com.example.gemini.theme.AppColors.warning
             }
             val statusLabel = when {
                 !server.isEnabled -> "Disabled"
@@ -2431,13 +2435,13 @@ private fun McpSubScreen(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSse) Color(0xFF1976D2).copy(alpha = 0.12f) else Color(0xFF7B1FA2).copy(alpha = 0.12f)),
+                                .background(if (isSse) com.example.gemini.theme.AppColors.info.copy(alpha = 0.12f) else com.example.gemini.theme.AppColors.accentAlt.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Extension,
                                 contentDescription = null,
-                                tint = if (isSse) Color(0xFF1976D2) else Color(0xFF7B1FA2),
+                                tint = if (isSse) com.example.gemini.theme.AppColors.info else com.example.gemini.theme.AppColors.accentAlt,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -2458,13 +2462,13 @@ private fun McpSubScreen(
                                 // Transport badge
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = if (isSse) Color(0xFF1976D2).copy(alpha = 0.15f) else Color(0xFF7B1FA2).copy(alpha = 0.15f)
+                                    color = if (isSse) com.example.gemini.theme.AppColors.info.copy(alpha = 0.15f) else com.example.gemini.theme.AppColors.accentAlt.copy(alpha = 0.15f)
                                 ) {
                                     Text(
                                         text = if (isSse) "SSE" else "Stdio",
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isSse) Color(0xFF1976D2) else Color(0xFF7B1FA2),
+                                        color = if (isSse) com.example.gemini.theme.AppColors.info else com.example.gemini.theme.AppColors.accentAlt,
                                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                                     )
                                 }
@@ -2522,7 +2526,7 @@ private fun McpSubScreen(
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFF1976D2).copy(alpha = 0.08f)
+                            color = com.example.gemini.theme.AppColors.info.copy(alpha = 0.08f)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -2533,13 +2537,13 @@ private fun McpSubScreen(
                                     imageVector = Icons.Default.Key,
                                     contentDescription = null,
                                     modifier = Modifier.size(12.dp),
-                                    tint = Color(0xFF1976D2)
+                                    tint = com.example.gemini.theme.AppColors.info
                                 )
                                 Text(
                                     text = "Headers: ${server.spec!!.headers.keys.joinToString(", ")}",
                                     fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace,
-                                    color = Color(0xFF1976D2)
+                                    color = com.example.gemini.theme.AppColors.info
                                 )
                             }
                         }
@@ -4317,8 +4321,8 @@ private fun BackupsSubScreen(
         if (isAnyServerRunning) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFFF59E0B).copy(alpha = 0.12f),
-                border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.4f)),
+                color = com.example.gemini.theme.AppColors.warning.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.warning.copy(alpha = 0.4f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -4329,7 +4333,7 @@ private fun BackupsSubScreen(
                     Icon(
                         imageVector = Icons.Default.WarningAmber,
                         contentDescription = null,
-                        tint = Color(0xFFF59E0B),
+                        tint = com.example.gemini.theme.AppColors.warning,
                         modifier = Modifier.size(24.dp)
                     )
                     Column(modifier = Modifier.weight(1f)) {
@@ -4350,7 +4354,7 @@ private fun BackupsSubScreen(
                         Button(
                             onClick = onStopServer,
                             shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48)),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.danger),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                             modifier = Modifier.height(34.dp)
                         ) {
@@ -4377,14 +4381,14 @@ private fun BackupsSubScreen(
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = Color(0xFF00ACC1).copy(alpha = 0.15f),
+                        color = com.example.gemini.theme.AppColors.accentTeal.copy(alpha = 0.15f),
                         modifier = Modifier.size(38.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Outlined.Inventory2,
                                 contentDescription = null,
-                                tint = Color(0xFF00ACC1),
+                                tint = com.example.gemini.theme.AppColors.accentTeal,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -4450,7 +4454,7 @@ private fun BackupsSubScreen(
                         }
                     },
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00ACC1)),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.accentTeal),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Outlined.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -4512,8 +4516,8 @@ private fun BackupsSubScreen(
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFFEF4444).copy(alpha = 0.12f),
-                    border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.35f)),
+                    color = com.example.gemini.theme.AppColors.danger.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.danger.copy(alpha = 0.35f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -4521,7 +4525,7 @@ private fun BackupsSubScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Security, contentDescription = null, tint = com.example.gemini.theme.AppColors.danger, modifier = Modifier.size(18.dp))
                         Text(
                             text = "⚠️ Security Warning: This backup includes your authentication credentials and login tokens. Never share this archive with anyone, as anyone with this file can log in to your account.",
                             fontSize = 11.sp,
@@ -4657,14 +4661,14 @@ private fun BackupsSubScreen(
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = Color(0xFF6366F1).copy(alpha = 0.15f),
+                        color = com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.15f),
                         modifier = Modifier.size(38.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Outlined.Workspaces,
                                 contentDescription = null,
-                                tint = Color(0xFF6366F1),
+                                tint = com.example.gemini.theme.AppColors.accentIndigo,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -4696,7 +4700,7 @@ private fun BackupsSubScreen(
                 Button(
                     onClick = { showProjectsBackupRestoreDialog = true },
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.accentIndigo),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Outlined.FolderZip, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -4711,7 +4715,7 @@ private fun BackupsSubScreen(
     showServerRunningAlert?.let { actionName ->
         AlertDialog(
             onDismissRequest = { showServerRunningAlert = null },
-            icon = { Icon(Icons.Default.WarningAmber, contentDescription = null, tint = Color(0xFFF59E0B)) },
+            icon = { Icon(Icons.Default.WarningAmber, contentDescription = null, tint = com.example.gemini.theme.AppColors.warning) },
             title = { Text("Server Must Be Stopped", fontWeight = FontWeight.Bold) },
             text = {
                 Text(
@@ -4726,7 +4730,7 @@ private fun BackupsSubScreen(
                         showServerRunningAlert = null
                         Toast.makeText(context, "Stopping server... Please re-run $actionName once stopped.", Toast.LENGTH_SHORT).show()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48))
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.danger)
                 ) {
                     Text("Stop Server", fontWeight = FontWeight.Bold)
                 }
@@ -4754,8 +4758,8 @@ private fun BackupsSubScreen(
                     )
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFFEF4444).copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.35f)),
+                        color = com.example.gemini.theme.AppColors.danger.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.danger.copy(alpha = 0.35f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -4763,7 +4767,7 @@ private fun BackupsSubScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Security, contentDescription = null, tint = com.example.gemini.theme.AppColors.danger, modifier = Modifier.size(16.dp))
                             Text(
                                 text = "Do not share this file. Anyone with it can log into your account.",
                                 fontSize = 10.5.sp,
@@ -5167,14 +5171,14 @@ private fun ProjectsBackupRestoreDialog(
                     ) {
                         Surface(
                             shape = CircleShape,
-                            color = Color(0xFF6366F1).copy(alpha = 0.15f),
+                            color = com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.15f),
                             modifier = Modifier.size(38.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Outlined.Workspaces,
                                     contentDescription = null,
-                                    tint = Color(0xFF6366F1),
+                                    tint = com.example.gemini.theme.AppColors.accentIndigo,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -5204,7 +5208,7 @@ private fun ProjectsBackupRestoreDialog(
                 TabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    contentColor = Color(0xFF6366F1),
+                    contentColor = com.example.gemini.theme.AppColors.accentIndigo,
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
@@ -5256,8 +5260,8 @@ private fun ProjectsBackupRestoreDialog(
                                     // Git-Aware (Clean)
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
-                                        color = if (backupMode == "git") Color(0xFF6366F1).copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
-                                        border = BorderStroke(1.dp, if (backupMode == "git") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
+                                        color = if (backupMode == "git") com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, if (backupMode == "git") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
                                         modifier = Modifier
                                             .weight(1f)
                                             .clickable { backupMode = "git" }
@@ -5270,11 +5274,11 @@ private fun ProjectsBackupRestoreDialog(
                                             Icon(
                                                 imageVector = if (backupMode == "git") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
                                                 contentDescription = null,
-                                                tint = if (backupMode == "git") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                tint = if (backupMode == "git") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                             Column {
-                                                Text("Git-Aware (Clean)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (backupMode == "git") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurface)
+                                                Text("Git-Aware (Clean)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (backupMode == "git") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurface)
                                                 Text("Excludes node_modules & build caches", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
@@ -5283,8 +5287,8 @@ private fun ProjectsBackupRestoreDialog(
                                     // Full Raw Archive
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
-                                        color = if (backupMode == "full") Color(0xFF6366F1).copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
-                                        border = BorderStroke(1.dp, if (backupMode == "full") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
+                                        color = if (backupMode == "full") com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, if (backupMode == "full") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
                                         modifier = Modifier
                                             .weight(1f)
                                             .clickable { backupMode = "full" }
@@ -5297,11 +5301,11 @@ private fun ProjectsBackupRestoreDialog(
                                             Icon(
                                                 imageVector = if (backupMode == "full") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
                                                 contentDescription = null,
-                                                tint = if (backupMode == "full") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                tint = if (backupMode == "full") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                             Column {
-                                                Text("Full Raw Archive", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (backupMode == "full") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurface)
+                                                Text("Full Raw Archive", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (backupMode == "full") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurface)
                                                 Text("All files, symlinks & permissions as-is", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
@@ -5330,7 +5334,7 @@ private fun ProjectsBackupRestoreDialog(
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
-                                    Text("Select All", fontSize = 11.5.sp, color = Color(0xFF6366F1))
+                                    Text("Select All", fontSize = 11.5.sp, color = com.example.gemini.theme.AppColors.accentIndigo)
                                 }
                                 TextButton(
                                     onClick = { selectedProjectPaths.clear() },
@@ -5414,17 +5418,17 @@ private fun ProjectsBackupRestoreDialog(
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 fontFamily = FontFamily.Monospace,
-                                                color = Color(0xFF6366F1).copy(alpha = 0.8f),
+                                                color = com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.8f),
                                                 modifier = Modifier.padding(end = 6.dp)
                                             )
                                         }
 
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
-                                            color = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                            color = if (isSelected) com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                                             border = BorderStroke(
                                                 1.dp,
-                                                if (isSelected) Color(0xFF6366F1).copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                                                if (isSelected) com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                             ),
                                             modifier = Modifier
                                                 .weight(1f)
@@ -5438,7 +5442,7 @@ private fun ProjectsBackupRestoreDialog(
                                                 Checkbox(
                                                     checked = isSelected,
                                                     onCheckedChange = { toggleNode() },
-                                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF6366F1)),
+                                                    colors = CheckboxDefaults.colors(checkedColor = com.example.gemini.theme.AppColors.accentIndigo),
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                                 Column(modifier = Modifier.weight(1f)) {
@@ -5455,13 +5459,13 @@ private fun ProjectsBackupRestoreDialog(
                                                         if (childProjectsCount > 0) {
                                                             Surface(
                                                                 shape = RoundedCornerShape(4.dp),
-                                                                color = Color(0xFF6366F1).copy(alpha = 0.15f)
+                                                                color = com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.15f)
                                                             ) {
                                                                 Text(
                                                                     text = "$childProjectsCount ${if (childProjectsCount == 1) "sub-project" else "sub-projects"}",
                                                                     fontSize = 9.5.sp,
                                                                     fontWeight = FontWeight.Bold,
-                                                                    color = Color(0xFF6366F1),
+                                                                    color = com.example.gemini.theme.AppColors.accentIndigo,
                                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                                 )
                                                             }
@@ -5469,26 +5473,26 @@ private fun ProjectsBackupRestoreDialog(
                                                         if (isCoveredByParent && parentProj != null) {
                                                             Surface(
                                                                 shape = RoundedCornerShape(4.dp),
-                                                                color = Color(0xFF10B981).copy(alpha = 0.15f)
+                                                                color = com.example.gemini.theme.AppColors.success.copy(alpha = 0.15f)
                                                             ) {
                                                                 Text(
                                                                     text = "Included with ${parentProj.name}",
                                                                     fontSize = 9.5.sp,
                                                                     fontWeight = FontWeight.Medium,
-                                                                    color = Color(0xFF10B981),
+                                                                    color = com.example.gemini.theme.AppColors.success,
                                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                                 )
                                                             }
                                                         } else if (parentProj != null) {
                                                             Surface(
                                                                 shape = RoundedCornerShape(4.dp),
-                                                                color = Color(0xFF6366F1).copy(alpha = 0.12f)
+                                                                color = com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.12f)
                                                             ) {
                                                                 Text(
                                                                     text = "Inside ${parentProj.name}",
                                                                     fontSize = 9.5.sp,
                                                                     fontWeight = FontWeight.Medium,
-                                                                    color = Color(0xFF6366F1),
+                                                                    color = com.example.gemini.theme.AppColors.accentIndigo,
                                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                                 )
                                                             }
@@ -5532,7 +5536,7 @@ private fun ProjectsBackupRestoreDialog(
                             },
                             enabled = selectedCount > 0,
                             shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.accentIndigo),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Outlined.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -5574,7 +5578,7 @@ private fun ProjectsBackupRestoreDialog(
                             singleLine = true,
                             trailingIcon = {
                                 IconButton(onClick = { filePickerLauncher.launch("*/*") }) {
-                                    Icon(Icons.Outlined.FolderOpen, contentDescription = "Choose File", tint = Color(0xFF6366F1))
+                                    Icon(Icons.Outlined.FolderOpen, contentDescription = "Choose File", tint = com.example.gemini.theme.AppColors.accentIndigo)
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -5587,13 +5591,13 @@ private fun ProjectsBackupRestoreDialog(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.padding(vertical = 4.dp)
                             ) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color(0xFF6366F1))
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = com.example.gemini.theme.AppColors.accentIndigo)
                                 Text("Inspecting archive contents & manifest...", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
 
                         archiveError?.let { err ->
-                            Text(text = err, color = Color(0xFFEF4444), fontSize = 11.5.sp)
+                            Text(text = err, color = com.example.gemini.theme.AppColors.danger, fontSize = 11.5.sp)
                         }
 
                         if (manifestProjects.isNotEmpty()) {
@@ -5626,7 +5630,7 @@ private fun ProjectsBackupRestoreDialog(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             modifier = Modifier.padding(vertical = 2.dp)
                                         ) {
-                                            Icon(Icons.Outlined.Folder, contentDescription = null, tint = Color(0xFF6366F1), modifier = Modifier.size(16.dp))
+                                            Icon(Icons.Outlined.Folder, contentDescription = null, tint = com.example.gemini.theme.AppColors.accentIndigo, modifier = Modifier.size(16.dp))
                                             Column {
                                                 Text(item.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                                 if (item.originalPath.isNotBlank()) {
@@ -5672,7 +5676,7 @@ private fun ProjectsBackupRestoreDialog(
                                     Icon(
                                         imageVector = if (conflictStrategy == "bak") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
                                         contentDescription = null,
-                                        tint = if (conflictStrategy == "bak") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = if (conflictStrategy == "bak") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Column {
@@ -5694,7 +5698,7 @@ private fun ProjectsBackupRestoreDialog(
                                     Icon(
                                         imageVector = if (conflictStrategy == "overwrite") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
                                         contentDescription = null,
-                                        tint = if (conflictStrategy == "overwrite") Color(0xFF6366F1) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = if (conflictStrategy == "overwrite") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Column {
@@ -5713,7 +5717,7 @@ private fun ProjectsBackupRestoreDialog(
                             Checkbox(
                                 checked = useCustomRestoreDir,
                                 onCheckedChange = { useCustomRestoreDir = it },
-                                colors = CheckboxDefaults.colors(checkedColor = Color(0xFF6366F1)),
+                                colors = CheckboxDefaults.colors(checkedColor = com.example.gemini.theme.AppColors.accentIndigo),
                                 modifier = Modifier.size(20.dp)
                             )
                             Text("Restore to custom parent directory", fontSize = 12.sp)
@@ -5901,8 +5905,8 @@ private fun ScriptExecutionDialog(
                 // Terminal output container
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF090D16),
-                    border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                    color = com.example.gemini.theme.AppColors.terminalBg,
+                    border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.editorBorder),
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -5916,11 +5920,11 @@ private fun ScriptExecutionDialog(
                         items(logs) { line ->
                             val cleanLine = line.replace(Regex("\u001B\\[[;\\d]*m"), "")
                             val lineColor = when {
-                                cleanLine.startsWith("❌") || cleanLine.contains("Error", ignoreCase = true) -> Color(0xFFFF5252)
-                                cleanLine.startsWith("✅") || cleanLine.startsWith("🎉") || cleanLine.contains("Success", ignoreCase = true) -> Color(0xFF4CAF50)
-                                cleanLine.startsWith("⚠️") || cleanLine.contains("Note:", ignoreCase = true) || cleanLine.contains("Warning:", ignoreCase = true) -> Color(0xFFFFB74D)
-                                cleanLine.startsWith("=") || cleanLine.startsWith("[") -> Color(0xFF64B5F6)
-                                else -> Color(0xFFE2E8F0)
+                                cleanLine.startsWith("❌") || cleanLine.contains("Error", ignoreCase = true) -> com.example.gemini.theme.AppColors.danger
+                                cleanLine.startsWith("✅") || cleanLine.startsWith("🎉") || cleanLine.contains("Success", ignoreCase = true) -> com.example.gemini.theme.AppColors.success
+                                cleanLine.startsWith("⚠️") || cleanLine.contains("Note:", ignoreCase = true) || cleanLine.contains("Warning:", ignoreCase = true) -> com.example.gemini.theme.AppColors.warning
+                                cleanLine.startsWith("=") || cleanLine.startsWith("[") -> com.example.gemini.theme.AppColors.info
+                                else -> com.example.gemini.theme.AppColors.editorText
                             }
                             Text(
                                 text = cleanLine,
@@ -5949,7 +5953,7 @@ private fun ScriptExecutionDialog(
                                 logs.add("🛑 Execution cancelled by user.")
                             },
                             shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48))
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.danger)
                         ) {
                             Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -6104,8 +6108,8 @@ private fun CommandExecutionDialog(
                 // Terminal output container
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF090D16),
-                    border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                    color = com.example.gemini.theme.AppColors.terminalBg,
+                    border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.editorBorder),
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -6119,10 +6123,10 @@ private fun CommandExecutionDialog(
                         items(logs) { line ->
                             val cleanLine = line.replace(Regex("\u001B\\[[;?0-9]*[a-zA-Z]"), "")
                             val lineColor = when {
-                                cleanLine.contains("ERROR", ignoreCase = true) || cleanLine.contains("FAILED", ignoreCase = true) -> Color(0xFFF87171)
-                                cleanLine.contains("SUCCESS", ignoreCase = true) || cleanLine.contains("✓") || cleanLine.contains("Setting up termux-api") -> Color(0xFF4ADE80)
-                                cleanLine.startsWith("⚡") -> Color(0xFF38BDF8)
-                                else -> Color(0xFFCBD5E1)
+                                cleanLine.contains("ERROR", ignoreCase = true) || cleanLine.contains("FAILED", ignoreCase = true) -> com.example.gemini.theme.AppColors.danger
+                                cleanLine.contains("SUCCESS", ignoreCase = true) || cleanLine.contains("✓") || cleanLine.contains("Setting up termux-api") -> com.example.gemini.theme.AppColors.success
+                                cleanLine.startsWith("⚡") -> com.example.gemini.theme.AppColors.accentTeal
+                                else -> com.example.gemini.theme.AppColors.editorText
                             }
                             Text(
                                 text = cleanLine,
@@ -6151,7 +6155,7 @@ private fun CommandExecutionDialog(
                                 logs.add("🛑 Execution cancelled by user.")
                             },
                             shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48))
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.danger)
                         ) {
                             Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -6218,8 +6222,8 @@ private fun DataProtectionSubScreen(
         // Banner info
         Surface(
             shape = RoundedCornerShape(14.dp),
-            color = Color(0xFF10B981).copy(alpha = 0.1f),
-            border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.3f)),
+            color = com.example.gemini.theme.AppColors.success.copy(alpha = 0.1f),
+            border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.success.copy(alpha = 0.3f)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
@@ -6230,7 +6234,7 @@ private fun DataProtectionSubScreen(
                 Icon(
                     imageVector = Icons.Outlined.Security,
                     contentDescription = null,
-                    tint = Color(0xFF10B981),
+                    tint = com.example.gemini.theme.AppColors.success,
                     modifier = Modifier.size(26.dp)
                 )
                 Column {
@@ -6849,12 +6853,12 @@ private fun CommandsSubScreen(
                 "DEFAULT",
                 "🛡️ Default Mode",
                 "Terminal commands require confirmation. Files outside workspace require confirmation."
-            ) to ("Recommended" to Color(0xFF00ACC1)),
+            ) to ("Recommended" to com.example.gemini.theme.AppColors.accentTeal),
             Triple(
                 "FULL_MACHINE",
                 "💻 Full Machine Mode",
                 "Terminal commands require confirmation. Full read/write access to all files on device."
-            ) to ("Open Files" to Color(0xFFF59E0B)),
+            ) to ("Open Files" to com.example.gemini.theme.AppColors.warning),
             Triple(
                 "TURBO",
                 "⚡ Turbo Mode",
@@ -6864,7 +6868,7 @@ private fun CommandsSubScreen(
                 "CUSTOM",
                 "⚙️ Custom Granular Mode",
                 "Configure terminal command execution and external filesystem permissions separately."
-            ) to ("Custom" to Color(0xFF8B5CF6))
+            ) to ("Custom" to com.example.gemini.theme.AppColors.accentAlt)
         )
 
         presets.forEach { (presetInfo, badgeInfo) ->
@@ -7306,7 +7310,7 @@ private fun CommandsSubScreen(
                                 val decisions = listOf(
                                     Triple("ALLOW", "✅ Allow", QuotaGreen),
                                     Triple("DENY", "🚫 Deny", MaterialTheme.colorScheme.error),
-                                    Triple("ASK", "❓ Ask", Color(0xFFF59E0B))
+                                    Triple("ASK", "❓ Ask", com.example.gemini.theme.AppColors.warning)
                                 )
 
                                 decisions.forEach { (decKey, decLabel, decColor) ->
@@ -7449,13 +7453,13 @@ private fun CommandsSubScreen(
 
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
-                                    color = if (project.isInheritingGlobal) QuotaGreen.copy(alpha = 0.15f) else Color(0xFFF59E0B).copy(alpha = 0.15f)
+                                    color = if (project.isInheritingGlobal) QuotaGreen.copy(alpha = 0.15f) else com.example.gemini.theme.AppColors.warning.copy(alpha = 0.15f)
                                 ) {
                                     Text(
                                         text = if (project.isInheritingGlobal) "🌐 Inherits Global" else "⚠️ Custom Override",
                                         fontSize = 10.5.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = if (project.isInheritingGlobal) QuotaGreen else Color(0xFFF59E0B),
+                                        color = if (project.isInheritingGlobal) QuotaGreen else com.example.gemini.theme.AppColors.warning,
                                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                     )
                                 }
@@ -7794,7 +7798,7 @@ private fun AddPermissionRuleDialog(
                     val decs = listOf(
                         Triple("ALLOW", "✅ Allow", QuotaGreen),
                         Triple("DENY", "🚫 Deny", MaterialTheme.colorScheme.error),
-                        Triple("ASK", "❓ Ask", Color(0xFFF59E0B))
+                        Triple("ASK", "❓ Ask", com.example.gemini.theme.AppColors.warning)
                     )
                     decs.forEach { (key, label, col) ->
                         val isSel = selectedDecision == key
@@ -7919,7 +7923,7 @@ private fun DiagnosticsSubScreen(
                             Runtime.getRuntime().exit(0)
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.info),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text("Restart App", fontWeight = FontWeight.Bold)
@@ -7964,14 +7968,14 @@ private fun DiagnosticsSubScreen(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = (if (isNetworkInspectorEnabled) Color(0xFF0284C7) else Color.Gray).copy(alpha = 0.12f),
+                            color = (if (isNetworkInspectorEnabled) com.example.gemini.theme.AppColors.info else Color.Gray).copy(alpha = 0.12f),
                             modifier = Modifier.size(36.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Language,
                                     contentDescription = null,
-                                    tint = if (isNetworkInspectorEnabled) Color(0xFF0284C7) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    tint = if (isNetworkInspectorEnabled) com.example.gemini.theme.AppColors.info else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -7986,13 +7990,13 @@ private fun DiagnosticsSubScreen(
                                 )
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = if (isNetworkInspectorEnabled) Color(0xFF0284C7).copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
+                                    color = if (isNetworkInspectorEnabled) com.example.gemini.theme.AppColors.info.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
                                 ) {
                                     Text(
                                         text = if (isNetworkInspectorEnabled) "ACTIVE" else "OFF",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isNetworkInspectorEnabled) Color(0xFF0284C7) else Color.Gray,
+                                        color = if (isNetworkInspectorEnabled) com.example.gemini.theme.AppColors.info else Color.Gray,
                                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                                     )
                                 }
@@ -8011,7 +8015,7 @@ private fun DiagnosticsSubScreen(
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF0284C7)
+                            checkedTrackColor = com.example.gemini.theme.AppColors.info
                         )
                     )
                 }
@@ -8053,7 +8057,7 @@ private fun DiagnosticsSubScreen(
                             onCheckedChange = onToggleFloatingNetworkInspector,
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
-                                checkedTrackColor = Color(0xFF0284C7)
+                                checkedTrackColor = com.example.gemini.theme.AppColors.info
                             )
                         )
                     }
@@ -8066,7 +8070,7 @@ private fun DiagnosticsSubScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF0284C7)
+                            containerColor = com.example.gemini.theme.AppColors.info
                         )
                     ) {
                         Icon(
@@ -8218,7 +8222,7 @@ private fun DiagnosticsSubScreen(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = FontFamily.Monospace,
-                        color = if (snapshot.agyQueued > 0) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface
+                        color = if (snapshot.agyQueued > 0) com.example.gemini.theme.AppColors.danger else MaterialTheme.colorScheme.onSurface
                     )
                 }
 
@@ -8272,7 +8276,7 @@ private fun DiagnosticsSubScreen(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = FontFamily.Monospace,
-                        color = if (snapshot.isLagging) Color(0xFFFF5252) else QuotaGreen
+                        color = if (snapshot.isLagging) com.example.gemini.theme.AppColors.danger else QuotaGreen
                     )
                 }
 
@@ -8359,15 +8363,15 @@ private fun AboutSubScreen(
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = Color(0xFF8B5CF6).copy(alpha = 0.15f),
-                    border = BorderStroke(1.5.dp, Color(0xFF8B5CF6).copy(alpha = 0.4f)),
+                    color = com.example.gemini.theme.AppColors.accentAlt.copy(alpha = 0.15f),
+                    border = BorderStroke(1.5.dp, com.example.gemini.theme.AppColors.accentAlt.copy(alpha = 0.4f)),
                     modifier = Modifier.size(64.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Outlined.Info,
                             contentDescription = null,
-                            tint = Color(0xFF8B5CF6),
+                            tint = com.example.gemini.theme.AppColors.accentAlt,
                             modifier = Modifier.size(32.dp)
                         )
                     }
@@ -8388,7 +8392,7 @@ private fun AboutSubScreen(
                 Spacer(modifier = Modifier.height(10.dp))
                 val isSharedBuild = BuildConfig.IS_SHARED_USER_ID
                 val variantBadgeText = if (isSharedBuild) "Shared UID" else "Standalone"
-                val variantColor = if (isSharedBuild) QuotaGreen else Color(0xFF8B5CF6)
+                val variantColor = if (isSharedBuild) QuotaGreen else com.example.gemini.theme.AppColors.accentAlt
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = variantColor.copy(alpha = 0.12f),
@@ -8443,7 +8447,7 @@ private fun AboutSubScreen(
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Medium,
                         fontFamily = FontFamily.Monospace,
-                        color = if (bv == null || bridgeMatches) MaterialTheme.colorScheme.onSurface else Color(0xFFF59E0B)
+                        color = if (bv == null || bridgeMatches) MaterialTheme.colorScheme.onSurface else com.example.gemini.theme.AppColors.warning
                     )
                 }
 
@@ -8574,8 +8578,8 @@ private fun AboutSubScreen(
                 if (updateCheckResultText != null) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = if (isUpdateCheckError) Color(0xFFFF5252).copy(alpha = 0.12f) else QuotaGreen.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, if (isUpdateCheckError) Color(0xFFFF5252).copy(alpha = 0.3f) else QuotaGreen.copy(alpha = 0.3f)),
+                        color = if (isUpdateCheckError) com.example.gemini.theme.AppColors.danger.copy(alpha = 0.12f) else QuotaGreen.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, if (isUpdateCheckError) com.example.gemini.theme.AppColors.danger.copy(alpha = 0.3f) else QuotaGreen.copy(alpha = 0.3f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -8586,13 +8590,13 @@ private fun AboutSubScreen(
                             Icon(
                                 imageVector = if (isUpdateCheckError) Icons.Default.Warning else Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = if (isUpdateCheckError) Color(0xFFFF5252) else QuotaGreen,
+                                tint = if (isUpdateCheckError) com.example.gemini.theme.AppColors.danger else QuotaGreen,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 text = updateCheckResultText!!,
                                 fontSize = 12.sp,
-                                color = if (isUpdateCheckError) Color(0xFFFF5252) else QuotaGreen
+                                color = if (isUpdateCheckError) com.example.gemini.theme.AppColors.danger else QuotaGreen
                             )
                         }
                     }
@@ -8672,7 +8676,7 @@ private fun AboutSubScreen(
                         Icon(
                             imageVector = Icons.Outlined.FolderZip,
                             contentDescription = null,
-                            tint = Color(0xFF00ACC1),
+                            tint = com.example.gemini.theme.AppColors.accentTeal,
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
@@ -8751,7 +8755,7 @@ private fun AboutSubScreen(
                         enabled = !isExportingBridge,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00ACC1))
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.accentTeal)
                     ) {
                         if (isExportingBridge) {
                             CircularProgressIndicator(
@@ -8784,16 +8788,16 @@ private fun AboutSubScreen(
                             },
                             modifier = Modifier.weight(0.7f),
                             shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, Color(0xFF00ACC1).copy(alpha = 0.5f))
+                            border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.accentTeal.copy(alpha = 0.5f))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.OpenInNew,
                                 contentDescription = null,
-                                tint = Color(0xFF00ACC1),
+                                tint = com.example.gemini.theme.AppColors.accentTeal,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("View File", fontSize = 12.5.sp, color = Color(0xFF00ACC1))
+                            Text("View File", fontSize = 12.5.sp, color = com.example.gemini.theme.AppColors.accentTeal)
                         }
                     }
                 }

@@ -297,7 +297,7 @@ private fun SkillItemCard(
         "DISCOVERY_CATEGORY_BUILTIN" -> ClaudeTerracotta
         "DISCOVERY_CATEGORY_INSTALLED" -> GeminiBlue
         "DISCOVERY_CATEGORY_WORKSPACE" -> QuotaGreen
-        else -> Color(0xFF9C27B0)
+        else -> com.example.gemini.theme.AppColors.accentAlt
     }
 
     val categoryBadgeText = when (skill.discoveryCategory) {

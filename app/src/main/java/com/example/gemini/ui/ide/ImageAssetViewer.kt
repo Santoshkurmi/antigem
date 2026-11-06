@@ -133,8 +133,8 @@ fun ImageAssetViewer(
             .background(
                 when (bgMode) {
                     1 -> Color.White
-                    2 -> Color(0xFF181818)
-                    else -> Color(0xFF1E1E1E)
+                    2 -> com.example.gemini.theme.AppColors.editorBg
+                    else -> com.example.gemini.theme.AppColors.editorBg
                 }
             )
     ) {
@@ -210,7 +210,7 @@ fun ImageAssetViewer(
                 .padding(12.dp)
                 .fillMaxWidth(0.92f),
             shape = RoundedCornerShape(10.dp),
-            color = Color(0xEE252526),
+            color = com.example.gemini.theme.AppColors.editorPanel.copy(alpha = 0.93f),
             tonalElevation = 6.dp
         ) {
             Row(
@@ -329,8 +329,8 @@ private fun CheckerboardCanvas(modifier: Modifier = Modifier) {
         val squareSize = 16.dp.toPx()
         val cols = (size.width / squareSize).toInt() + 1
         val rows = (size.height / squareSize).toInt() + 1
-        val dark = Color(0xFF222222)
-        val light = Color(0xFF2C2C2C)
+        val dark = com.example.gemini.theme.AppColors.editorPanel
+        val light = com.example.gemini.theme.AppColors.editorLine
 
         for (c in 0 until cols) {
             for (r in 0 until rows) {

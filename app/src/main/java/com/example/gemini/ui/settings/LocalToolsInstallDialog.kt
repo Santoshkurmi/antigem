@@ -229,7 +229,7 @@ fun LocalToolsInstallDialog(
                                     .background(
                                         when (hardwareInfo.vaBits) {
                                             48 -> QuotaGreen.copy(alpha = 0.12f)
-                                            39 -> Color(0xFFF59E0B).copy(alpha = 0.12f)
+                                            39 -> com.example.gemini.theme.AppColors.warning.copy(alpha = 0.12f)
                                             else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                                         }
                                     )
@@ -249,7 +249,7 @@ fun LocalToolsInstallDialog(
                                         fontWeight = FontWeight.Bold,
                                         color = when (hardwareInfo.vaBits) {
                                             48 -> QuotaGreen
-                                            39 -> Color(0xFFF59E0B)
+                                            39 -> com.example.gemini.theme.AppColors.warning
                                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                                         }
                                     )
@@ -264,7 +264,7 @@ fun LocalToolsInstallDialog(
                                     .background(
                                         when (hardwareInfo.hasAtomics) {
                                             true -> QuotaGreen.copy(alpha = 0.12f)
-                                            false -> Color(0xFFEF4444).copy(alpha = 0.12f)
+                                            false -> com.example.gemini.theme.AppColors.danger.copy(alpha = 0.12f)
                                             else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                                         }
                                     )
@@ -284,7 +284,7 @@ fun LocalToolsInstallDialog(
                                         fontWeight = FontWeight.Bold,
                                         color = when (hardwareInfo.hasAtomics) {
                                             true -> QuotaGreen
-                                            false -> Color(0xFFEF4444)
+                                            false -> com.example.gemini.theme.AppColors.danger
                                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                                         }
                                     )
@@ -480,10 +480,10 @@ fun LocalToolsInstallDialog(
                                                 Box(
                                                     modifier = Modifier
                                                         .clip(RoundedCornerShape(4.dp))
-                                                        .background(Color(0xFF6366F1).copy(alpha = 0.15f))
+                                                        .background(com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.15f))
                                                         .padding(horizontal = 5.dp, vertical = 1.dp)
                                                 ) {
-                                                    Text("Minimal (~33MB)", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6366F1))
+                                                    Text("Minimal (~33MB)", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = com.example.gemini.theme.AppColors.accentIndigo)
                                                 }
                                             }
                                             Text(
@@ -828,7 +828,7 @@ fun LocalToolsInstallDialog(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF0F1115),
+                        color = com.example.gemini.theme.AppColors.terminalBg,
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
@@ -870,7 +870,7 @@ fun LocalToolsInstallDialog(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .heightIn(min = 60.dp, max = 150.dp)
-                                        .background(Color(0xFF08090C), RoundedCornerShape(6.dp))
+                                        .background(com.example.gemini.theme.AppColors.terminalBg, RoundedCornerShape(6.dp))
                                         .padding(6.dp)
                                 ) {
                                     if (installerLogs.isEmpty()) {
@@ -890,11 +890,11 @@ fun LocalToolsInstallDialog(
                                                 fontFamily = FontFamily.Monospace,
                                                 lineHeight = 13.sp,
                                                 color = if (logLine.contains("⚠") || logLine.contains("Fail") || logLine.contains("Error")) {
-                                                    Color(0xFFF87171)
+                                                    com.example.gemini.theme.AppColors.danger
                                                 } else if (logLine.contains("✓") || logLine.contains("Success") || logLine.contains("ready") || logLine.contains("Extracted")) {
                                                     QuotaGreen
                                                 } else {
-                                                    Color(0xFFD1D5DB)
+                                                    com.example.gemini.theme.AppColors.editorText
                                                 }
                                             )
                                         }

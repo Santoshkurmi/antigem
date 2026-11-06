@@ -75,9 +75,9 @@ fun DaemonLogsDialog(
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = when (status) {
-                        DaemonStatus.RUNNING -> Color(0xFF1B5E20)
-                        DaemonStatus.STARTING -> Color(0xFFE65100)
-                        else -> Color(0xFFB71C1C)
+                        DaemonStatus.RUNNING -> com.example.gemini.theme.AppColors.success
+                        DaemonStatus.STARTING -> com.example.gemini.theme.AppColors.warning
+                        else -> com.example.gemini.theme.AppColors.danger
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -144,7 +144,7 @@ fun DaemonLogsDialog(
                 // Terminal Log Console
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFF121212),
+                    color = com.example.gemini.theme.AppColors.editorBg,
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f)
@@ -171,10 +171,10 @@ fun DaemonLogsDialog(
                                         fontFamily = FontFamily.Monospace,
                                         fontSize = 11.sp,
                                         color = when {
-                                            logLine.contains("🎉") || logLine.contains("✅") -> Color(0xFF4CAF50)
-                                            logLine.contains("❌") -> Color(0xFFFF5252)
-                                            logLine.contains("SSH Execution Output") -> Color(0xFF81D4FA)
-                                            else -> Color(0xFFE0E0E0)
+                                            logLine.contains("🎉") || logLine.contains("✅") -> com.example.gemini.theme.AppColors.success
+                                            logLine.contains("❌") -> com.example.gemini.theme.AppColors.danger
+                                            logLine.contains("SSH Execution Output") -> com.example.gemini.theme.AppColors.info
+                                            else -> com.example.gemini.theme.AppColors.editorText
                                         }
                                     ),
                                     modifier = Modifier.padding(vertical = 2.dp)

@@ -161,10 +161,10 @@ fun AgentToolCallCard(
     }
 
     val actionColor = when {
-        isPendingApproval -> Color(0xFFF59E0B)
+        isPendingApproval -> com.example.gemini.theme.AppColors.warning
         isRunning -> ClaudeTerracotta
         isSuccess -> MaterialTheme.colorScheme.onSurface
-        isTerminated || isFailed -> Color(0xFFEF4444)
+        isTerminated || isFailed -> com.example.gemini.theme.AppColors.danger
         isRejected -> Color.Gray
         else -> MaterialTheme.colorScheme.onSurface
     }
@@ -221,7 +221,7 @@ fun AgentToolCallCard(
                 Icon(
                     imageVector = Icons.Default.HourglassEmpty,
                     contentDescription = "Pending Approval",
-                    tint = Color(0xFFF59E0B),
+                    tint = com.example.gemini.theme.AppColors.warning,
                     modifier = Modifier.size(14.dp)
                 )
             } else if (isRunning) {
@@ -242,7 +242,7 @@ fun AgentToolCallCard(
                 Icon(
                     imageVector = Icons.Default.Cancel,
                     contentDescription = "Terminated",
-                    tint = Color(0xFFEF4444),
+                    tint = com.example.gemini.theme.AppColors.danger,
                     modifier = Modifier.size(14.dp)
                 )
             } else if (isRejected) {
@@ -291,7 +291,7 @@ fun AgentToolCallCard(
                     modifier = Modifier
                         .size(22.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFEF4444).copy(alpha = 0.18f))
+                        .background(com.example.gemini.theme.AppColors.danger.copy(alpha = 0.18f))
                         .clickable(
                             role = androidx.compose.ui.semantics.Role.Button,
                             onClick = { onTerminate(toolCall) }
@@ -301,7 +301,7 @@ fun AgentToolCallCard(
                     Icon(
                         imageVector = Icons.Default.Stop,
                         contentDescription = "Stop command",
-                        tint = Color(0xFFEF4444),
+                        tint = com.example.gemini.theme.AppColors.danger,
                         modifier = Modifier.size(12.dp)
                     )
                 }
@@ -380,7 +380,7 @@ fun AgentToolCallCard(
                 }
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF090A10),
+                    color = com.example.gemini.theme.AppColors.terminalBg,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
@@ -395,7 +395,7 @@ fun AgentToolCallCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF13151F))
+                                .background(com.example.gemini.theme.AppColors.editorBg)
                                 .clickable {
                                     if (displayUri.isNotBlank()) showFullScreenViewer = true
                                 },
@@ -489,7 +489,7 @@ fun AgentToolCallCard(
         ) {
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = Color(0xFF0D0E15),
+                color = com.example.gemini.theme.AppColors.terminalBg,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -589,7 +589,7 @@ fun AgentToolCallCard(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             lineHeight = 16.sp,
-                            color = Color(0xFFE2E8F0),
+                            color = com.example.gemini.theme.AppColors.editorText,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState())

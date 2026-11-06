@@ -118,7 +118,7 @@ fun LiveAudioWaveform(
     amplitudes: List<Float>,
     isPaused: Boolean,
     modifier: Modifier = Modifier,
-    barColor: Color = Color(0xFFE53935)
+    barColor: Color = com.example.gemini.theme.AppColors.danger
 ) {
     Canvas(modifier = modifier) {
         val count = amplitudes.size.coerceAtLeast(1)
@@ -605,7 +605,7 @@ fun ChatInputBar(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                color = if (isDark) Color(0xFF21211E) else Color.White,
+                color = com.example.gemini.theme.AppColors.card,
                 border = BorderStroke(
                     1.dp,
                     if (isDark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
@@ -635,8 +635,8 @@ fun ChatInputBar(
                                 .size(9.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (isRecordingPaused) Color(0xFFFFA000)
-                                    else Color(0xFFE53935).copy(alpha = pulseAlpha)
+                                    if (isRecordingPaused) com.example.gemini.theme.AppColors.warning
+                                    else com.example.gemini.theme.AppColors.danger.copy(alpha = pulseAlpha)
                                 )
                         )
 
@@ -648,7 +648,7 @@ fun ChatInputBar(
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
-                            color = if (isRecordingPaused) Color(0xFFFFA000) else MaterialTheme.colorScheme.onSurface
+                            color = if (isRecordingPaused) com.example.gemini.theme.AppColors.warning else MaterialTheme.colorScheme.onSurface
                         )
 
                         if (recordMode == AudioRecordMode.TRANSCRIBE) {
@@ -688,7 +688,7 @@ fun ChatInputBar(
                                 .weight(1f)
                                 .height(26.dp)
                                 .padding(horizontal = 4.dp),
-                            barColor = if (isRecordingPaused) Color(0xFFFFA000) else Color(0xFFE53935)
+                            barColor = if (isRecordingPaused) com.example.gemini.theme.AppColors.warning else com.example.gemini.theme.AppColors.danger
                         )
 
                         Spacer(modifier = Modifier.width(4.dp))
@@ -697,15 +697,15 @@ fun ChatInputBar(
                         Surface(
                             onClick = { togglePauseAudioRecording() },
                             shape = CircleShape,
-                            color = if (isRecordingPaused) Color(0xFFFFA000).copy(alpha = 0.15f) else MaterialTheme.colorScheme.background,
-                            border = BorderStroke(1.dp, if (isRecordingPaused) Color(0xFFFFA000) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
+                            color = if (isRecordingPaused) com.example.gemini.theme.AppColors.warning.copy(alpha = 0.15f) else MaterialTheme.colorScheme.background,
+                            border = BorderStroke(1.dp, if (isRecordingPaused) com.example.gemini.theme.AppColors.warning else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
                             modifier = Modifier.size(34.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = if (isRecordingPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
                                     contentDescription = if (isRecordingPaused) "Resume" else "Pause",
-                                    tint = if (isRecordingPaused) Color(0xFFFFA000) else MaterialTheme.colorScheme.onSurface,
+                                    tint = if (isRecordingPaused) com.example.gemini.theme.AppColors.warning else MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(17.dp)
                                 )
                             }
@@ -775,10 +775,10 @@ fun ChatInputBar(
                         if (isLiveDictating) {
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = if (isDictationPaused) Color(0xFFFFA000).copy(alpha = 0.12f) else GeminiBlue.copy(alpha = 0.12f),
+                                color = if (isDictationPaused) com.example.gemini.theme.AppColors.warning.copy(alpha = 0.12f) else GeminiBlue.copy(alpha = 0.12f),
                                 border = BorderStroke(
                                     1.dp,
-                                    if (isDictationPaused) Color(0xFFFFA000).copy(alpha = 0.4f) else GeminiBlue.copy(alpha = 0.4f)
+                                    if (isDictationPaused) com.example.gemini.theme.AppColors.warning.copy(alpha = 0.4f) else GeminiBlue.copy(alpha = 0.4f)
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -792,7 +792,7 @@ fun ChatInputBar(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(if (isDictationPaused) Color(0xFFFFA000) else Color(0xFFE53935))
+                                            .background(if (isDictationPaused) com.example.gemini.theme.AppColors.warning else com.example.gemini.theme.AppColors.danger)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
@@ -815,14 +815,14 @@ fun ChatInputBar(
                                             }
                                         },
                                         shape = CircleShape,
-                                        color = if (isDictationPaused) Color(0xFFFFA000).copy(alpha = 0.18f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                        color = if (isDictationPaused) com.example.gemini.theme.AppColors.warning.copy(alpha = 0.18f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                                         modifier = Modifier.size(26.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
                                                 imageVector = if (isDictationPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
                                                 contentDescription = if (isDictationPaused) "Resume" else "Pause",
-                                                tint = if (isDictationPaused) Color(0xFFFFA000) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                tint = if (isDictationPaused) com.example.gemini.theme.AppColors.warning else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(15.dp)
                                             )
                                         }
@@ -834,14 +834,14 @@ fun ChatInputBar(
                                     Surface(
                                         onClick = { stopLiveDictation() },
                                         shape = CircleShape,
-                                        color = Color(0xFFE53935).copy(alpha = 0.12f),
+                                        color = com.example.gemini.theme.AppColors.danger.copy(alpha = 0.12f),
                                         modifier = Modifier.size(26.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
                                                 imageVector = Icons.Default.Stop,
                                                 contentDescription = "Stop",
-                                                tint = Color(0xFFE53935),
+                                                tint = com.example.gemini.theme.AppColors.danger,
                                                 modifier = Modifier.size(15.dp)
                                             )
                                         }
@@ -1224,7 +1224,7 @@ fun ChatInputBar(
                                 }
                             }
                         } else if (canSend) {
-                            val sendBtnColor = if (!isAuth) Color(0xFF6B7280) else if (!isOnline) Color(0xFF6B7280) else if (isBackgroundActive) Color(0xFFFFB300) else ClaudeTerracotta
+                            val sendBtnColor = if (!isAuth) com.example.gemini.theme.AppColors.textSecondary else if (!isOnline) com.example.gemini.theme.AppColors.textSecondary else if (isBackgroundActive) com.example.gemini.theme.AppColors.warning else ClaudeTerracotta
                             Surface(
                                 onClick = {
                                     val trimmed = textFieldState.text.toString().trim()
@@ -1250,15 +1250,15 @@ fun ChatInputBar(
                                     Icon(
                                         imageVector = Icons.Default.ArrowUpward,
                                         contentDescription = "Send",
-                                        tint = if (isAuth && isOnline) (if (isBackgroundActive) Color(0xFF1E1E1E) else Color.White) else Color(0xFFD1D5DB),
+                                        tint = if (isAuth && isOnline) (if (isBackgroundActive) com.example.gemini.theme.AppColors.onBackground else Color.White) else com.example.gemini.theme.AppColors.textSecondary,
                                         modifier = Modifier.size(19.dp)
                                     )
                                 }
                             }
                         } else {
                             // Claude-style Microphone Voice Recorder Button
-                            val voiceBgColor = if (isDark) Color(0xFFEDEDED) else Color(0xFF1F1F1F)
-                            val voiceIconColor = if (isDark) Color(0xFF1B1B1B) else Color.White
+                            val voiceBgColor = com.example.gemini.theme.AppColors.onBackground
+                            val voiceIconColor = com.example.gemini.theme.AppColors.background
 
                             Surface(
                                 onClick = {

@@ -58,15 +58,15 @@ import com.example.gemini.theme.*
 import kotlinx.coroutines.delay
 import java.util.regex.Pattern
 
-// Syntax theme colors (One Dark / VS Code inspired)
-private val SynKeyword = Color(0xFFC678DD)      // Magenta / Purple
-private val SynType = Color(0xFFE5C07B)         // Gold / Yellow
-private val SynString = Color(0xFF98C379)       // Soft Green
-private val SynNumber = Color(0xFFD19A66)       // Orange / Peach
-private val SynComment = Color(0xFF7F848E)      // Muted Slate Gray
-private val SynAnnotation = Color(0xFFE5C07B)   // Warm Gold
-private val SynFunction = Color(0xFF61AFEF)     // Sky Blue
-private val SynPunctuation = Color(0xFFABB2BF)  // Light Gray
+// Syntax colors come from the app theme (syntax_* tokens; One Dark in the default themes)
+private val SynKeyword: Color get() = AppColors.syntaxKeyword
+private val SynType: Color get() = AppColors.syntaxType
+private val SynString: Color get() = AppColors.syntaxString
+private val SynNumber: Color get() = AppColors.syntaxNumber
+private val SynComment: Color get() = AppColors.syntaxComment
+private val SynAnnotation: Color get() = AppColors.syntaxAnnotation
+private val SynFunction: Color get() = AppColors.syntaxFunction
+private val SynPunctuation: Color get() = AppColors.syntaxPunctuation
 
 /**
  * Checks whether a code block is runnable / previewable as an interactive Web/HTML/SVG Artifact.
@@ -233,7 +233,7 @@ fun CodeBlock(
                     Text(
                         text = "•  $lineCount lines",
                         fontSize = 10.5.sp,
-                        color = TextPrimaryDark.copy(alpha = 0.5f)
+                        color = AppColors.codeText.copy(alpha = 0.5f)
                     )
                 }
             }
@@ -261,7 +261,7 @@ fun CodeBlock(
                             Icon(
                                 imageVector = Icons.Outlined.Code,
                                 contentDescription = null,
-                                tint = if (selectedTab == 0) Color.White else TextPrimaryDark.copy(alpha = 0.6f),
+                                tint = if (selectedTab == 0) Color.White else AppColors.codeText.copy(alpha = 0.6f),
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(3.dp))
@@ -269,7 +269,7 @@ fun CodeBlock(
                                 text = "Code",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (selectedTab == 0) Color.White else TextPrimaryDark.copy(alpha = 0.6f)
+                                color = if (selectedTab == 0) Color.White else AppColors.codeText.copy(alpha = 0.6f)
                             )
                         }
                     }
@@ -286,7 +286,7 @@ fun CodeBlock(
                             Icon(
                                 imageVector = Icons.Filled.PlayArrow,
                                 contentDescription = null,
-                                tint = if (selectedTab == 1) Color.White else TextPrimaryDark.copy(alpha = 0.6f),
+                                tint = if (selectedTab == 1) Color.White else AppColors.codeText.copy(alpha = 0.6f),
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(3.dp))
@@ -294,7 +294,7 @@ fun CodeBlock(
                                 text = "Preview",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (selectedTab == 1) Color.White else TextPrimaryDark.copy(alpha = 0.6f)
+                                color = if (selectedTab == 1) Color.White else AppColors.codeText.copy(alpha = 0.6f)
                             )
                         }
                     }
@@ -311,7 +311,7 @@ fun CodeBlock(
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Reload preview",
-                            tint = TextPrimaryDark.copy(alpha = 0.7f),
+                            tint = AppColors.codeText.copy(alpha = 0.7f),
                             modifier = Modifier.size(15.dp)
                         )
                     }
@@ -326,7 +326,7 @@ fun CodeBlock(
                 Icon(
                     imageVector = Icons.Outlined.OpenInFull,
                     contentDescription = "Fullscreen",
-                    tint = TextPrimaryDark.copy(alpha = 0.7f),
+                    tint = AppColors.codeText.copy(alpha = 0.7f),
                     modifier = Modifier.size(14.dp)
                 )
             }
@@ -340,7 +340,7 @@ fun CodeBlock(
                     Icon(
                         imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = if (isExpanded) "Collapse code block" else "Expand full height",
-                        tint = if (isExpanded) ClaudeTerracotta else TextPrimaryDark.copy(alpha = 0.7f),
+                        tint = if (isExpanded) ClaudeTerracotta else AppColors.codeText.copy(alpha = 0.7f),
                         modifier = Modifier.size(17.dp)
                     )
                 }
@@ -368,7 +368,7 @@ fun CodeBlock(
                     Icon(
                         imageVector = Icons.Outlined.ContentCopy,
                         contentDescription = "Copy code",
-                        tint = TextPrimaryDark.copy(alpha = 0.7f),
+                        tint = AppColors.codeText.copy(alpha = 0.7f),
                         modifier = Modifier.size(15.dp)
                     )
                 }
@@ -658,7 +658,7 @@ fun CodeBlock(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.5.sp,
                                 lineHeight = 20.sp,
-                                color = Color(0xFF636D83),
+                                color = com.example.gemini.theme.AppColors.editorMuted,
                                 textAlign = TextAlign.End,
                                 modifier = Modifier
                                     .padding(start = 12.dp, end = 10.dp, top = 14.dp, bottom = 14.dp)
@@ -813,7 +813,7 @@ private fun highlightSyntax(code: String, lang: String): AnnotatedString {
     } catch (_: Exception) {}
 
     // Apply default text color
-    builder.addStyle(SpanStyle(color = TextPrimaryDark), 0, code.length)
+    builder.addStyle(SpanStyle(color = AppColors.codeText), 0, code.length)
 
     // Apply all non-overlapping / prioritized spans
     spans.sortedWith(compareBy<Span> { it.start }.thenByDescending { it.end }).forEach { span ->
