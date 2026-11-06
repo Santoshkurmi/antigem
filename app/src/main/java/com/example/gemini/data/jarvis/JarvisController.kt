@@ -65,8 +65,8 @@ object JarvisController {
     private const val TAG = "JarvisController"
     private const val NO_SPEECH_MS = 10_000L
     private const val ASK_TIMEOUT_MS = 45_000L
-    /** Microphone level above which someone is talking (the recognizers report 0.08..1). */
-    private const val LOUD = 0.42f
+    /** A voice counts as still talking this long after its last loud moment (bridges the gaps between syllables). */
+    private const val VOICE_HANGOVER_MS = 400L
 
     enum class Phase { OFF, IDLE, LISTENING, THINKING, SPEAKING }
     enum class Risk { READ, NORMAL, RISKY }
@@ -774,13 +774,39 @@ object JarvisController {
         return true
     }
 
+    /**
+     * Tells speech from background noise by the microphone level, whatever scale the recognizer reports (the agents'
+     * dictation gives RMS/6500, so normal speech is only 0.1-0.45; the device recognizer maps dB to 0.08-1). It keeps
+     * a noise floor (follows quieter readings quickly, louder ones only slowly and only while nobody talks), how much
+     * that background wobbles, and a slowly fading peak; a level clearly above all of that is a voice.
+     */
+    private class VoiceDetector {
+        private var floor = -1f
+        private var noise = 0.02f
+        private var peak = 0f
+
+        fun isVoice(level: Float): Boolean {
+            if (floor < 0f) { floor = level; peak = level; return false }
+            peak = maxOf(level, peak * 0.985f)
+            val threshold = floor + maxOf(0.05f, noise * 3f, (peak - floor) * 0.35f)
+            val voice = level > threshold
+            if (level < floor) floor += (level - floor) * 0.3f
+            else if (!voice) {
+                floor += (level - floor) * 0.02f
+                noise = noise * 0.95f + kotlin.math.abs(level - floor) * 0.05f
+            }
+            return voice
+        }
+    }
+
     /** Decides when the sentence is over, by the chosen send mode. */
     private suspend fun endpointLoop(origin: Origin) {
+        val detector = VoiceDetector()
         while (scope.isActive && listening.value) {
             delay(100)
             val n = System.currentTimeMillis()
             val amp = activeStt?.latestAmplitude?.value ?: 0f
-            if (amp > LOUD) lastLoudAt = n
+            if (detector.isVoice(amp)) lastLoudAt = n
             val text = joinText(snapshotCommitted(), partial)
             val mode = if (_holding.value) "manual" else JarvisPreferences.sendMode.value
             if (text.isBlank()) {
@@ -808,9 +834,16 @@ object JarvisController {
             val pause = effectivePause(text, origin, mode)
             val quietFor = n - lastChangeAt
             val voiceQuiet = n - lastLoudAt
-            // the text stopped changing and the microphone went quiet (or the text has been still for long)
+            // the text stopped changing and the microphone went quiet (or the text has been still for long: a noisy room)
             val ready = quietFor >= pause && (voiceQuiet >= pause * 6 / 10 || quietFor >= pause * 2)
-            _sendProgress.value = if (voiceQuiet < 250) 0f else (quietFor.toFloat() / pause).coerceIn(0f, 1f)
+            // the countdown only shows in a real pause: the gap between two partial transcripts while you talk is not one
+            val micQuiet = voiceQuiet >= VOICE_HANGOVER_MS
+            val showFrom = maxOf(500L, pause * 35 / 100)
+            _sendProgress.value = when {
+                micQuiet && quietFor >= showFrom -> ((quietFor - showFrom).toFloat() / (pause - showFrom).coerceAtLeast(1L)).coerceIn(0f, 1f)
+                !micQuiet && quietFor >= pause -> ((quietFor - pause).toFloat() / pause).coerceIn(0f, 1f)
+                else -> 0f
+            }
             if (ready) { finishListening(); return }
         }
     }
@@ -1106,24 +1139,63 @@ object JarvisController {
         return null
     }
 
-    /** Next message goes to a brand new Jarvis chat. [carry] brings over the Jarvis memory and a short recap. */
-    fun newSession(carry: Boolean = true) {
+    /**
+     * Next message goes to a brand new Jarvis chat (it gets the full guide). [carry] brings over the Jarvis memory and a
+     * short recap; [clearLog] = false keeps the conversation lines on the card (the old chat vanished, the talk goes on).
+     */
+    fun newSession(carry: Boolean = true, clearLog: Boolean = true) {
         carryText = if (carry && JarvisPreferences.carryOver.value) buildCarry() else ""
         JarvisPreferences.currentChatId.set("")
         JarvisPreferences.currentChatMessages.set(0)
         JarvisPreferences.bootSentFor.set("")
         lastReplySeen = ""
-        _log.value = emptyList()
+        if (clearLog) _log.value = emptyList()
     }
 
-    private fun buildCarry(): String {
-        val recent = _log.value.takeLast(10).joinToString("\n") { "${it.first}: ${it.second}" }
+    /**
+     * A chat was deleted (chat list, a tool): Jarvis forgets it. When it was the Jarvis chat itself, the next message
+     * starts a new one instead of being sent to a chat that no longer exists.
+     */
+    fun onChatDeleted(id: String) {
+        if (id.isBlank()) return
+        runCatching {
+            if (id == JarvisPreferences.currentChatId.value) {
+                turnOpen = false
+                newSession(carry = true, clearLog = false)
+            }
+            if (JarvisPreferences.isJarvisChat(id)) JarvisPreferences.removeChatId(id)
+            if (JarvisTasks.isTask(id)) JarvisTasks.close(id)
+        }
+    }
+
+    /** What the agents answer when a chat id no longer exists. */
+    private val missingChat = Regex(
+        "not.?found|does not exist|doesn'?t exist|no such|unknown (cascade|conversation|session|chat)|no conversation found|\\b404\\b",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
+     * The Jarvis chat [id] is gone (deleted elsewhere): the next message starts a new one. [resending] is the message
+     * about to be sent there again; it is left out of the recap so the model does not take it as already handled.
+     */
+    private fun replaceMissingChat(id: String, resending: String?) {
+        Log.i(TAG, "the Jarvis chat $id is gone: starting a new one")
+        JarvisPreferences.removeChatId(id)
+        newSession(carry = true, clearLog = false)
+        if (resending != null && JarvisPreferences.carryOver.value) carryText = buildCarry(exclude = resending)
+        showNotice("The Jarvis chat was gone, so I started a new one.")
+    }
+
+    private fun buildCarry(exclude: String? = null): String {
+        val lines = _log.value.let { l -> if (exclude != null && l.lastOrNull()?.let { it.first == "You" && it.second == exclude } == true) l.dropLast(1) else l }
+        val recent = lines.takeLast(10).joinToString("\n") { "${it.first}: ${it.second}" }
         if (recent.isBlank()) return ""
         // the memory note itself is part of the guide of the new chat
         return "The previous Jarvis chat was closed. Its last lines (continue from here without repeating them):\n$recent"
     }
 
-    private suspend fun sendToJarvis(m: Outgoing, interrupted: Boolean = false) {
+    /** [retried]: this is the second try, in a new chat, after the old Jarvis chat turned out to be gone. */
+    private suspend fun sendToJarvis(m: Outgoing, interrupted: Boolean = false, retried: Boolean = false) {
         val reason = rotationReason()
         if (reason != null) {
             Log.i(TAG, "new Jarvis chat ($reason)")
@@ -1149,13 +1221,44 @@ object JarvisController {
         turnOpen = true
         firstTurnOfChat = freshChat
         val prompt = PromptExpansion.hidden(note) + m.text
-        when (agent) {
-            AgentKind.CLAUDE -> sendClaude(prompt)
-            AgentKind.AGY -> sendAgy(prompt)
+        val existingId = if (freshChat) "" else chatId
+        val errorBefore = if (agent == AgentKind.CLAUDE) jarvisClaude.conversationError.value else null
+        try {
+            when (agent) {
+                AgentKind.CLAUDE -> sendClaude(prompt)
+                AgentKind.AGY -> sendAgy(prompt)
+            }
+        } catch (e: Exception) {
+            // the saved Jarvis chat was deleted: start a new one and send this message there (once)
+            if (!retried && existingId.isNotBlank() && missingChat.containsMatchIn(e.message.orEmpty())) {
+                turnOpen = false
+                replaceMissingChat(existingId, m.text)
+                sendToJarvis(m, interrupted = false, retried = true)
+                return
+            }
+            turnOpen = false
+            throw e
         }
         if (needsBoot) JarvisPreferences.bootSentFor.set("${JarvisPreferences.currentChatId.value}|${JarvisSkill.version}")
         JarvisPreferences.currentChatMessages.set(JarvisPreferences.currentChatMessages.value + 1)
         touch()
+        // Claude reports a missing chat as an error of the chat, a moment after sending
+        if (agent == AgentKind.CLAUDE && existingId.isNotBlank() && !retried) {
+            scope.launch {
+                val until = System.currentTimeMillis() + 6000
+                while (System.currentTimeMillis() < until) {
+                    delay(300)
+                    if (JarvisPreferences.currentChatId.value != existingId) return@launch
+                    val err = jarvisClaude.conversationError.value
+                    if (err != null && err != errorBefore && missingChat.containsMatchIn(err)) {
+                        turnOpen = false
+                        replaceMissingChat(existingId, m.text)
+                        outbox.trySend(m)
+                        return@launch
+                    }
+                }
+            }
+        }
     }
 
     private suspend fun sendClaude(prompt: String) {

@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -338,21 +339,37 @@ private fun ActivityCard(
     }
 }
 
-/** How sending works right now: a bar that fills during the pause (auto modes), or a hint (word / manual / waiting). */
+/**
+ * How sending works right now. The hint stays the same for the whole capture (it never flips while you talk); in the
+ * auto modes a thin bar fades in and fills only during a real pause, and empties again when you go on talking.
+ */
 @Composable
 private fun SendMeter(progress: Float, holding: Boolean, mode: String) {
     val hint = when {
         holding -> "Waiting for you · tap Send"
         mode == "manual" -> "Tap Send when you're done"
         mode == "word" -> "End with “${JarvisPreferences.sendWords.value.substringBefore(',').trim()}” to send"
-        progress > 0.02f -> "Sending…"
         else -> "Pause to send"
     }
     Column {
         if (!holding && (mode == "smart" || mode == "pause")) {
-            val p by animateFloatAsState(progress, tween(90), label = "send")
-            Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f))) {
-                Box(Modifier.fillMaxWidth(p).fillMaxHeight().clip(RoundedCornerShape(50)).background(Brush.horizontalGradient(listOf(Cyan, Blue))))
+            val p by animateFloatAsState(progress, tween(120), label = "send")
+            val shown by animateFloatAsState(if (progress > 0f) 1f else 0f, tween(if (progress > 0f) 220 else 160), label = "sendAlpha")
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.06f))
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(p)
+                        .fillMaxHeight()
+                        .alpha(shown)
+                        .clip(RoundedCornerShape(50))
+                        .background(Brush.horizontalGradient(listOf(Cyan, Blue)))
+                )
             }
             Spacer(Modifier.height(4.dp))
         }

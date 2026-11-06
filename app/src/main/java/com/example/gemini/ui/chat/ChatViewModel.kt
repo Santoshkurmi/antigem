@@ -277,7 +277,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun startPersistentStream(conversationId: String) = agyBackend.startPersistentStream(conversationId)
-    fun deleteConversation(id: String) = if (agentOf(id) == AgentKind.CLAUDE) claudeBackend.deleteConversation(id) else agyBackend.deleteConversation(id)
+    fun deleteConversation(id: String) {
+        if (agentOf(id) == AgentKind.CLAUDE) claudeBackend.deleteConversation(id) else agyBackend.deleteConversation(id)
+        // Jarvis forgets it too: a deleted Jarvis chat is replaced by a new one on the next message
+        com.example.gemini.data.jarvis.JarvisController.onChatDeleted(id)
+    }
     fun forkConversation(id: String) {
         if (agentOf(id) == AgentKind.CLAUDE) {
             agyBackend.detach()
