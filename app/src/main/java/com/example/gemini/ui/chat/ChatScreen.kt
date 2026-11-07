@@ -37,6 +37,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import com.example.gemini.data.preferences.AuthPreferences
@@ -251,6 +252,8 @@ fun ChatScreen(
     val systemConnectionState by viewModel.systemConnectionState.collectAsState()
     val isNetworkConnected by viewModel.isNetworkConnectedState.collectAsState()
     val isAnyGenerationOrTaskActive by viewModel.isAnyGenerationOrTaskActive.collectAsState()
+    val screenAwakeReasons by viewModel.screenAwakeReasons.collectAsState()
+    var screenAwakeInfoOpen by remember { mutableStateOf(false) }
 
     DisposableEffect(isAnyGenerationOrTaskActive) {
         val window = (context as? Activity)?.window
@@ -1328,6 +1331,70 @@ fun ChatScreen(
                                                 size = 8.dp,
                                                 pulsing = agentEntries.any { it.pending }
                                             )
+                                        }
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                    }
+                                    if (isAnyGenerationOrTaskActive) {
+                                        // the screen is kept on (work is running): a sun, tap it to see why
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .clickable { screenAwakeInfoOpen = true },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.LightMode,
+                                                contentDescription = "Screen stays on",
+                                                tint = com.example.gemini.theme.AppColors.warning,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            DropdownMenu(
+                                                expanded = screenAwakeInfoOpen,
+                                                onDismissRequest = { screenAwakeInfoOpen = false }
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier
+                                                        .widthIn(min = 220.dp, max = 300.dp)
+                                                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.LightMode,
+                                                            contentDescription = null,
+                                                            tint = com.example.gemini.theme.AppColors.warning,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text(
+                                                            text = "Screen stays on",
+                                                            fontSize = 14.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(6.dp))
+                                                    Text(
+                                                        text = "The screen won't turn off by itself while:",
+                                                        fontSize = 12.5.sp,
+                                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                    )
+                                                    screenAwakeReasons.forEach { reason ->
+                                                        Text(
+                                                            text = "• $reason",
+                                                            fontSize = 12.5.sp,
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                            modifier = Modifier.padding(top = 4.dp)
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(6.dp))
+                                                    Text(
+                                                        text = "It turns off normally again once this is done.",
+                                                        fontSize = 12.sp,
+                                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                                                    )
+                                                }
+                                            }
                                         }
                                         Spacer(modifier = Modifier.width(2.dp))
                                     }

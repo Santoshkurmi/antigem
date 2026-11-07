@@ -232,6 +232,44 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     ) { agy, claudeTurn, claudeChats, jarvis, tasks ->
         agy || claudeTurn || claudeChats.any { it.isRunning } || jarvis || tasks
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /**
+     * Why the screen is kept on, one line per cause (same conditions as [isAnyGenerationOrTaskActive]); shown when
+     * the screen-on icon in the chat bar is tapped.
+     */
+    val screenAwakeReasons: StateFlow<List<String>> = combine(
+        combine(agyBackend.conversations, agyBackend.activeInstances, ::Pair),
+        combine(claudeBackend.isCurrentChatActivelyRunning, claudeBackend.currentConversation, ::Pair),
+        claudeBackend.conversations,
+        com.example.gemini.data.jarvis.JarvisController.keepScreenAwake,
+        com.example.gemini.data.jarvis.JarvisTasks.anyActive
+    ) { (agyChats, instances), (claudeTurn, current), claudeChats, jarvis, tasks ->
+        fun names(titles: List<String>): String {
+            val shown = titles.map { "“${it.ifBlank { "Untitled chat" }.take(40)}”" }.take(2).joinToString(", ")
+            return if (titles.size > 2) "$shown and ${titles.size - 2} more" else shown
+        }
+        buildList {
+            val agyWorking = agyChats.filter { it.isRunning }
+            val agyBackground = agyChats.filter { !it.isRunning && (it.notFullyIdle || it.hasActivity) }
+            if (agyWorking.isNotEmpty()) add("Antigravity is working in ${names(agyWorking.map { it.title })}")
+            if (agyBackground.isNotEmpty()) add("Antigravity has background work in ${names(agyBackground.map { it.title })}")
+            val listed = (agyWorking + agyBackground).map { it.id }.toSet()
+            val otherInstances = instances.count { it.conversationId !in listed }
+            if (otherInstances > 0) add(if (otherInstances == 1) "An Antigravity instance is running" else "$otherInstances Antigravity instances are running")
+            val claudeOpen = current?.takeIf { claudeTurn && it.agent == AgentKind.CLAUDE }
+            if (claudeOpen != null) add("Claude is replying in ${names(listOf(claudeOpen.title))}")
+            val claudeOthers = claudeChats.filter { it.isRunning && it.id != claudeOpen?.id }
+            if (claudeOthers.isNotEmpty()) add("Claude is working in ${names(claudeOthers.map { it.title })}")
+            if (claudeTurn && claudeOpen == null && claudeOthers.isEmpty()) add("Claude is replying")
+            if (tasks) add("A Jarvis task is running")
+            if (jarvis) add(
+                when (com.example.gemini.data.jarvis.JarvisPreferences.keepScreenOn.value) {
+                    "active" -> "Jarvis is active (Jarvis setting: keep the screen on while it's active)"
+                    else -> "Jarvis is on (Jarvis setting: keep the screen on while Jarvis is on)"
+                }
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val isCurrentChatActivelyRunning = byAgent(agyBackend.isCurrentChatActivelyRunning, claudeBackend.isCurrentChatActivelyRunning)
     val isCurrentChatBackgroundActive = byAgent(agyBackend.isCurrentChatBackgroundActive, alwaysFalse)
     val connectionState = agyBackend.connectionState
