@@ -116,6 +116,9 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     UTILITIES("Utilities", "Handy device tools"),
     ADB_CONNECT("ADB Connect", "Connect the terminal's adb to this phone over Wireless debugging"),
     ANDROID_AUTOMATION("Android Automation", "Let AI agents see and control this phone"),
+    TERMUX_SUPPORT("Termux Support", "Termux:API and the X11 desktop"),
+    TERMUX_API("Termux:API", "How termux-api commands are handled"),
+    X11_DESKTOP("X11 Desktop", "Linux desktop apps with Termux:X11"),
     ABOUT("About & Info", "App version, package details, and bridge export");
 
     /** The Jarvis section this page shows (Settings → Jarvis → …), or null. */
@@ -137,6 +140,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     val parent: SettingsSection get() = when (this) {
         AGY_CLI, MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
         CLAUDE_PAGE -> CLAUDE
+        TERMUX_API, X11_DESKTOP -> TERMUX_SUPPORT
         else -> if (jarvisPage != null) JARVIS else MAIN
     }
 }
@@ -614,6 +618,19 @@ fun SettingsDialog(
                         cardBorder = cardBorder,
                         onOpenAdbConnect = { currentSection = SettingsSection.ADB_CONNECT }
                     )
+                    SettingsSection.TERMUX_SUPPORT -> TermuxSupportMenu(
+                        cardBg = cardBg,
+                        onNavigate = { currentSection = it }
+                    )
+                    SettingsSection.TERMUX_API -> TermuxApiSubScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder
+                    )
+                    SettingsSection.X11_DESKTOP -> X11DesktopScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onOpenAdbConnect = { currentSection = SettingsSection.ADB_CONNECT }
+                    )
                     SettingsSection.ABOUT -> AboutSubScreen(
                         cardBg = cardBg,
                         cardBorder = cardBorder
@@ -704,6 +721,12 @@ private fun MainSettingsMenu(
                     if (useSshTerminal || com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) "SSH" else "Local"),
                 deviceTools.adb,
                 deviceTools.automation,
+                // Termux:API and X11 need the com.termux package; shown on both of its builds (and before the terminal is
+                // installed) so standalone users learn these exist: each page explains the Shared UID build they need
+                if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(LocalContext.current))
+                    row(SettingsSection.TERMUX_SUPPORT, Icons.Outlined.Cable, c.accentIndigo,
+                        if (BuildConfig.IS_SHARED_USER_ID) null else "Standalone",
+                        if (BuildConfig.IS_SHARED_USER_ID) null else c.warning) else null,
                 // Utilities only shows once it has something in it (its old items are rows of their own now)
                 if (utilityRows(onNavigate).isNotEmpty()) row(SettingsSection.UTILITIES, Icons.Outlined.Handyman, c.accentTeal) else null,
                 row(SettingsSection.DIAGNOSTICS, Icons.Outlined.Speed, c.success,
@@ -768,6 +791,40 @@ private fun AntigravitySettingsMenu(
     )
 }
 
+/** Settings → Termux Support: the features that work with Termux companion apps (they need the Shared UID build). */
+@Composable
+private fun TermuxSupportMenu(
+    cardBg: Color,
+    onNavigate: (SettingsSection) -> Unit
+) {
+    val context = LocalContext.current
+    val c = com.example.gemini.theme.AppColors
+    val shared = BuildConfig.IS_SHARED_USER_ID
+    LaunchedEffect(Unit) {
+        com.example.gemini.data.x11.X11DesktopManager.init(context)
+        com.example.gemini.data.x11.X11DesktopManager.refresh()
+    }
+    val x11 by com.example.gemini.data.x11.X11DesktopManager.state.collectAsState()
+    val apiExternal = com.example.gemini.data.local.LocalEnvironmentManager.getTermuxApiProvider(context) ==
+        com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
+    val (x11Value, x11Color) = when {
+        !shared -> "Needs Shared UID" to c.warning
+        x11.running -> "Running" to QuotaGreen
+        else -> null to null
+    }
+    SettingsRowList(
+        cardBg = cardBg,
+        groups = listOf(
+            listOf(
+                SettingsRowItem(Icons.Outlined.Api, c.accentTeal, SettingsSection.TERMUX_API.title,
+                    if (apiExternal) "External app" else "Built-in") { onNavigate(SettingsSection.TERMUX_API) },
+                SettingsRowItem(Icons.Outlined.DesktopWindows, c.accentIndigo, SettingsSection.X11_DESKTOP.title,
+                    x11Value, x11Color) { onNavigate(SettingsSection.X11_DESKTOP) }
+            )
+        )
+    )
+}
+
 /** What Settings → Utilities lists. Empty for now: when it is, the Utilities row is hidden. Add future handy tools here. */
 private fun utilityRows(onNavigate: (SettingsSection) -> Unit): List<SettingsRowItem> = emptyList()
 
@@ -814,6 +871,284 @@ private fun rememberDeviceToolRows(onNavigate: (SettingsSection) -> Unit): Devic
             if (automationAllowed) "Allowed" else "Off", if (automationAllowed) QuotaGreen else null
         ) { onNavigate(SettingsSection.ANDROID_AUTOMATION) }
     )
+}
+
+/**
+ * Settings → Termux Support → Termux:API: how termux-api commands are handled, by AntiGem's built-in
+ * handlers or by the external Termux:API companion app (that one needs the Shared UID build).
+ */
+@Composable
+private fun TermuxApiSubScreen(cardBg: Color, cardBorder: BorderStroke) {
+    val context = LocalContext.current
+    var termuxApiProviderState by remember {
+        mutableStateOf(com.example.gemini.data.local.LocalEnvironmentManager.getTermuxApiProvider(context))
+    }
+    var showExternalApiInstructionDialog by remember { mutableStateOf(false) }
+    var activeCommandExecution by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .bouncyVerticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        if (!BuildConfig.IS_SHARED_USER_ID) SharedUidRequiredCard("The external Termux:API app", cardBg, cardBorder)
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Select how Termux API commands (termux-toast, termux-clipboard, termux-location, etc.) are handled.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Option 1: Built-in
+                val isBuiltin = termuxApiProviderState == com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable {
+                            if (!isBuiltin) {
+                                termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
+                                com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
+                                    context,
+                                    com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
+                                )
+                                android.widget.Toast.makeText(context, "Built-in Termux API restored", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isBuiltin) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, if (isBuiltin) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isBuiltin,
+                            onClick = {
+                                if (!isBuiltin) {
+                                    termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
+                                    com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
+                                        context,
+                                        com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
+                                    )
+                                    android.widget.Toast.makeText(context, "Built-in Termux API restored", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Built-in (Zero-setup)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Lightweight native handlers for clipboard, toast, torch, vibration, TTS, battery, volume, and notifications.",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Option 2: External App
+                val isExternal = termuxApiProviderState == com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(enabled = BuildConfig.IS_SHARED_USER_ID) {
+                            if (!isExternal) {
+                                termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
+                                com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
+                                    context,
+                                    com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
+                                )
+                                showExternalApiInstructionDialog = true
+                            }
+                        },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isExternal) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, if (isExternal) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isExternal,
+                            enabled = BuildConfig.IS_SHARED_USER_ID,
+                            onClick = {
+                                if (!isExternal) {
+                                    termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
+                                    com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
+                                        context,
+                                        com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
+                                    )
+                                    showExternalApiInstructionDialog = true
+                                }
+                            },
+                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "External Termux:API App",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Uses your signed Termux:API companion APK for all hardware APIs (Location, Camera, Sensors, SMS, etc.).",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            if (isExternal) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            activeCommandExecution = "Reinstall Termux:API Package" to "pkg reinstall -y termux-api"
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.5f))
+                                    ) {
+                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(13.dp), tint = ClaudeTerracotta)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Reinstall Package", fontSize = 11.sp, color = ClaudeTerracotta, fontWeight = FontWeight.SemiBold)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/santoshkurmi/termux-api/releases"))
+                                                context.startActivity(intent)
+                                            } catch (_: Exception) {}
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
+                                    ) {
+                                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(13.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Get APK", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showExternalApiInstructionDialog) {
+        AlertDialog(
+            onDismissRequest = { showExternalApiInstructionDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = ClaudeTerracotta,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Setup External Termux:API",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "To use the external companion app, the official Termux API binary must be reinstalled so that UNIX domain socket communication is restored.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "1. Reinstall official package: pkg reinstall termux-api",
+                                fontSize = 11.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "2. Install your signed Termux:API companion APK.",
+                                fontSize = 11.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExternalApiInstructionDialog = false
+                        activeCommandExecution = "Reinstall Termux:API Package" to "pkg reinstall -y termux-api"
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Reinstall Now", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/santoshkurmi/termux-api/releases"))
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Get APK")
+                    }
+                    TextButton(
+                        onClick = { showExternalApiInstructionDialog = false }
+                    ) {
+                        Text("Close")
+                    }
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    activeCommandExecution?.let { (title, cmd) ->
+        CommandExecutionDialog(
+            title = title,
+            command = cmd,
+            onDismiss = { activeCommandExecution = null }
+        )
+    }
 }
 
 // ==========================================
@@ -3117,11 +3452,6 @@ private fun TerminalSubScreen(
     var bufferSizeState by remember { mutableIntStateOf(terminalBufferSize) }
     var themeState by remember { mutableStateOf(terminalTheme) }
 
-    var termuxApiProviderState by remember {
-        mutableStateOf(com.example.gemini.data.local.LocalEnvironmentManager.getTermuxApiProvider(context))
-    }
-    var showExternalApiInstructionDialog by remember { mutableStateOf(false) }
-    var activeCommandExecution by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     Column(
         modifier = Modifier
@@ -3477,173 +3807,6 @@ private fun TerminalSubScreen(
             }
         }
 
-        // Termux:API Mode Card
-        Text(
-            text = "Termux:API Integration",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            border = cardBorder
-        ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "Select how Termux API commands (termux-toast, termux-clipboard, termux-location, etc.) are handled.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                // Option 1: Built-in
-                val isBuiltin = termuxApiProviderState == com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable {
-                            if (!isBuiltin) {
-                                termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
-                                com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
-                                    context,
-                                    com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
-                                )
-                                android.widget.Toast.makeText(context, "Built-in Termux API restored", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isBuiltin) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, if (isBuiltin) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = isBuiltin,
-                            onClick = {
-                                if (!isBuiltin) {
-                                    termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
-                                    com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
-                                        context,
-                                        com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_BUILTIN
-                                    )
-                                    android.widget.Toast.makeText(context, "Built-in Termux API restored", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = "Built-in (Zero-setup)",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Lightweight native handlers for clipboard, toast, torch, vibration, TTS, battery, volume, and notifications.",
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                // Option 2: External App
-                val isExternal = termuxApiProviderState == com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable {
-                            if (!isExternal) {
-                                termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
-                                com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
-                                    context,
-                                    com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
-                                )
-                                showExternalApiInstructionDialog = true
-                            }
-                        },
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isExternal) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, if (isExternal) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = isExternal,
-                            onClick = {
-                                if (!isExternal) {
-                                    termuxApiProviderState = com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
-                                    com.example.gemini.data.local.LocalEnvironmentManager.setTermuxApiProvider(
-                                        context,
-                                        com.example.gemini.data.local.LocalEnvironmentManager.TERMUX_API_PROVIDER_EXTERNAL
-                                    )
-                                    showExternalApiInstructionDialog = true
-                                }
-                            },
-                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = "External Termux:API App",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Uses your signed Termux:API companion APK for all hardware APIs (Location, Camera, Sensors, SMS, etc.).",
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-
-                            if (isExternal) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            activeCommandExecution = "Reinstall Termux:API Package" to "pkg reinstall -y termux-api"
-                                        },
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                        border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.5f))
-                                    ) {
-                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(13.dp), tint = ClaudeTerracotta)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Reinstall Package", fontSize = 11.sp, color = ClaudeTerracotta, fontWeight = FontWeight.SemiBold)
-                                    }
-
-                                    OutlinedButton(
-                                        onClick = {
-                                            try {
-                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/santoshkurmi/termux-api/releases"))
-                                                context.startActivity(intent)
-                                            } catch (_: Exception) {}
-                                        },
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
-                                    ) {
-                                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(13.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Get APK", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         // Action Button: Open Terminal
         Button(
             onClick = onOpenLocalTerminal,
@@ -3655,100 +3818,6 @@ private fun TerminalSubScreen(
             Spacer(modifier = Modifier.width(8.dp))
             Text("Launch Terminal Now", fontWeight = FontWeight.Bold)
         }
-    }
-
-    if (showExternalApiInstructionDialog) {
-        AlertDialog(
-            onDismissRequest = { showExternalApiInstructionDialog = false },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = ClaudeTerracotta,
-                    modifier = Modifier.size(28.dp)
-                )
-            },
-            title = {
-                Text(
-                    text = "Setup External Termux:API",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "To use the external companion app, the official Termux API binary must be reinstalled so that UNIX domain socket communication is restored.",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                text = "1. Reinstall official package: pkg reinstall termux-api",
-                                fontSize = 11.5.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "2. Install your signed Termux:API companion APK.",
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showExternalApiInstructionDialog = false
-                        activeCommandExecution = "Reinstall Termux:API Package" to "pkg reinstall -y termux-api"
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Reinstall Now", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = {
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/santoshkurmi/termux-api/releases"))
-                                context.startActivity(intent)
-                            } catch (_: Exception) {}
-                        },
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Get APK")
-                    }
-                    TextButton(
-                        onClick = { showExternalApiInstructionDialog = false }
-                    ) {
-                        Text("Close")
-                    }
-                }
-            },
-            shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    }
-
-    activeCommandExecution?.let { (title, cmd) ->
-        CommandExecutionDialog(
-            title = title,
-            command = cmd,
-            onDismiss = { activeCommandExecution = null }
-        )
     }
 
     if (showResetWarningDialog) {

@@ -382,12 +382,12 @@ internal fun Hint(text: String) =
     Text(text, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
 
 @Composable
-private fun Mono(text: String) = Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)) {
+internal fun Mono(text: String) = Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)) {
     Text(text, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(10.dp))
 }
 
 @Composable
-private fun LogBox(lines: List<String>) {
+internal fun LogBox(lines: List<String>) {
     val scroll = rememberScrollState()
     LaunchedEffect(lines.size) { scroll.animateScrollTo(scroll.maxValue) }
     Box(

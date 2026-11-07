@@ -109,6 +109,7 @@ Each one is a one-tap preset in **Settings → MCP Servers**, for both agents.
 - Multiple sessions, themes, font sizes, quick keys and text selection.
 - Background service for long-running builds, servers and scripts.
 - **ADB Connect**: connects the terminal's `adb` to the same phone over Wireless debugging, with pairing from a notification and automatic reconnects.
+- **Linux desktop (X11)**: run an XFCE or LXQt desktop and Linux GUI apps through Termux:X11, set up from **Settings → Termux Support → X11 Desktop** (Shared UID build). See [X11 desktop](#x11-desktop).
 
 ### Code editor and Git
 - Syntax highlighting for Python, Go, Kotlin, Java, JS/TS, Rust, C/C++, HTML/CSS, JSON, YAML, Markdown and more.
@@ -189,8 +190,25 @@ For advanced hardware APIs (such as `termux-location`, `termux-camera-photo`, `t
 
 **How to enable:**
 1. Install the companion APK from the [releases page](https://github.com/Santoshkurmi/termux-api/releases).
-2. In AntiGem, go to **Settings → Terminal & Shell → Termux:API Integration** and select **External Termux:API App**.
+2. In AntiGem, go to **Settings → Termux Support → Termux:API** and select **External Termux:API App**.
 3. Tap **Reinstall Package Now** (or run `pkg reinstall termux-api` in the terminal) to restore the official dispatcher binary.
+
+#### X11 desktop
+
+AntiGem can run a Linux desktop (XFCE or LXQt) with [Termux:X11](https://github.com/termux/termux-x11). It uses AntiGem's own build of Termux:X11, signed to share the `com.termux` UID, so the desktop runs inside AntiGem's process and Android doesn't slow it down or stop it while you use it. This needs the **Shared UID build**.
+
+Go to **Settings → Termux Support → X11 Desktop** and follow the steps: install the Termux:X11 app, the `termux-x11` command and a desktop, then tap **Start**.
+
+To set it up by hand instead, get `antigem-termux-x11-sharedUid.apk` and `antigem-termux-x11-*-all.deb` from the [AntiGem Termux:X11 releases](https://github.com/Santoshkurmi/termux-x11/releases/latest), install the APK, and run:
+
+```bash
+pkg install x11-repo
+apt install ./antigem-termux-x11-*-all.deb
+pkg install dbus xfce4
+termux-x11 :0 -xstartup "dbus-launch --exit-with-session xfce4-session"
+```
+
+Then open Termux:X11. Don't install `termux-x11-nightly` from x11-repo: it only works with the official Termux:X11 app.
 
 ---
 
