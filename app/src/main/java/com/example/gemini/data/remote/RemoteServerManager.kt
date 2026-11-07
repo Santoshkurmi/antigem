@@ -183,8 +183,57 @@ object RemoteServerManager {
     // Reverse port forwards: the agents on the server reach the MCP servers inside this app
     // ---------------------------------------------------------------------------------------------------------
 
+    // local forwards opened for the SSH-tunnel mode and the user's own list: phone port -> server port, per session
+    private val ownedLocal = mutableMapOf<Int, Int>()
+    private var ownedSession: Session? = null
+
+    /**
+     * Phone 127.0.0.1:<local> -> server 127.0.0.1:<server> for the bridge and the hub (SSH-tunnel mode) and every enabled
+     * user forward. A forward that already runs is left alone, so open connections through it are not cut.
+     */
+    private fun syncLocalForwards(s: Session, active: MutableList<String>) {
+        if (ownedSession !== s) { ownedLocal.clear(); ownedSession = s }
+        val wanted = linkedMapOf<Int, Pair<Int, String>>()
+        if (AuthPreferences.currentRemoteTunnel) {
+            val p = appContext?.let { plan(it) }
+            val bp = p?.bridgePort ?: com.example.gemini.BuildConfig.BRIDGE_PORT
+            val hp = p?.hubPort ?: com.example.gemini.BuildConfig.HUB_PORT
+            wanted[bp] = bp to "bridge"
+            wanted[hp] = hp to "hub"
+        }
+        appContext?.let { ctx ->
+            AuthPreferences(ctx).getPortForwardsSync().filter { it.enabled }.forEach { f ->
+                if (f.localPort !in wanted) wanted[f.localPort] = f.serverPort to f.name.ifBlank { "forward" }
+            }
+        }
+        // close what is no longer wanted (or now points at another server port)
+        ownedLocal.entries.toList().forEach { (lp, rp) ->
+            if (wanted[lp]?.first != rp) {
+                try { s.delPortForwardingL("127.0.0.1", lp) } catch (_: Exception) {}
+                ownedLocal.remove(lp)
+            }
+        }
+        wanted.forEach { (lp, v) ->
+            val (rp, label) = v
+            if (ownedLocal[lp] == rp) {
+                active += "phone 127.0.0.1:$lp → server :$rp ($label)"
+                return@forEach
+            }
+            try {
+                s.setPortForwardingL("127.0.0.1", lp, "127.0.0.1", rp)
+                ownedLocal[lp] = rp
+                active += "phone 127.0.0.1:$lp → server :$rp ($label)"
+            } catch (e: Exception) {
+                Log.w(TAG, "Local forward $lp -> $rp failed: ${e.message}")
+                active += "$label: phone port $lp not forwarded (${e.message?.take(60)})"
+            }
+        }
+    }
+
+    @Synchronized
     private fun syncTunnels(s: Session) {
         val active = mutableListOf<String>()
+        syncLocalForwards(s, active)
 
         // reverse: the agents/plugin host on the server reach the phone's MCP server (browser, Android, notes ...)
         val remotePort = AndroidLocalBridgeServer.DEFAULT_PORT
@@ -288,6 +337,14 @@ object RemoteServerManager {
         val (bp, hp, bind) = prefs.getRemoteListenSync()
         val bu = runCatching { java.net.URI(AuthPreferences.currentBridgeHttpUrl) }.getOrNull()
         val hu = runCatching { java.net.URI(AuthPreferences.currentHubUrl) }.getOrNull()
+        if (AuthPreferences.currentRemoteTunnel) {
+            // SSH tunnel: the port in each 127.0.0.1 address is the server port, and nothing listens beyond loopback
+            return Plan(
+                bu?.port?.takeIf { it > 0 } ?: com.example.gemini.BuildConfig.BRIDGE_PORT,
+                hu?.port?.takeIf { it > 0 } ?: com.example.gemini.BuildConfig.HUB_PORT,
+                "127.0.0.1"
+            )
+        }
         val bridgeDirect = isDirect(bu, com.example.gemini.BuildConfig.BRIDGE_PORT)
         val hubDirect = isDirect(hu, com.example.gemini.BuildConfig.HUB_PORT)
         val bridgePort = bp.toIntOrNull()
@@ -296,6 +353,10 @@ object RemoteServerManager {
             ?: if (hubDirect) hu!!.port else com.example.gemini.BuildConfig.HUB_PORT
         return Plan(bridgePort, hubPort, bind.ifBlank { if (bridgeDirect) "0.0.0.0" else "127.0.0.1" })
     }
+
+    private fun unreachableHint(): String =
+        if (AuthPreferences.currentRemoteTunnel) "Check the SSH tunnel in Settings > Servers (the bridge port in the address must be the port it listens on at the server)."
+        else "Check the reverse proxy, the firewall and the URL."
 
     private suspend fun bridgeReachable(): Boolean =
         AgyBridgeService.instance.checkServerHealth(AuthPreferences.currentBridgeHttpUrl)
@@ -490,7 +551,7 @@ object RemoteServerManager {
                         _detail.value = ""
                         LocalServerManager.publishRemoteStatus(LocalServerStatus.Error(
                             "The bridge is running on the server (port ${p.bridgePort}) but the app cannot reach " +
-                                "${AuthPreferences.currentBridgeHttpUrl}. Check the reverse proxy, the firewall and the URL " +
+                                "${AuthPreferences.currentBridgeHttpUrl}. ${unreachableHint()} " +
                                 "(Restart relaunches the bridge)."
                         ))
                         refreshLogInternal(context, s)
@@ -530,7 +591,7 @@ object RemoteServerManager {
                     val msg = when {
                         onLoopback ->
                             "The bridge is running on the server (port ${p.bridgePort}) but the app cannot reach " +
-                                "${AuthPreferences.currentBridgeHttpUrl}. Check the reverse proxy, the firewall and the URL."
+                                "${AuthPreferences.currentBridgeHttpUrl}. ${unreachableHint()}"
                         else -> {
                             val tail = logTail(s, bin).trim()
                             (if (died) "The bridge stopped right after it was started on the server." else "The bridge did not come up on the server in time.") +

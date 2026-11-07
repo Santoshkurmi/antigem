@@ -237,31 +237,54 @@ Then open Termux:X11. Don't install `termux-x11-nightly` from x11-repo: it only 
 
 By default everything runs on the phone. In **Server mode** the heavy part moves to a Linux server that you own (a VPS, a home server, a spare PC): the **IDE bridge**, the **Antigravity hub (`agy`)**, **Claude Code**, your **projects, files, git and the shell** all live there, and AntiGem on the phone only shows the UI. It is the same app and the same interface, but the chats, the files and the agents' accounts live on the server (they are separate from any chats you have in local mode), so the agents keep working when the phone sleeps, and the phone stays light.
 
-It is **not a separate APK**. Both the `termux` and the `standard` variant can use it: open **Settings → Servers** and turn on **Remote server (SSH)**. The Linux environment on the phone is not needed in this mode. (Default ports differ per variant: `termux` uses 1234 / 1235 for the bridge / hub, `standard` uses 1236 / 1237.)
+It is **not a separate APK**. Both the `termux` and the `standard` variant can use it: open **Settings → Servers** and pick **SSH tunnel** or **Server** under *Where the server runs*. The Linux environment on the phone is not needed in this mode. (Default ports differ per variant: `termux` uses 1234 / 1235 for the bridge / hub, `standard` uses 1236 / 1237.)
+
+### Two ways to connect: start with the SSH tunnel
+
+| | **SSH tunnel** (recommended, try this first) | **Server** (domain or open ports) |
+|---|---|---|
+| Addresses in the app | `http://127.0.0.1:1234` and `http://127.0.0.1:1235` | `https://bridge.example.com` / `https://hub.example.com`, or `http://<ip>:1234` / `:1235` |
+| What you set up on the server | nothing beyond SSH | DNS, certificates, nginx / Caddy / Apache, firewall rules, optional access header |
+| Reachable from the internet | only SSH; the bridge and the hub listen on the server's `127.0.0.1` only | the bridge and the hub, through the proxy or the open ports |
+| Encryption | SSH | TLS (only if you use `https://`) |
+| When the SSH connection drops | chats, files and the terminal pause until the app reconnects (automatic) | chats keep working; only the terminal, start/stop and the phone tools wait for SSH |
+| Speed for big files | slower (everything goes through one SSH connection) | full speed |
+| Other devices / a desktop browser | no, only this app | yes |
+
+**The SSH tunnel is the safer and simpler choice.** Nothing but SSH is open to the internet, so a bug in the bridge or in `agy` cannot be reached by strangers, and there is no proxy that could be misconfigured. Its drawbacks are that everything depends on one SSH connection (a network switch or a sleeping phone pauses the app for a few seconds while it reconnects) and that large uploads and downloads are slower. Pick **Server** mode when you need full speed, chats that survive SSH drops, or access from other devices, and are ready to secure a public service. Both are compared in detail at the top of [docs/remote-server.md](docs/remote-server.md#two-ways-to-connect-which-one-to-use).
 
 ```
-phone (AntiGem app)                              your server (Linux, x86_64 or arm64)
+SSH tunnel mode (recommended)
+phone (AntiGem app)                                   your server (Linux, x86_64 or arm64)
+ └─ SSH  ───────────────────────────────────────────►  sshd
+      · phone 127.0.0.1:1234 ──(tunnel)──► agy_ide_bridge (server 127.0.0.1:1234)
+      · phone 127.0.0.1:1235 ──(tunnel)──► agy hub        (server 127.0.0.1:1235)
+      · your own port forwards, e.g. a dev server: phone 127.0.0.1:5173 ──► server :5173
+      · the app starts / stops the bridge for you (in tmux), shows its log; the terminal runs here
+      · reverse tunnels: the server's agents can use the phone's browser, Android and notes tools (and adb, if you connect it)
+
+Server mode (domain)
+phone (AntiGem app)                              your server
  ├─ https://bridge.example.com  ──────────────►  nginx / Caddy / Apache ──► agy_ide_bridge (127.0.0.1)
  ├─ https://hub.example.com     ──────────────►  nginx / Caddy / Apache ──► agy hub        (127.0.0.1)
- └─ SSH                          ──────────────►  sshd
-      · the app starts / stops the bridge for you (in tmux), shows its log
-      · the terminal runs here
-      · reverse tunnels: the server's agents can use the phone's browser, Android and notes tools (and adb, if you connect it)
+ └─ SSH                          ──────────────►  sshd (start / stop, terminal, reverse tunnels, as above)
 ```
+
+**Port forwards:** in both modes, *Settings → Servers → Port forwards* makes any port of the server reachable on the phone's `127.0.0.1` over SSH. Start `npm run dev` on the server, forward 5173, and open `http://127.0.0.1:5173` in the app's browser.
 
 ### How to set it up (short version)
 
 1. **Prepare the server:** a normal (non-root) user, `sshd`, `tmux`, `git`. Use a **dedicated VPS and a dedicated user**.
 2. **Get the bridge on the server:** the app does **not** contain it and never uploads anything. Build it once with Go (`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build` in `agy_ide_bridge/`, or `arm64`), copy it to `~/.antigem/agy_ide_bridge` and `chmod +x` it. Build it from the **same version as your app**: the app compares versions on every launch and tells you when the bridge is out of date.
 3. **Install the agents on the server:** `curl -fsSL https://antigravity.google/cli/install.sh | bash` for Antigravity, `curl -fsSL https://claude.ai/install.sh | bash` for Claude Code (both end up in `~/.local/bin`). You can also install `agy` from the app (**Settings → Agents**) once the bridge is running.
-4. **Put a reverse proxy with TLS in front** (nginx, Caddy or Apache) on two sub-domains, one for the bridge and one for the hub. Strongly recommended: add the **proxy access header** (a second secret that the proxy checks), and open only SSH, 80 and 443 in the firewall.
-5. **In the app (Settings → Servers):** turn on Remote server, enter the two addresses, the SSH host, user and key, check the server paths (they are pre-filled with the defaults), optionally the proxy access header, **Save**, **Reopen**. The app connects over SSH, starts the bridge, and shows its state and log.
+4. **Choose how the phone reaches it.** *SSH tunnel* (recommended): nothing to do, skip to step 5. *Server* mode: put a reverse proxy with TLS in front (nginx, Caddy or Apache) on two sub-domains, one for the bridge and one for the hub, add the **proxy access header** (a second secret that the proxy checks), and open only SSH, 80 and 443 in the firewall.
+5. **In the app (Settings → Servers):** pick **SSH tunnel** (the addresses are filled in as `http://127.0.0.1:<port>`; keep the default ports unless you changed them) or **Server** (enter your two addresses and, optionally, the proxy access header). Then enter the SSH host, user and key, check the server paths (they are pre-filled with the defaults), **Save**, **Reopen**. The app connects over SSH, opens the tunnels, starts the bridge, and shows its state and log.
 6. **Sign in** to Antigravity (a Google redirect page that you paste back into the app) and to Claude Code, and start chatting.
 
-**The full, step-by-step guide, with ready-to-paste nginx, Caddy and Apache configurations, the app settings explained field by field, adb from the server to the phone, updating, and debugging, is here: 👉 [docs/remote-server.md](docs/remote-server.md).**
+**The full, step-by-step guide, with the two connection modes compared, ready-to-paste nginx, Caddy and Apache configurations, the app settings explained field by field, adb from the server to the phone, updating, and debugging, is here: 👉 [docs/remote-server.md](docs/remote-server.md).**
 
 > [!CAUTION]
-> **A server on the internet is a target, and nothing here is guaranteed to be secure.** The bridge gives whoever controls it the power of the server user: every file that user can read or write, the agents (which run commands), git, and the logins stored in its home folder. This software is young and has **not been independently audited**; parts of it have had real bugs, and more exist. **Assume your server can be hacked**: use a dedicated VPS and an unprivileged user, keep nothing on it that you cannot afford to lose, use `https://` only, add the proxy access header, open only the ports you need, and keep everything updated.
+> **A server on the internet is a target, and nothing here is guaranteed to be secure.** The bridge gives whoever controls it the power of the server user: every file that user can read or write, the agents (which run commands), git, and the logins stored in its home folder. This software is young and has **not been independently audited**; parts of it have had real bugs, and more exist. **Assume your server can be hacked**: use a dedicated VPS and an unprivileged user, keep nothing on it that you cannot afford to lose, prefer the SSH tunnel (or, in Server mode, use `https://` only and add the proxy access header), open only the ports you need, and keep everything updated.
 >
 > **Test your protections yourself.** A proxy rule or a firewall setting that you typed in but never checked may do nothing. The guide lists concrete checks to run from another machine (is the access header really enforced, does the bridge refuse a request without the token, which ports are open, does an answer ever contain the secret) in [section 15.5](docs/remote-server.md#155-test-it-yourself-do-not-skip). Repeat them after every change.
 >

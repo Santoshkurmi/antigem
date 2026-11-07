@@ -12,21 +12,97 @@ This guide takes you from an empty Linux server to a working app. Follow the ste
 > cannot afford to lose or leak, and **test every protection yourself** (section 15.5): a setting that you typed in but
 > never checked may do nothing at all.
 
+## Two ways to connect: which one to use
+
+The app always logs in to the server over SSH (to start and stop the bridge, for the terminal and for the phone
+tools). What differs is how the app talks to the **bridge** and the **hub**. In **Settings > Servers**, under *Where the
+server runs*, pick one:
+
+* **SSH tunnel** (recommended, try this first): the bridge and the hub listen only on the server's `127.0.0.1`. The app
+  forwards the same ports on the phone's `127.0.0.1` to them through the SSH connection. You type
+  `http://127.0.0.1:1234` and `http://127.0.0.1:1235` as the addresses (the port is the one the service listens on at
+  the server).
+* **Server** (domain or open ports): the app reaches the bridge and the hub over the network, either through a reverse
+  proxy with TLS on two sub-domains (`https://bridge.example.com`, `https://hub.example.com`) or straight on two open
+  ports (`http://203.0.113.5:1234`, `:1235`).
+
 ```
+SSH tunnel mode (recommended)
+phone (AntiGem app)                                   server
+ └─ SSH (port 22)  ─────────────────────────────────►  sshd
+      · phone 127.0.0.1:1234 ──(tunnel)──► bridge   (REST + WebSocket)  on the server's 127.0.0.1:1234
+      · phone 127.0.0.1:1235 ──(tunnel)──► agy hub  (gRPC over HTTP/2)   on the server's 127.0.0.1:1235
+      · your own port forwards (a dev server, ...): phone 127.0.0.1:5173 ──► server :5173
+      · starts / stops the bridge (in a tmux session), terminal
+      · reverse tunnels: the server's agents reach the phone's MCP tools (browser, Android, notes)
+      · adb: the server's adb reaches the phone's adb (optional)
+
+Server mode (domain or open ports)
 phone (AntiGem app)                              server
  ├─ https://bridge.example.com  ──────────────►  bridge   (REST + WebSocket)   :1234
  ├─ https://hub.example.com     ──────────────►  agy hub  (gRPC over HTTP/2)    :1235
- └─ SSH (port 22)               ──────────────►  sshd
-      · starts / stops the bridge (in a tmux session)
-      · terminal
-      · reverse tunnels: the server's agents reach the phone's MCP tools (browser, Android, notes)
-      · adb: the server's adb reaches the phone's adb (optional)
+ └─ SSH (port 22)               ──────────────►  sshd (start / stop, terminal, reverse tunnels, adb, as above)
 ```
+
+### SSH tunnel: pros and cons
+
+**Pros**
+
+* **Safer: the smallest attack surface.** Only SSH is reachable from the internet. The bridge and `agy` are never
+  exposed, so a bug in them, a leaked token or a wrong proxy rule cannot be used by a stranger. To get in, an attacker
+  first has to get through SSH.
+* **Nothing to set up** besides SSH: no domain, no DNS, no certificates to renew, no nginx / Caddy / Apache, no firewall
+  rules for 1234 / 1235, no proxy access header. Sections 6 to 8b do not apply.
+* **Always encrypted** by SSH, even though the addresses say `http://`. The token is never sent in clear text.
+* **Works for servers you cannot expose**: a home server behind a router, a machine on a private network. All it needs is SSH.
+* **Port forwards come with it:** any port of the server (a dev server started with `npm run dev`, an admin page) can be
+  opened on the phone at `http://127.0.0.1:<port>` (*Port forwards* in Settings > Servers). These also work in Server
+  mode.
+
+**Cons**
+
+* **Everything rides on one SSH connection.** When it drops (switching between Wi-Fi and mobile data, a tunnel or a
+  train, Android putting the phone to sleep), chats, files, the editor and the terminal all pause together until the
+  app reconnects. The app reconnects by itself, after 3 seconds and then up to every 30 seconds, but a long answer that
+  was streaming at that moment may need to be reopened.
+* **Nothing works until SSH is connected.** Startup takes a moment longer, and *Test Hub* / *Test Bridge* only work after
+  you saved the settings and SSH is up.
+* **Slower for big transfers.** Large attachments, media, downloads and plugin ZIPs go through the app's SSH library,
+  which is slower than a direct HTTP/2 connection. Chat streaming and the terminal are not noticeably affected.
+* **Only this app on this phone can use it.** A desktop browser or a second device cannot reach the bridge unless you
+  open your own `ssh -L` tunnel there.
+* **The ports must be free on the phone.** The tunnel opens the bridge and hub ports on the phone's `127.0.0.1`. If
+  something else on the phone already uses them (for example the local bridge of the other AntiGem variant on the same
+  ports), the tunnel cannot open: use other ports in the addresses.
+* **The SSH key is the master key.** Whoever has it has the bridge too (in Server mode they have a shell anyway, so this
+  is no worse, but protect the key).
+
+### Server mode (domain or open ports): pros and cons
+
+**Pros**
+
+* **Independent of SSH:** chats, files and the editor go straight to the server, so they keep working when the SSH
+  connection drops for a moment. Only the terminal, start / stop and the phone tools wait for SSH.
+* **Full speed:** a direct HTTP/2 (and TLS) connection for every request, better for big files and media.
+* **Reachable from more than one device** and from other clients, and can sit behind a CDN or your existing reverse proxy.
+
+**Cons**
+
+* **The bridge and `agy` are on the internet.** Any bug in them, a leaked token, or a proxy or firewall mistake is open
+  to everyone who finds the server, and servers on the internet are scanned all day.
+* **Much more to set up and to keep right:** a domain, DNS, certificates (and their renewal), the proxy configuration
+  (`underscores_in_headers on;` for nginx, WebSocket and gRPC settings), firewall rules, and ideally the proxy access
+  header. Every one of these needs testing (section 15.5).
+* **Plain `http://` with an IP leaks the token** to anyone on the network path. That is only acceptable on a private
+  network or a VPN (Tailscale, WireGuard).
+
+**In short:** start with the **SSH tunnel**. Move to Server mode only if you need full speed, chats that survive SSH
+drops, or access from other devices, and you are ready to secure and test a public service.
 
 **What the app does for you:** connects over SSH, starts the bridge in tmux with the right flags, stops and restarts
 it, shows its log, and opens the tunnels.
-**What you do:** put the bridge binary, `agy` and `claude` on the server, and (for a domain) set up the reverse proxy.
-The app never uploads anything to the server.
+**What you do:** put the bridge binary, `agy` and `claude` on the server, and (only in Server mode with a domain) set up
+the reverse proxy. The app never uploads anything to the server.
 
 Contents
 
@@ -35,7 +111,7 @@ Contents
 3. [Get the bridge binary on the server](#3-get-the-bridge-binary-on-the-server)
 4. [Install agy and Claude Code](#4-install-agy-and-claude-code)
 5. [SSH access](#5-ssh-access)
-6. [Choose how the phone reaches the server](#6-choose-how-the-phone-reaches-the-server)
+6. [Choose how the phone reaches the server](#6-choose-how-the-phone-reaches-the-server) (SSH tunnel users: only 6.1)
 7. [Domain mode: nginx / Caddy / Apache](#7-domain-mode-reverse-proxy)
 8. [IP mode: open two ports](#8-ip-mode-open-two-ports), and [8b. Second layer: secret header, which ports to open](#8b-second-layer-a-secret-header-checked-by-the-proxy-recommended)
 9. [Set up the app](#9-set-up-the-app)
@@ -62,10 +138,13 @@ Contents
 
 | | Address in the app | What you set up |
 |---|---|---|
-| **Domain + TLS** (recommended) | `https://bridge.example.com`, `https://hub.example.com` | two DNS names, certificates, nginx / Caddy / Apache |
-| **IP and ports** | `http://203.0.113.5:1234`, `http://203.0.113.5:1235` | open two ports in the firewall |
+| **SSH tunnel** (recommended) | `http://127.0.0.1:1234`, `http://127.0.0.1:1235` | nothing beyond SSH |
+| **Server mode: domain + TLS** | `https://bridge.example.com`, `https://hub.example.com` | two DNS names, certificates, nginx / Caddy / Apache |
+| **Server mode: IP and ports** | `http://203.0.113.5:1234`, `http://203.0.113.5:1235` | open two ports in the firewall |
 
-> **Use TLS on the internet.** The security token is the *name* of an HTTP header, so over plain `http://` anyone on
+See [Two ways to connect](#two-ways-to-connect-which-one-to-use) for the pros and cons.
+
+> **In Server mode, use TLS on the internet** (the SSH tunnel is encrypted by SSH). The security token is the *name* of an HTTP header, so over plain `http://` anyone on
 > the path can read it, and with it read and write files and run commands on your server. Plain `http://` is fine on a
 > private network or a VPN (Tailscale, WireGuard).
 
@@ -244,6 +323,22 @@ Notes:
 ## 6. Choose how the phone reaches the server
 
 The bridge and the hub are **two separate services on two ports**. The app wants two addresses.
+
+### 6.1 SSH tunnel mode (recommended)
+
+Pick **SSH tunnel** in the app (step 9) and you are done with this part: skip sections 7, 8 and 8b.
+
+* The addresses are `http://127.0.0.1:1234` (bridge) and `http://127.0.0.1:1235` (hub). The app fills them in when you
+  pick the mode. The **port is the one the service listens on at the server**; the app opens the same port on the phone.
+  Change both numbers only if those ports are already taken on the server or on the phone.
+* The app starts the bridge and the hub with `--bind 127.0.0.1`, so they are not reachable from outside the server.
+  *Ports on the server* and the proxy access header are hidden in this mode; they are not used.
+* Open **only SSH** in the firewall (`sudo ufw allow 22/tcp`, or your SSH port). Do not open 1234 / 1235.
+* The tunnels show under *Server control > SSH tunnels* (`phone 127.0.0.1:1234 → server :1234 (bridge)`, ...).
+
+The rest of section 6 is about **Server mode**.
+
+### 6.2 Server mode: domain or IP
 
 | Service | Default port | Used for |
 |---|---|---|
@@ -493,13 +588,17 @@ that is its purpose, so only connect a server you trust.
 
 Open **Settings > Servers**.
 
-1. Turn on **Remote server (SSH)**.
+1. Under **Where the server runs**, pick **SSH tunnel** (recommended) or **Server** (domain or open ports). See
+   [Two ways to connect](#two-ways-to-connect-which-one-to-use).
 2. **Server addresses**
-   * *IDE Bridge address*: `https://bridge.example.com` (or `http://203.0.113.5:1234`)
-   * *AGY Hub address*: `https://hub.example.com` (or `http://203.0.113.5:1235`)
-   * `https://` needs no port. Without `https://`, a missing port becomes the default (1234 / 1235).
-3. **Ports on the server** (leave blank unless you changed them): the ports the bridge and hub really listen on, and
-   the bridge bind address. Behind a proxy the defaults are right.
+   * **SSH tunnel:** `http://127.0.0.1:1234` (bridge) and `http://127.0.0.1:1235` (hub), filled in for you. The port is
+     the one each service listens on at the server. Both must be `127.0.0.1` (or `localhost`), `http://` and two
+     different ports, or Save refuses them.
+   * **Server mode:** *IDE Bridge address* `https://bridge.example.com` (or `http://203.0.113.5:1234`), *AGY Hub address*
+     `https://hub.example.com` (or `http://203.0.113.5:1235`). `https://` needs no port. Without `https://`, a missing
+     port becomes the default (1234 / 1235).
+3. **Ports on the server** (Server mode only; leave blank unless you changed them): the ports the bridge and hub really
+   listen on, and the bridge bind address. Behind a proxy the defaults are right.
 4. **SSH access**: host, port, user, then a password and/or the private key (step 5). Tap **Test SSH**: it should say
    "SSH works" and show `uname`, the user and whether tmux is installed.
 5. **Advanced (server paths and ports)** → *Show*. The fields are filled with the defaults. Check each against what
@@ -517,10 +616,18 @@ Open **Settings > Servers**.
    looks for it by itself; install it from the app (Settings > Agents / Settings > Claude Code).
 6. **Security token**: created by the app. The app starts the server with it; you never type it on the server.
    Do not change it unless you know why (Randomize makes a new one; you must then Restart the server).
-7. **Proxy access header** (optional, [step 8b](#8b-second-layer-a-secret-header-checked-by-the-proxy-recommended)): generate
-   a value and add the same one to the proxy.
-8. Tap **Test Hub** and **Test Bridge** once the server is running (step 10). The bridge test also checks the token.
+7. **Proxy access header** (Server mode only, optional, [step 8b](#8b-second-layer-a-secret-header-checked-by-the-proxy-recommended)):
+   generate a value and add the same one to the proxy. Hidden in SSH tunnel mode, where there is no proxy.
+8. Tap **Test Hub** and **Test Bridge** once the server is running (step 10). The bridge test also checks the token. In
+   SSH tunnel mode the tests only work after you saved and SSH is connected, because they go through the tunnel.
 9. **Save Server & Security Settings**, then **Reopen** so every connection uses the new settings.
+
+**Port forwards (server → this phone):** in both modes the *Port forwards* card makes a port of the server reachable on
+the phone's `127.0.0.1` over SSH, for example a dev server: run `npm run dev` on the server, add server port `5173`
+(phone port blank = the same), and open `http://127.0.0.1:5173` in the app's browser. Each entry has a switch, a copy
+button and a status dot (green = active). Changes apply right away, without Save. The program on the server must listen
+on `127.0.0.1` or `0.0.0.0`; phone ports below 1024 are not allowed (Android needs root for them), nor ports the app
+already uses. Nothing is opened on the server: only this phone can use the forwarded port.
 
 **Profiles:** *Save as profile* stores the current form on this phone under a name (SSH password and key only if you
 tick the box). Open *Saved profiles* to load one, **Update** it with the current form, or delete it. Handy for several
@@ -754,9 +861,12 @@ Your chats and projects are not touched by any of this.
      the secret).
 4. **Rate limit**: the bridge blocks an address for 5 minutes after 30 wrong tokens. The token has about 4.7e18
    possibilities, so guessing is not the realistic attack; leaks and misconfiguration are.
-5. **Loopback binding and the firewall**: behind a proxy the bridge and the hub listen on `127.0.0.1` only, and only
-   22, 80 and 443 should be reachable. This is only true if you check it (15.5).
-6. **SSH**: the app uses it to start and stop the bridge. Whoever has the key has a shell.
+5. **Loopback binding and the firewall**: in SSH tunnel mode and behind a proxy the bridge and the hub listen on
+   `127.0.0.1` only. In SSH tunnel mode only SSH should be reachable; behind a proxy only 22, 80 and 443. This is only
+   true if you check it (15.5).
+6. **SSH**: the app uses it to start and stop the bridge, and in SSH tunnel mode it carries all the traffic to the
+   bridge and the hub. Whoever has the key has a shell (and the bridge). The tunnel does not replace the token: other
+   users on the same server can still connect to `127.0.0.1:1234`, and the token is what stops them.
 
 Other things to know: the app stores the SSH key, password, token and header **unencrypted** in its own settings, and
 Android may include them in device backups (the app allows backups). If that worries you, turn off backups for the app

@@ -29,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -180,6 +181,8 @@ internal fun ServersSubScreen(
     var securityToken by remember { mutableStateOf(initSecurityToken) }
 
     var remote by remember { mutableStateOf(AuthPreferences.currentRemoteMode) }
+    // only with remote: reach the server's bridge/hub through the SSH connection instead of a domain or open ports
+    var tunnel by remember { mutableStateOf(AuthPreferences.currentRemoteMode && AuthPreferences.currentRemoteTunnel) }
     var hubText by remember { mutableStateOf(currentHubUrl.ifBlank { AuthPreferences.DEFAULT_HUB_URL }) }
     var bridgeText by remember { mutableStateOf(currentBridgeUrl.ifBlank { AuthPreferences.DEFAULT_BRIDGE_HTTP_URL }) }
 
@@ -216,7 +219,7 @@ internal fun ServersSubScreen(
     var edgeName by remember { mutableStateOf(initEdgeName) }
     var edgeValue by remember { mutableStateOf(initEdgeValue) }
     fun edgeOrNull(): Pair<String, String>? =
-        if (remote && edgeName.trim().isNotEmpty() && edgeValue.trim().isNotEmpty()) edgeName.trim() to edgeValue.trim() else null
+        if (remote && !tunnel && edgeName.trim().isNotEmpty() && edgeValue.trim().isNotEmpty()) edgeName.trim() to edgeValue.trim() else null
 
     var hubTestStatus by remember { mutableStateOf<String?>(null) }
     var isTestingHub by remember { mutableStateOf(false) }
@@ -239,7 +242,7 @@ internal fun ServersSubScreen(
     var profileTick by remember { mutableIntStateOf(0) }
 
     fun snapshot() = listOf(
-        remote, hubText.trim(), bridgeText.trim(), bridgeBinPath.trim(), agyBinPath.trim(), claudeBinPath.trim(),
+        remote, tunnel, hubText.trim(), bridgeText.trim(), bridgeBinPath.trim(), agyBinPath.trim(), claudeBinPath.trim(),
         securityToken.trim(), sshHost.trim(), sshPort.trim(), sshUser.trim(), sshPass, sshKey.trim(), sshPassphrase,
         remoteBridgeBin.trim(), remoteAgyBin.trim(), remoteClaudeBin.trim(), remoteInstallDir.trim(),
         listenBridge.trim(), listenHub.trim(), listenBind.trim(), edgeName.trim(), edgeValue.trim()
@@ -249,6 +252,7 @@ internal fun ServersSubScreen(
     fun profileJson(forRemote: Boolean, withSecrets: Boolean): org.json.JSONObject = org.json.JSONObject().apply {
         put("hub", hubText.trim()); put("bridge", bridgeText.trim())
         if (forRemote) {
+            put("tunnel", tunnel)
             put("sshHost", sshHost.trim()); put("sshPort", sshPort.trim()); put("sshUser", sshUser.trim())
             put("edgeName", edgeName.trim())
             if (withSecrets) { put("sshPass", sshPass); put("sshKey", sshKey.trim()); put("sshPassphrase", sshPassphrase); put("edgeValue", edgeValue.trim()) }
@@ -262,6 +266,7 @@ internal fun ServersSubScreen(
 
     fun applyProfile(forRemote: Boolean, o: org.json.JSONObject) {
         hubText = o.optString("hub", hubText); bridgeText = o.optString("bridge", bridgeText)
+        tunnel = forRemote && o.optBoolean("tunnel", false)
         if (forRemote) {
             sshHost = o.optString("sshHost"); sshPort = o.optString("sshPort", "22").ifBlank { "22" }
             sshUser = o.optString("sshUser")
@@ -277,6 +282,25 @@ internal fun ServersSubScreen(
             bridgeBinPath = o.optString("bridgeBin", bridgeBinPath); agyBinPath = o.optString("agyBin", agyBinPath)
             claudeBinPath = o.optString("claudeBin", claudeBinPath)
         }
+    }
+
+    /** Local (phone), Server (domain or open ports) or Server through an SSH tunnel. */
+    fun selectMode(r: Boolean, t: Boolean) {
+        if (r == remote && t == tunnel) return
+        saveFeedback = null; hubTestStatus = null; bridgeTestStatus = null
+        val bridgeLoopback = AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(AuthPreferences.normalizeServerUrl(bridgeText, BuildConfig.BRIDGE_PORT).orEmpty()))
+        val hubLoopback = AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(AuthPreferences.normalizeServerUrl(hubText, BuildConfig.HUB_PORT).orEmpty()))
+        when {
+            !r -> { hubText = AuthPreferences.DEFAULT_HUB_URL; bridgeText = AuthPreferences.DEFAULT_BRIDGE_HTTP_URL }
+            // the tunnel needs 127.0.0.1 addresses: start from the default ports (= what the server listens on)
+            t -> {
+                if (!bridgeLoopback) bridgeText = AuthPreferences.DEFAULT_BRIDGE_HTTP_URL
+                if (!hubLoopback) hubText = AuthPreferences.DEFAULT_HUB_URL
+            }
+            // a phone address makes no sense for a server reached directly: start from empty boxes
+            bridgeLoopback -> { hubText = ""; bridgeText = "" }
+        }
+        remote = r; tunnel = r && t
     }
 
     var savedSnapshot by remember { mutableStateOf<String?>(null) }
@@ -330,6 +354,7 @@ internal fun ServersSubScreen(
                 TextButton(onClick = {
                     showUnsavedDialog = false
                     remote = AuthPreferences.currentRemoteMode
+                    tunnel = AuthPreferences.currentRemoteMode && AuthPreferences.currentRemoteTunnel
                     hubText = currentHubUrl
                     bridgeText = currentBridgeUrl
                     securityToken = initSecurityToken
@@ -438,7 +463,7 @@ internal fun ServersSubScreen(
                                         Text(o.optString("name"), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
                                         Spacer(Modifier.width(8.dp))
                                         Surface(shape = RoundedCornerShape(4.dp), color = accent.copy(alpha = 0.15f)) {
-                                            Text(if (r) "SERVER" else "LOCAL", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = accent,
+                                            Text(if (r && o.optBoolean("tunnel")) "SSH TUNNEL" else if (r) "SERVER" else "LOCAL", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = accent,
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp))
                                         }
                                     }
@@ -556,29 +581,22 @@ internal fun ServersSubScreen(
                     Icon(Icons.Outlined.Dns, null, tint = QuotaGreen, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Remote server (SSH)", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text("Where the server runs", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Text(
-                            if (remote) "The bridge and the agents run on your server. The app manages them over SSH."
-                            else "The bridge and the agents run on this phone.",
+                            when {
+                                !remote -> "The bridge and the agents run on this phone."
+                                tunnel -> "On your server, reached through the SSH connection: no open ports, no domain, no reverse proxy."
+                                else -> "The bridge and the agents run on your server, reached by a domain or open ports. The app manages them over SSH."
+                            },
                             fontSize = 11.5.sp, color = subtle
                         )
                     }
-                    Switch(
-                        checked = remote,
-                        onCheckedChange = {
-                            remote = it
-                            saveFeedback = null
-                            if (it && AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(bridgeText))) {
-                                // a phone address makes no sense for a server: start from empty https boxes
-                                hubText = ""
-                                bridgeText = ""
-                            } else if (!it) {
-                                hubText = AuthPreferences.DEFAULT_HUB_URL
-                                bridgeText = AuthPreferences.DEFAULT_BRIDGE_HTTP_URL
-                            }
-                        },
-                        colors = SwitchDefaults.colors(checkedTrackColor = QuotaGreen)
-                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ModeOption("This phone", !remote, Modifier.weight(1f)) { selectMode(false, false) }
+                    ModeOption("Server", remote && !tunnel, Modifier.weight(1f)) { selectMode(true, false) }
+                    ModeOption("SSH tunnel", remote && tunnel, Modifier.weight(1f)) { selectMode(true, true) }
                 }
 
                 // ----- Saved profiles (saved only when the user taps "Save as profile") -----
@@ -606,8 +624,12 @@ internal fun ServersSubScreen(
             Column(Modifier.padding(16.dp)) {
                 Text("Server addresses", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text(
-                    if (remote) "Two addresses, e.g. https://bridge.example.com and https://hub.example.com behind nginx/Apache, or http://203.0.113.5:1234 and http://203.0.113.5:1235 straight to the ports."
-                    else "Where this phone's bridge and hub listen.",
+                    when {
+                        remote && tunnel -> "Use 127.0.0.1 with the port the bridge and the hub listen on at the server (default ${BuildConfig.BRIDGE_PORT} and ${BuildConfig.HUB_PORT}). " +
+                            "The app starts them on the server's 127.0.0.1 only and forwards the same ports on this phone to them over SSH."
+                        remote -> "Two addresses, e.g. https://bridge.example.com and https://hub.example.com behind nginx/Apache, or http://203.0.113.5:1234 and http://203.0.113.5:1235 straight to the ports."
+                        else -> "Where this phone's bridge and hub listen."
+                    },
                     fontSize = 11.5.sp, color = subtle
                 )
                 Spacer(Modifier.height(12.dp))
@@ -616,7 +638,7 @@ internal fun ServersSubScreen(
                     value = bridgeText,
                     onValueChange = { bridgeText = it; saveFeedback = null; bridgeTestStatus = null },
                     label = { Text("IDE Bridge address") },
-                    placeholder = { Text(if (remote) "https://bridge.example.com" else AuthPreferences.DEFAULT_BRIDGE_HTTP_URL) },
+                    placeholder = { Text(if (remote && !tunnel) "https://bridge.example.com" else AuthPreferences.DEFAULT_BRIDGE_HTTP_URL) },
                     modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
                 )
@@ -625,17 +647,18 @@ internal fun ServersSubScreen(
                     value = hubText,
                     onValueChange = { hubText = it; saveFeedback = null; hubTestStatus = null },
                     label = { Text("AGY Hub address") },
-                    placeholder = { Text(if (remote) "https://hub.example.com" else AuthPreferences.DEFAULT_HUB_URL) },
+                    placeholder = { Text(if (remote && !tunnel) "https://hub.example.com" else AuthPreferences.DEFAULT_HUB_URL) },
                     modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "https:// needs no port. Without https://, a missing port becomes ${BuildConfig.BRIDGE_PORT} (bridge) / ${BuildConfig.HUB_PORT} (hub).",
+                    if (remote && tunnel) "Test Hub and Test Bridge work once the settings are saved and SSH is connected: the tunnel runs on that connection."
+                    else "https:// needs no port. Without https://, a missing port becomes ${BuildConfig.BRIDGE_PORT} (bridge) / ${BuildConfig.HUB_PORT} (hub).",
                     fontSize = 11.sp, color = subtle
                 )
 
-                if (remote) {
+                if (remote && !tunnel) {
                     Spacer(Modifier.height(14.dp))
                     Text("Ports on the server", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                     Text(
@@ -707,8 +730,8 @@ internal fun ServersSubScreen(
         }
 
         if (remote) {
-            // ----- Proxy access header: a second lock in front of the bridge and the hub -----
-            Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
+            // ----- Proxy access header: a second lock in front of the bridge and the hub (no proxy in tunnel mode) -----
+            if (!tunnel) Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Security, null, tint = QuotaGreen, modifier = Modifier.size(22.dp))
@@ -918,6 +941,17 @@ internal fun ServersSubScreen(
                 }
             }
 
+            // ----- user port forwards: server port -> this phone's 127.0.0.1 (dev servers and the like) -----
+            val reservedPorts = buildSet {
+                if (tunnel) {
+                    AuthPreferences.normalizeServerUrl(bridgeText, BuildConfig.BRIDGE_PORT)?.let { runCatching { java.net.URI(it).port }.getOrNull() }?.takeIf { it > 0 }?.let(::add)
+                    AuthPreferences.normalizeServerUrl(hubText, BuildConfig.HUB_PORT)?.let { runCatching { java.net.URI(it).port }.getOrNull() }?.takeIf { it > 0 }?.let(::add)
+                }
+                add(com.example.gemini.ui.browser.BrowserExtensionManager.instance.hostPort())
+                add(com.example.gemini.data.remote.AndroidLocalBridgeServer.instance.boundPort)
+            }
+            PortForwardsCard(cardBg, cardBorder, subtle, reservedPorts)
+
             // ----- live server control (only once Remote mode is active) -----
             if (AuthPreferences.currentRemoteMode) RemoteServerCard(cardBg, cardBorder, subtle, onShowLog = {
                 RemoteServerManager.refreshLog(context)
@@ -985,7 +1019,8 @@ internal fun ServersSubScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Security Token (Header Obfuscation)", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Text(
-                            if (remote) "The secret that protects the bridge. The app starts the server with it. Use https:// on the internet: over plain http it is visible on the network."
+                            if (remote && tunnel) "The secret that protects the bridge. The app starts the server with it. Through the SSH tunnel it is encrypted; it still keeps other users of the server out of the bridge."
+                            else if (remote) "The secret that protects the bridge. The app starts the server with it. Use https:// on the internet: over plain http it is visible on the network."
                             else "12-char token framing localhost requests to prevent unauthorized app access",
                             fontSize = 11.5.sp, color = subtle
                         )
@@ -1046,15 +1081,21 @@ internal fun ServersSubScreen(
                 val problem = when {
                     bridge == null -> "The IDE Bridge address is not valid."
                     hub == null -> "The AGY Hub address is not valid."
+                    remote && tunnel && (!AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(bridge)) || !AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(hub))) ->
+                        "In SSH tunnel mode both addresses are 127.0.0.1 with the port the service listens on at the server, e.g. http://127.0.0.1:${BuildConfig.BRIDGE_PORT}."
+                    remote && tunnel && (bridge.startsWith("https://") || hub.startsWith("https://")) ->
+                        "In SSH tunnel mode use http:// (SSH already encrypts the connection)."
+                    remote && tunnel && runCatching { java.net.URI(bridge).port == java.net.URI(hub).port }.getOrDefault(false) ->
+                        "The bridge and the hub need two different ports."
                     remote && AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(bridge)) && sshHost.isBlank() ->
                         "A remote server needs its address (not 127.0.0.1) or an SSH host."
                     remote && sshHost.isBlank() -> "Enter the SSH host."
                     remote && sshUser.isBlank() -> "Enter the SSH user."
                     remote && sshPass.isBlank() && !SshSessionFactory.looksLikePrivateKey(sshKey) -> "Enter an SSH password or a private key."
                     remote && sshKey.isNotBlank() && !SshSessionFactory.looksLikePrivateKey(sshKey) -> "The SSH key is not a valid private key."
-                    remote && edgeValue.isNotBlank() && !AuthPreferences.isValidEdgeName(edgeName.trim()) ->
+                    remote && !tunnel && edgeValue.isNotBlank() && !AuthPreferences.isValidEdgeName(edgeName.trim()) ->
                         "The access header name may only contain letters, digits and dashes."
-                    remote && edgeValue.isNotBlank() && !AuthPreferences.isValidEdgeValue(edgeValue.trim()) ->
+                    remote && !tunnel && edgeValue.isNotBlank() && !AuthPreferences.isValidEdgeValue(edgeValue.trim()) ->
                         "The access header value must be 8 to 200 visible characters, without quotes or backslashes."
                     else -> null
                 }
@@ -1071,6 +1112,7 @@ internal fun ServersSubScreen(
                 coroutineScope.launch {
                     authPrefs.saveSecurityToken(tokenToSave)
                     authPrefs.saveRemoteModeSync(remote)
+                    authPrefs.saveRemoteTunnelSync(remote && tunnel)
                     if (remote) {
                         authPrefs.saveSshSettings(sshHost.trim(), sshPort.toIntOrNull() ?: 22, sshUser.trim(), sshPass)
                         authPrefs.setUseSshTerminal(true)
@@ -1096,6 +1138,148 @@ internal fun ServersSubScreen(
             Icon(Icons.Default.Save, null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
             Text("Save Server & Security Settings", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+private fun ModeOption(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(38.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) QuotaGreen.copy(alpha = 0.16f) else Color.Transparent,
+        border = BorderStroke(1.dp, if (selected) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f))
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                label, fontSize = 12.sp, maxLines = 1,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+            )
+        }
+    }
+}
+
+/**
+ * The user's own forwards: a port on the server (a dev server from `npm run dev`, a database admin page ...) made
+ * reachable on this phone's 127.0.0.1 over the SSH connection. Saved and applied right away, no Save button needed.
+ */
+@Composable
+private fun PortForwardsCard(cardBg: Color, cardBorder: BorderStroke, subtle: Color, reservedPorts: Set<Int>) {
+    val context = LocalContext.current
+    val prefs = remember(context) { AuthPreferences(context) }
+    var list by remember { mutableStateOf(prefs.getPortForwardsSync()) }
+    var serverPort by remember { mutableStateOf("") }
+    var localPort by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    val tunnels by RemoteServerManager.tunnels.collectAsState()
+    val ssh by RemoteServerManager.sshState.collectAsState()
+    val live = AuthPreferences.currentRemoteMode
+
+    fun persist(next: List<AuthPreferences.PortForward>) {
+        list = next
+        prefs.savePortForwardsSync(next)
+        RemoteServerManager.resyncTunnels()
+    }
+
+    Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Dns, null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Port forwards (server → this phone)", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        "Reach a port of the server on this phone, e.g. a dev server started with npm run dev on port 5173: " +
+                            "then open http://127.0.0.1:5173 here. Runs over the SSH connection; changes apply right away.",
+                        fontSize = 11.5.sp, color = subtle
+                    )
+                }
+            }
+
+            if (list.isNotEmpty()) Spacer(Modifier.height(10.dp))
+            list.forEachIndexed { index, f ->
+                val active = live && tunnels.any { it.startsWith("phone 127.0.0.1:${f.localPort} ") }
+                val failed = live && tunnels.any { it.contains("phone port ${f.localPort} not forwarded") }
+                val dot = when {
+                    !f.enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    active -> QuotaGreen
+                    failed -> Color.Red
+                    else -> com.example.gemini.theme.AppColors.warning
+                }
+                val state = when {
+                    !f.enabled -> "off"
+                    active -> "active"
+                    failed -> "could not open the phone port"
+                    !live -> "starts once Server mode is saved"
+                    !ssh.connected -> "waiting for SSH"
+                    else -> "opening…"
+                }
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Surface(Modifier.size(8.dp), shape = CircleShape, color = dot) {}
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(f.name.ifBlank { "Port ${f.serverPort}" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                        Text("server :${f.serverPort} → http://127.0.0.1:${f.localPort} · $state", fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, color = subtle)
+                    }
+                    androidx.compose.material3.IconButton(onClick = {
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        cm?.setPrimaryClip(android.content.ClipData.newPlainText("Forwarded address", "http://127.0.0.1:${f.localPort}"))
+                        Toast.makeText(context, "Copied http://127.0.0.1:${f.localPort}", Toast.LENGTH_SHORT).show()
+                    }) { Icon(Icons.Outlined.ContentCopy, "Copy address", modifier = Modifier.size(17.dp)) }
+                    Switch(
+                        checked = f.enabled,
+                        onCheckedChange = { on -> persist(list.toMutableList().also { it[index] = f.copy(enabled = on) }) },
+                        colors = SwitchDefaults.colors(checkedTrackColor = QuotaGreen)
+                    )
+                    androidx.compose.material3.IconButton(onClick = { persist(list.filterIndexed { i, _ -> i != index }) }) {
+                        Icon(Icons.Outlined.DeleteOutline, "Remove", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(19.dp))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(serverPort, { serverPort = it.filter(Char::isDigit).take(5); error = null }, label = { Text("Server port") },
+                    placeholder = { Text("5173") }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                OutlinedTextField(localPort, { localPort = it.filter(Char::isDigit).take(5); error = null }, label = { Text("Phone port") },
+                    placeholder = { Text(serverPort.ifBlank { "same" }) }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(name, { name = it.take(40); error = null }, label = { Text("Name (optional)") },
+                    placeholder = { Text("Vite dev server") }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp))
+                Button(
+                    onClick = {
+                        val sp = serverPort.toIntOrNull()
+                        val lp = localPort.toIntOrNull() ?: sp
+                        error = when {
+                            sp == null || sp !in 1..65535 -> "Enter the server port (1-65535)."
+                            lp == null || lp !in 1024..65535 -> "The phone port must be 1024-65535 (lower ports need root)."
+                            lp in reservedPorts -> "Phone port $lp is already used by the app (bridge, hub or tools). Pick another phone port."
+                            list.any { it.localPort == lp } -> "Phone port $lp is already in the list."
+                            else -> null
+                        }
+                        if (error == null && sp != null && lp != null) {
+                            persist(list + AuthPreferences.PortForward(sp, lp, name.trim(), true))
+                            serverPort = ""; localPort = ""; name = ""
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta), shape = RoundedCornerShape(8.dp)
+                ) { Text("Add", fontWeight = FontWeight.Bold) }
+            }
+            error?.let { Text(it, fontSize = 11.5.sp, color = Color.Red, modifier = Modifier.padding(top = 6.dp)) }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "The program on the server has to listen on 127.0.0.1 or 0.0.0.0 (for Vite: npm run dev -- --host 127.0.0.1 if it picks another address). " +
+                    "Only this phone can use the forwarded port; nothing is opened on the server.",
+                fontSize = 11.sp, color = subtle
+            )
         }
     }
 }
@@ -1146,7 +1330,7 @@ private fun RemoteServerCard(cardBg: Color, cardBorder: BorderStroke, subtle: Co
             )
             if (tunnels.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                Text("Phone tools for the server's agents (reverse tunnels):", fontSize = 11.sp, color = subtle)
+                Text("SSH tunnels:", fontSize = 11.sp, color = subtle)
                 tunnels.forEach { Text("• $it", fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, color = subtle) }
             }
             Spacer(Modifier.height(12.dp))

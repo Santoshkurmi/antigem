@@ -135,7 +135,7 @@ class AuthPreferences(private val context: Context) {
         fun edgeHeader(): Pair<String, String>? {
             val n = currentEdgeHeaderName.trim()
             val v = currentEdgeHeaderValue
-            return if (currentRemoteMode && n.isNotEmpty() && v.isNotEmpty()) n to v else null
+            return if (currentRemoteMode && !currentRemoteTunnel && n.isNotEmpty() && v.isNotEmpty()) n to v else null
         }
 
         val currentFramedHeader: String
@@ -168,6 +168,14 @@ class AuthPreferences(private val context: Context) {
          */
         @Volatile
         var currentRemoteMode: Boolean = false
+
+        /**
+         * Server mode through an SSH tunnel: the bridge and the hub listen only on the server's 127.0.0.1 and the app
+         * forwards the same ports on this phone's 127.0.0.1 to them over the SSH connection. No open ports, no domain,
+         * no reverse proxy. Only meaningful while [currentRemoteMode] is on.
+         */
+        @Volatile
+        var currentRemoteTunnel: Boolean = false
 
         /** SSH private key (PEM/OpenSSH text) and its passphrase, used for the server connection when set. */
         @Volatile
@@ -258,6 +266,7 @@ class AuthPreferences(private val context: Context) {
         com.example.gemini.data.remote.inspector.NetworkInspectorManager.isFloatingBubbleEnabled = inspectorFloating
 
         currentRemoteMode = syncPrefs.getBoolean("remote_mode", false)
+        currentRemoteTunnel = syncPrefs.getBoolean("remote_tunnel", false)
         currentSshPrivateKey = syncPrefs.getString("ssh_private_key", "") ?: ""
         currentSshKeyPassphrase = syncPrefs.getString("ssh_key_passphrase", "") ?: ""
 
@@ -584,6 +593,32 @@ class AuthPreferences(private val context: Context) {
     fun saveRemoteModeSync(enabled: Boolean) {
         currentRemoteMode = enabled
         syncPrefs.edit().putBoolean("remote_mode", enabled).commit()
+    }
+
+    fun saveRemoteTunnelSync(enabled: Boolean) {
+        currentRemoteTunnel = enabled
+        syncPrefs.edit().putBoolean("remote_tunnel", enabled).commit()
+    }
+
+    /** A port on the server that the app makes reachable on this phone's 127.0.0.1 over SSH (e.g. `npm run dev`). */
+    data class PortForward(val serverPort: Int, val localPort: Int, val name: String, val enabled: Boolean)
+
+    fun getPortForwardsSync(): List<PortForward> = runCatching {
+        val arr = org.json.JSONArray(syncPrefs.getString("port_forwards_json", "[]"))
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.getJSONObject(i)
+            val sp = o.optInt("server", 0)
+            if (sp !in 1..65535) null
+            else PortForward(sp, o.optInt("local", sp).takeIf { it in 1..65535 } ?: sp, o.optString("name"), o.optBoolean("on", true))
+        }
+    }.getOrDefault(emptyList())
+
+    fun savePortForwardsSync(list: List<PortForward>) {
+        val arr = org.json.JSONArray()
+        list.forEach {
+            arr.put(org.json.JSONObject().put("server", it.serverPort).put("local", it.localPort).put("name", it.name).put("on", it.enabled))
+        }
+        syncPrefs.edit().putString("port_forwards_json", arr.toString()).commit()
     }
 
     /** Named connection profiles the user saved by hand ("remote" = server mode, otherwise local). Stored as JSON on the phone. */
