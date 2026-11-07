@@ -253,7 +253,10 @@ class AgyChatBackend(
 
     fun checkAgyAuthStatus(userInitiated: Boolean = false) {
         backendScope.launch {
-            agyBridgeService.updateAuthChecking(true)
+            // "Checking sign-in…" only while the sign-in state is unknown (or the user asked). A background re-check of
+            // a confirmed sign-in stays silent: the status only changes if the answer differs (signed out).
+            val alreadySignedIn = _agyAuthInfo.value.isLoggedIn && !_agyAuthInfo.value.isOffline
+            if (userInitiated || !alreadySignedIn) agyBridgeService.updateAuthChecking(true)
             if (!isNetworkConnected()) {
                 android.util.Log.d("ChatViewModel", "Skipping auth status check: device is offline.")
                 _agyAuthInfo.value = _agyAuthInfo.value.copy(
