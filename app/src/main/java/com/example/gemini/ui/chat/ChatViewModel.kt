@@ -982,6 +982,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch { claudeBackend.refreshSessions() }
         }
         claudeBackend.onTurnFinished = { claudeAccount.refreshUsage(force = false) }
+        claudeAccount.onFreshUsage = { claudeBackend.dropLiveRateLimits() }
         claudeConfig.onSettingsChanged = {
             claudeBackend.refreshInfo(force = true)
             claudeBackend.loadChatDefaults()

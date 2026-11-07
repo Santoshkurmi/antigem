@@ -250,7 +250,9 @@ fun ClaudeModelSheet(
     val effort by backend.effort.collectAsState()
     val thinking by backend.thinkingEnabled.collectAsState()
     val fast by backend.fastModeState.collectAsState()
-    val refreshing by backend.isRefreshingModels.collectAsState()
+    val refreshingModels by backend.isRefreshingModels.collectAsState()
+    val refreshingUsage by account.isRefreshingUsage.collectAsState()
+    val refreshing = refreshingModels
     val modelsError by backend.modelsError.collectAsState()
     val usage by account.usage.collectAsState()
     val liveLimits by backend.rateLimits.collectAsState()
@@ -259,7 +261,9 @@ fun ClaudeModelSheet(
     val cardColor = claudeCardColor()
 
     LaunchedEffect(Unit) {
-        account.refreshUsage(force = false)
+        // the bridge's cached usage is fine when it was loaded a moment ago; after that, ask for fresh numbers
+        val stale = System.currentTimeMillis() - account.usageUpdatedAt.value > 5 * 60_000L
+        account.refreshUsage(force = stale)
         backend.refreshProviders()
     }
 
@@ -290,8 +294,12 @@ fun ClaudeModelSheet(
                     refreshing -> "loading models…"
                     else -> "no models loaded"
                 },
-                refreshing = refreshing,
-                onRefresh = { backend.refreshInfo(force = true) }
+                refreshing = refreshingModels || refreshingUsage,
+                onRefresh = {
+                    // models and the plan limits shown under them (5h / 7d)
+                    backend.refreshInfo(force = true)
+                    account.refreshUsage(force = true)
+                }
             )
             active?.let {
                 Text(

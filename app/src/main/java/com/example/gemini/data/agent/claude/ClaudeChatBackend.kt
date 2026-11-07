@@ -158,6 +158,17 @@ class ClaudeChatBackend(
 
     private val _rateLimits = MutableStateFlow<Map<String, ClaudeUnifiedWindow>>(emptyMap())
     val rateLimits: StateFlow<Map<String, ClaudeUnifiedWindow>> = _rateLimits.asStateFlow()
+    /** The stream's windows that a newer usage fetch replaced: not shown again until the stream sends new ones. */
+    @Volatile private var supersededLimits: Map<String, ClaudeUnifiedWindow>? = null
+
+    /**
+     * A fresh plan-usage fetch is newer than the windows the last reply carried: drop those so the fetched numbers show
+     * (otherwise they stay up all day until the next message). The next rate-limit event from a reply shows again.
+     */
+    fun dropLiveRateLimits() {
+        supersededLimits = transcript.rateLimits
+        _rateLimits.value = emptyMap()
+    }
 
     private val _sessionCost = MutableStateFlow(0.0)
     val sessionCost: StateFlow<Double> = _sessionCost.asStateFlow()
@@ -1471,7 +1482,8 @@ class ClaudeChatBackend(
         _isStreaming.value = active && !transcript.hasPending()
         _pendingPermissions.value = transcript.pendingList().filter { it.toolName != "AskUserQuestion" }
         _cacheInfo.value = transcript.cacheInfo
-        if (transcript.rateLimits.isNotEmpty()) _rateLimits.value = transcript.rateLimits
+        // identity check: each rate-limit event builds a new map, so only the dropped one stays hidden
+        if (transcript.rateLimits.isNotEmpty() && transcript.rateLimits !== supersededLimits) _rateLimits.value = transcript.rateLimits
         if (transcript.sessionCostUsd > 0) _sessionCost.value = transcript.sessionCostUsd
         _needsLogin.value = transcript.needsLogin
         transcript.sessionModel?.let { _activeModel.value = it }

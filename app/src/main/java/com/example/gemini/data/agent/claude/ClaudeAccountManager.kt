@@ -127,20 +127,38 @@ class ClaudeAccountManager(
     /** When plan usage was last loaded (ms). */
     val usageUpdatedAt: StateFlow<Long> = _usageUpdatedAt.asStateFlow()
 
+    /** Called after a forced (not cached) usage fetch succeeded: its numbers are the newest there are. */
+    var onFreshUsage: (() -> Unit)? = null
+
+    private var usageJob: Job? = null
+    private var usageJobForced = false
+    private var usageGen = 0
+
     fun refreshUsage(force: Boolean = true) {
-        if (_isRefreshingUsage.value) return
+        if (usageJob?.isActive == true) {
+            // a manual refresh must not be swallowed by a cached check already on its way (e.g. the sheet opening)
+            if (!force || usageJobForced) return
+            usageJob?.cancel()
+        }
         _isRefreshingUsage.value = true
-        scope.launch {
-            client.usage(force)
-                .onSuccess { resp ->
-                    if (resp.success) {
-                        _usage.value = resp.usage
-                        _usageError.value = null
-                        _usageUpdatedAt.value = System.currentTimeMillis()
-                    } else _usageError.value = resp.error ?: "Claude Code did not return usage"
-                }
-                .onFailure { _usageError.value = it.message ?: "Cannot reach the bridge" }
-            _isRefreshingUsage.value = false
+        usageJobForced = force
+        val gen = ++usageGen
+        usageJob = scope.launch {
+            try {
+                client.usage(force)
+                    .onSuccess { resp ->
+                        if (resp.success) {
+                            _usage.value = resp.usage
+                            _usageError.value = null
+                            _usageUpdatedAt.value = System.currentTimeMillis()
+                            if (force) onFreshUsage?.invoke()
+                        } else _usageError.value = resp.error ?: "Claude Code did not return usage"
+                    }
+                    .onFailure { if (it !is kotlinx.coroutines.CancellationException) _usageError.value = it.message ?: "Cannot reach the bridge" }
+            } finally {
+                // a newer refresh that replaced this one owns the spinner
+                if (gen == usageGen) _isRefreshingUsage.value = false
+            }
         }
     }
 
