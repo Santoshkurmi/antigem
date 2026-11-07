@@ -1,11 +1,17 @@
 {
-  "version_code": 119,
-  "version_name": "1.0.19",
+  "version_code": 120,
+  "version_name": "1.1.0",
   "min_supported_version_code": 1,
   "changelog": [
-    "Added notes and todos in the app(see in floating one) and its mcp",
-    "Fix bug of copying on expand of code causing crash",
-    "Added video better preview support"
+    "Added Jarvis: hands-free voice control of the whole app, with tasks, voice approvals and a wake phrase",
+    "Added Server mode: run the agents on your own server (VPS/PC) and use AntiGem as the app for it",
+    "Added X11 Desktop: run a Linux desktop (XFCE or LXQt) and GUI apps with Termux:X11 (Shared UID build)",
+    "Added Termux Support in Settings: Termux:API and X11 Desktop in one place",
+    "Added a theme gallery and a quick theme picker in the sidebar",
+    "Added better file explorer with a new file picker and a new file viewer",
+    "Added a What's new page with the changes of every version (Settings → About & Info)",
+    "Bugs fixed related to chat",
+    "And redesigned the app to be more user-friendly and intuitive"
   ],
   "is_critical": false
 }
