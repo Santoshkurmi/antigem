@@ -22,6 +22,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import kotlinx.coroutines.delay
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.AddComment
 import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.filled.Add
@@ -584,251 +588,228 @@ fun ChatHistoryDrawer(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Top Action Row: New Chat + Workspace Folders Toggle + Search Toggle
+            // ---------------- header: brand on the left, power + new chat on the right ----------------
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 2.dp, top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // New Chat Button
-                Button(
-                    onClick = {
+                Text(
+                    text = "AntiGem",
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.3).sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+
+                @Composable
+                fun HeaderIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, active: Boolean, onClick: () -> Unit) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (active) ClaudeTerracotta.copy(alpha = 0.14f) else Color.Transparent)
+                            .clickable(onClick = onClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = description,
+                            tint = if (active) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                }
+                HeaderIcon(Icons.Default.Search, "Search", isSearchActive || searchQuery.isNotBlank()) {
+                    isSearchActive = !isSearchActive
+                    if (!isSearchActive) {
                         searchQuery = ""
-                        isSearchActive = false
-                        scope.launch {
-                            try {
-                                listState.scrollToItem(0)
-                            } catch (_: Exception) {
-                            }
-                        }
-                        onNewChat()
-                    },
+                        onSearchQueryChange("")
+                    }
+                }
+                HeaderIcon(
+                    if (groupByWorkspace) Icons.Default.Folder else Icons.Outlined.FolderOpen,
+                    if (groupByWorkspace) "Disable Workspace Grouping" else "Group by Workspace",
+                    groupByWorkspace
+                ) { onToggleGroupByWorkspace(!groupByWorkspace) }
+
+                // Exit app: quiet until pressed (it asks first)
+                Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ClaudeTerracotta,
-                        contentColor = Color.White
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable { showExitConfirmDialog = true },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "New Chat",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = "New Chat",
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                        fontSize = 13.5.sp
+                        imageVector = Icons.Default.PowerSettingsNew,
+                        contentDescription = "Exit App",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(19.dp)
                     )
                 }
-
-                // Power / Exit App Button
-                Surface(
-                    onClick = { showExitConfirmDialog = true },
-                    modifier = Modifier.size(36.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
-                    )
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.PowerSettingsNew,
-                            contentDescription = "Exit App",
-                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
-                            modifier = Modifier.size(17.dp)
-                        )
-                    }
-                }
-
-                // Workspace Folder Grouping Toggle Button
-                Surface(
-                    onClick = { onToggleGroupByWorkspace(!groupByWorkspace) },
-                    modifier = Modifier.size(36.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (groupByWorkspace) ClaudeTerracotta.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(
-                        alpha = 0.5f
-                    ),
-                    border = BorderStroke(
-                        1.dp,
-                        if (groupByWorkspace) ClaudeTerracotta.copy(alpha = 0.45f)
-                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
-                    )
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = if (groupByWorkspace) "Disable Workspace Grouping" else "Group by Workspace",
-                            tint = if (groupByWorkspace) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                alpha = 0.8f
-                            ),
-                            modifier = Modifier.size(17.dp)
-                        )
-                    }
-                }
-
-                // Search Toggle Button
-                Surface(
-                    onClick = {
-                        isSearchActive = !isSearchActive
-                        if (!isSearchActive) {
+                Spacer(modifier = Modifier.width(2.dp))
+                // New chat: the same icon as the chat screen's top bar
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(ClaudeTerracotta.copy(alpha = 0.14f))
+                        .clickable {
                             searchQuery = ""
                             onSearchQueryChange("")
-                        }
-                    },
-                    modifier = Modifier.size(36.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isSearchActive || searchQuery.isNotBlank()) ClaudeTerracotta.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(
-                        alpha = 0.5f
-                    ),
-                    border = BorderStroke(
-                        1.dp,
-                        if (isSearchActive || searchQuery.isNotBlank()) ClaudeTerracotta.copy(alpha = 0.45f)
-                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
-                    )
+                            isSearchActive = false
+                            scope.launch {
+                                try {
+                                    listState.scrollToItem(0)
+                                } catch (_: Exception) {
+                                }
+                            }
+                            onNewChat()
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search",
-                            tint = if (isSearchActive || searchQuery.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                alpha = 0.8f
-                            ),
-                            modifier = Modifier.size(17.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Outlined.AddComment,
+                        contentDescription = "New chat",
+                        tint = ClaudeTerracotta,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
 
-            // breathing room between the header actions and the list
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Inline Search Bar (Smooth, no text clipping, auto-expandable)
+            // ---------------- search field: only after tapping the header's search icon ----------------
+            val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+            LaunchedEffect(isSearchActive) {
+                if (isSearchActive) runCatching { delay(120); searchFocus.requestFocus() }
+            }
             AnimatedVisibility(
                 visible = isSearchActive || searchQuery.isNotBlank(),
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
-                Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (searchQuery.isNotBlank()) ClaudeTerracotta.copy(alpha = 0.5f)
-                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (searchQuery.isNotBlank()) ClaudeTerracotta.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)
+                    ),
+                    modifier = Modifier
+                        .padding(top = 10.dp)
+                        .fillMaxWidth()
+                        .height(40.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(start = 12.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = if (searchQuery.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = {
+                                searchQuery = it
+                                onSearchQueryChange(it)
+                            },
+                            singleLine = true,
+                            textStyle = TextStyle(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 14.sp,
+                                lineHeight = 18.sp
+                            ),
+                            cursorBrush = SolidColor(ClaudeTerracotta),
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 10.dp, vertical = 9.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = if (searchQuery.isNotBlank()) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                    alpha = 0.7f
-                                ),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            BasicTextField(
-                                value = searchQuery,
-                                onValueChange = {
-                                    searchQuery = it
-                                    onSearchQueryChange(it)
-                                },
-                                singleLine = true,
-                                textStyle = TextStyle(
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 13.5.sp,
-                                    lineHeight = 18.sp
-                                ),
-                                cursorBrush = SolidColor(ClaudeTerracotta),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(vertical = 1.dp),
-                                decorationBox = { innerTextField ->
+                                .weight(1f)
+                                .focusRequester(searchFocus),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.CenterStart) {
                                     if (searchQuery.isEmpty()) {
                                         Text(
-                                            text = "Search chat titles...",
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                            text = "Search chats",
+                                            fontSize = 14.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                                         )
                                     }
                                     innerTextField()
                                 }
-                            )
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(
-                                    onClick = {
-                                        searchQuery = ""
-                                        onSearchQueryChange("")
-                                    },
-                                    modifier = Modifier.size(22.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Clear",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
                             }
-                            // Deep search modal button
+                        )
+                        if (searchQuery.isNotEmpty()) {
                             IconButton(
-                                onClick = { showFullSearchDialog = true },
-                                modifier = Modifier.size(24.dp)
+                                onClick = {
+                                    searchQuery = ""
+                                    onSearchQueryChange("")
+                                },
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Tune,
-                                    contentDescription = "Advanced Search",
-                                    tint = ClaudeTerracotta,
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
-                    }
-
-                    if (searchQuery.isNotBlank()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        // Deep search (message contents, filters)
+                        IconButton(
+                            onClick = { showFullSearchDialog = true },
+                            modifier = Modifier.size(34.dp)
                         ) {
-                            Text(
-                                text = "${filtered.size} chat${if (filtered.size != 1) "s" else ""} found",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                            Text(
-                                text = "Advanced Search ›",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = ClaudeTerracotta,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .clickable { showFullSearchDialog = true }
-                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = "Advanced Search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                modifier = Modifier.size(17.dp)
                             )
                         }
                     }
                 }
             }
+
+            // result count + shortcut to the deep search while filtering
+            AnimatedVisibility(
+                visible = searchQuery.isNotBlank(),
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 6.dp, end = 2.dp, top = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${filtered.size} chat${if (filtered.size != 1) "s" else ""} found",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = "Advanced Search ›",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ClaudeTerracotta,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { showFullSearchDialog = true }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            // breathing room between the header and the list
+            Spacer(modifier = Modifier.height(10.dp))
 
             if (hasBothAgents || agentFilter != null || jarvisEnabled) {
                 Row(
