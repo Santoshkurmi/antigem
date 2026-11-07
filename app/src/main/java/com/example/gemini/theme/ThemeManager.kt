@@ -200,7 +200,7 @@ object ThemeManager {
         }
     }
 
-    fun mode(): String = appContext?.let { runCatching { com.example.gemini.data.preferences.AuthPreferences(it).getThemeModeSync() }.getOrNull() } ?: "SYSTEM"
+    fun mode(): String = appContext?.let { runCatching { com.example.gemini.data.preferences.AuthPreferences(it).getThemeModeSync() }.getOrNull() } ?: "DARK"
 
     /** Adds or replaces a custom theme. */
     fun saveCustom(theme: AppTheme): AppTheme {

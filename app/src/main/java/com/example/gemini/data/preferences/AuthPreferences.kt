@@ -333,7 +333,7 @@ class AuthPreferences(private val context: Context) {
             }
         } catch (_: Exception) {}
 
-        return "SYSTEM"
+        return "DARK"
     }
 
     val enabledModelIds: Flow<Set<String>?> = context.dataStore.data.map { it[ENABLED_MODELS] }
@@ -346,7 +346,7 @@ class AuthPreferences(private val context: Context) {
     /** Wavy-line dividers in chats: a new day ("Sat, Oct 10") and model switches ("Switched to …"). */
     val chatDividersEnabled: Flow<Boolean> = context.dataStore.data.map { it[CHAT_DIVIDERS_ENABLED] ?: true }
     val themeMode: Flow<String> = context.dataStore.data.map { prefs ->
-        val mode = prefs[APP_THEME_MODE] ?: "SYSTEM"
+        val mode = prefs[APP_THEME_MODE] ?: "DARK"
         if (syncPrefs.getString("app_theme_mode", null) != mode) {
             syncPrefs.edit().putString("app_theme_mode", mode).apply()
         }

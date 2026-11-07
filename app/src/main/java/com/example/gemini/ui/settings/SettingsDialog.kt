@@ -156,7 +156,7 @@ fun SettingsDialog(
     summaryModelId: String = "always_ask",
     isDevModeEnabled: Boolean = false,
     chatFontScale: Float = 1.0f,
-    themeMode: String = "SYSTEM",
+    themeMode: String = "DARK",
     agyHubUrl: String = com.example.gemini.data.preferences.AuthPreferences.currentHubUrl,
     agyBridgeHttpUrl: String = com.example.gemini.data.preferences.AuthPreferences.currentBridgeHttpUrl,
     isServerOnline: Boolean = true,
