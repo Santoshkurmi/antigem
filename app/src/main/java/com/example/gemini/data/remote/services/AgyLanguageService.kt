@@ -70,7 +70,10 @@ sealed class AgyRpcError(override val message: String, override val cause: Throw
  */
 suspend fun <Req : Any, Resp : Any> GrpcCall<Req, Resp>.executeSafely(
     request: Req
-): Result<Resp> = try {
+): Result<Resp> {
+    // the token this call goes out with: a rejection only drops the cached token if it is still this one
+    val tokenAtStart = AgyCsrfManager.instance.token
+    return try {
     val reqStr = request.toString().take(120)
     val res = execute(request)
     Result.success(res)
@@ -83,7 +86,7 @@ suspend fun <Req : Any, Resp : Any> GrpcCall<Req, Resp>.executeSafely(
     if (isCsrfError) {
         val hubUrl = AuthPreferences.currentHubUrl
         android.util.Log.w("AGY_RPC", "🔄 [AgyLanguageService.executeSafely] CSRF error detected on RPC. Invalidating token...")
-        AgyCsrfManager.instance.notifyCsrfExpired(hubUrl, "executeSafely")
+        AgyCsrfManager.instance.notifyCsrfExpired(hubUrl, "executeSafely", usedToken = tokenAtStart)
     }
     val err = when {
         isCsrfError || e.grpcStatus == GrpcStatus.UNAUTHENTICATED -> AgyRpcError.Unauthenticated(e.grpcMessage ?: "Session unauthenticated or CSRF validation failed.")
@@ -98,6 +101,7 @@ suspend fun <Req : Any, Resp : Any> GrpcCall<Req, Resp>.executeSafely(
     android.util.Log.e("AGY_RPC", "❌ [AgyLanguageService.executeSafely] Throwable: ${e.message}", e)
     Result.failure(AgyRpcError.Unknown(e.message ?: "Unexpected error", e))
 }
+}
 
 /**
  * Executes a server-streaming gRPC call as a Kotlin Flow with automatic error mapping.
@@ -106,6 +110,7 @@ suspend fun <Req : Any, Resp : Any> GrpcCall<Req, Resp>.executeSafely(
 fun <Req : Any, Resp : Any> GrpcStreamingCall<Req, Resp>.asFlowSafely(
     request: Req
 ): Flow<Resp> = callbackFlow {
+    val tokenAtStart = AgyCsrfManager.instance.token
     val reqStr = request.toString().take(120)
     val (requestChannel, responseChannel) = executeIn(this)
     try {
@@ -125,7 +130,7 @@ fun <Req : Any, Resp : Any> GrpcStreamingCall<Req, Resp>.asFlowSafely(
         if (isCsrfError) {
             val hubUrl = AuthPreferences.currentHubUrl
             android.util.Log.w("CHAT_OPEN_DEBUG", "🔄 [AgyLanguageService.asFlowSafely] CSRF error on stream. Invalidating CSRF cache for $hubUrl...")
-            AgyCsrfManager.instance.notifyCsrfExpired(hubUrl, "asFlowSafely")
+            AgyCsrfManager.instance.notifyCsrfExpired(hubUrl, "asFlowSafely", usedToken = tokenAtStart)
         }
         val err = when (e.grpcStatus) {
             GrpcStatus.UNAUTHENTICATED -> AgyRpcError.Unauthenticated(e.grpcMessage ?: "Unauthenticated")

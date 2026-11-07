@@ -11,6 +11,9 @@ import java.util.concurrent.TimeUnit
  * Configured with high multiplexing dispatcher, connection pooling, timeouts, and dynamic CSRF token evaluation.
  */
 object AgyOkHttpClient {
+    // how long a request waits for the hub's CSRF token when the hub is starting / just came up
+    private const val CSRF_WAIT_MS = 10_000L
+
     val client: OkHttpClient by lazy {
         val dispatcher = Dispatcher().apply {
             maxRequests = 256
@@ -56,6 +59,17 @@ object AgyOkHttpClient {
                         }
                     } catch (_: Exception) {}
                 }
+                if (token.isBlank()) {
+                    // App launch: the hub is (nearly) up but its token has not arrived yet. Sending without it is
+                    // always rejected (the CSRF errors shown at launch), so wait a moment for it instead. Not when
+                    // the hub is down or failed: then the request fails right away as before.
+                    val hubState = com.example.gemini.data.remote.AgyBridgeService.instance.hubStatus.value.status
+                    if (hubState == "starting" || hubState == "online" || hubState == "idle") {
+                        token = try {
+                            kotlinx.coroutines.runBlocking { AgyCsrfManager.instance.awaitToken(CSRF_WAIT_MS) }
+                        } catch (_: Exception) { "" }
+                    }
+                }
 
                 val requestBuilder = chain.request().newBuilder()
                     .header("User-Agent", "antiGem-Android-Native")
@@ -69,7 +83,7 @@ object AgyOkHttpClient {
                 // Check for CSRF expiry (HTTP 401/403 or gRPC status 16 UNAUTHENTICATED)
                 val isCsrfError = response.code == 401 || response.code == 403 || response.header("grpc-status") == "16"
                 if (isCsrfError) {
-                    AgyCsrfManager.instance.notifyCsrfExpired(hubUrl, chain.request().url.encodedPath)
+                    AgyCsrfManager.instance.notifyCsrfExpired(hubUrl, chain.request().url.encodedPath, usedToken = token)
                 }
 
                 response
