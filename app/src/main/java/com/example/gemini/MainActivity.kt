@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
         com.example.gemini.data.local.LocalTerminalBridge.instance.init(this)
         com.example.gemini.data.notes.NotesRepository.init(this)
         com.example.gemini.data.files.ExplorerPrefs.init(this)
+        resetTerminalLauncherOnce()
         com.example.gemini.data.remote.AndroidLocalBridgeServer.instance.start(this)
         com.example.gemini.data.jarvis.JarvisController.attach(application, chatViewModel)
         com.example.gemini.data.agent.ChatCompletionMonitor.start(application, chatViewModel)
@@ -599,6 +600,23 @@ class MainActivity : ComponentActivity() {
         handleOAuthIntent(intent)
         handleIncomingFileIntent(intent)
         handleJarvisIntent(intent)
+    }
+
+    /**
+     * One time after the update that made the separate terminal icon opt-in: if the icon is on (most users only got it by
+     * confirming the old first-launch dialog, which had it preselected), switch it off and show that dialog again with
+     * "hidden" preselected, so people who really use it can turn it back on with one tap.
+     */
+    private fun resetTerminalLauncherOnce() {
+        val prefs = chatViewModel.authPreferences
+        if (!prefs.takeTerminalLauncherResetSync()) return
+        val launcher = com.example.gemini.data.preferences.TerminalLauncherManager
+        if (!launcher.isLauncherEnabled(this)) return
+        launcher.applyLauncherSetting(this, enabled = false, style = launcher.getLauncherStyle(this))
+        lifecycleScope.launch {
+            prefs.setTerminalLauncherEnabled(false)
+            prefs.setHasSeenTerminalLauncherOnboarding(false)
+        }
     }
 
     /** The Jarvis Quick Settings tile opened the app: start listening once the window is in front. */

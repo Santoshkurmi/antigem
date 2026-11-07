@@ -28,16 +28,15 @@ object TerminalLauncherManager {
             val pm = context.packageManager
             val antiTermState = pm.getComponentEnabledSetting(getAntiTermComponent(context))
             val classicState = pm.getComponentEnabledSetting(getTermuxClassicComponent(context))
-            val directState = pm.getComponentEnabledSetting(getDirectActivityComponent(context))
 
-            val isAntiTermActive = antiTermState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ||
-                    (antiTermState == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT && classicState != PackageManager.COMPONENT_ENABLED_STATE_ENABLED && directState != PackageManager.COMPONENT_ENABLED_STATE_DISABLED)
+            // both aliases are disabled in the manifest, so only an explicit "enabled" from Settings shows an icon
+            // (TermuxActivity itself has no launcher entry, so it never adds one)
+            val isAntiTermActive = antiTermState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
             val isClassicActive = classicState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-            val isDirectActive = directState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
 
-            isAntiTermActive || isClassicActive || isDirectActive
+            isAntiTermActive || isClassicActive
         } catch (_: Exception) {
-            true
+            false
         }
     }
 

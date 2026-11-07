@@ -1002,7 +1002,17 @@ class AuthPreferences(private val context: Context) {
     }
 
     val isTerminalLauncherEnabled: Flow<Boolean> = context.dataStore.data.map {
-        it[IS_TERMINAL_LAUNCHER_ENABLED] ?: true
+        it[IS_TERMINAL_LAUNCHER_ENABLED] ?: false
+    }
+
+    /**
+     * The separate terminal icon became opt-in. Returns true exactly once per install (and marks it done), so existing
+     * installs get the icon switched off one time and are asked again, with "hidden" preselected.
+     */
+    fun takeTerminalLauncherResetSync(): Boolean {
+        if (syncPrefs.getBoolean("terminal_launcher_optin_reset_v1", false)) return false
+        syncPrefs.edit().putBoolean("terminal_launcher_optin_reset_v1", true).apply()
+        return true
     }
 
     suspend fun setTerminalLauncherEnabled(enabled: Boolean) {

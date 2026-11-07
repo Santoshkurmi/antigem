@@ -72,7 +72,7 @@ import com.example.gemini.theme.ClaudeTerracotta
 
 @Composable
 fun TerminalLauncherOnboardingDialog(
-    initialEnabled: Boolean = true,
+    initialEnabled: Boolean = false,
     initialStyle: String = TerminalLauncherManager.STYLE_ANTITERM,
     onConfirm: (enabled: Boolean, style: String) -> Unit,
     onDismiss: () -> Unit

@@ -243,8 +243,6 @@ fun ChatScreen(
     val isFloatingNetworkInspectorEnabled by viewModel.isFloatingNetworkInspectorEnabled.collectAsState()
     var showNetworkInspectorDialog by remember { mutableStateOf(false) }
     val hasSeenTerminalLauncherOnboarding by viewModel.authPreferences.hasSeenTerminalLauncherOnboarding.collectAsState(initial = true)
-    val isTerminalLauncherEnabledPref by viewModel.authPreferences.isTerminalLauncherEnabled.collectAsState(initial = true)
-    val terminalLauncherStylePref by viewModel.authPreferences.terminalLauncherStyle.collectAsState(initial = com.example.gemini.data.preferences.TerminalLauncherManager.STYLE_ANTITERM)
     val isTranscribingAudio by viewModel.isTranscribingAudio.collectAsState()
     val pendingLoginUrl by viewModel.pendingLoginUrl.collectAsState()
     val agyLoginIssue by viewModel.agyLoginIssue.collectAsState()
@@ -2752,7 +2750,8 @@ fun ChatScreen(
         )
     }
 
-    // Terminal Launcher First-Launch Onboarding Dialog
+    // Terminal Launcher First-Launch Onboarding Dialog: tells users the separate terminal icon exists,
+    // with "hidden" preselected (the icon is off by default; most users only need the in-app terminal)
     if (!hasSeenTerminalLauncherOnboarding && !isInFloatingWindow) {
         com.example.gemini.ui.onboarding.TerminalLauncherOnboardingDialog(
             initialEnabled = remember(context) { com.example.gemini.data.preferences.TerminalLauncherManager.isLauncherEnabled(context) },
@@ -2776,8 +2775,6 @@ fun ChatScreen(
             }
         )
     }
-
-
 
     // Attachment Selector Bottom Sheet
     if (showAttachmentSelector) {
