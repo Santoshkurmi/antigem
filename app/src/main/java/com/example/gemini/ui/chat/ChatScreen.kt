@@ -2578,6 +2578,10 @@ fun ChatScreen(
             enabledAgents = enabledAgents,
             isApplyingAgents = isApplyingAgents,
             onApplyAgents = { viewModel.applyAgents(it) },
+            onOpenProject = { project ->
+                TermuxDaemonManager.setActiveProject(project)
+                viewModel.onProjectChanged(project.path)
+            },
             onDismiss = {
                 showSettingsDialog = false
                 claudeSettingsPage = null

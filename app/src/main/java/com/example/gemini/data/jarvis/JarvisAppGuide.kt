@@ -61,6 +61,15 @@ The IDE screen is a code editor with tabs, find and replace, a file explorer and
 active project is where new chats work. Git: clone, status, diffs, commit, pull and push from the source control view.
 Jarvis can open projects and files (jarvis_ide_open_project, jarvis_ide_open_file) and search code (jarvis_ide_search_code).
 """.trim()),
+            Entry("github", listOf("github", "gh", "repo", "repository", "repositories", "clone", "push", "pull", "commit", "private repo", "new repo", "git login", "git credentials"), """
+Settings → GitHub (Termux build) installs the GitHub CLI (gh) with pkg and signs in with the browser (a one-time code) or a
+token. After sign-in git uses that login for github.com by itself (gh auth setup-git) and gets a commit identity from the
+profile, so clone, pull, commit and push work in the terminal, the IDE and agent commands, private repositories too. The page
+shows the account and its repositories (tap one to clone and open it). In server mode it is the server's gh and git; gh must
+be installed there by the user. Jarvis: jarvis_github_status, jarvis_github_list_repos, jarvis_github_clone (clones and makes it
+the active project), jarvis_github_create_repo (new private/public repository, optionally linked to a project and pushed);
+commits and later pushes are plain git commands.
+""".trim()),
             Entry("browser", listOf("browser", "web", "page", "url", "devtools", "eruda", "desktop mode"), """
 The in-app browser previews local dev servers and web apps; desktop and mobile modes and Eruda DevTools are built in.
 jarvis_open_url opens a page there.

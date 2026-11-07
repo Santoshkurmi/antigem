@@ -114,6 +114,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     JARVIS_CHAT("Jarvis · Jarvis chat", "Live context, fresh chats and Jarvis' memory"),
     DIAGNOSTICS("Diagnostics & Performance", "Live network connections, active streams & thread HUD"),
     UTILITIES("Utilities", "Handy device tools"),
+    GITHUB("GitHub", "Sign in with the GitHub CLI, your repositories and git credentials"),
     ADB_CONNECT("ADB Connect", "Connect the terminal's adb to this phone over Wireless debugging"),
     ANDROID_AUTOMATION("Android Automation", "Let AI agents see and control this phone"),
     TERMUX_SUPPORT("Termux Support", "Termux:API and the X11 desktop"),
@@ -282,6 +283,8 @@ fun SettingsDialog(
     enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = setOf(com.example.gemini.domain.model.AgentKind.AGY),
     isApplyingAgents: Boolean = false,
     onApplyAgents: (Set<com.example.gemini.domain.model.AgentKind>) -> Unit = {},
+    /** Opens a project cloned from Settings → GitHub (the dialog closes itself). */
+    onOpenProject: (ProjectItem) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -615,6 +618,14 @@ fun SettingsDialog(
                         cardBg = cardBg,
                         onNavigate = { currentSection = it }
                     )
+                    SettingsSection.GITHUB -> GitHubScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onOpenProject = { project ->
+                            onOpenProject(project)
+                            onDismiss()
+                        }
+                    )
                     SettingsSection.ADB_CONNECT -> AdbConnectScreen(
                         cardBg = cardBg,
                         cardBorder = cardBorder
@@ -686,6 +697,7 @@ private fun MainSettingsMenu(
     val jarvisOn by com.example.gemini.data.jarvis.JarvisPreferences.enabled.state.collectAsState()
     val activeMcp = mcpServers.count { it.isEnabled }
     val deviceTools = rememberDeviceToolRows(onNavigate)
+    val githubRow = rememberGitHubRow(onNavigate)
 
     // Claude Code's row shows the account state (signed in / plan / signed out)
     var claudeValue: String? = null
@@ -730,6 +742,7 @@ private fun MainSettingsMenu(
             listOfNotNull(
                 row(SettingsSection.TERMINAL, Icons.Outlined.Terminal, c.accentIndigo,
                     if (useSshTerminal || com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) "SSH" else "Local"),
+                githubRow,
                 deviceTools.adb,
                 deviceTools.automation,
                 // Termux:API and X11 need the com.termux package; shown on both of its builds (and before the terminal is
@@ -845,6 +858,28 @@ private fun UtilitiesSubScreen(
     onNavigate: (SettingsSection) -> Unit
 ) {
     SettingsRowList(cardBg = cardBg, groups = listOf(utilityRows(onNavigate)))
+}
+
+/** The GitHub row of the main settings page (com.termux builds only), with the sign-in state; null elsewhere. */
+@Composable
+private fun rememberGitHubRow(onNavigate: (SettingsSection) -> Unit): SettingsRowItem? {
+    val context = LocalContext.current
+    if (!com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) return null
+    LaunchedEffect(Unit) {
+        com.example.gemini.data.github.GitHubManager.init(context)
+        com.example.gemini.data.github.GitHubManager.refreshIfStale()
+    }
+    val gh by com.example.gemini.data.github.GitHubManager.state.collectAsState()
+    val c = com.example.gemini.theme.AppColors
+    val (value, color) = when {
+        gh.signedIn -> (gh.account?.login ?: "Signed in") to QuotaGreen
+        gh.ghInstalled == false -> "Not installed" to c.warning
+        gh.ghInstalled == true -> "Signed out" to null
+        else -> null to null
+    }
+    return SettingsRowItem(Icons.Outlined.AccountTree, c.accentAlt, SettingsSection.GITHUB.title, value, color) {
+        onNavigate(SettingsSection.GITHUB)
+    }
 }
 
 /** The ADB Connect and Android Automation rows of the main settings page, with their live state. */

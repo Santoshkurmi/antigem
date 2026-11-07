@@ -2,6 +2,7 @@ package com.example.gemini.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -52,11 +53,23 @@ private fun repoNameOf(url: String): String =
 @Composable
 fun GitCloneDialog(
     onCloned: (ProjectItem) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    initialUrl: String = ""
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var repoUrl by remember { mutableStateOf("") }
+    var repoUrl by remember { mutableStateOf(initialUrl) }
+    // Signed in to GitHub (Settings → GitHub): private repositories clone too, and can be picked from a list
+    val githubAvailable = LocalEnvironmentManager.isTermuxPackage(context)
+    val github by com.example.gemini.data.github.GitHubManager.state.collectAsState()
+    val githubSignedIn = githubAvailable && github.signedIn
+    var showRepoPicker by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (githubAvailable) {
+            com.example.gemini.data.github.GitHubManager.init(context)
+            com.example.gemini.data.github.GitHubManager.refreshIfStale()
+        }
+    }
     var projectName by remember { mutableStateOf("") }
     var started by remember { mutableStateOf(false) }
     val logs = remember { mutableStateListOf<String>() }
@@ -191,7 +204,8 @@ fun GitCloneDialog(
                             )
                             Text(
                                 text = when {
-                                    !started -> "Public repositories only, cloned into your home folder"
+                                    !started -> if (githubSignedIn) "Public and your GitHub repositories, cloned into your home folder"
+                                        else "Public repositories only, cloned into your home folder"
                                     isRunning -> "Cloning..."
                                     exitCode == 0 -> "Cloned in ${(durationMs / 1000.0)}s, opening project..."
                                     else -> "Clone failed (Exit: $exitCode)"
@@ -224,12 +238,26 @@ fun GitCloneDialog(
                         singleLine = true,
                         isError = trimmedUrl.isNotEmpty() && !urlValid,
                         supportingText = if (trimmedUrl.isNotEmpty() && !urlValid) {
-                            { Text("Paste a public https:// repository URL") }
+                            { Text(if (githubSignedIn) "Paste an https:// repository URL" else "Paste a public https:// repository URL") }
                         } else null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
+                    if (githubSignedIn) {
+                        TextButton(onClick = {
+                            showRepoPicker = !showRepoPicker
+                            if (showRepoPicker && !github.reposLoaded) com.example.gemini.data.github.GitHubManager.loadRepos()
+                        }, contentPadding = PaddingValues(horizontal = 4.dp)) {
+                            Text(if (showRepoPicker) "Hide my GitHub repositories" else "Choose from my GitHub repositories", fontSize = 12.5.sp)
+                        }
+                        if (showRepoPicker) {
+                            GitHubRepoPicker(github) { url ->
+                                repoUrl = url
+                                showRepoPicker = false
+                            }
+                        }
+                    }
                     Spacer(modifier = Modifier.height(10.dp))
                     OutlinedTextField(
                         value = projectName,
@@ -333,6 +361,63 @@ fun GitCloneDialog(
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Text("Close", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The signed-in GitHub account's repositories (Settings → GitHub), searchable; picking one gives its clone URL. */
+@Composable
+private fun GitHubRepoPicker(github: com.example.gemini.data.github.GitHubManager.State, onPick: (String) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val q = query.trim()
+    val matches = remember(github.repos, q) {
+        github.repos.filter { q.isEmpty() || it.fullName.contains(q, true) || it.description?.contains(q, true) == true }.take(100)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        OutlinedTextField(
+            value = query, onValueChange = { query = it }, singleLine = true,
+            placeholder = { Text("Search repositories") },
+            shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
+        )
+        when {
+            github.reposLoading && github.repos.isEmpty() -> Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+                Text("Loading your repositories…", fontSize = 12.sp)
+            }
+            github.reposError != null && github.repos.isEmpty() ->
+                Text(github.reposError, fontSize = 12.sp, color = com.example.gemini.theme.AppColors.danger)
+            matches.isEmpty() -> Text(if (q.isEmpty()) "No repositories." else "No repository matches \"$q\".", fontSize = 12.sp)
+        }
+        if (matches.isNotEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp)
+            ) {
+                LazyColumn {
+                    items(matches, key = { it.fullName }) { repo ->
+                        Column(
+                            Modifier.fillMaxWidth()
+                                .clickable { onPick(repo.cloneUrl) }
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(repo.fullName, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                if (repo.isPrivate) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Private", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = com.example.gemini.theme.AppColors.warning)
+                                }
+                            }
+                            repo.description?.let {
+                                Text(it, fontSize = 11.5.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }

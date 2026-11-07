@@ -145,7 +145,7 @@ object JarvisMcp {
         put(tool("jarvis_get_config",
             "The user's configuration: agents, Claude Code and Antigravity accounts and policies, MCP servers of both agents, Jarvis settings, look, projects.",
             emptyList(), "area" to prop("string", "What to read (default overview)", listOf("overview", "agents", "claude", "antigravity", "mcp", "jarvis", "appearance", "projects"))))
-        put(tool("jarvis_open_settings", "Show a settings page (e.g. jarvis, appearance, mcp, claude, agents, servers, terminal, commands).",
+        put(tool("jarvis_open_settings", "Show a settings page (e.g. jarvis, appearance, mcp, claude, agents, servers, terminal, commands, github).",
             listOf("section"), "section" to prop("string", "Settings page name (jarvis_app_guide topic settings lists them)")))
         put(tool("jarvis_get_usage",
             "Plan usage: the 5-hour window and the 7-day window with percent used, percent left and when each resets (Claude Code and Antigravity), " +
@@ -263,6 +263,34 @@ object JarvisMcp {
             "Search text in the files of the active project (or another project). Returns file, line number and the line, paged.",
             listOf("query"), "query" to prop("string", "Text to find"),
             "project" to prop("string", "Project name or path (default: the active project)"), limit, offset))
+        // ---- GitHub (the gh login of Settings → GitHub; git uses it for github.com)
+        put(tool("jarvis_github_status",
+            "The GitHub account the terminal's gh and git use: signed in or not, username, name, email, repository counts, " +
+                "whether git uses the login and git's commit identity. Says what to do when gh is missing or signed out.",
+            emptyList()))
+        put(tool("jarvis_github_list_repos",
+            "The signed-in account's GitHub repositories (own, collaborator and organization ones), newest push first: full name, " +
+                "private or public, fork, description, language, last push and clone URL.",
+            emptyList(), "query" to prop("string", "Part of a name, description or language"),
+            "reload" to prop("boolean", "Load the list again from GitHub (default: the cached list)"), limit, offset))
+        put(tool("jarvis_github_clone",
+            "Clone a GitHub repository into the home folder (private ones too) and make it the active project. Give its name " +
+                "(\"notes\"), owner/name or a URL. Fails instead of overwriting when the folder exists.",
+            listOf("repo"), "repo" to prop("string", "Repository name, owner/name or https URL"),
+            "folder" to prop("string", "Folder name in the home folder (default: the repository's name)"),
+            "open" to prop("boolean", "Make it the active project (default true)"),
+            "show_ide" to prop("boolean", "Also switch to the IDE screen (default false)")))
+        put(tool("jarvis_github_create_repo",
+            "Create a new repository on the user's GitHub account (or owner/name for an organization). With project, that folder " +
+                "becomes its local copy (git init when needed, the repository added as remote origin) and its commits are pushed. " +
+                "Confirm public vs private with the user first unless they said it. Commit and later pushes are plain git commands; " +
+                "before any commit check git status and put build output, dependencies, secrets and local files in .gitignore.",
+            listOf("name", "private"), "name" to prop("string", "Repository name, or owner/name"),
+            "private" to prop("boolean", "true = private, false = public"),
+            "description" to prop("string", "Short description"),
+            "project" to prop("string", "Link this local folder: project name or path, or \"active\" for the active project"),
+            "push" to prop("boolean", "Push the folder's commits right away (default true)"),
+            "remote" to prop("string", "Remote name for it (default origin)")))
         // ---- session and memory
         put(tool("jarvis_new_session",
             "Start a fresh Jarvis chat on the next message (the user asked to start again, or the chat got long). Never do this by yourself while work is running.",
@@ -443,6 +471,10 @@ object JarvisMcp {
                 "jarvis_ide_open_file" -> ideOpenFile(args)
                 "jarvis_ide_close_file" -> ideCloseFile(args)
                 "jarvis_ide_get_open_files" -> json(openFilesJson())
+                "jarvis_github_status" -> githubStatus(context)
+                "jarvis_github_list_repos" -> githubListRepos(context, args)
+                "jarvis_github_clone" -> githubClone(context, args)
+                "jarvis_github_create_repo" -> githubCreateRepo(context, args)
                 "jarvis_new_session" -> {
                     JarvisController.newSession(args.optBoolean("carry_over", true))
                     text("The next message starts a fresh Jarvis chat.")
@@ -502,6 +534,10 @@ object JarvisMcp {
         "jarvis_open_url" -> "Opening the page"
         "jarvis_set_timer", "jarvis_cancel_timer" -> "Setting a timer"
         "jarvis_get_health" -> "Checking the system"
+        "jarvis_github_status" -> "Checking GitHub"
+        "jarvis_github_list_repos" -> "Looking at your repositories"
+        "jarvis_github_clone" -> "Cloning ${args.optString("repo").substringAfterLast('/').removeSuffix(".git").take(30)}"
+        "jarvis_github_create_repo" -> "Creating ${args.optString("name").take(30)} on GitHub"
         "jarvis_new_session" -> "Starting fresh"
         "jarvis_memory_read", "jarvis_memory_write" -> "Updating memory"
         else -> null
@@ -1178,6 +1214,137 @@ object JarvisMcp {
                 }
             })
         })
+    }
+
+    // ---------------- GitHub
+
+    /** Null when GitHub works here; otherwise why not, and what the user should do. */
+    private suspend fun githubProblem(context: Context): String? {
+        if (!com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context))
+            return "GitHub sign-in is only in the Termux build of AntiGem."
+        val s = com.example.gemini.data.github.GitHubManager.statusNow(context)
+        val where = if (com.example.gemini.data.github.GitHubManager.remote) "on the server" else "in the terminal"
+        return when {
+            s.ghInstalled != true -> "The GitHub CLI (gh) isn't installed $where. Open Settings → GitHub (jarvis_open_settings page github) to install it" +
+                (if (com.example.gemini.data.github.GitHubManager.remote) " (on a server the user installs it themselves)." else ".")
+            !s.signedIn -> "Not signed in to GitHub. Open Settings → GitHub (jarvis_open_settings page github) so the user can sign in."
+            s.authProblem != null -> "The GitHub login stopped working: ${s.authProblem} The user can sign in again in Settings → GitHub."
+            else -> null
+        }
+    }
+
+    private suspend fun githubStatus(context: Context): JSONObject {
+        if (!com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) return error("GitHub sign-in is only in the Termux build of AntiGem.")
+        val gh = com.example.gemini.data.github.GitHubManager
+        val s = gh.statusNow(context)
+        return json(JSONObject().apply {
+            put("runs_on", if (gh.remote) "server" else "phone")
+            put("gh_installed", s.ghInstalled == true)
+            s.ghVersion?.let { put("gh_version", it) }
+            put("signed_in", s.signedIn)
+            s.authProblem?.let { put("problem", it) }
+            s.account?.let { a ->
+                put("account", JSONObject().apply {
+                    put("login", a.login); put("url", a.htmlUrl)
+                    a.name?.let { put("name", it) }
+                    put("email", a.email ?: "private")
+                    put("public_repos", a.publicRepos)
+                    a.privateRepos?.let { put("private_repos", it) }
+                    put("followers", a.followers); put("following", a.following)
+                    a.plan?.let { put("plan", it) }
+                })
+            }
+            s.accountError?.let { put("account_error", it) }
+            s.scopes?.let { put("token_scopes", it) }
+            put("git_installed", s.gitInstalled)
+            put("git_uses_github_login", s.gitCredentialHelper)
+            put("git_identity", if (s.gitUserName != null && s.gitUserEmail != null) "${s.gitUserName} <${s.gitUserEmail}>" else "not set")
+            githubProblem(context)?.let { put("next_step", it) }
+        })
+    }
+
+    private fun repoJson(r: com.example.gemini.data.github.GitHubManager.Repo) = JSONObject().apply {
+        put("full_name", r.fullName)
+        put("visibility", if (r.isPrivate) "private" else "public")
+        if (r.isFork) put("fork", true)
+        if (r.isArchived) put("archived", true)
+        r.description?.let { put("description", it.take(160)) }
+        r.language?.let { put("language", it) }
+        r.pushedAt?.let { put("pushed", it.take(10)) }
+        if (r.stars > 0) put("stars", r.stars)
+        put("clone_url", r.cloneUrl)
+    }
+
+    private suspend fun githubListRepos(context: Context, args: JSONObject): JSONObject {
+        githubProblem(context)?.let { return error(it) }
+        val repos = com.example.gemini.data.github.GitHubManager.reposNow(args.optBoolean("reload"))
+            .getOrElse { return error(it.message ?: "Couldn't load repositories") }
+        val q = args.optString("query").trim()
+        val list = repos.filter {
+            q.isEmpty() || it.fullName.contains(q, true) || it.description?.contains(q, true) == true || it.language?.contains(q, true) == true
+        }
+        return json(pagedJson("repositories", list.map(::repoJson), args) { put("all_repositories", repos.size) })
+    }
+
+    /** "notes", "me/notes", "https://github.com/me/notes(.git)" → the repository (or just the URL for one not in the list). */
+    private fun findRepo(repos: List<com.example.gemini.data.github.GitHubManager.Repo>, wanted: String): Pair<String, com.example.gemini.data.github.GitHubManager.Repo?>? {
+        val w = wanted.trim().removeSuffix("/").removeSuffix(".git")
+        val name = w.removePrefix("https://").removePrefix("http://").removePrefix("github.com/")
+        val hit = repos.firstOrNull { it.fullName.equals(name, true) }
+            ?: repos.firstOrNull { it.name.equals(name, true) }
+            ?: repos.filter { it.fullName.contains(name, true) }.singleOrNull()
+        if (hit != null) return hit.cloneUrl to hit
+        if (w.startsWith("https://")) return "$w.git" to null
+        if (name.count { it == '/' } == 1) return "https://github.com/$name.git" to null
+        return null
+    }
+
+    private suspend fun githubClone(context: Context, args: JSONObject): JSONObject {
+        githubProblem(context)?.let { return error(it) }
+        val wanted = args.optString("repo").trim()
+        if (wanted.isEmpty()) return error("repo is required")
+        val repos = com.example.gemini.data.github.GitHubManager.reposNow().getOrDefault(emptyList())
+        val (url, repo) = findRepo(repos, wanted) ?: run {
+            val close = repos.filter { it.name.contains(wanted.take(4), true) }.take(5).joinToString { it.fullName }
+            return error("No repository matches \"$wanted\"." + (if (close.isNotEmpty()) " Close ones: $close." else "") + " Use jarvis_github_list_repos.")
+        }
+        val folder = args.optString("folder").trim().takeIf { it.isNotEmpty() }
+        if (folder != null && !folder.matches(Regex("[A-Za-z0-9._-]+"))) return error("folder may only use letters, numbers, '.', '_' and '-'")
+        val path = com.example.gemini.data.github.GitHubManager.cloneNow(context, url, folder)
+            .getOrElse { return error("Clone failed: ${it.message}") }
+        val name = java.io.File(path).name
+        if (args.optBoolean("open", true)) {
+            val p = ProjectItem(name, path)
+            TermuxDaemonManager.setActiveProject(p)
+            vm.onProjectChanged(path)
+            runCatching { TermuxDaemonManager.loadProjects(vm.allConversations.value) }
+            if (args.optBoolean("show_ide", false)) vm.requestViewMode("IDE")
+        }
+        return text("Cloned ${repo?.fullName ?: url} into $path" + (if (args.optBoolean("open", true)) " and made it the active project." else "."))
+    }
+
+    private suspend fun githubCreateRepo(context: Context, args: JSONObject): JSONObject {
+        githubProblem(context)?.let { return error(it) }
+        val name = args.optString("name").trim().removeSuffix(".git")
+        if (!name.matches(Regex("([A-Za-z0-9_.-]+/)?[A-Za-z0-9_.-]+"))) return error("name may only use letters, numbers, '.', '_' and '-' (optionally owner/name)")
+        if (!args.has("private")) return error("private is required: ask the user whether it should be private or public")
+        val projectArg = args.optString("project").trim()
+        val dir = when {
+            projectArg.isEmpty() -> null
+            projectArg.equals("active", true) -> TermuxDaemonManager.activeProject.value?.path ?: return error("No project is active.")
+            else -> (findProject(projectArg) ?: return error("No project matches \"$projectArg\". Use jarvis_ide_list_projects.")).path
+        }
+        val remote = args.optString("remote").trim().ifEmpty { "origin" }
+        if (!remote.matches(Regex("[A-Za-z0-9_.-]+"))) return error("remote may only use letters, numbers, '.', '_' and '-'")
+        val result = com.example.gemini.data.github.GitHubManager.createRepoNow(
+            name = name,
+            private = args.optBoolean("private", true),
+            description = args.optString("description").trim().takeIf { it.isNotEmpty() },
+            sourceDir = dir,
+            push = args.optBoolean("push", true),
+            remoteName = remote
+        )
+        return result.fold({ text(it) }, { error("Couldn't create the repository: ${it.message}") })
     }
 
     // ---------------- IDE
