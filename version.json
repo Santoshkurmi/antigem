@@ -4,7 +4,8 @@
   "min_supported_version_code": 1,
   "changelog": [
    "Added support for OpenCode",
-   "200+ third party api provider support using opencode"
+   "200+ third party api provider support using opencode",
+   "Fix to show argon proper usage limit(Not sure if it work though)"
   ],
   "is_critical": false
 }

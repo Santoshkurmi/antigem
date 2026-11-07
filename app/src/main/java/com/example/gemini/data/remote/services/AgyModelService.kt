@@ -259,11 +259,12 @@ class AgyModelService {
                     }
 
                     val gId = when {
-                        dispName.contains("gemini", ignoreCase = true) -> "gemini"
+                        dispName.contains("argon", ignoreCase = true) -> "argon"
                         dispName.contains("claude", ignoreCase = true) || dispName.contains(
                             "gpt",
                             ignoreCase = true
                         ) -> "claude_gpt"
+                        dispName.contains("gemini", ignoreCase = true) -> "gemini"
 
                         else -> dispName.lowercase().replace(" ", "_")
                     }

@@ -40,10 +40,16 @@ import com.example.gemini.theme.*
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
-enum class CategoryType {
-    GEMINI,
-    CLAUDE
-}
+data class ModelCategoryUi(
+    val id: String,
+    val title: String,
+    val models: List<AiModel>,
+    val brandColor: Color,
+    val line1: String? = null,
+    val fraction1: Float? = null,
+    val line2: String? = null,
+    val fraction2: Float? = null
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,17 +63,140 @@ fun ModelSelectorBottomSheet(
     onSelectModel: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Group models into two groups: Claude and Gemini (with GPT-OSS and others under Gemini)
-    val claudeModels = availableModels.filter {
-        (it.family == ModelFamily.CLAUDE || it.id.contains("claude", ignoreCase = true) || it.displayName.contains("claude", ignoreCase = true)) &&
-                !it.id.contains("gpt", ignoreCase = true) && !it.displayName.contains("gpt", ignoreCase = true)
-    }
-    val geminiModels = availableModels.filter { it !in claudeModels }
-
     val activeModel = availableModels.find { it.id == selectedModelId }
+    val fallbackColor = MaterialTheme.colorScheme.primary
 
-    // Navigation state inside the sheet: null = category list, CategoryType = subcategory sheet
-    var activeCategory by remember { mutableStateOf<CategoryType?>(null) }
+    val categories = remember(availableModels, quotaSummary, quotas, fallbackColor) {
+        val claudeGptModels = availableModels.filter {
+            it.family == ModelFamily.CLAUDE ||
+                    it.id.contains("claude", ignoreCase = true) ||
+                    it.displayName.contains("claude", ignoreCase = true) ||
+                    it.id.contains("gpt", ignoreCase = true) ||
+                    it.displayName.contains("gpt", ignoreCase = true)
+        }
+        val argonModels = availableModels.filter {
+            it.id.contains("argon", ignoreCase = true) ||
+                    it.key.contains("argon", ignoreCase = true) ||
+                    it.displayName.contains("argon", ignoreCase = true)
+        }
+        val standardGeminiModels = availableModels.filter { it !in claudeGptModels && it !in argonModels }
+
+        val groups = quotaSummary?.groups.orEmpty()
+        if (groups.isNotEmpty()) {
+            val list = mutableListOf<ModelCategoryUi>()
+            for (grp in groups) {
+                val gName = grp.groupName.ifBlank { grp.groupId }
+                val isArgon = grp.groupId == "argon" || gName.contains("argon", ignoreCase = true)
+                val isClaudeGpt = grp.groupId == "claude_gpt" ||
+                        gName.contains("claude", ignoreCase = true) ||
+                        gName.contains("gpt", ignoreCase = true)
+
+                val (catModels, color, defaultId) = when {
+                    isArgon -> Triple(argonModels, Color(0xFF8E44AD), "argon")
+                    isClaudeGpt -> Triple(claudeGptModels, ClaudeTerracotta, "claude_gpt")
+                    else -> Triple(standardGeminiModels, GeminiBlue, "gemini")
+                }
+
+                val fiveHour = grp.fiveHour
+                val weekly = grp.weekly
+
+                val fiveHourFraction = fiveHour?.remainingFraction
+                    ?: quotas.find { q -> catModels.any { it.id == q.modelId } }?.remainingFraction
+                val weeklyFraction = weekly?.remainingFraction
+                    ?: quotas.find { q -> catModels.any { it.id == q.modelId } }?.weeklyRemainingFraction
+
+                val l1 = if (fiveHour != null || fiveHourFraction != null) {
+                    buildQuotaSummaryLine("5h", fiveHourFraction, fiveHour?.resetTime, fiveHour?.countdown)
+                } else null
+
+                val l2 = if (weekly != null || weeklyFraction != null) {
+                    buildQuotaSummaryLine("7d", weeklyFraction, weekly?.resetTime, weekly?.countdown)
+                } else null
+
+                val line1: String?
+                val frac1: Float?
+                val line2: String?
+                val frac2: Float?
+                if (l1 == null && l2 != null) {
+                    line1 = l2
+                    frac1 = weeklyFraction
+                    line2 = null
+                    frac2 = null
+                } else {
+                    line1 = l1
+                    frac1 = fiveHourFraction
+                    line2 = l2
+                    frac2 = weeklyFraction
+                }
+
+                list.add(
+                    ModelCategoryUi(
+                        id = grp.groupId.ifBlank { defaultId },
+                        title = gName,
+                        models = catModels,
+                        brandColor = color,
+                        line1 = line1,
+                        fraction1 = frac1,
+                        line2 = line2,
+                        fraction2 = frac2
+                    )
+                )
+            }
+
+            // Ensure any models not covered by the server's groups are still accessible
+            val coveredModels = list.flatMap { it.models }.toSet()
+            val uncovered = availableModels.filter { it !in coveredModels }
+            if (uncovered.isNotEmpty()) {
+                list.add(
+                    ModelCategoryUi(
+                        id = "other",
+                        title = "Other Models",
+                        models = uncovered,
+                        brandColor = fallbackColor
+                    )
+                )
+            }
+            list
+        } else {
+            // Fallback when quota summary is not loaded yet
+            val list = mutableListOf<ModelCategoryUi>()
+            if (standardGeminiModels.isNotEmpty() || argonModels.isNotEmpty()) {
+                val geminiAll = standardGeminiModels + argonModels
+                val qMatch = quotas.find { q -> geminiAll.any { it.id == q.modelId } }
+                list.add(
+                    ModelCategoryUi(
+                        id = "gemini",
+                        title = "Google Gemini",
+                        models = geminiAll,
+                        brandColor = GeminiBlue,
+                        line1 = buildQuotaSummaryLine("5h", qMatch?.remainingFraction, qMatch?.resetTime, qMatch?.resetCountdown),
+                        fraction1 = qMatch?.remainingFraction,
+                        line2 = buildQuotaSummaryLine("7d", qMatch?.weeklyRemainingFraction, null, qMatch?.weeklyResetCountdown),
+                        fraction2 = qMatch?.weeklyRemainingFraction
+                    )
+                )
+            }
+            if (claudeGptModels.isNotEmpty()) {
+                val qMatch = quotas.find { q -> claudeGptModels.any { it.id == q.modelId } }
+                list.add(
+                    ModelCategoryUi(
+                        id = "claude_gpt",
+                        title = "Claude and GPT models",
+                        models = claudeGptModels,
+                        brandColor = ClaudeTerracotta,
+                        line1 = buildQuotaSummaryLine("5h", qMatch?.remainingFraction, qMatch?.resetTime, qMatch?.resetCountdown),
+                        fraction1 = qMatch?.remainingFraction,
+                        line2 = buildQuotaSummaryLine("7d", qMatch?.weeklyRemainingFraction, null, qMatch?.weeklyResetCountdown),
+                        fraction2 = qMatch?.weeklyRemainingFraction
+                    )
+                )
+            }
+            list
+        }
+    }
+
+    // Navigation state inside the sheet: null = category list, ModelCategoryUi = subcategory sheet
+    var activeCategory by remember { mutableStateOf<ModelCategoryUi?>(null) }
 
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = false
@@ -113,15 +242,11 @@ fun ModelSelectorBottomSheet(
                 label = "category_transition"
             ) { currentCategory ->
                 if (currentCategory == null) {
-                    // Main Level: Active Model + Category Selection Tiles
+                    // Main Level: Active Model + Dynamic Category Selection Tiles
                     MainCategoryListView(
                         activeModel = activeModel,
-                        availableModels = availableModels,
-                        claudeModelsCount = claudeModels.size,
-                        geminiModelsCount = geminiModels.size,
+                        categories = categories,
                         availableModelsCount = availableModels.size,
-                        quotas = quotas,
-                        quotaSummary = quotaSummary,
                         isRefreshing = isRefreshing,
                         onRefresh = onRefresh,
                         onSelectCategory = { category -> activeCategory = category },
@@ -129,15 +254,10 @@ fun ModelSelectorBottomSheet(
                     )
                 } else {
                     // Sub-Sheet: Models inside the chosen category
-                    val (categoryTitle, brandColor, categoryModels) = when (currentCategory) {
-                        CategoryType.GEMINI -> Triple("Google Gemini", GeminiBlue, geminiModels)
-                        CategoryType.CLAUDE -> Triple("Anthropic Claude", ClaudeTerracotta, claudeModels)
-                    }
-
                     CategoryModelsSubView(
-                        title = categoryTitle,
-                        brandColor = brandColor,
-                        models = categoryModels,
+                        title = currentCategory.title,
+                        brandColor = currentCategory.brandColor,
+                        models = currentCategory.models,
                         selectedModelId = selectedModelId,
                         onBack = {
                             activeCategory = null
@@ -256,15 +376,11 @@ fun QuotaBadgeChip(
 @Composable
 private fun MainCategoryListView(
     activeModel: AiModel?,
-    availableModels: List<AiModel>,
-    claudeModelsCount: Int,
-    geminiModelsCount: Int,
+    categories: List<ModelCategoryUi>,
     availableModelsCount: Int,
-    quotas: List<ModelQuota>,
-    quotaSummary: com.example.gemini.domain.model.QuotaSummaryResponse? = null,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
-    onSelectCategory: (CategoryType) -> Unit,
+    onSelectCategory: (ModelCategoryUi) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -305,90 +421,25 @@ private fun MainCategoryListView(
                 )
             }
         } else {
-            // Category Navigation Tiles: Gemini FIRST, Claude SECOND
-            val isClaudeActive = activeModel != null && (
-                activeModel.family == ModelFamily.CLAUDE ||
-                activeModel.id.contains("claude", ignoreCase = true) ||
-                activeModel.displayName.contains("claude", ignoreCase = true)
-            ) && !activeModel.id.contains("gpt", ignoreCase = true) && !activeModel.displayName.contains("gpt", ignoreCase = true)
-            val isGeminiActive = activeModel != null && !isClaudeActive
-
             val cleanActiveModelName = activeModel?.displayName
                 ?.replace(Regex("\\s*\\(?Thinking\\)?", RegexOption.IGNORE_CASE), "")
                 ?.trim()
 
-            val geminiGroup = quotaSummary?.groups?.find {
-                it.groupId == "gemini" || it.groupName.contains("gemini", ignoreCase = true)
-            }
-            val claudeGroup = quotaSummary?.groups?.find {
-                it.groupId == "claude_gpt" || it.groupName.contains("claude", ignoreCase = true) || it.groupName.contains("gpt", ignoreCase = true)
-            }
-
-            // 1. Google Gemini (First!)
-            if (geminiModelsCount > 0) {
-                val fiveHour = geminiGroup?.fiveHour
-                val weekly = geminiGroup?.weekly
-                val fiveHourFraction = fiveHour?.remainingFraction ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.GEMINI } }?.remainingFraction
-                val weeklyFraction = weekly?.remainingFraction ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.GEMINI } }?.weeklyRemainingFraction
-
-                val line1 = buildQuotaSummaryLine(
-                    "5h",
-                    fiveHourFraction,
-                    fiveHour?.resetTime,
-                    fiveHour?.countdown ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.GEMINI } }?.resetCountdown
-                )
-                val line2 = buildQuotaSummaryLine(
-                    "7d",
-                    weeklyFraction,
-                    weekly?.resetTime,
-                    weekly?.countdown ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.GEMINI } }?.weeklyResetCountdown
-                )
+            for (cat in categories) {
+                val isCatActive = activeModel != null && cat.models.any { it.id == activeModel.id || it.key == activeModel.key }
 
                 CategoryNavigationTile(
-                    title = "Google Gemini",
-                    activeModelName = if (isGeminiActive) cleanActiveModelName else null,
-                    line1 = line1,
-                    fraction1 = fiveHourFraction,
-                    line2 = line2,
-                    fraction2 = weeklyFraction,
-                    count = geminiModelsCount,
-                    brandColor = GeminiBlue,
-                    onClick = { onSelectCategory(CategoryType.GEMINI) }
+                    title = cat.title,
+                    activeModelName = if (isCatActive) cleanActiveModelName else null,
+                    line1 = cat.line1,
+                    fraction1 = cat.fraction1,
+                    line2 = cat.line2,
+                    fraction2 = cat.fraction2,
+                    count = cat.models.size,
+                    brandColor = cat.brandColor,
+                    onClick = { onSelectCategory(cat) }
                 )
                 Spacer(modifier = Modifier.height(10.dp))
-            }
-
-            // 2. Anthropic Claude (Second, no GPT in title!)
-            if (claudeModelsCount > 0) {
-                val fiveHour = claudeGroup?.fiveHour
-                val weekly = claudeGroup?.weekly
-                val fiveHourFraction = fiveHour?.remainingFraction ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.CLAUDE } }?.remainingFraction
-                val weeklyFraction = weekly?.remainingFraction ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.CLAUDE } }?.weeklyRemainingFraction
-
-                val line1 = buildQuotaSummaryLine(
-                    "5h",
-                    fiveHourFraction,
-                    fiveHour?.resetTime,
-                    fiveHour?.countdown ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.CLAUDE } }?.resetCountdown
-                )
-                val line2 = buildQuotaSummaryLine(
-                    "7d",
-                    weeklyFraction,
-                    weekly?.resetTime,
-                    weekly?.countdown ?: quotas.find { q -> availableModels.any { it.id == q.modelId && it.family == ModelFamily.CLAUDE } }?.weeklyResetCountdown
-                )
-
-                CategoryNavigationTile(
-                    title = "Anthropic Claude",
-                    activeModelName = if (isClaudeActive) cleanActiveModelName else null,
-                    line1 = line1,
-                    fraction1 = fiveHourFraction,
-                    line2 = line2,
-                    fraction2 = weeklyFraction,
-                    count = claudeModelsCount,
-                    brandColor = ClaudeTerracotta,
-                    onClick = { onSelectCategory(CategoryType.CLAUDE) }
-                )
             }
         }
     }

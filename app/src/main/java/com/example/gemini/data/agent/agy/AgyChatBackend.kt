@@ -1988,25 +1988,31 @@ class AgyChatBackend(
 
     fun applyQuotaSummary(summary: com.example.gemini.domain.model.QuotaSummaryResponse) {
         _quotaSummary.value = summary
-        val geminiGroup = summary.groups.find {
-            it.groupId == "gemini" || it.groupName.contains("gemini", ignoreCase = true)
-        }
-        val claudeGroup = summary.groups.find {
-            it.groupId == "claude_gpt" || it.groupName.contains("claude", ignoreCase = true) || it.groupName.contains("gpt", ignoreCase = true)
-        }
 
         val updatedQuotas = _availableModels.value.map { model ->
-            val isClaude = model.family == com.example.gemini.domain.model.ModelFamily.CLAUDE
-            val group = if (isClaude) claudeGroup else geminiGroup
+            val mName = model.displayName.ifBlank { model.id }
+            val group = summary.groups.firstOrNull { grp ->
+                val desc = grp.description
+                val gName = grp.groupName
+
+                (desc.isNotBlank() && desc.contains(mName.substringBefore(" ("), ignoreCase = true)) ||
+                (gName.contains("claude", ignoreCase = true) && (mName.contains("claude", ignoreCase = true) || mName.contains("gpt", ignoreCase = true))) ||
+                (gName.contains("argon", ignoreCase = true) && mName.contains("argon", ignoreCase = true)) ||
+                (gName.contains("gemini", ignoreCase = true) && !gName.contains("argon", ignoreCase = true) && !mName.contains("claude", ignoreCase = true) && !mName.contains("gpt", ignoreCase = true))
+            } ?: summary.groups.firstOrNull()
+
+            val fiveHour = group?.fiveHour
+            val weekly = group?.weekly
+
             com.example.gemini.domain.model.ModelQuota(
                 modelId = model.id,
-                remainingFraction = group?.fiveHour?.remainingFraction,
-                resetTime = group?.fiveHour?.resetTime,
-                usedPercentage = group?.fiveHour?.usedPct,
-                resetCountdown = group?.fiveHour?.countdown,
-                weeklyRemainingFraction = group?.weekly?.remainingFraction,
-                weeklyUsedPercentage = group?.weekly?.usedPct,
-                weeklyResetCountdown = group?.weekly?.countdown
+                remainingFraction = fiveHour?.remainingFraction ?: weekly?.remainingFraction,
+                resetTime = fiveHour?.resetTime ?: weekly?.resetTime,
+                usedPercentage = fiveHour?.usedPct ?: weekly?.usedPct,
+                resetCountdown = fiveHour?.countdown ?: weekly?.countdown,
+                weeklyRemainingFraction = weekly?.remainingFraction,
+                weeklyUsedPercentage = weekly?.usedPct,
+                weeklyResetCountdown = weekly?.countdown
             )
         }
         _quotas.value = updatedQuotas

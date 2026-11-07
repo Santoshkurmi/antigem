@@ -349,11 +349,12 @@ class AgyBridgeService(
 
             val gId = when {
                 rawGroupId.isNotBlank() -> rawGroupId
-                groupName.contains("gemini", ignoreCase = true) -> "gemini"
+                groupName.contains("argon", ignoreCase = true) -> "argon"
                 groupName.contains("claude", ignoreCase = true) || groupName.contains(
                     "gpt",
                     ignoreCase = true
                 ) -> "claude_gpt"
+                groupName.contains("gemini", ignoreCase = true) -> "gemini"
 
                 else -> groupName.lowercase().replace(" ", "_")
             }
