@@ -309,6 +309,13 @@ fun ChatScreen(
     var showRawPayloadDialog by remember { mutableStateOf<String?>(null) }
     var showChatTelemetryDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    // an error card's "Reconnect in Settings" (an OpenCode account the provider rejected)
+    LaunchedEffect(Unit) {
+        com.example.gemini.ui.opencode.OpenCodeUiEvents.openProviders.collect {
+            openCodeSettingsPage = com.example.gemini.ui.opencode.OpenCodeSettingsPage.PROVIDERS
+            showSettingsDialog = true
+        }
+    }
     var showAttachmentSelector by remember { mutableStateOf(false) }
     var showProjectPickerDialog by remember { mutableStateOf(false) }
     var showGitCloneDialog by remember { mutableStateOf(false) }

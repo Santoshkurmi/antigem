@@ -189,7 +189,7 @@ fun OpenCodeControlsStrip(backend: OpenCodeChatBackend) {
                     onClick = { backend.selectAgent(a.id); agentSheet = false }
                 )
             }
-            SheetNote("Switching applies to the next message of this chat. New chats use the agent from Settings → OpenCode → Defaults.")
+            SheetNote("Switching applies to the next message of this chat. New chats use the agent from Settings → OpenCode → Permissions.")
         }
     }
     if (modeSheet) {

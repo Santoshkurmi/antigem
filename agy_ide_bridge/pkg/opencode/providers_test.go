@@ -188,3 +188,51 @@ func TestBinaryPathTildeAndFallback(t *testing.T) {
 		t.Fatalf("fallback: %q %v", got, err)
 	}
 }
+
+func TestCallbackURLCheck(t *testing.T) {
+	ok := []string{
+		"http://127.0.0.1:1455/auth/callback?code=abc&state=xyz",
+		"http://localhost:40711/callback?code=a&state=b",
+	}
+	for _, u := range ok {
+		if got, msg := checkCallbackURL(u); got == nil || got.Hostname() != "127.0.0.1" {
+			t.Fatalf("%s rejected: %s", u, msg)
+		}
+	}
+	bad := []string{
+		"https://127.0.0.1:1455/auth/callback?code=a&state=b", // not http
+		"http://example.com:80/callback?code=a&state=b",       // not loopback
+		"http://127.0.0.1:1455/admin?code=a&state=b",          // not a callback
+		"http://127.0.0.1:1455/callback",                      // no code / state
+		"http://127.0.0.1/callback?code=a",                    // no port
+		"http://10.0.0.5:1455/callback?code=a&state=b",
+	}
+	for _, u := range bad {
+		if got, _ := checkCallbackURL(u); got != nil {
+			t.Fatalf("%s accepted", u)
+		}
+	}
+}
+
+func TestOAuthCallbackForwarding(t *testing.T) {
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/auth/callback" && r.URL.Query().Get("code") == "c1" {
+			hits++
+			_, _ = w.Write([]byte("Signed in, you can close this"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	port := srv.URL[strings.LastIndex(srv.URL, ":")+1:]
+	m := NewManager(t.TempDir(), "", "")
+	res := doJSON(t, m, http.MethodPost, "/api/opencode/oauth-callback", `{"url":"http://localhost:`+port+`/auth/callback?code=c1&state=s1"}`)
+	if res["success"] != true || hits != 1 {
+		t.Fatalf("forward: %v (hits %d)", res, hits)
+	}
+	res = doJSON(t, m, http.MethodPost, "/api/opencode/oauth-callback", `{"url":"http://example.com/auth/callback?code=c1&state=s1"}`)
+	if res["success"] != false || hits != 1 {
+		t.Fatalf("non-loopback forwarded: %v", res)
+	}
+}

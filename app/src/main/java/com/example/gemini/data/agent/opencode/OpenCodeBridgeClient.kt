@@ -214,6 +214,64 @@ class OpenCodeBridgeClient(private val bridge: AgyBridgeService = AgyBridgeServi
         OpenCodeJson.decodeFromString<CliJobResponse>(execute(Request.Builder().url(url("/cli/job")).get().build())).job
     }
 
+    // ---- provider sign-in
+
+    suspend fun integrations(): Result<List<OpenCodeAuth.Integration>> =
+        get("/integration").map { OpenCodeAuth.integrations(it.obj().a("data")) }
+
+    /** Starts an OAuth sign-in ([answer]: the method's form). */
+    suspend fun startOAuth(integrationId: String, methodId: String, answer: Map<String, JsonElement>): Result<OpenCodeAuth.Attempt> =
+        post("/integration/$integrationId/connect/oauth", kotlinx.serialization.json.buildJsonObject {
+            put("methodID", kotlinx.serialization.json.JsonPrimitive(methodId))
+            if (answer.isNotEmpty()) put("answer", JsonObject(answer))
+            put("label", kotlinx.serialization.json.JsonPrimitive("Added from AntiGem"))
+        }).mapCatching { OpenCodeAuth.attempt(it.obj()) ?: error("OpenCode did not start the sign-in") }
+
+    suspend fun oauthStatus(integrationId: String, attemptId: String): Result<OpenCodeAuth.AttemptStatus> =
+        get("/integration/$integrationId/connect/oauth/$attemptId").map { OpenCodeAuth.status(it.obj()) }
+
+    /** Finishes a sign-in that gave a code to paste. */
+    suspend fun completeOAuth(integrationId: String, attemptId: String, code: String): Result<Unit> =
+        post("/integration/$integrationId/connect/oauth/$attemptId/complete", kotlinx.serialization.json.buildJsonObject {
+            put("code", kotlinx.serialization.json.JsonPrimitive(code))
+        }).map { }
+
+    suspend fun cancelOAuth(integrationId: String, attemptId: String): Result<Unit> =
+        api("DELETE", "/integration/$integrationId/connect/oauth/$attemptId").map { }
+
+    /** Uses credentials already on the server (Claude Code's login, an AWS profile, gcloud). */
+    suspend fun connectExternal(integrationId: String, methodId: String, answer: Map<String, JsonElement>): Result<Unit> =
+        post("/integration/$integrationId/connect/external", kotlinx.serialization.json.buildJsonObject {
+            put("methodID", kotlinx.serialization.json.JsonPrimitive(methodId))
+            if (answer.isNotEmpty()) put("answer", JsonObject(answer))
+            put("label", kotlinx.serialization.json.JsonPrimitive("Added from AntiGem"))
+        }).map { }
+
+    suspend fun connectKey(integrationId: String, key: String, label: String = "Added from AntiGem"): Result<Unit> =
+        post("/integration/$integrationId/connect/key", kotlinx.serialization.json.buildJsonObject {
+            put("key", kotlinx.serialization.json.JsonPrimitive(key))
+            put("label", kotlinx.serialization.json.JsonPrimitive(label))
+        }).map { }
+
+    /** The saved accounts (the bridge leaves their secrets out). */
+    suspend fun credentials(): Result<List<OpenCodeAuth.Credential>> = runCatching {
+        val o = OpenCodeJson.parseToJsonElement(execute(Request.Builder().url(url("/credentials")).get().build())).obj()
+        if (o.bool("success") == false) error(o.str("error") ?: "Could not list the accounts")
+        OpenCodeAuth.credentials(o.a("credentials"))
+    }
+
+    suspend fun activateCredential(id: String): Result<Unit> = post("/credential/$id/activate").map { }
+    suspend fun removeCredential(id: String): Result<Unit> = api("DELETE", "/credential/$id").map { }
+
+    /** Server mode: hands the 127.0.0.1 address a browser sign-in came back to over to the server (see the bridge). */
+    suspend fun forwardOAuthCallback(callbackUrl: String): Result<Unit> = runCatching {
+        val body = OpenCodeJson.encodeToString(JsonElement.serializer(), kotlinx.serialization.json.buildJsonObject {
+            put("url", kotlinx.serialization.json.JsonPrimitive(callbackUrl))
+        }).toRequestBody(jsonType)
+        val o = OpenCodeJson.parseToJsonElement(execute(Request.Builder().url(url("/oauth-callback")).post(body).build())).obj()
+        if (o.bool("success") != true) error(o.str("error") ?: "The server could not finish the sign-in")
+    }
+
     /** Names of the MCP servers the app added (kept in the bridge's OpenCode config). */
     suspend fun mcpServers(): Result<Set<String>> = runCatching {
         val o = OpenCodeJson.parseToJsonElement(execute(Request.Builder().url(url("/mcp")).get().build())).obj()

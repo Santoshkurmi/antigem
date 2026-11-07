@@ -77,6 +77,8 @@ class OpenCodeTranscript(var sessionId: String = "") {
         var finish: String? = null
         var error: String? = null
         var errorTitle: String? = null
+        /** The provider rejected the account (expired sign-in, invalid key): the card offers to reconnect. */
+        var errorAuth = false
         /** The user message was sent from the app and is not confirmed by OpenCode yet. */
         var pending = false
         /** Made in the app (a prompt just sent, an error card): kept until the stored history has it. */
@@ -468,6 +470,15 @@ class OpenCodeTranscript(var sessionId: String = "") {
     private fun setError(msg: Msg, err: JsonObject) {
         msg.errorTitle = errorTitle(err)
         msg.error = err.str("message") ?: err.toString()
+        msg.errorAuth = isAuthError(err)
+    }
+
+    private fun isAuthError(err: JsonObject): Boolean {
+        val type = err.str("type").orEmpty().lowercase()
+        val status = err.long("status")
+        val text = (err.str("message").orEmpty() + " " + err.o("response").str("body").orEmpty()).lowercase()
+        return type.contains("auth") || status == 401L || status == 403L ||
+            listOf("unauthorized", "invalid api key", "invalid_api_key", "incorrect api key", "expired", "not signed in", "invalid token", "authentication").any { text.contains(it) }
     }
 
     private fun errorTitle(err: JsonObject): String = when {
@@ -555,6 +566,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
                     put("userMessage", e)
                     put("shortError", e)
                     put("fullError", "")
+                    if (step.errorAuth) put("action", "opencode_providers")
                 }
                 content.add("<!-- error -->\n${OpenCodeJson.encodeToString(JsonObject.serializer(), err)}\n<!-- /error -->")
             }

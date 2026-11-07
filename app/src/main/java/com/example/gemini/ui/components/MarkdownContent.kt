@@ -126,7 +126,9 @@ sealed class MarkdownBlock {
         val fullError: String = "",
         val errorCode: Int? = null,
         val errorId: String = "",
-        val rawJson: String = ""
+        val rawJson: String = "",
+        /** A fix the card offers as a button ("opencode_providers": reconnect in Settings → OpenCode → Providers). */
+        val action: String? = null
     ) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class Header(val level: Int, val text: String) : MarkdownBlock()
@@ -1440,6 +1442,16 @@ fun AgentErrorCard(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                     lineHeight = 17.sp
                 )
+            }
+
+            // the fix, when the agent knows it (an account to reconnect)
+            if (error.action == com.example.gemini.ui.opencode.OpenCodeUiEvents.ACTION_PROVIDERS) {
+                Spacer(modifier = Modifier.height(8.dp))
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { com.example.gemini.ui.opencode.OpenCodeUiEvents.requestProviders() },
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                ) { Text("Reconnect in Settings", fontSize = 12.5.sp) }
             }
 
             // Full Error / Stack Trace / JSON Accordion if present
@@ -3068,7 +3080,9 @@ private fun parseErrorPayloadToBlock(raw: String): MarkdownBlock.AgentError {
             val errorCode = json["errorCode"]?.jsonPrimitive?.intOrNull
             val errorId = json["errorId"]?.jsonPrimitive?.content ?: ""
             val rawJson = json["rawJson"]?.jsonPrimitive?.content ?: ""
+            val action = json["action"]?.jsonPrimitive?.content
             return MarkdownBlock.AgentError(
+                action = action,
                 title = title,
                 userMessage = userMessage,
                 shortError = shortError,

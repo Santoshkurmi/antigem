@@ -452,6 +452,8 @@ func (m *Manager) Call(ctx context.Context, method, path string, body interface{
 //	POST /api/opencode/start              start the server (no-op when running)
 //	POST /api/opencode/restart            restart the server (reloads providers and config)
 //	GET|POST /api/opencode/custom-providers, PUT|DELETE /api/opencode/custom-providers/{id}
+//	POST /api/opencode/oauth-callback {"url"}    finishes a browser sign-in that came back to 127.0.0.1 (server mode)
+//	GET  /api/opencode/credentials       saved accounts per provider (active or not), without their secrets
 //	GET  /api/opencode/mcp; PUT|DELETE /api/opencode/mcp/{name}   MCP servers kept in the bridge's OpenCode config
 //	GET  /api/opencode/cli/job; POST /api/opencode/cli/{install|update}   install or update OpenCode (~/.opencode/bin)
 //	POST /api/opencode/custom-providers/fetch-models   {"kind","base_url","api_key"|"id"} → model ids of an endpoint
@@ -476,6 +478,10 @@ func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
+	case path == "/oauth-callback" && r.Method == http.MethodPost:
+		m.handleOAuthCallback(w, r)
+	case path == "/credentials" && r.Method == http.MethodGet:
+		m.handleCredentials(w, r)
 	case path == "/mcp" || strings.HasPrefix(path, "/mcp/"):
 		m.handleMcp(w, r, strings.Trim(strings.TrimPrefix(path, "/mcp"), "/"))
 	case path == "/cli/job" || strings.HasPrefix(path, "/cli/"):

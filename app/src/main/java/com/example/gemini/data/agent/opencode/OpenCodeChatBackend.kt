@@ -706,6 +706,11 @@ class OpenCodeChatBackend(
         }
     }
 
+    /** Cancels a provider sign-in that was left open (the settings sheet closed). */
+    fun cancelSignIn(integrationId: String, attemptId: String) {
+        backendScope.launch { client.cancelOAuth(integrationId, attemptId) }
+    }
+
     /** Switches the model of any chat (open or not); applies to its next message. */
     suspend fun switchModelOf(sessionId: String, modelId: String): Result<Unit> {
         val ref = modelRefJson(modelId) ?: return Result.failure(IllegalArgumentException("Not an OpenCode model id: $modelId"))

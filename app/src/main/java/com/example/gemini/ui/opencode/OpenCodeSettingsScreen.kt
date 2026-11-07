@@ -92,9 +92,8 @@ private fun toast(msg: String, ok: Boolean = true) =
 /** The pages of Settings → OpenCode (each opens from the OpenCode row list). */
 enum class OpenCodeSettingsPage(val title: String, val subtitle: String) {
     SERVER("Server & install", "Install, update and restart OpenCode"),
-    DEFAULTS("Defaults", "Approvals and the agent of new chats"),
-    PROVIDERS("Providers", "Built-in providers you connect with an API key"),
-    ENDPOINTS("Custom endpoints", "Any OpenAI- or Anthropic-compatible API"),
+    DEFAULTS("Permissions", "What OpenCode asks before acting, and the agent of new chats"),
+    PROVIDERS("Custom providers", "Sign in or add an API key, or add any OpenAI- or Anthropic-compatible API manually"),
     MCP("MCP servers", "Tools OpenCode can call: presets and your own servers")
 }
 
@@ -125,8 +124,7 @@ fun OpenCodeSettingsGroup(backend: OpenCodeChatBackend, cardBg: Color, onOpen: (
             listOf(
                 row(OpenCodeSettingsPage.DEFAULTS, Icons.Outlined.Tune, openCodeModeLabel(mode)),
                 row(OpenCodeSettingsPage.PROVIDERS, Icons.Outlined.Cloud,
-                    if (connected.isNotEmpty()) "${connected.size} connected" else if (models.isNotEmpty()) "Free models" else null),
-                row(OpenCodeSettingsPage.ENDPOINTS, Icons.Outlined.Link, endpoints?.takeIf { it > 0 }?.let { "$it added" }),
+                    (connected.size + (endpoints ?: 0)).takeIf { it > 0 }?.let { "$it connected" } ?: if (models.isNotEmpty()) "Free models" else null),
                 row(OpenCodeSettingsPage.MCP, Icons.Outlined.Hub, mcp?.takeIf { it > 0 }?.let { "$it servers" })
             )
         )
@@ -329,56 +327,16 @@ fun OpenCodeSettingsScreen(backend: OpenCodeChatBackend, page: OpenCodeSettingsP
 
         }
 
-        // ---- built-in providers
-        if (page == OpenCodeSettingsPage.PROVIDERS) ClaudeCard {
-            Text(
-                "OpenCode has ${integrations.size.takeIf { it > 0 } ?: "200+"} built-in providers (OpenAI, Anthropic, Google, OpenRouter, Groq, DeepSeek, Mistral, Ollama Cloud…). " +
-                    "Connect one with its API key; its models then show in the model picker. ${models.size} models are available now.",
-                fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
-            integrationsError?.let { Text(it, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp)) }
-            val connected = integrations.filter { it.connections.isNotEmpty() }
-            if (connected.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                connected.forEach { integ ->
-                    integ.connections.forEach { (credId, label) ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Link, null, tint = OpenCodeAccent, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(integ.name, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-                                Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
-                            }
-                            if (credId.startsWith("cred")) {
-                                TextButton(onClick = {
-                                    scope.launch {
-                                        backend.client.api("DELETE", "/credential/$credId")
-                                            .onSuccess { toast("${integ.name} disconnected"); backend.refreshModels() }
-                                            .onFailure { toast("Could not disconnect: ${it.message}", ok = false) }
-                                        reload()
-                                    }
-                                }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = { showConnect = true },
-                enabled = integrations.isNotEmpty(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = OpenCodeAccent, contentColor = Color.White)
-            ) {
-                Icon(Icons.Outlined.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Connect a provider")
-            }
-        }
+        // ---- built-in providers: accounts and signing in
+        if (page == OpenCodeSettingsPage.PROVIDERS) OpenCodeProvidersPage(backend)
 
         // ---- custom endpoints
-        if (page == OpenCodeSettingsPage.ENDPOINTS) ClaudeCard {
+        // ---- manual: any OpenAI- / Anthropic-compatible API by its address (on the same page as the providers)
+        if (page == OpenCodeSettingsPage.PROVIDERS) ClaudeCard {
+            Text("Manual", fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Text(
-                "Any OpenAI-compatible API (Ollama, LM Studio, vLLM, LiteLLM, a company gateway…) or an Anthropic-compatible one. " +
-                    "Its address must be reachable from the server.",
+                "Any OpenAI-compatible API (Ollama, LM Studio, vLLM, LiteLLM, a company gateway…) or an Anthropic-compatible one, " +
+                    "added by its address. It must be reachable from the server.",
                 fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
             customs.forEach { p ->
@@ -408,32 +366,13 @@ fun OpenCodeSettingsScreen(backend: OpenCodeChatBackend, page: OpenCodeSettingsP
             }
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { editing = OpenCodeCustomProvider() }, shape = RoundedCornerShape(12.dp)) {
-                Icon(Icons.Outlined.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Add an endpoint")
+                Icon(Icons.Outlined.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Add manually")
             }
         }
         if (page == OpenCodeSettingsPage.MCP) OpenCodeMcpPage(backend)
         Spacer(Modifier.height(24.dp))
     }
 
-    if (showConnect) {
-        ConnectProviderDialog(
-            integrations = integrations.filter { it.keyLogin },
-            onDismiss = { showConnect = false },
-            onConnect = { integ, key, done ->
-                scope.launch {
-                    backend.client.post("/integration/${integ.id}/connect/key", buildJsonObject { put("key", key); put("label", "Added from AntiGem") })
-                        .onSuccess {
-                            toast("${integ.name} connected")
-                            showConnect = false
-                            backend.refreshModels()
-                            reload()
-                        }
-                        .onFailure { toast("Could not connect: ${it.message}", ok = false) }
-                    done()
-                }
-            }
-        )
-    }
     editing?.let { p ->
         CustomProviderDialog(
             backend = backend,
@@ -457,68 +396,6 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun ConnectProviderDialog(integrations: List<Integration>, onDismiss: () -> Unit, onConnect: (Integration, String, () -> Unit) -> Unit) {
-    var query by remember { mutableStateOf("") }
-    var picked by remember { mutableStateOf<Integration?>(null) }
-    var key by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(picked?.let { "Connect ${it.name}" } ?: "Connect a provider", fontWeight = FontWeight.Bold) },
-        text = {
-            val p = picked
-            if (p == null) {
-                Column {
-                    OutlinedTextField(
-                        value = query, onValueChange = { query = it }, singleLine = true,
-                        leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Search providers") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    val shown = integrations.filter { query.isBlank() || it.name.contains(query, true) || it.id.contains(query, true) }
-                    LazyColumn(Modifier.heightIn(max = 380.dp)) {
-                        items(shown, key = { it.id }) { integ ->
-                            Row(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { picked = integ }.padding(vertical = 10.dp, horizontal = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(integ.name, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                                if (integ.connections.isNotEmpty()) Text("connected", fontSize = 11.sp, color = OpenCodeAccent)
-                            }
-                        }
-                    }
-                }
-            } else {
-                Column {
-                    OutlinedTextField(
-                        value = key, onValueChange = { key = it }, singleLine = true, label = { Text("API key") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Saved by OpenCode on the server" + (p.envNames.firstOrNull()?.let { ". Setting $it in the server's environment works too." } ?: "."),
-                        fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            if (picked != null) {
-                Button(onClick = {
-                    busy = true
-                    onConnect(picked!!, key.trim()) { busy = false }
-                }, enabled = key.isNotBlank() && !busy) { Text(if (busy) "Connecting…" else "Connect") }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = { if (picked != null) { picked = null; key = "" } else onDismiss() }) { Text(if (picked != null) "Back" else "Close") }
-        }
-    )
-}
-
-@Composable
 private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCodeCustomProvider, onDismiss: () -> Unit, onSaved: () -> Unit) {
     val scope = rememberCoroutineScope()
     val isNew = initial.id.isBlank()
@@ -535,7 +412,7 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isNew) "Add an endpoint" else "Edit ${initial.name}", fontWeight = FontWeight.Bold) },
+        title = { Text(if (isNew) "Add a custom provider" else "Edit ${initial.name}", fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
