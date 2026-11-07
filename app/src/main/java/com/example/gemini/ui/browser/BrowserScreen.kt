@@ -11,6 +11,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.animation.*
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
@@ -40,6 +41,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,6 +55,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 
@@ -80,6 +83,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.theme.ClaudeTerracotta
 import java.net.URLEncoder
+import kotlinx.coroutines.launch
 
 /**
  * Tab model representing a live web session with its own state and WebView.
@@ -314,6 +318,9 @@ fun BrowserScreen(
         return
     }
 
+    val hasActivePage = activeTab != null && activeTab.url.isNotBlank() && activeTab.url != "about:blank"
+    val subtleDivider = com.example.gemini.theme.AppColors.border.copy(alpha = if (isDarkTheme) 0.35f else 0.7f)
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = barBackgroundColor,
@@ -321,215 +328,193 @@ fun BrowserScreen(
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = barBackgroundColor,
-                shadowElevation = 2.dp,
-                border = if (!isDarkTheme) BorderStroke(0.5.dp, com.example.gemini.theme.AppColors.border) else null
+                color = barBackgroundColor
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
                 ) {
-                    Row(
+                    val isHttps = activeTab?.url?.startsWith("https://", ignoreCase = true) == true
+                    val isLocal = activeTab?.url?.contains("localhost") == true || activeTab?.url?.contains("127.0.0.1") == true
+                    val pillBorderColor by animateColorAsState(
+                        targetValue = if (isAddressFocused) ClaudeTerracotta.copy(alpha = 0.85f) else Color.Transparent,
+                        label = "pillBorder"
+                    )
+                    val showHostOnly = !isAddressFocused && hasActivePage
+
+                    // Address pill: security badge, host (full URL while editing), reload / clear
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        // 1. DevTools / Eruda Web Inspector Button (Left 1)
-                        val hasActivePage = activeTab != null && activeTab.url.isNotBlank() && activeTab.url != "about:blank"
-                        val isDevToolsOn = activeTab?.isDevToolsEnabled == true
-                        IconButton(
-                            onClick = {
-                                if (activeTab != null) {
-                                    val wv = activeTab.webView ?: sessionManager.ensureWebViewAttached(context, activeTab, isDarkTheme)
-                                    if (!isDevToolsOn) {
-                                        activeTab.isDevToolsEnabled = true
-                                        ErudaHelper.inject(wv, showImmediately = true)
-                                    } else {
-                                        ErudaHelper.toggle(wv)
-                                    }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .height(44.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                if (!isAddressFocused) {
+                                    shouldSelectAllOnNextValueChange = true
+                                    focusRequester.requestFocus()
                                 }
                             },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.BugReport,
-                                contentDescription = "Inspect DevTools",
-                                tint = if (isDevToolsOn) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = if (hasActivePage) 0.85f else 0.4f),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // 2. Desktop / Phone UA Mode Toggle Button (Left 2)
-                        val isDesktopMode = activeTab?.isDesktopMode == true
-                        IconButton(
-                            onClick = {
-                                sessionManager.toggleDesktopMode(activeTab, context)
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isDesktopMode) Icons.Outlined.Laptop else Icons.Outlined.TouchApp,
-                                contentDescription = if (isDesktopMode) "Desktop mode enabled" else "Mobile mode enabled",
-                                tint = if (isDesktopMode) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // 3. Search / URL Pill (Center pill with select-all on click & clear button)
-                        Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = com.example.gemini.theme.AppColors.fill,
+                        border = BorderStroke(1.5.dp, pillBorderColor)
+                    ) {
+                        Row(
                             modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    if (!isAddressFocused) {
-                                        shouldSelectAllOnNextValueChange = true
-                                        focusRequester.requestFocus()
-                                    }
-                                },
-                            shape = RoundedCornerShape(20.dp),
-                            color = com.example.gemini.theme.AppColors.fill,
-                            border = BorderStroke(
-                                1.dp,
-                                if (isAddressFocused) ClaudeTerracotta.copy(alpha = 0.7f)
-                                else com.example.gemini.theme.AppColors.border
-                            )
+                                .fillMaxSize()
+                                .padding(start = 6.dp, end = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
+                            val badgeTint = when {
+                                isAddressFocused || !hasActivePage -> MaterialTheme.colorScheme.onSurfaceVariant
+                                isHttps -> com.example.gemini.theme.AppColors.success
+                                isLocal -> ClaudeTerracotta
+                                else -> com.example.gemini.theme.AppColors.warning
+                            }
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isAddressFocused || !hasActivePage) Color.Transparent
+                                        else badgeTint.copy(alpha = 0.13f)
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
-                                val isHttps = activeTab?.url?.startsWith("https://", ignoreCase = true) == true
-                                val isLocal = activeTab?.url?.contains("localhost") == true || activeTab?.url?.contains("127.0.0.1") == true
                                 Icon(
-                                    imageVector = if (isHttps) Icons.Default.Lock else if (isLocal) Icons.Default.Computer else Icons.Default.Language,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(15.dp),
-                                    tint = if (isHttps) com.example.gemini.theme.AppColors.success else if (isLocal) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    imageVector = when {
+                                        isAddressFocused || !hasActivePage -> Icons.Rounded.Search
+                                        isHttps -> Icons.Rounded.Lock
+                                        isLocal -> Icons.Rounded.Computer
+                                        else -> Icons.Rounded.Language
+                                    },
+                                    contentDescription = when {
+                                        !hasActivePage -> null
+                                        isHttps -> "Secure connection"
+                                        isLocal -> "Local server"
+                                        else -> "Not secure"
+                                    },
+                                    modifier = Modifier.size(if (isAddressFocused || !hasActivePage) 19.dp else 15.dp),
+                                    tint = badgeTint
                                 )
+                            }
 
-                                Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
 
-                                BasicTextField(
-                                    value = textFieldValue,
-                                    onValueChange = { newVal ->
-                                        if (shouldSelectAllOnNextValueChange) {
-                                            shouldSelectAllOnNextValueChange = false
-                                            if (newVal.text == textFieldValue.text && newVal.text.isNotEmpty()) {
-                                                textFieldValue = newVal.copy(selection = TextRange(0, newVal.text.length))
-                                            } else {
-                                                textFieldValue = newVal
-                                            }
+                            BasicTextField(
+                                value = textFieldValue,
+                                onValueChange = { newVal ->
+                                    if (shouldSelectAllOnNextValueChange) {
+                                        shouldSelectAllOnNextValueChange = false
+                                        if (newVal.text == textFieldValue.text && newVal.text.isNotEmpty()) {
+                                            textFieldValue = newVal.copy(selection = TextRange(0, newVal.text.length))
                                         } else {
                                             textFieldValue = newVal
                                         }
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .focusRequester(focusRequester)
-                                        .onFocusChanged { focusState ->
-                                            val wasFocused = isAddressFocused
-                                            isAddressFocused = focusState.isFocused
-                                            if (focusState.isFocused && !wasFocused) {
-                                                shouldSelectAllOnNextValueChange = true
-                                                if (textFieldValue.text.isNotEmpty()) {
-                                                    textFieldValue = textFieldValue.copy(
-                                                        selection = TextRange(0, textFieldValue.text.length)
-                                                    )
-                                                }
-                                            } else if (!focusState.isFocused) {
-                                                shouldSelectAllOnNextValueChange = false
-                                            }
-                                        },
-                                    textStyle = TextStyle(
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Normal
-                                    ),
-                                    singleLine = true,
-                                    cursorBrush = SolidColor(ClaudeTerracotta),
-                                    keyboardOptions = KeyboardOptions(
-                                        keyboardType = KeyboardType.Uri,
-                                        imeAction = ImeAction.Go
-                                    ),
-                                    keyboardActions = KeyboardActions(
-                                        onGo = { navigateToUrl(textFieldValue.text) }
-                                    ),
-                                    decorationBox = { innerTextField ->
-                                        Box(contentAlignment = Alignment.CenterStart) {
-                                            if (textFieldValue.text.isEmpty() && !isAddressFocused) {
-                                                Text(
-                                                    text = "Search or type URL",
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                                                    fontSize = 13.5.sp
+                                    } else {
+                                        textFieldValue = newVal
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(focusRequester)
+                                    .onFocusChanged { focusState ->
+                                        val wasFocused = isAddressFocused
+                                        isAddressFocused = focusState.isFocused
+                                        if (focusState.isFocused && !wasFocused) {
+                                            shouldSelectAllOnNextValueChange = true
+                                            if (textFieldValue.text.isNotEmpty()) {
+                                                textFieldValue = textFieldValue.copy(
+                                                    selection = TextRange(0, textFieldValue.text.length)
                                                 )
                                             }
+                                        } else if (!focusState.isFocused) {
+                                            shouldSelectAllOnNextValueChange = false
+                                        }
+                                    },
+                                textStyle = TextStyle(
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Normal
+                                ),
+                                singleLine = true,
+                                cursorBrush = SolidColor(ClaudeTerracotta),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Uri,
+                                    imeAction = ImeAction.Go
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onGo = { navigateToUrl(textFieldValue.text) }
+                                ),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (textFieldValue.text.isEmpty() && !isAddressFocused) {
+                                            Text(
+                                                text = "Search or type URL",
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                fontSize = 14.5.sp,
+                                                maxLines = 1
+                                            )
+                                        }
+                                        if (showHostOnly) {
+                                            // Resting state shows just the site, like a modern browser; the full URL appears on tap
+                                            Text(
+                                                text = browserDisplayHost(activeTab?.url.orEmpty()),
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                fontSize = 14.5.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Box(modifier = Modifier.graphicsLayer { alpha = if (showHostOnly) 0f else 1f }) {
                                             innerTextField()
                                         }
                                     }
-                                )
+                                }
+                            )
 
+                            if (isAddressFocused) {
                                 if (textFieldValue.text.isNotEmpty()) {
-                                    IconButton(
+                                    BrowserBarIconButton(
+                                        icon = Icons.Rounded.Cancel,
+                                        contentDescription = "Clear",
                                         onClick = {
                                             textFieldValue = TextFieldValue("")
                                             focusRequester.requestFocus()
                                         },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Cancel,
-                                            contentDescription = "Clear",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
+                                        size = 36.dp,
+                                        iconSize = 18.dp,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
                                 }
+                            } else if (hasActivePage) {
+                                val loading = activeTab?.isLoading == true
+                                BrowserBarIconButton(
+                                    icon = if (loading) Icons.Rounded.Close else Icons.Rounded.Refresh,
+                                    contentDescription = if (loading) "Stop" else "Reload",
+                                    onClick = {
+                                        if (activeTab?.isLoading == true) {
+                                            activeTab.stopLoading(sessionManager.getMainHandler())
+                                        } else if (activeTab != null) {
+                                            sessionManager.reloadTab(activeTab.id)
+                                        }
+                                    },
+                                    size = 36.dp,
+                                    iconSize = 20.dp,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
-
-                        // 4. Refresh / Stop Loading Button (Right 1)
-                        IconButton(
-                            onClick = {
-                                if (activeTab?.isLoading == true) {
-                                    activeTab.stopLoading(sessionManager.getMainHandler())
-                                } else if (hasActivePage) {
-                                    sessionManager.reloadTab(activeTab.id)
-                                }
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (activeTab?.isLoading == true) Icons.Default.Close else Icons.Default.Refresh,
-                                contentDescription = if (activeTab?.isLoading == true) "Stop" else "Reload",
-                                tint = if (activeTab?.isLoading == true || hasActivePage) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // 5. Close / Exit to Chat Button (Right 2)
-                        IconButton(
-                            onClick = {
-                                onClose()
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            // same "go to chat" icon as the IDE's top bar: a cross would read as "close the browser"
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = "AI Chat",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
                     }
+
+                    HorizontalDivider(thickness = 0.5.dp, color = subtleDivider)
                 }
             }
         },
@@ -542,212 +527,92 @@ fun BrowserScreen(
                             footerHeightPx = coords.size.height.toFloat()
                         }
                     },
-                color = barBackgroundColor,
-                shadowElevation = 8.dp,
-                border = if (!isDarkTheme) BorderStroke(0.5.dp, com.example.gemini.theme.AppColors.border) else null
+                color = barBackgroundColor
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .height(52.dp)
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceAround,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val canGoBack = activeTab?.webView?.canGoBack() == true
-                    val canGoForward = activeTab?.webView?.canGoForward() == true
-
-                    // 1. Back in WebView (<)
-                    IconButton(
-                        onClick = {
-                            if (activeTab?.webView?.canGoBack() == true) {
-                                activeTab.webView?.goBack()
-                            }
-                        },
-                        enabled = canGoBack,
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = if (canGoBack) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    // 2. Forward in WebView (>)
-                    IconButton(
-                        onClick = {
-                            if (activeTab?.webView?.canGoForward() == true) {
-                                activeTab.webView?.goForward()
-                            }
-                        },
-                        enabled = canGoForward,
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Forward",
-                            tint = if (canGoForward) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    // 3. Home Button (🏠)
-                    IconButton(
-                        onClick = {
-                            sessionManager.openUrl("about:blank", tabId = activeTabId, newTab = false)
-                            textFieldValue = TextFieldValue("")
-                        },
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Home,
-                            contentDescription = "Home",
-                            tint = if (isHomePage) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    // 4. Tabs Badge Switcher ([ N ])
-                    Box(
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    HorizontalDivider(thickness = 0.5.dp, color = subtleDivider)
+                    Row(
                         modifier = Modifier
-                            .size(44.dp)
-                            .clickable {
-                                activeTab?.capturePreview()
-                                showTabOverview = true
-                            },
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .height(56.dp)
+                            .padding(horizontal = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            modifier = Modifier.size(26.dp),
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color.Transparent,
-                            border = BorderStroke(1.8.dp, MaterialTheme.colorScheme.onSurface)
+                        val canGoBack = activeTab?.canGoBack == true || activeTab?.webView?.canGoBack() == true
+                        val canGoForward = activeTab?.canGoForward == true || activeTab?.webView?.canGoForward() == true
+
+                        BrowserBarIconButton(
+                            icon = Icons.Rounded.ChevronLeft,
+                            contentDescription = "Back",
+                            enabled = canGoBack,
+                            iconSize = 30.dp,
+                            onClick = {
+                                if (activeTab?.webView?.canGoBack() == true) {
+                                    activeTab.webView?.goBack()
+                                }
+                            }
+                        )
+
+                        BrowserBarIconButton(
+                            icon = Icons.Rounded.ChevronRight,
+                            contentDescription = "Forward",
+                            enabled = canGoForward,
+                            iconSize = 30.dp,
+                            onClick = {
+                                if (activeTab?.webView?.canGoForward() == true) {
+                                    activeTab.webView?.goForward()
+                                }
+                            }
+                        )
+
+                        BrowserBarIconButton(
+                            icon = if (isHomePage) Icons.Rounded.Home else Icons.Outlined.Home,
+                            contentDescription = "Home",
+                            tint = if (isHomePage) ClaudeTerracotta else null,
+                            onClick = {
+                                sessionManager.openUrl("about:blank", tabId = activeTabId, newTab = false)
+                                textFieldValue = TextFieldValue("")
+                            }
+                        )
+
+                        // Tab switcher: rounded counter square
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .clickable {
+                                    activeTab?.capturePreview()
+                                    showTabOverview = true
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
+                            val tabCount = tabs.size.coerceAtLeast(1)
+                            Box(
+                                modifier = Modifier
+                                    .size(23.dp)
+                                    .border(
+                                        BorderStroke(1.8.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)),
+                                        RoundedCornerShape(7.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
-                                    text = "${tabs.size.coerceAtLeast(1)}",
-                                    fontSize = 11.5.sp,
+                                    text = if (tabCount > 99) ":)" else "$tabCount",
+                                    fontSize = if (tabCount > 9) 10.sp else 11.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
                                 )
                             }
                         }
-                    }
 
-                    // 5. More Menu Button (⋮)
-                    Box {
-                        IconButton(
-                            onClick = { showMoreMenu = true },
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More Options",
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showMoreMenu,
-                            onDismissRequest = { showMoreMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("New Tab") },
-                                leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    addNewTab()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (activeTab?.isDesktopMode == true) "Mobile Site" else "Desktop Site") },
-                                leadingIcon = { Icon(Icons.Default.DesktopWindows, contentDescription = null) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    sessionManager.toggleDesktopMode(activeTab, context)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("DevTools Inspector") },
-                                leadingIcon = { Icon(Icons.Outlined.Code, contentDescription = null) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    if (activeTab != null) {
-                                        val wv = activeTab.webView ?: sessionManager.ensureWebViewAttached(context, activeTab, isDarkTheme)
-                                        if (activeTab.isDevToolsEnabled) {
-                                            ErudaHelper.toggle(wv)
-                                        } else {
-                                            activeTab.isDevToolsEnabled = true
-                                            ErudaHelper.inject(wv, showImmediately = true)
-                                        }
-                                    }
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Clear Tab Cache") },
-                                leadingIcon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    activeTab?.webView?.clearCache(true)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Clear Browsing Data", color = MaterialTheme.colorScheme.error) },
-                                leadingIcon = { Icon(Icons.Outlined.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    showClearDataConfirm = true
-                                }
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text("Close Browser", color = MaterialTheme.colorScheme.error) },
-                                leadingIcon = { Icon(Icons.Default.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    showMoreMenu = false
-                                    onClose()
-                                }
-                            )
-                        }
-
-                        if (showClearDataConfirm) {
-                            AlertDialog(
-                                onDismissRequest = { showClearDataConfirm = false },
-                                title = { Text("Clear Browsing Data?") },
-                                text = {
-                                    Text(
-                                        "This deletes all cookies, site data (local storage, IndexedDB, service workers), cache, " +
-                                            "saved site logins, site permissions, history and closes every tab. " +
-                                            "You will be signed out of all websites, including Google accounts. " +
-                                            "Speed dial shortcuts are kept. This cannot be undone."
-                                    )
-                                },
-                                confirmButton = {
-                                    Button(
-                                        onClick = {
-                                            showClearDataConfirm = false
-                                            sessionManager.clearAllBrowsingData(context) {
-                                                activeTabId = sessionManager.activeTabId
-                                                textFieldValue = TextFieldValue("")
-                                                android.widget.Toast.makeText(context, "Browsing data cleared", android.widget.Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                                    ) {
-                                        Text("Clear All")
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showClearDataConfirm = false }) {
-                                        Text("Cancel")
-                                    }
-                                }
-                            )
-                        }
+                        BrowserBarIconButton(
+                            icon = Icons.Rounded.MoreHoriz,
+                            contentDescription = "More options",
+                            tint = if (showMoreMenu) ClaudeTerracotta else null,
+                            onClick = { showMoreMenu = true }
+                        )
                     }
                 }
             }
@@ -916,6 +781,395 @@ fun BrowserScreen(
         }
     }
 
+    if (showMoreMenu) {
+        BrowserMenuSheet(
+            activeTab = activeTab,
+            hasActivePage = hasActivePage,
+            onDismiss = { showMoreMenu = false },
+            onNewTab = { addNewTab() },
+            onReload = {
+                if (activeTab != null && hasActivePage) sessionManager.reloadTab(activeTab.id)
+            },
+            onToggleDesktop = { sessionManager.toggleDesktopMode(activeTab, context) },
+            onToggleDevTools = {
+                if (activeTab != null) {
+                    val wv = activeTab.webView ?: sessionManager.ensureWebViewAttached(context, activeTab, isDarkTheme)
+                    if (activeTab.isDevToolsEnabled) {
+                        ErudaHelper.toggle(wv)
+                    } else {
+                        activeTab.isDevToolsEnabled = true
+                        ErudaHelper.inject(wv, showImmediately = true)
+                    }
+                }
+            },
+            onClearTabCache = {
+                activeTab?.webView?.clearCache(true)
+                android.widget.Toast.makeText(context, "Tab cache cleared", android.widget.Toast.LENGTH_SHORT).show()
+            },
+            onClearBrowsingData = { showClearDataConfirm = true },
+            onCloseBrowser = { onClose() }
+        )
+    }
+
+    if (showClearDataConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearDataConfirm = false },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = MaterialTheme.colorScheme.background,
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.DeleteForever,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            },
+            title = { Text("Clear browsing data?", fontWeight = FontWeight.SemiBold) },
+            text = {
+                Text(
+                    "This deletes all cookies, site data (local storage, IndexedDB, service workers), cache, " +
+                        "saved site logins, site permissions, history and closes every tab. " +
+                        "You will be signed out of all websites, including Google accounts. " +
+                        "Speed dial shortcuts are kept. This cannot be undone.",
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showClearDataConfirm = false
+                        sessionManager.clearAllBrowsingData(context) {
+                            activeTabId = sessionManager.activeTabId
+                            textFieldValue = TextFieldValue("")
+                            android.widget.Toast.makeText(context, "Browsing data cleared", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Clear all")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDataConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+/** Host shown in the resting address pill ("github.com", "localhost:8080"); falls back to the raw URL. */
+private fun browserDisplayHost(url: String): String {
+    val uri = try { android.net.Uri.parse(url) } catch (_: Exception) { null }
+    val host = uri?.host
+    if (host.isNullOrBlank()) return url
+    val port = uri.port
+    return host.removePrefix("www.") + if (port > 0) ":$port" else ""
+}
+
+@Composable
+private fun BrowserBarIconButton(
+    icon: ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    size: androidx.compose.ui.unit.Dp = 48.dp,
+    iconSize: androidx.compose.ui.unit.Dp = 24.dp,
+    tint: Color? = null
+) {
+    val baseTint = tint ?: MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) baseTint else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+            modifier = Modifier.size(iconSize)
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BrowserMenuSheet(
+    activeTab: BrowserTab?,
+    hasActivePage: Boolean,
+    onDismiss: () -> Unit,
+    onNewTab: () -> Unit,
+    onReload: () -> Unit,
+    onToggleDesktop: () -> Unit,
+    onToggleDevTools: () -> Unit,
+    onClearTabCache: () -> Unit,
+    onClearBrowsingData: () -> Unit,
+    onCloseBrowser: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    // Slide the sheet away first, then run the action
+    fun closeThen(action: () -> Unit) {
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            onDismiss()
+            action()
+        }
+    }
+
+    val groupColor = com.example.gemini.theme.AppColors.fill
+    val dividerColor = com.example.gemini.theme.AppColors.border.copy(alpha = 0.5f)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(top = 10.dp, bottom = 6.dp)
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 20.dp)
+        ) {
+            // Current page header
+            val url = activeTab?.url.orEmpty()
+            val isHttps = url.startsWith("https://", ignoreCase = true)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(ClaudeTerracotta.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = when {
+                            !hasActivePage -> Icons.Rounded.Home
+                            isHttps -> Icons.Rounded.Lock
+                            else -> Icons.Rounded.Language
+                        },
+                        contentDescription = null,
+                        tint = ClaudeTerracotta,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (hasActivePage) activeTab?.title?.takeIf { it.isNotBlank() } ?: browserDisplayHost(url) else "New Tab",
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (hasActivePage) browserDisplayHost(url) else "Start page",
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Quick action tiles
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                BrowserMenuTile(
+                    icon = Icons.Rounded.Add,
+                    label = "New tab",
+                    modifier = Modifier.weight(1f),
+                    onClick = { closeThen(onNewTab) }
+                )
+                BrowserMenuTile(
+                    icon = Icons.Rounded.Refresh,
+                    label = "Reload",
+                    enabled = hasActivePage,
+                    modifier = Modifier.weight(1f),
+                    onClick = { closeThen(onReload) }
+                )
+                BrowserMenuTile(
+                    icon = Icons.Rounded.DesktopWindows,
+                    label = "Desktop",
+                    active = activeTab?.isDesktopMode == true,
+                    modifier = Modifier.weight(1f),
+                    onClick = { closeThen(onToggleDesktop) }
+                )
+                BrowserMenuTile(
+                    icon = Icons.Rounded.Code,
+                    label = "DevTools",
+                    active = activeTab?.isDevToolsEnabled == true,
+                    modifier = Modifier.weight(1f),
+                    onClick = { closeThen(onToggleDevTools) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = groupColor,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    BrowserMenuRow(
+                        icon = Icons.Rounded.CleaningServices,
+                        title = "Clear tab cache",
+                        subtitle = "Reload this site's files fresh",
+                        onClick = { closeThen(onClearTabCache) }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 60.dp),
+                        thickness = 0.5.dp,
+                        color = dividerColor
+                    )
+                    BrowserMenuRow(
+                        icon = Icons.Rounded.DeleteForever,
+                        title = "Clear browsing data",
+                        subtitle = "Cookies, logins, history and all tabs",
+                        tint = MaterialTheme.colorScheme.error,
+                        onClick = { closeThen(onClearBrowsingData) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = groupColor,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                BrowserMenuRow(
+                    icon = Icons.Rounded.PowerSettingsNew,
+                    title = "Close browser",
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = { closeThen(onCloseBrowser) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowserMenuTile(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    active: Boolean = false
+) {
+    val container by animateColorAsState(
+        targetValue = if (active) ClaudeTerracotta.copy(alpha = 0.14f) else com.example.gemini.theme.AppColors.fill,
+        label = "tileBg"
+    )
+    val contentColor = when {
+        !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+        active -> ClaudeTerracotta
+        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+    }
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(container)
+            .border(
+                BorderStroke(1.dp, if (active) ClaudeTerracotta.copy(alpha = 0.35f) else Color.Transparent),
+                RoundedCornerShape(18.dp)
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = label,
+            fontSize = 11.5.sp,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+            color = contentColor,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun BrowserMenuRow(
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit,
+    subtitle: String? = null,
+    tint: Color? = null
+) {
+    val color = tint ?: MaterialTheme.colorScheme.onSurface
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (tint != null) color else color.copy(alpha = 0.8f),
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(22.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = color
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
 }
 
 @Composable
