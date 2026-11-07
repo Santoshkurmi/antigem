@@ -11,6 +11,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.example.gemini.ui.components.bounceWhenNotScrollable
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -25,7 +33,6 @@ import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -623,7 +630,21 @@ fun FileExplorer(
                     if (entries.isEmpty()) "This folder is empty" else "Only hidden files here",
                     if (entries.isEmpty()) "Tap + to create a file or folder." else "Turn on \"Show hidden files\" in the menu to see them."
                 )
-                else -> PullToRefreshBox(isRefreshing = refreshing, onRefresh = { reload(silent = false) }, modifier = Modifier.fillMaxSize()) {
+                else -> Box(Modifier.fillMaxSize()) {
+                    // iOS bounce at both ends, also when the folder fits on screen. Pull-to-refresh rides on it:
+                    // pulling down past the top only bounces, until the pull passes refreshPullPx; letting go then refreshes.
+                    val listBounce = com.example.gemini.ui.components.rememberBouncyOverscrollEffect()
+                    val refreshPullPx = with(LocalDensity.current) { 72.dp.toPx() }
+                    val currentRefreshing by rememberUpdatedState(refreshing)
+                    val currentReload by rememberUpdatedState { reload(silent = false) }
+                    DisposableEffect(listBounce, refreshPullPx) {
+                        listBounce.onPullReleased = { dy -> if (dy >= refreshPullPx && !currentRefreshing) currentReload() }
+                        onDispose { listBounce.onPullReleased = null }
+                    }
+                    val pullArmed by remember(listBounce, refreshPullPx) { derivedStateOf { listBounce.offsetY >= refreshPullPx } }
+                    val haptics = LocalHapticFeedback.current
+                    LaunchedEffect(pullArmed) { if (pullArmed) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+
                     val folders = visible.count { it.isDir }
                     val files = visible.size - folders
                     val summary = buildString {
@@ -637,10 +658,15 @@ fun FileExplorer(
                     val rowClick: (ExplorerEntry) -> Unit = { e -> if (selecting) toggle(e) else openEntry(e) }
                     val rowLong: (ExplorerEntry) -> Unit = { e -> toggle(e) }
                     if (settings.grid) {
+                        val gridState = rememberLazyGridState()
+                        val gridCanScroll by remember(gridState) { derivedStateOf { gridState.canScrollForward || gridState.canScrollBackward } }
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(108.dp),
+                            state = gridState,
                             contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 120.dp),
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize().bounceWhenNotScrollable(!gridCanScroll, listBounce),
+                            userScrollEnabled = gridCanScroll,
+                            overscrollEffect = listBounce
                         ) {
                             // one continuous grid: folders come first through the sort order, no section headers
                             items(visible, key = { it.path }) { e ->
@@ -653,7 +679,15 @@ fun FileExplorer(
                             item(span = { GridItemSpan(maxLineSpan) }, key = "summary") { SummaryFooter(summary) }
                         }
                     } else {
-                        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp)) {
+                        val rowsState = rememberLazyListState()
+                        val rowsCanScroll by remember(rowsState) { derivedStateOf { rowsState.canScrollForward || rowsState.canScrollBackward } }
+                        LazyColumn(
+                            Modifier.fillMaxSize().bounceWhenNotScrollable(!rowsCanScroll, listBounce),
+                            state = rowsState,
+                            contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp),
+                            userScrollEnabled = rowsCanScroll,
+                            overscrollEffect = listBounce
+                        ) {
                             // one continuous list: folders come first through the sort order, no section headers
                             items(visible, key = { it.path }) { e ->
                                 EntryRow(
@@ -664,6 +698,42 @@ fun FileExplorer(
                                 )
                             }
                             item(key = "summary") { SummaryFooter(summary) }
+                        }
+                    }
+
+                    // Refresh indicator: sits in the gap the pull opens above the list, fills as the pull nears the
+                    // threshold (haptic tick when reached), and spins at the top while refreshing.
+                    if (refreshing || listBounce.offsetY > 1f) {
+                        val pullFraction = (listBounce.offsetY / refreshPullPx).coerceIn(0f, 1f)
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shadowElevation = 3.dp,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .graphicsLayer {
+                                    val size = 36.dp.toPx()
+                                    val centered = (listBounce.offsetY - size) / 2f
+                                    translationY = if (refreshing) maxOf(12.dp.toPx(), centered) else centered
+                                    val shown = if (refreshing) 1f else pullFraction
+                                    alpha = shown
+                                    scaleX = 0.6f + 0.4f * shown
+                                    scaleY = 0.6f + 0.4f * shown
+                                }
+                                .size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                if (refreshing) {
+                                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.5.dp)
+                                } else {
+                                    CircularProgressIndicator(
+                                        progress = { pullFraction },
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.5.dp,
+                                        color = if (pullArmed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 }

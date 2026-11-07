@@ -138,6 +138,11 @@ class BouncyOverscrollEffect internal constructor(private val scope: CoroutineSc
         private set
     var offsetY by mutableFloatStateOf(0f)
         private set
+    /**
+     * Called with [offsetY] when the finger lets go while the content is pulled past an edge (before it springs back),
+     * e.g. for a pull-to-refresh driven by the bounce: positive = pulled down past the top.
+     */
+    var onPullReleased: ((offsetY: Float) -> Unit)? = null
     /** Size of the list on screen (the rubber band's scale); set on every layout. */
     private var width = 0f
     private var height = 0f
@@ -183,6 +188,7 @@ class BouncyOverscrollEffect internal constructor(private val scope: CoroutineSc
         val job = if (isInProgress) {
             // let go while pulled: no fling, the content springs back
             performFling(Velocity.Zero)
+            onPullReleased?.invoke(offsetY)
             startRelease(pullReleaseBounce(velocity))
         } else {
             // a normal fling; when it hits the end, the speed left makes the content bounce past it and back
@@ -196,13 +202,19 @@ class BouncyOverscrollEffect internal constructor(private val scope: CoroutineSc
      * so the list cannot scroll): springs back when pulled, or bounces with the flick's [velocity].
      */
     fun release(velocity: Velocity) {
+        if (isInProgress) onPullReleased?.invoke(offsetY)
+        springBack(velocity)
+    }
+
+    private fun springBack(velocity: Velocity) {
         stopRelease()
         startRelease(if (isInProgress) pullReleaseBounce(velocity) else flingBounce(velocity))
     }
 
     /** Springs back from where it is, unless that is already happening (never leaves the content moved). */
     fun settle() {
-        if (releaseJob?.isActive != true && isInProgress) release(Velocity.Zero)
+        // not a release by the finger: no onPullReleased
+        if (releaseJob?.isActive != true && isInProgress) springBack(Velocity.Zero)
     }
 
     /**

@@ -16,7 +16,7 @@ data class ExplorerSettings(
     val descending: Boolean = false,
     val foldersFirst: Boolean = true,
     val showHidden: Boolean = false,
-    val grid: Boolean = true,
+    val grid: Boolean = false,
     val thumbnails: Boolean = true
 )
 
@@ -38,7 +38,7 @@ object ExplorerPrefs {
             descending = p.getBoolean("descending", false),
             foldersFirst = p.getBoolean("folders_first", true),
             showHidden = p.getBoolean("show_hidden", false),
-            grid = p.getBoolean("grid", true),
+            grid = p.getBoolean("grid", false),
             thumbnails = p.getBoolean("thumbnails", true)
         )
         p.all.forEach { (k, v) -> if (k.startsWith("last_path_") && v is String) lastPaths[k.removePrefix("last_path_")] = v }

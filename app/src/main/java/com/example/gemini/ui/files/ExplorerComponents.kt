@@ -220,13 +220,15 @@ internal fun EntryTile(
         color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceContainerLow,
         border = if (selected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
         modifier = Modifier
+            .fillMaxWidth()
             .padding(4.dp)
             .clip(RoundedCornerShape(18.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .alpha(if (dimmed || cut) 0.45f else if (entry.hidden) 0.7f else 1f)
     ) {
-        Box {
-            Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.fillMaxWidth()) {
+            // fill the cell: every tile is the same width, so icons and names line up whatever the name's length
+            Column(Modifier.fillMaxWidth().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 EntryIcon(entry, 64.dp, thumbnails, corner = 16.dp)
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -237,13 +239,17 @@ internal fun EntryTile(
                     minLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
-                    lineHeight = 15.sp
+                    lineHeight = 15.sp,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Text(
                     if (entry.isDir) entrySubtitle(entry).substringBefore("  ·") else FileKinds.formatSize(entry.size),
                     fontSize = 10.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
             AnimatedVisibility(selecting, enter = fadeIn() + scaleIn(), exit = fadeOut() + scaleOut(), modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)) {
@@ -310,7 +316,7 @@ internal fun BreadcrumbBar(
         ) {
             Row(
                 Modifier
-                    .horizontalScroll(scroll)
+                    .horizontalScroll(scroll, overscrollEffect = com.example.gemini.ui.components.rememberBouncyOverscrollEffect())
                     .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

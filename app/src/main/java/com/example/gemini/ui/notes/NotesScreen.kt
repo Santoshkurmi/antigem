@@ -14,7 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import com.example.gemini.ui.components.bouncyVerticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
@@ -141,6 +141,7 @@ private fun NotesList(
     onNew: (NoteKind) -> Unit
 ) {
     var filter by rememberSaveable { mutableStateOf(NotesFilter.ALL) }
+    val chipsBounce = com.example.gemini.ui.components.rememberBouncyOverscrollEffect()
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var showNewMenu by remember { mutableStateOf(false) }
@@ -189,7 +190,9 @@ private fun NotesList(
                     }
                 }
                 Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    Modifier.fillMaxWidth()
+                        .horizontalScroll(rememberScrollState(), overscrollEffect = chipsBounce)
+                        .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     NotesFilter.entries.forEach { f ->
@@ -219,9 +222,12 @@ private fun NotesList(
                     }
                 )
             } else {
+                val listBounce = com.example.gemini.ui.components.rememberBouncyLazyScroll(listState)
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().then(listBounce.modifier),
+                    userScrollEnabled = listBounce.userScrollEnabled,
+                    overscrollEffect = listBounce.overscrollEffect,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -436,7 +442,7 @@ private fun NoteEditor(note: Note, onBack: () -> Unit, onDelete: () -> Unit) {
         Column(
             Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .bouncyVerticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(horizontal = 20.dp)
