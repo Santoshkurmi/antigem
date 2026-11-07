@@ -1146,31 +1146,19 @@ fun ChatHistoryDrawer(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Settings on left
+                // Settings on left: icon only, same style as the Themes button next to it
                 Surface(
                     onClick = onOpenSettings,
                     shape = RoundedCornerShape(8.dp),
                     color = Color.Transparent,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.padding(end = 4.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Settings,
-                            contentDescription = "Settings",
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Settings",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(8.dp).size(20.dp)
+                    )
                 }
 
                 // Themes: a floating picker over the sidebar and chat, to try themes and see them live
@@ -1189,6 +1177,9 @@ fun ChatHistoryDrawer(
                         )
                     }
                 }
+
+                // keeps the profile / login button on the right
+                Spacer(modifier = Modifier.weight(1f))
 
                 // Profile / Login on right
                 if (accountsButton != null) {
