@@ -307,6 +307,14 @@ class MainActivity : ComponentActivity() {
                                         onNavigateToBrowser = {
                                             previousViewMode = currentViewMode
                                             currentViewMode = AppViewMode.BROWSER
+                                        },
+                                        onNavigateToNotes = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.NOTES
+                                        },
+                                        onNavigateToFiles = {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.FILES
                                         }
                                     )
                                 }

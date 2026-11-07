@@ -240,6 +240,8 @@ fun SettingsDialog(
     onSetFloatingSwitcherItems: (List<String>) -> Unit = {},
     onSetFloatingSwitcherAutoCollapseSec: (Int) -> Unit = {},
     onResetFloatingSwitcherPosition: () -> Unit = {},
+    chatHeaderItems: List<String> = listOf("newchat"),
+    onSetChatHeaderItems: (List<String>) -> Unit = {},
     commandAutoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
     commandSandboxEnabled: Boolean = false,
     requireApprovalForFileEdits: Boolean = false,
@@ -424,7 +426,9 @@ fun SettingsDialog(
                         onSetFloatingSwitcherOrientation = onSetFloatingSwitcherOrientation,
                         onSetFloatingSwitcherItems = onSetFloatingSwitcherItems,
                         onSetFloatingSwitcherAutoCollapseSec = onSetFloatingSwitcherAutoCollapseSec,
-                        onResetFloatingSwitcherPosition = onResetFloatingSwitcherPosition
+                        onResetFloatingSwitcherPosition = onResetFloatingSwitcherPosition,
+                        chatHeaderItems = chatHeaderItems,
+                        onSetChatHeaderItems = onSetChatHeaderItems
                     )
 
                     SettingsSection.SERVERS -> ServersSubScreen(
@@ -1177,7 +1181,9 @@ private fun AppearanceSubScreen(
     onSetFloatingSwitcherOrientation: (String) -> Unit,
     onSetFloatingSwitcherItems: (List<String>) -> Unit,
     onSetFloatingSwitcherAutoCollapseSec: (Int) -> Unit,
-    onResetFloatingSwitcherPosition: () -> Unit
+    onResetFloatingSwitcherPosition: () -> Unit,
+    chatHeaderItems: List<String>,
+    onSetChatHeaderItems: (List<String>) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -1455,6 +1461,14 @@ private fun AppearanceSubScreen(
                 )
             }
         }
+
+        // Chat Header Icons Card: shortcut buttons in the chat's top bar, next to the project
+        ChatHeaderIconsCard(
+            items = chatHeaderItems,
+            cardBg = cardBg,
+            cardBorder = cardBorder,
+            onSetItems = onSetChatHeaderItems
+        )
 
         // Floating App Switcher Card
         Surface(
@@ -2024,6 +2038,135 @@ internal fun McpPresetTile(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+        }
+    }
+}
+
+/** Picks which shortcut icons the chat's top bar shows (none is fine) and their order, like the floating switcher. */
+@Composable
+private fun ChatHeaderIconsCard(
+    items: List<String>,
+    cardBg: Color,
+    cardBorder: BorderStroke,
+    onSetItems: (List<String>) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = cardBg,
+        border = cardBorder,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Chat Header Icons",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Shortcut buttons in the chat's top bar, next to the project name. Turn any on or off (all off is fine) and set their order, left to right.",
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            val allAvailable = listOf("newchat", "ide", "terminal", "browser", "notes", "files")
+            val currentItems = items.filter { it in allAvailable }
+            val displayedList = currentItems + allAvailable.filterNot { currentItems.contains(it) }
+
+            displayedList.forEach { itemId ->
+                val isEnabled = currentItems.contains(itemId)
+                val itemLabel = when (itemId) {
+                    "newchat" -> "New Chat"
+                    "ide" -> "IDE (Code Editor)"
+                    "terminal" -> "Terminal"
+                    "browser" -> "Web Browser"
+                    "notes" -> "Notes & To-dos"
+                    "files" -> "Files (file explorer)"
+                    else -> itemId
+                }
+                val itemIcon = when (itemId) {
+                    "newchat" -> Icons.Outlined.AddComment
+                    "ide" -> Icons.Outlined.Code
+                    "terminal" -> Icons.Outlined.Terminal
+                    "browser" -> Icons.Outlined.Language
+                    "notes" -> Icons.Outlined.EditNote
+                    "files" -> Icons.Outlined.FolderOpen
+                    else -> Icons.Outlined.AddComment
+                }
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 3.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                    border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = isEnabled,
+                                onCheckedChange = { checked ->
+                                    onSetItems(if (checked) currentItems + itemId else currentItems.filter { it != itemId })
+                                },
+                                colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(itemIcon, contentDescription = null, tint = if (isEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = itemLabel,
+                                fontSize = 12.sp,
+                                color = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                            )
+                        }
+
+                        if (isEnabled) {
+                            val index = currentItems.indexOf(itemId)
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                IconButton(
+                                    onClick = {
+                                        if (index > 0) {
+                                            val copy = currentItems.toMutableList()
+                                            copy[index] = copy[index - 1].also { copy[index - 1] = copy[index] }
+                                            onSetItems(copy)
+                                        }
+                                    },
+                                    enabled = index > 0,
+                                    modifier = Modifier.size(26.dp)
+                                ) {
+                                    Icon(Icons.Outlined.ExpandLess, contentDescription = "Move Up", modifier = Modifier.size(16.dp))
+                                }
+                                IconButton(
+                                    onClick = {
+                                        if (index < currentItems.size - 1) {
+                                            val copy = currentItems.toMutableList()
+                                            copy[index] = copy[index + 1].also { copy[index + 1] = copy[index] }
+                                            onSetItems(copy)
+                                        }
+                                    },
+                                    enabled = index < currentItems.size - 1,
+                                    modifier = Modifier.size(26.dp)
+                                ) {
+                                    Icon(Icons.Outlined.ExpandMore, contentDescription = "Move Down", modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

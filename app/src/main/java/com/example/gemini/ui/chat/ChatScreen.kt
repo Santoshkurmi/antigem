@@ -133,7 +133,10 @@ fun ChatScreen(
     onMinimizeWindow: () -> Unit = {},
     onNavigateToIde: () -> Unit = {},
     onNavigateToTerminal: () -> Unit = {},
-    onNavigateToBrowser: () -> Unit = {}
+    onNavigateToBrowser: () -> Unit = {},
+    // null where that screen doesn't exist (the floating chat window): its header icon is then hidden
+    onNavigateToNotes: (() -> Unit)? = null,
+    onNavigateToFiles: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -239,6 +242,7 @@ fun ChatScreen(
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
     val floatingSwitcherOrientation by viewModel.floatingSwitcherOrientation.collectAsState()
     val floatingSwitcherItems by viewModel.floatingSwitcherItems.collectAsState()
+    val chatHeaderItems by viewModel.chatHeaderItems.collectAsState()
     val floatingSwitcherAutoCollapseSec by viewModel.floatingSwitcherAutoCollapseSec.collectAsState()
     val isFloatingDiagnosticsEnabled by viewModel.isFloatingDiagnosticsEnabled.collectAsState()
     val isNetworkInspectorEnabled by viewModel.isNetworkInspectorEnabled.collectAsState()
@@ -1423,28 +1427,74 @@ fun ChatScreen(
                                     onOpenServerLogs = { showLocalServerOutputDialog = true }
                                 )
                             }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            // new chat (same as the sidebar's New chat)
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .clickable {
-                                        val currentId = currentConv?.id
-                                        if (!currentId.isNullOrBlank() && feedItems.isNotEmpty()) {
-                                            ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
-                                        }
-                                        conversationBackStack.clear()
-                                        viewModel.startNewChat()
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.AddComment,
-                                    contentDescription = "New chat",
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                    modifier = Modifier.size(19.dp)
-                                )
+                            // shortcut icons chosen in Settings > Appearance > Chat Header Icons (default: just New chat)
+                            val headerShortcuts = chatHeaderItems.filter { id ->
+                                when (id) {
+                                    "newchat", "ide", "terminal", "browser" -> true
+                                    "notes" -> onNavigateToNotes != null
+                                    "files" -> onNavigateToFiles != null
+                                    else -> false
+                                }
+                            }
+                            if (headerShortcuts.isNotEmpty()) Spacer(modifier = Modifier.width(4.dp))
+                            headerShortcuts.forEach { id ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .clickable {
+                                            when (id) {
+                                                "newchat" -> {
+                                                    // same as the sidebar's New chat
+                                                    val currentId = currentConv?.id
+                                                    if (!currentId.isNullOrBlank() && feedItems.isNotEmpty()) {
+                                                        ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
+                                                    }
+                                                    conversationBackStack.clear()
+                                                    viewModel.startNewChat()
+                                                }
+                                                "ide" -> onNavigateToIde()
+                                                "browser" -> onNavigateToBrowser()
+                                                "notes" -> onNavigateToNotes?.invoke()
+                                                "files" -> onNavigateToFiles?.invoke()
+                                                "terminal" -> {
+                                                    // like the floating switcher: needs SSH, server mode or the local Linux tools
+                                                    val ready = useSshTerminal || AuthPreferences.currentRemoteMode ||
+                                                        (isLocalToolsInstalled && isLocalToolsEnabled)
+                                                    when {
+                                                        ready -> onNavigateToTerminal()
+                                                        isLocalToolsInstalled -> {
+                                                            viewModel.setLocalToolsEnabled(true)
+                                                            onNavigateToTerminal()
+                                                        }
+                                                        else -> showLocalToolsInstallDialog = true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = when (id) {
+                                            "ide" -> Icons.Outlined.Code
+                                            "terminal" -> Icons.Outlined.Terminal
+                                            "browser" -> Icons.Outlined.Language
+                                            "notes" -> Icons.Outlined.EditNote
+                                            "files" -> Icons.Outlined.FolderOpen
+                                            else -> Icons.Outlined.AddComment
+                                        },
+                                        contentDescription = when (id) {
+                                            "ide" -> "Open IDE"
+                                            "terminal" -> "Open Terminal"
+                                            "browser" -> "Open Browser"
+                                            "notes" -> "Open Notes"
+                                            "files" -> "Open Files"
+                                            else -> "New chat"
+                                        },
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
                             }
                         }
                     },
@@ -2487,6 +2537,8 @@ fun ChatScreen(
             onSetFloatingSwitcherItems = { viewModel.setFloatingSwitcherItems(it) },
             onSetFloatingSwitcherAutoCollapseSec = { viewModel.setFloatingSwitcherAutoCollapseSec(it) },
             onResetFloatingSwitcherPosition = { viewModel.resetFloatingSwitcherPosition() },
+            chatHeaderItems = chatHeaderItems,
+            onSetChatHeaderItems = { viewModel.setChatHeaderItems(it) },
             commandAutoExecutionPolicy = commandAutoExecutionPolicy,
             commandSandboxEnabled = commandSandboxEnabled,
             requireApprovalForFileEdits = requireApprovalForFileEdits,

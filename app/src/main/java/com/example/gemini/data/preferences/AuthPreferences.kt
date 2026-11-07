@@ -65,6 +65,7 @@ class AuthPreferences(private val context: Context) {
         val IS_FLOATING_SWITCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_switcher_enabled")
         val FLOATING_SWITCHER_ORIENTATION = stringPreferencesKey("floating_switcher_orientation")
         val FLOATING_SWITCHER_ITEMS = stringPreferencesKey("floating_switcher_items")
+        val CHAT_HEADER_ITEMS = stringPreferencesKey("chat_header_items")
         val FLOATING_SWITCHER_AUTO_COLLAPSE_SEC = androidx.datastore.preferences.core.intPreferencesKey("floating_switcher_auto_collapse_sec")
         val FLOATING_SWITCHER_POS_X = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_pos_x")
         val FLOATING_SWITCHER_POS_Y = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_pos_y")
@@ -824,6 +825,22 @@ class AuthPreferences(private val context: Context) {
         syncPrefs.edit().putString("floating_switcher_items", raw)
             .putBoolean("floating_switcher_items_has_notes", true).putBoolean("floating_switcher_items_has_files", true).apply()
         context.dataStore.edit { it[FLOATING_SWITCHER_ITEMS] = raw }
+    }
+
+    /** Shortcut icons in the chat's top bar, in order ("newchat", "ide", "terminal", "browser", "notes", "files"); may be empty. */
+    val chatHeaderItems: Flow<List<String>> = context.dataStore.data
+        .map { parseChatHeaderItems(it[CHAT_HEADER_ITEMS] ?: syncPrefs.getString("chat_header_items", "newchat") ?: "newchat") }
+
+    fun getChatHeaderItemsSync(): List<String> =
+        parseChatHeaderItems(syncPrefs.getString("chat_header_items", "newchat") ?: "newchat")
+
+    private fun parseChatHeaderItems(raw: String): List<String> =
+        raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+
+    suspend fun saveChatHeaderItems(items: List<String>) {
+        val raw = items.joinToString(",")
+        syncPrefs.edit().putString("chat_header_items", raw).apply()
+        context.dataStore.edit { it[CHAT_HEADER_ITEMS] = raw }
     }
 
     val floatingSwitcherAutoCollapseSec: Flow<Int> = context.dataStore.data

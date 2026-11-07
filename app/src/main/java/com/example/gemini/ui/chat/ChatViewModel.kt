@@ -731,6 +731,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val floatingSwitcherItems: StateFlow<List<String>> = authPrefs.floatingSwitcherItems
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingSwitcherItemsSync())
 
+    val chatHeaderItems: StateFlow<List<String>> = authPrefs.chatHeaderItems
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getChatHeaderItemsSync())
+
     val floatingSwitcherAutoCollapseSec: StateFlow<Int> = authPrefs.floatingSwitcherAutoCollapseSec
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingSwitcherAutoCollapseSecSync())
 
@@ -755,6 +758,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun setFloatingSwitcherItems(items: List<String>) {
         viewModelScope.launch {
             authPrefs.saveFloatingSwitcherItems(items)
+        }
+    }
+
+    fun setChatHeaderItems(items: List<String>) {
+        viewModelScope.launch {
+            authPrefs.saveChatHeaderItems(items)
         }
     }
 
