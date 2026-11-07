@@ -1,7 +1,8 @@
 package com.example.gemini.ui.ide
 
+import androidx.compose.ui.graphics.toArgb
+
 import android.content.Context
-import android.graphics.Color
 import android.graphics.Typeface
 import android.util.AttributeSet
 import android.util.Log
@@ -10,7 +11,8 @@ import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
-import io.github.rosemoe.sora.widget.schemes.SchemeVS2019
+import io.github.rosemoe.sora.widget.schemes.SchemeDarcula
+import androidx.core.graphics.ColorUtils
 
 class CodeEditorView @JvmOverloads constructor(
     context: Context,
@@ -29,29 +31,86 @@ class CodeEditorView @JvmOverloads constructor(
         typefaceText = Typeface.MONOSPACE
         typefaceLineNumber = Typeface.MONOSPACE
         setTextSize(14f)
-        colorScheme = SchemeVS2019().apply {
-            setColor(EditorColorScheme.WHOLE_BACKGROUND, Color.parseColor("#1E1E1E"))
-            setColor(EditorColorScheme.LINE_NUMBER_BACKGROUND, Color.parseColor("#1E1E1E"))
-            setColor(EditorColorScheme.LINE_NUMBER, Color.parseColor("#6E7681"))
-            setColor(EditorColorScheme.LINE_NUMBER_CURRENT, Color.parseColor("#CCCCCC"))
-            setColor(EditorColorScheme.LINE_DIVIDER, Color.parseColor("#2D2D2D"))
-            setColor(EditorColorScheme.CURRENT_LINE, Color.parseColor("#252526"))
-            setColor(EditorColorScheme.SELECTED_TEXT_BACKGROUND, Color.parseColor("#264F78"))
-            setColor(EditorColorScheme.SELECTION_HANDLE, Color.parseColor("#007ACC"))
-            setColor(EditorColorScheme.SELECTION_INSERT, Color.parseColor("#007ACC"))
-            // Explicitly define syntax token colors to avoid black-on-black text
-            setColor(EditorColorScheme.TEXT_NORMAL, Color.parseColor("#D4D4D4"))
-            setColor(EditorColorScheme.HTML_TAG, Color.parseColor("#569CD6"))
-            setColor(EditorColorScheme.KEYWORD, Color.parseColor("#C586C0"))
-            setColor(EditorColorScheme.LITERAL, Color.parseColor("#CE9178"))
-            setColor(EditorColorScheme.COMMENT, Color.parseColor("#6A9955"))
-            setColor(EditorColorScheme.FUNCTION_NAME, Color.parseColor("#DCDCAA"))
-            setColor(EditorColorScheme.OPERATOR, Color.parseColor("#D4D4D4"))
-        }
+        // VS Code dark until the screen hands over the app theme's colors (applyThemeColors)
+        colorScheme = buildColorScheme(EditorThemeColors.VS_DARK)
         isLineNumberEnabled = true
         setPinLineNumber(true)
         isWordwrap = false
         isEditable = true
+    }
+
+    private var appliedTheme: EditorThemeColors? = null
+
+    /** Colors the editor with the app theme's IDE colors; does nothing when they did not change. */
+    fun applyThemeColors(theme: EditorThemeColors) {
+        if (theme == appliedTheme) return
+        appliedTheme = theme
+        editor.colorScheme = buildColorScheme(theme)
+    }
+
+    private fun buildColorScheme(t: EditorThemeColors): EditorColorScheme {
+        val bg = t.background or 0xFF000000.toInt()
+        val dark = ColorUtils.calculateLuminance(bg) < 0.4
+        // every editor color starts from the matching built-in scheme, so anything not set below still suits the background
+        val scheme = if (dark) SchemeDarcula() else EditorColorScheme()
+        // syntax and text colors are kept readable on the background: one too close to it is moved lighter / darker
+        val text = readable(t.text, bg, 4.5)
+        val muted = readable(t.muted, bg, 2.5)
+        fun syntax(c: Int, min: Double = 3.0) = readable(c, bg, min)
+        val accent = readable(t.accent, bg, 3.0)
+
+        scheme.setColor(EditorColorScheme.WHOLE_BACKGROUND, bg)
+        scheme.setColor(EditorColorScheme.LINE_NUMBER_BACKGROUND, bg)
+        scheme.setColor(EditorColorScheme.LINE_NUMBER, muted)
+        scheme.setColor(EditorColorScheme.LINE_NUMBER_CURRENT, text)
+        scheme.setColor(EditorColorScheme.LINE_DIVIDER, t.line)
+        scheme.setColor(EditorColorScheme.CURRENT_LINE, t.panel)
+        scheme.setColor(EditorColorScheme.SELECTED_TEXT_BACKGROUND, t.selection)
+        scheme.setColor(EditorColorScheme.SELECTION_HANDLE, accent)
+        scheme.setColor(EditorColorScheme.SELECTION_INSERT, accent)
+        scheme.setColor(EditorColorScheme.MATCHED_TEXT_BACKGROUND, ColorUtils.setAlphaComponent(accent, 0x55))
+        scheme.setColor(EditorColorScheme.HIGHLIGHTED_DELIMITERS_FOREGROUND, accent)
+        scheme.setColor(EditorColorScheme.BLOCK_LINE, t.line)
+        scheme.setColor(EditorColorScheme.BLOCK_LINE_CURRENT, ColorUtils.setAlphaComponent(muted, 0xAA))
+        scheme.setColor(EditorColorScheme.SIDE_BLOCK_LINE, t.line)
+        scheme.setColor(EditorColorScheme.NON_PRINTABLE_CHAR, muted)
+        scheme.setColor(EditorColorScheme.HARD_WRAP_MARKER, t.line)
+        scheme.setColor(EditorColorScheme.STICKY_SCROLL_DIVIDER, t.border)
+        scheme.setColor(EditorColorScheme.SCROLL_BAR_THUMB, ColorUtils.setAlphaComponent(muted, 0x66))
+        scheme.setColor(EditorColorScheme.SCROLL_BAR_THUMB_PRESSED, ColorUtils.setAlphaComponent(muted, 0xAA))
+        scheme.setColor(EditorColorScheme.LINE_NUMBER_PANEL, t.panel)
+        scheme.setColor(EditorColorScheme.LINE_NUMBER_PANEL_TEXT, text)
+        scheme.setColor(EditorColorScheme.TEXT_ACTION_WINDOW_BACKGROUND, t.panel)
+        scheme.setColor(EditorColorScheme.TEXT_ACTION_WINDOW_ICON_COLOR, text)
+
+        scheme.setColor(EditorColorScheme.TEXT_NORMAL, text)
+        scheme.setColor(EditorColorScheme.IDENTIFIER_NAME, text)
+        scheme.setColor(EditorColorScheme.IDENTIFIER_VAR, text)
+        scheme.setColor(EditorColorScheme.KEYWORD, syntax(t.keyword))
+        scheme.setColor(EditorColorScheme.LITERAL, syntax(t.string))
+        scheme.setColor(EditorColorScheme.COMMENT, syntax(t.comment, 2.5))
+        scheme.setColor(EditorColorScheme.OPERATOR, syntax(t.punctuation))
+        scheme.setColor(EditorColorScheme.FUNCTION_NAME, syntax(t.function))
+        scheme.setColor(EditorColorScheme.ANNOTATION, syntax(t.annotation))
+        scheme.setColor(EditorColorScheme.HTML_TAG, syntax(t.tag))
+        scheme.setColor(EditorColorScheme.ATTRIBUTE_NAME, syntax(t.attribute))
+        scheme.setColor(EditorColorScheme.ATTRIBUTE_VALUE, syntax(t.string))
+        return scheme
+    }
+
+    /** [color] (made opaque) if it reaches [minContrast] on [bg]; otherwise the same hue made darker / lighter until it does. */
+    private fun readable(color: Int, bg: Int, minContrast: Double): Int {
+        var c = color or 0xFF000000.toInt()
+        if (ColorUtils.calculateContrast(c, bg) >= minContrast) return c
+        val towardDark = ColorUtils.calculateLuminance(bg) >= 0.4
+        val hsl = FloatArray(3)
+        ColorUtils.colorToHSL(c, hsl)
+        repeat(25) {
+            hsl[2] = (hsl[2] + if (towardDark) -0.04f else 0.04f).coerceIn(0f, 1f)
+            c = ColorUtils.HSLToColor(hsl)
+            if (ColorUtils.calculateContrast(c, bg) >= minContrast) return c
+        }
+        return if (towardDark) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
     }
 
     var onContentChangeListener: ((String) -> Unit)? = null
@@ -216,6 +275,48 @@ class CodeEditorView @JvmOverloads constructor(
             }
         } else {
             updateContentIfDifferent(content)
+        }
+    }
+}
+
+/** The IDE editor's colors (ARGB ints), taken from the app theme's editor and syntax colors. */
+data class EditorThemeColors(
+    val background: Int,
+    val panel: Int,
+    val line: Int,
+    val border: Int,
+    val text: Int,
+    val muted: Int,
+    val selection: Int,
+    val accent: Int,
+    val keyword: Int,
+    val string: Int,
+    val comment: Int,
+    val function: Int,
+    val punctuation: Int,
+    val annotation: Int,
+    val tag: Int,
+    val attribute: Int
+) {
+    companion object {
+        /** The look the editor had before it followed the theme (VS Code dark). */
+        val VS_DARK = EditorThemeColors(
+            background = 0xFF1E1E1E.toInt(), panel = 0xFF252526.toInt(), line = 0xFF2D2D2D.toInt(), border = 0xFF3C3C3C.toInt(),
+            text = 0xFFD4D4D4.toInt(), muted = 0xFF6E7681.toInt(), selection = 0xFF264F78.toInt(), accent = 0xFF007ACC.toInt(),
+            keyword = 0xFFC586C0.toInt(), string = 0xFFCE9178.toInt(), comment = 0xFF6A9955.toInt(), function = 0xFFDCDCAA.toInt(),
+            punctuation = 0xFFD4D4D4.toInt(), annotation = 0xFFDCDCAA.toInt(), tag = 0xFF569CD6.toInt(), attribute = 0xFF9CDCFE.toInt()
+        )
+
+        /** The current app theme's IDE colors (reading them in Compose follows theme changes). */
+        fun fromAppTheme(): EditorThemeColors {
+            val c = com.example.gemini.theme.AppColors
+            fun i(color: androidx.compose.ui.graphics.Color) = color.toArgb()
+            return EditorThemeColors(
+                background = i(c.editorBg), panel = i(c.editorPanel), line = i(c.editorLine), border = i(c.editorBorder),
+                text = i(c.editorText), muted = i(c.editorMuted), selection = i(c.editorSelection), accent = i(c.primary),
+                keyword = i(c.syntaxKeyword), string = i(c.syntaxString), comment = i(c.syntaxComment), function = i(c.syntaxFunction),
+                punctuation = i(c.syntaxPunctuation), annotation = i(c.syntaxAnnotation), tag = i(c.syntaxTag), attribute = i(c.syntaxAttribute)
+            )
         }
     }
 }

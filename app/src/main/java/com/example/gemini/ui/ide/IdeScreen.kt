@@ -1341,10 +1341,13 @@ fun IdeScreen(
                             onToggleXmlSource = if (isSvgFile) { { showSvgSource = true } } else null
                         )
                     } else {
+                        // the editor follows the app theme's IDE colors (re-applied when the theme changes)
+                        val editorThemeColors = com.example.gemini.ui.ide.EditorThemeColors.fromAppTheme()
                         key(activeTab.path) {
                             AndroidView<CodeEditorView>(
                                 factory = { ctx ->
                                     CodeEditorView(ctx).apply {
+                                        applyThemeColors(editorThemeColors)
                                         isWordWrapEnabled = isWordWrap
                                         isReadOnly = activeTab.isReadOnly
                                         setFile(activeTab.name, activeTab.content)
@@ -1366,6 +1369,7 @@ fun IdeScreen(
                                 },
                                 update = { view ->
                                     currentEditorView = view
+                                    view.applyThemeColors(editorThemeColors)
                                     view.editor.isFocusable = isVisible
                                     view.editor.isFocusableInTouchMode = isVisible
                                     view.isFocusable = isVisible
