@@ -64,8 +64,13 @@ object X11DesktopManager {
         val startCommand: String get() = "dbus-launch --exit-with-session $sessionBinary"
     }
 
+    enum class Browser(val label: String, val packageName: String, val binaryName: String) {
+        CHROMIUM("Chromium", "chromium", "chromium"),
+        FIREFOX("Firefox", "firefox", "firefox")
+    }
+
     /** What is running right now, so the screen shows progress and the log in that step. */
-    enum class Task { APP, COMPANION, DESKTOP, START, CHILD_LIMIT }
+    enum class Task { APP, COMPANION, DESKTOP, BROWSER, START, CHILD_LIMIT }
 
     data class AppInfo(
         val versionName: String?,
@@ -85,6 +90,8 @@ object X11DesktopManager {
         val dbusInstalled: Boolean = false,
         val installedDesktops: Set<Desktop> = emptySet(),
         val desktop: Desktop = Desktop.XFCE,
+        val installedBrowsers: Set<Browser> = emptySet(),
+        val browser: Browser = Browser.CHROMIUM,
         val running: Boolean = false,
         val task: Task? = null,
         val progress: String? = null,
@@ -123,12 +130,23 @@ object X11DesktopManager {
         if (::appContext.isInitialized) return
         appContext = context.applicationContext
         val saved = prefs.getString("desktop", null)
-        _state.update { it.copy(desktop = Desktop.entries.firstOrNull { d -> d.name == saved } ?: Desktop.XFCE) }
+        val savedBrowser = prefs.getString("browser", null)
+        _state.update {
+            it.copy(
+                desktop = Desktop.entries.firstOrNull { d -> d.name == saved } ?: Desktop.XFCE,
+                browser = Browser.entries.firstOrNull { b -> b.name == savedBrowser } ?: Browser.CHROMIUM
+            )
+        }
     }
 
     fun setDesktop(desktop: Desktop) {
         prefs.edit().putString("desktop", desktop.name).apply()
         _state.update { it.copy(desktop = desktop) }
+    }
+
+    fun setBrowser(browser: Browser) {
+        prefs.edit().putString("browser", browser.name).apply()
+        _state.update { it.copy(browser = browser) }
     }
 
     fun clearMessage() = _state.update { it.copy(message = null, isError = false) }
@@ -156,6 +174,7 @@ object X11DesktopManager {
                 companion = companion,
                 dbusInstalled = File(bin, "dbus-launch").exists(),
                 installedDesktops = Desktop.entries.filter { d -> File(bin, d.sessionBinary).exists() }.toSet(),
+                installedBrowsers = Browser.entries.filter { b -> File(bin, b.binaryName).exists() }.toSet(),
                 running = xServerPids().isNotEmpty()
             )
         }
@@ -238,6 +257,18 @@ object X11DesktopManager {
             "Installing ${desktop.label}… (a large download, this can take a while)",
             "apt-get update && apt-get install -y $KEEP_CONFIGS x11-repo && apt-get update && " +
                 "apt-get install -y $KEEP_CONFIGS dbus ${desktop.packages}",
+            3600
+        )
+    }
+
+    // ---------------- browser ----------------
+
+    fun installBrowser() = runTask(Task.BROWSER) {
+        val browser = _state.value.browser
+        shellTask(
+            "Installing ${browser.label}…",
+            "apt-get update && apt-get install -y $KEEP_CONFIGS tur-repo && apt-get update && " +
+                "apt-get install -y $KEEP_CONFIGS ${browser.packageName}",
             3600
         )
     }

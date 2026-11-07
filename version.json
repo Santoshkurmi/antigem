@@ -1,11 +1,9 @@
 {
-  "version_code": 121,
-  "version_name": "1.1.1",
+  "version_code": 122,
+  "version_name": "1.1.2",
   "min_supported_version_code": 1,
   "changelog": [
-   "Added support for OpenCode",
-   "200+ third party api provider support using opencode",
-   "Fix to show argon proper usage limit(Not sure if it work though)"
+   "Fix the bug that show all agents name in sidebar"
   ],
   "is_critical": false
 }

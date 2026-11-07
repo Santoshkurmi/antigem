@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.example.gemini.BuildConfig
 import com.example.gemini.data.adb.AdbConnectManager
 import com.example.gemini.data.x11.X11DesktopManager
+import com.example.gemini.data.x11.X11DesktopManager.Browser
 import com.example.gemini.data.x11.X11DesktopManager.Desktop
 import com.example.gemini.data.x11.X11DesktopManager.Task
 import com.example.gemini.theme.QuotaGreen
@@ -205,6 +206,53 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
                 }
             }
             TaskOutput(state, Task.START)
+        }
+
+        // Web Browser: Chromium or Firefox from tur-repo
+        val browserInstalled = state.browser in state.installedBrowsers
+        Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Web Browser", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    if (browserInstalled) {
+                        Pill("Installed", QuotaGreen)
+                    } else {
+                        Pill("Optional", MaterialTheme.colorScheme.primary)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Browser.entries.forEach { b ->
+                        FilterChip(
+                            selected = state.browser == b,
+                            enabled = !busy,
+                            onClick = { X11DesktopManager.setBrowser(b) },
+                            label = { Text(if (b in state.installedBrowsers) "${b.label} ✓" else b.label) }
+                        )
+                    }
+                }
+                Hint("Install a browser from tur-repo to browse the web on your desktop.")
+                if (!state.desktopOk) {
+                    Hint("Install a desktop above first.")
+                }
+                if (!browserInstalled) {
+                    Button(
+                        enabled = !busy && state.desktopOk,
+                        onClick = X11DesktopManager::installBrowser
+                    ) {
+                        Icon(Icons.Outlined.Download, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Install ${state.browser.label}")
+                    }
+                } else {
+                    OutlinedButton(
+                        enabled = !busy && state.desktopOk,
+                        onClick = X11DesktopManager::installBrowser
+                    ) {
+                        Text("Reinstall ${state.browser.label}")
+                    }
+                }
+                TaskOutput(state, Task.BROWSER)
+            }
         }
 
         // Optional: Android 12+ kills apps' extra processes past a limit, and a desktop starts many
