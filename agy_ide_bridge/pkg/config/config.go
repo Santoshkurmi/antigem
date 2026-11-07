@@ -34,9 +34,10 @@ func LoadConfig() *Config {
 		port = "1234"
 	}
 
+	// loopback only unless asked otherwise: 0.0.0.0 would expose the bridge to every network the machine is on
 	bind := os.Getenv("BIND")
 	if bind == "" {
-		bind = "0.0.0.0"
+		bind = "127.0.0.1"
 	}
 
 	workspace := os.Getenv("WORKSPACE_DIR")

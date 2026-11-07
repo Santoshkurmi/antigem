@@ -42,7 +42,7 @@ Flags:
   -t, --token <token>       12-character security token for API & AGY CSRF obfuscation
   -f, --force, --f          Force start AGY Hub automatically without prompting
   -p, --port <port>         Port for the Go IDE Server (default: 1234)
-  --bind <address>          Address the IDE Server listens on (default: 0.0.0.0; use 127.0.0.1 behind nginx/Apache)
+  --bind <address>          Address the IDE Server listens on (default: 127.0.0.1; use 0.0.0.0 only to reach it directly from other machines)
   --hub-port <port>         Port for the AGY Hub RPC server (default: 1235)
   --tz-offset <seconds>     Timezone offset in seconds (e.g. 20700 for UTC+05:45)
   --tz <location>           Timezone location name (e.g. Asia/Kathmandu)

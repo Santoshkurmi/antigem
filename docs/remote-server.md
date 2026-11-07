@@ -1043,7 +1043,7 @@ The app does this for you inside tmux, but the command is:
 | `-f` | start the hub without asking |
 | `--token` | the 12-character security token (letters and digits); must be the one in the app |
 | `-p`, `--hub-port` | bridge port, hub port |
-| `--bind` | bridge address; `127.0.0.1` behind a proxy, `0.0.0.0` (default) for a direct address |
+| `--bind` | bridge address; `127.0.0.1` (default) for the SSH tunnel and behind a proxy, `0.0.0.0` for a direct address |
 | `--bin`, `--claude-bin` | paths of `agy` and `claude` |
 | `--no-hub`, `--no-claude` | do not run Antigravity / Claude Code (the app adds these when you turn an agent off) |
 | `--tz-offset` | timezone offset in seconds (the app sends the phone's) |
