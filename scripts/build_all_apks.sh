@@ -63,8 +63,9 @@ else
     find "${APKS_SRC}/termux/debug" -name "*.apk" -exec cp {} "${OUTPUT_DIR}/antiGem-termux-v${VERSION_NAME}-debug.apk" \;
     find "${APKS_SRC}/termuxShared/debug" -name "*.apk" -exec cp {} "${OUTPUT_DIR}/antiGem-termux-shared-v${VERSION_NAME}-debug.apk" \;
 
-    if [[ -f "${ROOT_DIR}/app/src/main/assets/bin/agy_ide_bridge" ]]; then
-        cp "${ROOT_DIR}/app/src/main/assets/bin/agy_ide_bridge" "${OUTPUT_DIR}/agy_ide_bridge-v${VERSION_NAME}-android-arm64"
+    # the APK ships the bridge xz-compressed; the uncompressed build is kept under app/build
+    if [[ -f "${ROOT_DIR}/app/build/intermediates/agyIdeBridge/agy_ide_bridge" ]]; then
+        cp "${ROOT_DIR}/app/build/intermediates/agyIdeBridge/agy_ide_bridge" "${OUTPUT_DIR}/agy_ide_bridge-v${VERSION_NAME}-android-arm64"
     fi
 fi
 

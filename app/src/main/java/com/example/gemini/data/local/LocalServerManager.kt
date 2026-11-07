@@ -55,10 +55,19 @@ object LocalServerManager {
         val binBridge = File(LocalEnvironmentManager.getBinDir(context), "agy_ide_bridge")
         if (binBridge.exists()) return true
         return try {
-            context.assets.list("bin")?.contains("agy_ide_bridge") == true
+            context.assets.list("bin")?.contains(BRIDGE_ASSET) == true
         } catch (_: Exception) {
             false
         }
+    }
+
+    /** The IDE bridge is shipped xz-compressed (see compressAgyIdeBridge in app/build.gradle.kts). */
+    private const val BRIDGE_ASSET = "agy_ide_bridge.xz"
+
+    /** Opens assets/bin/[assetName], decompressing it on the fly when it is an .xz file. */
+    private fun openBinAsset(context: Context, assetName: String): java.io.InputStream {
+        val raw = context.assets.open("bin/$assetName")
+        return if (assetName.endsWith(".xz")) org.tukaani.xz.XZInputStream(java.io.BufferedInputStream(raw, 64 * 1024)) else raw
     }
 
     private fun extractAssetToBin(
@@ -68,7 +77,7 @@ object LocalServerManager {
         targetFileName: String = assetName
     ) {
         val targetFile = File(binDir, targetFileName)
-        context.assets.open("bin/$assetName").use { input ->
+        openBinAsset(context, assetName).use { input ->
             val tempFile = File(binDir, "$targetFileName.tmp")
             tempFile.outputStream().use { output ->
                 input.copyTo(output)
@@ -120,7 +129,7 @@ object LocalServerManager {
                 if (!binDir.exists()) {
                     binDir.mkdirs()
                 }
-                extractAssetToBin(context, binDir, "agy_ide_bridge")
+                extractAssetToBin(context, binDir, BRIDGE_ASSET, "agy_ide_bridge")
                 try {
                     extractAssetToBin(context, binDir, "backup_bootstrap")
                 } catch (e: Exception) {
@@ -184,7 +193,7 @@ object LocalServerManager {
             if (bridgeFile.exists() && bridgeFile.length() > 0) {
                 bridgeFile.copyTo(destFile, overwrite = true)
             } else {
-                context.assets.open("bin/agy_ide_bridge").use { input ->
+                openBinAsset(context, BRIDGE_ASSET).use { input ->
                     destFile.outputStream().use { output ->
                         input.copyTo(output)
                     }
