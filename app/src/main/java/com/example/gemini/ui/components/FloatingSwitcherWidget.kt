@@ -277,12 +277,13 @@ fun FloatingSwitcherWidget(
                     )
                 }
         ) {
+            // Solid fill with a single shadow: a see-through fill let the shadow underneath show through as a
+            // second, smaller circle behind the arrow
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)),
-                shadowElevation = 8.dp,
-                modifier = Modifier.shadow(8.dp, RoundedCornerShape(24.dp))
+                shadowElevation = 8.dp
             ) {
                 if (!isExpanded) {
                     // Collapsed Compact Pill with Directional Arrow.
