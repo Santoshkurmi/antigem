@@ -18,6 +18,9 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          # full history: the app's "What's new" page is generated from every commit of version.json
+          fetch-depth: 0
 
       - name: Set up Java 21
         uses: actions/setup-java@v4

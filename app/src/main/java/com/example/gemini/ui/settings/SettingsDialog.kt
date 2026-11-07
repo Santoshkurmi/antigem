@@ -119,6 +119,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     TERMUX_SUPPORT("Termux Support", "Termux:API and the X11 desktop"),
     TERMUX_API("Termux:API", "How termux-api commands are handled"),
     X11_DESKTOP("X11 Desktop", "Linux desktop apps with Termux:X11"),
+    CHANGELOG("What's new", "Every AntiGem version and what changed"),
     ABOUT("About & Info", "App version, package details, and bridge export");
 
     /** The Jarvis section this page shows (Settings → Jarvis → …), or null. */
@@ -141,6 +142,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
         AGY_CLI, MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
         CLAUDE_PAGE -> CLAUDE
         TERMUX_API, X11_DESKTOP -> TERMUX_SUPPORT
+        CHANGELOG -> ABOUT
         else -> if (jarvisPage != null) JARVIS else MAIN
     }
 }
@@ -632,6 +634,11 @@ fun SettingsDialog(
                         onOpenAdbConnect = { currentSection = SettingsSection.ADB_CONNECT }
                     )
                     SettingsSection.ABOUT -> AboutSubScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onOpenChangelog = { currentSection = SettingsSection.CHANGELOG }
+                    )
+                    SettingsSection.CHANGELOG -> ChangelogScreen(
                         cardBg = cardBg,
                         cardBorder = cardBorder
                     )
@@ -8107,7 +8114,8 @@ private fun DiagnosticsSubScreen(
 @Composable
 private fun AboutSubScreen(
     cardBg: Color,
-    cardBorder: BorderStroke
+    cardBorder: BorderStroke,
+    onOpenChangelog: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -8206,6 +8214,9 @@ private fun AboutSubScreen(
                 }
             }
         }
+
+        // What's new: this version's changes, opens the full timeline
+        WhatsNewCard(cardBg = cardBg, cardBorder = cardBorder, onClick = onOpenChangelog)
 
         // 2. Package & Environment Details
         Card(
