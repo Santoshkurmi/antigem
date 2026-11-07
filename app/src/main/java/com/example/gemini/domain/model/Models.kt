@@ -127,6 +127,19 @@ data class Conversation(
     val agent: AgentKind = AgentKind.AGY
 )
 
+/** A message sent while the agent was working, waiting to be delivered (shown in the queued-messages card). */
+data class QueuedMessage(
+    val id: String,
+    val text: String,
+    val attachmentCount: Int = 0,
+    /** "Send now" is offered (interrupts the current work and delivers this message). */
+    val canSendNow: Boolean = true,
+    /** "Delete" is offered (the message is removed from the queue). */
+    val canDelete: Boolean = true,
+    /** Not confirmed by the agent yet (just sent from this app). */
+    val isPending: Boolean = false
+)
+
 enum class ModelFamily {
     CLAUDE,
     GEMINI,

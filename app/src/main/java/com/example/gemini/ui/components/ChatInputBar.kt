@@ -179,6 +179,10 @@ fun ChatInputBar(
     /** The agent cannot read audio (Claude): the mic records and transcribes to text instead of attaching a file. */
     voiceNotesAsText: Boolean = false,
     focusRequester: FocusRequester = remember { FocusRequester() },
+    /** Messages sent while the agent was working, waiting to be delivered (card above the box). */
+    queuedMessages: List<com.example.gemini.domain.model.QueuedMessage> = emptyList(),
+    onSendQueuedNow: (String) -> Unit = {},
+    onDeleteQueued: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -601,6 +605,13 @@ fun ChatInputBar(
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 6.dp)
         ) {
+            QueuedMessagesCard(
+                messages = queuedMessages,
+                onSendNow = onSendQueuedNow,
+                onDelete = onDeleteQueued,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+
             // Claude-style unified rounded input card
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -1206,8 +1217,9 @@ fun ChatInputBar(
                             Spacer(modifier = Modifier.width(6.dp))
                         }
 
-                        // Action Button (Send / Stop / Voice Recorder)
-                        if (isStreaming) {
+                        // Action Button (Send / Stop / Voice Recorder). While the agent works, a typed message is
+                        // sent (it is queued, or injected by Claude); Stop shows when the box is empty.
+                        if (isStreaming && !canSend) {
                             Surface(
                                 onClick = onStopStreaming,
                                 shape = CircleShape,

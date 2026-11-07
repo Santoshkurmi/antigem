@@ -217,6 +217,8 @@ class ClaudeChatBackend(
     // the chat is shown once (complete) when it arrives
     private var replayUntilSeq: Long? = null
     private var replayDeadline: Job? = null
+    // messages sent while Claude was replying, not delivered yet: chat id → (uuid → entry); kept across chat switches
+    private val queuedByChat = HashMap<String, LinkedHashMap<String, com.example.gemini.domain.model.QueuedMessage>>()
     private var loopJob: Job? = null
     private val titleRefreshes = HashMap<String, Job>()
 
@@ -265,6 +267,7 @@ class ClaudeChatBackend(
             detachLocked()
             transcript.reset(id)
             attachedId = id
+            publishQueue()
         }
     }
 
@@ -285,13 +288,14 @@ class ClaudeChatBackend(
         backendScope.launch(worker) {
             detachLocked()
             attachedId = id
+            publishQueue()
             loadAndAttach(id)
         }
     }
 
     override fun sendMessage(content: String) {
         val atts = store.attachments.value
-        if ((content.isBlank() && atts.isEmpty()) || _isTurnActive.value) return
+        if (content.isBlank() && atts.isEmpty()) return
         val conv = store.currentConversation.value ?: return
         if (conv.agent != AgentKind.CLAUDE) return
         store.attachments.value = emptyList()
@@ -318,6 +322,24 @@ class ClaudeChatBackend(
                 transcript.reset(conv.id)
                 attachedId = conv.id
             }
+            if (processLive && transcript.isTurnActive) {
+                // Claude is replying: the CLI queues it (command_lifecycle "queued") and delivers it at the next tool
+                // boundary, or as the next turn. Its replay adds it to the chat once it is delivered ("started").
+                synchronized(queuedByChat) {
+                    queuedByChat.getOrPut(conv.id) { LinkedHashMap() }[uuid] = com.example.gemini.domain.model.QueuedMessage(
+                        id = uuid,
+                        text = displayText,
+                        attachmentCount = atts.size,
+                        canSendNow = true, // interrupts the current reply; the CLI then runs the queued message
+                        canDelete = false
+                    )
+                }
+                publishQueue()
+                val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(conv.id, text, atts))))
+                ensureConnected(conv.id)
+                send(frame)
+                return@launch
+            }
             transcript.addLocalUserMessage(uuid, displayText, atts)
             if (!processLive) {
                 awaitingProcess = true
@@ -333,6 +355,36 @@ class ClaudeChatBackend(
             send(frame)
         }
     }
+
+    private val _queuedMessages = MutableStateFlow<List<com.example.gemini.domain.model.QueuedMessage>>(emptyList())
+    /** The open chat's messages waiting for Claude to finish (shown in the queued-messages card). */
+    val queuedMessages: StateFlow<List<com.example.gemini.domain.model.QueuedMessage>> = _queuedMessages.asStateFlow()
+
+    private fun publishQueue() {
+        val id = attachedId ?: store.currentConversation.value?.id
+        _queuedMessages.value = synchronized(queuedByChat) { id?.let { queuedByChat[it]?.values?.toList() }.orEmpty() }
+    }
+
+    /** A queued message was delivered (or dropped): out of the queue. */
+    private fun dequeue(chatId: String?, uuid: String) {
+        chatId ?: return
+        val removed = synchronized(queuedByChat) { queuedByChat[chatId]?.remove(uuid) != null }
+        if (removed) publishQueue()
+    }
+
+    /** The process is gone: the open chat's queued messages were never delivered. */
+    private fun dropQueued(reason: String) {
+        val dropped = synchronized(queuedByChat) { attachedId?.let { queuedByChat.remove(it) } }
+        if (dropped.isNullOrEmpty()) return
+        publishQueue()
+        transcript.addError(
+            if (dropped.size == 1) "Queued message not sent" else "${dropped.size} queued messages not sent",
+            reason + "\n\n" + dropped.values.joinToString("\n") { "• " + it.text.take(120) }
+        )
+    }
+
+    /** "Send now": interrupts the current reply; the CLI then runs the queued messages. */
+    fun sendQueuedNow(@Suppress("UNUSED_PARAMETER") id: String) = stopStreaming()
 
     override fun stopStreaming() {
         backendScope.launch(worker) {
@@ -1257,6 +1309,14 @@ class ClaudeChatBackend(
                 val isReply = data?.get("type")?.jsonPrimitive?.contentOrNull == "control_response"
                 if (isReply) deliverReply(data!!)
                 val type = if (data != null && !isReply) transcript.applyLive(data) else ""
+                // a queued message was delivered (its replay, or command_lifecycle started / completed / cancelled)
+                when (type) {
+                    "command_lifecycle" -> {
+                        val state = data?.get("state")?.jsonPrimitive?.contentOrNull
+                        if (state != "queued") data?.get("command_uuid")?.jsonPrimitive?.contentOrNull?.let { dequeue(attachedId, it) }
+                    }
+                    "user" -> data?.get("uuid")?.jsonPrimitive?.contentOrNull?.let { dequeue(attachedId, it) }
+                }
                 val replayTarget = replayUntilSeq
                 if (replayTarget != null) {
                     // old output being replayed while the chat opens: no side effects, show it once at the end.
@@ -1343,6 +1403,7 @@ class ClaudeChatBackend(
                         clearStartupNotice()
                         if (replayUntilSeq != null) finishReplay()
                         failReplies("Claude process exited")
+                        dropQueued("Claude Code stopped before it was delivered.")
                         val err = frame.error.orEmpty()
                         if (transcript.isTurnActive || (frame.exit_code ?: 0) != 0) {
                             if ((frame.exit_code ?: 0) != 0) {
@@ -1360,6 +1421,7 @@ class ClaudeChatBackend(
                 clearStartupNotice()
                 if (replayUntilSeq != null) finishReplay()
                 failReplies(err)
+                dropQueued(err)
                 transcript.addError(
                     if (err.contains("not found", ignoreCase = true)) "Claude Code is not installed" else "Claude Code unavailable",
                     if (err.contains("not found", ignoreCase = true)) "$err\n\nInstall it from Settings → Claude Code → Account & CLI." else err

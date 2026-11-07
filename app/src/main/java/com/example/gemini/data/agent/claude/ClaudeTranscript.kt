@@ -435,6 +435,12 @@ class ClaudeTranscript {
             savedFiles.mapIndexed { i, f -> ClaudeAttachments.toChatAttachment(f, "${uuid}_file_$i") }
         if (displayText.isBlank() && attachments.isEmpty()) return
         val createdAt = parseTime(e.timestamp) ?: System.currentTimeMillis()
+        // a message sent while Claude was replying arrives inside that turn (at a tool boundary): the reply so far
+        // stops streaming and continues in a new turn below the message
+        if (live) activeTurn?.let {
+            it.isStreaming = false
+            touch(it)
+        }
         addUserTurn(uuid, displayText, attachments, createdAt, e.parentUuid ?: lastEventUuid)
         lastEventUuid = uuid
         if (live) beginAssistantTurn() else activeTurn = null

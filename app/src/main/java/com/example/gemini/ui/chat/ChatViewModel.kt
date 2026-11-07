@@ -316,6 +316,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (agentOf(id) == AgentKind.CLAUDE) claudeBackend.renameConversation(id, title)
     }
     fun stopStreaming() = if (isClaudeActive) claudeBackend.stopStreaming() else agyBackend.stopStreaming()
+
+    /** Messages sent while the agent was working, waiting to be delivered (queued-messages card). */
+    val queuedMessages = byAgent(agyBackend.queuedMessages, claudeBackend.queuedMessages)
+    fun sendQueuedNow(id: String) = if (isClaudeActive) claudeBackend.sendQueuedNow(id) else agyBackend.sendQueuedNow(id)
+    fun deleteQueued(id: String) { if (!isClaudeActive) agyBackend.deleteQueued(id) }
     fun applyQuotaSummary(summary: com.example.gemini.domain.model.QuotaSummaryResponse) = agyBackend.applyQuotaSummary(summary)
     fun refreshQuotas(force: Boolean = true, showToastFeedback: Boolean = false) {
         if (isClaudeActive) {

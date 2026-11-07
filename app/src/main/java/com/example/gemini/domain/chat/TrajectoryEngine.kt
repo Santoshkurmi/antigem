@@ -11,8 +11,11 @@ import com.example.gemini.domain.model.TokenUsage
 import com.example.gemini.domain.model.ToolCall
 import com.example.gemini.domain.model.ToolType
 import com.example.gemini.domain.model.TurnBlock
+import exa.language_server_pb.AgentMessage
 import exa.language_server_pb.AgentStateUpdate
 import exa.language_server_pb.CascadeRunStatus
+import exa.language_server_pb.MessageDeliveryStrategy
+import exa.language_server_pb.PendingAgentMessagesUpdate
 import exa.language_server_pb.CortexErrorDetails
 import exa.language_server_pb.CortexStepErrorMessage
 import exa.language_server_pb.CortexStepStatus
@@ -35,6 +38,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * 2. Active turn steps (sparse stepIndex map, O(1) cumulative replacement).
  */
 class TrajectoryEngine {
+
+    companion object {
+        const val CLIENT_MSG_TAG_PREFIX = "client_msg:"
+    }
 
     private val _turns = MutableStateFlow<List<ChatTurn>>(emptyList())
     val turns: StateFlow<List<ChatTurn>> = _turns.asStateFlow()
@@ -62,6 +69,47 @@ class TrajectoryEngine {
     private var activeTurnStartStep: Int = 0
     private var pendingUserTurn: ChatTurn.User? = null
 
+    /** Last frame's `fully_idle`: nothing (model, subagents, background work) is running in the conversation. */
+    var fullyIdle: Boolean = true
+        private set
+    /** The trajectory's step count as the daemon last reported it. */
+    var totalStepsLength: Int = 0
+        private set
+
+    // the daemon's message queue (`pending_agent_messages`), merged from indexed deltas like the hub web UI does
+    private var pendingAgentMessages: List<AgentMessage> = emptyList()
+    // `client_msg:<id>` tags seen on user-input steps: a sent message has reached the trajectory
+    private val seenClientTags = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** One message waiting in the daemon's queue. */
+    data class QueuedEntry(
+        val id: String,
+        val text: String,
+        val media: List<exa.language_server_pb.Media>,
+        val deliveryStrategy: MessageDeliveryStrategy,
+        val tags: List<String>
+    )
+
+    /** The visible messages in the daemon's queue, oldest first. */
+    fun queuedMessages(): List<QueuedEntry> = pendingAgentMessages.mapNotNull { m ->
+        if (m.id.isBlank() || m.hide_from_user) return@mapNotNull null
+        val step = runCatching { Step.ADAPTER.decode(m.step_payload) }.getOrNull()
+        val input = step?.user_input ?: return@mapNotNull null
+        val text = input.items.mapNotNull { it.text.takeIf { t -> t.isNotBlank() } }.joinToString("\n").ifBlank { input.query }
+        QueuedEntry(m.id, text, input.media, m.delivery_strategy, input.tags)
+    }
+
+    /** A message sent with this `client_msg:` tag reached the trajectory (as a user-input step). */
+    fun hasSeenClientTag(tag: String): Boolean = seenClientTags.contains(tag)
+
+    private fun applyPendingMessagesUpdate(u: PendingAgentMessagesUpdate) {
+        val len = u.total_length
+        val next = arrayOfNulls<AgentMessage>(len)
+        pendingAgentMessages.forEachIndexed { i, m -> if (i < len) next[i] = m }
+        u.indices.forEachIndexed { k, idx -> if (idx in 0 until len && k < u.pending_agent_messages.size) next[idx] = u.pending_agent_messages[k] }
+        pendingAgentMessages = next.map { it ?: AgentMessage() }
+    }
+
     /**
      * Resets state when switching conversations.
      */
@@ -79,6 +127,10 @@ class TrajectoryEngine {
         trajectoryId = ""
         isRunning = false
         isWaitingInteraction = false
+        fullyIdle = true
+        totalStepsLength = 0
+        pendingAgentMessages = emptyList()
+        seenClientTags.clear()
         activeTurnStartStep = 0
         userRespondedStepIndices.clear()
         completedTurns.clear()
@@ -163,14 +215,26 @@ class TrajectoryEngine {
         val isTerminated = liveTerminationReason != null &&
                 liveTerminationReason != ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_UNSPECIFIED
 
-        val daemonRunning = (status == CascadeRunStatus.CASCADE_RUN_STATUS_RUNNING) && !isTerminated
-        val daemonIdle = status == CascadeRunStatus.CASCADE_RUN_STATUS_IDLE || update.fully_idle || isTerminated
+        // Same rule as the hub web UI: the executor loop's own status says whether the model is working; `status`
+        // is the whole conversation's and stays RUNNING while subagents / background work are alive after the
+        // reply has finished (which left the chat "outputting" forever). It is only the fallback.
+        val loopStatus = update.executor_loop_status.takeIf { it != CascadeRunStatus.CASCADE_RUN_STATUS_UNSPECIFIED } ?: status
+        val loopActive = loopStatus == CascadeRunStatus.CASCADE_RUN_STATUS_RUNNING || loopStatus == CascadeRunStatus.CASCADE_RUN_STATUS_CANCELING
+        val daemonRunning = loopActive && !isTerminated
+        val daemonIdle = loopStatus == CascadeRunStatus.CASCADE_RUN_STATUS_IDLE || update.fully_idle || isTerminated
+        fullyIdle = update.fully_idle
+
+        update.pending_agent_messages_update?.let { applyPendingMessagesUpdate(it) }
 
         val stepsUpdate = update.main_trajectory_update?.steps_update
 
         val effectiveSteps = stepsUpdate?.steps ?: emptyList()
         val effectiveIndices = stepsUpdate?.indices ?: effectiveSteps.indices.toList()
         val totalLength = stepsUpdate?.total_length ?: effectiveSteps.size
+        if (stepsUpdate != null) totalStepsLength = totalLength
+        for (s in effectiveSteps) {
+            s.user_input?.tags?.forEach { if (it.startsWith(CLIENT_MSG_TAG_PREFIX)) seenClientTags.add(it) }
+        }
 
         Log.d("CHAT_OPEN_DEBUG", "⚙️ [TrajectoryEngine.ingestAgentStateUpdate] convId=$conversationId, trajId=$trajectoryId, status=$status, termination=$liveTerminationReason, stepsCount=${effectiveSteps.size}")
 

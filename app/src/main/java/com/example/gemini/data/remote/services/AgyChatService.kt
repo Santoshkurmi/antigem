@@ -42,6 +42,7 @@ import exa.language_server_pb.ConversationHistoryConfig
 import exa.language_server_pb.CortexTrajectorySource
 import exa.language_server_pb.CustomAgentSpec
 import exa.language_server_pb.DefaultAgentConfig
+import exa.language_server_pb.DeleteAgentMessageRequest
 import exa.language_server_pb.HandleCascadeUserInteractionRequest
 import exa.language_server_pb.Media
 import exa.language_server_pb.MessageDeliveryStrategy
@@ -67,6 +68,9 @@ class AgyChatService {
     companion object {
         private const val TAG = "AgyChatService"
         val instance by lazy { AgyChatService() }
+
+        /** The tag a sent message carries in its user-input step / queued entry (same format as the hub web UI). */
+        fun clientMsgTag(clientMessageId: String) = "client_msg:$clientMessageId"
 
         private val jsonParser = Json {
             ignoreUnknownKeys = true
@@ -122,7 +126,13 @@ class AgyChatService {
         thinkingBudget: Int = 8192,
         autoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
         media: List<AgyMediaItem> = emptyList(),
-        hubUrl: String = AuthPreferences.currentHubUrl
+        hubUrl: String = AuthPreferences.currentHubUrl,
+        // NEXT_INVOCATION runs it now (idle chat, or "Send now"); WHEN_IDLE queues it after the current work
+        deliveryStrategy: MessageDeliveryStrategy = MessageDeliveryStrategy.MESSAGE_DELIVERY_STRATEGY_WHEN_IDLE,
+        // tagged `client_msg:<id>` (as the hub web UI does), so the echoed step / queued entry can be recognised
+        clientMessageId: String? = null,
+        // media already in daemon form (a queued message sent again with "Send now")
+        rawMedia: List<Media> = emptyList()
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val resolvedModelStr = resolveModelEnum(modelEnum)
         val modelProto = toModelProto(resolvedModelStr)
@@ -154,7 +164,7 @@ class AgyChatService {
         val req = SendUserCascadeMessageRequest(
             cascade_id = cascadeId,
             items = listOf(TextOrScopeItem(text = promptText)),
-            media = mediaItems,
+            media = mediaItems + rawMedia,
             cascade_config = CascadeConfig(
                 planner_config = CascadePlannerConfig(
                     tool_config = CascadeToolConfig(
@@ -180,7 +190,9 @@ class AgyChatService {
                     )
                 )
             ),
-            delivery_strategy = MessageDeliveryStrategy.MESSAGE_DELIVERY_STRATEGY_WHEN_IDLE
+            delivery_strategy = deliveryStrategy,
+            tags = if (clientMessageId.isNullOrBlank()) emptyList() else listOf(clientMsgTag(clientMessageId)),
+            client_message_id = clientMessageId.orEmpty()
         )
 
         AgyLanguageService.SendUserCascadeMessage().executeSafely(req).map { }
@@ -215,6 +227,16 @@ class AgyChatService {
     /**
      * Cancels / aborts running generation or commands via typed AgyLanguageService
      */
+    /** Removes a queued (pending) message from a conversation's queue (the hub web UI's "Delete"). */
+    suspend fun deleteAgentMessage(
+        cascadeId: String,
+        messageId: String
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        AgyLanguageService.DeleteAgentMessage().executeSafely(
+            DeleteAgentMessageRequest(message_id = messageId, recipient = cascadeId)
+        ).map { }
+    }
+
     suspend fun cancelCascadeInvocation(
         cascadeId: String,
         hubUrl: String = AuthPreferences.currentHubUrl

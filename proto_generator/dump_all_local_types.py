@@ -150,7 +150,15 @@ def parse_file(data):
     stream = BytesIO(data)
     fields = parse_proto_fields(stream, FD_TAGS)
     filename, package, messages, enums, services = "", "", [], [], []
+    seen_name = False
     for fn, wt, val in fields:
+        # A FileDescriptorProto has exactly one name (field 1). Descriptors sit back to back in the binary, so a
+        # second field 1 is the next file: stop, or its name/package overwrite this file's and its messages are
+        # merged in (agy 1.5.2: language_server.proto was registered as exa.codeium_common_pb).
+        if fn == 1:
+            if seen_name:
+                break
+            seen_name = True
         if fn == 1 and isinstance(val, bytes):   filename = val.decode('utf-8', errors='ignore')
         elif fn == 2 and isinstance(val, bytes): package  = val.decode('utf-8', errors='ignore')
         elif fn == 4 and isinstance(val, bytes): messages.append(parse_message_descriptor(val))

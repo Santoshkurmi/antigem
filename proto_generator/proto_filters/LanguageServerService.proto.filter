@@ -29,6 +29,8 @@ GetAvailableModels
 # Chat & Cascade Agent Execution
 StartCascade
 SendUserCascadeMessage
+SendAllQueuedMessages
+DeleteAgentMessage
 CancelCascadeInvocation
 CancelCascadeSteps
 StreamAgentStateUpdates

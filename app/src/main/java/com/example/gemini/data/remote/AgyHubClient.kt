@@ -193,9 +193,15 @@ class AgyHubClient {
         thinkingBudget: Int = 8192,
         autoExecutionPolicy: String = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER",
         media: List<AgyMediaItem> = emptyList(),
-        hubUrl: String = AuthPreferences.currentHubUrl
+        hubUrl: String = AuthPreferences.currentHubUrl,
+        deliveryStrategy: exa.language_server_pb.MessageDeliveryStrategy = exa.language_server_pb.MessageDeliveryStrategy.MESSAGE_DELIVERY_STRATEGY_WHEN_IDLE,
+        clientMessageId: String? = null,
+        rawMedia: List<exa.language_server_pb.Media> = emptyList()
     ): Result<Unit> =
-        chatService.sendUserPrompt(cascadeId, text, modelEnum, thinkingBudget, autoExecutionPolicy, media, hubUrl)
+        chatService.sendUserPrompt(cascadeId, text, modelEnum, thinkingBudget, autoExecutionPolicy, media, hubUrl, deliveryStrategy, clientMessageId, rawMedia)
+
+    suspend fun deleteAgentMessage(cascadeId: String, messageId: String): Result<Unit> =
+        chatService.deleteAgentMessage(cascadeId, messageId)
 
 
     fun streamAgentStateUpdates(

@@ -207,6 +207,7 @@ fun ChatScreen(
     val activeInstances by viewModel.activeInstances.collectAsState()
     val isActivelyRunning by viewModel.isCurrentChatActivelyRunning.collectAsState()
     val isBackgroundActive by viewModel.isCurrentChatBackgroundActive.collectAsState()
+    val queuedMessages by viewModel.queuedMessages.collectAsState()
     val quotaSummary by viewModel.quotaSummary.collectAsState()
     val preferredModelName by viewModel.preferredModelName.collectAsState()
     val isLocalToolsEnabled by viewModel.isLocalToolsEnabled.collectAsState(initial = false)
@@ -2231,7 +2232,10 @@ fun ChatScreen(
                     speechManager = if (isClaudeChat) viewModel.claudeVoice else viewModel.speechManager,
                     voiceNotesAsText = isClaudeChat,
                     cascadeId = activeConversationKey,
-                    focusRequester = chatInputFocusRequester
+                    focusRequester = chatInputFocusRequester,
+                    queuedMessages = queuedMessages,
+                    onSendQueuedNow = { viewModel.sendQueuedNow(it) },
+                    onDeleteQueued = { viewModel.deleteQueued(it) }
                 )
             }
         }

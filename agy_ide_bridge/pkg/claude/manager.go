@@ -226,11 +226,20 @@ type Session struct {
 	bufferedBytes int
 	baseSeq       int64
 	historyOffset int64
-	pendingTurns  int
-	stderrTail    []byte
-	subs          map[*subscriber]struct{}
-	lastActivity  time.Time
-	generation    int
+	// pendingTurns is the number of prompts written and not finished yet: len(openCommands) + anonTurns.
+	pendingTurns int
+	// openCommands are the prompts (by uuid) the CLI has not finished. It reports each one with command_lifecycle
+	// (queued → started → completed / cancelled). Counting `result` lines is wrong: a prompt sent while Claude
+	// replies is injected into that turn at the next tool boundary, so two prompts can end with one result.
+	openCommands map[string]struct{}
+	// anonTurns are prompts written without a uuid, finished by a `result`.
+	anonTurns int
+	// sawLifecycle: this process reports command_lifecycle (older CLIs do not; then `result` finishes prompts)
+	sawLifecycle bool
+	stderrTail   []byte
+	subs         map[*subscriber]struct{}
+	lastActivity time.Time
+	generation   int
 	// historyCut is the rewind point the live process was started at: its transcript still ends with the old
 	// branch until the first new prompt is written, so history is cut there while the process runs.
 	historyCut *string
@@ -306,9 +315,18 @@ func (s *Session) Write(line []byte) error {
 	}
 	var head struct {
 		Type string `json:"type"`
+		UUID string `json:"uuid"`
 	}
 	if json.Unmarshal(line, &head) == nil && head.Type == "user" {
-		s.pendingTurns++
+		if head.UUID != "" {
+			if s.openCommands == nil {
+				s.openCommands = map[string]struct{}{}
+			}
+			s.openCommands[head.UUID] = struct{}{}
+		} else {
+			s.anonTurns++
+		}
+		s.recountTurnsLocked()
 		if s.rewindPending {
 			// the new prompt starts the new branch: from now on the transcript itself ends there
 			s.rewindPending = false
@@ -431,7 +449,7 @@ func (s *Session) spawnLocked() error {
 	s.baseSeq += int64(len(s.lines))
 	s.lines = nil
 	s.bufferedBytes = 0
-	s.pendingTurns = 0
+	s.resetTurnsLocked()
 	s.stderrTail = nil
 	s.historyCut = nil
 	s.quietExit = false
@@ -471,12 +489,7 @@ func (s *Session) appendLine(line []byte, gen int) {
 	if gen != s.generation {
 		return
 	}
-	var head struct {
-		Type string `json:"type"`
-	}
-	if json.Unmarshal(line, &head) == nil && head.Type == "result" && s.pendingTurns > 0 {
-		s.pendingTurns--
-	}
+	s.trackTurnLocked(line)
 	seq := s.baseSeq + int64(len(s.lines))
 	s.lines = append(s.lines, line)
 	s.bufferedBytes += len(line)
@@ -487,6 +500,50 @@ func (s *Session) appendLine(line []byte, gen int) {
 	}
 	s.lastActivity = time.Now()
 	s.broadcastLocked(lineMessage(seq, line))
+}
+
+// trackTurnLocked finishes prompts from one output line: command_lifecycle completed / cancelled ends that prompt;
+// `result` ends a prompt without a uuid (and, on a CLI without command_lifecycle, the oldest open one).
+func (s *Session) trackTurnLocked(line []byte) {
+	var head struct {
+		Type        string `json:"type"`
+		State       string `json:"state"`
+		CommandUUID string `json:"command_uuid"`
+	}
+	if json.Unmarshal(line, &head) != nil {
+		return
+	}
+	switch head.Type {
+	case "command_lifecycle":
+		s.sawLifecycle = true
+		if head.State == "completed" || head.State == "cancelled" {
+			delete(s.openCommands, head.CommandUUID)
+		}
+	case "result":
+		if s.anonTurns > 0 {
+			s.anonTurns--
+		} else if !s.sawLifecycle {
+			for id := range s.openCommands {
+				delete(s.openCommands, id)
+				break
+			}
+		}
+	default:
+		return
+	}
+	s.recountTurnsLocked()
+}
+
+func (s *Session) recountTurnsLocked() {
+	s.pendingTurns = len(s.openCommands) + s.anonTurns
+}
+
+// resetTurnsLocked forgets all prompts (a new process, or the process is gone).
+func (s *Session) resetTurnsLocked() {
+	s.openCommands = nil
+	s.anonTurns = 0
+	s.sawLifecycle = false
+	s.pendingTurns = 0
 }
 
 func (s *Session) readStderr(r io.Reader) {
@@ -531,7 +588,7 @@ func (s *Session) wait(cmd *exec.Cmd, gen int) {
 	}
 	s.cmd = nil
 	s.stdin = nil
-	s.pendingTurns = 0
+	s.resetTurnsLocked()
 	// Everything this process produced is now in the transcript file; drop the buffer so a later attach
 	// does not replay it on top of the history.
 	s.baseSeq += int64(len(s.lines))

@@ -446,30 +446,58 @@ class AgyChatBackend(
     // Note: We use the daemon's sidebar summaries (JetboxSubscribeToSummaries) as the single source of truth rather than
     // per-frame stream updates from StreamAgentStateUpdates because the fine-grained gRPC stream in AGY can be buggier
     // (e.g. continuing to report RUNNING state even when the turn has ended, particularly in long chats with multiple subagents/tools).
+    //
+    // The OPEN chat is decided by its live stream when it has one: the stream carries the executor loop's own status
+    // (the rule the hub web UI uses, see TrajectoryEngine), the summaries only the conversation's `status`, which stays
+    // RUNNING while subagents / background work are alive. Without a stream frame yet, the summary decides.
+    private data class StreamRunState(val conversationId: String, val loopRunning: Boolean, val fullyIdle: Boolean)
+    private val _streamRun = MutableStateFlow<StreamRunState?>(null)
+
+    // A just-sent (not queued) message shows the chat as running right away, until the stream confirms it
+    // (the hub web UI does the same), so the Send button turns into Stop at once.
+    private data class OptimisticSend(val conversationId: String, val tag: String)
+    private val _optimisticSend = MutableStateFlow<OptimisticSend?>(null)
+    private var optimisticTimeoutJob: Job? = null
+
     val isCurrentChatActivelyRunning: StateFlow<Boolean> = combine(
         _conversations,
         _currentConversation,
-        systemConnectionState
-    ) { convList, current, conn ->
+        systemConnectionState,
+        _streamRun,
+        _optimisticSend
+    ) { convList, current, conn, stream, optimistic ->
         val curId = current?.id ?: return@combine false
-        val conv = convList.find { it.id == curId } ?: current
-        (conv.isRunning) && conn.isHubOnline
+        if (!conn.isHubOnline) return@combine false
+        if (optimistic?.conversationId == curId) return@combine true
+        stream?.takeIf { it.conversationId == curId }?.loopRunning
+            ?: (convList.find { it.id == curId } ?: current).isRunning
     }.distinctUntilChanged()
     .stateIn(backendScope, SharingStarted.Eagerly, false)
 
     val isCurrentChatBackgroundActive: StateFlow<Boolean> = combine(
-        _conversations,
-        _currentConversation,
+        combine(_conversations, _currentConversation, ::Pair),
         systemConnectionState,
-        _activeInstances
-    ) { convList, current, conn, instances ->
+        _activeInstances,
+        _streamRun,
+        isCurrentChatActivelyRunning
+    ) { (convList, current), conn, instances, stream, activelyRunning ->
         val curId = current?.id ?: return@combine false
         val conv = convList.find { it.id == curId } ?: current
-        val isActivelyRunning = (conv.isRunning) && conn.isHubOnline
         val activeInst = instances.find { it.conversationId == curId }
-        conn.isHubOnline && !isActivelyRunning && (conv.notFullyIdle || conv.hasActivity || activeInst != null)
+        val streamBusy = stream?.takeIf { it.conversationId == curId }?.let { !it.fullyIdle } == true
+        // a summary still RUNNING while the loop is idle is background work (subagents, background tasks)
+        conn.isHubOnline && !activelyRunning &&
+            (streamBusy || conv.isRunning || conv.notFullyIdle || conv.hasActivity || activeInst != null)
     }.distinctUntilChanged()
     .stateIn(backendScope, SharingStarted.Eagerly, false)
+
+    // ---- queued messages (sent while the agent was working; the daemon delivers them when it is done)
+    private val _queuedMessages = MutableStateFlow<List<com.example.gemini.domain.model.QueuedMessage>>(emptyList())
+    val queuedMessages: StateFlow<List<com.example.gemini.domain.model.QueuedMessage>> = _queuedMessages.asStateFlow()
+    // queued sends from this app the daemon's queue does not list yet: chat id → (client tag → entry)
+    private val localQueued = java.util.concurrent.ConcurrentHashMap<String, LinkedHashMap<String, com.example.gemini.domain.model.QueuedMessage>>()
+    // server queue entries removed here, hidden until the daemon's queue drops them
+    private val hiddenQueuedIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     val connectionState: StateFlow<com.example.gemini.data.remote.BridgeConnectionState> = combine(_isServerOnline, isCurrentChatActivelyRunning) { online, streaming ->
         when {
@@ -849,6 +877,9 @@ class AgyChatBackend(
         hasSeenTurnActivity = false
         _isStreaming.value = false
         _bridgeStatusMessage.value = null
+        clearOptimisticSend()
+        _streamRun.value = null
+        _queuedMessages.value = emptyList()
 
         val modelToUse = if (_selectedModelId.value.isNotBlank()) {
             com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
@@ -899,6 +930,9 @@ class AgyChatBackend(
         _bridgeStatusMessage.value = null
         _messages.value = emptyList()
         _isLoadingConversation.value = true
+        clearOptimisticSend()
+        _streamRun.value = null
+        _queuedMessages.value = emptyList()
 
         backendScope.launch {
             _conversationError.value = null
@@ -907,6 +941,8 @@ class AgyChatBackend(
                 ?: Conversation(id = id, title = "Antigravity Chat", sessionId = id)
             Log.d("CHAT_OPEN_DEBUG", "👉 [ChatViewModel.selectConversation] Launching stream for conv: title='${conv.title}', id=${conv.id}")
             _currentConversation.value = conv
+            // this app's pending queued sends for the chat (the daemon's queue arrives with the first frame)
+            refreshQueuedMessages(id)
             chatModels[id]?.let { _selectedModelId.value = it }
             knownDaemonCascadeIds.add(id)
 
@@ -984,6 +1020,14 @@ class AgyChatBackend(
                             val isRunning = trajectoryEngine.isRunning
                             val isWaiting = trajectoryEngine.isWaitingInteraction
                             _isStreaming.value = isRunning && !isWaiting
+                            _streamRun.value = StreamRunState(conversationId, isRunning, trajectoryEngine.fullyIdle)
+                            _optimisticSend.value?.let { o ->
+                                // the sent message started (loop running) or already finished (its step is there)
+                                if (o.conversationId == conversationId && (isRunning || trajectoryEngine.hasSeenClientTag(o.tag))) {
+                                    clearOptimisticSend()
+                                }
+                            }
+                            refreshQueuedMessages(conversationId)
 
                             Log.d("CHAT_OPEN_DEBUG", "✨ [ChatViewModel State Update] convId=$conversationId, turnsCount=${turns.size}, msgsCount=${msgs.size}, isRunning=$isRunning, isWaiting=$isWaiting")
 
@@ -1066,7 +1110,50 @@ class AgyChatBackend(
                     break
                 }
             }
+            // no live stream for this chat any more: its sidebar summary decides again
+            _streamRun.compareAndSet(_streamRun.value?.takeIf { it.conversationId == conversationId }, null)
         }
+    }
+
+    private fun clearOptimisticSend() {
+        optimisticTimeoutJob?.cancel()
+        optimisticTimeoutJob = null
+        _optimisticSend.value = null
+    }
+
+    private fun startOptimisticSend(conversationId: String, tag: String) {
+        optimisticTimeoutJob?.cancel()
+        _optimisticSend.value = OptimisticSend(conversationId, tag)
+        // safety net only: the stream normally confirms within a moment
+        optimisticTimeoutJob = backendScope.launch {
+            delay(30_000)
+            if (_optimisticSend.value?.tag == tag) _optimisticSend.value = null
+        }
+    }
+
+    /** The open chat's queue: the daemon's queued messages plus sends from this app it does not list yet. */
+    private fun refreshQueuedMessages(conversationId: String) {
+        if (_currentConversation.value?.id != conversationId) return
+        val server = trajectoryEngine.queuedMessages()
+        val serverIds = server.map { it.id }.toSet()
+        synchronized(hiddenQueuedIds) { hiddenQueuedIds.retainAll(serverIds) }
+        val serverTags = server.flatMap { it.tags }.toSet()
+        val local = localQueued[conversationId]
+        val pending = if (local == null) emptyList() else synchronized(local) {
+            // listed by the daemon now (or already delivered): no longer pending here
+            local.keys.removeAll { it in serverTags || trajectoryEngine.hasSeenClientTag(it) }
+            local.values.toList()
+        }
+        _queuedMessages.value = server.filter { it.id !in hiddenQueuedIds }.map { e ->
+            com.example.gemini.domain.model.QueuedMessage(
+                id = e.id,
+                text = e.text,
+                attachmentCount = e.media.size,
+                // NEXT_INVOCATION ones are being delivered right now
+                canSendNow = e.deliveryStrategy != exa.language_server_pb.MessageDeliveryStrategy.MESSAGE_DELIVERY_STRATEGY_NEXT_INVOCATION,
+                canDelete = true
+            )
+        } + pending
     }
 
     private fun markLastAssistantMessageDisconnected() {
@@ -1163,7 +1250,7 @@ class AgyChatBackend(
 
 
     override fun sendMessage(content: String) {
-        if ((content.isBlank() && _attachments.value.isEmpty()) || isCurrentChatActivelyRunning.value) return
+        if (content.isBlank() && _attachments.value.isEmpty()) return
 
         val state = systemConnectionState.value
         if (!state.canSend) {
@@ -1206,10 +1293,34 @@ class AgyChatBackend(
         updatedConv = updatedConv.copy(updatedAt = System.currentTimeMillis())
         _currentConversation.value = updatedConv
 
-        trajectoryEngine.submitUserPrompt(finalPrompt, currentAtts, conv.id)
-        val updatedList = trajectoryEngine.toChatMessages(conv.id)
-        _messages.value = updatedList
-        com.example.gemini.ui.chat.ChatFeedCache.prewarm(updatedList)
+        // Like the hub web UI: a fully idle chat runs the message now; otherwise it is queued and the daemon sends it
+        // when the agent is done (it was always WHEN_IDLE before, so a message sent while the chat was "idle" with
+        // background work vanished until then)
+        val queued = isCurrentChatActivelyRunning.value || isCurrentChatBackgroundActive.value
+        val clientMessageId = UUID.randomUUID().toString()
+        val clientTag = com.example.gemini.data.remote.services.AgyChatService.clientMsgTag(clientMessageId)
+        val updatedList: List<ChatMessage>
+        if (queued) {
+            val entries = localQueued.getOrPut(conv.id) { LinkedHashMap() }
+            synchronized(entries) {
+                entries[clientTag] = com.example.gemini.domain.model.QueuedMessage(
+                    id = clientTag,
+                    text = finalPrompt,
+                    attachmentCount = currentAtts.size,
+                    canSendNow = false,
+                    canDelete = false,
+                    isPending = true
+                )
+            }
+            refreshQueuedMessages(conv.id)
+            updatedList = _messages.value
+        } else {
+            startOptimisticSend(conv.id, clientTag)
+            trajectoryEngine.submitUserPrompt(finalPrompt, currentAtts, conv.id)
+            updatedList = trajectoryEngine.toChatMessages(conv.id)
+            _messages.value = updatedList
+            com.example.gemini.ui.chat.ChatFeedCache.prewarm(updatedList)
+        }
 
         backendScope.launch {
             val exists = _conversations.value.any { it.id == updatedConv.id }
@@ -1277,8 +1388,75 @@ class AgyChatBackend(
                 }
             }
 
-            executeStream(updatedConv, updatedList, mediaItems = mediaList)
+            executeStream(
+                updatedConv, updatedList,
+                mediaItems = mediaList,
+                promptText = finalPrompt,
+                queued = queued,
+                clientMessageId = clientMessageId
+            )
         }
+    }
+
+    /**
+     * "Send now" on a queued message: it is sent again to run right away (interrupting the current work), then
+     * removed from the queue (the hub web UI does the same).
+     */
+    fun sendQueuedNow(id: String) {
+        val conv = _currentConversation.value ?: return
+        val entry = trajectoryEngine.queuedMessages().find { it.id == id } ?: return
+        val clientMessageId = UUID.randomUUID().toString()
+        startOptimisticSend(conv.id, com.example.gemini.data.remote.services.AgyChatService.clientMsgTag(clientMessageId))
+        hiddenQueuedIds.add(id)
+        refreshQueuedMessages(conv.id)
+        backendScope.launch(Dispatchers.IO) {
+            val (modelEnum, thinkingBudget, policy) = promptSettings()
+            val res = agyHubClient.sendUserPrompt(
+                cascadeId = conv.id,
+                text = entry.text,
+                modelEnum = modelEnum,
+                thinkingBudget = thinkingBudget,
+                autoExecutionPolicy = policy,
+                deliveryStrategy = exa.language_server_pb.MessageDeliveryStrategy.MESSAGE_DELIVERY_STRATEGY_NEXT_INVOCATION,
+                clientMessageId = clientMessageId,
+                rawMedia = entry.media
+            )
+            if (res.isSuccess) {
+                agyHubClient.deleteAgentMessage(conv.id, id).onFailure { Log.w("ChatViewModel", "deleteAgentMessage: ${it.message}") }
+            } else {
+                withContext(Dispatchers.Main) {
+                    clearOptimisticSend()
+                    hiddenQueuedIds.remove(id)
+                    refreshQueuedMessages(conv.id)
+                    android.widget.Toast.makeText(application, "Couldn't send the queued message: ${res.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /** "Delete" on a queued message: removes it from the daemon's queue. */
+    fun deleteQueued(id: String) {
+        val conv = _currentConversation.value ?: return
+        hiddenQueuedIds.add(id)
+        refreshQueuedMessages(conv.id)
+        backendScope.launch(Dispatchers.IO) {
+            agyHubClient.deleteAgentMessage(conv.id, id).onFailure { e ->
+                withContext(Dispatchers.Main) {
+                    hiddenQueuedIds.remove(id)
+                    refreshQueuedMessages(conv.id)
+                    android.widget.Toast.makeText(application, "Couldn't delete the queued message: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /** Model, thinking budget and command auto-execution policy a prompt is sent with. */
+    private suspend fun promptSettings(): Triple<String, Int, String> {
+        val modelEnum = com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
+        val selectedModel = _enabledModels.value.find { it.id == modelEnum }
+        val supportsThinking = selectedModel?.supportsThinking ?: (modelEnum.contains("thinking", ignoreCase = true) || modelEnum.contains("flash", ignoreCase = true) || modelEnum.contains("pro", ignoreCase = true))
+        val policy = authPrefs.commandAutoExecutionPolicy.firstOrNull() ?: "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER"
+        return Triple(modelEnum, if (supportsThinking) 8192 else 0, policy)
     }
 
     val isTranscribingAudio = MutableStateFlow(false)
@@ -1451,14 +1629,29 @@ class AgyChatBackend(
         existingAssistantMsgId: String? = null,
         existingToolCalls: List<com.example.gemini.domain.model.ToolCall> = emptyList(),
         priorTextPrefix: String = "",
-        mediaItems: List<com.example.gemini.data.remote.AgyHubClient.AgyMediaItem> = emptyList()
+        mediaItems: List<com.example.gemini.data.remote.AgyHubClient.AgyMediaItem> = emptyList(),
+        // the text to send; null = the last user message of [currentHistory]
+        promptText: String? = null,
+        // queued for after the current work: no reply placeholder, it shows in the queued-messages card
+        queued: Boolean = false,
+        clientMessageId: String? = null
     ) {
         _bridgeStatusMessage.value = null
 
-        val assistantMsgId = existingAssistantMsgId ?: UUID.randomUUID().toString()
-        currentAssistantMsgId = assistantMsgId
+        val assistantMsgId = if (queued) (currentAssistantMsgId ?: "") else existingAssistantMsgId ?: UUID.randomUUID().toString()
+        if (!queued) currentAssistantMsgId = assistantMsgId
+        val clientTag = clientMessageId?.let { com.example.gemini.data.remote.services.AgyChatService.clientMsgTag(it) }
 
-        if (existingAssistantMsgId == null) {
+        // a queued message that could not be sent: out of the queue card, and say so
+        suspend fun failQueued(err: String) = withContext(Dispatchers.Main) {
+            localQueued[conv.id]?.let { synchronized(it) { it.remove(clientTag) } }
+            refreshQueuedMessages(conv.id)
+            android.widget.Toast.makeText(application, "Couldn't queue the message: $err", android.widget.Toast.LENGTH_SHORT).show()
+        }
+
+        if (queued) {
+            // nothing to show in the chat yet
+        } else if (existingAssistantMsgId == null) {
             val hasStreamingAssistant = _messages.value.any { it.role == MessageRole.ASSISTANT && it.isStreaming }
             if (!hasStreamingAssistant) {
                 val assistantMsg = ChatMessage(
@@ -1484,7 +1677,9 @@ class AgyChatBackend(
         }
 
         val hubUrl = AuthPreferences.currentHubUrl
-        val userPrompt = currentHistory.lastOrNull { it.role == MessageRole.USER }?.content ?: ""
+        val userPrompt = promptText ?: currentHistory.lastOrNull { it.role == MessageRole.USER }?.content ?: ""
+        val deliveryStrategy = if (queued) exa.language_server_pb.MessageDeliveryStrategy.MESSAGE_DELIVERY_STRATEGY_WHEN_IDLE
+            else exa.language_server_pb.MessageDeliveryStrategy.MESSAGE_DELIVERY_STRATEGY_NEXT_INVOCATION
         val modelEnum = com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
         val selectedModel = _enabledModels.value.find { it.id == modelEnum }
         val supportsThinking = selectedModel?.supportsThinking ?: (modelEnum.contains("thinking", ignoreCase = true) || modelEnum.contains("flash", ignoreCase = true) || modelEnum.contains("pro", ignoreCase = true))
@@ -1516,7 +1711,12 @@ class AgyChatBackend(
                             userMessage = err,
                             shortError = err
                         )
+                        if (queued) {
+                            failQueued(err)
+                            return@launch
+                        }
                         withContext(Dispatchers.Main) {
+                            clearOptimisticSend()
                             isPromptInFlight = false
                             _isStreaming.value = false
                             hasSeenTurnActivity = false
@@ -1553,10 +1753,12 @@ class AgyChatBackend(
                     delay(50)
                 }
 
-                // Reset turn boundary and state for this active turn
-                currentTurnStartStep = totalStepsCount
-                hasStartedRunning = false
-                hasSeenTurnActivity = false
+                // Reset turn boundary and state for this active turn (a queued message does not start one now)
+                if (!queued) {
+                    currentTurnStartStep = totalStepsCount
+                    hasStartedRunning = false
+                    hasSeenTurnActivity = false
+                }
 
                 val currentAutoExecPolicy = authPrefs.commandAutoExecutionPolicy.firstOrNull() ?: "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER"
 
@@ -1567,7 +1769,9 @@ class AgyChatBackend(
                     thinkingBudget = thinkingBudget,
                     autoExecutionPolicy = currentAutoExecPolicy,
                     media = mediaItems,
-                    hubUrl = hubUrl
+                    hubUrl = hubUrl,
+                    deliveryStrategy = deliveryStrategy,
+                    clientMessageId = clientMessageId
                 )
 
                 if (sendRes.isFailure) {
@@ -1592,7 +1796,9 @@ class AgyChatBackend(
                                 thinkingBudget = thinkingBudget,
                                 autoExecutionPolicy = currentAutoExecPolicy,
                                 media = mediaItems,
-                                hubUrl = hubUrl
+                                hubUrl = hubUrl,
+                                deliveryStrategy = deliveryStrategy,
+                                clientMessageId = clientMessageId
                             )
                         }
                     }
@@ -1600,6 +1806,8 @@ class AgyChatBackend(
 
                 if (sendRes.isSuccess) {
                     isPromptInFlight = false
+                } else if (queued) {
+                    failQueued(sendRes.exceptionOrNull()?.message ?: "Failed to send message")
                 } else {
                     val err = sendRes.exceptionOrNull()?.message ?: "Failed to send message"
                     Log.e("ChatViewModel", "sendUserPrompt final error: $err")
@@ -1615,6 +1823,7 @@ class AgyChatBackend(
                         shortError = err
                     )
                     withContext(Dispatchers.Main) {
+                        clearOptimisticSend()
                         _isServerOnline.value = false
                         isPromptInFlight = false
                         _isStreaming.value = false
@@ -1630,6 +1839,10 @@ class AgyChatBackend(
                 }
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "sendUserPrompt exception: ${e.message}", e)
+                if (queued) {
+                    failQueued(e.message ?: "Unknown error")
+                    return@launch
+                }
                 val formattedErr = formatStructuredErrorMessage(
                     title = "Execution Failure",
                     userMessage = e.message ?: "Unknown error",
@@ -1637,6 +1850,7 @@ class AgyChatBackend(
                     fullError = e.stackTraceToString()
                 )
                 withContext(Dispatchers.Main) {
+                    clearOptimisticSend()
                     _isServerOnline.value = false
                     isPromptInFlight = false
                     _isStreaming.value = false
@@ -1754,6 +1968,7 @@ class AgyChatBackend(
         currentAssistantMsgId = null
         _bridgeStatusMessage.value = null
         trajectoryEngine.cancelRunning()
+        clearOptimisticSend()
 
         if (conv != null) {
             backendScope.launch {
@@ -2210,6 +2425,9 @@ class AgyChatBackend(
         _isStreaming.value = false
         _isLoadingConversation.value = false
         _bridgeStatusMessage.value = null
+        clearOptimisticSend()
+        _streamRun.value = null
+        _queuedMessages.value = emptyList()
     }
 
     fun dispose() {
