@@ -4262,399 +4262,152 @@ private fun BackupsSubScreen(
             .fillMaxSize()
             .bouncyVerticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 1. Server Online Guard / Warning Banner
+        // Server running: backups and restores need it stopped first
         if (isAnyServerRunning) {
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = com.example.gemini.theme.AppColors.warning.copy(alpha = 0.12f),
-                border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.warning.copy(alpha = 0.4f)),
+                shape = RoundedCornerShape(14.dp),
+                color = com.example.gemini.theme.AppColors.warning.copy(alpha = 0.08f),
+                border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.warning.copy(alpha = 0.25f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.WarningAmber,
+                        imageVector = Icons.Outlined.Info,
                         contentDescription = null,
                         tint = com.example.gemini.theme.AppColors.warning,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "AGY Server Is Running",
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Bold,
+                            text = "Server is running",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "The daemon is actively accessing databases and processes. Please stop the server before performing backups or restores to prevent corrupted archives.",
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                            lineHeight = 16.sp
+                            text = "Stop it before backing up or restoring, so no database is written to while it's being archived.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            lineHeight = 17.sp
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
                             onClick = onStopServer,
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.danger),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.height(34.dp)
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                            modifier = Modifier.height(36.dp)
                         ) {
                             Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Stop Server Now", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Stop server", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
             }
         }
 
-        // Card 1: Rootfs Environment Backup
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            border = cardBorder
+        BackupSectionLabel("Backup")
+
+        BackupActionCard(
+            icon = Icons.Outlined.Inventory2,
+            title = "Linux environment",
+            subtitle = "Installed packages, binaries and your home folder",
+            description = "A full, portable copy of the Linux system (/usr) and \$HOME dotfiles. Sockets, caches and auth tokens are left out.",
+            savesTo = "Download/Antigem/backups/bootrapz_<time>.zip",
+            cardBg = cardBg,
+            cardBorder = cardBorder
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = com.example.gemini.theme.AppColors.accentTeal.copy(alpha = 0.15f),
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Outlined.Inventory2,
-                                contentDescription = null,
-                                tint = com.example.gemini.theme.AppColors.accentTeal,
-                                modifier = Modifier.size(20.dp)
+            BackupPrimaryButton(
+                text = "Back up environment",
+                icon = Icons.Outlined.Archive,
+                onClick = {
+                    if (isAnyServerRunning) {
+                        showServerRunningAlert = "Backup Rootfs"
+                    } else {
+                        requestStoragePermission {
+                            activeScriptExecution = ScriptExecutionInfo(
+                                title = "Rootfs System Packager",
+                                scriptName = "backup_bootstrap",
+                                args = emptyList()
                             )
                         }
                     }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Rootfs Environment Backup",
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Package entire Linux /usr system and \$HOME into a bootable zip",
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Creates a full, portable backup of all installed packages, libraries, binaries, shell configurations, and user home dotfiles. Excludes active sockets, volatile caches, and auth tokens.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                    lineHeight = 17.sp
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Outlined.Folder, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Saves to: /sdcard/Download/Antigem/backups/bootrapz_<timestamp>.zip",
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-                Button(
-                    onClick = {
-                        if (isAnyServerRunning) {
-                            showServerRunningAlert = "Backup Rootfs"
-                        } else {
-                            requestStoragePermission {
-                                activeScriptExecution = ScriptExecutionInfo(
-                                    title = "Rootfs System Packager",
-                                    scriptName = "backup_bootstrap",
-                                    args = emptyList()
-                                )
-                            }
-                        }
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.accentTeal),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Outlined.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Run Rootfs Backup (backup_bootstrap)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
-            }
+            )
         }
 
-        // Card 2: AGY Chats & Credentials Backup
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            border = cardBorder
+        BackupActionCard(
+            icon = Icons.Outlined.Chat,
+            title = "Chats & credentials",
+            subtitle = "Conversations, transcripts, skills and login",
+            description = "Archives your ~/.gemini folder: chat history databases, transcripts, summaries, custom skills and the auth token. Can be password-protected.",
+            savesTo = "Download/Antigem/backups/agy_chats_backup_<time>.zip",
+            note = "Includes your login token. Don't share this file: anyone who has it can sign in as you.",
+            cardBg = cardBg,
+            cardBorder = cardBorder
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = ClaudeTerracotta.copy(alpha = 0.15f),
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Outlined.Chat,
-                                contentDescription = null,
-                                tint = ClaudeTerracotta,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "AGY Chats & Credentials Backup",
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Archive conversations, transcripts, auth tokens & configs",
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
+            BackupPrimaryButton(
+                text = "Back up chats",
+                icon = Icons.Outlined.CloudUpload,
+                onClick = {
+                    if (isAnyServerRunning) {
+                        showServerRunningAlert = "Backup Chats"
+                    } else {
+                        showBackupChatsPasswordDialog = true
                     }
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Safely packages your entire ~/.gemini folder (SQLite chat history databases, brain transcripts, summaries index, custom skills, and authentication token). Supports optional zip encryption.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                    lineHeight = 17.sp
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = com.example.gemini.theme.AppColors.danger.copy(alpha = 0.12f),
-                    border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.danger.copy(alpha = 0.35f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Default.Security, contentDescription = null, tint = com.example.gemini.theme.AppColors.danger, modifier = Modifier.size(18.dp))
-                        Text(
-                            text = "⚠️ Security Warning: This backup includes your authentication credentials and login tokens. Never share this archive with anyone, as anyone with this file can log in to your account.",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = 15.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Outlined.Folder, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Saves to: /sdcard/Download/Antigem/backups/agy_chats_backup_<timestamp>.zip",
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-                Button(
-                    onClick = {
-                        if (isAnyServerRunning) {
-                            showServerRunningAlert = "Backup Chats"
-                        } else {
-                            showBackupChatsPasswordDialog = true
-                        }
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Outlined.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Backup AGY Chats (backup_chats)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
-            }
+            )
         }
 
-        // Card 3: Restore AGY Chats & Credentials
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            border = cardBorder
+        Spacer(modifier = Modifier.height(4.dp))
+        BackupSectionLabel("Restore")
+
+        BackupActionCard(
+            icon = Icons.Outlined.SettingsBackupRestore,
+            title = "Chats & credentials",
+            subtitle = "From a chats backup zip",
+            description = "Restores chats, the conversation index and your login. Your current ~/.gemini is kept as ~/.gemini.bak first, so nothing is lost.",
+            cardBg = cardBg,
+            cardBorder = cardBorder
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = QuotaGreen.copy(alpha = 0.15f),
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Outlined.SettingsBackupRestore,
-                                contentDescription = null,
-                                tint = QuotaGreen,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Restore AGY Chats & Credentials",
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Restore previous chats and login from a backup zip archive",
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
+            BackupSecondaryButton(
+                text = "Restore chats",
+                icon = Icons.Outlined.SettingsBackupRestore,
+                onClick = {
+                    if (isAnyServerRunning) {
+                        showServerRunningAlert = "Restore Chats"
+                    } else {
+                        showRestoreChatsDialog = true
                     }
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Restores your chats, conversations index, and credentials. To prevent any accidental data loss, the restore script automatically creates a safety backup of your existing ~/.gemini directory to ~/.gemini.bak first.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                    lineHeight = 17.sp
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-                OutlinedButton(
-                    onClick = {
-                        if (isAnyServerRunning) {
-                            showServerRunningAlert = "Restore Chats"
-                        } else {
-                            showRestoreChatsDialog = true
-                        }
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, QuotaGreen),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = QuotaGreen),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Outlined.SettingsBackupRestore, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Restore AGY Chats (restore_chats)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
-            }
+            )
         }
 
-        // Card 4: IDE & AGY Projects Backup & Restore
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            border = cardBorder
+        Spacer(modifier = Modifier.height(4.dp))
+        BackupSectionLabel("Projects")
+
+        BackupActionCard(
+            icon = Icons.Outlined.Workspaces,
+            title = "IDE & AGY projects",
+            subtitle = "Back up or restore selected projects",
+            description = "Pick projects from the IDE and chat workspaces. Choose a clean git-aware archive (skips node_modules and build output) or a full copy. Restores map back to the right folders, with a safety backup.",
+            cardBg = cardBg,
+            cardBorder = cardBorder
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.15f),
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Outlined.Workspaces,
-                                contentDescription = null,
-                                tint = com.example.gemini.theme.AppColors.accentIndigo,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "IDE & AGY Projects Backup & Restore",
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Archive selected projects, workspaces & restore from zip",
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Export and backup projects open in the IDE and AGY conversation workspaces. Choose clean git-aware packaging (excluding node_modules and build caches) or full raw folder archives. Restore with automatic location mapping and safety backup protection.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                    lineHeight = 17.sp
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-                Button(
-                    onClick = { showProjectsBackupRestoreDialog = true },
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.accentIndigo),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Outlined.FolderZip, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Manage Projects Backup & Restore", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
-            }
+            BackupSecondaryButton(
+                text = "Manage projects",
+                icon = Icons.Outlined.FolderZip,
+                onClick = { showProjectsBackupRestoreDialog = true }
+            )
         }
     }
 
@@ -4662,8 +4415,8 @@ private fun BackupsSubScreen(
     showServerRunningAlert?.let { actionName ->
         AlertDialog(
             onDismissRequest = { showServerRunningAlert = null },
-            icon = { Icon(Icons.Default.WarningAmber, contentDescription = null, tint = com.example.gemini.theme.AppColors.warning) },
-            title = { Text("Server Must Be Stopped", fontWeight = FontWeight.Bold) },
+            icon = { Icon(Icons.Outlined.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            title = { Text("Stop the server first", fontWeight = FontWeight.SemiBold) },
             text = {
                 Text(
                     "The AGY IDE Bridge and Hub server must be offline before running '$actionName'. Would you like to stop the server now?",
@@ -4677,9 +4430,10 @@ private fun BackupsSubScreen(
                         showServerRunningAlert = null
                         Toast.makeText(context, "Stopping server... Please re-run $actionName once stopped.", Toast.LENGTH_SHORT).show()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.danger)
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta, contentColor = Color.White)
                 ) {
-                    Text("Stop Server", fontWeight = FontWeight.Bold)
+                    Text("Stop server", fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
@@ -4694,8 +4448,8 @@ private fun BackupsSubScreen(
     if (showBackupChatsPasswordDialog) {
         AlertDialog(
             onDismissRequest = { showBackupChatsPasswordDialog = false },
-            icon = { Icon(Icons.Outlined.CloudUpload, contentDescription = null, tint = ClaudeTerracotta) },
-            title = { Text("Backup AGY Chats", fontWeight = FontWeight.Bold) },
+            icon = { Icon(Icons.Outlined.CloudUpload, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            title = { Text("Back up chats", fontWeight = FontWeight.SemiBold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
@@ -4703,25 +4457,7 @@ private fun BackupsSubScreen(
                         fontSize = 12.5.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                     )
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = com.example.gemini.theme.AppColors.danger.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, com.example.gemini.theme.AppColors.danger.copy(alpha = 0.35f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(Icons.Default.Security, contentDescription = null, tint = com.example.gemini.theme.AppColors.danger, modifier = Modifier.size(16.dp))
-                            Text(
-                                text = "Do not share this file. Anyone with it can log into your account.",
-                                fontSize = 10.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
+                    BackupNote("Don't share this file: anyone who has it can sign in as you.")
                     OutlinedTextField(
                         value = backupChatsPassword,
                         onValueChange = { backupChatsPassword = it },
@@ -4755,9 +4491,10 @@ private fun BackupsSubScreen(
                             )
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta, contentColor = Color.White)
                 ) {
-                    Text("Start Backup", fontWeight = FontWeight.Bold)
+                    Text("Start backup", fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
@@ -4775,8 +4512,8 @@ private fun BackupsSubScreen(
     if (showRestoreChatsDialog) {
         AlertDialog(
             onDismissRequest = { showRestoreChatsDialog = false },
-            icon = { Icon(Icons.Outlined.SettingsBackupRestore, contentDescription = null, tint = QuotaGreen) },
-            title = { Text("Restore AGY Chats", fontWeight = FontWeight.Bold) },
+            icon = { Icon(Icons.Outlined.SettingsBackupRestore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            title = { Text("Restore chats", fontWeight = FontWeight.SemiBold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
@@ -4793,7 +4530,7 @@ private fun BackupsSubScreen(
                         singleLine = true,
                         trailingIcon = {
                             IconButton(onClick = { filePickerLauncher.launch("*/*") }) {
-                                Icon(Icons.Outlined.FolderOpen, contentDescription = "Choose File", tint = QuotaGreen)
+                                Icon(Icons.Outlined.FolderOpen, contentDescription = "Choose File", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
@@ -4833,9 +4570,10 @@ private fun BackupsSubScreen(
                         )
                     },
                     enabled = restoreFilePath.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = QuotaGreen)
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta, contentColor = Color.White)
                 ) {
-                    Text("Start Restore", fontWeight = FontWeight.Bold)
+                    Text("Start restore", fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
@@ -4867,6 +4605,168 @@ private fun BackupsSubScreen(
                 activeScriptExecution = executionInfo
             }
         )
+    }
+}
+
+@Composable
+private fun BackupSectionLabel(text: String) {
+    Text(
+        text = text.uppercase(),
+        fontSize = 11.5.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.8.sp,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+    )
+}
+
+/** Small neutral note row (lock icon + text) used for the "keep this file private" hint. */
+@Composable
+private fun BackupNote(text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Lock,
+            contentDescription = null,
+            tint = com.example.gemini.theme.AppColors.warning,
+            modifier = Modifier.size(15.dp).padding(top = 1.dp)
+        )
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+        )
+    }
+}
+
+/** One backup / restore action: neutral icon tile, title, short description, optional save path and note, then its button. */
+@Composable
+private fun BackupActionCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    description: String,
+    cardBg: Color,
+    cardBorder: BorderStroke,
+    savesTo: String? = null,
+    note: String? = null,
+    action: @Composable () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = cardBg,
+        border = cardBorder
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = subtitle,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = description,
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+            )
+
+            if (savesTo != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Outlined.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = savesTo,
+                        fontSize = 11.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            if (note != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                BackupNote(note)
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            action()
+        }
+    }
+}
+
+@Composable
+private fun BackupPrimaryButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta, contentColor = Color.White),
+        elevation = null,
+        modifier = Modifier.fillMaxWidth().height(44.dp)
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+    }
+}
+
+@Composable
+private fun BackupSecondaryButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+        modifier = Modifier.fillMaxWidth().height(44.dp)
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
     }
 }
 
@@ -5118,14 +5018,14 @@ private fun ProjectsBackupRestoreDialog(
                     ) {
                         Surface(
                             shape = CircleShape,
-                            color = com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.15f),
+                            color = ClaudeTerracotta.copy(alpha = 0.15f),
                             modifier = Modifier.size(38.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Outlined.Workspaces,
                                     contentDescription = null,
-                                    tint = com.example.gemini.theme.AppColors.accentIndigo,
+                                    tint = ClaudeTerracotta,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -5155,7 +5055,7 @@ private fun ProjectsBackupRestoreDialog(
                 TabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    contentColor = com.example.gemini.theme.AppColors.accentIndigo,
+                    contentColor = ClaudeTerracotta,
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
@@ -5207,8 +5107,8 @@ private fun ProjectsBackupRestoreDialog(
                                     // Git-Aware (Clean)
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
-                                        color = if (backupMode == "git") com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
-                                        border = BorderStroke(1.dp, if (backupMode == "git") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
+                                        color = if (backupMode == "git") ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, if (backupMode == "git") ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
                                         modifier = Modifier
                                             .weight(1f)
                                             .clickable { backupMode = "git" }
@@ -5221,11 +5121,11 @@ private fun ProjectsBackupRestoreDialog(
                                             Icon(
                                                 imageVector = if (backupMode == "git") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
                                                 contentDescription = null,
-                                                tint = if (backupMode == "git") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                tint = if (backupMode == "git") ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                             Column {
-                                                Text("Git-Aware (Clean)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (backupMode == "git") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurface)
+                                                Text("Git-Aware (Clean)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (backupMode == "git") ClaudeTerracotta else MaterialTheme.colorScheme.onSurface)
                                                 Text("Excludes node_modules & build caches", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
@@ -5234,8 +5134,8 @@ private fun ProjectsBackupRestoreDialog(
                                     // Full Raw Archive
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
-                                        color = if (backupMode == "full") com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
-                                        border = BorderStroke(1.dp, if (backupMode == "full") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
+                                        color = if (backupMode == "full") ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, if (backupMode == "full") ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
                                         modifier = Modifier
                                             .weight(1f)
                                             .clickable { backupMode = "full" }
@@ -5248,11 +5148,11 @@ private fun ProjectsBackupRestoreDialog(
                                             Icon(
                                                 imageVector = if (backupMode == "full") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
                                                 contentDescription = null,
-                                                tint = if (backupMode == "full") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                tint = if (backupMode == "full") ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                             Column {
-                                                Text("Full Raw Archive", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (backupMode == "full") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurface)
+                                                Text("Full Raw Archive", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (backupMode == "full") ClaudeTerracotta else MaterialTheme.colorScheme.onSurface)
                                                 Text("All files, symlinks & permissions as-is", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
@@ -5281,7 +5181,7 @@ private fun ProjectsBackupRestoreDialog(
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
-                                    Text("Select All", fontSize = 11.5.sp, color = com.example.gemini.theme.AppColors.accentIndigo)
+                                    Text("Select All", fontSize = 11.5.sp, color = ClaudeTerracotta)
                                 }
                                 TextButton(
                                     onClick = { selectedProjectPaths.clear() },
@@ -5365,17 +5265,17 @@ private fun ProjectsBackupRestoreDialog(
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 fontFamily = FontFamily.Monospace,
-                                                color = com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.8f),
+                                                color = ClaudeTerracotta.copy(alpha = 0.8f),
                                                 modifier = Modifier.padding(end = 6.dp)
                                             )
                                         }
 
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
-                                            color = if (isSelected) com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                            color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                                             border = BorderStroke(
                                                 1.dp,
-                                                if (isSelected) com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                                                if (isSelected) ClaudeTerracotta.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                             ),
                                             modifier = Modifier
                                                 .weight(1f)
@@ -5389,7 +5289,7 @@ private fun ProjectsBackupRestoreDialog(
                                                 Checkbox(
                                                     checked = isSelected,
                                                     onCheckedChange = { toggleNode() },
-                                                    colors = CheckboxDefaults.colors(checkedColor = com.example.gemini.theme.AppColors.accentIndigo),
+                                                    colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta),
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                                 Column(modifier = Modifier.weight(1f)) {
@@ -5406,13 +5306,13 @@ private fun ProjectsBackupRestoreDialog(
                                                         if (childProjectsCount > 0) {
                                                             Surface(
                                                                 shape = RoundedCornerShape(4.dp),
-                                                                color = com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.15f)
+                                                                color = ClaudeTerracotta.copy(alpha = 0.15f)
                                                             ) {
                                                                 Text(
                                                                     text = "$childProjectsCount ${if (childProjectsCount == 1) "sub-project" else "sub-projects"}",
                                                                     fontSize = 9.5.sp,
                                                                     fontWeight = FontWeight.Bold,
-                                                                    color = com.example.gemini.theme.AppColors.accentIndigo,
+                                                                    color = ClaudeTerracotta,
                                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                                 )
                                                             }
@@ -5433,13 +5333,13 @@ private fun ProjectsBackupRestoreDialog(
                                                         } else if (parentProj != null) {
                                                             Surface(
                                                                 shape = RoundedCornerShape(4.dp),
-                                                                color = com.example.gemini.theme.AppColors.accentIndigo.copy(alpha = 0.12f)
+                                                                color = ClaudeTerracotta.copy(alpha = 0.12f)
                                                             ) {
                                                                 Text(
                                                                     text = "Inside ${parentProj.name}",
                                                                     fontSize = 9.5.sp,
                                                                     fontWeight = FontWeight.Medium,
-                                                                    color = com.example.gemini.theme.AppColors.accentIndigo,
+                                                                    color = ClaudeTerracotta,
                                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                                 )
                                                             }
@@ -5483,7 +5383,7 @@ private fun ProjectsBackupRestoreDialog(
                             },
                             enabled = selectedCount > 0,
                             shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = com.example.gemini.theme.AppColors.accentIndigo),
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Outlined.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -5525,7 +5425,7 @@ private fun ProjectsBackupRestoreDialog(
                             singleLine = true,
                             trailingIcon = {
                                 IconButton(onClick = { filePickerLauncher.launch("*/*") }) {
-                                    Icon(Icons.Outlined.FolderOpen, contentDescription = "Choose File", tint = com.example.gemini.theme.AppColors.accentIndigo)
+                                    Icon(Icons.Outlined.FolderOpen, contentDescription = "Choose File", tint = ClaudeTerracotta)
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -5538,7 +5438,7 @@ private fun ProjectsBackupRestoreDialog(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.padding(vertical = 4.dp)
                             ) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = com.example.gemini.theme.AppColors.accentIndigo)
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = ClaudeTerracotta)
                                 Text("Inspecting archive contents & manifest...", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
@@ -5577,7 +5477,7 @@ private fun ProjectsBackupRestoreDialog(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             modifier = Modifier.padding(vertical = 2.dp)
                                         ) {
-                                            Icon(Icons.Outlined.Folder, contentDescription = null, tint = com.example.gemini.theme.AppColors.accentIndigo, modifier = Modifier.size(16.dp))
+                                            Icon(Icons.Outlined.Folder, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.size(16.dp))
                                             Column {
                                                 Text(item.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                                 if (item.originalPath.isNotBlank()) {
@@ -5623,7 +5523,7 @@ private fun ProjectsBackupRestoreDialog(
                                     Icon(
                                         imageVector = if (conflictStrategy == "bak") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
                                         contentDescription = null,
-                                        tint = if (conflictStrategy == "bak") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = if (conflictStrategy == "bak") ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Column {
@@ -5645,7 +5545,7 @@ private fun ProjectsBackupRestoreDialog(
                                     Icon(
                                         imageVector = if (conflictStrategy == "overwrite") Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
                                         contentDescription = null,
-                                        tint = if (conflictStrategy == "overwrite") com.example.gemini.theme.AppColors.accentIndigo else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = if (conflictStrategy == "overwrite") ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Column {
@@ -5664,7 +5564,7 @@ private fun ProjectsBackupRestoreDialog(
                             Checkbox(
                                 checked = useCustomRestoreDir,
                                 onCheckedChange = { useCustomRestoreDir = it },
-                                colors = CheckboxDefaults.colors(checkedColor = com.example.gemini.theme.AppColors.accentIndigo),
+                                colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta),
                                 modifier = Modifier.size(20.dp)
                             )
                             Text("Restore to custom parent directory", fontSize = 12.sp)
@@ -5706,7 +5606,7 @@ private fun ProjectsBackupRestoreDialog(
                             },
                             enabled = restoreZipPath.isNotBlank(),
                             shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = QuotaGreen),
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Outlined.SettingsBackupRestore, contentDescription = null, modifier = Modifier.size(18.dp))
