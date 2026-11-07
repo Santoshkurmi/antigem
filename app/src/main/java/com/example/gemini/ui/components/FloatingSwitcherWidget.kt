@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.*
@@ -52,6 +53,7 @@ fun FloatingSwitcherWidget(
     onNavigateToBrowser: () -> Unit,
     onNavigateToTerminal: () -> Unit,
     onNavigateToNotes: () -> Unit = {},
+    onNavigateToFiles: () -> Unit = {},
     onPositionSaved: (Float, Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -260,6 +262,7 @@ fun FloatingSwitcherWidget(
                                     "browser" -> currentViewMode == AppViewMode.BROWSER
                                     "terminal" -> currentViewMode == AppViewMode.TERMINAL
                                     "notes" -> currentViewMode == AppViewMode.NOTES
+                                    "files" -> currentViewMode == AppViewMode.FILES
                                     else -> false
                                 }
 
@@ -269,6 +272,7 @@ fun FloatingSwitcherWidget(
                                     "terminal" -> Icons.Outlined.Terminal
                                     "browser" -> Icons.Outlined.Language
                                     "notes" -> Icons.Outlined.EditNote
+                                    "files" -> Icons.Outlined.FolderOpen
                                     else -> Icons.Outlined.ChatBubbleOutline
                                 }
 
@@ -278,6 +282,7 @@ fun FloatingSwitcherWidget(
                                     "terminal" -> "Terminal"
                                     "browser" -> "Browser"
                                     "notes" -> "Notes"
+                                    "files" -> "Files"
                                     else -> itemId
                                 }
 
@@ -293,6 +298,7 @@ fun FloatingSwitcherWidget(
                                             "browser" -> onNavigateToBrowser()
                                             "terminal" -> onNavigateToTerminal()
                                             "notes" -> onNavigateToNotes()
+                                            "files" -> onNavigateToFiles()
                                         }
                                     }
                                 )
@@ -313,6 +319,7 @@ fun FloatingSwitcherWidget(
                                     "browser" -> currentViewMode == AppViewMode.BROWSER
                                     "terminal" -> currentViewMode == AppViewMode.TERMINAL
                                     "notes" -> currentViewMode == AppViewMode.NOTES
+                                    "files" -> currentViewMode == AppViewMode.FILES
                                     else -> false
                                 }
 
@@ -322,6 +329,7 @@ fun FloatingSwitcherWidget(
                                     "terminal" -> Icons.Outlined.Terminal
                                     "browser" -> Icons.Outlined.Language
                                     "notes" -> Icons.Outlined.EditNote
+                                    "files" -> Icons.Outlined.FolderOpen
                                     else -> Icons.Outlined.ChatBubbleOutline
                                 }
 
@@ -331,6 +339,7 @@ fun FloatingSwitcherWidget(
                                     "terminal" -> "Terminal"
                                     "browser" -> "Browser"
                                     "notes" -> "Notes"
+                                    "files" -> "Files"
                                     else -> itemId
                                 }
 
@@ -346,6 +355,7 @@ fun FloatingSwitcherWidget(
                                             "browser" -> onNavigateToBrowser()
                                             "terminal" -> onNavigateToTerminal()
                                             "notes" -> onNavigateToNotes()
+                                            "files" -> onNavigateToFiles()
                                         }
                                     }
                                 )

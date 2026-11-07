@@ -126,6 +126,13 @@
                 <data android:mimeType="text/*" />
                 <data android:mimeType="*/*" />
             </intent-filter>
+
+            <!-- Receive several shared files at once (saved together into a folder picked in the file explorer) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
         </activity>
 
         <activity

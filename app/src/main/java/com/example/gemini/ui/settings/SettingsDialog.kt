@@ -228,7 +228,7 @@ fun SettingsDialog(
     pluginActionErrorMessage: String? = null,
     onClearPluginStatus: () -> Unit = {},
     floatingSwitcherOrientation: String = "HORIZONTAL",
-    floatingSwitcherItems: List<String> = listOf("chat", "ide", "terminal", "browser", "notes"),
+    floatingSwitcherItems: List<String> = listOf("chat", "ide", "terminal", "browser", "notes", "files"),
     floatingSwitcherAutoCollapseSec: Int = 0,
     onSetFloatingSwitcherOrientation: (String) -> Unit = {},
     onSetFloatingSwitcherItems: (List<String>) -> Unit = {},
@@ -1253,7 +1253,7 @@ private fun AppearanceSubScreen(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
 
-                val allAvailable = listOf("chat", "ide", "terminal", "browser", "notes")
+                val allAvailable = listOf("chat", "ide", "terminal", "browser", "notes", "files")
                 val currentItems = floatingSwitcherItems.toMutableList()
                 val displayedList = currentItems + allAvailable.filterNot { currentItems.contains(it) }
 
@@ -1265,6 +1265,7 @@ private fun AppearanceSubScreen(
                         "terminal" -> "Terminal"
                         "browser" -> "Web Browser"
                         "notes" -> "Notes & To-dos"
+                        "files" -> "Files (file explorer)"
                         else -> itemId
                     }
                     val itemIcon = when (itemId) {
@@ -1273,6 +1274,7 @@ private fun AppearanceSubScreen(
                         "terminal" -> Icons.Outlined.Terminal
                         "browser" -> Icons.Outlined.Language
                         "notes" -> Icons.Outlined.EditNote
+                        "files" -> Icons.Outlined.FolderOpen
                         else -> Icons.Outlined.ChatBubbleOutline
                     }
 

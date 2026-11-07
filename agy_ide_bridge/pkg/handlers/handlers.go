@@ -1155,14 +1155,23 @@ func (h *Handler) FsBrowseHandler(w http.ResponseWriter, r *http.Request) {
 		var size int64
 		var modTime int64
 		isDir := e.IsDir()
+		mode := ""
 
 		if statInfo, err := os.Stat(fullPath); err == nil {
 			isDir = statInfo.IsDir()
 			size = statInfo.Size()
 			modTime = statInfo.ModTime().UnixMilli()
+			mode = statInfo.Mode().String()
 		} else if info, err := e.Info(); err == nil && info != nil {
 			size = info.Size()
 			modTime = info.ModTime().UnixMilli()
+			mode = info.Mode().String()
+		}
+		childCount := 0
+		if isDir && len(entries) <= 400 {
+			if n := fsCountChildren(fullPath); n > 0 {
+				childCount = n
+			}
 		}
 
 		ext := ""
@@ -1184,6 +1193,11 @@ func (h *Handler) FsBrowseHandler(w http.ResponseWriter, r *http.Request) {
 			Size:    size,
 			ModTime: modTime,
 			Ext:     ext,
+
+			Hidden:     strings.HasPrefix(name, "."),
+			Symlink:    e.Type()&os.ModeSymlink != 0,
+			Mode:       mode,
+			ChildCount: childCount,
 		})
 	}
 

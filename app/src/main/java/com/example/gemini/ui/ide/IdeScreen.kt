@@ -49,7 +49,6 @@ import com.example.gemini.data.daemon.OpenTab
 import com.example.gemini.data.daemon.ProjectItem
 import com.example.gemini.data.daemon.TermuxDaemonManager
 import com.example.gemini.theme.ClaudeTerracotta
-import com.example.gemini.ui.components.FileManagerDialog
 import com.example.gemini.ui.components.LocalTerminalContent
 import com.example.gemini.data.local.LocalPtySession
 import androidx.compose.ui.zIndex
@@ -1548,39 +1547,32 @@ fun IdeScreen(
                         if (!parent.isNullOrBlank() && parent != "/") parent else p
                     } else "~"
                 }
-                FileManagerDialog(
+                com.example.gemini.ui.files.FileExplorerDialog(
+                    stateKey = "ide_projects",
                     initialPath = initialBrowsePath,
-                    onOpenAsProject = { proj ->
+                    title = "Open a project or file",
+                    confirmLabel = "Open as project",
+                    onConfirmFolder = { folder ->
+                        showFileManager = false
+                        val proj = ProjectItem(java.io.File(folder).name.ifBlank { folder }, folder)
+                        TermuxDaemonManager.setActiveProject(proj)
+                        viewModel?.onProjectChanged(proj.path)
+                        refreshProjectsAndTree()
+                    },
+                    onOpenFolderInIde = { folder ->
+                        showFileManager = false
+                        val proj = ProjectItem(java.io.File(folder).name.ifBlank { folder }, folder)
+                        TermuxDaemonManager.setActiveProject(proj)
+                        viewModel?.onProjectChanged(proj.path)
+                        refreshProjectsAndTree()
+                    },
+                    onProjectCreated = { proj ->
                         showFileManager = false
                         TermuxDaemonManager.setActiveProject(proj)
                         viewModel?.onProjectChanged(proj.path)
                         refreshProjectsAndTree()
                     },
-                    onOpenFileInEditor = { path, name ->
-                        coroutineScope.launch {
-                            val res = IdeApiClient.readFileDetailed(path)
-                            if (res == null) {
-                                Toast.makeText(
-                                    context,
-                                    "Cannot open '$name'. IDE Bridge is offline or file is unreachable.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            } else {
-                                if (res.category == "binary") {
-                                    binaryWarningDialog = BinaryWarningTab(
-                                        path = path,
-                                        name = name,
-                                        content = res.content,
-                                        mimeType = res.mimeType
-                                    )
-                                    showFileManager = false
-                                } else {
-                                    TermuxDaemonManager.openOrSelectTab(path, name, res.content)
-                                    showFileManager = false
-                                }
-                            }
-                        }
-                    },
+                    onOpenedInIde = { showFileManager = false },
                     onDismiss = { showFileManager = false }
                 )
             }
@@ -1589,10 +1581,12 @@ fun IdeScreen(
                 val initialSavePath = remember(activeProject?.path) {
                     activeProject?.path?.takeIf { it.isNotBlank() } ?: "~"
                 }
-                FileManagerDialog(
+                com.example.gemini.ui.files.FileExplorerDialog(
+                    stateKey = "ide_save_as",
                     initialPath = initialSavePath,
-                    saveModeFileName = tabToSave.name,
-                    onSaveFileHere = { folderPath, fileName ->
+                    title = "Save \"${tabToSave.name}\" as",
+                    saveFileName = tabToSave.name,
+                    onSave = { folderPath, fileName ->
                         val cleanFolder = folderPath.trim().trimEnd('/')
                         val cleanFileName = fileName.trim().trimStart('/').trimEnd('/').ifBlank { "file.txt" }
                         val fullPath = if (cleanFolder.isBlank() || cleanFolder == "~") {

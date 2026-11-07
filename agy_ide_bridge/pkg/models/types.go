@@ -160,6 +160,11 @@ type FsItemNode struct {
 	Size    int64  `json:"size"`
 	ModTime int64  `json:"modTime"` // unix millis
 	Ext     string `json:"ext,omitempty"`
+	// Extra details for the Files screen (older clients ignore them)
+	Hidden     bool   `json:"hidden,omitempty"`
+	Symlink    bool   `json:"symlink,omitempty"`
+	Mode       string `json:"mode,omitempty"`
+	ChildCount int    `json:"childCount,omitempty"` // folders: entries inside, capped at 1001; 0 when empty or unknown
 }
 
 // FsBrowseResult represents directory navigation contents.

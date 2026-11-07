@@ -105,7 +105,6 @@ import com.example.gemini.ui.components.MarkdownDocViewerModal
 import com.example.gemini.ui.components.SharedChatViewerModal
 import com.example.gemini.ui.components.SharedChatLoadingDialog
 import com.example.gemini.ui.components.ProjectPickerDialog
-import com.example.gemini.ui.components.FileManagerDialog
 import com.example.gemini.ui.components.ToolCallExpansionCache
 import com.example.gemini.ui.components.CodeBlockExpansionCache
 import com.example.gemini.ui.bubble.FloatingChatActivity
@@ -2912,12 +2911,24 @@ fun ChatScreen(
     }
 
     if (showWorkspaceFolderBrowserDialog) {
-        FileManagerDialog(
-            initialPath = "~",
-            onOpenAsProject = { selectedProj ->
+        com.example.gemini.ui.files.FileExplorerDialog(
+            stateKey = "chat_workspace",
+            title = "Choose the chat's project folder",
+            confirmLabel = "Use this folder",
+            onConfirmFolder = { folder ->
                 showWorkspaceFolderBrowserDialog = false
+                val selectedProj = ProjectItem(File(folder).name.ifBlank { folder }, folder)
                 TermuxDaemonManager.setActiveProject(selectedProj)
                 viewModel.onProjectChanged(selectedProj.path)
+            },
+            onOpenedInIde = {
+                showWorkspaceFolderBrowserDialog = false
+                onNavigateToIde()
+            },
+            onProjectCreated = { created ->
+                showWorkspaceFolderBrowserDialog = false
+                TermuxDaemonManager.setActiveProject(created)
+                viewModel.onProjectChanged(created.path)
             },
             onDismiss = { showWorkspaceFolderBrowserDialog = false }
         )

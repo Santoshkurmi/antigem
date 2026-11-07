@@ -804,22 +804,25 @@ class AuthPreferences(private val context: Context) {
 
     val floatingSwitcherItems: Flow<List<String>> = context.dataStore.data
         .map {
-            val raw = it[FLOATING_SWITCHER_ITEMS] ?: "chat,ide,terminal,browser,notes"
+            val raw = it[FLOATING_SWITCHER_ITEMS] ?: "chat,ide,terminal,browser,notes,files"
             withNotesSwitcherItem(raw.split(",").map { s -> s.trim() }.filter { s -> s.isNotEmpty() })
         }
 
     fun getFloatingSwitcherItemsSync(): List<String> {
-        val raw = syncPrefs.getString("floating_switcher_items", "chat,ide,terminal,browser,notes") ?: "chat,ide,terminal,browser,notes"
+        val raw = syncPrefs.getString("floating_switcher_items", "chat,ide,terminal,browser,notes,files") ?: "chat,ide,terminal,browser,notes,files"
         return withNotesSwitcherItem(raw.split(",").map { it.trim() }.filter { it.isNotEmpty() })
     }
 
-    /** Lists saved before Notes existed get it at the end, until the user customizes the switcher items themselves. */
-    private fun withNotesSwitcherItem(items: List<String>): List<String> =
-        if ("notes" in items || syncPrefs.getBoolean("floating_switcher_items_has_notes", false)) items else items + "notes"
+    /** Lists saved before Notes / Files existed get them at the end, until the user customizes the switcher items themselves. */
+    private fun withNotesSwitcherItem(items: List<String>): List<String> {
+        val withNotes = if ("notes" in items || syncPrefs.getBoolean("floating_switcher_items_has_notes", false)) items else items + "notes"
+        return if ("files" in withNotes || syncPrefs.getBoolean("floating_switcher_items_has_files", false)) withNotes else withNotes + "files"
+    }
 
     suspend fun saveFloatingSwitcherItems(items: List<String>) {
         val raw = items.joinToString(",")
-        syncPrefs.edit().putString("floating_switcher_items", raw).putBoolean("floating_switcher_items_has_notes", true).apply()
+        syncPrefs.edit().putString("floating_switcher_items", raw)
+            .putBoolean("floating_switcher_items_has_notes", true).putBoolean("floating_switcher_items_has_files", true).apply()
         context.dataStore.edit { it[FLOATING_SWITCHER_ITEMS] = raw }
     }
 

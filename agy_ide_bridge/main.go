@@ -335,6 +335,20 @@ func main() {
 	mux.HandleFunc("/api/projects/create", h.CreateProjectHandler)
 	mux.HandleFunc("/api/fs/browse", h.FsBrowseHandler)
 	mux.HandleFunc("/api/fs/mkdir", h.FsMkdirHandler)
+	// Files screen (explorer): places, details, safe create / rename, batch copy / move / delete, zip, unzip, search, streaming
+	mux.HandleFunc("/api/fs/roots", h.FsRootsHandler)
+	mux.HandleFunc("/api/fs/stat", h.FsStatHandler)
+	mux.HandleFunc("/api/fs/new", h.FsNewHandler)
+	mux.HandleFunc("/api/fs/rename", h.FsRenameHandler)
+	mux.HandleFunc("/api/fs/chmod", h.FsChmodHandler)
+	mux.HandleFunc("/api/fs/transfer", h.FsTransferHandler)
+	mux.HandleFunc("/api/fs/delete", h.FsDeleteHandler)
+	mux.HandleFunc("/api/fs/compress", h.FsCompressHandler)
+	mux.HandleFunc("/api/fs/extract", h.FsExtractHandler)
+	mux.HandleFunc("/api/fs/archive/list", h.FsArchiveListHandler)
+	mux.HandleFunc("/api/fs/search", h.FsSearchHandler)
+	mux.HandleFunc("/api/fs/raw", h.FsRawHandler)
+	mux.HandleFunc("/api/fs/upload", h.FsUploadHandler)
 	mux.HandleFunc("/api/tree", h.FileTreeHandler)
 	mux.HandleFunc("/api/file/read", h.FileReadHandler)
 	mux.HandleFunc("/api/file/save", h.FileSaveHandler)
@@ -460,7 +474,9 @@ func main() {
 		}
 
 		var reqPayload string
-		if r.Body != nil && !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		// raw uploads (Files screen) can be gigabytes: never read them into memory for logging
+		if r.Body != nil && !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") &&
+			!strings.HasPrefix(r.Header.Get("Content-Type"), "application/octet-stream") {
 			bodyBytes, err := io.ReadAll(r.Body)
 			if err == nil && len(bodyBytes) > 0 {
 				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))

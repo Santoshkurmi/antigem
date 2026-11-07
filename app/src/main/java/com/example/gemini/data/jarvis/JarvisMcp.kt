@@ -244,7 +244,7 @@ object JarvisMcp {
             "reason" to prop("string", "When rejecting: what to tell the agent")))
         // ---- screens and IDE
         put(tool("jarvis_open_screen", "Switch the app to a screen.", listOf("screen"),
-            "screen" to prop("string", "Where to go", listOf("chat", "ide", "terminal", "browser", "notes"))))
+            "screen" to prop("string", "Where to go", listOf("chat", "ide", "terminal", "browser", "notes", "files"))))
         put(tool("jarvis_ide_list_projects", "List the IDE's projects and which one is active.", emptyList(),
             "query" to prop("string", "Part of a name or path"), limit, offset))
         put(tool("jarvis_ide_open_project",
@@ -434,7 +434,7 @@ object JarvisMcp {
                 )
                 "jarvis_open_screen" -> {
                     val s = args.optString("screen").lowercase()
-                    if (s !in listOf("chat", "ide", "terminal", "browser", "notes")) return error("Unknown screen $s")
+                    if (s !in listOf("chat", "ide", "terminal", "browser", "notes", "files")) return error("Unknown screen $s")
                     JarvisController.vm.requestViewMode(s.uppercase())
                     text("Opened $s.")
                 }

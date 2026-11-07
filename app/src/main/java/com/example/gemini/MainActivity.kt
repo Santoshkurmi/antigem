@@ -31,7 +31,8 @@ enum class AppViewMode {
     IDE,
     TERMINAL,
     BROWSER,
-    NOTES
+    NOTES,
+    FILES
 }
 
 class MainActivity : ComponentActivity() {
@@ -72,6 +73,7 @@ class MainActivity : ComponentActivity() {
         com.example.gemini.ui.browser.BrowserSessionManager.instance.init(this)
         com.example.gemini.data.local.LocalTerminalBridge.instance.init(this)
         com.example.gemini.data.notes.NotesRepository.init(this)
+        com.example.gemini.data.files.ExplorerPrefs.init(this)
         com.example.gemini.data.remote.AndroidLocalBridgeServer.instance.start(this)
         com.example.gemini.data.jarvis.JarvisController.attach(application, chatViewModel)
         com.example.gemini.data.agent.ChatCompletionMonitor.start(application, chatViewModel)
@@ -98,6 +100,7 @@ class MainActivity : ComponentActivity() {
                     "TERMINAL" -> AppViewMode.TERMINAL
                     "BROWSER" -> AppViewMode.BROWSER
                     "NOTES" -> AppViewMode.NOTES
+                    "FILES" -> AppViewMode.FILES
                     else -> AppViewMode.CHAT
                 }
             }
@@ -130,6 +133,11 @@ class MainActivity : ComponentActivity() {
                         "NOTES" -> {
                             previousViewMode = currentViewMode
                             currentViewMode = AppViewMode.NOTES
+                        }
+
+                        "FILES" -> {
+                            previousViewMode = currentViewMode
+                            currentViewMode = AppViewMode.FILES
                         }
                     }
                     chatViewModel.consumeRequestedViewMode()
@@ -391,6 +399,46 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
 
+                                // Persistent Files Screen (file explorer: folder, history and clipboard survive switching away)
+                                var hasEverOpenedFiles by remember { mutableStateOf(false) }
+                                if (currentViewMode == AppViewMode.FILES) hasEverOpenedFiles = true
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            val isVisible = currentViewMode == AppViewMode.FILES
+                                            alpha = if (isVisible) 1f else 0f
+                                            translationX = if (isVisible) 0f else 20000f
+                                        }
+                                ) {
+                                    if (hasEverOpenedFiles) {
+                                        com.example.gemini.ui.files.FileExplorer(
+                                            stateKey = "screen",
+                                            isVisible = currentViewMode == AppViewMode.FILES,
+                                            onClose = {
+                                                currentViewMode =
+                                                    if (previousViewMode == AppViewMode.FILES) AppViewMode.CHAT else previousViewMode
+                                            },
+                                            onOpenedInIde = {
+                                                previousViewMode = currentViewMode
+                                                currentViewMode = AppViewMode.IDE
+                                            },
+                                            onOpenFolderInIde = { folder ->
+                                                com.example.gemini.data.files.IdeFileLauncher.openFolderAsProject(folder)
+                                                chatViewModel.onProjectChanged(folder)
+                                                previousViewMode = currentViewMode
+                                                currentViewMode = AppViewMode.IDE
+                                            },
+                                            onProjectCreated = { proj ->
+                                                com.example.gemini.data.daemon.TermuxDaemonManager.setActiveProject(proj)
+                                                chatViewModel.onProjectChanged(proj.path)
+                                                previousViewMode = currentViewMode
+                                                currentViewMode = AppViewMode.IDE
+                                            }
+                                        )
+                                    }
+                                }
+
                                 // Floating App Switcher Across Whole App (always on; renders on top of Chat, IDE, Terminal, Browser)
                                 // Its Terminal needs a shell: SSH, server mode, or the local Linux tools (turned on here when
                                 // installed but off); without any, it offers to install the Linux tools instead.
@@ -438,6 +486,10 @@ class MainActivity : ComponentActivity() {
                                         previousViewMode = currentViewMode
                                         currentViewMode = AppViewMode.NOTES
                                     },
+                                    onNavigateToFiles = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.FILES
+                                    },
                                     onPositionSaved = { x, y ->
                                         chatViewModel.saveFloatingSwitcherPosition(x, y)
                                     }
@@ -451,6 +503,40 @@ class MainActivity : ComponentActivity() {
                                             currentViewMode = AppViewMode.TERMINAL
                                         },
                                         onDismiss = { showSwitcherToolsInstall = false }
+                                    )
+                                }
+
+                                // Files shared or opened from other apps: ask what to do (open in the editor, save to a folder)
+                                val incomingFiles by com.example.gemini.data.files.IncomingShare.pending.collectAsState()
+                                val shareScope = rememberCoroutineScope()
+                                incomingFiles?.let { items ->
+                                    com.example.gemini.ui.files.IncomingShareDialog(
+                                        items = items,
+                                        onOpenInEditor = { item -> openIncomingInEditor(item) },
+                                        onPreviewMarkdown = { item -> item.uri?.let { chatViewModel.loadMarkdownFromUri(context, it) } },
+                                        onOpenSavedInIde = { path, name, size ->
+                                            shareScope.launch {
+                                                when (val r = com.example.gemini.data.files.IdeFileLauncher.open(path, name, size)) {
+                                                    is com.example.gemini.data.files.IdeFileLauncher.Outcome.Opened -> {
+                                                        previousViewMode = currentViewMode
+                                                        currentViewMode = AppViewMode.IDE
+                                                    }
+                                                    is com.example.gemini.data.files.IdeFileLauncher.Outcome.Failed ->
+                                                        com.example.gemini.ui.components.AppToastHelper.showToast(r.message, com.example.gemini.ui.components.ChatToastType.ERROR)
+                                                    is com.example.gemini.data.files.IdeFileLauncher.Outcome.NeedsConfirm -> {
+                                                        com.example.gemini.data.files.ExplorerNav.open("screen", path.substringBeforeLast('/'))
+                                                        previousViewMode = currentViewMode
+                                                        currentViewMode = AppViewMode.FILES
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        onShowInFiles = { folder ->
+                                            com.example.gemini.data.files.ExplorerNav.open("screen", folder)
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.FILES
+                                        },
+                                        onDismiss = { com.example.gemini.data.files.IncomingShare.clear() }
                                     )
                                 }
 
@@ -534,96 +620,85 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Files opened with or shared to AntiGem. Shared conversations (.antigem) import directly; everything else (one file,
+     * many files, or plain text / code) asks first: open in the code editor, preview, or save to a folder.
+     */
     private fun handleIncomingFileIntent(intent: Intent?) {
         if (intent == null) return
         val action = intent.action
-        val uri: android.net.Uri? = when (action) {
-            Intent.ACTION_VIEW -> intent.data
-            Intent.ACTION_SEND -> {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    intent.getParcelableExtra(Intent.EXTRA_STREAM)
-                }
+        if (action != Intent.ACTION_VIEW && action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
+        val share = com.example.gemini.data.files.IncomingShare
+        // links (OAuth callbacks, web pages) are not files
+        val uris = share.urisOf(intent).filter { it.scheme == "content" || it.scheme == "file" }
+        if (uris.isEmpty()) {
+            if (action == Intent.ACTION_SEND) {
+                val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+                if (!text.isNullOrBlank()) share.offer(listOf(share.textItem(text, intent.getStringExtra(Intent.EXTRA_SUBJECT))))
             }
-
-            else -> null
+            return
         }
-
-        if (uri != null) {
-            val intentMime = intent.type?.lowercase() ?: ""
-            val crMime = try {
-                contentResolver.getType(uri)?.lowercase()
-            } catch (_: Exception) {
-                null
-            } ?: ""
-            val resolvedMime = intentMime.ifBlank { crMime }
-            val uriPath = uri.path?.lowercase() ?: ""
-
-            var fileName: String? = null
-            if (uri.scheme == "content") {
-                try {
-                    contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
-                        ?.use { cursor ->
-                            if (cursor.moveToFirst()) {
-                                val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                                if (nameIdx != -1) {
-                                    fileName = cursor.getString(nameIdx)?.lowercase()
-                                }
-                            }
-                        }
+        val items = uris.map { share.describe(this, it, intent.type) }
+        if (items.size == 1) {
+            val item = items.first()
+            val lower = item.name.lowercase()
+            if (lower.endsWith(".antigem")) {
+                chatViewModel.loadSharedConversationFromUri(this, item.uri!!)
+                return
+            }
+            // exported trajectories can arrive without the .antigem name: peek at the header
+            val kind = item.kind
+            if (kind == com.example.gemini.data.files.FileKind.DATA || kind == com.example.gemini.data.files.FileKind.TEXT ||
+                kind == com.example.gemini.data.files.FileKind.BINARY
+            ) {
+                val header = try {
+                    contentResolver.openInputStream(item.uri!!)?.bufferedReader(Charsets.UTF_8)?.use {
+                        val chars = CharArray(150)
+                        val read = it.read(chars, 0, 150)
+                        if (read > 0) String(chars, 0, read) else ""
+                    } ?: ""
                 } catch (_: Exception) {
+                    ""
+                }
+                if (header.contains("\"antigem_trajectory\"")) {
+                    chatViewModel.loadSharedConversationFromUri(this, item.uri!!)
+                    return
                 }
             }
-            val displayName =
-                fileName ?: uri.lastPathSegment?.substringAfterLast('/')?.lowercase() ?: uriPath.substringAfterLast('/')
+        }
+        share.offer(items)
+    }
 
-            val isMarkdown =
-                resolvedMime.contains("markdown") || displayName.endsWith(".md") || displayName.endsWith(".markdown") || uriPath.endsWith(
-                    ".md"
-                ) || uriPath.endsWith(".markdown")
-            val isAntigem =
-                displayName.endsWith(".antigem") || displayName.endsWith(".jsonl.antigem") || uriPath.endsWith(".antigem") || uriPath.endsWith(
-                    ".jsonl.antigem"
+    /** "Open in code editor" from the share dialog. */
+    private fun openIncomingInEditor(item: com.example.gemini.data.files.IncomingItem) {
+        val uri = item.uri
+        when {
+            item.text != null -> {
+                com.example.gemini.data.daemon.TermuxDaemonManager.openOrSelectTab(
+                    path = "shared-text:${System.currentTimeMillis()}/${item.name}",
+                    name = item.name,
+                    content = item.text,
+                    isExternal = true
                 )
-
-            when {
-                isMarkdown -> {
-                    chatViewModel.loadMarkdownFromUri(this, uri)
-                }
-
-                isAntigem -> {
-                    chatViewModel.loadSharedConversationFromUri(this, uri)
-                }
-
-                resolvedMime.startsWith("text/") || resolvedMime.contains("json") || resolvedMime.contains("javascript") ||
-                        resolvedMime.contains("xml") || resolvedMime.contains("sql") || resolvedMime.contains("html") ||
-                        resolvedMime.contains("css") || resolvedMime.contains("x-sh") || resolvedMime.contains("script") ||
-                        resolvedMime.contains("code") || displayName.endsWith(".html") || displayName.endsWith(".htm") ||
-                        displayName.endsWith(".js") || displayName.endsWith(".ts") || displayName.endsWith(".py") ||
-                        displayName.endsWith(".json") || displayName.endsWith(".txt") || displayName.endsWith(".xml") -> {
-                    chatViewModel.openFileInIdeDirectly(this, uri)
-                }
-
-                else -> {
-                    // Probe if text or antigem trajectory header
-                    try {
-                        val headerSample = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {
-                            val chars = CharArray(150)
-                            val read = it.read(chars, 0, 150)
-                            if (read > 0) String(chars, 0, read) else ""
-                        } ?: ""
-                        if (headerSample.contains("\"antigem_trajectory\"")) {
-                            chatViewModel.loadSharedConversationFromUri(this, uri)
-                        } else {
-                            chatViewModel.openFileInIdeDirectly(this, uri)
-                        }
-                    } catch (_: Exception) {
-                        chatViewModel.openFileInIdeDirectly(this, uri)
+                chatViewModel.requestViewMode("IDE")
+            }
+            // the IDE's image viewer reads a file path: keep a private copy for it
+            item.kind == com.example.gemini.data.files.FileKind.IMAGE && uri != null -> lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val dir = java.io.File(cacheDir, "shared_open").apply { mkdirs() }
+                    val dest = java.io.File(dir, item.name)
+                    contentResolver.openInputStream(uri)?.use { input -> dest.outputStream().use { input.copyTo(it) } }
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        com.example.gemini.data.daemon.TermuxDaemonManager.openOrSelectTab(dest.absolutePath, item.name, "")
+                        chatViewModel.requestViewMode("IDE")
+                    }
+                } catch (e: Exception) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        com.example.gemini.ui.components.AppToastHelper.showToast("Could not open ${item.name}", com.example.gemini.ui.components.ChatToastType.ERROR)
                     }
                 }
             }
+            uri != null -> chatViewModel.openFileInIdeDirectly(this, uri)
         }
     }
 }
