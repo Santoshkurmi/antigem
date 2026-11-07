@@ -74,12 +74,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** Dictation for Claude chats (Claude's speech-to-text through the bridge). */
     val claudeVoice = com.example.gemini.data.agent.claude.ClaudeVoiceTranscriber(claudeClient) { claudePrefs.voiceLanguage.value }
 
+    /** OpenCode: one `opencode serve` on the bridge for all its chats (any provider, OpenAI-compatible ones included). */
+    val openCodePrefs = com.example.gemini.data.agent.opencode.OpenCodePreferences(application)
+    val openCodeBackend = com.example.gemini.data.agent.opencode.OpenCodeChatBackend(application, viewModelScope, store, openCodePrefs)
+
     /** Agent of the conversation on screen; chat actions go to that agent's backend. */
     val activeAgent: StateFlow<AgentKind> = store.currentConversation
         .map { it?.agent ?: AgentKind.AGY }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AgentKind.AGY)
 
     private val isClaudeActive get() = store.currentConversation.value?.agent == AgentKind.CLAUDE
+    private val isOpenCodeActive get() = store.currentConversation.value?.agent == AgentKind.OPENCODE
 
     /** Agent used for new chats, picked on the empty chat screen (remembered). */
     val newChatAgent: StateFlow<AgentKind> = claudePrefs.newChatAgent
@@ -95,6 +100,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val isApplyingAgents: StateFlow<Boolean> = _isApplyingAgents.asStateFlow()
 
     private val isClaudeEnabled get() = AgentKind.CLAUDE in enabledAgents.value
+    private val isOpenCodeEnabled get() = AgentKind.OPENCODE in enabledAgents.value
 
     /**
      * Applies an agent selection: saves it, starts / stops Claude Code in the app, leaves a chat of a disabled
@@ -112,6 +118,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             claudeBackend.stop()
         }
+        if (AgentKind.OPENCODE in agents) openCodeBackend.start() else openCodeBackend.stop()
         val cur = store.currentConversation.value
         if (cur == null || cur.agent !in agents) startNewChat()
         if (firstChoice) {
@@ -143,9 +150,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val noQuotas = MutableStateFlow<List<ModelQuota>>(emptyList())
     private val alwaysFalse = MutableStateFlow(false)
 
-    private fun <T> byAgent(agy: StateFlow<T>, claude: StateFlow<T>): StateFlow<T> =
-        combine(store.currentConversation, agy, claude) { conv, a, c -> if (conv?.agent == AgentKind.CLAUDE) c else a }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, agy.value)
+    private fun <T> byAgent(agy: StateFlow<T>, claude: StateFlow<T>, openCode: StateFlow<T>): StateFlow<T> =
+        combine(store.currentConversation, agy, claude, openCode) { conv, a, c, o ->
+            when (conv?.agent) {
+                AgentKind.CLAUDE -> c
+                AgentKind.OPENCODE -> o
+                else -> a
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, agy.value)
+
+    private val noQueued = MutableStateFlow<List<com.example.gemini.domain.model.QueuedMessage>>(emptyList())
 
     private fun isoUtc(epochSeconds: Long): String =
         java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
@@ -159,6 +173,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun claudeNotSupported(action: String) {
         com.example.gemini.ui.components.AppToastHelper.showToast("$action is not available in Claude chats yet", com.example.gemini.ui.components.ChatToastType.INFO)
+    }
+
+    private fun openCodeNotSupported(action: String) {
+        com.example.gemini.ui.components.AppToastHelper.showToast("$action is not available in OpenCode chats yet", com.example.gemini.ui.components.ChatToastType.INFO)
     }
 
     fun setNewChatAgent(agent: AgentKind) {
@@ -178,12 +196,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val isConversationsLoading = agyBackend.isConversationsLoading
     val artifacts = agyBackend.artifacts
     val pendingApprovals = agyBackend.pendingApprovals
-    val isStreaming = byAgent(agyBackend.isStreaming, claudeBackend.isStreaming)
-    val availableModels = byAgent(agyBackend.availableModels, claudeBackend.availableModels)
+    val isStreaming = byAgent(agyBackend.isStreaming, claudeBackend.isStreaming, openCodeBackend.isStreaming)
+    val availableModels = byAgent(agyBackend.availableModels, claudeBackend.availableModels, openCodeBackend.availableModels)
     val enabledModelIds = agyBackend.enabledModelIds
-    val enabledModels = byAgent(agyBackend.enabledModels, claudeBackend.availableModels)
-    val isRefreshingModels = byAgent(agyBackend.isRefreshingModels, claudeBackend.isRefreshingModels)
-    val selectedModelId = byAgent(agyBackend.selectedModelId, claudeBackend.selectedModelId)
+    val enabledModels = byAgent(agyBackend.enabledModels, claudeBackend.availableModels, openCodeBackend.availableModels)
+    val isRefreshingModels = byAgent(agyBackend.isRefreshingModels, claudeBackend.isRefreshingModels, openCodeBackend.isRefreshingModels)
+    val selectedModelId = byAgent(agyBackend.selectedModelId, claudeBackend.selectedModelId, openCodeBackend.selectedModelId)
     val preferredModelName = agyBackend.preferredModelName
     /** Claude's plan windows as the model pill's quota (remaining share of the 5-hour and weekly limits). */
     private val claudeQuotas: StateFlow<List<ModelQuota>> =
@@ -205,9 +223,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val quotas = byAgent(agyBackend.quotas, claudeQuotas)
+    val quotas = byAgent(agyBackend.quotas, claudeQuotas, noQuotas)
     val quotaSummary = agyBackend.quotaSummary
-    val isLoadingConversation = byAgent(agyBackend.isLoadingConversation, claudeBackend.isLoadingConversation)
+    val isLoadingConversation = byAgent(agyBackend.isLoadingConversation, claudeBackend.isLoadingConversation, openCodeBackend.isLoadingConversation)
     fun setModelEnabled(modelId: String, isEnabled: Boolean) = agyBackend.setModelEnabled(modelId, isEnabled)
     fun enableAllModels() = agyBackend.enableAllModels()
     val bridgeStatusMessage = agyBackend.bridgeStatusMessage
@@ -236,10 +254,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         agyBackend.isAnyGenerationOrTaskActive,
         claudeBackend.isCurrentChatActivelyRunning,
         claudeBackend.conversations,
-        com.example.gemini.data.jarvis.JarvisController.keepScreenAwake,
+        combine(com.example.gemini.data.jarvis.JarvisController.keepScreenAwake, openCodeBackend.isCurrentChatActivelyRunning, openCodeBackend.conversations) { j, ocTurn, ocChats ->
+            j || ocTurn || ocChats.any { it.isRunning }
+        },
         com.example.gemini.data.jarvis.JarvisTasks.anyActive
-    ) { agy, claudeTurn, claudeChats, jarvis, tasks ->
-        agy || claudeTurn || claudeChats.any { it.isRunning } || jarvis || tasks
+    ) { agy, claudeTurn, claudeChats, jarvisOrOpenCode, tasks ->
+        agy || claudeTurn || claudeChats.any { it.isRunning } || jarvisOrOpenCode || tasks
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /**
@@ -270,6 +290,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val claudeOthers = claudeChats.filter { it.isRunning && it.id != claudeOpen?.id }
             if (claudeOthers.isNotEmpty()) add("Claude is working in ${names(claudeOthers.map { it.title })}")
             if (claudeTurn && claudeOpen == null && claudeOthers.isEmpty()) add("Claude is replying")
+            val openCodeChats = openCodeBackend.conversations.value.filter { it.isRunning }
+            if (openCodeChats.isNotEmpty()) add("OpenCode is working in ${names(openCodeChats.map { it.title })}")
+            else if (openCodeBackend.isCurrentChatActivelyRunning.value) add("OpenCode is replying")
             if (tasks) add("A Jarvis task is running")
             if (jarvis) add(
                 when (com.example.gemini.data.jarvis.JarvisPreferences.keepScreenOn.value) {
@@ -279,8 +302,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val isCurrentChatActivelyRunning = byAgent(agyBackend.isCurrentChatActivelyRunning, claudeBackend.isCurrentChatActivelyRunning)
-    val isCurrentChatBackgroundActive = byAgent(agyBackend.isCurrentChatBackgroundActive, alwaysFalse)
+    val isCurrentChatActivelyRunning = byAgent(agyBackend.isCurrentChatActivelyRunning, claudeBackend.isCurrentChatActivelyRunning, openCodeBackend.isCurrentChatActivelyRunning)
+    val isCurrentChatBackgroundActive = byAgent(agyBackend.isCurrentChatBackgroundActive, alwaysFalse, alwaysFalse)
     val connectionState = agyBackend.connectionState
     fun refreshActiveInstances() = agyBackend.refreshActiveInstances()
     fun terminateInstance(conversationId: String) = agyBackend.terminateInstance(conversationId)
@@ -288,6 +311,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun retryConnections() {
         agyBackend.retryConnections()
         if (isClaudeActive) claudeBackend.retryConnections()
+        if (isOpenCodeEnabled) openCodeBackend.retryConnections()
     }
     fun onAppForegrounded() {
         agyBackend.onAppForegrounded()
@@ -296,102 +320,163 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             // the CLI may have been installed or signed in from a terminal meanwhile
             if (claudeAccount.state.value != com.example.gemini.data.agent.claude.ClaudeStatus.READY) claudeAccount.refreshStatus()
         }
+        if (isOpenCodeEnabled) openCodeBackend.onAppForegrounded()
     }
     fun onProjectChanged(projectPath: String) = agyBackend.onProjectChanged(projectPath)
     fun onUserStartedTyping() = agyBackend.onUserStartedTyping()
     fun startNewChat() = startNewChat(
         newChatAgent.value.takeIf { it in enabledAgents.value }
-            ?: if (AgentKind.AGY in enabledAgents.value) AgentKind.AGY else AgentKind.CLAUDE
+            ?: if (AgentKind.AGY in enabledAgents.value) AgentKind.AGY else enabledAgents.value.firstOrNull() ?: AgentKind.AGY
     )
 
     /** New chat with [agent] (e.g. `/clear` in a Claude chat), without changing the new-chat default. */
     fun startNewChat(agent: AgentKind) {
-        if (agent == AgentKind.CLAUDE) {
-            agyBackend.detach()
-            claudeBackend.startNewChat()
-        } else {
-            claudeBackend.detach()
-            agyBackend.startNewChat()
+        when (agent) {
+            AgentKind.CLAUDE -> {
+                agyBackend.detach()
+                openCodeBackend.detach()
+                claudeBackend.startNewChat()
+            }
+            AgentKind.OPENCODE -> {
+                agyBackend.detach()
+                claudeBackend.detach()
+                openCodeBackend.startNewChat()
+            }
+            AgentKind.AGY -> {
+                claudeBackend.detach()
+                openCodeBackend.detach()
+                agyBackend.startNewChat()
+            }
         }
     }
     fun selectConversation(id: String) {
-        if (agentOf(id) == AgentKind.CLAUDE) {
-            agyBackend.detach()
-            claudeBackend.selectConversation(id)
-        } else {
-            claudeBackend.detach()
-            agyBackend.selectConversation(id)
+        when (agentOf(id)) {
+            AgentKind.CLAUDE -> {
+                agyBackend.detach()
+                openCodeBackend.detach()
+                claudeBackend.selectConversation(id)
+            }
+            AgentKind.OPENCODE -> {
+                agyBackend.detach()
+                claudeBackend.detach()
+                openCodeBackend.selectConversation(id)
+            }
+            AgentKind.AGY -> {
+                claudeBackend.detach()
+                openCodeBackend.detach()
+                agyBackend.selectConversation(id)
+            }
         }
     }
     fun startPersistentStream(conversationId: String) = agyBackend.startPersistentStream(conversationId)
     fun deleteConversation(id: String) {
-        if (agentOf(id) == AgentKind.CLAUDE) claudeBackend.deleteConversation(id) else agyBackend.deleteConversation(id)
+        when (agentOf(id)) {
+            AgentKind.CLAUDE -> claudeBackend.deleteConversation(id)
+            AgentKind.OPENCODE -> openCodeBackend.deleteConversation(id)
+            AgentKind.AGY -> agyBackend.deleteConversation(id)
+        }
         // Jarvis forgets it too: a deleted Jarvis chat is replaced by a new one on the next message
         com.example.gemini.data.jarvis.JarvisController.onChatDeleted(id)
     }
     fun forkConversation(id: String) {
-        if (agentOf(id) == AgentKind.CLAUDE) {
+        if (agentOf(id) == AgentKind.OPENCODE) {
+            agyBackend.detach()
+            claudeBackend.detach()
+            openCodeBackend.forkConversation(id)
+        } else if (agentOf(id) == AgentKind.CLAUDE) {
             agyBackend.detach()
             claudeBackend.forkConversation(id)
         } else {
             agyBackend.forkConversation(id)
         }
     }
-    fun selectModel(modelId: String) = if (isClaudeActive) claudeBackend.selectModel(modelId) else agyBackend.selectModel(modelId)
+    fun selectModel(modelId: String) = when {
+        isClaudeActive -> claudeBackend.selectModel(modelId)
+        isOpenCodeActive -> openCodeBackend.selectModel(modelId)
+        else -> agyBackend.selectModel(modelId)
+    }
     /** `/plu:` plugin skills and custom slash commands are expanded here, for both agents. */
-    fun sendMessage(content: String) = PromptExpansion.expand(content).let { if (isClaudeActive) claudeBackend.sendMessage(it) else agyBackend.sendMessage(it) }
+    fun sendMessage(content: String) = PromptExpansion.expand(content).let {
+        when {
+            isClaudeActive -> claudeBackend.sendMessage(it)
+            isOpenCodeActive -> openCodeBackend.sendMessage(it)
+            else -> agyBackend.sendMessage(it)
+        }
+    }
     val isTranscribingAudio = agyBackend.isTranscribingAudio
     fun transcribeAudioFile(file: java.io.File, onDone: (String) -> Unit, onError: (String) -> Unit) = agyBackend.transcribeAudioFile(file, onDone, onError)
-    fun retryMessage(messageId: String) = if (isClaudeActive) claudeBackend.regenerate(messageId) else agyBackend.retryMessage(messageId)
+    fun retryMessage(messageId: String) = when {
+        isClaudeActive -> claudeBackend.regenerate(messageId)
+        isOpenCodeActive -> openCodeBackend.regenerate(messageId)
+        else -> agyBackend.retryMessage(messageId)
+    }
     fun prepareEditMessage(messageId: String): String? {
+        if (isOpenCodeActive) {
+            openCodeNotSupported("Editing a sent message")
+            return null
+        }
         if (isClaudeActive) {
             claudeNotSupported("Editing a sent message")
             return null
         }
         return agyBackend.prepareEditMessage(messageId)?.let(PromptExpansion::collapse)
     }
-    fun revertAndEditLastUserMessage(targetMsg: ChatMessage, onRestored: (String) -> Unit) = if (isClaudeActive) claudeBackend.editMessage(targetMsg.id, restoreCode = false) { onRestored(PromptExpansion.collapse(it)) } else agyBackend.revertAndEditLastUserMessage(targetMsg) { onRestored(PromptExpansion.collapse(it)) }
+    fun revertAndEditLastUserMessage(targetMsg: ChatMessage, onRestored: (String) -> Unit) = if (isOpenCodeActive) openCodeBackend.editMessage(targetMsg.id, restoreFiles = false) { onRestored(PromptExpansion.collapse(it)) } else if (isClaudeActive) claudeBackend.editMessage(targetMsg.id, restoreCode = false) { onRestored(PromptExpansion.collapse(it)) } else agyBackend.revertAndEditLastUserMessage(targetMsg) { onRestored(PromptExpansion.collapse(it)) }
 
     /** Claude: edit a sent prompt in a copy of the chat that ends before it; optionally restore the files changed since. */
     fun editClaudeMessage(targetMsg: ChatMessage, restoreCode: Boolean, onRestored: (String) -> Unit) =
-        claudeBackend.editMessage(targetMsg.id, restoreCode) { onRestored(PromptExpansion.collapse(it)) }
+        if (isOpenCodeActive) openCodeBackend.editMessage(targetMsg.id, restoreCode) { onRestored(PromptExpansion.collapse(it)) }
+        else claudeBackend.editMessage(targetMsg.id, restoreCode) { onRestored(PromptExpansion.collapse(it)) }
 
     /** Sidebar export / share of a Claude chat that is not open. */
     suspend fun loadClaudeMessages(conversationId: String): List<ChatMessage> = claudeBackend.loadMessages(conversationId)
 
+    /** Sidebar export / share of an OpenCode chat that is not open. */
+    suspend fun loadOpenCodeMessages(conversationId: String): List<ChatMessage> = openCodeBackend.loadMessages(conversationId)
+
     fun renameConversation(id: String, title: String) {
-        if (agentOf(id) == AgentKind.CLAUDE) claudeBackend.renameConversation(id, title)
+        when (agentOf(id)) {
+            AgentKind.CLAUDE -> claudeBackend.renameConversation(id, title)
+            AgentKind.OPENCODE -> openCodeBackend.renameConversation(id, title)
+            AgentKind.AGY -> Unit
+        }
     }
-    fun stopStreaming() = if (isClaudeActive) claudeBackend.stopStreaming() else agyBackend.stopStreaming()
+    fun stopStreaming() = when {
+        isClaudeActive -> claudeBackend.stopStreaming()
+        isOpenCodeActive -> openCodeBackend.stopStreaming()
+        else -> agyBackend.stopStreaming()
+    }
 
     /** Messages sent while the agent was working, waiting to be delivered (queued-messages card). */
-    val queuedMessages = byAgent(agyBackend.queuedMessages, claudeBackend.queuedMessages)
-    fun sendQueuedNow(id: String) = if (isClaudeActive) claudeBackend.sendQueuedNow(id) else agyBackend.sendQueuedNow(id)
-    fun deleteQueued(id: String) { if (!isClaudeActive) agyBackend.deleteQueued(id) }
+    val queuedMessages = byAgent(agyBackend.queuedMessages, claudeBackend.queuedMessages, noQueued)
+    fun sendQueuedNow(id: String) { if (isClaudeActive) claudeBackend.sendQueuedNow(id) else if (!isOpenCodeActive) agyBackend.sendQueuedNow(id) }
+    fun deleteQueued(id: String) { if (!isClaudeActive && !isOpenCodeActive) agyBackend.deleteQueued(id) }
     fun applyQuotaSummary(summary: com.example.gemini.domain.model.QuotaSummaryResponse) = agyBackend.applyQuotaSummary(summary)
     fun refreshQuotas(force: Boolean = true, showToastFeedback: Boolean = false) {
-        if (isClaudeActive) {
+        if (isOpenCodeActive) {
+            openCodeBackend.refreshModels()
+        } else if (isClaudeActive) {
             claudeBackend.refreshInfo(force)
             agyBackend.refreshQuotas(force, showToastFeedback = false)
         } else {
             agyBackend.refreshQuotas(force, showToastFeedback)
         }
     }
-    fun approveAndExecuteTerminalTool(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, scope: String? = null) = if (isClaudeActive) claudeBackend.approveTool(toolCall) else agyBackend.approveAndExecuteTerminalTool(toolCall, messageId, scope)
-    fun rejectTerminalTool(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, reason: String? = null) = if (isClaudeActive) claudeBackend.rejectTool(toolCall, reason) else agyBackend.rejectTerminalTool(toolCall, messageId, reason)
-    fun approveAllPendingTools(list: List<PendingToolApproval>) = if (isClaudeActive) list.forEach { claudeBackend.approveTool(it.toolCall) } else agyBackend.approveAllPendingTools(list)
-    fun rejectAllPendingTools(list: List<PendingToolApproval>, reason: String? = null) = if (isClaudeActive) list.forEach { claudeBackend.rejectTool(it.toolCall, reason) } else agyBackend.rejectAllPendingTools(list, reason)
-    fun terminateRunningTerminalTool(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String) = if (isClaudeActive) claudeBackend.stopStreaming() else agyBackend.terminateRunningTerminalTool(toolCall, messageId)
+    fun approveAndExecuteTerminalTool(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, scope: String? = null) = if (isOpenCodeActive) openCodeBackend.approveTool(toolCall) else if (isClaudeActive) claudeBackend.approveTool(toolCall) else agyBackend.approveAndExecuteTerminalTool(toolCall, messageId, scope)
+    fun rejectTerminalTool(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, reason: String? = null) = if (isOpenCodeActive) openCodeBackend.rejectTool(toolCall, reason) else if (isClaudeActive) claudeBackend.rejectTool(toolCall, reason) else agyBackend.rejectTerminalTool(toolCall, messageId, reason)
+    fun approveAllPendingTools(list: List<PendingToolApproval>) = if (isOpenCodeActive) list.forEach { openCodeBackend.approveTool(it.toolCall) } else if (isClaudeActive) list.forEach { claudeBackend.approveTool(it.toolCall) } else agyBackend.approveAllPendingTools(list)
+    fun rejectAllPendingTools(list: List<PendingToolApproval>, reason: String? = null) = if (isOpenCodeActive) list.forEach { openCodeBackend.rejectTool(it.toolCall, reason) } else if (isClaudeActive) list.forEach { claudeBackend.rejectTool(it.toolCall, reason) } else agyBackend.rejectAllPendingTools(list, reason)
+    fun terminateRunningTerminalTool(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String) = if (isOpenCodeActive) openCodeBackend.stopStreaming() else if (isClaudeActive) claudeBackend.stopStreaming() else agyBackend.terminateRunningTerminalTool(toolCall, messageId)
     fun proceedAfterTermination(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, userInstructions: String?) {
-        if (isClaudeActive) {
+        if (isClaudeActive || isOpenCodeActive) {
             store.terminatedToolDialog.value = null
             return
         }
         agyBackend.proceedAfterTermination(toolCall, messageId, userInstructions)
     }
-    fun submitUserChoices(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, responses: List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto>, summaryDisplay: String) = if (isClaudeActive) claudeBackend.submitChoices(toolCall, responses, summaryDisplay) else agyBackend.submitUserChoices(toolCall, messageId, responses, summaryDisplay)
-    fun skipUserChoices(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, responses: List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto> = emptyList()) = if (isClaudeActive) claudeBackend.skipChoices(toolCall) else agyBackend.skipUserChoices(toolCall, messageId, responses)
-    fun cancelUserChoices(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String) = if (isClaudeActive) claudeBackend.cancelChoices(toolCall) else agyBackend.cancelUserChoices(toolCall, messageId)
+    fun submitUserChoices(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, responses: List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto>, summaryDisplay: String) = if (isOpenCodeActive) openCodeBackend.submitChoices(toolCall, responses) else if (isClaudeActive) claudeBackend.submitChoices(toolCall, responses, summaryDisplay) else agyBackend.submitUserChoices(toolCall, messageId, responses, summaryDisplay)
+    fun skipUserChoices(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String, responses: List<com.example.gemini.data.remote.dto.AskQuestionResponseItemDto> = emptyList()) = if (isOpenCodeActive) openCodeBackend.cancelChoices(toolCall) else if (isClaudeActive) claudeBackend.skipChoices(toolCall) else agyBackend.skipUserChoices(toolCall, messageId, responses)
+    fun cancelUserChoices(toolCall: com.example.gemini.domain.model.ToolCall, messageId: String) = if (isOpenCodeActive) openCodeBackend.cancelChoices(toolCall) else if (isClaudeActive) claudeBackend.cancelChoices(toolCall) else agyBackend.cancelUserChoices(toolCall, messageId)
 
     val mcpServers = mcpManager.mcpServers
     val isMcpLoading = mcpManager.isMcpLoading
@@ -454,9 +539,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _conversations = store.conversations
     /** Every conversation of the enabled agents, Jarvis' own chats included. */
-    val allConversations: StateFlow<List<Conversation>> = combine(_conversations, claudeBackend.conversations, enabledAgents) { agy, claude, enabled ->
+    val allConversations: StateFlow<List<Conversation>> = combine(_conversations, claudeBackend.conversations, openCodeBackend.conversations, enabledAgents) { agy, claude, openCode, enabled ->
         // a disabled agent's chats stay on disk but are not listed
-        ((if (AgentKind.AGY in enabled) agy else emptyList()) + (if (AgentKind.CLAUDE in enabled) claude else emptyList()))
+        ((if (AgentKind.AGY in enabled) agy else emptyList()) + (if (AgentKind.CLAUDE in enabled) claude else emptyList()) +
+            (if (AgentKind.OPENCODE in enabled) openCode else emptyList()))
             .sortedByDescending { it.updatedAt }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -499,7 +585,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** Antigravity's chat state (shared store); Claude Code keeps its own, see [messages]. */
     private val _messages = store.messages
     /** Messages of the chat on screen, from the agent that owns it. */
-    val messages: StateFlow<List<ChatMessage>> = byAgent(_messages, claudeBackend.messages)
+    val messages: StateFlow<List<ChatMessage>> = byAgent(_messages, claudeBackend.messages, openCodeBackend.messages)
 
     private val _thinkingPreference = MutableStateFlow(com.example.gemini.domain.model.ThinkingPreference())
     val thinkingPreference: StateFlow<com.example.gemini.domain.model.ThinkingPreference> = _thinkingPreference.asStateFlow()
@@ -593,7 +679,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                 // Antigravity keeps attachments as hub artifacts; a Claude chat sends them itself (inline or saved
                 // on the bridge when the message is sent), so nothing goes to the AGY hub
-                val savedHostUri = if (isClaudeActive) uri.toString() else {
+                val savedHostUri = if (isClaudeActive || isOpenCodeActive) uri.toString() else {
                     agyHubClient.saveMediaAsArtifact(
                         mimeType = mimeType,
                         base64Data = base64,
@@ -1012,7 +1098,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private val _conversationError = store.conversationError
-    val conversationError: StateFlow<String?> = byAgent(_conversationError, claudeBackend.conversationError)
+    val conversationError: StateFlow<String?> = byAgent(_conversationError, claudeBackend.conversationError, openCodeBackend.conversationError)
 
 
     private val _conversationDrafts = mutableMapOf<String, androidx.compose.ui.text.input.TextFieldValue>()
@@ -1036,8 +1122,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         agyBackend.start()
         if (isClaudeEnabled) claudeBackend.start()
+        if (isOpenCodeEnabled) openCodeBackend.start()
         // the first chat follows the new-chat agent (Antigravity's own start-up chat only fills in when it is AGY)
-        if (isClaudeEnabled && (newChatAgent.value == AgentKind.CLAUDE || AgentKind.AGY !in enabledAgents.value)) startNewChat()
+        if ((isClaudeEnabled || isOpenCodeEnabled) && (newChatAgent.value != AgentKind.AGY || AgentKind.AGY !in enabledAgents.value)) startNewChat()
         claudeAccount.onAccountChanged = {
             claudeBackend.refreshInfo(force = true)
             viewModelScope.launch { claudeBackend.refreshSessions() }
@@ -1057,6 +1144,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             var wasOnline: Boolean? = null
             systemConnectionState.map { it.isBridgeOnline }.distinctUntilChanged().collect { online ->
+                if (isOpenCodeEnabled && online && wasOnline == false) openCodeBackend.retryConnections()
                 if (isClaudeEnabled) {
                     if (online && wasOnline == false) {
                         claudeAccount.refreshStatus()

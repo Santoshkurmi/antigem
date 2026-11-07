@@ -62,7 +62,7 @@ object ChatCompletionMonitor {
      * How long a chat must stay idle before it counts as finished. Claude's running flag is the turn itself (it only
      * clears at the turn's result), so a short wait is enough; Antigravity's can blink off between steps.
      */
-    private fun settleMs(c: Conversation): Long = if (c.agent == AgentKind.CLAUDE) 300L else 1200L
+    private fun settleMs(c: Conversation): Long = if (c.agent != AgentKind.AGY) 300L else 1200L
 
     private suspend fun loop(vm: ChatViewModel) {
         // all on one thread (see [scope]), so the maps need no locking
@@ -75,7 +75,7 @@ object ChatCompletionMonitor {
                 for (c in convs) {
                     seen += c.id
                     // the same signal the sidebar's running dot uses
-                    val busy = (c.isRunning && (hubOnline || c.agent == AgentKind.CLAUDE)) || (c.agent == AgentKind.AGY && hubOnline && c.notFullyIdle)
+                    val busy = (c.isRunning && (hubOnline || c.agent != AgentKind.AGY)) || (c.agent == AgentKind.AGY && hubOnline && c.notFullyIdle)
                     when {
                         busy -> {
                             busyState[c.id] = true

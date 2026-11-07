@@ -115,7 +115,14 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
     val P = JarvisPreferences
     val enabled by P.enabled.state.collectAsState()
     val agentName by P.agent.state.collectAsState()
-    val agent = runCatching { AgentKind.valueOf(agentName) }.getOrDefault(AgentKind.CLAUDE)
+    // null until the user picks the agent Jarvis talks to
+    val agent: AgentKind? = agentName.takeIf { it.isNotBlank() }?.let { runCatching { AgentKind.valueOf(it) }.getOrNull() }
+    val agentTitle = when (agent) {
+        AgentKind.CLAUDE -> "Claude Code"
+        AgentKind.AGY -> "Antigravity"
+        AgentKind.OPENCODE -> "OpenCode"
+        null -> "the agent"
+    }
 
     Column(
         Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
@@ -129,11 +136,21 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
         when (page) {
             JarvisSettingsPage.AGENT -> {
                 JCard(cardBg, cardBorder, "") {
+                    val enabledAgents by vm.enabledAgents.collectAsState()
                     JChips(
-                        listOf(AgentKind.CLAUDE.name to "Claude Code", AgentKind.AGY.name to "Antigravity"),
+                        listOf(AgentKind.CLAUDE.name to "Claude Code", AgentKind.AGY.name to "Antigravity", AgentKind.OPENCODE.name to "OpenCode"),
                         agentName
                     ) { P.agent.set(it); P.modelId.set("") }
-                    val models by (if (agent == AgentKind.CLAUDE) vm.claudeBackend.availableModels else vm.agyBackend.enabledModels).collectAsState()
+                    if (agent == null) {
+                        Text("Pick the agent Jarvis talks to. Nothing is selected yet, so Jarvis can't answer.", fontSize = 12.5.sp, color = Color(0xFFF59E0B))
+                    } else if (agent !in enabledAgents) {
+                        Text("$agentTitle is turned off in Settings → Agents: turn it on, or pick another agent here.", fontSize = 12.5.sp, color = Color(0xFFF59E0B))
+                    }
+                    val models by (when (agent) {
+                        AgentKind.CLAUDE -> vm.claudeBackend.availableModels
+                        AgentKind.OPENCODE -> vm.openCodeBackend.availableModels
+                        else -> vm.agyBackend.enabledModels
+                    }).collectAsState()
                     val modelId by P.modelId.state.collectAsState()
                     var menu by remember { mutableStateOf(false) }
                     Box {
@@ -174,7 +191,9 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                 if (!enabled) {
                     JHint("Turn on Jarvis first (Settings → Jarvis).")
                 } else {
-                    JCard(cardBg, cardBorder, "Setup for ${if (agent == AgentKind.CLAUDE) "Claude Code" else "Antigravity"}") {
+                    if (agent == null) {
+                        JHint("Pick the agent Jarvis talks to first (Settings → Jarvis → Agent).")
+                    } else JCard(cardBg, cardBorder, "Setup for $agentTitle") {
                         val deviceId = remember(context) {
                             runCatching { android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: "" }.getOrDefault("")
                         }
@@ -184,7 +203,7 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                         val mcpProblem by JarvisController.mcpProblem.collectAsState()
                         if (mcpProblem) {
                             Text(
-                                "Jarvis reported that its app tools are missing in ${if (agent == AgentKind.CLAUDE) "Claude Code" else "Antigravity"}. Add the Jarvis MCP server below (then start a fresh Jarvis chat).",
+                                "Jarvis reported that its app tools are missing in $agentTitle. Add the Jarvis MCP server below (then start a fresh Jarvis chat).",
                                 fontSize = 12.5.sp, color = Color(0xFFF59E0B)
                             )
                         }
@@ -192,16 +211,39 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                         // 1. the MCP server
                         val claudeServers by vm.claudeConfig.mcpServers.collectAsState()
                         val agyServers by vm.mcpServers.collectAsState()
-                        LaunchedEffect(agent) { if (agent == AgentKind.CLAUDE) vm.claudeConfig.loadMcp(null) else vm.loadMcpServers() }
-                        val mcpState = if (agent == AgentKind.CLAUDE) claudeServers.firstOrNull { it.name == name }?.status
-                        else agyServers.firstOrNull { it.name == name }?.status
-                        val mcpAdded = if (agent == AgentKind.CLAUDE) claudeServers.any { it.name == name } else agyServers.any { it.name == name }
+                        // OpenCode keeps the servers the app adds in the bridge's OpenCode config
+                        var openCodeServers by remember { mutableStateOf<Set<String>>(emptySet()) }
+                        val reloadOpenCodeMcp: () -> Unit = { scope.launch { vm.openCodeBackend.client.mcpServers().onSuccess { openCodeServers = it } } }
+                        LaunchedEffect(agent) {
+                            when (agent) {
+                                AgentKind.CLAUDE -> vm.claudeConfig.loadMcp(null)
+                                AgentKind.OPENCODE -> reloadOpenCodeMcp()
+                                else -> vm.loadMcpServers()
+                            }
+                        }
+                        val mcpState = when (agent) {
+                            AgentKind.CLAUDE -> claudeServers.firstOrNull { it.name == name }?.status
+                            AgentKind.OPENCODE -> null
+                            else -> agyServers.firstOrNull { it.name == name }?.status
+                        }
+                        val mcpAdded = when (agent) {
+                            AgentKind.CLAUDE -> claudeServers.any { it.name == name }
+                            AgentKind.OPENCODE -> name in openCodeServers
+                            else -> agyServers.any { it.name == name }
+                        }
                         JStep(
                             "1. Add the Jarvis MCP server",
                             if (mcpAdded) "Added" + (mcpState?.let { " · $it" } ?: "") else "Required: these are the tools Jarvis controls the app with.",
                             mcpAdded, if (mcpAdded) "Refresh" else "Add"
                         ) {
-                            if (agent == AgentKind.CLAUDE) {
+                            if (agent == AgentKind.OPENCODE) {
+                                if (mcpAdded) reloadOpenCodeMcp()
+                                else scope.launch {
+                                    vm.openCodeBackend.client.addRemoteMcp(name, url, headers)
+                                        .onSuccess { reloadOpenCodeMcp(); Toast.makeText(context, "Added to OpenCode", Toast.LENGTH_SHORT).show() }
+                                        .onFailure { Toast.makeText(context, it.message ?: "Could not add it", Toast.LENGTH_LONG).show() }
+                                }
+                            } else if (agent == AgentKind.CLAUDE) {
                                 if (mcpAdded) vm.claudeConfig.loadMcp(null)
                                 else vm.claudeConfig.addMcp(ClaudeMcpAddRequest(name = name, transport = "http", url = url, headers = headers), null)
                             } else {

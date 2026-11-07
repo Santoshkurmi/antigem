@@ -48,50 +48,50 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.domain.model.AgentKind
 import com.example.gemini.ui.components.accent
+import com.example.gemini.ui.components.label
 
-private data class AgentOption(val agents: Set<AgentKind>, val title: String, val description: String)
+private data class AgentOption(val agent: AgentKind, val title: String, val description: String)
 
 private val AGENT_OPTIONS = listOf(
     AgentOption(
-        setOf(AgentKind.AGY),
+        AgentKind.AGY,
         "Antigravity",
         "Google's coding agent through the agy hub: Gemini and Claude models on your Google plan."
     ),
     AgentOption(
-        setOf(AgentKind.CLAUDE),
+        AgentKind.CLAUDE,
         "Claude Code",
         "Anthropic's Claude Code CLI on this device: your Claude subscription or Anthropic Console account."
     ),
     AgentOption(
-        setOf(AgentKind.AGY, AgentKind.CLAUDE),
-        "Both",
-        "Pick the agent for each new chat. Both share the chat list, status and accounts."
+        AgentKind.OPENCODE,
+        "OpenCode",
+        "Open-source coding agent: 200+ providers with your own keys, any OpenAI-compatible API, and free models."
     )
 )
 
-/** Three choices: Antigravity, Claude Code, or both. */
+/**
+ * The agents to run: tap to turn each on or off (at least one stays on). With several on, the new-chat screen
+ * lets you pick the agent per chat; they share the chat list, status and accounts.
+ */
 @Composable
-fun AgentSelector(selected: Set<AgentKind>, onSelect: (Set<AgentKind>) -> Unit, modifier: Modifier = Modifier) {
+fun AgentSelector(selected: Set<AgentKind>, onSelect: (Set<AgentKind>) -> Unit, modifier: Modifier = Modifier, allowEmpty: Boolean = false) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         AGENT_OPTIONS.forEach { option ->
-            val isOn = option.agents == selected
-            val accent = if (option.agents.size == 1) option.agents.first().accent() else MaterialTheme.colorScheme.primary
+            val isOn = option.agent in selected
+            val accent = option.agent.accent()
             Surface(
-                onClick = { onSelect(option.agents) },
+                onClick = {
+                    val next = if (isOn) selected - option.agent else selected + option.agent
+                    if (allowEmpty || next.isNotEmpty()) onSelect(next)
+                },
                 shape = RoundedCornerShape(16.dp),
                 color = if (isOn) accent.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface,
                 border = BorderStroke(if (isOn) 1.5.dp else 1.dp, if (isOn) accent.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (option.agents.size == 1) {
-                        AgentMark(option.agents.first(), size = 40.dp)
-                    } else {
-                        Box(Modifier.size(width = 52.dp, height = 40.dp)) {
-                            AgentMark(AgentKind.AGY, size = 34.dp)
-                            AgentMark(AgentKind.CLAUDE, size = 34.dp, modifier = Modifier.offset(x = 18.dp, y = 6.dp))
-                        }
-                    }
+                    AgentMark(option.agent, size = 40.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(option.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
@@ -101,58 +101,56 @@ fun AgentSelector(selected: Set<AgentKind>, onSelect: (Set<AgentKind>) -> Unit, 
                     Box(
                         Modifier
                             .size(20.dp)
-                            .clip(CircleShape)
-                            .border(1.5.dp, if (isOn) accent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), CircleShape),
+                            .clip(RoundedCornerShape(6.dp))
+                            .border(1.5.dp, if (isOn) accent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                            .background(if (isOn) accent else Color.Transparent),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (isOn) Box(Modifier.size(10.dp).clip(CircleShape).background(accent))
+                        if (isOn) Text("✓", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
+        if (selected.size > 1) {
+            Text(
+                "With several agents on, pick the agent for each new chat on the empty chat screen.",
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
     }
 }
 
-/** First launch: which agents the app should run (Antigravity preselected). */
+/**
+ * First launch: which agents the app should run. Nothing is preselected: the user ticks one or more (the same
+ * choice as Settings → Agents). Full screen, as step [step] of [total] of the setup.
+ */
 @Composable
-fun AgentChoiceDialog(onConfirm: (Set<AgentKind>) -> Unit) {
-    var selected by remember { mutableStateOf(setOf(AgentKind.AGY)) }
-    Dialog(
-        onDismissRequest = {},
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false)
-    ) {
-        Card(
-            shape = RoundedCornerShape(26.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)
-        ) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size(width = 76.dp, height = 56.dp)) {
-                    AgentMark(AgentKind.AGY, size = 48.dp)
-                    AgentMark(AgentKind.CLAUDE, size = 48.dp, modifier = Modifier.offset(x = 28.dp, y = 8.dp))
-                }
-                Spacer(Modifier.height(14.dp))
-                Text("Choose your agent", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "The app runs only the agents you pick. You can change this later in Settings → Agents.",
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
-                )
-                Spacer(Modifier.height(18.dp))
-                AgentSelector(selected, { selected = it })
-                Spacer(Modifier.height(18.dp))
-                Button(
-                    onClick = { onConfirm(selected) },
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(vertical = 12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Continue", fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
+fun AgentChoiceDialog(step: Int = 1, total: Int = 1, onConfirm: (Set<AgentKind>) -> Unit) {
+    var selected by remember { mutableStateOf(emptySet<AgentKind>()) }
+    com.example.gemini.ui.onboarding.OnboardingStepScreen(
+        step = step,
+        total = total,
+        accent = MaterialTheme.colorScheme.primary,
+        icon = {
+            Box(Modifier.size(width = 64.dp, height = 44.dp)) {
+                AgentMark(AgentKind.AGY, size = 34.dp, modifier = Modifier.align(Alignment.CenterStart))
+                AgentMark(AgentKind.CLAUDE, size = 34.dp, modifier = Modifier.align(Alignment.Center).offset(y = (-6).dp))
+                AgentMark(AgentKind.OPENCODE, size = 34.dp, modifier = Modifier.align(Alignment.CenterEnd))
             }
-        }
+        },
+        title = "Choose your agents",
+        subtitle = "Tick the coding agents you want to use. The app runs only the ones you pick; you can change this later in Settings → Agents.",
+        primaryLabel = when (selected.size) {
+            0 -> "Pick at least one agent"
+            1 -> "Continue with ${selected.first().label()}"
+            else -> "Continue with ${selected.size} agents"
+        },
+        primaryEnabled = selected.isNotEmpty(),
+        onPrimary = { onConfirm(selected) }
+    ) {
+        AgentSelector(selected, { selected = it }, allowEmpty = true)
     }
 }
 

@@ -164,6 +164,24 @@ fun ChatScreen(
     val currentConv by viewModel.currentConversation.collectAsState()
     val newChatAgent by viewModel.newChatAgent.collectAsState()
     val isClaudeChat = currentConv?.agent == com.example.gemini.domain.model.AgentKind.CLAUDE
+    val isOpenCodeChat = currentConv?.agent == com.example.gemini.domain.model.AgentKind.OPENCODE
+    /** The chat on screen is Antigravity's (its hub, bridge banners and sign-in apply). */
+    val isAgyChat = !isClaudeChat && !isOpenCodeChat
+    val openCodeBackend = viewModel.openCodeBackend
+    val openCodePending by openCodeBackend.pendingPermissions.collectAsState()
+    val openCodeState by openCodeBackend.state.collectAsState()
+    val openCodeStatus by openCodeBackend.status.collectAsState()
+    val openCodeModelsError by openCodeBackend.modelsError.collectAsState()
+    val openCodeConnected by openCodeBackend.connectedProviders.collectAsState()
+    val openCodeModelCount = openCodeBackend.availableModels.collectAsState().value.size
+    var openOpenCodeSettings by remember { mutableStateOf(false) }
+    // the OpenCode page Settings opens on (Server & install for the Install button, Providers from the model picker)
+    var openCodeSettingsPage by remember { mutableStateOf<com.example.gemini.ui.opencode.OpenCodeSettingsPage?>(null) }
+    LaunchedEffect(Unit) {
+        openCodeBackend.toasts.collect {
+            com.example.gemini.ui.components.AppToastHelper.showToast(it, com.example.gemini.ui.components.ChatToastType.INFO)
+        }
+    }
     val isFreshNewChat = currentConv == null || currentConv?.title == "New Chat"
     val claudeBackend = viewModel.claudeBackend
     val claudePending by claudeBackend.pendingPermissions.collectAsState()
@@ -412,7 +430,22 @@ fun ChatScreen(
             onRetry = recheckClaude
         )
     } else null
-    val agentEntries = listOfNotNull(agyEntry, claudeEntry)
+    val openCodeEntry = if (com.example.gemini.domain.model.AgentKind.OPENCODE in enabledAgents) {
+        com.example.gemini.ui.agents.openCodeStatusEntry(
+            state = openCodeState,
+            status = openCodeStatus,
+            serverRestarting = serverRestarting,
+            // installs right away; Settings → OpenCode shows the progress
+            onSetup = {
+                viewModel.openCodeBackend.startCliJob("install")
+                openCodeSettingsPage = com.example.gemini.ui.opencode.OpenCodeSettingsPage.SERVER
+                showSettingsDialog = true
+            },
+            onRestartServer = restartLocalServer,
+            onRetry = { viewModel.openCodeBackend.retryConnections() }
+        )
+    } else null
+    val agentEntries = listOfNotNull(agyEntry, claudeEntry, openCodeEntry)
 
     // Slash commands Claude's CLI only shows in a terminal: the app opens its own screen instead
     val handleClaudeCommand: (com.example.gemini.data.agent.claude.ClaudeAppCommand) -> Unit = { cmd ->
@@ -550,7 +583,7 @@ fun ChatScreen(
     val pluginActionErrorMessage by viewModel.pluginActionErrorMessage.collectAsState()
 
     var allSlashCommands by remember { mutableStateOf(com.example.gemini.data.remote.SlashCommandsCache.getCachedSync()) }
-    val effectiveSlashCommands = if (isClaudeChat) claudeSlashCommands else allSlashCommands
+    val effectiveSlashCommands = if (isClaudeChat) claudeSlashCommands else if (isOpenCodeChat) emptyList() else allSlashCommands
 
     LaunchedEffect(agyHubUrl, systemConnectionState) {
         if (systemConnectionState.isHubOnline) {
@@ -811,7 +844,7 @@ fun ChatScreen(
 
     // The Claude Code-style working row: under the reply for as long as the agent works, but not while it waits for
     // the user (an approval or a question)
-    val waitingForUser = (isClaudeChat && claudePending.isNotEmpty()) ||
+    val waitingForUser = (isClaudeChat && claudePending.isNotEmpty()) || (isOpenCodeChat && openCodePending.isNotEmpty()) ||
         lastToolCalls.any { it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE" }
     val showWorkingRow = (isRunningOrStreaming || holdingTail) && !waitingForUser && !footerShown
 
@@ -824,6 +857,16 @@ fun ChatScreen(
                 else -> "Choose model"
             },
             family = com.example.gemini.domain.model.ModelFamily.CLAUDE
+        )
+    } else if (isOpenCodeChat) {
+        enabledModels.find { it.id == selectedModelId } ?: AiModel(
+            id = selectedModelId.ifBlank { "default" },
+            displayName = when {
+                isRefreshingModels -> "Loading models…"
+                openCodeModelsError != null -> "No models"
+                selectedModelId.isNotBlank() -> selectedModelId.substringAfter('/')
+                else -> "Choose model"
+            }
         )
     } else AiModel.findInList(enabledModels, selectedModelId, preferredModelName)
     val currentQuota = quotas.find { it.modelId == selectedModelId }
@@ -1060,12 +1103,16 @@ fun ChatScreen(
                         claude = claudeEntry,
                         agyAuth = agyAuthInfo,
                         claudeStatus = claudeStatus,
-                        onClick = { showAccountsDialog = true }
+                        onClick = { showAccountsDialog = true },
+                        openCode = openCodeEntry
                     )
                 },
                 claudeActions = remember(viewModel) {
                     com.example.gemini.ui.drawer.ClaudeDrawerActions(
-                        loadMessages = { id -> viewModel.loadClaudeMessages(id) },
+                        loadMessages = { id ->
+                            if (viewModel.openCodeBackend.conversations.value.any { it.id == id }) viewModel.loadOpenCodeMessages(id)
+                            else viewModel.loadClaudeMessages(id)
+                        },
                         rename = { id, title -> viewModel.renameConversation(id, title) },
                         restart = { id, onDone -> viewModel.claudeBackend.restartChat(id, onDone) }
                     )
@@ -1318,10 +1365,7 @@ fun ChatScreen(
                                     if (showStatusDot) {
                                         // upper half Antigravity, lower half Claude Code (one solid dot when they agree);
                                         // the dot itself always opens the agents' status, also before the chat starts
-                                        val agyEntry = agentEntries.find { it.agent == com.example.gemini.domain.model.AgentKind.AGY }
-                                        val claudeEntry = agentEntries.find { it.agent == com.example.gemini.domain.model.AgentKind.CLAUDE }
-                                        val dotTop = agyEntry?.color ?: claudeEntry?.color ?: com.example.gemini.data.remote.SystemStatus.OFFLINE.dotColor
-                                        val dotBottom = if (agyEntry != null) claudeEntry?.color else null
+                                        // one slice per enabled agent (Antigravity, Claude Code, OpenCode)
                                         Box(
                                             modifier = Modifier
                                                 .size(20.dp)
@@ -1330,9 +1374,8 @@ fun ChatScreen(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             com.example.gemini.ui.agents.AgentStatusDot(
-                                                top = dotTop,
-                                                bottom = dotBottom,
-                                                size = 8.dp,
+                                                colors = agentEntries.map { it.color },
+                                                size = if (agentEntries.size > 2) 10.dp else 8.dp,
                                                 pulsing = agentEntries.any { it.pending }
                                             )
                                         }
@@ -1576,7 +1619,7 @@ fun ChatScreen(
                     val isExistingChat = messages.isEmpty() && isExistingConversation && isLoadingConversation
                     Log.d("CHAT_OPEN_DEBUG", "🖥️ [ChatScreen Render] convId=${currentConv?.id}, title='${currentConv?.title}', isLoading=$isLoadingConversation, isExisting=$isExistingChat, msgCount=${messages.size}, error=$conversationError, isServerStopped=$isServerStopped")
 
-                    if (!isClaudeChat && isServerStopped && messages.isEmpty()) {
+                    if (isAgyChat && isServerStopped && messages.isEmpty()) {
                         BoxWithConstraints(
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -1602,7 +1645,7 @@ fun ChatScreen(
                                 com.example.gemini.ui.components.ServerStoppedPromptCard()
                             }
                         }
-                    } else if (!isClaudeChat && isServerInitializing && messages.isEmpty()) {
+                    } else if (isAgyChat && isServerInitializing && messages.isEmpty()) {
                         if (isFreshNewChat && enabledAgents.size > 1) {
                             // a new chat keeps its agent picker while Antigravity starts (Claude can be picked and used
                             // meanwhile); before, the whole view was replaced and the picker vanished until the hub was up
@@ -1727,7 +1770,24 @@ fun ChatScreen(
                                         onServerLogs = { showLocalServerOutputDialog = true },
                                         serverStarting = serverRestarting
                                     )
-                                } else when (if (isClaudeChat) null else systemConnectionState.status) {
+                                } else if (isOpenCodeChat && openCodeState != com.example.gemini.data.agent.opencode.OpenCodeState.READY) {
+                                    com.example.gemini.ui.agents.AgentSetupPrompt(
+                                        agent = com.example.gemini.domain.model.AgentKind.OPENCODE,
+                                        title = when (openCodeState) {
+                                            com.example.gemini.data.agent.opencode.OpenCodeState.CHECKING -> "Starting OpenCode…"
+                                            com.example.gemini.data.agent.opencode.OpenCodeState.NOT_INSTALLED -> "OpenCode is not installed"
+                                            else -> "OpenCode is unavailable"
+                                        },
+                                        message = if (openCodeState == com.example.gemini.data.agent.opencode.OpenCodeState.CHECKING)
+                                            "Waiting for the server to come up. This takes a few seconds after the app opens."
+                                        else openCodeEntry?.detail ?: openCodeState.label,
+                                        statusColor = openCodeEntry?.color,
+                                        actionLabel = openCodeEntry?.action?.label,
+                                        onAction = { openCodeEntry?.action?.onClick?.invoke() },
+                                        secondaryLabel = if (openCodeState == com.example.gemini.data.agent.opencode.OpenCodeState.CHECKING) null else "Server logs",
+                                        onSecondary = { showLocalServerOutputDialog = true }
+                                    )
+                                } else when (if (isClaudeChat || isOpenCodeChat) null else systemConnectionState.status) {
                                     com.example.gemini.data.remote.SystemStatus.CHECKING_AUTH -> {
                                         com.example.gemini.ui.components.NewChatCheckingAuthPromptCard()
                                     }
@@ -1926,7 +1986,7 @@ fun ChatScreen(
                                     if (showWorkingRow) {
                                         item(key = "working_spinner", contentType = "working_spinner") {
                                             com.example.gemini.ui.components.AgentWorkingSpinner(
-                                                color = if (isClaudeChat) com.example.gemini.ui.components.ClaudeAccent else com.example.gemini.ui.components.AgyAccent,
+                                                color = if (isClaudeChat) com.example.gemini.ui.components.ClaudeAccent else if (isOpenCodeChat) com.example.gemini.ui.components.OpenCodeAccent else com.example.gemini.ui.components.AgyAccent,
                                                 compacting = isClaudeChat && claudeCompacting,
                                                 // leaves in the frame the reply's footer arrives, which fades in in its place
                                                 modifier = Modifier.animateItem(fadeInSpec = tween(180), placementSpec = null, fadeOutSpec = null)
@@ -2135,7 +2195,7 @@ fun ChatScreen(
 
                 // Dynamic Bridge / Project / Model Initialization Banner
                 AnimatedVisibility(
-                    visible = !isClaudeChat && !bridgeStatusMessage.isNullOrBlank(),
+                    visible = isAgyChat && !bridgeStatusMessage.isNullOrBlank(),
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()
                 ) {
@@ -2170,7 +2230,7 @@ fun ChatScreen(
 
                 // Disconnection / Reconnecting Inline Banner (Compact, non-intrusive with Reconnect action)
                 AnimatedVisibility(
-                    visible = !isClaudeChat && (isServerOnline == false || isReconnecting) && messages.isNotEmpty(),
+                    visible = isAgyChat && (isServerOnline == false || isReconnecting) && messages.isNotEmpty(),
                     enter = expandVertically() + fadeIn(),
                     exit = shrinkVertically() + fadeOut()
                 ) {
@@ -2241,8 +2301,10 @@ fun ChatScreen(
                 }
 
                 // Agent prompts docked above the input (both agents): permission requests, then questions
-                val approvalItems = remember(pendingApprovals, claudePending, isClaudeChat) {
-                    if (isClaudeChat) {
+                val approvalItems = remember(pendingApprovals, claudePending, openCodePending, isClaudeChat, isOpenCodeChat) {
+                    if (isOpenCodeChat) {
+                        com.example.gemini.ui.opencode.openCodeApprovalItems(openCodePending, openCodeBackend)
+                    } else if (isClaudeChat) {
                         com.example.gemini.ui.claude.claudeApprovalItems(claudePending, claudeBackend)
                     } else {
                         com.example.gemini.ui.agents.agyApprovalItems(
@@ -2262,12 +2324,16 @@ fun ChatScreen(
                 ) {
                     com.example.gemini.ui.agents.AgentApprovalPanel(
                         items = approvalItems.ifEmpty { lastApprovalItems[0] },
-                        onAllowAll = if (isClaudeChat) {
+                        onAllowAll = if (isOpenCodeChat) {
+                            { openCodePending.forEach { openCodeBackend.replyPermission(it.id, "once") } }
+                        } else if (isClaudeChat) {
                             { claudePending.filter { it.toolName != "ExitPlanMode" }.forEach { claudeBackend.approveToolAlways(it.toolUseId, -1) } }
                         } else {
                             { viewModel.approveAllPendingTools(pendingApprovals) }
                         },
-                        onDenyAll = if (isClaudeChat) {
+                        onDenyAll = if (isOpenCodeChat) {
+                            { openCodePending.forEach { openCodeBackend.replyPermission(it.id, "reject") } }
+                        } else if (isClaudeChat) {
                             { claudePending.forEach { claudeBackend.rejectToolById(it.toolUseId, null) } }
                         } else {
                             { viewModel.rejectAllPendingTools(pendingApprovals) }
@@ -2275,9 +2341,9 @@ fun ChatScreen(
                     )
                 }
 
-                val pendingQuestion = remember(messages, isClaudeChat) {
+                val pendingQuestion = remember(messages, isClaudeChat, isOpenCodeChat) {
                     com.example.gemini.ui.agents.findPendingQuestion(
-                        if (isClaudeChat) com.example.gemini.domain.model.AgentKind.CLAUDE else com.example.gemini.domain.model.AgentKind.AGY,
+                        currentConv?.agent ?: com.example.gemini.domain.model.AgentKind.AGY,
                         messages
                     )
                 }
@@ -2316,12 +2382,19 @@ fun ChatScreen(
                     }
                     com.example.gemini.ui.claude.ClaudeControlsStrip(claudeBackend, viewModel.claudePrefs)
                 }
+                if (isOpenCodeChat) {
+                    com.example.gemini.ui.opencode.OpenCodeControlsStrip(openCodeBackend)
+                }
 
                 // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)
                 ChatInputBar(
-                    isOnline = if (isClaudeChat) !claudeState.isBlocking else systemConnectionState.canSend,
-                    isAuth = if (isClaudeChat) claudeChatState != com.example.gemini.data.agent.claude.ClaudeStatus.SIGNED_OUT && claudeChatState != com.example.gemini.data.agent.claude.ClaudeStatus.SIGNING_IN else systemConnectionState.isAuth,
-                    offlineMessage = if (isClaudeChat) when (claudeState) {
+                    isOnline = if (isOpenCodeChat) !openCodeState.isBlocking else if (isClaudeChat) !claudeState.isBlocking else systemConnectionState.canSend,
+                    isAuth = if (isOpenCodeChat) true else if (isClaudeChat) claudeChatState != com.example.gemini.data.agent.claude.ClaudeStatus.SIGNED_OUT && claudeChatState != com.example.gemini.data.agent.claude.ClaudeStatus.SIGNING_IN else systemConnectionState.isAuth,
+                    offlineMessage = if (isOpenCodeChat) when (openCodeState) {
+                        com.example.gemini.data.agent.opencode.OpenCodeState.NOT_INSTALLED -> "OpenCode is not installed on the server. See Settings → OpenCode."
+                        com.example.gemini.data.agent.opencode.OpenCodeState.DISABLED, com.example.gemini.data.agent.opencode.OpenCodeState.OUTDATED -> "Restart the server to use OpenCode."
+                        else -> "The server is offline. Start it to send messages."
+                    } else if (isClaudeChat) when (claudeState) {
                         com.example.gemini.data.agent.claude.ClaudeStatus.NOT_INSTALLED -> "Claude Code is not installed. Set it up in Settings."
                         com.example.gemini.data.agent.claude.ClaudeStatus.BRIDGE_OUTDATED -> "Restart the local server to use Claude Code."
                         else -> "The local server is offline. Start it to send messages."
@@ -2376,6 +2449,7 @@ fun ChatScreen(
                     isTranscribingAudio = isTranscribingAudio,
                     speechManager = if (isClaudeChat) viewModel.claudeVoice else viewModel.speechManager,
                     voiceNotesAsText = isClaudeChat,
+                    voiceEnabled = !isOpenCodeChat,
                     cascadeId = activeConversationKey,
                     focusRequester = chatInputFocusRequester,
                     queuedMessages = queuedMessages,
@@ -2390,6 +2464,11 @@ fun ChatScreen(
     if (isClaudeChat) com.example.gemini.ui.claude.ClaudeProviderSwitchDialog(claudeBackend)
     if (showModelSelector && isClaudeChat) {
         com.example.gemini.ui.claude.ClaudeModelSheet(claudeBackend, viewModel.claudeAccount) { showModelSelector = false }
+    } else if (showModelSelector && isOpenCodeChat) {
+        com.example.gemini.ui.opencode.OpenCodeModelSheet(
+            openCodeBackend,
+            onOpenSettings = { openCodeSettingsPage = com.example.gemini.ui.opencode.OpenCodeSettingsPage.PROVIDERS; showSettingsDialog = true }
+        ) { showModelSelector = false }
     } else if (showModelSelector) {
         ModelSelectorBottomSheet(
             selectedModelId = selectedModelId,
@@ -2574,7 +2653,9 @@ fun ChatScreen(
             onOpenNetworkInspector = { showNetworkInspectorDialog = true },
             claude = claudeSettingsDeps,
             initialClaudePage = claudeSettingsPage,
-            initialSection = requestedSettingsSection,
+            openCode = viewModel.openCodeBackend,
+            initialOpenCodePage = openCodeSettingsPage,
+            initialSection = requestedSettingsSection ?: if (openOpenCodeSettings) com.example.gemini.ui.settings.SettingsSection.OPENCODE else null,
             enabledAgents = enabledAgents,
             isApplyingAgents = isApplyingAgents,
             onApplyAgents = { viewModel.applyAgents(it) },
@@ -2586,6 +2667,8 @@ fun ChatScreen(
                 showSettingsDialog = false
                 claudeSettingsPage = null
                 requestedSettingsSection = null
+                openOpenCodeSettings = false
+                openCodeSettingsPage = null
             }
         )
     }
@@ -2595,8 +2678,17 @@ fun ChatScreen(
     }
 
     // asked once the local environment (rootfs) is installed, before the local server starts
-    if (!hasChosenAgents && (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context) || AuthPreferences.currentRemoteMode)) {
-        com.example.gemini.ui.agents.AgentChoiceDialog { viewModel.applyAgents(it) }
+    // First-launch setup, one full-screen step at a time: the agents, then the terminal icon (that one waits for the
+    // agent choice so the two never show at once). The steps are numbered while both are still to do.
+    val agentStepPending = !hasChosenAgents &&
+        (isLocalToolsInstalled || com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(context) || AuthPreferences.currentRemoteMode)
+    val launcherStepPending = !hasSeenTerminalLauncherOnboarding && !isInFloatingWindow
+    var setupSteps by remember { mutableStateOf(0) }
+    LaunchedEffect(agentStepPending, launcherStepPending) {
+        if (agentStepPending && launcherStepPending) setupSteps = 2
+    }
+    if (agentStepPending) {
+        com.example.gemini.ui.agents.AgentChoiceDialog(step = 1, total = if (launcherStepPending) 2 else 1) { viewModel.applyAgents(it) }
     }
     if (isApplyingAgents) {
         com.example.gemini.ui.agents.AgentsApplyingDialog()
@@ -2621,7 +2713,18 @@ fun ChatScreen(
                 scope.launch { drawerState.close() }
                 openClaudeSetup()
             },
-            onDismiss = { showAccountsDialog = false }
+            onDismiss = { showAccountsDialog = false },
+            openCode = openCodeEntry,
+            openCodeFacts = listOfNotNull(
+                openCodeStatus?.version?.let { "OpenCode $it" },
+                openCodeConnected.takeIf { it.isNotEmpty() }?.let { if (it.size <= 2) it.joinToString(", ") else "${it.size} providers" },
+                openCodeModelCount.takeIf { it > 0 }?.let { "$it models" }
+            ),
+            onOpenCodeSettings = {
+                scope.launch { drawerState.close() }
+                openOpenCodeSettings = true
+                showSettingsDialog = true
+            }
         )
     }
 
@@ -2644,10 +2747,10 @@ fun ChatScreen(
                 Column {
                     Text(
                         text = when {
-                            isClaudeChat && action.type == MessageActionType.EDIT ->
+                            (isClaudeChat || isOpenCodeChat) && action.type == MessageActionType.EDIT ->
                                 "This chat goes back to right before this message, so you can change it and send again. Everything after it is removed from the chat."
-                            isClaudeChat ->
-                                "This chat goes back to right before this reply and Claude answers the same message again. The current reply is removed from the chat."
+                            isClaudeChat || isOpenCodeChat ->
+                                "This chat goes back to right before this reply and ${if (isOpenCodeChat) "OpenCode" else "Claude"} answers the same message again. The current reply is removed from the chat."
                             action.type == MessageActionType.EDIT ->
                                 "Editing this message will delete the subsequent response so you can edit and send a fresh query. Do you want to continue?"
                             else ->
@@ -2657,7 +2760,7 @@ fun ChatScreen(
                         lineHeight = 21.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                     )
-                    if (isClaudeChat && action.type == MessageActionType.EDIT) {
+                    if ((isClaudeChat || isOpenCodeChat) && action.type == MessageActionType.EDIT) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -2665,7 +2768,7 @@ fun ChatScreen(
                                 .clickable { restoreCodeOnEdit = !restoreCodeOnEdit }
                         ) {
                             androidx.compose.material3.Checkbox(checked = restoreCodeOnEdit, onCheckedChange = { restoreCodeOnEdit = it })
-                            Text("Also restore files Claude changed after this message", fontSize = 13.5.sp)
+                            Text("Also restore files ${if (isOpenCodeChat) "OpenCode" else "Claude"} changed after this message", fontSize = 13.5.sp)
                         }
                     }
                 }
@@ -2674,7 +2777,7 @@ fun ChatScreen(
                 TextButton(
                     onClick = {
                         val target = action.message
-                        if (isClaudeChat && action.type == MessageActionType.EDIT) {
+                        if ((isClaudeChat || isOpenCodeChat) && action.type == MessageActionType.EDIT) {
                             viewModel.editClaudeMessage(target, restoreCodeOnEdit) { restoredText ->
                                 inputState.setTextAndPlaceCursorAtEnd(restoredText)
                             }
@@ -2692,7 +2795,7 @@ fun ChatScreen(
                 ) {
                     Text(
                         text = when {
-                            isClaudeChat && action.type == MessageActionType.EDIT -> "Edit"
+                            (isClaudeChat || isOpenCodeChat) && action.type == MessageActionType.EDIT -> "Edit"
                             action.type == MessageActionType.EDIT -> "Edit & Delete"
                             else -> "Regenerate"
                         },
@@ -2907,8 +3010,10 @@ fun ChatScreen(
 
     // Terminal Launcher First-Launch Onboarding Dialog: tells users the separate terminal icon exists,
     // with "hidden" preselected (the icon is off by default; most users only need the in-app terminal)
-    if (!hasSeenTerminalLauncherOnboarding && !isInFloatingWindow) {
+    if (launcherStepPending && hasChosenAgents && !agentStepPending) {
         com.example.gemini.ui.onboarding.TerminalLauncherOnboardingDialog(
+            step = if (setupSteps == 2) 2 else 1,
+            total = if (setupSteps == 2) 2 else 1,
             initialEnabled = remember(context) { com.example.gemini.data.preferences.TerminalLauncherManager.isLauncherEnabled(context) },
             initialStyle = remember(context) { com.example.gemini.data.preferences.TerminalLauncherManager.getLauncherStyle(context) },
             onConfirm = { enabled, style ->

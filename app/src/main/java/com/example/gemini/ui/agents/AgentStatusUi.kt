@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.data.agent.claude.ClaudeCliStatus
 import com.example.gemini.data.agent.claude.ClaudeStatus
+import com.example.gemini.data.agent.opencode.OpenCodeState
 import com.example.gemini.data.remote.AgyHubClient
 import com.example.gemini.data.remote.SystemConnectionState
 import com.example.gemini.data.remote.SystemStatus
@@ -155,6 +156,39 @@ fun claudeStatusEntry(
     }
 }
 
+fun openCodeStatusEntry(
+    state: com.example.gemini.data.agent.opencode.OpenCodeState,
+    status: com.example.gemini.data.agent.opencode.OpenCodeStatus?,
+    serverRestarting: Boolean,
+    onSetup: () -> Unit,
+    onRestartServer: () -> Unit,
+    onRetry: () -> Unit
+): AgentStatusEntry {
+    val color = when (state) {
+        OpenCodeState.READY -> SystemStatus.READY.dotColor
+        OpenCodeState.CHECKING -> SystemStatus.STARTING.dotColor
+        OpenCodeState.OFFLINE, OpenCodeState.DISABLED, OpenCodeState.OUTDATED -> SystemStatus.OFFLINE.dotColor
+        else -> ClaudeStatus.ERROR.dotColor
+    }
+    if (serverRestarting) {
+        return AgentStatusEntry(AgentKind.OPENCODE, "Restarting…", SystemStatus.STARTING.dotColor, "The local server is restarting.", pending = true)
+    }
+    fun entry(detail: String? = null, action: AgentStatusAction? = null) = AgentStatusEntry(
+        AgentKind.OPENCODE, state.label, color, detail, action,
+        pending = state == OpenCodeState.CHECKING,
+        isReady = state == OpenCodeState.READY
+    )
+    return when (state) {
+        OpenCodeState.CHECKING -> entry("Starting… waiting for the server.")
+        OpenCodeState.READY -> entry(listOfNotNull(status?.version?.let { "OpenCode $it" }, if (status?.running == true) "running" else "starts with the first message").joinToString(" · "))
+        OpenCodeState.NOT_INSTALLED -> entry("OpenCode is not installed yet. The app can install it for you.", AgentStatusAction("Install", onSetup))
+        OpenCodeState.DISABLED -> entry("The server was started with OpenCode off.", AgentStatusAction("Restart", onRestartServer))
+        OpenCodeState.OUTDATED -> entry("This server has no OpenCode support yet. Update it.", AgentStatusAction("Restart", onRestartServer))
+        OpenCodeState.OFFLINE -> entry("The server is not running.", AgentStatusAction("Start", onRestartServer))
+        OpenCodeState.ERROR -> entry(status?.error, AgentStatusAction("Retry", onRetry))
+    }
+}
+
 fun claudePlanLabel(raw: String): String = when (raw.lowercase()) {
     "pro" -> "Pro"
     "max" -> "Max"
@@ -168,17 +202,33 @@ fun claudePlanLabel(raw: String): String = when (raw.lowercase()) {
  * lower half [bottom] (Claude Code); the same state (or one agent) draws one solid dot.
  */
 @Composable
-fun AgentStatusDot(top: Color, bottom: Color?, modifier: Modifier = Modifier, size: Dp = 11.dp, pulsing: Boolean = false) {
+fun AgentStatusDot(top: Color, bottom: Color?, modifier: Modifier = Modifier, size: Dp = 11.dp, pulsing: Boolean = false) =
+    AgentStatusDot(listOfNotNull(top, bottom), modifier, size, pulsing)
+
+/**
+ * Connection dot for up to three agents, one slice each in the order given (Antigravity, Claude Code, OpenCode):
+ * one agent is a solid dot, two are an upper and a lower half, three are thirds (top, lower right, lower left).
+ * Agents in the same state draw one solid dot.
+ */
+@Composable
+fun AgentStatusDot(colors: List<Color>, modifier: Modifier = Modifier, size: Dp = 11.dp, pulsing: Boolean = false) {
     val alpha = if (pulsing) {
         val transition = rememberInfiniteTransition(label = "agent_dot")
         transition.animateFloat(1f, 0.4f, infiniteRepeatable(tween(850), RepeatMode.Reverse), label = "agent_dot_alpha").value
     } else 1f
+    val slices = colors.ifEmpty { listOf(SystemStatus.OFFLINE.dotColor) }
     Canvas(modifier.size(size).graphicsLayer { this.alpha = alpha }) {
-        if (bottom == null || bottom == top) {
-            drawCircle(top)
-        } else {
-            drawArc(top, startAngle = 180f, sweepAngle = 180f, useCenter = true)
-            drawArc(bottom, startAngle = 0f, sweepAngle = 180f, useCenter = true)
+        when {
+            slices.distinct().size == 1 -> drawCircle(slices.first())
+            slices.size == 2 -> {
+                drawArc(slices[0], startAngle = 180f, sweepAngle = 180f, useCenter = true)
+                drawArc(slices[1], startAngle = 0f, sweepAngle = 180f, useCenter = true)
+            }
+            else -> {
+                // the first slice is centred on top (-90°), then clockwise
+                val sweep = 360f / slices.size
+                slices.forEachIndexed { i, c -> drawArc(c, startAngle = -90f - sweep / 2 + i * sweep, sweepAngle = sweep, useCenter = true) }
+            }
         }
     }
 }
@@ -195,6 +245,7 @@ fun AgentMark(agent: AgentKind, modifier: Modifier = Modifier, size: Dp = 32.dp,
             when (agent) {
                 AgentKind.AGY -> Icon(Icons.Outlined.RocketLaunch, null, tint = accent, modifier = Modifier.size(size * 0.52f))
                 AgentKind.CLAUDE -> Text("✻", color = accent, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.5f).sp)
+                AgentKind.OPENCODE -> Text("</>", color = accent, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.3f).sp, maxLines = 1)
             }
         }
         if (statusColor != null) {
@@ -276,16 +327,16 @@ fun AgentStatusIndicator(
     var open by remember { mutableStateOf(false) }
     val agy = entries.find { it.agent == AgentKind.AGY }
     val claude = entries.find { it.agent == AgentKind.CLAUDE }
-    val top = agy?.color ?: claude?.color ?: SystemStatus.OFFLINE.dotColor
-    val bottom = if (agy != null) claude?.color else null
+    val openCode = entries.find { it.agent == AgentKind.OPENCODE }
+    // one slice per enabled agent
+    val colors = listOfNotNull(agy, claude, openCode).map { it.color }
     Box(
         modifier = modifier.size(36.dp).clip(CircleShape).clickable { open = true },
         contentAlignment = Alignment.Center
     ) {
         AgentStatusDot(
-            top = top,
-            bottom = bottom,
-            size = if (bottom != null && bottom != top) 12.dp else 11.dp,
+            colors = colors,
+            size = if (colors.distinct().size > 1) 12.dp else 11.dp,
             pulsing = entries.any { it.pending }
         )
         AgentStatusMenu(entries, expanded = open, onDismiss = { open = false }, onOpenServerLogs = onOpenServerLogs)

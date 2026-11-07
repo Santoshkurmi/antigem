@@ -53,8 +53,8 @@ object JarvisPreferences {
     // ---- master switch and agent
     /** Jarvis is available (the Jarvis chip, the MCP server and the voice controls are active). */
     val enabled = pref("enabled", false)
-    /** "CLAUDE" or "AGY": which agent runs the hidden Jarvis chat. */
-    val agent = pref("agent", AgentKind.CLAUDE.name)
+    /** "CLAUDE", "AGY" or "OPENCODE": which agent runs the hidden Jarvis chat; blank until the user picks one. */
+    val agent = pref("agent", "")
     /** Model of the Jarvis chat; blank = the agent's default. */
     val modelId = pref("model_id", "")
 
@@ -226,8 +226,9 @@ object JarvisPreferences {
         sp?.edit()?.putStringSet("chat_ids", next)?.apply()
     }
 
-    val agentKind: AgentKind
-        get() = runCatching { AgentKind.valueOf(agent.value) }.getOrDefault(AgentKind.CLAUDE)
+    /** The agent the user picked for Jarvis, or null when none was picked yet. */
+    val agentKind: AgentKind?
+        get() = agent.value.takeIf { it.isNotBlank() }?.let { runCatching { AgentKind.valueOf(it) }.getOrNull() }
 
     fun isJarvisChat(id: String?): Boolean = id != null && id in _chatIds.value
 }

@@ -101,7 +101,12 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit) {
                         Phase.LISTENING -> "Listening"
                         Phase.THINKING -> steps.lastOrNull()?.text ?: "Working"
                         Phase.SPEAKING -> "Speaking"
-                        else -> "Ready · runs on ${if (agent == "AGY") "Antigravity" else "Claude Code"}"
+                        else -> when (agent) {
+                            "AGY" -> "Ready · runs on Antigravity"
+                            "CLAUDE" -> "Ready · runs on Claude Code"
+                            "OPENCODE" -> "Ready · runs on OpenCode"
+                            else -> "No agent picked: Settings → Jarvis → Agent"
+                        }
                     }
                     Text(sub, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -237,7 +242,7 @@ private fun TaskRow(t: JarvisTasks.Task, onOpen: () -> Unit, onStop: () -> Unit,
             Text(t.title, color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val age = ((System.currentTimeMillis() - t.createdAt) / 60_000).let { if (it < 1) "just now" else if (it < 60) "${it}m" else "${it / 60}h ${it % 60}m" }
             Text(
-                listOf(if (t.agent.name == "AGY") "Antigravity" else "Claude", t.state.label, age, t.note.takeIf { it.isNotBlank() && it != "Working" }).filterNotNull().joinToString(" · "),
+                listOf(when (t.agent.name) { "AGY" -> "Antigravity"; "OPENCODE" -> "OpenCode"; else -> "Claude" }, t.state.label, age, t.note.takeIf { it.isNotBlank() && it != "Working" }).filterNotNull().joinToString(" · "),
                 color = c.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }

@@ -66,10 +66,10 @@ fun permissionModeIcon(mode: String): ImageVector = when (mode) {
     else -> Icons.Outlined.PanTool
 }
 
-/** Bottom sheet shell shared by the Claude chat pickers. */
+/** Bottom sheet shell shared by the chat pickers (Claude Code's, and OpenCode's with [agent]). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ClaudePickerSheet(title: String, detail: String, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+internal fun ClaudePickerSheet(title: String, detail: String, onDismiss: () -> Unit, agent: AgentKind = AgentKind.CLAUDE, content: @Composable ColumnScope.() -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.background,
@@ -79,7 +79,7 @@ private fun ClaudePickerSheet(title: String, detail: String, onDismiss: () -> Un
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(bottom = 22.dp).navigationBarsPadding()
         ) {
-            AgentSheetHeader(AgentKind.CLAUDE, title, detail)
+            AgentSheetHeader(agent, title, detail)
             Spacer(Modifier.height(14.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
         }
@@ -88,7 +88,7 @@ private fun ClaudePickerSheet(title: String, detail: String, onDismiss: () -> Un
 
 /** One choice in a picker sheet: tinted icon (or custom leading), title, description, selected state. */
 @Composable
-private fun PickerOption(
+internal fun PickerOption(
     title: String,
     description: String,
     color: Color,

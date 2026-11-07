@@ -100,7 +100,10 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     CLAUDE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
     /** One Claude Code page (which one: the dialog's claudePage); not a page of its own for Jarvis. */
     CLAUDE_PAGE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
-    AGENTS("Agents", "Run Antigravity, Claude Code or both"),
+    OPENCODE("OpenCode", "Server, providers, custom OpenAI-compatible endpoints & approvals"),
+    /** One OpenCode page (which one: the dialog's openCodePage). */
+    OPENCODE_PAGE("OpenCode", "Server, providers, endpoints, MCP & approvals"),
+    AGENTS("Agents", "Run Antigravity, Claude Code, OpenCode or several"),
     JARVIS("Jarvis", "Hands-free voice control of the whole app"),
     JARVIS_AGENT("Jarvis · Agent", "Which agent and model Jarvis talks to"),
     JARVIS_PERSONALITY("Jarvis · Personality & you", "How Jarvis speaks, and what it should know about you"),
@@ -142,6 +145,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     val parent: SettingsSection get() = when (this) {
         AGY_CLI, MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
         CLAUDE_PAGE -> CLAUDE
+        OPENCODE_PAGE -> OPENCODE
         TERMUX_API, X11_DESKTOP -> TERMUX_SUPPORT
         CHANGELOG -> ABOUT
         else -> if (jarvisPage != null) JARVIS else MAIN
@@ -278,6 +282,9 @@ fun SettingsDialog(
     onOpenNetworkInspector: () -> Unit = {},
     claude: com.example.gemini.ui.claude.ClaudeSettingsDeps? = null,
     initialClaudePage: com.example.gemini.ui.claude.ClaudeSettingsPage? = null,
+    openCode: com.example.gemini.data.agent.opencode.OpenCodeChatBackend? = null,
+    /** Opens on this OpenCode page (e.g. Server & install from an Install button). */
+    initialOpenCodePage: com.example.gemini.ui.opencode.OpenCodeSettingsPage? = null,
     /** Opens on this page (e.g. Jarvis asked to show it); also switches to it while the dialog is open. */
     initialSection: SettingsSection? = null,
     enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = setOf(com.example.gemini.domain.model.AgentKind.AGY),
@@ -291,6 +298,13 @@ fun SettingsDialog(
     val coroutineScope = rememberCoroutineScope()
     var currentSection by remember { mutableStateOf(initialSection ?: if (initialClaudePage != null && claude != null) SettingsSection.CLAUDE_PAGE else SettingsSection.MAIN) }
     var claudePage by remember { mutableStateOf(initialClaudePage ?: com.example.gemini.ui.claude.ClaudeSettingsPage.ACCOUNT) }
+    var openCodePage by remember { mutableStateOf(initialOpenCodePage ?: com.example.gemini.ui.opencode.OpenCodeSettingsPage.SERVER) }
+    LaunchedEffect(initialOpenCodePage) {
+        if (initialOpenCodePage != null && openCode != null) {
+            openCodePage = initialOpenCodePage
+            currentSection = SettingsSection.OPENCODE_PAGE
+        }
+    }
     LaunchedEffect(initialSection) { if (initialSection != null) currentSection = initialSection }
     // Hoisted so the main list keeps its position while a sub-section is open
     val mainMenuScrollState = rememberScrollState()
@@ -326,9 +340,10 @@ fun SettingsDialog(
                 title = {
                     // a Claude Code page names itself here (it has no header of its own)
                     val isClaudePage = currentSection == SettingsSection.CLAUDE_PAGE && claude != null
+                    val isOpenCodePage = currentSection == SettingsSection.OPENCODE_PAGE && openCode != null
                     Column {
                         Text(
-                            text = if (isClaudePage) "Claude Code · ${claudePage.title}" else currentSection.title,
+                            text = if (isClaudePage) "Claude Code · ${claudePage.title}" else if (isOpenCodePage) "OpenCode · ${openCodePage.title}" else currentSection.title,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -337,7 +352,7 @@ fun SettingsDialog(
                         )
                         if (currentSection != SettingsSection.MAIN) {
                             Text(
-                                text = if (isClaudePage) claudePage.subtitle else currentSection.subtitle,
+                                text = if (isClaudePage) claudePage.subtitle else if (isOpenCodePage) openCodePage.subtitle else currentSection.subtitle,
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                                 maxLines = 1,
@@ -411,6 +426,7 @@ fun SettingsDialog(
                         scrollState = mainMenuScrollState,
                         enabledAgents = enabledAgents,
                         claude = claude,
+                        openCode = openCode,
                         onNavigate = { currentSection = it }
                     )
 
@@ -611,6 +627,15 @@ fun SettingsDialog(
                             currentSection = SettingsSection.CLAUDE_PAGE
                         }
                     }
+                    SettingsSection.OPENCODE -> if (openCode != null) {
+                        com.example.gemini.ui.opencode.OpenCodeSettingsGroup(openCode, cardBg) { page ->
+                            openCodePage = page
+                            currentSection = SettingsSection.OPENCODE_PAGE
+                        }
+                    }
+                    SettingsSection.OPENCODE_PAGE -> if (openCode != null) {
+                        com.example.gemini.ui.opencode.OpenCodeSettingsScreen(openCode, openCodePage)
+                    }
                     SettingsSection.CLAUDE_PAGE -> if (claude != null) {
                         com.example.gemini.ui.claude.ClaudeSettingsScreen(claude, claudePage) { currentSection = SettingsSection.CLAUDE }
                     }
@@ -680,11 +705,14 @@ private fun MainSettingsMenu(
     cardBg: Color,
     scrollState: androidx.compose.foundation.ScrollState,
     claude: com.example.gemini.ui.claude.ClaudeSettingsDeps? = null,
+    openCode: com.example.gemini.data.agent.opencode.OpenCodeChatBackend? = null,
     enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = setOf(com.example.gemini.domain.model.AgentKind.AGY),
     onNavigate: (SettingsSection) -> Unit
 ) {
     val agyOn = com.example.gemini.domain.model.AgentKind.AGY in enabledAgents
     val claudeOn = com.example.gemini.domain.model.AgentKind.CLAUDE in enabledAgents
+    val openCodeOn = com.example.gemini.domain.model.AgentKind.OPENCODE in enabledAgents
+    val openCodeState = openCode?.state?.collectAsState()?.value
     val c = com.example.gemini.theme.AppColors
     fun row(section: SettingsSection, icon: ImageVector, tint: Color, value: String? = null, valueColor: Color? = null) =
         SettingsRowItem(icon, tint, section.title, value, valueColor) { onNavigate(section) }
@@ -725,13 +753,18 @@ private fun MainSettingsMenu(
             ),
             listOfNotNull(
                 row(SettingsSection.AGENTS, Icons.Outlined.SmartToy, MaterialTheme.colorScheme.primary, when {
-                    agyOn && claudeOn -> "Both"
+                    enabledAgents.size >= 3 -> "All three"
+                    enabledAgents.size == 2 -> com.example.gemini.domain.model.AgentKind.entries.filter { it in enabledAgents }
+                        .joinToString(" + ") { if (it == com.example.gemini.domain.model.AgentKind.AGY) "AGY" else if (it == com.example.gemini.domain.model.AgentKind.CLAUDE) "Claude" else "OpenCode" }
                     claudeOn -> "Claude Code"
+                    openCodeOn -> "OpenCode"
                     else -> "Antigravity"
                 }),
                 if (agyOn) row(SettingsSection.ANTIGRAVITY, Icons.Outlined.RocketLaunch, GeminiBlue,
                     if (activeMcp > 0) "$activeMcp MCP" else null) else null,
                 if (claude != null && claudeOn) row(SettingsSection.CLAUDE, Icons.Outlined.AutoAwesome, ClaudeAccent, claudeValue, claudeColor) else null,
+                if (openCode != null && openCodeOn) row(SettingsSection.OPENCODE, Icons.Outlined.Code, com.example.gemini.ui.components.OpenCodeAccent, openCodeState?.label,
+                    if (openCodeState == com.example.gemini.data.agent.opencode.OpenCodeState.READY) QuotaGreen else c.warning) else null,
                 row(SettingsSection.JARVIS, Icons.Outlined.RecordVoiceOver, c.accentTeal, if (jarvisOn) "On" else "Off",
                     if (jarvisOn) QuotaGreen else null)
             ),

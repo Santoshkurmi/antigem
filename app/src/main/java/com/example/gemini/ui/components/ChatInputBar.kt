@@ -178,6 +178,8 @@ fun ChatInputBar(
     offlineMessage: String = "Server is offline. Start the server to send messages.",
     /** The agent cannot read audio (Claude): the mic records and transcribes to text instead of attaching a file. */
     voiceNotesAsText: Boolean = false,
+    /** The agent has no voice input (OpenCode): no dictation or voice-note buttons; Send stays in their place. */
+    voiceEnabled: Boolean = true,
     focusRequester: FocusRequester = remember { FocusRequester() },
     /** Messages sent while the agent was working, waiting to be delivered (card above the box). */
     queuedMessages: List<com.example.gemini.domain.model.QueuedMessage> = emptyList(),
@@ -1188,7 +1190,7 @@ fun ChatInputBar(
                         }
 
                         // Dedicated Speech-to-Text Live Dictation Button (AGY Hub)
-                        if (!isStreaming && !isRecordingAudio) {
+                        if (voiceEnabled && !isStreaming && !isRecordingAudio) {
                             Surface(
                                 onClick = {
                                     if (isLiveDictating) {
@@ -1263,6 +1265,24 @@ fun ChatInputBar(
                                         imageVector = Icons.Default.ArrowUpward,
                                         contentDescription = "Send",
                                         tint = if (isAuth && isOnline) (if (isBackgroundActive) com.example.gemini.theme.AppColors.onBackground else Color.White) else com.example.gemini.theme.AppColors.textSecondary,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+                            }
+                        } else if (!voiceEnabled) {
+                            // no voice input for this agent: an inactive Send until something is typed
+                            Surface(
+                                onClick = {},
+                                enabled = false,
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowUpward,
+                                        contentDescription = "Send",
+                                        tint = com.example.gemini.theme.AppColors.textSecondary,
                                         modifier = Modifier.size(19.dp)
                                     )
                                 }

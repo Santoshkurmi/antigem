@@ -72,6 +72,9 @@ import com.example.gemini.theme.ClaudeTerracotta
 
 @Composable
 fun TerminalLauncherOnboardingDialog(
+    /** Position in the first-launch setup ("Step 2 of 2" after the agents). */
+    step: Int = 1,
+    total: Int = 1,
     initialEnabled: Boolean = false,
     initialStyle: String = TerminalLauncherManager.STYLE_ANTITERM,
     onConfirm: (enabled: Boolean, style: String) -> Unit,
@@ -80,76 +83,18 @@ fun TerminalLauncherOnboardingDialog(
     var isEnabled by remember { mutableStateOf(initialEnabled) }
     var selectedStyle by remember { mutableStateOf(initialStyle) }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false
-        )
+    OnboardingStepScreen(
+        step = step,
+        total = total,
+        accent = ClaudeTerracotta,
+        icon = { Icon(Icons.Default.Terminal, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.size(36.dp)) },
+        title = "Terminal App Setup",
+        subtitle = "Choose how you want to open the Linux command line on your device.",
+        primaryLabel = "Save & Continue",
+        onPrimary = { onConfirm(isEnabled, selectedStyle) },
+        footnote = "You can change this anytime in Settings.",
+        onBack = onDismiss
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .clip(RoundedCornerShape(26.dp)),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp,
-            shadowElevation = 20.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(22.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Header Icon Badge
-                Box(
-                    modifier = Modifier
-                        .size(54.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    ClaudeTerracotta.copy(alpha = 0.25f),
-                                    ClaudeTerracotta.copy(alpha = 0.05f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Terminal,
-                        contentDescription = null,
-                        tint = ClaudeTerracotta,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Title & Subtitle
-                Text(
-                    text = "Terminal App Setup",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = "Choose how you want to access the Linux command line on your device.",
-                    fontSize = 12.5.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                    textAlign = TextAlign.Center,
-                    lineHeight = 17.sp
-                )
-
-                Spacer(modifier = Modifier.height(18.dp))
-
                 // Visual Preview: Home Screen Apps Simulation
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -456,40 +401,5 @@ fun TerminalLauncherOnboardingDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Bottom Primary Button: Confirm & Continue
-                Button(
-                    onClick = { onConfirm(isEnabled, selectedStyle) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(46.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(17.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Save & Continue",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Text(
-                    text = "You can always change or toggle this anytime in Settings.",
-                    fontSize = 10.5.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
     }
 }

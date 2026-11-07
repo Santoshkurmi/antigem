@@ -146,6 +146,7 @@ fun JarvisOverlay() {
     val onNoticeAction: (String) -> Unit = { action ->
         when (action) {
             "mic" -> micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            "agent" -> JarvisController.requestSettings("JARVIS_AGENT")
             else -> JarvisController.requestSettings("JARVIS")
         }
         JarvisController.clearNotice()

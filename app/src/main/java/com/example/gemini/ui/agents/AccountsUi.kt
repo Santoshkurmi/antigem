@@ -125,9 +125,10 @@ fun AccountsButton(
     agyAuth: AgyHubClient.AgyAuthInfo,
     claudeStatus: ClaudeCliStatus?,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    openCode: AgentStatusEntry? = null
 ) {
-    val entries = listOfNotNull(agy, claude)
+    val entries = listOfNotNull(agy, claude, openCode)
     val needsSignIn = entries.any { it.isSignedOut }
     val single = entries.singleOrNull()
     Surface(
@@ -141,12 +142,14 @@ fun AccountsButton(
             Row(horizontalArrangement = Arrangement.spacedBy((-7).dp)) {
                 agy?.let { AccountAvatar(AgentKind.AGY, it, agyAuth.displayName.firstOrNull(), agyAuth.profilePictureUrl?.takeIf { u -> u.isNotBlank() }) }
                 claude?.let { AccountAvatar(AgentKind.CLAUDE, it, claudeStatus?.auth?.email?.firstOrNull()) }
+                openCode?.let { AccountAvatar(AgentKind.OPENCODE, it, null) }
             }
             Spacer(Modifier.width(7.dp))
             val text = when {
                 needsSignIn -> "Sign in"
                 single?.agent == AgentKind.AGY && single.isReady -> agyAuth.displayName.ifBlank { "Account" }
                 single?.agent == AgentKind.CLAUDE && single.isReady -> claudeStatus?.auth?.email?.substringBefore('@') ?: "Account"
+                single?.agent == AgentKind.OPENCODE && single.isReady -> "OpenCode"
                 single != null -> single.label
                 else -> "Accounts"
             }
@@ -175,7 +178,11 @@ fun AccountsDialog(
     onAgyCancelSignIn: () -> Unit,
     onClaudeSignOut: () -> Unit,
     onClaudeSettings: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    openCode: AgentStatusEntry? = null,
+    /** Version, connected providers, model count. */
+    openCodeFacts: List<String> = emptyList(),
+    onOpenCodeSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
     // `agy --version`, asked from the bridge (this phone's or the server's) each time the dialog opens
@@ -277,7 +284,34 @@ fun AccountsDialog(
                         }
                     }
                 }
+
+                openCode?.let { entry ->
+                    if (agy != null || claude != null) Spacer(Modifier.height(12.dp))
+                    OpenCodeAccountSection(entry, openCodeFacts, onOpenCodeSettings, onDismiss)
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun OpenCodeAccountSection(entry: AgentStatusEntry, facts: List<String>, onSettings: () -> Unit, onDismiss: () -> Unit) {
+    AccountSection(
+        entry = entry,
+        avatar = { AccountAvatar(AgentKind.OPENCODE, entry, null, size = 44.dp) },
+        title = AgentKind.OPENCODE.label(),
+        subtitle = if (entry.isReady) "No sign-in: each provider uses its own API key (free models need none)." else entry.detail,
+        facts = facts
+    ) {
+        if (!entry.isReady) entry.action?.let {
+            SectionButton(it.label, primary = AgentKind.OPENCODE.accent()) {
+                it.onClick()
+                onDismiss()
+            }
+        }
+        SectionButton(if (entry.isReady) "Providers & settings" else "OpenCode settings", Icons.Outlined.Settings) {
+            onSettings()
+            onDismiss()
         }
     }
 }

@@ -43,6 +43,7 @@ the phone. Their words come from speech-to-text, so expect small mistakes and wo
    - Claude Code names them `mcp__jarvis_mcp__<tool>`. If they are deferred, load the ones you need in ONE ToolSearch call,
      e.g. `select:mcp__jarvis_mcp__jarvis_speak,mcp__jarvis_mcp__jarvis_status,mcp__jarvis_mcp__jarvis_ask`.
    - Antigravity: they are the tools of the MCP server `jarvis_mcp`; call them like any MCP tool.
+   - OpenCode names them `jarvis_mcp_<tool>` (e.g. `jarvis_mcp_jarvis_speak`); call them directly.
 3. If you do NOT have the `jarvis_mcp` tools at all, do not try anything else (no curl, no config edits, no workarounds, no other
    tools). Reply with exactly `$MCP_MISSING` and nothing more. The app tells the user how to fix it.
 4. Every later message starts with a short [Jarvis] note with fresh live context (screen, project, chats, tasks, approvals,
@@ -270,6 +271,7 @@ description: Use when a message comes from the AntiGem Jarvis voice mode (hands-
     private fun skillDir(agent: AgentKind) = when (agent) {
         AgentKind.CLAUDE -> "~/.claude/skills/$SKILL_NAME"
         AgentKind.AGY -> "~/.gemini/antigravity/skills/$SKILL_NAME"
+        AgentKind.OPENCODE -> "~/.config/opencode/skills/$SKILL_NAME"
     }
 
     /** Writes the skill file for [agent]. Returns the path on success. */

@@ -98,7 +98,7 @@ object JarvisMcp {
             listOf("goal"),
             "goal" to prop("string", "Full instructions for the task's agent, as clear and complete as the user's intent allows"),
             "title" to prop("string", "Short name, 2-5 words (e.g. \"Release build\")"),
-            "agent" to prop("string", "claude or agy (default: the app's new-chat agent)", listOf("claude", "agy")),
+            "agent" to prop("string", "claude, agy or opencode (default: the app's new-chat agent). OpenCode runs any provider's models (OpenAI-compatible, NVIDIA, Groq, free models)", listOf("claude", "agy", "opencode")),
             "model" to prop("string", "Model id or part of its name (default: the agent's default)"),
             "project" to prop("string", "Project name or path to work in (default: the active project)"),
             "open" to prop("boolean", "Also show the chat on screen (default false)")))
@@ -185,7 +185,7 @@ object JarvisMcp {
             "Start a new chat. With a message it runs as a watched task (same as jarvis_task_start); without one an empty chat opens on screen. " +
                 "Use it only when the user asked for a new chat; prefer jarvis_task_start for delegated work.",
             emptyList(),
-            "agent" to prop("string", "claude or agy (default: the app's current new-chat agent)", listOf("claude", "agy")),
+            "agent" to prop("string", "claude, agy or opencode (default: the app's current new-chat agent)", listOf("claude", "agy", "opencode")),
             "message" to prop("string", "The first message / task"),
             "model" to prop("string", "Model id or name (default: the agent's default)"),
             "project" to prop("string", "Project name or path to work in (default: the active project)"),
@@ -415,7 +415,7 @@ object JarvisMcp {
                 }
                 "jarvis_rename_chat" -> {
                     val id = resolveId(args) ?: return error("No chat. Give an id.")
-                    if (JarvisController.agentOfChat(id) != AgentKind.CLAUDE) return error("Only Claude Code chats can be renamed.")
+                    if (JarvisController.agentOfChat(id) == AgentKind.AGY) return error("Antigravity chats can't be renamed.")
                     JarvisController.vm.renameConversation(id, args.optString("title"))
                     text("Renamed.")
                 }
@@ -655,6 +655,7 @@ object JarvisMcp {
     private fun agentArg(raw: String): AgentKind = when (raw.lowercase()) {
         "claude" -> AgentKind.CLAUDE
         "agy", "antigravity" -> AgentKind.AGY
+        "opencode" -> AgentKind.OPENCODE
         else -> vm.newChatAgent.value.takeIf { it in vm.enabledAgents.value } ?: vm.enabledAgents.value.firstOrNull() ?: AgentKind.CLAUDE
     }
 
@@ -662,7 +663,7 @@ object JarvisMcp {
         val goal = args.optString("goal").trim()
         if (goal.isEmpty()) return error("goal is required")
         val agent = agentArg(args.optString("agent"))
-        if (agent !in vm.enabledAgents.value) return error("${if (agent == AgentKind.CLAUDE) "Claude Code" else "Antigravity"} is turned off (Settings → Agents).")
+        if (agent !in vm.enabledAgents.value) return error("${when (agent) { AgentKind.CLAUDE -> "Claude Code"; AgentKind.OPENCODE -> "OpenCode"; AgentKind.AGY -> "Antigravity" }} is turned off (Settings → Agents).")
         val projectArg = args.optString("project").trim()
         val project = if (projectArg.isBlank()) null else findProject(projectArg) ?: return error("No project matches \"$projectArg\". Use jarvis_ide_list_projects.")
         val model = args.optString("model").trim().takeIf { it.isNotEmpty() }?.let { findModel(it, modelsFor(agent))?.id ?: return error("No ${agent.name.lowercase()} model matches \"$it\".") }
@@ -1004,8 +1005,11 @@ object JarvisMcp {
 
     // ---------------- models
 
-    private fun modelsFor(agent: AgentKind): List<AiModel> =
-        if (agent == AgentKind.CLAUDE) vm.claudeBackend.availableModels.value else vm.agyBackend.enabledModels.value
+    private fun modelsFor(agent: AgentKind): List<AiModel> = when (agent) {
+        AgentKind.CLAUDE -> vm.claudeBackend.availableModels.value
+        AgentKind.OPENCODE -> vm.openCodeBackend.availableModels.value
+        AgentKind.AGY -> vm.agyBackend.enabledModels.value
+    }
 
     private fun findModel(text: String, models: List<AiModel>): AiModel? {
         val t = text.lowercase().trim()
@@ -1024,6 +1028,7 @@ object JarvisMcp {
             }
             if (which == "all" || which == "claude") section("claude", AgentKind.CLAUDE, vm.claudeBackend.selectedModelId.value)
             if (which == "all" || which == "agy") section("antigravity", AgentKind.AGY, vm.agyBackend.selectedModelId.value)
+            if ((which == "all" || which == "opencode") && AgentKind.OPENCODE in vm.enabledAgents.value) section("opencode", AgentKind.OPENCODE, vm.openCodeBackend.selectedModelId.value)
             put("jarvis_chat_model", JarvisPreferences.modelId.value.ifBlank { "default" })
         })
     }
@@ -1039,10 +1044,11 @@ object JarvisMcp {
             return text("Chat model set to ${m.displayName.ifBlank { m.id }}.")
         }
         if (args.optString("scope", "screen") == "jarvis") {
-            val kind = JarvisPreferences.agentKind
+            val kind = JarvisPreferences.agentKind ?: return error("Jarvis has no agent yet (Settings → Jarvis → Agent).")
             val m = findModel(wanted, modelsFor(kind)) ?: return error("No ${kind.name.lowercase()} model matches \"$wanted\".")
             JarvisPreferences.modelId.set(m.id)
             if (kind == AgentKind.CLAUDE && JarvisPreferences.currentChatId.value.isNotBlank()) JarvisController.jarvisClaude.selectModel(m.id)
+            if (kind == AgentKind.OPENCODE && JarvisPreferences.currentChatAgent.value == AgentKind.OPENCODE.name) JarvisController.jarvisOpenCode.selectModel(m.id)
             return text("The Jarvis chat now uses ${m.displayName.ifBlank { m.id }}.")
         }
         val conv = vm.currentConversation.value ?: return error("No chat on screen. Pass id to change another chat.")
@@ -1112,10 +1118,10 @@ object JarvisMcp {
             bool("group_chats_by_workspace", "Group the chat list by project", false, { vm.groupChatsByWorkspace.value }, { vm.setGroupChatsByWorkspace(it) }),
             bool("floating_bubble", "Floating chat bubble over other apps", false, { vm.isFloatingBubbleEnabled.value }, { vm.setFloatingBubbleEnabled(it) }),
             bool("vibrate_when_chat_done", "A light buzz when a chat finishes", false, { ChatCompletionMonitor.vibrate.value }, { ChatCompletionMonitor.setVibrate(it) }),
-            Setting("new_chat_agent", "Agent of new chats", "claude|agy", false, get = { vm.newChatAgent.value.name.lowercase() }, set = { v ->
-                val a = when (v.trim().lowercase()) { "claude" -> AgentKind.CLAUDE; "agy", "antigravity" -> AgentKind.AGY; else -> null }
+            Setting("new_chat_agent", "Agent of new chats", "claude|agy|opencode", false, get = { vm.newChatAgent.value.name.lowercase() }, set = { v ->
+                val a = when (v.trim().lowercase()) { "claude" -> AgentKind.CLAUDE; "agy", "antigravity" -> AgentKind.AGY; "opencode" -> AgentKind.OPENCODE; else -> null }
                 when {
-                    a == null -> "Use claude or agy."
+                    a == null -> "Use claude, agy or opencode."
                     a !in vm.enabledAgents.value -> "That agent is turned off (Settings → Agents)."
                     else -> { vm.setNewChatAgent(a); null }
                 }

@@ -802,9 +802,11 @@ fun TokenUsageTelemetryPill(
     } else 0
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val inputColor = if (isDark) com.example.gemini.theme.AppColors.info else com.example.gemini.theme.AppColors.info
-    val outputColor = if (isDark) com.example.gemini.theme.AppColors.success else com.example.gemini.theme.AppColors.success
+    val inputColor = com.example.gemini.theme.AppColors.info
+    val outputColor = com.example.gemini.theme.AppColors.success
     val cacheColor = com.example.gemini.theme.AppColors.warning
+    // tap: the reply's full usage and model (the raw payload, when there is one, opens from there)
+    var showDetails by remember { mutableStateOf(false) }
 
     Surface(
         shape = RoundedCornerShape(6.dp),
@@ -812,8 +814,9 @@ fun TokenUsageTelemetryPill(
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDark) 0.12f else 0.18f)),
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .then(if (onViewPayload != null) Modifier.clickable { onViewPayload() } else Modifier)
+            .clickable { showDetails = true }
     ) {
+        // one line, always: the model name gives way (…) before anything wraps
         Row(
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -824,14 +827,18 @@ fun TokenUsageTelemetryPill(
                 fontSize = 10.5.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.SemiBold,
-                color = inputColor
+                color = inputColor,
+                maxLines = 1,
+                softWrap = false
             )
             Text(
                 text = "📤 ${formatCompactTokens(usage.outputTokens)}",
                 fontSize = 10.5.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.SemiBold,
-                color = outputColor
+                color = outputColor,
+                maxLines = 1,
+                softWrap = false
             )
             if (usage.cachedTokens > 0) {
                 Text(
@@ -839,7 +846,9 @@ fun TokenUsageTelemetryPill(
                     fontSize = 10.5.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
-                    color = cacheColor
+                    color = cacheColor,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
             if (usage.durationMs > 0) {
@@ -847,15 +856,20 @@ fun TokenUsageTelemetryPill(
                     text = "⏱️ ${formatDuration(usage.durationMs)}",
                     fontSize = 10.5.sp,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
-            usage.model?.let { model ->
+            usage.model?.takeIf { it.isNotBlank() }?.let { model ->
                 Text(
-                    text = model.removePrefix("claude-"),
+                    text = shortModelName(model),
                     fontSize = 10.5.sp,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
             }
             if (usage.isEstimated) {
@@ -863,10 +877,15 @@ fun TokenUsageTelemetryPill(
                     text = "(est.)",
                     fontSize = 9.5.sp,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
+    }
+    if (showDetails) {
+        TokenUsageDetailsSheet(usage, onViewPayload) { showDetails = false }
     }
 }
 

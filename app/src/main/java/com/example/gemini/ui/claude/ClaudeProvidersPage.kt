@@ -163,6 +163,20 @@ fun ProvidersPage(deps: ClaudeSettingsDeps) {
             "A chat on one of them uses its key, headers and limits; your Claude login and other chats stay as they are.",
         fontSize = 11.5.sp, color = muted
     )
+    // Claude Code speaks only Anthropic's API: other providers work better in OpenCode
+    val oc = com.example.gemini.ui.components.OpenCodeAccent
+    Surface(shape = RoundedCornerShape(12.dp), color = oc.copy(alpha = 0.08f), border = BorderStroke(1.dp, oc.copy(alpha = 0.35f))) {
+        Column(Modifier.padding(12.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Third-party models work better in OpenCode", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = oc)
+            Text(
+                "Claude Code only speaks Anthropic's API, so a provider here must offer an Anthropic-compatible endpoint, and tools or " +
+                    "thinking can break on the way. OpenCode talks to each provider in its own format: 200+ built-in providers, any " +
+                    "OpenAI-compatible API (Ollama, LM Studio, NVIDIA NIM, Groq…) and free models. Turn it on in Settings → Agents. " +
+                    "Keep using this page for Anthropic and Anthropic-compatible APIs.",
+                fontSize = 11.5.sp, color = muted
+            )
+        }
+    }
 
     settingsEndpoint?.let { endpoint ->
         Surface(shape = RoundedCornerShape(12.dp), color = QuotaAmber.copy(alpha = 0.1f), border = BorderStroke(1.dp, QuotaAmber.copy(alpha = 0.4f))) {

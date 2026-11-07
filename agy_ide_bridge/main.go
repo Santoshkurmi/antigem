@@ -24,6 +24,7 @@ import (
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/handlers"
 	"gemini-server/pkg/hub"
+	"gemini-server/pkg/opencode"
 	"gemini-server/pkg/plugins"
 	"gemini-server/pkg/security"
 	"gemini-server/pkg/ws"
@@ -39,6 +40,7 @@ Flags:
   -u, --unpatch             Unpatch AGY binary back to standard header and exit (do not start server)
   --bin <path>              Custom path to AGY binary (for --unpatch or custom setups)
   --claude-bin <path>       Custom path to the Claude Code CLI (default: claude on PATH)
+  --opencode-bin <path>     Custom path to the OpenCode CLI (default: opencode on PATH or ~/.opencode/bin)
   -t, --token <token>       12-character security token for API & AGY CSRF obfuscation
   -f, --force, --f          Force start AGY Hub automatically without prompting
   -p, --port <port>         Port for the Go IDE Server (default: 1234)
@@ -48,6 +50,7 @@ Flags:
   --tz <location>           Timezone location name (e.g. Asia/Kathmandu)
   --no-hub                  Skip launching AGY Hub (run IDE server only)
   --no-claude               Disable Claude Code (no /api/claude endpoints, never runs the claude CLI)
+  --no-opencode             Disable OpenCode (no /api/opencode endpoints, never runs the opencode CLI)
   -d, --dir <path>          Custom workspace directory
   -h, --help                Show help documentation`)
 }
@@ -130,6 +133,8 @@ func main() {
 	var customAgyBin string
 	var customClaudeBin string
 	var noClaude bool
+	var customOpenCodeBin string
+	var noOpenCode bool
 	var forceStart bool
 	var skipHub bool
 	var cliToken string
@@ -170,6 +175,15 @@ func main() {
 			skipHub = true
 		case arg == "--no-claude":
 			noClaude = true
+		case strings.HasPrefix(arg, "--opencode-bin="):
+			customOpenCodeBin = strings.TrimPrefix(arg, "--opencode-bin=")
+		case arg == "--opencode-bin":
+			if i+1 < len(os.Args) {
+				customOpenCodeBin = os.Args[i+1]
+				i++
+			}
+		case arg == "--no-opencode":
+			noOpenCode = true
 		case strings.HasPrefix(arg, "--port="):
 			cfg.Port = strings.TrimPrefix(arg, "--port=")
 		case arg == "-p" || arg == "--port":
@@ -306,6 +320,19 @@ func main() {
 	} else {
 		claudeMgr = claude.NewManager(cfg.HomeDir, cfg.WorkspaceDir, customClaudeBin)
 		mux.Handle("/api/claude/", claudeMgr)
+	}
+
+	// OpenCode: one `opencode serve` for all its chats, relayed under /api/opencode/x/; off with --no-opencode
+	var openCodeMgr *opencode.Manager
+	if noOpenCode {
+		mux.HandleFunc("/api/opencode/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"success":false,"disabled":true,"error":"OpenCode is turned off in the app"}`))
+		})
+	} else {
+		openCodeMgr = opencode.NewManager(cfg.HomeDir, cfg.WorkspaceDir, customOpenCodeBin)
+		mux.Handle("/api/opencode/", openCodeMgr)
 	}
 
 	// Custom AntiGem plugins on disk: list, install (ZIP or GitHub repository), update, remove, export
@@ -629,6 +656,9 @@ func main() {
 	// 2. Stop Claude Code sessions, then the AGY Hub process group and continuous background monitor
 	if claudeMgr != nil {
 		claudeMgr.StopAll()
+	}
+	if openCodeMgr != nil {
+		openCodeMgr.StopAll()
 	}
 	if hubMgr != nil {
 		hubMgr.Stop()

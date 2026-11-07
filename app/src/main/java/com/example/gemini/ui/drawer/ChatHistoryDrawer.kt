@@ -821,7 +821,8 @@ fun ChatHistoryDrawer(
                     listOf<Pair<com.example.gemini.domain.model.AgentKind?, String>>(
                         null to "All",
                         com.example.gemini.domain.model.AgentKind.AGY to "Antigravity",
-                        com.example.gemini.domain.model.AgentKind.CLAUDE to "Claude"
+                        com.example.gemini.domain.model.AgentKind.CLAUDE to "Claude",
+                        com.example.gemini.domain.model.AgentKind.OPENCODE to "OpenCode"
                     ).forEach { (agent, label) ->
                         val selected = !jarvisFilter && agentFilter == agent
                         val accent = agent?.accent() ?: ClaudeTerracotta
@@ -948,7 +949,7 @@ fun ChatHistoryDrawer(
                                     val conv = item.conv
                                     val isSelected = conv.id == currentConversationId
                                     val activeInst = activeInstances.find { it.conversationId == conv.id }
-                                    val isActivelyRunning = conv.isRunning && (systemConnectionState.isHubOnline || conv.agent == com.example.gemini.domain.model.AgentKind.CLAUDE)
+                                    val isActivelyRunning = conv.isRunning && (systemConnectionState.isHubOnline || conv.agent != com.example.gemini.domain.model.AgentKind.AGY)
                                     val isScheduledOrBackground =
                                         systemConnectionState.isHubOnline && !isActivelyRunning && (conv.notFullyIdle || conv.hasActivity || activeInst != null)
 
@@ -1057,7 +1058,7 @@ fun ChatHistoryDrawer(
                                         val conv = item.conv
                                         val isSelected = conv.id == currentConversationId
                                         val activeInst = activeInstances.find { it.conversationId == conv.id }
-                                        val isActivelyRunning = conv.isRunning && (systemConnectionState.isHubOnline || conv.agent == com.example.gemini.domain.model.AgentKind.CLAUDE)
+                                        val isActivelyRunning = conv.isRunning && (systemConnectionState.isHubOnline || conv.agent != com.example.gemini.domain.model.AgentKind.AGY)
                                         val isScheduledOrBackground =
                                             systemConnectionState.isHubOnline && !isActivelyRunning && (conv.notFullyIdle || conv.hasActivity || activeInst != null)
 
@@ -1497,11 +1498,13 @@ private fun ChatHistoryItemRow(
             Box(contentAlignment = Alignment.Center) {
                 // Claude chats are marked by an orange chat icon (instead of a "Claude" text badge)
                 val isClaudeChat = conv.agent == com.example.gemini.domain.model.AgentKind.CLAUDE
+                val isOpenCodeChat = conv.agent == com.example.gemini.domain.model.AgentKind.OPENCODE
                 Icon(
                     imageVector = Icons.Outlined.ChatBubbleOutline,
-                    contentDescription = if (isClaudeChat) "Claude Code chat" else null,
+                    contentDescription = if (isClaudeChat) "Claude Code chat" else if (isOpenCodeChat) "OpenCode chat" else null,
                     tint = when {
                         isClaudeChat -> com.example.gemini.ui.components.ClaudeAccent.copy(alpha = if (isSelected) 1f else 0.85f)
+                        isOpenCodeChat -> com.example.gemini.ui.components.OpenCodeAccent.copy(alpha = if (isSelected) 1f else 0.85f)
                         isSelected -> ClaudeTerracotta
                         else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     },
@@ -1630,6 +1633,8 @@ private fun ChatHistoryItemRow(
         var menuExpanded by remember { mutableStateOf(false) }
         var showRename by remember { mutableStateOf(false) }
         val isClaudeConv = conv.agent == com.example.gemini.domain.model.AgentKind.CLAUDE
+        // Claude Code and OpenCode chats: renamed, exported and shared through claudeActions (routed by agent)
+        val isAgentConv = conv.agent != com.example.gemini.domain.model.AgentKind.AGY
         val clipboardManager = LocalClipboardManager.current
         val context = LocalContext.current
 
@@ -1706,7 +1711,7 @@ private fun ChatHistoryItemRow(
                         onForkConversation(conv.id)
                     }
                 )
-                if (isClaudeConv && claudeActions != null) {
+                if (isAgentConv && claudeActions != null) {
                     DropdownMenuItem(
                         text = { Text("Rename", fontSize = 13.5.sp) },
                         leadingIcon = {
@@ -1722,6 +1727,8 @@ private fun ChatHistoryItemRow(
                             showRename = true
                         }
                     )
+                }
+                if (isClaudeConv && claudeActions != null) {
                     DropdownMenuItem(
                         text = { Text("Restart chat", fontSize = 13.5.sp) },
                         leadingIcon = {
@@ -1762,7 +1769,7 @@ private fun ChatHistoryItemRow(
                                 context = context,
                                 conversationId = conv.id,
                                 title = conv.title,
-                                activeMessages = if (isClaudeConv) claudeActions?.loadMessages?.invoke(conv.id) else null,
+                                activeMessages = if (isAgentConv) claudeActions?.loadMessages?.invoke(conv.id) else null,
                                 format = ConversationExportHelper.ExportFormat.MARKDOWN,
                                 snackbarHostState = snackbarHostState
                             )
@@ -1787,7 +1794,7 @@ private fun ChatHistoryItemRow(
                                 context = context,
                                 conversationId = conv.id,
                                 title = conv.title,
-                                activeMessages = if (isClaudeConv) claudeActions?.loadMessages?.invoke(conv.id) else null,
+                                activeMessages = if (isAgentConv) claudeActions?.loadMessages?.invoke(conv.id) else null,
                                 format = ConversationExportHelper.ExportFormat.HTML,
                                 snackbarHostState = snackbarHostState
                             )
@@ -1812,7 +1819,7 @@ private fun ChatHistoryItemRow(
                                 context = context,
                                 conversationId = conv.id,
                                 title = conv.title,
-                                activeMessages = if (isClaudeConv) claudeActions?.loadMessages?.invoke(conv.id) else null,
+                                activeMessages = if (isAgentConv) claudeActions?.loadMessages?.invoke(conv.id) else null,
                                 snackbarHostState = snackbarHostState
                             )
                         }
