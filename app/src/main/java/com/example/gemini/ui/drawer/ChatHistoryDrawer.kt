@@ -120,6 +120,7 @@ fun ChatHistoryDrawer(
     /** Jarvis (voice mode) is on: the filter row gets a Jarvis chip listing Jarvis' hidden chats. */
     jarvisEnabled: Boolean = false,
     jarvisConversations: List<Conversation> = emptyList(),
+    enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = emptySet(),
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -143,7 +144,12 @@ fun ChatHistoryDrawer(
     val context = LocalContext.current
 
     var agentFilter by remember { mutableStateOf<com.example.gemini.domain.model.AgentKind?>(null) }
-    val hasBothAgents = remember(conversations) { conversations.map { it.agent }.distinct().size > 1 }
+    val visibleAgents = remember(enabledAgents, conversations) {
+        val base = if (enabledAgents.isNotEmpty()) enabledAgents else conversations.map { it.agent }.distinct().toSet()
+        com.example.gemini.domain.model.AgentKind.entries.filter { it in base }
+    }
+    val showFilterBar = (visibleAgents.size + if (jarvisEnabled) 1 else 0) > 1
+    if (agentFilter != null && agentFilter !in visibleAgents) agentFilter = null
     var jarvisFilter by remember { mutableStateOf(false) }
     if (!jarvisEnabled && jarvisFilter) jarvisFilter = false
     val filtered = remember(conversations, jarvisConversations, searchQuery, agentFilter, jarvisFilter) {
@@ -650,34 +656,6 @@ fun ChatHistoryDrawer(
                         modifier = Modifier.size(19.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(2.dp))
-                // New chat: the same icon as the chat screen's top bar
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(ClaudeTerracotta.copy(alpha = 0.14f))
-                        .clickable {
-                            searchQuery = ""
-                            onSearchQueryChange("")
-                            isSearchActive = false
-                            scope.launch {
-                                try {
-                                    listState.scrollToItem(0)
-                                } catch (_: Exception) {
-                                }
-                            }
-                            onNewChat()
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AddComment,
-                        contentDescription = "New chat",
-                        tint = ClaudeTerracotta,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
             }
 
             // ---------------- search field: only after tapping the header's search icon ----------------
@@ -811,19 +789,27 @@ fun ChatHistoryDrawer(
             // breathing room between the header and the list
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (hasBothAgents || agentFilter != null || jarvisEnabled) {
+            if (showFilterBar) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        .padding(horizontal = 12.dp, vertical = 2.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    listOf<Pair<com.example.gemini.domain.model.AgentKind?, String>>(
-                        null to "All",
-                        com.example.gemini.domain.model.AgentKind.AGY to "Antigravity",
-                        com.example.gemini.domain.model.AgentKind.CLAUDE to "Claude",
-                        com.example.gemini.domain.model.AgentKind.OPENCODE to "OpenCode"
-                    ).forEach { (agent, label) ->
+                    val allItems = buildList {
+                        add(null to "All")
+                        visibleAgents.forEach { agent ->
+                            val label = when (agent) {
+                                com.example.gemini.domain.model.AgentKind.AGY -> "Antigravity"
+                                com.example.gemini.domain.model.AgentKind.CLAUDE -> "Claude"
+                                com.example.gemini.domain.model.AgentKind.OPENCODE -> "OpenCode"
+                            }
+                            add(agent to label)
+                        }
+                    }
+                    allItems.forEach { (agent, label) ->
                         val selected = !jarvisFilter && agentFilter == agent
                         val accent = agent?.accent() ?: ClaudeTerracotta
                         Text(

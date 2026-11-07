@@ -1037,6 +1037,7 @@ fun ChatScreen(
                 conversations = conversations,
                 jarvisEnabled = jarvisEnabled,
                 jarvisConversations = jarvisConversations,
+                enabledAgents = enabledAgents,
                 currentConversationId = currentConv?.id,
                 activeInstances = activeInstances,
                 isLoading = isConversationsLoading,
