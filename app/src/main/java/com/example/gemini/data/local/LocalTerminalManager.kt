@@ -1248,6 +1248,13 @@ object LocalTerminalManager {
             return
         }
 
+        // the server starts with the agent flags: right after the first install the user has not chosen the agents
+        // yet (it would start Antigravity only); the agent choice starts it then
+        if (!com.example.gemini.data.agent.AgentPreferences.hasChosenSync(context)) {
+            Log.d(TAG, "[AutoLaunch] Agents not chosen yet, deferring the server start until the choice is made")
+            return
+        }
+
         if (LocalServerManager.hasServerScript(context)) {
             Log.d(TAG, "[AutoLaunch] Server script found in home directory, launching local server...")
             LocalServerManager.startServer(context, forceRestart = false)

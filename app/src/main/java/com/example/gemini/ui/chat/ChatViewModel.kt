@@ -115,8 +115,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val cur = store.currentConversation.value
         if (cur == null || cur.agent !in agents) startNewChat()
         if (firstChoice) {
-            // first launch: the server waited for this choice and now starts with it
-            com.example.gemini.data.local.LocalServerManager.autoStartOnAppLaunch(getApplication())
+            // first launch: the server waited for this choice and now starts with it. If something started it already
+            // (with the default agents, i.e. Antigravity only), restart it so the chosen agents run.
+            val server = com.example.gemini.data.local.LocalServerManager
+            val alreadyUp = server.status.value.let {
+                it is com.example.gemini.data.local.LocalServerStatus.Running || it is com.example.gemini.data.local.LocalServerStatus.Starting
+            }
+            if (alreadyUp && !com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) {
+                server.startServer(getApplication(), forceRestart = true)
+            } else {
+                server.autoStartOnAppLaunch(getApplication())
+            }
         } else if (before != agents) {
             // stop the server completely, then restart the app: it starts the server again with the new agents
             viewModelScope.launch {
@@ -1315,7 +1324,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 if (bytes != null && bytes.isNotEmpty()) {
-                    val restoreRes = agyBridgeService.restoreConversationArchive(bytes)
+                    // The restore is done by the local server (bridge) alone, but at app launch it may not be up yet:
+                    // retry while it is unreachable. An HTTP answer (e.g. not an archive) is final.
+                    var restoreRes = agyBridgeService.restoreConversationArchive(bytes)
+                    val giveUpAt = System.currentTimeMillis() + 60_000
+                    var told = false
+                    while (restoreRes.isFailure && restoreRes.exceptionOrNull()?.message?.startsWith("HTTP ") != true &&
+                        System.currentTimeMillis() < giveUpAt && isActive
+                    ) {
+                        if (!told) {
+                            told = true
+                            withContext(Dispatchers.Main) {
+                                com.example.gemini.ui.components.AppToastHelper.showToast("Waiting for the local server to restore the chat…", com.example.gemini.ui.components.ChatToastType.INFO)
+                            }
+                        }
+                        delay(1_500)
+                        restoreRes = agyBridgeService.restoreConversationArchive(bytes)
+                    }
                     if (restoreRes.isSuccess) {
                         val restored = restoreRes.getOrThrow()
                         if (!isActive) return@launch
@@ -1327,10 +1352,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             stepCount = restored.stepsCount
                         )
                         _conversations.value = listOf(newConv) + _conversations.value.filter { it.id != restored.id }
+                        val hubReady = systemConnectionState.value.isReady
                         withContext(Dispatchers.Main) {
-                            selectConversation(restored.id)
-                            com.example.gemini.ui.components.AppToastHelper.showToast("Restored chat: ${restored.title}", com.example.gemini.ui.components.ChatToastType.SUCCESS)
+                            com.example.gemini.ui.components.AppToastHelper.showToast(
+                                if (hubReady) "Chat restored: ${restored.title}"
+                                else "Chat restored: ${restored.title}. It opens once Antigravity has started.",
+                                com.example.gemini.ui.components.ChatToastType.SUCCESS
+                            )
                         }
+                        _isSharedConversationLoading.value = false
+                        openRestoredWhenAgyReady(restored.id)
                         return@launch
                     }
 
@@ -1351,6 +1382,25 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _isSharedConversationLoading.value = false
             }
         }
+    }
+
+    /**
+     * A restored Antigravity chat can only be shown once the hub is up (its steps come from the hub): open it then.
+     * Not if the user opened another existing chat meanwhile (it stays in the list).
+     */
+    private suspend fun openRestoredWhenAgyReady(id: String) {
+        val before = store.currentConversation.value?.id
+        val ready = withTimeoutOrNull(180_000) { systemConnectionState.first { it.isReady } } != null
+        if (!ready) {
+            withContext(Dispatchers.Main) {
+                com.example.gemini.ui.components.AppToastHelper.showToast("Antigravity has not started yet: the restored chat is in the chat list.", com.example.gemini.ui.components.ChatToastType.INFO)
+            }
+            return
+        }
+        val now = store.currentConversation.value
+        val userMovedOn = now != null && now.id != before && now.title != "New Chat"
+        if (userMovedOn) return
+        withContext(Dispatchers.Main) { selectConversation(id) }
     }
 
     fun cancelSharedConversationLoading() {

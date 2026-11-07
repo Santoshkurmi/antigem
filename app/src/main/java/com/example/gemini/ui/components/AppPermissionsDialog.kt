@@ -12,6 +12,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -22,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.NotificationsActive
@@ -32,6 +32,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -171,303 +172,283 @@ fun AppPermissionsDialog(
         }
     }
 
-    val screenBg = if (isDark) ClaudeDarkBg else ClaudeCream
     val textPrimary = if (isDark) TextPrimaryDark else TextPrimaryLight
     val textSecondary = if (isDark) TextSecondaryDark else TextSecondaryLight
+    val allowedCount = listOf(hasNotification, hasStorage, hasAudio).count { it }
+    val progress by animateFloatAsState(allowedCount / 3f, label = "permProgress")
 
     Surface(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(screenBg),
-        color = screenBg
+        modifier = Modifier.fillMaxSize(),
+        color = AppColors.background
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 20.dp)
+                .padding(horizontal = 24.dp)
         ) {
-            // Welcoming Header
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 24.dp),
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Spacer(modifier = Modifier.height(48.dp))
+
+                // app mark
                 Box(
                     modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(ClaudeTerracotta.copy(alpha = if (isDark) 0.16f else 0.12f)),
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(ClaudeTerracotta, ClaudeTerracotta.copy(alpha = 0.65f))
+                            )
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Shield,
                         contentDescription = null,
-                        tint = ClaudeTerracotta,
-                        modifier = Modifier.size(32.dp)
+                        tint = Color.White,
+                        modifier = Modifier.size(34.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
                     text = "Welcome to AntiGem",
-                    fontSize = 24.sp,
+                    fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
                     color = textPrimary,
                     textAlign = TextAlign.Center
                 )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Configure your permissions to enable background execution, terminal tools, and local project storage.",
-                    fontSize = 13.5.sp,
-                    lineHeight = 19.sp,
+                    text = "Allow a few things so AntiGem can run in the background and work with your files.",
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
                     color = textSecondary,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp)
                 )
-            }
 
-            // Scrollable List of Permission Cards
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                // 1. NOTIFICATIONS (Compulsory)
-                PermissionCard(
-                    isDark = isDark,
-                    icon = Icons.Outlined.NotificationsActive,
-                    title = "Notifications & Service",
-                    badgeText = "Required",
-                    badgeColor = ClaudeTerracotta,
-                    accentColor = ClaudeTerracotta,
-                    description = "Required for persistent background terminal service, live status alerts, updates, and rootfs package installer progress.",
-                    isGranted = hasNotification,
-                    onGrantClick = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            hasNotification = PermissionUtils.hasNotificationPermission(context)
-                        }
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // progress
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Permissions",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "$allowedCount of 3 allowed",
+                        fontSize = 12.5.sp,
+                        color = textSecondary
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = AppColors.success,
+                    trackColor = AppColors.fill,
+                    drawStopIndicator = {}
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = AppColors.card,
+                    border = BorderStroke(1.dp, AppColors.border.copy(alpha = if (isDark) 0.35f else 0.8f))
+                ) {
+                    Column {
+                        PermissionRow(
+                            icon = Icons.Outlined.NotificationsActive,
+                            accent = ClaudeTerracotta,
+                            title = "Notifications",
+                            subtitle = "Keeps the background service running and shows progress",
+                            required = true,
+                            isGranted = hasNotification,
+                            onAllow = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    hasNotification = PermissionUtils.hasNotificationPermission(context)
+                                }
+                            }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 68.dp),
+                            color = AppColors.border.copy(alpha = if (isDark) 0.25f else 0.6f)
+                        )
+                        PermissionRow(
+                            icon = Icons.Outlined.Folder,
+                            accent = GeminiBlue,
+                            title = "Files",
+                            subtitle = "Open projects and files on your storage",
+                            required = false,
+                            isGranted = hasStorage,
+                            onAllow = { requestStorage() }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 68.dp),
+                            color = AppColors.border.copy(alpha = if (isDark) 0.25f else 0.6f)
+                        )
+                        PermissionRow(
+                            icon = Icons.Outlined.Mic,
+                            accent = GeminiPurple,
+                            title = "Microphone",
+                            subtitle = "Dictate messages and voice notes",
+                            required = false,
+                            isGranted = hasAudio,
+                            onAllow = { audioLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+                        )
                     }
-                )
+                }
 
-                // 2. EXTERNAL STORAGE (/sdcard) (Optional)
-                PermissionCard(
-                    isDark = isDark,
-                    icon = Icons.Outlined.Folder,
-                    title = "Storage & /sdcard",
-                    badgeText = "Optional",
-                    badgeColor = GeminiBlue,
-                    accentColor = GeminiBlue,
-                    description = "Allows AntiGem to access /sdcard to import local bootstrap packages, inspect files, and manage external code workspaces.",
-                    isGranted = hasStorage,
-                    onGrantClick = { requestStorage() }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "You can change these anytime in Android settings.",
+                    fontSize = 12.sp,
+                    color = textSecondary.copy(alpha = 0.8f),
+                    textAlign = TextAlign.Center
                 )
-
-                // 3. MICROPHONE (Optional)
-                PermissionCard(
-                    isDark = isDark,
-                    icon = Icons.Outlined.Mic,
-                    title = "Microphone & Voice",
-                    badgeText = "Optional",
-                    badgeColor = GeminiPurple,
-                    accentColor = GeminiPurple,
-                    description = "Enables voice-to-text dictation and voice commands directly in chat.",
-                    isGranted = hasAudio,
-                    onGrantClick = { audioLauncher.launch(Manifest.permission.RECORD_AUDIO) }
-                )
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Bottom Action Section
+            // continue
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .padding(top = 8.dp, bottom = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (!hasNotification) {
+                AnimatedVisibility(visible = !hasNotification) {
                     Text(
-                        text = "👉 Please enable Notifications above to proceed",
+                        text = "Allow notifications to continue",
                         fontSize = 12.5.sp,
-                        color = com.example.gemini.theme.AppColors.danger,
-                        fontWeight = FontWeight.Medium
+                        color = textSecondary,
+                        modifier = Modifier.padding(bottom = 10.dp)
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
                 }
-
                 Button(
                     onClick = onDismissOrCompleted,
                     enabled = hasNotification,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
+                        .height(54.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ClaudeTerracotta,
                         contentColor = Color.White,
-                        disabledContainerColor = com.example.gemini.theme.AppColors.fill,
-                        disabledContentColor = com.example.gemini.theme.AppColors.textSecondary
+                        disabledContainerColor = AppColors.fill,
+                        disabledContentColor = AppColors.textSecondary
                     )
                 ) {
-                    Text(
-                        text = if (hasNotification) "Continue to AntiGem 🚀" else "Notifications Required to Proceed",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
+                    Text(text = "Continue", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
             }
         }
     }
 }
 
+/** One permission: icon, title, a short line, and an Allow button (a check once it is allowed). */
 @Composable
-private fun PermissionCard(
-    isDark: Boolean,
+private fun PermissionRow(
     icon: ImageVector,
+    accent: Color,
     title: String,
-    badgeText: String,
-    badgeColor: Color,
-    accentColor: Color,
-    description: String,
+    subtitle: String,
+    required: Boolean,
     isGranted: Boolean,
-    onGrantClick: () -> Unit
+    onAllow: () -> Unit
 ) {
-    val cardBg = com.example.gemini.theme.AppColors.card.let { if (isGranted) androidx.compose.ui.graphics.lerp(it, com.example.gemini.theme.AppColors.background, 0.4f) else it }
-
-    val cardBorder = if (isGranted) {
-        BorderStroke(1.dp, com.example.gemini.theme.AppColors.success.copy(alpha = if (isDark) 0.5f else 0.4f))
-    } else {
-        BorderStroke(1.dp, com.example.gemini.theme.AppColors.border)
-    }
-
-    val textPrimary = if (isDark) TextPrimaryDark else TextPrimaryLight
-    val textSecondary = if (isDark) TextSecondaryDark else TextSecondaryLight
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = cardBg,
-        border = cardBorder
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
+        val tint by animateColorAsState(if (isGranted) AppColors.success else accent, label = "permTint")
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.Top
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(tint.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (isGranted) com.example.gemini.theme.AppColors.success.copy(alpha = if (isDark) 0.16f else 0.12f)
-                        else accentColor.copy(alpha = if (isDark) 0.16f else 0.12f)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isGranted) Icons.Default.CheckCircle else icon,
-                    contentDescription = null,
-                    tint = if (isGranted) com.example.gemini.theme.AppColors.success else accentColor,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = title,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = textPrimary,
-                        modifier = Modifier.weight(1f, fill = false),
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = if (isGranted) {
-                            com.example.gemini.theme.AppColors.success.copy(alpha = if (isDark) 0.18f else 0.12f)
-                        } else {
-                            badgeColor.copy(alpha = if (isDark) 0.18f else 0.12f)
-                        }
-                    ) {
-                        Text(
-                            text = if (isGranted) "Enabled ✓" else badgeText,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false,
-                            color = if (isGranted) com.example.gemini.theme.AppColors.success else badgeColor,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
+            Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = description,
-                    fontSize = 12.sp,
-                    color = textSecondary,
-                    lineHeight = 16.5.sp
+                    text = title,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = AppColors.onBackground
                 )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                if (isGranted) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = com.example.gemini.theme.AppColors.success,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "Permission active",
-                            fontSize = 11.5.sp,
-                            color = com.example.gemini.theme.AppColors.success,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                } else {
-                    FilledTonalButton(
-                        onClick = onGrantClick,
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = com.example.gemini.theme.AppColors.fill,
-                            contentColor = textPrimary
-                        ),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Text(
-                            text = "Grant Access",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                if (required && !isGranted) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Required",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = ClaudeTerracotta
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                fontSize = 12.5.sp,
+                lineHeight = 17.sp,
+                color = AppColors.textSecondary
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        AnimatedContent(targetState = isGranted, label = "permState") { granted ->
+            if (granted) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(AppColors.success.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Allowed",
+                        tint = AppColors.success,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            } else {
+                FilledTonalButton(
+                    onClick = onAllow,
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = accent.copy(alpha = 0.14f),
+                        contentColor = accent
+                    ),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Text(text = "Allow", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

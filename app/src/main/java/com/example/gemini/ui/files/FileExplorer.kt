@@ -586,7 +586,13 @@ fun FileExplorer(
                         enabled = loaded && saveName.isNotBlank() && !saveName.contains('/'),
                         onSave = {
                             val n = saveName.trim()
-                            if (n in existingNames) confirmOverwrite = n else onSave(path, n)
+                            val folder = path
+                            // checked now, not against the listing from when the folder was opened (a file may have
+                            // been created there since: an earlier save, the agent, another app)
+                            scope.launch {
+                                val names = FileExplorerApi.list(folder).getOrNull()?.entries?.map { it.name }?.toSet() ?: existingNames
+                                if (n in names) confirmOverwrite = n else onSave(folder, n)
+                            }
                         }
                     )
                 } else if (onConfirmFolder != null && !selecting) {

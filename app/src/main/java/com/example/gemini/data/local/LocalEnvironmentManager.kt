@@ -662,6 +662,9 @@ object LocalEnvironmentManager {
         }
     }
 
+    /** A 32-bit-only phone (no 64-bit ABI): the local Linux environment cannot run on it. */
+    fun isUnsupported32BitDevice(): Boolean = Build.SUPPORTED_64_BIT_ABIS.isNullOrEmpty()
+
     fun getBootstrapArch(): String {
         val abis = Build.SUPPORTED_ABIS ?: emptyArray()
         for (abi in abis) {
