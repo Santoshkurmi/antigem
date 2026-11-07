@@ -6,6 +6,7 @@
     "Added Jarvis: hands-free voice control of the whole app, with tasks, voice approvals and a wake phrase",
     "Added Server mode: run the agents on your own server (VPS/PC) and use AntiGem as the app for it",
     "Added X11 Desktop: run a Linux desktop (XFCE or LXQt) and GUI apps with Termux:X11 (Shared UID build)",
+    "Added github integration: clone, pull, push and manage your repositories from the app",
     "Added Termux Support in Settings: Termux:API and X11 Desktop in one place",
     "Added a theme gallery and a quick theme picker in the sidebar",
     "Added better file explorer with a new file picker and a new file viewer",
