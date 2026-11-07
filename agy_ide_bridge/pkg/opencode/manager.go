@@ -65,7 +65,12 @@ type Manager struct {
 }
 
 func NewManager(homeDir, workspaceDir, binPath string) *Manager {
-	return &Manager{HomeDir: homeDir, WorkspaceDir: workspaceDir, BinPath: strings.TrimSpace(binPath)}
+	binPath = strings.TrimSpace(binPath)
+	// the app passes paths like "~/.opencode/bin/opencode" quoted, so the shell does not expand the tilde
+	if binPath == "~" || strings.HasPrefix(binPath, "~/") {
+		binPath = filepath.Join(homeDir, strings.TrimPrefix(binPath, "~"))
+	}
+	return &Manager{HomeDir: homeDir, WorkspaceDir: workspaceDir, BinPath: binPath}
 }
 
 // dataDir holds the bridge's OpenCode files (custom providers and the generated config).

@@ -87,6 +87,9 @@ class AuthPreferences(private val context: Context) {
         /** The app's Claude Code launcher (glibc loader); Claude's updater never touches it. */
         const val DEFAULT_CLAUDE_BINARY_PATH = "~/../usr/bin/claude"
         const val DEFAULT_UBUNTU_CLAUDE_BINARY_PATH = "/root/.local/bin/claude"
+        /** Where the official OpenCode installer (and the app's own installer) puts it. */
+        const val DEFAULT_OPENCODE_BINARY_PATH = "~/.opencode/bin/opencode"
+        const val DEFAULT_UBUNTU_OPENCODE_BINARY_PATH = "/root/.opencode/bin/opencode"
 
         const val TOKEN_PREFIX = "x-ag"
         const val TOKEN_SUFFIX = "_9qx"
@@ -661,12 +664,14 @@ class AuthPreferences(private val context: Context) {
     fun getRemoteBridgeBinSync(): String = syncPrefs.getString("remote_bridge_bin", "") ?: ""
     fun getRemoteAgyBinSync(): String = syncPrefs.getString("remote_agy_bin", "") ?: ""
     fun getRemoteClaudeBinSync(): String = syncPrefs.getString("remote_claude_bin", "") ?: ""
+    fun getRemoteOpenCodeBinSync(): String = syncPrefs.getString("remote_opencode_bin", "") ?: ""
 
-    fun saveRemoteBinariesSync(bridge: String, agy: String, claude: String) {
+    fun saveRemoteBinariesSync(bridge: String, agy: String, claude: String, openCode: String = getRemoteOpenCodeBinSync()) {
         syncPrefs.edit()
             .putString("remote_bridge_bin", bridge.trim())
             .putString("remote_agy_bin", agy.trim())
             .putString("remote_claude_bin", claude.trim())
+            .putString("remote_opencode_bin", openCode.trim())
             .apply()
     }
 
@@ -1035,6 +1040,16 @@ class AuthPreferences(private val context: Context) {
         val trimmed = path.trim().ifBlank { getDefaultClaudeBinaryPath() }
         syncPrefs.edit().putString("claude_binary_path", trimmed).apply()
         context.dataStore.edit { it[CLAUDE_BINARY_PATH] = trimmed }
+    }
+
+    fun getDefaultOpenCodeBinaryPath(): String =
+        if (context.packageName == "com.termux") DEFAULT_OPENCODE_BINARY_PATH else DEFAULT_UBUNTU_OPENCODE_BINARY_PATH
+
+    fun getOpenCodeBinaryPathSync(): String =
+        syncPrefs.getString("opencode_binary_path", getDefaultOpenCodeBinaryPath()) ?: getDefaultOpenCodeBinaryPath()
+
+    fun saveOpenCodeBinaryPath(path: String) {
+        syncPrefs.edit().putString("opencode_binary_path", path.trim().ifBlank { getDefaultOpenCodeBinaryPath() }).apply()
     }
 
     val hasSeenTerminalLauncherOnboarding: Flow<Boolean> = context.dataStore.data.map {

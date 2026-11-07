@@ -371,6 +371,7 @@ object RemoteServerManager {
     /** Defaults shown in Settings (and used when a field is left blank). `~` is the SSH user's home on the server. */
     const val DEFAULT_AGY_BIN = "~/.local/bin/agy"
     const val DEFAULT_CLAUDE_BIN = "~/.local/bin/claude"
+    const val DEFAULT_OPENCODE_BIN = "~/.opencode/bin/opencode"
     fun defaultBridgeBin(installDir: String): String =
         "~/" + installDir.trim().trim('/').ifBlank { ".antigem" } + "/agy_ide_bridge"
 
@@ -379,6 +380,7 @@ object RemoteServerManager {
 
     private fun effectiveAgyBin(prefs: AuthPreferences): String = prefs.getRemoteAgyBinSync().trim().ifBlank { DEFAULT_AGY_BIN }
     private fun effectiveClaudeBin(prefs: AuthPreferences): String = prefs.getRemoteClaudeBinSync().trim().ifBlank { DEFAULT_CLAUDE_BIN }
+    private fun effectiveOpenCodeBin(prefs: AuthPreferences): String = prefs.getRemoteOpenCodeBinSync().trim().ifBlank { DEFAULT_OPENCODE_BIN }
 
     private fun serverHome(s: Session): String {
         val (_, home) = exec(s, "printf %s \"\$HOME\"")
@@ -436,7 +438,7 @@ object RemoteServerManager {
     /** Where the app expects the bridge binary on the server (with `~` for the home folder). */
     fun bridgeBinaryPath(context: Context): String = effectiveBridgeBin(AuthPreferences(context))
 
-    private fun launchScript(context: Context, bin: String, agyPath: String?, claudePath: String?): String {
+    private fun launchScript(context: Context, bin: String, agyPath: String?, claudePath: String?, openCodePath: String? = null): String {
         val prefs = AuthPreferences(context)
         val installDir = bin.substringBeforeLast('/')
         val p = plan(context)
@@ -452,6 +454,7 @@ object RemoteServerManager {
             append(" --tz-offset ").append(tz)
             if (agyEnabled && agyPath != null) append(" --bin ").append(q(agyPath))
             if (claudeEnabled && claudePath != null) append(" --claude-bin ").append(q(claudePath))
+            if (com.example.gemini.domain.model.AgentKind.OPENCODE in enabledAgents && openCodePath != null) append(" --opencode-bin ").append(q(openCodePath))
             append(com.example.gemini.data.agent.AgentPreferences.bridgeFlags(context))
         }
         val log = "$installDir/bridge.log"
@@ -565,13 +568,14 @@ object RemoteServerManager {
                 val enabledAgents = com.example.gemini.data.agent.AgentPreferences.enabledSync(context)
                 val agyPath = agentPathOrNull(s, expandHome(effectiveAgyBin(prefs), home))
                 val claudePath = agentPathOrNull(s, expandHome(effectiveClaudeBin(prefs), home))
+                val openCodePath = agentPathOrNull(s, expandHome(effectiveOpenCodeBin(prefs), home))
 
                 // Never launch over an old copy: graceful on a restart, only leftovers on a plain start
                 _detail.value = if (force) "Stopping the old bridge…" else "Starting the bridge…"
                 stopServerProcesses(s, context, graceful = force)
 
                 _detail.value = "Starting the bridge…"
-                val (code, out) = exec(s, launchScript(context, bin, agyPath, claudePath), 30_000)
+                val (code, out) = exec(s, launchScript(context, bin, agyPath, claudePath, openCodePath), 30_000)
                 if (code != 0) throw IllegalStateException("Could not start the bridge: $out")
 
                 _detail.value = "Waiting for the bridge…"

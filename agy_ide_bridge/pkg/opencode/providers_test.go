@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -169,5 +170,21 @@ func TestMcpServersGoIntoTheConfig(t *testing.T) {
 	data, _ = os.ReadFile(m.configPath())
 	if strings.Contains(string(data), "jarvis_mcp") {
 		t.Fatalf("not removed: %s", data)
+	}
+}
+
+func TestBinaryPathTildeAndFallback(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(home, ".opencode", "bin", "opencode")
+	_ = os.MkdirAll(filepath.Dir(bin), 0755)
+	_ = os.WriteFile(bin, []byte("#!/bin/sh\n"), 0755)
+	t.Setenv("PATH", home)
+	t.Setenv("OPENCODE_BIN", "")
+	if got, err := NewManager(home, home, "~/.opencode/bin/opencode").ResolveBinary(); err != nil || got != bin {
+		t.Fatalf("tilde path: %q %v", got, err)
+	}
+	// a path that does not exist falls back to the usual folders
+	if got, err := NewManager(home, home, "~/nope/opencode").ResolveBinary(); err != nil || got != bin {
+		t.Fatalf("fallback: %q %v", got, err)
 	}
 }
