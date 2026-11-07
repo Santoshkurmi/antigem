@@ -1495,10 +1495,16 @@ private fun ChatHistoryItemRow(
             Spacer(modifier = Modifier.width(8.dp))
         } else {
             Box(contentAlignment = Alignment.Center) {
+                // Claude chats are marked by an orange chat icon (instead of a "Claude" text badge)
+                val isClaudeChat = conv.agent == com.example.gemini.domain.model.AgentKind.CLAUDE
                 Icon(
                     imageVector = Icons.Outlined.ChatBubbleOutline,
-                    contentDescription = null,
-                    tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    contentDescription = if (isClaudeChat) "Claude Code chat" else null,
+                    tint = when {
+                        isClaudeChat -> com.example.gemini.ui.components.ClaudeAccent.copy(alpha = if (isSelected) 1f else 0.85f)
+                        isSelected -> ClaudeTerracotta
+                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    },
                     modifier = Modifier.size(17.dp)
                 )
                 if (statusDotColor != null) {
@@ -1533,9 +1539,6 @@ private fun ChatHistoryItemRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (conv.agent == com.example.gemini.domain.model.AgentKind.CLAUDE) {
-                    com.example.gemini.ui.components.ClaudeBadge(modifier = Modifier.padding(start = 6.dp))
-                }
                 if (subagents.isNotEmpty()) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
