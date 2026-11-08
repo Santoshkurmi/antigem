@@ -12,7 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -166,18 +166,47 @@ fun LocalServerOutputDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        // Restart / Start Button
+                        // Copy Button: copies the whole log shown below
                         IconButton(
-                            onClick = { LocalServerManager.restartServer(context) },
-                            enabled = status !is LocalServerStatus.Stopping,
+                            onClick = {
+                                val session = serverSession
+                                val text = if (session != null) {
+                                    session.terminalSession.emulator?.screen?.getTranscriptText() ?: ""
+                                } else {
+                                    com.example.gemini.data.remote.RemoteServerManager.log.value
+                                }
+                                if (text.isBlank()) {
+                                    AppToastHelper.showToast("The log is empty", ChatToastType.INFO)
+                                } else {
+                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                    clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Server log", text))
+                                    AppToastHelper.showToast("Log copied", ChatToastType.SUCCESS)
+                                }
+                            },
                             modifier = Modifier.size(34.dp)
                         ) {
                             Icon(
-                                imageVector = if (status is LocalServerStatus.Running) Icons.Default.Refresh else Icons.Default.PlayArrow,
-                                contentDescription = "Restart Server",
-                                tint = if (status is LocalServerStatus.Stopping) Color.Gray else ClaudeTerracotta,
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy log",
+                                tint = textPrimary,
                                 modifier = Modifier.size(18.dp)
                             )
+                        }
+
+                        // Start Button (only while the server is not running)
+                        if (status !is LocalServerStatus.Running && status !is LocalServerStatus.Starting) {
+                            IconButton(
+                                onClick = { LocalServerManager.restartServer(context) },
+                                enabled = status !is LocalServerStatus.Stopping,
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Start Server",
+                                    tint = if (status is LocalServerStatus.Stopping) Color.Gray else ClaudeTerracotta,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
 
                         // Stop Button (Ctrl+C / terminate child processes)

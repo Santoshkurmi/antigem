@@ -462,7 +462,7 @@ object RemoteServerManager {
         return """
             export PATH="${'$'}HOME/.local/bin:${'$'}HOME/.gemini/bin:${'$'}HOME/.antigravity/bin:/usr/local/bin:${'$'}PATH"
             mkdir -p ${q(installDir)}
-            [ "${'$'}(wc -c < ${q(log)} 2>/dev/null || echo 0)" -gt 5000000 ] && : > ${q(log)}
+            : > ${q(log)}
             cd "${'$'}HOME"
             tmux kill-session -t $TMUX_SESSION 2>/dev/null
             if command -v tmux >/dev/null 2>&1; then

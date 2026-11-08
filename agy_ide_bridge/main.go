@@ -26,6 +26,7 @@ import (
 	"gemini-server/pkg/hub"
 	"gemini-server/pkg/opencode"
 	"gemini-server/pkg/plugins"
+	"gemini-server/pkg/runlog"
 	"gemini-server/pkg/security"
 	"gemini-server/pkg/ws"
 )
@@ -286,6 +287,9 @@ func main() {
 		fmt.Printf(" \033[31m[!] AGY Discovery Warning:\033[0m %v\n", err)
 	}
 
+	// everything printed from here on also goes to ~/logs/agy-ide-bridge_<date>_<time>.log (one file per start)
+	runLogFile := runlog.Start(cfg.HomeDir)
+
 	// Stylized Banner
 	fmt.Println("\033[1;36m============================================================\033[0m")
 	fmt.Println("\033[1;32m  ⚡ antiGem Go IDE Server & AGY Hub Supervisor\033[0m")
@@ -299,6 +303,9 @@ func main() {
 	fmt.Printf("  \033[1;33m• Security Token:\033[0m   %s\n", secToken)
 	fmt.Printf("  \033[1;36m• Framed Header:\033[0m    %s\n", framedHeader)
 	fmt.Printf("  \033[1m• Local Time:\033[0m       %s\n", time.Now().Format("2006-01-02 15:04:05 MST"))
+	if runLogFile != nil {
+		fmt.Printf("  \033[1m• Log File:\033[0m         %s\n", runLogFile.Path)
+	}
 	fmt.Println("\033[1;36m============================================================\033[0m")
 
 	var hubMgr *hub.HubManager
@@ -671,5 +678,6 @@ func main() {
 	_ = server.Close()
 
 	fmt.Println("✅ antiGem Go server stopped.")
+	runLogFile.Close()
 	os.Exit(0)
 }
