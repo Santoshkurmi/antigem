@@ -43,6 +43,9 @@ class TrajectoryEngine {
         const val CLIENT_MSG_TAG_PREFIX = "client_msg:"
     }
 
+    /** Model enum name → display name for the usage pill under a reply (set by the AGY backend from its model list). */
+    var modelDisplayName: (String) -> String = { it }
+
     private val _turns = MutableStateFlow<List<ChatTurn>>(emptyList())
     val turns: StateFlow<List<ChatTurn>> = _turns.asStateFlow()
 
@@ -767,7 +770,7 @@ class TrajectoryEngine {
                             thoughtDurationMs = maxDuration,
                             toolCalls = toolCalls,
                             isStreaming = turn.isStreaming,
-                            tokenUsage = turn.tokenUsage,
+                            tokenUsage = turn.tokenUsage?.let { u -> turn.modelId?.let { u.copy(model = modelDisplayName(it)) } ?: u },
                             modelId = turn.modelId
                         )
                     )

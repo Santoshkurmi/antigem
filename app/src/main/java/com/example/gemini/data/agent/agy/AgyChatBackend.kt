@@ -105,6 +105,13 @@ class AgyChatBackend(
     private val _availableModels = MutableStateFlow<List<AiModel>>(AiModel.DEFAULT_MODELS)
     val availableModels: StateFlow<List<AiModel>> = _availableModels.asStateFlow()
 
+    init {
+        // the usage pill under a reply names its model, as the "Switched to …" divider does
+        trajectoryEngine.modelDisplayName = { id ->
+            _availableModels.value.firstOrNull { it.id == id || it.key == id }?.displayName?.takeIf { it.isNotBlank() } ?: id
+        }
+    }
+
     private val _enabledModelIds = MutableStateFlow<Set<String>?>(null)
     val enabledModelIds: StateFlow<Set<String>?> = _enabledModelIds.asStateFlow()
 
