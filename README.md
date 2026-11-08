@@ -2,14 +2,14 @@
 
 # AntiGem
 
-**An AI coding workspace for Android: Antigravity and Claude Code agents, a real Linux terminal, a code editor and a browser the agent can control, all in one app.**
+**An AI coding workspace for Android: Antigravity, Claude Code and OpenCode agents, a real Linux terminal, a code editor and a browser the agent can control, all in one app.**
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![Go](https://img.shields.io/badge/Bridge-Go-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)](LICENSE)
 [![Releases](https://img.shields.io/github/v/release/santoshkurmi/antigem?style=flat-square&label=Download)](https://github.com/santoshkurmi/antigem/releases)
 
-[Download](https://github.com/santoshkurmi/antigem/releases) · [Website](https://santoshkurmi.github.io/antigem/) · [Plugin SDK](extension_docs/README.md) · [WhatsApp community](https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV?s=cl&p=a&mlu=4&ilr=4)
+[Download](https://github.com/santoshkurmi/antigem/releases) · [Website](https://santoshkurmi.github.io/antigem/) · [Plugin SDK](extension_docs/README.md) · [User Guide](user_docs/README.md) · [WhatsApp community](https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV?s=cl&p=a&mlu=4&ilr=4)
 
 </div>
 
@@ -36,12 +36,13 @@
 
 ## What it is
 
-AntiGem runs two coding agents on your phone:
+AntiGem runs three coding agents on your phone:
 
 - **Antigravity (`agy`)**: the app talks to the `agy` language server directly over gRPC.
 - **Claude Code**: Anthropic's official `claude` CLI runs inside the app's Linux environment, and the app talks to it over its stream-json protocol, with one CLI process per chat.
+- **OpenCode**: the open-source coding agent. It works with 200+ providers with your own keys, any OpenAI-compatible API, and free models.
 
-You can turn on either agent or both, on first launch or later in **Settings → Agents**. An agent you turn off does not run.
+You can turn on any of the three agents, on first launch or later in **Settings → Agents**. An agent you turn off does not run.
 
 The app reads each agent's structured protocol, not its terminal output. That is how it shows streaming replies, tool approvals, the agent's questions, subagents and file changes as normal chat UI.
 
@@ -60,7 +61,7 @@ The app reads each agent's structured protocol, not its terminal output. That is
 - A floating chat bubble you can use over other apps.
 
 ### Jarvis voice assistant
-Use the whole app hands-free by voice, on top of Claude Code or Antigravity. Full guide: **[docs/jarvis.md](docs/jarvis.md)**.
+Use the whole app hands-free by voice, on top of Antigravity, Claude Code or OpenCode. Full guide: **[docs/jarvis.md](docs/jarvis.md)**.
 - Open projects and files, switch screens, models and settings (theme too), search code, read chats, check your usage, set timers, and ask how the app works.
 - **Tasks:** hand over big jobs ("fix the failing tests and tell me when it's done"). Each runs in its own chat; Jarvis tells you when it finishes, fails, gets stuck, needs an approval or asks a question, and you can redirect or stop it by voice.
 - Approvals read out loud and answered by voice, with policies from "ask me each time" to "auto except risky".
@@ -82,8 +83,14 @@ Use the whole app hands-free by voice, on top of Claude Code or Antigravity. Ful
 - Security presets and per-project rules for command auto-run and file access.
 - MCP servers, skills and Google plugins.
 
+### OpenCode
+- The open-source coding agent, run through the bridge: its own CLI and its own providers.
+- Sign in to a provider with an API key, a device-code / browser sign-in, or credentials already on the machine.
+- **Custom providers**: add any OpenAI-compatible endpoint with your own base URL and key; free models work too. Its models show in the model picker like the other agents.
+- Settings for the server, providers, endpoints, MCP servers and approvals: **Settings → OpenCode** ("Server, providers, custom OpenAI-compatible endpoints & approvals").
+
 ### Built-in MCP servers
-Each one is a one-tap preset in **Settings → MCP Servers**, for both agents.
+Each one is a one-tap preset in **Settings → MCP Servers**, for every agent.
 
 | MCP | What the agent can do |
 | :--- | :--- |
@@ -141,7 +148,7 @@ Get the latest APK from [Releases](https://github.com/santoshkurmi/antigem/relea
 | :--- | :--- | :---: | :--- |
 | **`termux`** (recommended) | `com.termux` | No | Self-contained: the app sets up its own Linux environment. This is the one published in releases. |
 | **`standard`** | `com.antigem` | Yes | You run `agy_ide_bridge` inside a separately installed Termux app, and AntiGem connects to it over localhost. Not published; build it yourself from source. |
-| **Server mode** (a mode, not a third build) | the same as the build you installed (`com.termux` or `com.antigem`) | No | The bridge, the agents (`agy`, Claude Code), your projects and the terminal run on **your own server (a VPS)**, and the phone is only the screen. Switch it on in **Settings → Servers**. Works with both variants. See [Server mode](#server-mode-run-it-on-a-vps) below. |
+| **Server mode** (a mode, not a third build) | the same as the build you installed (`com.termux` or `com.antigem`) | No | The bridge, the agents (`agy`, Claude Code, OpenCode), your projects and the terminal run on **your own server (a VPS)**, and the phone is only the screen. Switch it on in **Settings → Servers**. Works with both variants. See [Server mode](#server-mode-run-it-on-a-vps) below. |
 
 > [!NOTE]
 > The `standard` variant is not deprecated, but it gets little attention because almost nobody uses it. Some features, such as the Browser MCP, may not work in it right now, and it may be dropped in the future. Use the `termux` variant.
@@ -319,7 +326,7 @@ APKs are written to `app/build/outputs/apk/<variant>/<buildType>/` and `build/ou
 antigem/
 ├── app/src/main/
 │   ├── java/com/example/gemini/
-│   │   ├── data/          # Agent backends (agy, claude), terminal, ADB, automation, notes, updater
+│   │   ├── data/          # Agent backends (agy, claude, opencode), terminal, ADB, automation, notes, updater
 │   │   ├── domain/        # Chat models and parsing
 │   │   └── ui/            # Compose screens: chat, IDE, browser, notes, settings
 │   ├── java/com/termux/   # Termux terminal-view widget and com.termux service entry points
