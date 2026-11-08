@@ -1135,7 +1135,6 @@ internal fun ServersSubScreen(
                     authPrefs.saveRemoteTunnelSync(remote && tunnel)
                     if (remote) {
                         authPrefs.saveSshSettings(sshHost.trim(), sshPort.toIntOrNull() ?: 22, sshUser.trim(), sshPass)
-                        authPrefs.setUseSshTerminal(true)
                         authPrefs.saveSshKeySync(sshKey, sshPassphrase)
                         authPrefs.saveRemoteBinariesSync(remoteBridgeBin, remoteAgyBin, remoteClaudeBin, remoteOpenCodeBin)
                         authPrefs.saveRemoteInstallDirSync(remoteInstallDir)
