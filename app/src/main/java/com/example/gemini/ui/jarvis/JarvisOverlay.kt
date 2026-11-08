@@ -128,6 +128,8 @@ fun JarvisOverlay() {
     val orbSize by JarvisPreferences.orbSize.state.collectAsState()
     val autoNow by JarvisController.autoSendNow.collectAsState()
     val quiet by JarvisPreferences.quietMode.state.collectAsState()
+    // "chat only": no floating button; it shows up only to carry a notice (a Jarvis chat waits for an approval…)
+    val voiceOn by JarvisPreferences.voiceAssistant.state.collectAsState()
 
     var level by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(phase) {
@@ -142,7 +144,11 @@ fun JarvisOverlay() {
         if (granted) JarvisController.onMicPressed()
     }
     val onTap: () -> Unit = {
-        if (!JarvisController.hasMic()) micLauncher.launch(Manifest.permission.RECORD_AUDIO) else JarvisController.onMicPressed()
+        when {
+            !voiceOn -> JarvisController.clearNotice()
+            !JarvisController.hasMic() -> micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            else -> JarvisController.onMicPressed()
+        }
     }
     val onNoticeAction: (String) -> Unit = { action ->
         when {
@@ -161,7 +167,7 @@ fun JarvisOverlay() {
     val quickOpen by JarvisController.quickSettingsOpen.collectAsState()
 
     val expanded = phase == Phase.LISTENING || phase == Phase.SPEAKING
-    val showPill = !expanded && showActivity && (phase == Phase.THINKING || steps.isNotEmpty())
+    val showPill = voiceOn && !expanded && showActivity && (phase == Phase.THINKING || steps.isNotEmpty())
     val line = when (phase) {
         Phase.LISTENING -> heard
         Phase.SPEAKING -> said
@@ -176,12 +182,12 @@ fun JarvisOverlay() {
         OrbLayer(
             phase = phase, level = level, expanded = expanded, showPill = showPill, steps = steps, line = line,
             showTranscript = showTranscript, showActivity = showActivity, sendProgress = sendProgress, holding = holding,
-            auto = autoNow, quiet = quiet, notice = notice, orbSize = orbSize, activeTasks = activeTasks,
+            auto = autoNow, quiet = quiet, notice = notice, orbSize = if (voiceOn) orbSize else "hidden", activeTasks = activeTasks,
             attention = attention, tasks = tasks, onTap = onTap, onNoticeAction = onNoticeAction
         )
     }
-    if (panelOpen) JarvisPanel(onTalk = onTap, onNoticeAction = onNoticeAction)
-    if (quickOpen) JarvisQuickSettings(onClose = { JarvisController.quickSettingsOpen.value = false })
+    if (panelOpen && voiceOn) JarvisPanel(onTalk = onTap, onNoticeAction = onNoticeAction)
+    if (quickOpen && voiceOn) JarvisQuickSettings(onClose = { JarvisController.quickSettingsOpen.value = false })
 }
 
 // ------------------------------------------------------------------------------------------------ orb + card layer

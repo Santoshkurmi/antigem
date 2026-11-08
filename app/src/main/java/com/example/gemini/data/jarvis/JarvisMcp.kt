@@ -125,8 +125,10 @@ object JarvisMcp {
         put(tool("jarvis_task_list", "Your tasks: state (starting, running, waiting for approval, asking a question, no progress, done, failed, stopped), team, age and last note. Not for polling: the news comes to you by itself.",
             emptyList(), "include_finished" to prop("boolean", "Also list finished tasks (default true)"),
             "scope" to prop("string", "mine (default: the tasks of your chat) or all", listOf("mine", "all")), limit, managerId))
-        put(tool("jarvis_task_get", "One task in detail: goal, state, last note, and its latest reply or progress. Use it for \"how is X going?\" or to understand a failure; not to poll a running task.",
-            listOf("id"), taskId, "messages" to prop("integer", "Also include this many of its newest messages (default 3, 0-10)"), managerId))
+        put(tool("jarvis_task_get", "One task in detail: goal, state, last note, and its latest reply or progress. Use it for \"how is X going?\" or to understand a failure; not to poll a running task. " +
+            "For a finished task's whole reply use jarvis_read_chat(id, role=\"assistant\", limit=1, max_chars=30000).",
+            listOf("id"), taskId, "messages" to prop("integer", "Also include this many of its newest messages (default 3, 0-10)"),
+            "max_chars" to prop("integer", "Cut each of those messages to this length (default 600, up to 30000)"), managerId))
         put(tool("jarvis_task_reply",
             "Send the task a follow-up, a correction or a new direction (\"also run the tests\", \"use the other API\"). The task keeps its context, so " +
                 "fixes and next steps of the same work go here. With interrupt=true a task that is still working is stopped first and then gets this message.",
@@ -224,12 +226,14 @@ object JarvisMcp {
             "Status of one chat: running or idle, agent, model, project, waiting approvals and a preview of the last messages.",
             emptyList(), chatId))
         put(tool("jarvis_read_chat",
-            "Read what is inside a chat, in pages. By default the newest messages first (from_end=true). Summarize for the user; do not read it out word for word.",
+            "Read what is inside a chat (also a task's chat: its id is the task id), in pages. By default the newest messages first (from_end=true). " +
+                "A message longer than max_chars is cut (it then says chars and cut=true); for a task's whole last reply use role=\"assistant\", limit=1, max_chars=30000. " +
+                "Summarize for the user; do not read it out word for word.",
             emptyList(), chatId, limit, offset,
             "from_end" to prop("boolean", "Count from the newest message (default true)"),
             "role" to prop("string", "Only these messages", listOf("all", "user", "assistant")),
             "include_tools" to prop("boolean", "Include the tool calls each reply made (default false)"),
-            "max_chars" to prop("integer", "Cut each message to this length (default 800)")))
+            "max_chars" to prop("integer", "Cut each message to this length (default 800, up to 30000)")))
         put(tool("jarvis_search_chats",
             "Find chats by title; with deep=true also look inside the most recent chats.",
             listOf("query"),
@@ -382,7 +386,7 @@ object JarvisMcp {
                     val t = args.optString("text").trim()
                     if (t.isEmpty()) return error("text is empty")
                     if (textChat) {
-                        if (!JarvisManagers.of(caller).speak) return text("Voice replies are off in this chat, so nothing was said. Write it in your reply instead.")
+                        if (!JarvisManagers.of(caller).voiceOn) return text("Voice replies are off in this chat, so nothing was said. Write it in your reply instead.")
                         JarvisEvents.markSpoke(caller)
                         JarvisController.announce(t)
                         return text("Said.")
@@ -394,7 +398,7 @@ object JarvisMcp {
                 "jarvis_ask" -> {
                     val q = args.optString("question").trim()
                     if (q.isEmpty()) return error("question is empty")
-                    if (textChat && !JarvisManagers.of(caller).speak) {
+                    if (textChat && !JarvisManagers.of(caller).voiceOn) {
                         return error("Voice replies are off in this chat: ask the user in your reply and end your turn. The answer comes as the next message.")
                     }
                     val secs = args.optInt("timeout_seconds", 45).coerceIn(5, 90)
@@ -717,8 +721,13 @@ object JarvisMcp {
         }.getOrNull()
     }
 
+    /** The chat id meant by args.id: a task's (also shortened), a chat's (also shortened, when unique), else as given; none = the chat on screen. */
     private fun resolveId(args: JSONObject): String? =
-        args.optString("id").trim().ifBlank { null }?.let { JarvisTasks.find(it)?.id ?: it } ?: vm.currentConversation.value?.id
+        args.optString("id").trim().ifBlank { null }?.let { given ->
+            JarvisTasks.find(given)?.id ?: given.takeIf { g -> vm.allConversations.value.any { it.id == g } }
+                ?: given.takeIf { it.length >= 6 }?.let { g -> vm.allConversations.value.filter { it.id.startsWith(g) }.singleOrNull()?.id }
+                ?: given
+        } ?: vm.currentConversation.value?.id
 
     private fun claudeOnScreen() =
         if (vm.currentConversation.value?.agent == AgentKind.CLAUDE) vm.claudeBackend else null
@@ -933,8 +942,12 @@ object JarvisMcp {
         val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id. Use jarvis_task_list.")
         if (t.active && !t.state.needsUser && polling("get:$caller:${t.id}", 2, 90_000)) return error(POLL_STOP)
         val n = args.optInt("messages", 3).coerceIn(0, 10)
+        val max = args.optInt("max_chars", 600).coerceIn(100, 30_000)
         val o = taskJson(t).put("goal", t.goal)
-        if (t.result.isNotBlank()) o.put("result", t.result)
+        if (t.result.isNotBlank()) {
+            o.put("result", t.result)
+            if (t.resultChars > t.result.length) o.put("result_note", "Only the end of a ${t.resultChars}-character reply. All of it: jarvis_read_chat(id=\"${t.id}\", role=\"assistant\", limit=1, max_chars=30000).")
+        }
         val pending = JarvisController.allPending().filter { it.chatId == t.id }
         if (pending.isNotEmpty()) o.put("waiting_approvals", JSONArray().apply { pending.forEach { put(JSONObject().put("key", it.key).put("what", it.summary).put("risk", it.risk.name.lowercase())) } })
         JarvisTasks.pendingQuestion(t.id)?.second?.questionnaire?.questions?.firstOrNull()?.let { q ->
@@ -945,7 +958,7 @@ object JarvisMcp {
                 .filter { it.content.isNotBlank() || it.toolCalls.isNotEmpty() }.takeLast(n)
             o.put("latest", JSONArray().apply {
                 msgs.forEach { m ->
-                    put(JSONObject().put("role", roleName(m)).put("text", cleanText(m.content, 500)).apply {
+                    put(JSONObject().put("role", roleName(m)).put("text", cleanText(m.content, max)).apply {
                         m.toolCalls.lastOrNull()?.let { tc -> put("last_tool", "${tc.name} ${tc.command.take(80)} (${tc.status.lowercase()})".trim()) }
                     })
                 }
@@ -1193,14 +1206,20 @@ object JarvisMcp {
         val role = args.optString("role", "all")
         if (role != "all") msgs = msgs.filter { roleName(it) == role }
         msgs = msgs.filter { it.content.isNotBlank() || it.toolCalls.isNotEmpty() }
+        if (msgs.isEmpty()) {
+            return error(if (role != "all") "That chat has no $role messages." else
+                "Nothing could be read from chat \"$id\". Check the id (jarvis_task_list or jarvis_list_chats give the full one); a chat that was just created may need a moment.")
+        }
         val fromEnd = args.optBoolean("from_end", true)
         val ordered = if (fromEnd) msgs.reversed() else msgs
-        val max = args.optInt("max_chars", 800).coerceIn(100, 6000)
+        val max = args.optInt("max_chars", 800).coerceIn(100, 30_000)
         val tools = args.optBoolean("include_tools")
         val items = ordered.map { m ->
             JSONObject().apply {
                 put("role", roleName(m))
-                put("text", cleanText(m.content, max))
+                val whole = JarvisText.report(m.content)
+                put("text", if (whole.length > max) whole.take(max) + "…" else whole)
+                if (whole.length > max) { put("chars", whole.length); put("cut", true) }
                 if (tools && m.toolCalls.isNotEmpty()) put("tools", JSONArray().apply {
                     m.toolCalls.take(12).forEach { t -> put(JSONObject().put("name", t.name).put("command", t.command.take(160)).put("status", t.status)) }
                 })

@@ -33,6 +33,8 @@ import java.util.concurrent.ConcurrentHashMap
 object JarvisTasks {
     private const val TAG = "JarvisTasks"
     private const val KEEP = 30
+    /** How much of a finished task's reply goes into its news (its end; the whole reply can be read with jarvis_read_chat). */
+    const val RESULT_MAX = 3500
     /** A task that never showed as running within this time after a message is taken as finished. */
     private const val START_GRACE_MS = 25_000L
 
@@ -61,8 +63,10 @@ object JarvisTasks {
         val followUps: Int = 0,
         /** One line about the latest change, for the panel ("Finished", "Wants to run: npm test"). */
         val note: String = "",
-        /** The task's last reply (cut), once it finished. */
+        /** The task's last reply (cut to its end when long), once it finished. */
         val result: String = "",
+        /** Length of the whole last reply ([result] is cut when this is longer). */
+        val resultChars: Int = 0,
         /** The current state was already reported (no repeat). */
         val reported: Boolean = true,
         /** An existing chat the user named, not one Jarvis started. */
@@ -284,7 +288,7 @@ object JarvisTasks {
         }
         val now = System.currentTimeMillis()
         put(t.copy(state = State.STARTING, turnAt = now, updatedAt = now, progressAt = now, seenRunning = false,
-            followUps = t.followUps + 1, note = "Follow-up: ${text.take(60)}", result = "", reported = true))
+            followUps = t.followUps + 1, note = "Follow-up: ${text.take(60)}", result = "", resultChars = 0, reported = true))
         return "Sent to the task."
     }
 
@@ -327,17 +331,19 @@ object JarvisTasks {
         return b to call
     }
 
-    /** The task's last reply text (cut to [max]). */
-    suspend fun lastReply(t: Task, max: Int = 900): String {
+    /** The task's last reply text, whole (its thinking and tool markers out, an error as one closing line). */
+    suspend fun fullReply(t: Task): String {
         val msgs = when (t.agent) {
             AgentKind.CLAUDE -> claudeBackends[t.id]?.messages?.value?.takeIf { it.isNotEmpty() } ?: runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
             AgentKind.OPENCODE -> openCodeBackends[t.id]?.messages?.value?.takeIf { it.isNotEmpty() } ?: runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
             AgentKind.AGY -> runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
         }
         val text = msgs.lastOrNull { it.role == MessageRole.ASSISTANT && it.content.isNotBlank() }?.content.orEmpty()
-        // the sub-agent's report as words: its thinking and tool markers out, an error as one closing line
-        return JarvisText.report(text).let { if (it.length > max) "…" + it.takeLast(max) else it }
+        return JarvisText.report(text)
     }
+
+    /** [text] cut to its last [max] characters: the end of a reply holds the agent's conclusion. */
+    fun cutEnd(text: String, max: Int): String = if (text.length > max) "…" + text.takeLast(max).trimStart() else text
 
     // ------------------------------------------------------------------ Antigravity approvals off screen
 
@@ -489,7 +495,10 @@ object JarvisTasks {
                 else -> t.note
             })
             // the manager gets the sub-agent's whole report (cut only when very long)
-            if (next == State.DONE || next == State.FAILED) t = t.copy(result = lastReply(t, 3500))
+            if (next == State.DONE || next == State.FAILED) {
+                val full = fullReply(t)
+                t = t.copy(result = cutEnd(full, RESULT_MAX), resultChars = full.length)
+            }
         }
         put(t)
         if (!t.reported) {
@@ -537,7 +546,7 @@ object JarvisTasks {
             arr.put(JSONObject().apply {
                 put("id", t.id); put("agent", t.agent.name); put("title", t.title); put("goal", t.goal); put("project", t.project)
                 put("state", t.state.name); put("created", t.createdAt); put("turn", t.turnAt); put("updated", t.updatedAt)
-                put("seen", t.seenRunning); put("follow", t.followUps); put("note", t.note); put("result", t.result.take(1200)); put("adopted", t.adopted)
+                put("seen", t.seenRunning); put("follow", t.followUps); put("note", t.note); put("result", t.result.take(RESULT_MAX + 1)); put("chars", t.resultChars); put("adopted", t.adopted)
                 put("owner", t.owner); put("team", t.team)
             })
         }
@@ -560,7 +569,7 @@ object JarvisTasks {
                     state = if (state.active) State.STARTING else state,
                     createdAt = o.optLong("created", now), turnAt = if (state.active) now else o.optLong("turn", now),
                     updatedAt = o.optLong("updated", now), progressAt = now, seenRunning = false,
-                    followUps = o.optInt("follow"), note = o.optString("note"), result = o.optString("result"),
+                    followUps = o.optInt("follow"), note = o.optString("note"), result = o.optString("result"), resultChars = o.optInt("chars"),
                     reported = true, adopted = o.optBoolean("adopted"),
                     owner = o.optString("owner").ifBlank { JarvisManagers.VOICE }, team = o.optString("team")
                 )

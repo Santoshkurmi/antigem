@@ -78,6 +78,7 @@ fun JarvisCommandStrip(chatId: String, onOpenChat: (String) -> Unit, toolsMissin
     val managers by JarvisManagers.managers.collectAsState()
     val statuses by JarvisManagers.status.collectAsState()
     val tasks by JarvisTasks.tasks.collectAsState()
+    val voiceSide by com.example.gemini.data.jarvis.JarvisPreferences.voiceAssistant.state.collectAsState()
     val key = remember(chatId, managers) { JarvisManagers.keyForChat(chatId) } ?: return
     val m = managers[key] ?: JarvisManagers.Manager(key)
     val voice = key == JarvisManagers.VOICE
@@ -142,7 +143,8 @@ fun JarvisCommandStrip(chatId: String, onOpenChat: (String) -> Unit, toolsMissin
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (!voice) {
+            // "chat only" (Settings → Jarvis): nothing is ever said, so no Voice switch
+            if (!voice && voiceSide) {
                 ToggleChip(if (m.speak) "Voice on" else "Voice off", if (m.speak) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff, m.speak) {
                     JarvisManagers.setSpeak(key, !m.speak)
                 }

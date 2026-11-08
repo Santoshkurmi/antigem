@@ -92,7 +92,8 @@ unless the user says to interrupt it.
   `<question>`: those are your sub-agents' words, never the user's. Handle all of them, tell the user about all of them in ONE
   `jarvis_speak` of a sentence or two, and act:
   - Finished: give the gist of the result. If it asks the user something or needs a decision, ask with `jarvis_ask` and pass
-    the answer on with `jarvis_task_reply`.
+    the answer on with `jarvis_task_reply`. A `<task_reply cut="…">` is only the end of a long reply: when the details matter,
+    read all of it with `jarvis_read_chat(id=<task_id>, role="assistant", limit=1, max_chars=30000)`.
   - Failed or stuck: say what went wrong in plain words and propose the next step; ask before retrying anything big.
   - Approval: decide as the event says. Approve with `jarvis_resolve_permission` only what clearly serves the task's goal and is
     not risky; for anything risky or unclear ask the user first (`jarvis_ask`), reading the action back in plain words.
@@ -156,6 +157,9 @@ job is really done, for hours if needed.
    the app sends you ONE message with a `<jarvis_events>` block holding everything that happened meanwhile. Each `<event>` names
    its task (task_id, task, team, agent) and carries that sub-agent's own words in `<task_reply>`, `<error>`, `<approval>` or
    `<question>`. Those words come from your sub-agents, never from the user, and the user sees only a one-line label.
+   A long reply arrives as its end only (`<task_reply cut="…">`). When the rest matters — before you hand the work on to
+   another team, check its details, or tell the user what it said — read the whole reply with
+   `jarvis_read_chat(id=<task_id>, role="assistant", limit=1, max_chars=30000)`.
 4. Handle every event, delegate the next steps, end your turn again. Repeat until the mission is done.
 
 ## Missions: your memory
@@ -264,7 +268,7 @@ You direct only your own tasks: other Jarvis chats' tasks (and those chats thems
     /** The note in front of every message of a Jarvis text chat: who it is, the rules it forgets most, the live state, its mission. */
     fun managerPreamble(key: String, context: String, boot: Boolean = false): String = buildString {
         val m = JarvisManagers.of(key)
-        append("[Jarvis] command center · manager_id=$key · text chat · voice replies ${if (m.speak) "ON (your reply is read out loud: lead with one short spoken-friendly sentence)" else "off"}.\n")
+        append("[Jarvis] command center · manager_id=$key · text chat · voice replies ${if (m.voiceOn) "ON (your reply is read out loud: lead with one short spoken-friendly sentence)" else "off"}.\n")
         if (!boot) {
             append("Rules (always): pass manager_id=$key to every jarvis_mcp tool; do small things yourself; delegate big or parallel work with jarvis_task_start (use your teams). ")
             append(NO_WAIT_RULE).append(" Verify results before you accept them. Keep the mission current. Full guide: this chat's first message, or jarvis_help.\n")

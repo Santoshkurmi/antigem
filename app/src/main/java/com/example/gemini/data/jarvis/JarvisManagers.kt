@@ -64,6 +64,8 @@ object JarvisManagers {
         val lastSentAt: Long = 0L
     ) {
         val isVoice: Boolean get() = key == VOICE
+        /** Replies are read out loud: the chat's Voice switch, and only while Jarvis' voice side is on (not "chat only"). */
+        val voiceOn: Boolean get() = speak && JarvisPreferences.voiceAssistant.value
     }
 
     private var sp: SharedPreferences? = null

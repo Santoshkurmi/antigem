@@ -24,6 +24,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -42,6 +43,8 @@ import kotlin.math.sin
  */
 object JarvisVoice {
     private const val TAG = "JarvisVoice"
+    /** Longest piece handed to a voice engine at once (the device engine refuses more than about 4000). */
+    private const val CHUNK = 2500
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var app: Context
@@ -173,16 +176,27 @@ object JarvisVoice {
         }
     }
 
+    /**
+     * Pieces of at most [CHUNK] characters, cut at sentence ends (a "sentence" longer than that is cut at spaces): the
+     * device engine refuses anything longer than its limit (about 4000) without any callback.
+     */
     private fun chunks(text: String): List<String> {
-        if (text.length <= 3000) return listOf(text)
+        if (text.length <= CHUNK) return listOf(text)
+        val pieces = text.split(Regex("(?<=[.!?])\\s+")).flatMap { s ->
+            if (s.length <= CHUNK) listOf(s) else s.split(' ').fold(mutableListOf(StringBuilder())) { acc, w ->
+                if (acc.last().length + w.length + 1 > CHUNK && acc.last().isNotEmpty()) acc += StringBuilder()
+                acc.last().append(w.take(CHUNK)).append(' ')
+                acc
+            }.map { it.toString() }
+        }
         val out = ArrayList<String>()
         val sb = StringBuilder()
-        for (s in text.split(Regex("(?<=[.!?])\\s+"))) {
-            if (sb.length + s.length > 3000 && sb.isNotEmpty()) { out += sb.toString(); sb.clear() }
+        for (s in pieces) {
+            if (sb.length + s.length > CHUNK && sb.isNotEmpty()) { out += sb.toString().trim(); sb.clear() }
             sb.append(s).append(' ')
         }
         if (sb.isNotBlank()) out += sb.toString().trim()
-        return out
+        return out.filter { it.isNotBlank() }
     }
 
     // ---- device voice
@@ -232,9 +246,29 @@ object JarvisVoice {
         val id = "jarvis-" + System.nanoTime()
         val done = CompletableDeferred<Unit>()
         synchronized(ttsWaiters) { ttsWaiters[id] = done }
-        withContext(Dispatchers.Main) { engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) }
         try {
-            done.await()
+            val queued = withContext(Dispatchers.Main) { engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) }
+            // refused (too long, engine gone): no callback ever comes, so do not wait for one
+            if (queued != TextToSpeech.SUCCESS) {
+                Log.w(TAG, "device voice refused ${text.length} chars ($queued)")
+                // most likely the engine died: the next piece starts a fresh one
+                withContext(Dispatchers.Main) { runCatching { engine.shutdown() } }
+                tts = null; ttsReady = null
+                return
+            }
+            // the "done" callback can also go missing (the engine restarted, another app took it): also watch whether
+            // it is still talking, and give up after far longer than the text could take
+            val started = System.currentTimeMillis()
+            val cap = 20_000L + (text.length * 140L / JarvisPreferences.ttsRate.value.coerceIn(0.4f, 2.5f)).toLong()
+            var silentFor = 0
+            while (true) {
+                if (withTimeoutOrNull(1000) { done.await() } != null) break
+                val talking = runCatching { engine.isSpeaking }.getOrDefault(false)
+                silentFor = if (talking) 0 else silentFor + 1
+                val elapsed = System.currentTimeMillis() - started
+                if (silentFor >= 3 && elapsed > 4000) { Log.w(TAG, "device voice ended without telling"); break }
+                if (elapsed > cap) { Log.w(TAG, "device voice timed out"); runCatching { engine.stop() }; break }
+            }
         } finally {
             synchronized(ttsWaiters) { ttsWaiters.remove(id) }
         }
@@ -338,6 +372,22 @@ object JarvisVoice {
                         .build()
                 )
                 mp.setOnCompletionListener { runCatching { mp.release() }; if (player === mp) player = null; if (cont.isActive) cont.resume(Unit) }
+                // a player that stops without "completed" (audio route changed, decoder hiccup) must not leave Jarvis
+                // "speaking" forever: once it played and then stays silent for 3 s it counts as finished
+                scope.launch {
+                    var played = false
+                    var silentFor = 0
+                    var waited = 0
+                    while (cont.isActive) {
+                        delay(1000)
+                        val playing = runCatching { player === mp && mp.isPlaying }.getOrDefault(false)
+                        if (playing) { played = true; silentFor = 0 } else if (played) silentFor++ else waited++
+                        if ((played && silentFor >= 3) || (!played && (player !== mp || waited >= 20))) {
+                            runCatching { mp.release() }; if (player === mp) player = null
+                            if (cont.isActive) cont.resume(Unit)
+                        }
+                    }
+                }
                 mp.setOnErrorListener { _, _, _ -> runCatching { mp.release() }; if (player === mp) player = null; if (cont.isActive) cont.resume(Unit); true }
                 cont.invokeOnCancellation { runCatching { mp.stop() }; runCatching { mp.release() }; if (player === mp) player = null }
                 try {

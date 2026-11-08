@@ -53,6 +53,7 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke, onOpen: (Jarvi
     val engine by P.ttsEngine.state.collectAsState()
     val quiet by P.quietMode.state.collectAsState()
     val policy by P.permissionPolicy.state.collectAsState()
+    val voiceSide by P.voiceAssistant.state.collectAsState()
 
     Column(
         Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
@@ -65,7 +66,30 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke, onOpen: (Jarvi
                     "change settings, ask for help or your usage. Off by default; nothing listens until you turn it on.",
                 enabled
             ) { JarvisController.setEnabled(it) }
-            JHint("Tap the orb to talk, long-press it for the Jarvis panel (tasks, conversation, typing, quick switches).")
+            if (enabled) {
+                JSwitch(
+                    "Floating button & voice",
+                    "Off = chat only: no floating button, no microphone, nothing read out loud. You use Jarvis in the Jarvis chats you open " +
+                        "from the chat list (Jarvis tab → New Jarvis chat), by typing.",
+                    voiceSide
+                ) { JarvisController.setVoiceAssistant(it) }
+            }
+            JHint(
+                if (!enabled || voiceSide) "Tap the orb to talk, long-press it for the Jarvis panel (tasks, conversation, typing, quick switches). " +
+                    "You can also type to Jarvis: Jarvis tab in the chat list → New Jarvis chat."
+                else "Chat only: open the Jarvis tab in the chat list and tap “New Jarvis chat”. Pick its agent and model like in any chat."
+            )
+        }
+        if (enabled && JarvisController.isAttached) {
+            JCard(cardBg, cardBorder, "Jarvis chats in the chat list") {
+                val inAll by P.jarvisInAll.state.collectAsState()
+                JChips(listOf("none" to "Only under Jarvis", "text" to "My Jarvis chats in All too", "all" to "All Jarvis chats in All too"), inAll) { P.jarvisInAll.set(it) }
+                JHint(when (inAll) {
+                    "text" -> "The Jarvis chats you opened yourself (New Jarvis chat) also show in All and the agent tabs; the voice chats Jarvis opens by itself stay under Jarvis."
+                    "all" -> "Every Jarvis chat, the voice chats Jarvis opens by itself too, also shows in All and the agent tabs."
+                    else -> "Jarvis chats are listed only under the Jarvis tab. The work chats Jarvis starts for its tasks are normal chats and always show in All."
+                })
+            }
         }
         if (!JarvisController.isAttached) {
             Text("Jarvis is starting…", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
@@ -87,7 +111,8 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke, onOpen: (Jarvi
                 // the setup checklist is only for a Jarvis that is turned on
                 if (enabled) row(JarvisSettingsPage.SETUP, I.Checklist, c.success, "Setup") else null
             ),
-            listOf(
+            // "chat only": nothing listens or speaks, so those pages are hidden
+            if (!voiceSide) emptyList() else listOf(
                 row(JarvisSettingsPage.WAKE, I.Hearing, c.accentTeal, "Waking Jarvis", if (hotword == "phrase") "Wake phrase" else "Button"),
                 row(JarvisSettingsPage.LISTEN, I.Mic, c.accentIndigo, "Listening & sending", if (autoSend) "Auto-send" else "Manual send"),
                 row(JarvisSettingsPage.VOICE, I.RecordVoiceOver, c.accentAlt, "Voice output", when {
@@ -533,14 +558,7 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                     Text("Autopilot gives up after", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     JChips(listOf("2" to "2 nudges", "4" to "4 nudges", "8" to "8 nudges", "15" to "15 nudges"), nudges.toString()) { P.autopilotMaxNudges.set(it.toInt()) }
                     JHint("With autopilot on, Jarvis is nudged to continue whenever it stops while the mission is unfinished and nothing runs. Nudges in a row without progress pause it.")
-                    val inAll by P.jarvisInAll.state.collectAsState()
-                    Text("Jarvis chats in the chat list", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    JChips(listOf("none" to "Only under Jarvis", "text" to "My Jarvis chats in All too", "all" to "All Jarvis chats in All too"), inAll) { P.jarvisInAll.set(it) }
-                    JHint(when (inAll) {
-                        "text" -> "The Jarvis chats you opened yourself also show in All and the agent tabs; the voice chats stay under Jarvis."
-                        "all" -> "Every Jarvis chat, the voice ones too, also shows in All and the agent tabs."
-                        else -> "Jarvis chats are listed only under the Jarvis tab."
-                    })
+                    JHint("Whether Jarvis chats also show in All: Settings → Jarvis, “Jarvis chats in the chat list”.")
                     JHint("Several Jarvis chats can work at the same time. Each one runs and hears about only its own tasks; they never steer each other's work.")
                 }
             }

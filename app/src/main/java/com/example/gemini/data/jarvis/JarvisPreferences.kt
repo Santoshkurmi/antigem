@@ -53,6 +53,11 @@ object JarvisPreferences {
     // ---- master switch and agent
     /** Jarvis is available (the Jarvis chip, the MCP server and the voice controls are active). */
     val enabled = pref("enabled", false)
+    /**
+     * The voice side of Jarvis: the floating button, the microphone, the wake phrase and replies read out loud. Off =
+     * "chat only": Jarvis works only in the Jarvis chats the user opens from the chat list, silently.
+     */
+    val voiceAssistant = pref("voice_assistant", true)
     /** "CLAUDE", "AGY" or "OPENCODE": which agent runs the hidden Jarvis chat; blank until the user picks one. */
     val agent = pref("agent", "")
     /** Model of the Jarvis chat; blank = the agent's default. */

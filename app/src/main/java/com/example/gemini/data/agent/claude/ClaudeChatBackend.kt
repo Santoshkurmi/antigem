@@ -848,9 +848,13 @@ class ClaudeChatBackend(
         }
     }
 
-    /** Loads a Claude conversation's messages without opening it (sidebar export / share). */
+    /**
+     * Loads a Claude conversation's messages without opening it (sidebar export / share, Jarvis reading a chat). Asks
+     * for the whole transcript: a chat whose process is still running (it stays up after a reply) otherwise came back
+     * without the part written since that process started — for a chat started in it, empty.
+     */
     suspend fun loadMessages(conversationId: String): List<ChatMessage> {
-        val h = client.history(conversationId).getOrNull() ?: return emptyList()
+        val h = client.history(conversationId, full = true).getOrNull() ?: return emptyList()
         val t = ClaudeTranscript().apply { reset(conversationId) }
         h.entries.forEach { t.applyHistory(it) }
         t.finishHistory()

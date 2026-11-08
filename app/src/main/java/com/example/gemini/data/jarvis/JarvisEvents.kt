@@ -34,6 +34,8 @@ object JarvisEvents {
         val body: String = "",
         val key: String = "",
         val risk: String = "",
+        /** Length of the whole reply when [body] is only its end (task_done), else 0. */
+        val replyChars: Int = 0,
         val at: Long = System.currentTimeMillis()
     )
 
@@ -126,7 +128,12 @@ object JarvisEvents {
         append(">\n")
         if (goal.isNotBlank()) append("<task_goal>\n${inner(goal.take(600))}\n</task_goal>\n")
         when (kind) {
-            "task_done" -> append(if (body.isNotBlank()) "<task_reply>\n${inner(body)}\n</task_reply>\n" else "<task_reply>(no text reply; use jarvis_task_get)</task_reply>\n")
+            "task_done" -> append(when {
+                body.isBlank() -> "<task_reply>(no text reply; use jarvis_task_get)</task_reply>\n"
+                // a long reply comes as its end: say so, so it is not taken as the whole report
+                replyChars > body.length -> "<task_reply cut=\"only the last ${body.length - 1} of $replyChars characters\">\n${inner(body)}\n</task_reply>\n"
+                else -> "<task_reply>\n${inner(body)}\n</task_reply>\n"
+            })
             "task_failed" -> append("<error>\n${inner(body.ifBlank { "unknown error" })}\n</error>\n")
             "task_stalled" -> append("<error>No visible progress for ${JarvisPreferences.stallMinutes.value} minutes while still running.</error>\n")
             "task_approval" -> append("<approval key=\"${attr(key)}\" risk=\"${attr(risk)}\">\nwants to ${inner(body)}\n</approval>\n")
@@ -145,6 +152,9 @@ object JarvisEvents {
         if (voice) append("- Tell the user with ONE jarvis_speak covering all events together (one or two short spoken sentences), not one call per event.\n")
         else append("- Write the user a short update in this chat (a line per event, plain and concrete).\n")
         if ("task_done" in kinds) append("- Done: check the result against the task goal and the mission. Do not trust \"done\" blindly: verify what matters (read the files, run the tests, or send a reviewer team). Good → mark the mission step done (jarvis_mission_update) and delegate the next step. Not good enough → jarvis_task_reply with precise feedback.\n")
+        if (events.any { it.kind == "task_done" && it.replyChars > it.body.length }) append("- A <task_reply cut=…> is only the END of a long reply (usually its conclusion), which is often enough. " +
+            "When the missing part matters (you hand the work on to another team, you check its details, or the user asks what it said), first read the whole reply: " +
+            "jarvis_read_chat(id=<task_id>, role=\"assistant\", limit=1, max_chars=30000). Never pass a cut report on as if it were complete.\n")
         if ("task_failed" in kinds || "task_stalled" in kinds) append("- Failed / stuck: find out why (jarvis_task_get), then redirect it with jarvis_task_reply, or start a fresh task with a better plan. Ask the user before anything big or risky.\n")
         if ("task_approval" in kinds) append("- Approval: if it clearly serves the task's goal and is not risky, approve it with jarvis_resolve_permission(key, approve=true). Risky or unclear: " +
             (if (voice) "read it back to the user with jarvis_ask first." else "ask the user in your reply and decide after their answer.") + "\n")
@@ -249,12 +259,15 @@ object JarvisEvents {
             inFlight.remove(owner)?.batch?.forEach { post(JarvisManagers.VOICE, it) }
             return
         }
-        if (voice && JarvisPreferences.agentKind == null && pending(owner) > 0) {
-            // no voice chat can be set up (no voice agent): nobody could receive it
+        val chatOnly = !JarvisPreferences.voiceAssistant.value
+        if (voice && (JarvisPreferences.agentKind == null || chatOnly) && pending(owner) > 0) {
+            // no voice chat can be set up (no voice agent), or the voice side is off ("chat only"): nobody could receive it
             val n = drain(owner).size
             if (!droppedVoiceNotice) {
                 droppedVoiceNotice = true
-                JarvisController.showProblem("$n update${if (n == 1) "" else "s"} for the voice Jarvis could not be delivered: no voice agent is set (Settings → Jarvis → Voice agent).")
+                val why = if (chatOnly) "Jarvis is set to chat only (Settings → Jarvis → Floating button & voice)"
+                    else "no voice agent is set (Settings → Jarvis → Voice agent)"
+                JarvisController.showProblem("$n update${if (n == 1) "" else "s"} for the voice Jarvis could not be delivered: $why.")
             }
             return
         }
@@ -382,7 +395,7 @@ object JarvisEvents {
     private suspend fun onTextTurnEnded(owner: String) {
         val m = JarvisManagers.get(owner) ?: return
         JarvisManagers.setStatus(owner, null)
-        if (!m.speak) { spokeInTurn -= owner; return }
+        if (!m.voiceOn) { spokeInTurn -= owner; return }
         if (spokeInTurn.remove(owner)) return
         delay(600)
         val reply = JarvisDriver.lastReply(owner)

@@ -252,7 +252,7 @@ object JarvisController {
     /** Turns Jarvis on or off (Settings). */
     fun setEnabled(on: Boolean) {
         JarvisPreferences.enabled.set(on)
-        if (on && JarvisPreferences.agentKind == null) {
+        if (on && JarvisPreferences.voiceAssistant.value && JarvisPreferences.agentKind == null) {
             showNotice("Pick the agent Jarvis talks to (Claude Code, Antigravity or OpenCode): tap here.", "agent")
         }
         if (!on) {
@@ -262,9 +262,29 @@ object JarvisController {
         }
     }
 
+    /**
+     * The voice side on or off. Off = "chat only": no floating button, microphone, wake phrase or speech; the Jarvis
+     * chats from the chat list keep working, silently.
+     */
+    fun setVoiceAssistant(on: Boolean) {
+        JarvisPreferences.voiceAssistant.set(on)
+        if (on) {
+            if (JarvisPreferences.enabled.value && JarvisPreferences.agentKind == null) {
+                showNotice("Pick the agent the voice Jarvis talks to (Claude Code, Antigravity or OpenCode): tap here.", "agent")
+            }
+            return
+        }
+        setHandsFree(false)
+        cancelCapture()
+        JarvisVoice.stop()
+        quietUntil = 0L
+        panelOpen.value = false
+        quickSettingsOpen.value = false
+    }
+
     /** Hands-free keeps the microphone service alive so the wake phrase and the headset button work with the screen off. */
     fun setHandsFree(on: Boolean) {
-        val target = on && JarvisPreferences.enabled.value
+        val target = on && JarvisPreferences.enabled.value && JarvisPreferences.voiceAssistant.value
         JarvisPreferences.handsFree.set(target)
         if (target) {
             if (!hasMic()) { showNotice("Allow the microphone first.", "mic"); JarvisPreferences.handsFree.set(false); return }
@@ -722,7 +742,7 @@ object JarvisController {
             // the manager that started it gets the news, batched with whatever else came in meanwhile
             JarvisEvents.post(owner, JarvisEvents.Event(
                 kind = "task_$kind", taskId = t.id, title = t.title, agent = t.agent.name.lowercase(), team = t.team,
-                goal = t.goal, body = detail
+                goal = t.goal, body = detail, replyChars = if (kind == "done") t.resultChars else 0
             ))
             return
         }
@@ -828,6 +848,10 @@ object JarvisController {
 
     fun startListening(initial: String = "", origin: Origin = Origin.BUTTON): Boolean {
         if (!JarvisPreferences.enabled.value) return false
+        if (!JarvisPreferences.voiceAssistant.value) {
+            showNotice("Jarvis is set to chat only, so voice is off. Turn it on in Settings → Jarvis.", "settings")
+            return false
+        }
         if (listening.value) return true
         if (!hasMic()) { showNotice("Allow the microphone first.", "mic"); return false }
         JarvisVoice.stop()
@@ -1704,21 +1728,52 @@ object JarvisController {
     }
 
     /** Messages of any chat (Claude: from the transcript; Antigravity: from its trajectory). */
-    suspend fun readChat(id: String): List<ChatMessage> = when (agentOfChat(id)) {
-        AgentKind.CLAUDE -> vm.claudeBackend.loadMessages(id)
-        AgentKind.OPENCODE -> vm.openCodeBackend.loadMessages(id)
-        AgentKind.AGY -> {
-            val steps = hub.getCascadeTrajectorySteps(id).getOrNull().orEmpty()
-            com.example.gemini.domain.chat.TrajectoryEngine().ingestStepsDirect(steps, id)
-        }
+    /**
+     * A chat's messages, whatever agent it runs on and wherever it is: what is already live in the app (the chat on
+     * screen, a task's or a Jarvis chat's own connection) comes first, as it is the most current; otherwise it is loaded.
+     */
+    suspend fun readChat(id: String): List<ChatMessage> {
+        if (vm.currentConversation.value?.id == id) vm.messages.value.takeIf { it.isNotEmpty() }?.let { return it }
+        liveMessagesOf(id)?.let { return it }
+        suspend fun load(agent: AgentKind): List<ChatMessage> = runCatching {
+            when (agent) {
+                AgentKind.CLAUDE -> vm.claudeBackend.loadMessages(id)
+                AgentKind.OPENCODE -> vm.openCodeBackend.loadMessages(id)
+                AgentKind.AGY -> {
+                    val steps = hub.getCascadeTrajectorySteps(id).getOrNull().orEmpty()
+                    com.example.gemini.domain.chat.TrajectoryEngine().ingestStepsDirect(steps, id)
+                }
+            }
+        }.getOrDefault(emptyList())
+        knownAgentOf(id)?.let { return load(it) }
+        // in no list yet (just created, list not refreshed): try every agent instead of guessing one
+        for (a in listOf(AgentKind.CLAUDE, AgentKind.OPENCODE, AgentKind.AGY)) load(a).takeIf { it.isNotEmpty() }?.let { return it }
+        return emptyList()
     }
+
+    /** Messages a live connection in the app already holds for chat [id] (a task's, a Jarvis chat's), if any. */
+    private fun liveMessagesOf(id: String): List<ChatMessage>? =
+        sequenceOf(
+            JarvisTasks.backendOf(id)?.messages?.value,
+            JarvisTasks.openCodeBackendOf(id)?.messages?.value,
+            JarvisDriver.claudeOf(id)?.messages?.value,
+            JarvisDriver.openCodeOf(id)?.messages?.value
+        ).firstOrNull { !it.isNullOrEmpty() }
+
+    /** The agent chat [id] runs on, when the app knows it for sure. */
+    private fun knownAgentOf(id: String): AgentKind? =
+        JarvisTasks.find(id)?.takeIf { it.id == id }?.agent
+            ?: vm.allConversations.value.find { it.id == id }?.agent
+            ?: JarvisManagers.get(id)?.agent
+            ?: if (JarvisPreferences.isJarvisChat(id) && JarvisPreferences.currentChatId.value == id) JarvisPreferences.agentKind else null
 
     // ------------------------------------------------------------------ speaking and asking
 
     /** Says [text], or shows it in quiet mode. With [wait] it returns after it was said. */
     private suspend fun speakOut(text: String, wait: Boolean = false) {
         val t = text.trim()
-        if (t.isEmpty()) return
+        // "chat only": nothing is said (it is still in the log)
+        if (t.isEmpty() || !JarvisPreferences.voiceAssistant.value) return
         _said.value = t
         if (JarvisPreferences.quietMode.value) {
             val dur = (1800L + t.length * 55L).coerceAtMost(9000L)
@@ -1834,7 +1889,8 @@ object JarvisController {
     }
 
     private fun pumpWake(speaking: Boolean) {
-        val want = JarvisPreferences.handsFree.value && JarvisPreferences.hotword.value == "phrase" && !listening.value && !speaking && hasMic()
+        val want = JarvisPreferences.voiceAssistant.value && JarvisPreferences.handsFree.value && JarvisPreferences.hotword.value == "phrase" &&
+            !listening.value && !speaking && hasMic()
         if (want && !wakeRunning) startWake()
         else if (!want && wakeRunning) stopWake()
         // a heard wake phrase fires once the sentence after it has ended
@@ -2072,7 +2128,7 @@ object JarvisController {
                     if (vm.currentConversation.value?.id != p.chatId) {
                         val title = vm.allConversations.value.find { it.id == p.chatId }?.title?.take(40)?.ifBlank { null } ?: "A Jarvis chat"
                         showNotice("“$title” is waiting for your approval: ${p.summary.take(90)}", "chat:${p.chatId}")
-                        if (JarvisManagers.of(p.chatId).speak) announce("$title needs your approval.")
+                        if (JarvisManagers.of(p.chatId).voiceOn) announce("$title needs your approval.")
                     }
                     continue
                 }
