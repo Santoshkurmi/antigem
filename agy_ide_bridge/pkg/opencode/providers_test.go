@@ -82,6 +82,9 @@ func TestCustomProvidersRoundTrip(t *testing.T) {
 	if a.Package != "@opencode/ai/providers/anthropic-compatible" || a.Settings["apiKey"] != "none" {
 		t.Fatalf("anthropic provider config: %+v", a)
 	}
+	if l, ok := cfg.Providers["lmstudio"]; !ok || l.Settings["baseURL"] != "" {
+		t.Fatalf("LM Studio probe not disabled: %+v", cfg.Providers["lmstudio"])
+	}
 	if fi, _ := os.Stat(m.configPath()); fi.Mode().Perm() != 0600 {
 		t.Fatalf("config readable by others: %v", fi.Mode())
 	}

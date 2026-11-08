@@ -157,10 +157,12 @@ func (m *Manager) writeConfig() error {
 		}
 		providers[p.ID] = entry
 	}
-	cfg := map[string]interface{}{"$schema": "https://opencode.ai/config.json"}
-	if len(providers) > 0 {
-		cfg["providers"] = providers
+	// OpenCode's built-in LM Studio plugin polls http://127.0.0.1:1234/api/v1/models every 30 s, which is the
+	// bridge's own port (logged as a 401 each time). An empty baseURL gives it no endpoint, so it never probes.
+	if _, taken := providers["lmstudio"]; !taken {
+		providers["lmstudio"] = map[string]interface{}{"settings": map[string]interface{}{"baseURL": ""}}
 	}
+	cfg := map[string]interface{}{"$schema": "https://opencode.ai/config.json", "providers": providers}
 	if servers, err := m.loadMcp(); err == nil && len(servers) > 0 {
 		cfg["mcp"] = map[string]interface{}{"servers": servers}
 	}

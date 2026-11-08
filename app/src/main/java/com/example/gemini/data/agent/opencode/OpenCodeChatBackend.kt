@@ -184,6 +184,9 @@ class OpenCodeChatBackend(
                     connected = false
                     if (e is OpenCodeUnavailableException) {
                         _state.value = if (e.disabled) OpenCodeState.DISABLED else OpenCodeState.OUTDATED
+                    } else if (_state.value == OpenCodeState.READY) {
+                        // the stream dropped (bridge stopped?): READY is never re-checked otherwise, so the dot stayed green
+                        backendScope.launch(worker) { if (_state.value == OpenCodeState.READY) refreshStatus() }
                     }
                 }
             ).collect { handleEvent(it) }
