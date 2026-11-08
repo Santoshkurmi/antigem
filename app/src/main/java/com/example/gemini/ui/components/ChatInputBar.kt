@@ -1160,10 +1160,12 @@ fun ChatInputBar(
                                     )
 
                                     // 5h or 7d share left (picked in the model sheet; 7d when the model has no 5h limit)
-                                    val pct = quota?.pillPercent
-                                    if (pct != null) {
+                                    val left = quota?.pillRemaining
+                                    val pctText = quota?.pillText
+                                    if (left != null && pctText != null) {
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
+                                        // same colour as the model picker's meter for this limit
+                                        val badgeColor = com.example.gemini.ui.models.quotaLeftColor(left)
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(6.dp))
@@ -1171,7 +1173,7 @@ fun ChatInputBar(
                                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                                         ) {
                                             Text(
-                                                text = if (quota?.pillIsWeekly == true) "7d $pct%" else "$pct%",
+                                                text = if (quota?.pillIsWeekly == true) "7d $pctText" else pctText,
                                                 fontSize = 9.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = badgeColor

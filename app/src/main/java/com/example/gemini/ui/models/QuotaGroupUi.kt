@@ -50,11 +50,11 @@ import androidx.compose.ui.unit.sp
 import com.example.gemini.domain.model.QuotaGroup
 import com.example.gemini.domain.model.QuotaPillWindow
 import com.example.gemini.domain.model.QuotaWindowUi
+import com.example.gemini.domain.model.quotaPercentText
 import com.example.gemini.theme.QuotaAmber
 import com.example.gemini.theme.QuotaGreen
 import com.example.gemini.theme.QuotaRed
 import com.example.gemini.ui.agents.SegmentedSelector
-import kotlin.math.roundToInt
 
 /** Green / amber / red by the share left. */
 fun quotaLeftColor(remaining: Float): Color = when {
@@ -66,7 +66,7 @@ fun quotaLeftColor(remaining: Float): Color = when {
 /** "5h ▬▬▬▭ 85% · 2h 4m": a limit's share left as a small meter. */
 @Composable
 fun QuotaMeter(window: QuotaWindowUi, modifier: Modifier = Modifier) {
-    val pct = (window.remaining * 100f).roundToInt().coerceIn(0, 100)
+    val pctText = quotaPercentText(window.remaining, window.oneDecimal)
     val color = quotaLeftColor(window.remaining)
     val fill by animateFloatAsState(window.remaining.coerceIn(0f, 1f), label = "quota_meter")
     val time = formatCleanCountdown(window.resetIso, window.countdown)
@@ -84,7 +84,7 @@ fun QuotaMeter(window: QuotaWindowUi, modifier: Modifier = Modifier) {
                 Box(Modifier.fillMaxWidth(fill).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(color))
             }
             Spacer(Modifier.width(6.dp))
-            Text("$pct%", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = color)
+            Text(pctText, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = color)
             if (time.isNotBlank()) {
                 Text(" · $time", fontSize = 11.sp, color = muted.copy(alpha = 0.5f), maxLines = 1)
             }
@@ -241,7 +241,7 @@ fun GroupMoveButton(
                     text = {
                         Column {
                             Text(g.title, fontSize = 14.sp)
-                            val limits = g.headerWindows.joinToString(" · ") { "${it.label} ${(it.remaining * 100).roundToInt()}%" }
+                            val limits = g.headerWindows.joinToString(" · ") { "${it.label} ${quotaPercentText(it.remaining, it.oneDecimal)}" }
                             if (limits.isNotBlank()) Text(limits, fontSize = 11.5.sp, color = muted.copy(alpha = 0.55f))
                         }
                     },

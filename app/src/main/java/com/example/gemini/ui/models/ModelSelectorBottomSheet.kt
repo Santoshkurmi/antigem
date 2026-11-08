@@ -1,5 +1,6 @@
 package com.example.gemini.ui.models
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +27,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -40,13 +45,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,6 +74,7 @@ import com.example.gemini.ui.agents.AgentSheetHeader
 import com.example.gemini.ui.components.AgyAccent
 import com.example.gemini.ui.components.ClaudeAccent
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /**
  * Antigravity's model picker, laid out like Claude Code's and OpenCode's: one section per quota group with its
@@ -104,16 +110,36 @@ fun ModelSelectorBottomSheet(
                 listOfNotNull(byGroup[null]?.let { AgySection(null, it) })
         }
     }
-    val maxListHeight = (LocalConfiguration.current.screenHeightDp * 0.72f).dp
+    // the status bar's height, read once: it does not change while the sheet moves
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // opens at half height like the Claude Code picker; swipe up (or scroll the list) for the full list
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val scope = rememberCoroutineScope()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.background,
         tonalElevation = 0.dp,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        // The default top inset grows as the sheet's edge enters the status bar, which makes the sheet taller and so
+        // moves its resting point: a fast fling then bounced it up and down without end. Instead the sheet's height
+        // never depends on its position: no top inset, and at most the height that ends right below the status bar.
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 16.dp).navigationBarsPadding()) {
+      // Back closes the picker in one press. Pulled up to full height, Material3 would first drop it to half height,
+      // so it took two presses; at half height its own handler already closes it (with the back-gesture animation).
+      BackHandler(enabled = sheetState.currentValue == SheetValue.Expanded) {
+          scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
+      }
+      BoxWithConstraints(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.fillMaxWidth()
+                .heightIn(max = (maxHeight - statusBarTop).coerceAtLeast(0.dp))
+                .padding(horizontal = 18.dp)
+                .padding(bottom = 16.dp)
+                .navigationBarsPadding()
+        ) {
             AgentSheetHeader(
                 AgentKind.AGY,
                 title = "Select model",
@@ -131,8 +157,9 @@ fun ModelSelectorBottomSheet(
             if (availableModels.isEmpty()) {
                 NoModelsCard()
             } else {
+                // the list takes the room left under the header, so the sheet only grows to its cap and then scrolls
                 LazyColumn(
-                    Modifier.fillMaxWidth().heightIn(max = maxListHeight),
+                    Modifier.fillMaxWidth().weight(1f, fill = false),
                     contentPadding = PaddingValues(bottom = 8.dp)
                 ) {
                     sections.forEach { section ->
@@ -176,6 +203,7 @@ fun ModelSelectorBottomSheet(
                 }
             }
         }
+      }
     }
 }
 

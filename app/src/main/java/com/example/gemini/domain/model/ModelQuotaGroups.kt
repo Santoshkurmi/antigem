@@ -7,14 +7,27 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 import java.util.Locale
+import kotlin.math.roundToInt
 
-/** One plan-limit window as the pickers show it: share left (0..1) and when it resets. */
+/**
+ * One plan-limit window as the pickers show it: share left (0..1) and when it resets. [oneDecimal]: the server sends
+ * more than whole percents (Antigravity: 0.4881588), so it is shown as "48.8%"; Claude's are whole percents.
+ */
 data class QuotaWindowUi(
     val label: String,
     val remaining: Float,
     val resetIso: String? = null,
-    val countdown: String? = null
+    val countdown: String? = null,
+    val oneDecimal: Boolean = false
 )
+
+/** "48.8%" / "49%" for a share left; the model picker and the chat pill both use this, so they always match. */
+fun quotaPercentText(remaining: Float, oneDecimal: Boolean): String {
+    val pct = (remaining * 100f).coerceIn(0f, 100f)
+    if (!oneDecimal) return "${pct.roundToInt()}%"
+    val text = String.format(Locale.US, "%.1f", pct)
+    return (if (text == "100.0") "100" else text) + "%"
+}
 
 /**
  * Models that share the same plan limits: one of Antigravity's quota groups, or Claude's plan-wide / per-model limits.
@@ -51,7 +64,8 @@ data class QuotaGroup(
             weeklyUsedPercentage = week?.let { usedPct(it.remaining) },
             weeklyResetCountdown = week?.countdown,
             pillFraction = pill?.remaining,
-            pillIsWeekly = pill != null && pill !== fiveHour
+            pillIsWeekly = pill != null && pill !== fiveHour,
+            pillOneDecimal = pill?.oneDecimal == true
         )
     }
 
@@ -171,5 +185,6 @@ object AgyQuotaGroups {
     private fun words(s: String): Set<String> =
         s.lowercase(Locale.ROOT).split(Regex("[^a-z0-9.\\-]+")).filter { it.isNotBlank() && it != "models" && it != "and" }.toSet()
 
-    private fun QuotaWindowInfo.toUi(label: String) = QuotaWindowUi(label, remainingFraction, resetTime, countdown.ifBlank { null })
+    private fun QuotaWindowInfo.toUi(label: String) =
+        QuotaWindowUi(label, remainingFraction, resetTime, countdown.ifBlank { null }, oneDecimal = true)
 }

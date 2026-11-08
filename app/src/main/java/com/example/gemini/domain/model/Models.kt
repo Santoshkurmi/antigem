@@ -285,14 +285,20 @@ data class ModelQuota(
     val weeklyResetCountdown: String? = null,
     /** Share left of the window the chat pill shows (5h or 7d, the user's choice; 7d when there is no 5h limit). */
     val pillFraction: Float? = null,
-    val pillIsWeekly: Boolean = false
+    val pillIsWeekly: Boolean = false,
+    /** The window comes with decimals (Antigravity), shown as "48.8%". */
+    val pillOneDecimal: Boolean = false
 ) {
     val percentage: Int
         get() = remainingFraction?.let { (it * 100).toInt() } ?: 0
 
-    /** The chat pill's number, or null when this model has no limit to show. */
-    val pillPercent: Int?
-        get() = (pillFraction ?: remainingFraction)?.let { (it * 100).toInt() }
+    /** Share left the chat pill shows, or null when this model has no limit to show. */
+    val pillRemaining: Float?
+        get() = pillFraction ?: remainingFraction
+
+    /** The chat pill's text, formatted exactly like the model picker's meters ("48.8%" for Antigravity, "75%" for Claude). */
+    val pillText: String?
+        get() = pillRemaining?.let { quotaPercentText(it, pillOneDecimal) }
 }
 
 @Serializable

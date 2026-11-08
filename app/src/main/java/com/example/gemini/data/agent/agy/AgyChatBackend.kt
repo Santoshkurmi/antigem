@@ -472,6 +472,33 @@ class AgyChatBackend(
     private data class StreamRunState(val conversationId: String, val loopRunning: Boolean, val fullyIdle: Boolean)
     private val _streamRun = MutableStateFlow<StreamRunState?>(null)
 
+    private var quotaAfterRunJob: Job? = null
+
+    init {
+        // A finished run used quota: when the last running chat (the open one or one in the background) stops,
+        // fetch the quota numbers again so the model picker and the chat pill show what is left now.
+        backendScope.launch {
+            combine(
+                _conversations.map { list -> list.any { it.isRunning } },
+                _streamRun.map { it?.loopRunning == true }
+            ) { anyChat, openChat -> anyChat || openChat }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { running -> if (!running) refreshQuotaAfterRun() }
+        }
+    }
+
+    /** Only the quota summary (not the model list, so no spinner); runs ending close together refresh once. */
+    private fun refreshQuotaAfterRun() {
+        quotaAfterRunJob?.cancel()
+        quotaAfterRunJob = backendScope.launch {
+            delay(3_000) // the server books a run's usage a moment after it ends
+            agyHubClient.retrieveUserQuotaSummary(forceRefresh = true, hubUrl = AuthPreferences.currentHubUrl)
+                .onSuccess { applyQuotaSummary(it) }
+                .onFailure { Log.w("AgyQuota", "quota refresh after run failed: ${it.message}") }
+        }
+    }
+
     // A just-sent (not queued) message shows the chat as running right away, until the stream confirms it
     // (the hub web UI does the same), so the Send button turns into Stop at once.
     private data class OptimisticSend(val conversationId: String, val tag: String)

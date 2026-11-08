@@ -455,6 +455,34 @@ class MainActivity : ComponentActivity() {
                                 val switcherToolsInstalled by chatViewModel.isLocalToolsInstalled.collectAsState(initial = false)
                                 val switcherToolsEnabled by chatViewModel.isLocalToolsEnabled.collectAsState(initial = false)
                                 var showSwitcherToolsInstall by remember { mutableStateOf(false) }
+                                val openTerminalFromSwitcher: () -> Unit = {
+                                    val ready = switcherUseSsh ||
+                                        com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode ||
+                                        (switcherToolsInstalled && switcherToolsEnabled)
+                                    when {
+                                        ready -> {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.TERMINAL
+                                        }
+                                        switcherToolsInstalled -> {
+                                            chatViewModel.setLocalToolsEnabled(true)
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.TERMINAL
+                                        }
+                                        else -> showSwitcherToolsInstall = true
+                                    }
+                                }
+                                // Double-tap "back" target: the screen shown just before the current one, however we
+                                // got here (switcher, close buttons, other in-app navigation). Tracked separately from
+                                // previousViewMode because the close handlers don't update that.
+                                var switcherBackTarget by remember { mutableStateOf<AppViewMode?>(null) }
+                                var switcherLastSeenMode by remember { mutableStateOf(currentViewMode) }
+                                LaunchedEffect(currentViewMode) {
+                                    if (currentViewMode != switcherLastSeenMode) {
+                                        switcherBackTarget = switcherLastSeenMode
+                                        switcherLastSeenMode = currentViewMode
+                                    }
+                                }
                                 com.example.gemini.ui.components.FloatingSwitcherWidget(
                                     currentViewMode = currentViewMode,
                                     orientation = floatingSwitcherOrientation,
@@ -474,23 +502,7 @@ class MainActivity : ComponentActivity() {
                                         previousViewMode = currentViewMode
                                         currentViewMode = AppViewMode.BROWSER
                                     },
-                                    onNavigateToTerminal = {
-                                        val ready = switcherUseSsh ||
-                                            com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode ||
-                                            (switcherToolsInstalled && switcherToolsEnabled)
-                                        when {
-                                            ready -> {
-                                                previousViewMode = currentViewMode
-                                                currentViewMode = AppViewMode.TERMINAL
-                                            }
-                                            switcherToolsInstalled -> {
-                                                chatViewModel.setLocalToolsEnabled(true)
-                                                previousViewMode = currentViewMode
-                                                currentViewMode = AppViewMode.TERMINAL
-                                            }
-                                            else -> showSwitcherToolsInstall = true
-                                        }
-                                    },
+                                    onNavigateToTerminal = openTerminalFromSwitcher,
                                     onNavigateToNotes = {
                                         previousViewMode = currentViewMode
                                         currentViewMode = AppViewMode.NOTES
@@ -499,9 +511,21 @@ class MainActivity : ComponentActivity() {
                                         previousViewMode = currentViewMode
                                         currentViewMode = AppViewMode.FILES
                                     },
+                                    onNavigateBack = {
+                                        val target = switcherBackTarget
+                                        when {
+                                            target == null || target == currentViewMode -> Unit
+                                            target == AppViewMode.TERMINAL -> openTerminalFromSwitcher()
+                                            else -> {
+                                                previousViewMode = currentViewMode
+                                                currentViewMode = target
+                                            }
+                                        }
+                                    },
                                     onPositionSaved = { x, y ->
                                         chatViewModel.saveFloatingSwitcherPosition(x, y)
-                                    }
+                                    },
+                                    onOrientationChange = { chatViewModel.setFloatingSwitcherOrientation(it) }
                                 )
                                 if (showSwitcherToolsInstall) {
                                     com.example.gemini.ui.settings.LocalToolsInstallDialog(
